@@ -290,6 +290,23 @@ object Migrations {
         }
     }
 
+    /**
+     * 43 -> 44 (D47 — Mensagens Familiares Efêmeras): adiciona `expiresAt`
+     * (TTL individual de 24h) e `deletedAt` (tombstone de exclusão pelo
+     * usuário) em `family_messages_local`. Mensagens legadas recebem o TTL
+     * contado a partir do `sentAt` original — nenhuma ultrapassa 24h de vida.
+     */
+    val MIGRATION_43_44 = object : Migration(43, 44) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE family_messages_local ADD COLUMN expiresAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE family_messages_local ADD COLUMN deletedAt INTEGER")
+            // Backfill: TTL de 24h a partir do envio original
+            db.execSQL("UPDATE family_messages_local SET expiresAt = sentAt + 86400000 WHERE expiresAt = 0")
+            // Higiene imediata: remove o que já nasceu expirado
+            db.execSQL("DELETE FROM family_messages_local WHERE expiresAt > 0 AND expiresAt < " + System.currentTimeMillis())
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -308,6 +325,7 @@ object Migrations {
         MIGRATION_39_40,
         MIGRATION_40_41,
         MIGRATION_41_42,
-        MIGRATION_42_43
+        MIGRATION_42_43,
+        MIGRATION_43_44
     )
 }

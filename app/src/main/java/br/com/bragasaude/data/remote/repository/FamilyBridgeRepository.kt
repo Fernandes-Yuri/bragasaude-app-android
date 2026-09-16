@@ -17,6 +17,9 @@ import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.sync.SyncScheduler
 import br.com.bragasaude.data.util.parseDate
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import java.util.Date
@@ -230,6 +233,7 @@ class FamilyBridgeRepository @Inject constructor(
             android.util.Log.w("FamilyBridgeRepo", "Mensagem salva localmente, pendente de sync: ${e.message}")
             syncScheduler.scheduleSync()
         }
+        syncScheduler.scheduleSync()
         return message
     }
 
@@ -241,10 +245,22 @@ class FamilyBridgeRepository @Inject constructor(
     ): FamilyMessageEntity = createFamilyMessage(patientUserId, senderName, messageText, iconType)
 
     suspend fun syncFamilyMessages(patientUserId: String): Result<Unit> = runCatching {
-        val messages = apiClient.getFamilyMessages(patientUserId)
-        if (messages.isNotEmpty()) {
-            familyDao.insertMessages(messages)
+        val now = System.currentTimeMillis()
+        val remote = apiClient.getFamilyMessages(patientUserId)
+        for (msg in remote) {
+            when {
+                // D47: tombstone propagado pelo outro aparelho — remover a cópia local
+                msg.deletedAt != null -> familyDao.insertMessage(msg.copy(messageText = "", senderName = "", pendingSync = false))
+                // D47: expirada no servidor — nunca reintroduzir; purgar cópia local se houver
+                msg.expiresAt in 1..now -> familyDao.deleteMessage(msg.id)
+                else -> {
+                    val local = familyDao.getMessageById(msg.id)
+                    if (local?.pendingSync != true && local?.deletedAt == null) familyDao.insertMessage(msg)
+                }
+            }
         }
+        // D47: higiene local a cada ciclo de sincronização
+        familyDao.purgeExpiredMessages(now)
     }
 
     suspend fun syncPatientDataForCaregiver(patientUserId: String): Result<Unit> = runCatching {
@@ -310,15 +326,15 @@ class FamilyBridgeRepository @Inject constructor(
     }
 
     fun getUnreadMessagesForPatient(patientUserId: String): Flow<List<FamilyMessageEntity>> {
-        return familyDao.getUnreadMessagesForPatient(patientUserId)
+        return liveMessages(familyDao.getUnreadMessagesForPatient(patientUserId))
     }
 
     fun getRecentMessagesForPatient(patientUserId: String, limit: Int = 10): Flow<List<FamilyMessageEntity>> {
-        return familyDao.getRecentMessagesForPatient(patientUserId, limit)
+        return liveMessages(familyDao.getRecentMessagesForPatient(patientUserId, limit))
     }
 
     suspend fun countUnreadMessages(patientUserId: String): Int {
-        return familyDao.getUnreadMessagesForPatient(patientUserId).first().size
+        return liveMessages(familyDao.getUnreadMessagesForPatient(patientUserId)).first().size
     }
 
     suspend fun markMessageAsRead(messageId: String) {
@@ -329,8 +345,43 @@ class FamilyBridgeRepository @Inject constructor(
         familyDao.markAllMessagesAsRead(patientUserId)
     }
 
+    /**
+     * D47 — Exclusão da própria mensagem pelo usuário (LGPD Art. 18, VI).
+     * - Nunca sincronizada (remoteId == null): remoção local definitiva.
+     * - Já no servidor: tombstone imediato (some da UI na hora) + exclusão remota;
+     *   em falha de rede o SyncWorker re-tenta até confirmar.
+     */
     suspend fun deleteMessage(messageId: String) {
-        familyDao.deleteMessage(messageId)
+        val local = familyDao.getMessageById(messageId) ?: return
+        check(local.senderUserId == auth.currentUser?.uid) { "Só quem enviou pode apagar a mensagem." }
+        // Keep a content-free tombstone until expiry, including ambiguous/in-flight uploads.
+        familyDao.softDeleteMessage(messageId)
+        try {
+            if (apiClient.deleteFamilyMessage(local.remoteId ?: local.id, local.patientUserId, local.sentAt)) {
+                familyDao.markDeletionSynced(messageId)
+            }
+        } finally {
+            syncScheduler.scheduleSync()
+        }
+    }
+
+    private fun liveMessages(source: Flow<List<FamilyMessageEntity>>): Flow<List<FamilyMessageEntity>> =
+        source.combine(flow {
+            var lastPurge = 0L
+            while (true) {
+                val now = System.currentTimeMillis()
+                if (now / 30_000 != lastPurge / 30_000) {
+                    familyDao.purgeExpiredMessages(now)
+                    lastPurge = now
+                }
+                emit(now)
+                delay(1000)
+            }
+        }) { messages, now -> messages.filter { it.deletedAt == null && it.expiresAt > now } }
+
+    /** D47 — Purga local: remove definitivamente mensagens que completaram 24h. */
+    suspend fun purgeExpiredFamilyMessages() {
+        familyDao.purgeExpiredMessages()
     }
 
 suspend fun sendMessageBidirectional(

@@ -1,4 +1,4 @@
-﻿.gradle
+.gradle
 /app/build
 /local.properties
 *.iml
@@ -7,3 +7,7 @@
 captured_images/
 *.jks
 keystore.properties
+
+# Bloqueio estrito de binários de compilação, permitindo apenas a release oficial em releases/
+*.apk
+!releases/*.apk

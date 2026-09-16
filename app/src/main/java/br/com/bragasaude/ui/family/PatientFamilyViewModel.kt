@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.family
+package br.com.bragasaude.ui.family
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
@@ -96,7 +96,7 @@ class PatientFamilyViewModel @Inject constructor(
 
             // Observar mensagens da família no dispositivo do paciente
             launch {
-                familyRepository.getRecentMessagesForPatient(patientUid, 15).collectLatest { messages ->
+                familyRepository.getRecentMessagesForPatient(patientUid, Int.MAX_VALUE).collectLatest { messages ->
                     _familyMessages.value = messages
                 }
             }
@@ -118,6 +118,15 @@ class PatientFamilyViewModel @Inject constructor(
             // Limpeza de códigos expirados em background
             launch {
                 familyRepository.cleanExpiredCodes()
+            }
+
+            // D47: purga local das mensagens familiares que completaram 24h
+            launch {
+                try {
+                    familyRepository.purgeExpiredFamilyMessages()
+                } catch (e: Exception) {
+                    android.util.Log.w("PatientFamilyVM", "Falha na purga de mensagens expiradas: ${e.message}")
+                }
             }
         }
     }
@@ -203,6 +212,18 @@ class PatientFamilyViewModel @Inject constructor(
                 familyRepository.markAllMessagesAsRead(currentUserId)
             } catch (e: Exception) {
                 android.util.Log.e("PatientFamilyVM", "Erro ao marcar todas as mensagens como lidas: ${e.message}")
+            }
+        }
+    }
+
+    /** D47 — Apaga a própria mensagem do paciente (janela de 24h). */
+    fun deleteFamilyMessage(messageId: String) {
+        viewModelScope.launch {
+            try {
+                familyRepository.deleteMessage(messageId)
+                _uiEvents.emit(FamilyUiEvent.Notice("Mensagem apagada."))
+            } catch (e: Exception) {
+                _uiEvents.emit(FamilyUiEvent.Error("Não foi possível apagar a mensagem."))
             }
         }
     }

@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Diversity3
 import androidx.compose.material.icons.filled.ExpandLess
@@ -34,8 +35,10 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Medication
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -63,6 +66,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -71,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.local.FamilyMessageEntity
+import br.com.bragasaude.domain.FamilyConversationPdfExporter
 import br.com.bragasaude.ui.theme.BragaEmerald
 import br.com.bragasaude.ui.theme.BragaTextPrimary
 import java.text.SimpleDateFormat
@@ -150,6 +155,14 @@ fun FamilyNotesCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp
+                    )
+                    // D47: transparência da retenção já no card da Home
+                    Text(
+                        "Visíveis por 24 horas",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
                 if (unreadCount > 0) {
@@ -372,7 +385,8 @@ private fun EmptyFamilyNotesCard(
 @Composable
 private fun FamilyMessageItem(
     message: FamilyMessageEntity,
-    onClick: () -> Unit = {}
+    onClick: () -> Unit = {},
+    onDelete: (() -> Unit)? = null
 ) {
     val iconConfig = familyMessageIconConfig(message.iconType)
     val iconColor = iconConfig.color
@@ -501,6 +515,21 @@ private fun FamilyMessageItem(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
             )
         }
+
+        // D47: exclusão da própria mensagem (somente o remetente recebe este botão)
+        if (onDelete != null) {
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Apagar mensagem",
+                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
     }
 }
 
@@ -614,6 +643,10 @@ fun FamilyMessagesScreen(
 ) {
     val messages by viewModel.familyMessages.collectAsState()
     val unread by viewModel.unreadMessageCount.collectAsState()
+    val context = LocalContext.current
+    val exportScope = androidx.compose.runtime.rememberCoroutineScope()
+    // D47: mensagem aguardando confirmação de exclusão
+    var messagePendingDelete by remember { mutableStateOf<FamilyMessageEntity?>(null) }
 
     Scaffold(
         topBar = {
@@ -631,6 +664,15 @@ fun FamilyMessagesScreen(
                     }
                 },
                 actions = {
+                    // D47: exportar a conversa do ciclo vigente (PDF compartilhável)
+                    IconButton(
+                        onClick = {
+                            FamilyConversationPdfExporter.exportAndShare(context, messages, exportScope)
+                        },
+                        enabled = messages.isNotEmpty()
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = "Exportar conversa em PDF")
+                    }
                     if (unread > 0) {
                         TextButton(onClick = { viewModel.markAllMessagesAsRead() }) {
                             Text(
@@ -680,6 +722,9 @@ fun FamilyMessagesScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             if (messages.isEmpty()) {
+                // D47: aviso permanente mesmo sem mensagens
+                Spacer(Modifier.height(8.dp))
+                FamilyRetentionNotice()
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -718,13 +763,21 @@ fun FamilyMessagesScreen(
                     }
                 }
             } else {
+                // D47: aviso permanente de retenção no topo da lista
                 Spacer(Modifier.height(8.dp))
+                FamilyRetentionNotice()
+                Spacer(Modifier.height(12.dp))
                 messages.forEachIndexed { index, message ->
                     FamilyMessageItem(
                         message = message,
                         onClick = {
                             viewModel.markMessageAsRead(message.id)
                             onOpenChat()
+                        },
+                        onDelete = if (message.senderUserId == viewModel.currentUserId) {
+                            { messagePendingDelete = message }
+                        } else {
+                            null
                         }
                     )
                     if (index < messages.lastIndex) {
@@ -734,5 +787,42 @@ fun FamilyMessagesScreen(
             }
             Spacer(Modifier.height(40.dp))
         }
+    }
+
+    // D47: confirmação clara antes de apagar (padrão geriátrico)
+    messagePendingDelete?.let { target ->
+        AlertDialog(
+            onDismissRequest = { messagePendingDelete = null },
+            title = {
+                Text("Apagar mensagem?", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "A mensagem será apagada para você e para a sua família. " +
+                        "Essa ação não pode ser desfeita.",
+                    fontSize = 15.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteFamilyMessage(target.id)
+                        messagePendingDelete = null
+                    }
+                ) {
+                    Text(
+                        "Apagar",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { messagePendingDelete = null }) {
+                    Text("Cancelar", fontSize = 16.sp)
+                }
+            }
+        )
     }
 }

@@ -1,6 +1,8 @@
 package br.com.bragasaude.ui.family
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -18,12 +20,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.local.FamilyMessageEntity
+import br.com.bragasaude.domain.FamilyConversationPdfExporter
 import br.com.bragasaude.ui.theme.BragaEmerald
 import br.com.bragasaude.ui.theme.BragaMint
 import br.com.bragasaude.ui.theme.BragaTextPrimary
@@ -47,9 +51,13 @@ fun FamilyChatScreen(
     val currentUserId by remember { derivedStateOf { viewModel.currentUserId } }
     val messages by viewModel.familyMessages.collectAsState()
     val binding by viewModel.activeBindingsForCurrentUser.collectAsState()
-    
+    val context = LocalContext.current
+    val exportScope = androidx.compose.runtime.rememberCoroutineScope()
+
     var messageText by remember { mutableStateOf("") }
     var isSending by remember { mutableStateOf(false) }
+    // D47: mensagem aguardando confirmação de exclusão (toque longo)
+    var messagePendingDelete by remember { mutableStateOf<FamilyMessageEntity?>(null) }
     
     // Marcar mensagens como lidas quando os vínculos estiverem carregados
     LaunchedEffect(binding) {
@@ -108,6 +116,15 @@ fun FamilyChatScreen(
                     }
                 },
                 actions = {
+                    // D47: exportar a conversa do ciclo vigente (PDF compartilhável)
+                    IconButton(
+                        onClick = {
+                            FamilyConversationPdfExporter.exportAndShare(context, messages, exportScope)
+                        },
+                        enabled = messages.isNotEmpty()
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = "Exportar conversa em PDF")
+                    }
                     IconButton(onClick = onNavigateToConnect) {
                         Icon(Icons.Default.Groups, contentDescription = "Gerenciar Círculo Familiar")
                     }
@@ -121,6 +138,11 @@ fun FamilyChatScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
+            // D47: aviso permanente de retenção — as mensagens vivem por 24 horas
+            FamilyRetentionNotice(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+
             // Lista de mensagens
             LazyColumn(
                 state = listState,
@@ -129,11 +151,15 @@ fun FamilyChatScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
             ) {
-                items(messages.filter { it.messageText.isNotBlank() || it.iconType != "CUSTOM" }) { message ->
+                items(
+                    messages.filter { it.messageText.isNotBlank() || it.iconType != "CUSTOM" },
+                    key = { it.id }
+                ) { message ->
                     val isFromMe = message.senderUserId == currentUserId
                     ChatBubble(
                         message = message,
                         isFromMe = isFromMe,
+                        onLongClick = if (isFromMe) ({ messagePendingDelete = message }) else null,
                         modifier = Modifier.fillMaxWidth(0.85f)
                     )
                 }
@@ -196,12 +222,51 @@ fun FamilyChatScreen(
             )
         }
     }
+
+    // D47: confirmação clara antes de apagar (padrão geriátrico)
+    messagePendingDelete?.let { target ->
+        AlertDialog(
+            onDismissRequest = { messagePendingDelete = null },
+            title = {
+                Text("Apagar mensagem?", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "A mensagem será apagada para você e para a sua família. " +
+                        "Essa ação não pode ser desfeita.",
+                    fontSize = 15.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteFamilyMessage(target.id)
+                        messagePendingDelete = null
+                    }
+                ) {
+                    Text(
+                        "Apagar",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { messagePendingDelete = null }) {
+                    Text("Cancelar", fontSize = 16.sp)
+                }
+            }
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChatBubble(
     message: FamilyMessageEntity,
     isFromMe: Boolean,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -229,14 +294,26 @@ private fun ChatBubble(
         }
         
         Column(horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start) {
-            // Balão da mensagem
+            // Balão da mensagem (toque longo na própria mensagem oferece exclusão — D47)
+            val bubbleShape = RoundedCornerShape(
+                topStart = 16.dp,
+                topEnd = 16.dp,
+                bottomStart = if (isFromMe) 4.dp else 16.dp,
+                bottomEnd = if (isFromMe) 16.dp else 4.dp
+            )
             Surface(
-                shape = RoundedCornerShape(
-                    topStart = 16.dp,
-                    topEnd = 16.dp,
-                    bottomStart = if (isFromMe) 4.dp else 16.dp,
-                    bottomEnd = if (isFromMe) 16.dp else 4.dp
-                ),
+                modifier = if (onLongClick != null) {
+                    Modifier
+                        .clip(bubbleShape)
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClick = onLongClick,
+                            onLongClickLabel = "Apagar mensagem"
+                        )
+                } else {
+                    Modifier
+                },
+                shape = bubbleShape,
                 color = if (isFromMe) BragaEmerald.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant
             ) {
                 Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {

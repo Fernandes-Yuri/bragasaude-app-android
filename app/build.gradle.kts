@@ -11,9 +11,12 @@ plugins {
 }
 
 // Leitura segura do keystore.properties (se existir na raiz ou módulo)
-val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystorePropertiesFile = listOf(
+    rootProject.file("keystore.properties"),
+    project.file("keystore.properties")
+).firstOrNull { it.exists() }
 val keystoreProperties = Properties()
-val hasKeystore = if (keystorePropertiesFile.exists()) {
+val hasKeystore = if (keystorePropertiesFile != null && keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
     true
 } else {
@@ -38,10 +41,17 @@ android {
 
     signingConfigs {
         if (hasKeystore) {
+            val storeFilePath = keystoreProperties.getProperty("storeFile") ?: "release-keystore.jks"
+            val resolvedStoreFile = listOf(
+                rootProject.file(storeFilePath),
+                project.file(storeFilePath),
+                file(storeFilePath)
+            ).firstOrNull { it.exists() } ?: rootProject.file(storeFilePath)
+
             create("release") {
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")
-                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storeFile = resolvedStoreFile
                 storePassword = keystoreProperties.getProperty("storePassword")
             }
         }
