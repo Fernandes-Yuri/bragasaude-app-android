@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Paleta Teal / Menta Suave & Neutros Modernos -->
+    <color name="teal_primary">#0D9488</color>
+    <color name="teal_secondary">#14B8A6</color>
+    <color name="teal_light">#CCFBF1</color>
+    <color name="teal_surface">#F0FDFA</color>
+    
+    <!-- Cores de Apoio / Status -->
+    <color name="green_health">#10B981</color>
+    <color name="blue_dark">#1E293B</color>
+    <color name="gray_secondary">#64748B</color>
+    <color name="neutral_50">#F8FAFC</color>
+    <color name="neutral_100">#F1F5F9</color>
+    <color name="background_light">#FAFAFA</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="splash_background">#FFFFFF</color>
+    
+    <!-- Vermelho apenas para destaque, alertas SOS e erros -->
+    <color name="accent_red">#DC2626</color>
+    <color name="accent_red_light">#FEE2E2</color>
+</resources>

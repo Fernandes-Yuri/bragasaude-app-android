@@ -1,0 +1,120 @@
+<resources>
+    <!-- Placeholder de Novo Nome da Marca & Rebranding -->
+    <string name="app_name">Braga Saúde</string>
+    <string name="app_name_new">Braga Saúde</string>
+    <string name="welcome_message">Bem-vindo ao seu espaço de saúde</string>
+    <string name="slogan">Seu guardião de bem-estar.\nAcompanhamento leve, claro e seguro.</string>
+    <string name="login_with_google">Continuar com Google</string>
+    <string name="home_tab">Início</string>
+    <string name="data_tab">Exames</string>
+    <string name="plans_tab">Planos</string>
+    <string name="profile_tab">Perfil</string>
+    <string name="register_data">Registrar dados</string>
+    <string name="recent_history">Histórico recente</string>
+    <string name="health_evolution_charts">Evolução de Parâmetros</string>
+    <string name="generate_report">Gerar Relatório PDF</string>
+
+    <!-- Health Engine Alerts (Focados em fatos, acolhimento e faixas, sem diagnósticos médicos) -->
+    <string name="health_emergency_title">Atenção Redobrada</string>
+    <string name="health_alert_title">Orientação de Cuidado</string>
+    <string name="health_milestone_title">Conquista</string>
+    <string name="health_evolution_title">Evolução Positiva</string>
+
+    <string name="bp_high_crisis">Pressão arterial muito acima da faixa de referência (%d mmHg).</string>
+    <string name="bp_high_crisis_action">Descanse e, caso sinta mal-estar, tontura ou dor, busque acolhimento médico presencial na UBS ou Emergência.</string>
+    <string name="bp_high">Sua pressão arterial está acima da faixa esperada (%d mmHg).</string>
+    <string name="bp_high_action">Descanse por 15 minutos e realize uma nova medição calmamente.</string>
+    <string name="bp_low">Pressão arterial abaixo da faixa de referência (%d mmHg).</string>
+    <string name="bp_low_action">Beba água, evite movimentos bruscos e refaça a medição em 30 minutos.</string>
+    <string name="bp_diastolic_high_crisis">Pressão diastólica muito alta (%1$d mmHg).</string>
+    <string name="bp_diastolic_high_crisis_action">Repouse e procure atendimento médico se persistir.</string>
+    <string name="bp_diastolic_low">Pressão diastólica muito baixa (%1$d mmHg).</string>
+    <string name="bp_diastolic_low_action">Deite-se com as pernas elevadas, hidrate-se e busque apoio médico se houver tontura ou desmaio.</string>
+
+    <string name="heart_rate_low">Frequência cardíaca muito baixa (%1$d bpm).</string>
+    <string name="heart_rate_low_action">Permaneça em repouso e busque atendimento médico de emergência se houver tontura, fraqueza ou mal-estar.</string>
+    <string name="heart_rate_high_crisis">Frequência cardíaca muito alta (%1$d bpm).</string>
+    <string name="heart_rate_high_crisis_action">Procure atendimento médico de emergência imediatamente.</string>
+    <string name="heart_rate_high">Frequência cardíaca elevada em repouso (%1$d bpm).</string>
+    <string name="heart_rate_high_action">Repouse por 10 a 15 minutos, respire calmamente e meça novamente.</string>
+
+    <string name="nutrition_glucose_msg">Glicemia em %1$d mg/dL (Faixa de Atenção SBD/ADA).</string>
+    <string name="nutrition_glucose_action">Sugestão Nutricional: Consuma fibras solúveis (aveia, semente de chia, psyllium), folhas verde-escuras e leguminosas, que retardam a absorção de carboidratos e auxiliam no controle glicêmico.</string>
+    <string name="nutrition_cholesterol_msg">Perfil Lipídico (%1$s: %2$d mg/dL) acima do ótimo da SBC.</string>
+    <string name="nutrition_cholesterol_action">Sugestão Nutricional: Inclua azeite de oliva extravirgem, abacate, peixes ricos em Ômega-3 (sardinha, salmão) e castanhas, que favorecem a modulação das frações lipídicas.</string>
+    <string name="nutrition_triglycerides_msg">Triglicerídeos em %1$d mg/dL (Acima da referência ideal SBC).</string>
+    <string name="nutrition_triglycerides_action">Sugestão Nutricional: Reduza açúcares e farinhas refinadas. Priorize carboidratos complexos, maçãs, grãos integrais e hidratação abundante.</string>
+    <string name="nutrition_uric_acid_msg">Ácido úrico em %1$s mg/dL (Limite superior).</string>
+    <string name="nutrition_uric_acid_action">Sugestão Nutricional: Aumente o consumo diário de água (meta 35 ml/kg) e dê preferência a alimentos com baixo teor de purinas como cerejas, morangos e vegetais frescos.</string>
+
+    <string name="glucose_emergency">Glicose em nível significativamente fora da faixa (%1$d mg/dL).</string>
+    <string name="glucose_emergency_action">Caso apresente sonolência, confusão ou mal-estar, busque atendimento de saúde presencial.</string>
+    <string name="glucose_high">Nível de glicose acima da faixa de referência (%1$d mg/dL).</string>
+    <string name="glucose_high_action">Hidrate-se bem, evite carboidratos e refaça o teste em 1 hora.</string>
+    <string name="glucose_hypo_severe">Glicose muito abaixo da faixa de referência (%1$d mg/dL).</string>
+    <string name="glucose_hypo_severe_action">Consuma carboidrato simples imediatamente e busque auxílio caso não haja melhora.</string>
+    <string name="glucose_hypo">Glicose abaixo da faixa de referência (%1$d mg/dL).</string>
+    <string name="glucose_hypo_action">Consuma 15g de carboidrato simples e refaça o teste em 15 minutos.</string>
+
+    <string name="imc_alert">Seu IMC atual é %1$s, fora da faixa de referência populacional.</string>
+    <string name="imc_alert_action">Considere conversar com um profissional de saúde (médico ou nutricionista) sobre esses valores.</string>
+    <string name="weight_trend_alert">Notamos uma variação rápida de peso (%1$s de %2$skg).</string>
+    <string name="weight_trend_action">Se essa mudança não foi planejada, considere conversar com um profissional de saúde.</string>
+    <string name="weight_goal_milestone_title">Meta de Peso Alcançada</string>
+    <string name="weight_goal_milestone_desc">Você atingiu sua meta de %1$skg. Parabéns pela consistência!</string>
+
+    <string name="pressure_stabilized">Sua pressão arterial retornou à faixa de referência (%1$d mmHg).</string>
+    <string name="pressure_stabilized_action">Continue mantendo seus hábitos saudáveis e o acompanhamento regular.</string>
+
+    <string name="hydration_milestone_title">Hidratação Completa</string>
+    <string name="hydration_milestone_desc">Você atingiu sua meta diária de %1$dml de água hoje.</string>
+
+    <string name="exam_critical_alert">Alerta de Parâmetro</string>
+    <string name="exam_critical_msg">Valor do parâmetro %1$s acima da faixa de referência (%2$s).</string>
+    <string name="exam_critical_action">Apresente este resultado ao seu profissional de saúde assistente.</string>
+    <string name="exam_evolution_msg">Evolução positiva: o valor de %s retornou para a faixa de referência.</string>
+    <string name="exam_evolution_action">Continue com os bons hábitos e acompanhamento!</string>
+
+    <!-- Transparência Metodológica & Compliance -->
+    <string name="observations_section_title">Observações de Parâmetros</string>
+    <string name="observations_referral">Considere conversar com seu profissional de saúde sobre esses valores.</string>
+    <string name="observation_bp_trend">Pressão arterial (sistólica) acima da faixa de referência em %1$d medições seguidas.</string>
+    <string name="observation_exam_high">Parâmetro %1$s acima da faixa de referência.</string>
+    <string name="disclaimer_not_medical">Conteúdo informativo com base em faixas de referência e consensos internacionais. Não constitui diagnóstico nem prescrição médica. Em caso de dúvidas ou sintomas, consulte um profissional de saúde.</string>
+    <string name="care_modules_subtitle">Sugestões de autocuidado com base nos parâmetros que você registra. Não substituem orientação médica.</string>
+    <string name="nutrition_disclaimer">Sugestões de autocuidado alimentar baseadas no seu perfil e parâmetros informados. Não constituem prescrição médica nem substituem nutricionista.</string>
+
+    <!-- Exames em PDF -->
+    <string name="exam_pdf_only_hint">Envie o laudo em PDF disponibilizado pelo laboratório.</string>
+    <string name="exam_pdf_only_error">Apenas arquivos no formato PDF são aceitos.</string>
+
+    <!-- Atividade e Sedentarismo -->
+    <string name="sedentary_alert">Momento de Movimento</string>
+    <string name="sedentary_msg">Você está em repouso há algum tempo. Que tal uma breve caminhada ou alongamento?</string>
+    <string name="activity_goal_title">Meta de Passos Alcançada!</string>
+    <string name="activity_goal_msg">Parabéns! Você atingiu sua meta de %d passos hoje.</string>
+
+    <!-- Onboarding e Telas Legais -->
+    <string name="terms_of_use_title">Termos de Uso</string>
+    <string name="privacy_policy_title">Política de Privacidade (LGPD)</string>
+    <string name="tutorial_skip">Pular Tutorial</string>
+    <string name="tutorial_finish">Começar a Usar</string>
+    <string name="tutorial_next">Próximo</string>
+    <string name="tutorial_see_again">Ver Tutorial do Aplicativo</string>
+
+    <!-- Trava de Segurança - Modo Desenvolvedor & Depuração USB -->
+    <string name="security_dev_mode_title">Acesso Bloqueado por Segurança</string>
+    <string name="security_dev_mode_badge">Blindagem de Segurança Ativa</string>
+    <string name="security_dev_mode_subtitle">Modo Desenvolvedor Ativado</string>
+    <string name="security_dev_mode_desc">Para garantir a máxima proteção do seu histórico de saúde e a estrita conformidade com as diretrizes de privacidade e LGPD, o aplicativo Braga Saúde não pode ser executado com o Modo Desenvolvedor ou a Depuração USB ativados no aparelho.</string>
+    <string name="security_dev_mode_step1">1. Toque no botão abaixo para abrir as Configurações.</string>
+    <string name="security_dev_mode_step2">2. Desative a opção \"Opções do desenvolvedor\" (ou \"Depuração USB\").</string>
+    <string name="security_dev_mode_step3">3. Retorne ao aplicativo Braga Saúde para continuar.</string>
+    <string name="security_dev_mode_btn_settings">Abrir Configurações do Sistema</string>
+    <string name="security_dev_mode_btn_retry">Verificar Novamente</string>
+    <string name="observation_exam_low">%1$s abaixo da faixa de referência geral</string>
+    <string name="exam_critical_low_msg">Valor do parâmetro %1$s abaixo da faixa de referência (%2$s).</string>
+    <string name="observation_metric_trend">%1$s acima da faixa de referência geral em 3 medições seguidas. Considere conversar com seu médico.</string>
+    <string name="weight_gain_48h">Notamos ganho de %1$s kg nas últimas 48 horas.</string>
+    <string name="weight_gain_48h_action">Procure atendimento. Este aplicativo não substitui avaliação médica.</string>
+</resources>

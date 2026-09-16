@@ -1,0 +1,519 @@
+# Queries do Braga Saúde
+
+query GetProfile($id: String!) @auth(expr: "auth.uid == id") {
+  profile(id: $id) {
+    id
+    fullName
+    birthDate
+    gender
+    height
+    weight
+    isSmoker
+    hasDiabetes
+    hasHypertension
+    hasThyroidIssue
+    hasRenalIssue
+    hasBoneIssue
+    hasMuscularIssue
+    hydrationTargetMl
+    dailyCalorieTarget
+    stepGoal
+    weightGoal
+    sleepStartTime
+    sleepEndTime
+    emergencyContactName
+    emergencyContactRelation
+    emergencyContactPhone
+    consentAcceptedAt
+    notificationsEnabled
+    locationEnabled
+    currentXp
+    totalXp
+    currentLevel
+    currentStreak
+    lastXpAt
+    showInFeed
+    userRole
+    caregiverMode
+    avatarIdentifier
+  }
+}
+
+query GetVitalSigns($userId: String!) @auth(expr: "auth.uid == userId") {
+  vitalSigns(where: { user: { id: { eq: $userId } } }, orderBy: [{ measuredAt: DESC }]) {
+    id
+    systolicPressure
+    diastolicPressure
+    heartRate
+    glucoseLevel
+    glucoseType
+    hydrationMl
+    measuredAt
+  }
+}
+
+query GetMedications($userId: String!) @auth(expr: "auth.uid == userId") {
+  medications(where: { user: { id: { eq: $userId } } }) {
+    id
+    name
+    dosageMg
+    pillQuantity
+    scheduleTime
+  }
+}
+
+query GetMedicationLogsToday($userId: String!) @auth(expr: "auth.uid == userId") {
+  medicationLogs(where: { user: { id: { eq: $userId } } }, orderBy: [{ takenAt: DESC }]) {
+    id
+    takenAt
+    medication {
+      id
+      name
+    }
+  }
+}
+
+query GetExams($userId: String!) @auth(expr: "auth.uid == userId") {
+  exams(where: { user: { id: { eq: $userId } } }, orderBy: [{ examDate: DESC }]) {
+    id
+    title
+    category
+    examDate
+    fileUrl
+    status
+    aiExtractedData
+    validationNotes
+  }
+}
+
+query GetClinicalReferences @auth(level: PUBLIC) {
+  clinicalReferences {
+    itemKey
+    itemName
+    category
+    unit
+    minTarget
+    maxTarget
+    minCritical
+    maxCritical
+    interpretationHint
+  }
+}
+
+query GetFeedbacks($userId: String!) @auth(expr: "auth.uid == userId") {
+  feedbacks(where: { user: { id: { eq: $userId } } }, orderBy: [{ createdAt: DESC }]) {
+    id
+    userId
+    userEmail
+    userName
+    category
+    title
+    message
+    inputMethod
+    appVersion
+    deviceInfo
+    status
+    createdAt
+  }
+}
+
+query GetDailyMetrics($userId: String!) @auth(expr: "auth.uid == userId") {
+  dailyMetrics(where: { user: { id: { eq: $userId } } }, orderBy: [{ date: DESC }], limit: 30) {
+    id
+    date
+    steps
+    distanceMeters
+    distanceGpsMeters
+    distanceStepsMeters
+    distanceFinalMeters
+    reliabilityScore
+    caloriesBurned
+    activeMinutes
+  }
+}
+
+# -------------------------------------------------------------
+# QUERIES DE GAMIFICAÇÃO & REDE SOCIAL
+# -------------------------------------------------------------
+
+# Retorna o ranking da liga semanal para um ciclo e nível específico (Top 50)
+# Regra de segurança: Acesso restrito a usuários autenticados (@auth(level: USER))
+query GetMyLeagueRanking($level: Int!, $cycleId: UUID!) @auth(level: USER) {
+  leagueMemberships(
+    where: {
+      leagueCycle: { id: { eq: $cycleId }, level: { eq: $level } }
+    }
+    orderBy: [{ xpEarned: DESC }]
+    limit: 50
+  ) {
+    id
+    xpEarned
+    rankAtClose
+    outcome
+    user {
+      id
+      fullName
+      currentLevel
+      currentStreak
+    }
+    leagueCycle {
+      id
+      level
+      weekStartDate
+      weekEndDate
+      status
+    }
+  }
+}
+
+# Retorna a adesão/registro de liga do usuário no ciclo ativo
+# Regra de segurança: Usuário consulta seus próprios dados de liga (@auth(expr: "auth.uid == userId"))
+query GetMyLeagueMembership($userId: String!, $cycleId: UUID!) @auth(expr: "auth.uid == userId") {
+  leagueMemberships(
+    where: {
+      user: { id: { eq: $userId } }
+      leagueCycle: { id: { eq: $cycleId } }
+    }
+  ) {
+    id
+    xpEarned
+    rankAtClose
+    outcome
+    leagueCycle {
+      id
+      level
+      weekStartDate
+      weekEndDate
+      status
+    }
+  }
+}
+
+# Retorna o ciclo de liga ativo atual para um nível específico
+query GetActiveLeagueCycle($level: Int!) @auth(level: USER) {
+  leagueCycles(
+    where: {
+      level: { eq: $level }
+      status: { eq: "active" }
+    }
+    limit: 1
+  ) {
+    id
+    level
+    weekStartDate
+    weekEndDate
+    status
+  }
+}
+
+# Retorna todos os ciclos de ligas atualmente ativos
+# REGRA DE SEGURANÇA: Execução exclusiva via Cloud Functions / Admin SDK (@auth(level: NO_ACCESS)).
+query GetActiveLeagueCycles @auth(level: NO_ACCESS) {
+  leagueCycles(
+    where: {
+      status: { eq: "active" }
+    }
+    orderBy: [{ level: ASC }]
+  ) {
+    id
+    level
+    weekStartDate
+    weekEndDate
+    status
+  }
+}
+
+# Retorna ciclos ativos com alias para o job de fechamento semanal
+# REGRA DE SEGURANÇA: Execução exclusiva via Cloud Functions / Admin SDK (@auth(level: NO_ACCESS)).
+query GetActiveCyclesGroupedByLevel @auth(level: NO_ACCESS) {
+  entries: leagueCycles(
+    where: {
+      status: { eq: "active" }
+    }
+    orderBy: [{ level: ASC }]
+  ) {
+    cycleId: id
+    level
+  }
+}
+
+# Retorna membros de um ciclo de liga ordenados por XP para ranking e fechamento
+# REGRA DE SEGURANÇA: Execução exclusiva via Cloud Functions / Admin SDK (@auth(level: NO_ACCESS)).
+query GetRankedMemberships($cycleId: UUID!, $level: Int!) @auth(level: NO_ACCESS) {
+  memberships: leagueMemberships(
+    where: {
+      leagueCycle: { id: { eq: $cycleId }, level: { eq: $level } }
+    }
+    orderBy: [{ xpEarned: DESC }]
+  ) {
+    id
+    xpEarned
+    rankAtClose
+    outcome
+    user {
+      id
+      currentLevel
+      totalXp
+    }
+  }
+}
+
+# Retorna membros de um ciclo de liga por ciclo e nível
+# REGRA DE SEGURANÇA: Execução exclusiva via Cloud Functions / Admin SDK (@auth(level: NO_ACCESS)).
+query GetLeagueMembershipsByCycle($cycleId: UUID!, $level: Int!) @auth(level: NO_ACCESS) {
+  memberships: leagueMemberships(
+    where: {
+      leagueCycle: { id: { eq: $cycleId }, level: { eq: $level } }
+    }
+    orderBy: [{ xpEarned: DESC }]
+  ) {
+    id
+    xpEarned
+    user {
+      id
+      currentLevel
+      totalXp
+    }
+  }
+}
+
+
+# Retorna o feed social global com publicações visíveis
+# Regra de segurança: Leitura global para qualquer usuário autenticado (@auth(level: USER))
+# Nota: Apenas posts gerados pelo sistema e com isVisible: true são retornados
+query GetGlobalFeed($limit: Int!, $offset: Int!) @auth(level: USER) {
+  socialPosts(
+    where: { isVisible: { eq: true }, user: { showInFeed: { eq: true } } }
+    orderBy: [{ createdAt: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    postType
+    title
+    description
+    createdAt
+    isVisible
+    user {
+      id
+      fullName
+      currentLevel
+    }
+    relatedMilestone {
+      id
+      badgeType
+    }
+  }
+}
+
+# Retorna reações associadas a um post específico
+query GetPostReactions($postId: UUID!) @auth(level: USER) {
+  postReactions(where: { post: { id: { eq: $postId } } }, orderBy: [{ createdAt: DESC }]) {
+    id
+    reactionType
+    createdAt
+    user {
+      id
+      fullName
+    }
+  }
+}
+
+# -------------------------------------------------------------
+# QUERIES DE PONTE FAMILIAR & MODO CUIDADOR
+# -------------------------------------------------------------
+
+# Vínculos em que o usuário autenticado é o PACIENTE (titular/idoso).
+query GetFamilyBindingsForPatient($patientId: String!) @auth(expr: "auth.uid == patientId") {
+  familyBindings(where: { patient: { id: { eq: $patientId } } }, orderBy: [{ createdAt: DESC }]) {
+    id
+    connectionCode
+    caregiverName
+    caregiverRelation
+    status
+    createdAt
+    expiresAt
+    patient { id }
+    caregiver { id fullName }
+  }
+}
+
+# Vínculos em que o usuário autenticado é o CUIDADOR (familiar).
+query GetFamilyBindingsForCaregiver($caregiverId: String!) @auth(expr: "auth.uid == caregiverId") {
+  familyBindings(where: { caregiver: { id: { eq: $caregiverId } } }, orderBy: [{ createdAt: DESC }]) {
+    id
+    connectionCode
+    caregiverName
+    caregiverRelation
+    status
+    createdAt
+    expiresAt
+    patient { id fullName }
+    caregiver { id }
+  }
+}
+
+# Busca um vínculo pendente pelo código de conexão (usado pelo cuidador para aceitar).
+# REGRA DE SEGURANÇA: Qualquer usuário autenticado pode buscar por código, porém o
+# código tem 8 caracteres alfanuméricos (36^8 combinações) e validade de 7 dias,
+# tornando inviável a enumeração por força bruta.
+query FindFamilyBindingByCode($code: String!) @auth(level: USER) {
+  familyBindings(where: { connectionCode: { eq: $code } }, limit: 1) {
+    id
+    connectionCode
+    status
+    createdAt
+    expiresAt
+    patient { id fullName }
+    caregiver { id }
+  }
+}
+
+# -------------------------------------------------------------
+# SINCRONIZAÇÃO CUIDADOR ↔ PACIENTE
+# -------------------------------------------------------------
+
+# Busca mensagens trocadas no contexto do paciente.
+# REGRA: leitura direta só pelo próprio paciente. Cuidador usa backend proxy
+# GET /api/family/:patientId/messages que valida familyBindings(status==ACTIVE).
+query GetFamilyMessages($patientId: String!) @auth(expr: "auth.uid == patientId") {
+  familyMessages(
+    where: { patient: { id: { eq: $patientId } } }
+    orderBy: [{ sentAt: DESC }]
+    limit: 30
+  ) {
+    id
+    sender {
+      id
+    }
+    senderName
+    messageText
+    iconType
+    isRead
+    sentAt
+  }
+}
+
+# --- QUERIES DE CONSULTA MÉDICA ---
+
+# Buscar todas as consultas de um usuário.
+query GetConsultations($userId: String!) @auth(expr: "auth.uid == userId") {
+  consultations(
+    where: { user: { id: { eq: $userId } } }
+    orderBy: { scheduledDate: DESC }
+  ) {
+    id
+    title
+    caregiverName
+    caregiverRelation
+    scheduledDate
+    status
+    googleCalendarEventId
+    createdAt
+    user { id fullName }
+    caregiver { id fullName }
+  }
+}
+
+# Buscar consultas sugeridas (do cuidador, não aceitas/rejeitadas).
+query GetSuggestedConsultations($userId: String!) @auth(expr: "auth.uid == userId") {
+  consultations(
+    where: { user: { id: { eq: $userId } }, status: { eq: "SUGGESTED" } }
+    orderBy: { scheduledDate: DESC }
+  ) {
+    id
+    title
+    caregiverName
+    caregiverRelation
+    scheduledDate
+    status
+    googleCalendarEventId
+    createdAt
+  }
+}
+
+# Buscar consultas aceitas.
+query GetAcceptedConsultations($userId: String!) @auth(expr: "auth.uid == userId") {
+  consultations(
+    where: { user: { id: { eq: $userId } }, status: { eq: "ACCEPTED" } }
+    orderBy: { scheduledDate: DESC }
+  ) {
+    id
+    title
+    caregiverName
+    caregiverRelation
+    scheduledDate
+    status
+    googleCalendarEventId
+    createdAt
+  }
+}
+
+# Buscar consultas rejeitadas.
+query GetRejectedConsultations($userId: String!) @auth(expr: "auth.uid == userId") {
+  consultations(
+    where: { user: { id: { eq: $userId } }, status: { eq: "REJECTED" } }
+    orderBy: { scheduledDate: DESC }
+  ) {
+    id
+    title
+    caregiverName
+    caregiverRelation
+    scheduledDate
+    status
+    googleCalendarEventId
+    createdAt
+  }
+}
+
+# Buscar próxima consulta (próxima da data atual).
+query GetNextConsultation($userId: String!, $nowMillis: Long!) @auth(expr: "auth.uid == userId") {
+  consultations(
+    where: { user: { id: { eq: $userId } }, scheduledDate: { gte: $nowMillis } }
+    orderBy: { scheduledDate: ASC }
+    limit: 1
+  ) {
+    id
+    title
+    caregiverName
+    caregiverRelation
+    scheduledDate
+    status
+    googleCalendarEventId
+  }
+}
+
+# Busca os sinais vitais mais recentes do paciente.
+# REGRA: leitura direta só pelo próprio paciente. Painel do cuidador usa backend proxy.
+query GetPatientVitalSigns($patientId: String!) @auth(expr: "auth.uid == patientId") {
+  vitalSigns(
+    where: { user: { id: { eq: $patientId } } }
+    orderBy: [{ measuredAt: DESC }]
+    limit: 15
+  ) {
+    id
+    systolicPressure
+    diastolicPressure
+    heartRate
+    glucoseLevel
+    glucoseType
+    hydrationMl
+    measuredAt
+  }
+}
+
+# Busca dados essenciais do perfil do paciente acompanhado.
+# REGRA: leitura direta só pelo próprio paciente. Painel do cuidador usa backend proxy.
+query GetPatientProfile($patientId: String!) @auth(expr: "auth.uid == patientId") {
+  profile(id: $patientId) {
+    id
+    fullName
+    hasDiabetes
+    hasHypertension
+    hydrationTargetMl
+    stepGoal
+    weight
+    height
+  }
+}
+
