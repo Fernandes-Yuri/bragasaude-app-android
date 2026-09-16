@@ -99,8 +99,3 @@ app/src/main/java/br/com/bragasaude/
 O app consulta `/api/app/latest` no gateway para verificar updates.
 
 As releases são gerenciadas via `app/build.gradle.kts` → `versionCode` / `versionName`.
-
-## 📚 Documentação Relacionada
-
-- `41_GUIA_MIGRACAO_AWS_CONCLUIDA.md` — Infraestrutura AWS
-- `40_MIGRACAO_AWS_E_DIVISAO_DE_REPOSITORIOS.md` — Divisão de repositórios
