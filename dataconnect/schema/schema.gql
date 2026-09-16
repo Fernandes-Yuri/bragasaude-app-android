@@ -1,0 +1,293 @@
+# -------------------------------------------------------------
+# ESQUEMA FIREBASE DATA CONNECT (POSTGRESQL) - BRAGA SAÚDE
+# -------------------------------------------------------------
+
+type Profile @table(key: ["id"]) {
+  id: String! @col(name: "id")
+  fullName: String!
+  birthDate: Date
+  gender: String
+  height: Float
+  weight: Float
+  isSmoker: Boolean @default(value: false)
+  hasDiabetes: Boolean @default(value: false)
+  hasHypertension: Boolean @default(value: false)
+  hasThyroidIssue: Boolean @default(value: false)
+  hasRenalIssue: Boolean @default(value: false)
+  hasBoneIssue: Boolean @default(value: false)
+  hasMuscularIssue: Boolean @default(value: false)
+  hydrationTargetMl: Int @default(value: 2000)
+  dailyCalorieTarget: Int @default(value: 1800)
+  stepGoal: Int @default(value: 8000)
+  weightGoal: Float
+  sleepStartTime: String @default(value: "22:00")
+  sleepEndTime: String @default(value: "06:00")
+  emergencyContactName: String
+  emergencyContactRelation: String
+  emergencyContactPhone: String
+  consentAcceptedAt: Timestamp
+  notificationsEnabled: Boolean @default(value: true)
+  locationEnabled: Boolean @default(value: true)
+  # -------------------------------------------------------------
+  # GAMIFICAÇÃO & NÍVEIS
+  # currentXp: XP acumulado no ciclo semanal corrente (zerado a cada fechamento semanal).
+  # totalXp: XP histórico acumulado pelo usuário (nunca resetado, usado para estatísticas e progressão).
+  # currentLevel: Nível/divisão atual da liga do usuário (inicia no Nível 1).
+  # currentStreak: Sequência de dias consecutivos com ganho de pelo menos 1 XP.
+  # lastXpAt: Timestamp da última pontuação/atividade geradora de XP.
+  # -------------------------------------------------------------
+  currentXp: Int @default(value: 0)
+  totalXp: Int @default(value: 0)
+  currentLevel: Int @default(value: 1)
+  currentStreak: Int @default(value: 0)
+  lastXpAt: Timestamp
+  showInFeed: Boolean @default(value: true) # Requisito LGPD: Permite ao usuário ocultar suas atividades do feed social/ranking público
+  userRole: String
+  caregiverMode: String
+  avatarIdentifier: String
+}
+
+type VitalSign @table {
+  user: Profile!
+  systolicPressure: Int
+  diastolicPressure: Int
+  heartRate: Int
+  glucoseLevel: Int
+  glucoseType: String
+  hydrationMl: Int
+  measuredAt: Timestamp!
+}
+
+type Medication @table {
+  user: Profile!
+  name: String!
+  dosageMg: Float
+  pillQuantity: Int
+  scheduleTime: String!
+}
+
+type MedicationLog @table {
+  user: Profile!
+  medication: Medication!
+  takenAt: Timestamp!
+}
+
+
+
+type Exam @table {
+  user: Profile!
+  title: String!
+  category: String!
+  examDate: Date!
+  fileUrl: String!
+  status: String! @default(value: "analyzed")
+  validationNotes: String
+  aiExtractedData: String
+  createdAt: Timestamp @default(expr: "request.time")
+}
+
+type ExamItem @table {
+  exam: Exam!
+  user: Profile!
+  itemKey: String!
+  itemName: String!
+  valueNumeric: Float
+  valueText: String
+  unit: String
+  referenceText: String
+  status: String @default(value: "uploaded")
+  measuredAt: Timestamp
+}
+
+type ClinicalReference @table(key: ["itemKey"]) {
+  itemKey: String!
+  itemName: String!
+  category: String!
+  unit: String
+  minTarget: Float
+  maxTarget: Float
+  minCritical: Float
+  maxCritical: Float
+  interpretationHint: String
+}
+
+type Biometry @table {
+  user: Profile!
+  weight: Float!
+  height: Float!
+  imc: Float!
+  measuredAt: Timestamp!
+}
+
+type DailyMetric @table {
+  user: Profile!
+  date: Date!
+  steps: Int!
+
+  distanceMeters: Float!
+
+  # Fase 2 — Reconciliação de atividade (fontes separadas + resultado final)
+  distanceGpsMeters: Float
+  distanceStepsMeters: Float
+  distanceFinalMeters: Float
+  reliabilityScore: Float
+
+  caloriesBurned: Float!
+  activeMinutes: Int!
+}
+
+type FoodCatalog @table {
+  name: String!
+  kcal: Float!
+  carbs: Float!
+  proteins: Float!
+  fats: Float!
+  sodium: Float!
+  isDiabetesSafe: Boolean
+  isHypertensionSafe: Boolean
+  isThyroidSafe: Boolean
+}
+
+type UserConsumption @table {
+  user: Profile!
+  food: FoodCatalog!
+  consumedAt: Timestamp!
+  mealType: String!
+}
+
+type Milestone @table {
+  user: Profile!
+  title: String!
+  description: String
+  badgeType: String!
+  achievedAt: Timestamp!
+}
+
+type DetectedCondition @table {
+  user: Profile!
+  conditionName: String!
+  detectedAt: Timestamp!
+  severity: String
+  evidenceType: String
+}
+
+type Feedback @table {
+  user: Profile
+  userId: String
+  userEmail: String
+  userName: String
+  category: String! # 'sugestao', 'reclamacao', 'bug', 'outro'
+  title: String
+  message: String!
+  inputMethod: String # 'voice', 'text', 'voice_edited'
+  appVersion: String
+  deviceInfo: String
+  status: String! @default(value: "pending") # 'pending', 'analyzed', 'resolved', 'archived'
+  createdAt: Timestamp!
+}
+
+# -------------------------------------------------------------
+# GAMIFICAÇÃO COMPETITIVA & REDE SOCIAL
+# -------------------------------------------------------------
+
+# Temporada semanal de competição pareada por nível.
+# Cada nível/divisão roda seu próprio ciclo em paralelo (Nível 1 tem seu ranking,
+# Nível 2 o dele, etc.), todos fechando sincronizadamente no mesmo dia (domingo à noite).
+type LeagueCycle @table {
+  level: Int!
+  weekStartDate: Date!
+  weekEndDate: Date!
+  status: String! @default(value: "active") # "active" | "closed"
+}
+
+# Vincula o usuário (Profile) a um ciclo específico de liga (LeagueCycle).
+# Isolar o xpEarned neste registro (em vez de confiar apenas em Profile.currentXp)
+# permite reconstruir com exatidão o histórico de ligas sem depender de um contador mutável.
+type LeagueMembership @table {
+  user: Profile!
+  leagueCycle: LeagueCycle!
+  xpEarned: Int! @default(value: 0)
+  rankAtClose: Int                         # Preenchido somente quando o ciclo fecha
+  outcome: String                          # "promoted" | "maintained" | "demoted" | null enquanto ativo
+}
+
+# Publicações do Feed Social Global.
+# NOTA DE PRODUTO E SEGURANÇA: NÃO existe campo de upload de imagem/vídeo/áudio externo.
+# O post é 100% derivado e estruturado a partir de eventos do sistema (metas atingidas,
+# subida de nível, marcos clínicos e sequências), garantindo ambiente seguro e sem moderação pesada.
+type SocialPost @table {
+  user: Profile!
+  postType: String!                        # "milestone" | "streak" | "level_up" | "goal_hit" | "weekly_recap"
+  title: String!
+  description: String
+  relatedMilestone: Milestone              # Referência opcional quando aplicável a um Milestone interno
+  createdAt: Timestamp!
+  isVisible: Boolean! @default(value: true) # Permite moderação preventiva (ocultar sem deletar do banco)
+}
+
+# Reações leves aos posts do Feed Social.
+# NOTA DE DESIGN: Não existe campo de texto livre aqui de propósito.
+# Reações predefinidas mantêm a moderação simples, segura e focada no encorajamento mútuo geriátrico.
+type PostReaction @table {
+  post: SocialPost!
+  user: Profile!
+  reactionType: String! @default(value: "apoio") # Tipo único no MVP ("apoio"), expansível no futuro
+  createdAt: Timestamp!
+}
+
+# -------------------------------------------------------------
+# PONTE FAMILIAR & MODO CUIDADOR (Módulo 2/3/4)
+# -------------------------------------------------------------
+# Vínculo entre um paciente (titular/idoso) e um cuidador (familiar).
+# O paciente gera um código alfanumérico de 8 caracteres; o cuidador o
+# insere/escaneia para estabelecer o vínculo. Regras:
+#   - status: PENDING (código gerado) -> ACTIVE (aceito) / REVOKED / EXPIRED
+#   - expiresAt: validade de 7 dias para o código pendente (segurança)
+#   - connectionCode: único no banco para impedir colisão entre pacientes
+type FamilyBinding @table {
+  patient: Profile!          # Titular/idoso que gera o código
+  caregiver: Profile         # Cuidador vinculado (null enquanto PENDING)
+  caregiverName: String!
+  caregiverRelation: String! # "Filho(a)", "Neto(a)", "Esposo(a)", "Cuidador(a)"
+  connectionCode: String! @unique
+  status: String! @default(value: "PENDING") # "PENDING" | "ACTIVE" | "REVOKED" | "EXPIRED"
+  createdAt: Timestamp!
+  expiresAt: Timestamp!
+}
+
+type Consultation @table {
+  user: Profile!               # Paciente titular
+  caregiver: Profile           # Cuidador que sugeriu (nullable)
+  caregiverName: String!
+  caregiverRelation: String!
+  title: String!               # Título/Especialidade da consulta
+  description: String          # Descrição opcional
+  scheduledDate: Timestamp!    # Data e hora agendadas
+  status: String! @default(value: "SUGGESTED") # "SUGGESTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED"
+  googleCalendarEventId: String # ID do evento no Google Calendar (null se não sincronizado)
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+# Mensagens de carinho, avisos e bilhetes trocados entre familiar/cuidador e o idoso
+type FamilyMessage @table {
+  patient: Profile!
+  sender: Profile!
+  senderName: String!
+  messageText: String!
+  iconType: String! @default(value: "LOVE")
+  isRead: Boolean! @default(value: false)
+  sentAt: Timestamp!
+}
+
+# -------------------------------------------------------------
+# AUDITORIA DE EXCLUSÃO (LGPD)
+# -------------------------------------------------------------
+type UserDeletionLog @table {
+  userId: String!
+  deletedAt: Timestamp!
+  ipAddress: String
+  tablesAffected: String!
+  storageFilesCleaned: Int!
+}
+
+

@@ -1,0 +1,11 @@
+specVersion: "v1alpha"
+serviceId: "braga-saude-service"
+location: "us-east4"
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "braga-saude-database"
+      cloudSql:
+        instanceId: "braga-saude-instance"
+connectorDirs: ["./connector"]

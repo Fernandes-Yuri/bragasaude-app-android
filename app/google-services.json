@@ -1,0 +1,47 @@
+﻿{
+  "project_info": {
+    "project_number": "626274351085",
+    "project_id": "braga-saude",
+    "storage_bucket": "braga-saude.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:626274351085:android:cd16ecbecd2d64aa04d9e4",
+        "android_client_info": {
+          "package_name": "br.com.bragasaude"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "626274351085-7vg11mtpvc8jj5alqhdg74hfsp0d4lgh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "br.com.bragasaude",
+            "certificate_hash": "01b7fd5e11c704ac360f6718e99064cbc0d1e043"
+          }
+        },
+        {
+          "client_id": "626274351085-b4q2acgsfuql6pcan2d9q13msiu7go24.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDuZ_pQWOOciWAKI26DdpG_87n4sxhpCvQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "626274351085-b4q2acgsfuql6pcan2d9q13msiu7go24.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

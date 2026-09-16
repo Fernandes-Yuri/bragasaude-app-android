@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Braga Saúde</string>
+    <string name="welcome_message">Bem-vinda ao Braga Saúde</string>
+    <string name="slogan">Seu sentinela de saúde.\nCuidar hoje para viver melhor amanhã.</string>
+    <string name="login_with_google">Continuar com Google</string>
+    <string name="home_tab">Início</string>
+    <string name="data_tab">Dados</string>
+    <string name="plans_tab">Planos</string>
+    <string name="profile_tab">Perfil</string>
+</resources>

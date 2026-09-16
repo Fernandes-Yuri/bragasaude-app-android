@@ -1,0 +1,754 @@
+# Mutations do Braga Saúde
+
+mutation UpsertProfile(
+  $id: String!
+  $fullName: String!
+  $birthDate: Date
+  $gender: String
+  $height: Float
+  $weight: Float
+  $isSmoker: Boolean
+  $hasDiabetes: Boolean
+  $hasHypertension: Boolean
+  $hasThyroidIssue: Boolean
+  $hasRenalIssue: Boolean
+  $hasBoneIssue: Boolean
+  $hasMuscularIssue: Boolean
+  $hydrationTargetMl: Int
+  $dailyCalorieTarget: Int
+  $stepGoal: Int
+  $weightGoal: Float
+  $sleepStartTime: String
+  $sleepEndTime: String
+  $emergencyContactName: String
+  $emergencyContactRelation: String
+  $emergencyContactPhone: String
+  $consentAcceptedAt: Timestamp
+  $notificationsEnabled: Boolean
+  $locationEnabled: Boolean
+  $showInFeed: Boolean
+  $userRole: String
+  $caregiverMode: String
+  $avatarIdentifier: String
+) @auth(expr: "auth.uid == id") {
+  profile_upsert(
+    data: {
+      id: $id
+      fullName: $fullName
+      birthDate: $birthDate
+      gender: $gender
+      height: $height
+      weight: $weight
+      isSmoker: $isSmoker
+      hasDiabetes: $hasDiabetes
+      hasHypertension: $hasHypertension
+      hasThyroidIssue: $hasThyroidIssue
+      hasRenalIssue: $hasRenalIssue
+      hasBoneIssue: $hasBoneIssue
+      hasMuscularIssue: $hasMuscularIssue
+      hydrationTargetMl: $hydrationTargetMl
+      dailyCalorieTarget: $dailyCalorieTarget
+      stepGoal: $stepGoal
+      weightGoal: $weightGoal
+      sleepStartTime: $sleepStartTime
+      sleepEndTime: $sleepEndTime
+      emergencyContactName: $emergencyContactName
+      emergencyContactRelation: $emergencyContactRelation
+      emergencyContactPhone: $emergencyContactPhone
+      consentAcceptedAt: $consentAcceptedAt
+      notificationsEnabled: $notificationsEnabled
+      locationEnabled: $locationEnabled
+      showInFeed: $showInFeed
+      userRole: $userRole
+      caregiverMode: $caregiverMode
+      avatarIdentifier: $avatarIdentifier
+    }
+  )
+}
+
+mutation CreateVitalSign(
+  $userId: String!
+  $systolicPressure: Int
+  $diastolicPressure: Int
+  $heartRate: Int
+  $glucoseLevel: Int
+  $glucoseType: String
+  $hydrationMl: Int
+  $measuredAt: Timestamp!
+) @auth(expr: "auth.uid == userId") {
+  vitalSign_insert(
+    data: {
+      user: { id: $userId }
+      systolicPressure: $systolicPressure
+      diastolicPressure: $diastolicPressure
+      heartRate: $heartRate
+      glucoseLevel: $glucoseLevel
+      glucoseType: $glucoseType
+      hydrationMl: $hydrationMl
+      measuredAt: $measuredAt
+    }
+  )
+}
+
+mutation CreateMedication(
+  $userId: String!
+  $name: String!
+  $dosageMg: Float
+  $pillQuantity: Int
+  $scheduleTime: String!
+) @auth(expr: "auth.uid == userId") {
+  medication_insert(
+    data: {
+      user: { id: $userId }
+      name: $name
+      dosageMg: $dosageMg
+      pillQuantity: $pillQuantity
+      scheduleTime: $scheduleTime
+    }
+  )
+}
+
+mutation LogMedicationTaken(
+  $userId: String!
+  $medicationId: UUID!
+  $takenAt: Timestamp!
+) @auth(expr: "auth.uid == userId") {
+  medicationLog_insert(
+    data: {
+      user: { id: $userId }
+      medication: { id: $medicationId }
+      takenAt: $takenAt
+    }
+  )
+}
+
+mutation CreateExam(
+  $userId: String!
+  $title: String!
+  $category: String!
+  $examDate: Date!
+  $fileUrl: String!
+  $aiExtractedData: String
+) @auth(expr: "auth.uid == userId") {
+  exam_insert(
+    data: {
+      user: { id: $userId }
+      title: $title
+      category: $category
+      examDate: $examDate
+      fileUrl: $fileUrl
+      status: "analyzed"
+      aiExtractedData: $aiExtractedData
+    }
+  )
+}
+
+# -------------------------------------------------------------
+# MUTATIONS — EXAM ITEMS (sincronização Data Connect)
+# -------------------------------------------------------------
+
+mutation CreateExamItem(
+  $examId: UUID!
+  $userId: String!
+  $itemKey: String!
+  $itemName: String!
+  $valueNumeric: Float
+  $valueText: String
+  $unit: String
+  $referenceText: String
+  $status: String
+  $measuredAt: Timestamp
+) @auth(expr: "auth.uid == userId") {
+  examItem_insert(
+    data: {
+      exam: { id: $examId }
+      user: { id: $userId }
+      itemKey: $itemKey
+      itemName: $itemName
+      valueNumeric: $valueNumeric
+      valueText: $valueText
+      unit: $unit
+      referenceText: $referenceText
+      status: $status
+      measuredAt: $measuredAt
+    }
+  )
+}
+
+mutation UpdateExamItem(
+  $id: UUID!
+  $userId: String!
+  $status: String!
+) @auth(expr: "auth.uid == userId") {
+  examItem_updateMany(
+    where: {
+      id: { eq: $id }
+      user: { id: { eq: $userId } }
+    }
+    data: {
+      status: $status
+    }
+  )
+}
+
+mutation UpsertExamItem(
+  $id: UUID
+  $examId: UUID!
+  $userId: String!
+  $itemKey: String!
+  $itemName: String!
+  $valueNumeric: Float
+  $valueText: String
+  $unit: String
+  $referenceText: String
+  $status: String
+  $measuredAt: Timestamp
+) @auth(expr: "auth.uid == userId") {
+  examItem_upsert(
+    data: {
+      id: $id
+      exam: { id: $examId }
+      user: { id: $userId }
+      itemKey: $itemKey
+      itemName: $itemName
+      valueNumeric: $valueNumeric
+      valueText: $valueText
+      unit: $unit
+      referenceText: $referenceText
+      status: $status
+      measuredAt: $measuredAt
+    }
+  )
+}
+
+mutation UpsertDailyMetric(
+  $id: UUID!
+  $userId: String!
+  $date: Date!
+  $steps: Int!
+  $distanceMeters: Float!
+  $distanceGpsMeters: Float
+  $distanceStepsMeters: Float
+  $distanceFinalMeters: Float
+  $reliabilityScore: Float
+  $caloriesBurned: Float!
+  $activeMinutes: Int!
+) @auth(expr: "auth.uid == userId") {
+  dailyMetric_upsert(
+    data: {
+      id: $id
+      user: { id: $userId }
+      date: $date
+      steps: $steps
+      distanceMeters: $distanceMeters
+      distanceGpsMeters: $distanceGpsMeters
+      distanceStepsMeters: $distanceStepsMeters
+      distanceFinalMeters: $distanceFinalMeters
+      reliabilityScore: $reliabilityScore
+      caloriesBurned: $caloriesBurned
+      activeMinutes: $activeMinutes
+    }
+  )
+}
+
+mutation CreateFeedback(
+  $userEmail: String
+  $userName: String
+  $category: String!
+  $title: String
+  $message: String!
+  $inputMethod: String
+  $appVersion: String
+  $deviceInfo: String
+  $createdAt: Timestamp!
+) @auth(level: USER) {
+  feedback_insert(
+    data: {
+      userId_expr: "auth.uid"
+      userEmail: $userEmail
+      userName: $userName
+      category: $category
+      title: $title
+      message: $message
+      inputMethod: $inputMethod
+      appVersion: $appVersion
+      deviceInfo: $deviceInfo
+      status: "pending"
+      createdAt: $createdAt
+    }
+  )
+}
+
+# -------------------------------------------------------------
+# MUTATIONS DE GAMIFICAÇÃO COMPETITIVA & REDE SOCIAL
+# -------------------------------------------------------------
+
+# Atualiza contadores de XP, nível e streak no Profile do usuário.
+# REGRA DE SEGURANÇA: Execução exclusiva via Cloud Functions / Admin SDK.
+# MOTIVO: versão anterior com @auth(expr: "auth.uid == userId") permitia auto-promoção
+# (mutation{profile_update(currentLevel:99, totalXp:99999)}). Cliente não escreve XP direto.
+# Use IncrementUserXp (NO_ACCESS) via backend após validar a regra de domínio.
+mutation UpdateProfileGamification(
+  $userId: String!
+  $currentXp: Int
+  $totalXp: Int
+  $currentLevel: Int
+  $currentStreak: Int
+  $lastXpAt: Timestamp
+) @auth(level: NO_ACCESS) {
+  profile_update(
+    id: $userId
+    data: {
+      currentXp: $currentXp
+      totalXp: $totalXp
+      currentLevel: $currentLevel
+      currentStreak: $currentStreak
+      lastXpAt: $lastXpAt
+    }
+  )
+}
+
+# Cria um novo ciclo semanal de liga.
+# REGRA DE SEGURANÇA: Execução exclusiva via Cloud Functions / Admin SDK (fechamento semanal automatizado).
+# O cliente Android/Web não possui permissão para instanciar novos ciclos de competição diretamente.
+mutation CreateLeagueCycle(
+  $level: Int!
+  $weekStartDate: Date!
+  $weekEndDate: Date!
+  $status: String!
+) @auth(level: NO_ACCESS) {
+  leagueCycle_insert(
+    data: {
+      level: $level
+      weekStartDate: $weekStartDate
+      weekEndDate: $weekEndDate
+      status: $status
+    }
+  )
+}
+
+# Inscreve/vincula o usuário a uma liga semanal
+mutation JoinLeagueCycle(
+  $userId: String!
+  $cycleId: UUID!
+) @auth(expr: "auth.uid == userId") {
+  leagueMembership_insert(
+    data: {
+      user: { id: $userId }
+      leagueCycle: { id: $cycleId }
+      xpEarned: 0
+    }
+  )
+}
+
+# Atualiza o XP acumulado pelo usuário na liga corrente.
+# REGRA DE SEGURANÇA: Execução exclusiva via Cloud Functions / Admin SDK.
+# Cliente NUNCA arbitra xpEarned (fraude de ranking). XP vem do backend validado.
+mutation UpdateLeagueMembershipXp(
+  $id: UUID!
+  $xpEarned: Int!
+) @auth(level: NO_ACCESS) {
+  leagueMembership_update(
+    id: $id
+    data: {
+      xpEarned: $xpEarned
+    }
+  )
+}
+
+# Atualiza o resultado da liga e rank para um membro no fechamento do ciclo semanal.
+# REGRA DE SEGURANÇA: Execução exclusiva via Cloud Functions / Admin SDK.
+mutation UpdateLeagueMembershipOutcome(
+  $membershipId: UUID!
+  $rankAtClose: Int!
+  $outcome: String!
+) @auth(level: NO_ACCESS) {
+  leagueMembership_update(
+    id: $membershipId
+    data: {
+      rankAtClose: $rankAtClose
+      outcome: $outcome
+    }
+  )
+}
+
+# Encerra o ciclo de liga semanal marcando seu status como "closed".
+# REGRA DE SEGURANÇA: Execução exclusiva via Cloud Functions / Admin SDK.
+mutation CloseLeagueCycle(
+  $cycleId: UUID!
+) @auth(level: NO_ACCESS) {
+  leagueCycle_update(
+    id: $cycleId
+    data: {
+      status: "closed"
+    }
+  )
+}
+
+# Marca o ciclo de liga como erro em caso de falha durante o processamento de encerramento.
+# REGRA DE SEGURANÇA: Execução exclusiva via Cloud Functions / Admin SDK.
+mutation MarkCycleAsError(
+  $cycleId: UUID!
+) @auth(level: NO_ACCESS) {
+  leagueCycle_update(
+    id: $cycleId
+    data: {
+      status: "error"
+    }
+  )
+}
+
+# Concede/atualiza XP no perfil do usuário via rotina administrativa.
+# REGRA DE SEGURANÇA: Execução exclusiva via Cloud Functions / Admin SDK.
+mutation IncrementUserXp(
+  $userId: String!
+  $xpAmount: Int!
+) @auth(level: NO_ACCESS) {
+  profile_update(
+    id: $userId
+    data: {
+      currentXp: $xpAmount
+    }
+  )
+}
+
+
+# Criação de publicação no Feed Social.
+# REGRA DE SEGURANÇA: O feed é estritamente derivado de eventos do sistema (sem upload livre de mídia).
+# Executada pelo backend/Cloud Functions após validação de regras de gamificação.
+mutation CreateSocialPost(
+  $userId: String!
+  $postType: String!
+  $title: String!
+  $description: String
+  $relatedMilestoneId: UUID
+  $createdAt: Timestamp!
+) @auth(expr: "auth.uid == userId") {
+  socialPost_insert(
+    data: {
+      user: { id: $userId }
+      postType: $postType
+      title: $title
+      description: $description
+      relatedMilestone: { id: $relatedMilestoneId }
+      createdAt: $createdAt
+      isVisible: true
+    }
+  )
+}
+
+# Registra uma reação ("apoio") em um post do feed social
+mutation ReactToPost(
+  $postId: UUID!
+  $userId: String!
+  $reactionType: String!
+  $createdAt: Timestamp!
+) @auth(expr: "auth.uid == userId") {
+  postReaction_insert(
+    data: {
+      post: { id: $postId }
+      user: { id: $userId }
+      reactionType: $reactionType
+      createdAt: $createdAt
+    }
+  )
+}
+
+# Remove uma reação do usuário a um post específico
+mutation RemovePostReaction(
+  $postId: UUID!
+  $userId: String!
+) @auth(expr: "auth.uid == userId") {
+  postReaction_deleteMany(
+    where: {
+      post: { id: { eq: $postId } }
+      user: { id: { eq: $userId } }
+    }
+  )
+}
+
+# -------------------------------------------------------------
+# MUTATIONS DE CONSULTA MÉDICA
+# -------------------------------------------------------------
+
+# Paciente agenda uma consulta para si mesmo.
+mutation CreateConsultation(
+  $userId: String!
+  $title: String!
+  $scheduledDate: Timestamp!
+  $caregiverUserId: String
+  $caregiverName: String
+  $caregiverRelation: String
+) @auth(expr: "auth.uid == userId") {
+  consultation_insert(
+    data: {
+      user: { id: $userId }
+      caregiver: { id: $caregiverUserId }
+      caregiverName: $caregiverName
+      caregiverRelation: $caregiverRelation
+      title: $title
+      scheduledDate: $scheduledDate
+      status: "SUGGESTED"
+      createdAt: $now
+    }
+  )
+}
+
+# Cuidador/familiar aceita uma consulta sugerida.
+mutation AcceptConsultation(
+  $consultationId: UUID!
+  $caregiverUserId: String!
+  $now: Timestamp!
+) @auth(expr: "auth.uid == caregiverUserId") {
+  consultation_update(
+    id: $consultationId
+    data: {
+      status: "ACCEPTED"
+      caregiver: { id: $caregiverUserId }
+    }
+  )
+}
+
+# Usuário rejeita uma consulta sugerida.
+mutation RejectConsultation(
+  $consultationId: UUID!
+  $userId: String!
+) @auth(expr: "auth.uid == userId") {
+  consultation_update(
+    id: $consultationId
+    data: {
+      status: "REJECTED"
+    }
+  )
+}
+
+# Usuário marca consulta como concluída.
+mutation CompleteConsultation(
+  $consultationId: UUID!
+  $userId: String!
+) @auth(expr: "auth.uid == userId") {
+  consultation_update(
+    id: $consultationId
+    data: {
+      status: "COMPLETED"
+    }
+  )
+}
+
+# Usuário cancela uma consulta agendada.
+mutation CancelConsultation(
+  $consultationId: UUID!
+  $userId: String!
+) @auth(expr: "auth.uid == userId") {
+  consultation_update(
+    id: $consultationId
+    data: {
+      status: "CANCELLED"
+    }
+  )
+}
+
+# Paciente (titular/idoso) cria um vínculo pendente com código alfanumérico.
+mutation CreateFamilyBinding(
+  $patientId: String!
+  $caregiverName: String!
+  $caregiverRelation: String!
+  $connectionCode: String!
+  $createdAt: Timestamp!
+  $expiresAt: Timestamp!
+) @auth(expr: "auth.uid == patientId") {
+  familyBinding_insert(
+    data: {
+      patient: { id: $patientId }
+      caregiverName: $caregiverName
+      caregiverRelation: $caregiverRelation
+      connectionCode: $connectionCode
+      status: "PENDING"
+      createdAt: $createdAt
+      expiresAt: $expiresAt
+    }
+  )
+}
+
+# Cuidador aceita um vínculo pendente inserindo/escaneando o código.
+# RESOLUÇÃO DE CONFLITOS: usa updateMany condicional (status ainda PENDING e não
+# expirado). Se dois cuidadores disputarem o mesmo código simultaneamente, apenas
+# o primeiro que executar muda o status para ACTIVE; o segundo encontra 0 registros.
+mutation AcceptFamilyBinding(
+  $code: String!
+  $caregiverUserId: String!
+  $caregiverName: String!
+  $caregiverRelation: String!
+  $now: Timestamp!
+) @auth(expr: "auth.uid == caregiverUserId") {
+  familyBinding_updateMany(
+    where: {
+      connectionCode: { eq: $code }
+      status: { eq: "PENDING" }
+      expiresAt: { gt: $now }
+    }
+    data: {
+      status: "ACTIVE"
+      caregiver: { id: $caregiverUserId }
+      caregiverName: $caregiverName
+      caregiverRelation: $caregiverRelation
+    }
+  )
+}
+
+# Paciente (titular) revoga o acesso de um cuidador.
+mutation RevokeFamilyBinding(
+  $bindingId: UUID!
+  $patientId: String!
+) @auth(expr: "auth.uid == patientId") {
+  familyBinding_update(
+    id: $bindingId
+    data: {
+      status: "REVOKED"
+    }
+  )
+}
+
+# -------------------------------------------------------------
+# MENSAGENS FAMILIARES (Cuidador ↔ Idoso)
+# -------------------------------------------------------------
+
+mutation CreateFamilyMessage(
+  $patientId: String!
+  $senderName: String!
+  $messageText: String!
+  $iconType: String!
+) @auth(expr: "auth.uid == patientId") {
+  familyMessage_insert(
+    data: {
+      patient: { id: $patientId }
+      sender: { id_expr: "auth.uid" }
+      senderName: $senderName
+      messageText: $messageText
+      iconType: $iconType
+      sentAt_expr: "request.time"
+    }
+  )
+}
+
+mutation MarkFamilyMessageAsRead(
+  $messageId: UUID!
+  $patientId: String!
+) @auth(expr: "auth.uid == patientId") {
+  familyMessage_updateMany(
+    where: {
+      id: { eq: $messageId }
+      patient: { id: { eq: $patientId } }
+    }
+    data: {
+      isRead: true
+    }
+  )
+}
+
+# -------------------------------------------------------------
+# MÓDULO 5 — EXCLUSÃO DE CONTA (LGPD - Direito ao Esquecimento)
+# -------------------------------------------------------------
+
+# Apaga todos os feedbacks do usuário. (Rodado ANTES de DeleteProfile,
+# porque a FK feedback.user_id é SET NULL e a linha sobreviveria órfã.)
+mutation DeleteUserFeedbacks(
+  $userId: String!
+) @auth(expr: "auth.uid == userId") {
+  feedback_deleteMany(
+    where: { user: { id: { eq: $userId } } }
+  )
+}
+
+# Apaga todos os vinculos familiares onde o usuario e PACIENTE ou CUIDADOR.
+# Necessario antes de DeleteProfile pois familyBinding.patient nao tem ON DELETE CASCADE.
+mutation DeleteFamilyBindingsByUserId(
+  $userId: String!
+) @auth(expr: "auth.uid == userId") {
+  familyBinding_deleteMany(
+    where: {
+      _or: [
+        { patient: { id: { eq: $userId } } }
+        { caregiver: { id: { eq: $userId } } }
+      ]
+    }
+  )
+}
+
+# Apaga o Profile do usuario. Acoes ON DELETE CASCADE removem automaticamente:
+# vital_sign, medication, medication_log, exam, exam_item, biometry, daily_metric,
+# user_consumption, milestone, detected_condition, league_membership, social_post,
+# post_reaction. Vinculos familiares sao removidos por DeleteFamilyBindingsByUserId
+# executado ANTES deste metodo. Feedbacks com SET NULL sao tratados pelo
+# DeleteUserFeedbacks executado antes de tudo.
+mutation DeleteProfile(
+  $userId: String!
+) @auth(expr: "auth.uid == userId") {
+  profile_delete(
+    id: $userId
+  )
+}
+
+# -------------------------------------------------------------
+# AUDITORIA DE EXCLUSAO (LGPD)
+# -------------------------------------------------------------
+
+# Registra a exclusao de conta no log de auditoria para cumplimiento do Art. 16 LGPD.
+# Executado apos todas as exclusoes em cascata terminarem.
+mutation LogUserDeletion(
+  $userId: String!
+  $deletedAt: Timestamp!
+  $ipAddress: String
+  $tablesAffected: String!
+  $storageFilesCleaned: Int!
+) @auth(level: NO_ACCESS) {
+  userDeletionLog_insert(
+    data: {
+      userId: $userId
+      deletedAt: $deletedAt
+      ipAddress: $ipAddress
+      tablesAffected: $tablesAffected
+      storageFilesCleaned: $storageFilesCleaned
+    }
+  )
+}
+
+# -------------------------------------------------------------
+# QUERIES — EXAM ITEMS (sincronização Data Connect)
+# -------------------------------------------------------------
+
+query GetExamsByUser($userId: String!) @auth(expr: "auth.uid == userId") {
+  exams(
+    where: { user: { id: { eq: $userId } } },
+    orderBy: { examDate: DESC }
+  ) {
+    id
+    title
+    category
+    examDate
+    fileUrl
+    status
+    createdAt
+    aiExtractedData
+  }
+}
+
+query GetExamItemsByUser($userId: String!) @auth(expr: "auth.uid == userId") {
+  examItems(
+    where: { user: { id: { eq: $userId } } },
+    orderBy: { measuredAt: DESC }
+  ) {
+    id
+    itemKey
+    itemName
+    valueNumeric
+    valueText
+    unit
+    referenceText
+    status
+    measuredAt
+    exam { id }
+    user { id }
+  }
+}
+

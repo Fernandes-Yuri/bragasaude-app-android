@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Grupo com escala reduzida centralizada no pivot (50,50) para Material Adaptive Icon -->
+    <group
+        android:pivotX="50"
+        android:pivotY="50"
+        android:scaleX="0.80"
+        android:scaleY="0.80">
+
+        <!-- Squircle esmeralda suave como fundo do ícone -->
+        <path
+            android:fillColor="#00A884"
+            android:pathData="M20,5 Q5,5 5,20 L5,80 Q5,95 20,95 L80,95 Q95,95 95,80 L95,20 Q95,5 80,5 Z" />
+
+        <!-- Traçado de Ritmo Cardíaco (ECG) Branco -->
+        <path
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="5"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:fillColor="@android:color/transparent"
+            android:pathData="M14,50 L30,50 L37,30 L46,70 L53,38 L59,57 L65,50 L86,50" />
+
+    </group>
+
+</vector>
