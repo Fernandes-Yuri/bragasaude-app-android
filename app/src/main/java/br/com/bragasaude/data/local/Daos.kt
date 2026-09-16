@@ -483,13 +483,13 @@ interface FamilyDao {
     @Query("SELECT * FROM family_bindings_local WHERE patientUserId = :patientUserId AND caregiverUserId = :caregiverUserId AND status = 'ACTIVE' LIMIT 1")
     suspend fun existsActiveLink(patientUserId: String, caregiverUserId: String): FamilyBindingEntity?
 
-    /** Mensagens nao lidas do paciente. */
-    @Query("SELECT * FROM family_messages_local WHERE patientUserId = :patientUserId AND isRead = 0 ORDER BY sentAt DESC")
-    fun getUnreadMessagesForPatient(patientUserId: String): Flow<List<FamilyMessageEntity>>
+    /** Mensagens nao lidas do paciente (D47: apenas vigentes e nao apagadas). */
+    @Query("SELECT * FROM family_messages_local WHERE patientUserId = :patientUserId AND isRead = 0 AND deletedAt IS NULL AND expiresAt > :now ORDER BY sentAt DESC")
+    fun getUnreadMessagesForPatient(patientUserId: String, now: Long = System.currentTimeMillis()): Flow<List<FamilyMessageEntity>>
 
-    /** Mensagens recentes do paciente. */
-    @Query("SELECT * FROM family_messages_local WHERE patientUserId = :patientUserId ORDER BY sentAt DESC LIMIT :limit")
-    fun getRecentMessagesForPatient(patientUserId: String, limit: Int): Flow<List<FamilyMessageEntity>>
+    /** Mensagens recentes do paciente (D47: apenas vigentes e nao apagadas). */
+    @Query("SELECT * FROM family_messages_local WHERE patientUserId = :patientUserId AND deletedAt IS NULL AND expiresAt > :now ORDER BY sentAt DESC LIMIT :limit")
+    fun getRecentMessagesForPatient(patientUserId: String, limit: Int, now: Long = System.currentTimeMillis()): Flow<List<FamilyMessageEntity>>
 
     /** Ativar um vinculo pendente. */
     @Query("UPDATE family_bindings_local SET status = 'ACTIVE' WHERE id = :bindingId")
@@ -552,13 +552,32 @@ interface FamilyDao {
     @Query("SELECT * FROM family_messages_local WHERE remoteId = :remoteId LIMIT 1")
     suspend fun getMessageByRemoteId(remoteId: String): FamilyMessageEntity?
 
-    /** Mensagens pendentes de envio para a nuvem. */
-    @Query("SELECT * FROM family_messages_local WHERE pendingSync = 1")
-    suspend fun getPendingSyncMessages(): List<FamilyMessageEntity>
+    /** Mensagens pendentes de envio para a nuvem (exclui as ja apagadas localmente). */
+    @Query("SELECT * FROM family_messages_local WHERE pendingSync = 1 AND deletedAt IS NULL AND expiresAt > :now")
+    suspend fun getPendingSyncMessages(now: Long = System.currentTimeMillis()): List<FamilyMessageEntity>
 
     /** Marcar mensagem sincronizada com a nuvem. */
-    @Query("UPDATE family_messages_local SET remoteId = :remoteId, pendingSync = 0 WHERE id = :id")
+    @Query("UPDATE family_messages_local SET remoteId = :remoteId, pendingSync = 0 WHERE id = :id AND deletedAt IS NULL")
     suspend fun markMessageSynced(id: String, remoteId: String)
+
+    /** Buscar mensagem pelo id local (D47: necessaria para decidir hard vs soft delete). */
+    @Query("SELECT * FROM family_messages_local WHERE id = :messageId LIMIT 1")
+    suspend fun getMessageById(messageId: String): FamilyMessageEntity?
+
+    /** Exclusao pelo usuario (D47): tombstone imediato; propagacao ao servidor pelo SyncWorker. */
+    @Query("UPDATE family_messages_local SET deletedAt = :deletedAt, pendingSync = 1, messageText = '', senderName = '', iconType = 'LOVE' WHERE id = :messageId")
+    suspend fun softDeleteMessage(messageId: String, deletedAt: Long = System.currentTimeMillis())
+
+    /** Mensagens apagadas localmente que ja existem no servidor e precisam propagar a exclusao (D47). */
+    @Query("SELECT * FROM family_messages_local WHERE deletedAt IS NOT NULL AND pendingSync = 1")
+    suspend fun getPendingDeletionMessages(): List<FamilyMessageEntity>
+
+    @Query("UPDATE family_messages_local SET pendingSync = 0 WHERE id = :id AND deletedAt IS NOT NULL")
+    suspend fun markDeletionSynced(id: String)
+
+    /** Purga local D47: remove definitivamente tudo o que completou 24h (com ou sem tombstone). */
+    @Query("DELETE FROM family_messages_local WHERE expiresAt > 0 AND expiresAt <= :now")
+    suspend fun purgeExpiredMessages(now: Long = System.currentTimeMillis())
 
     /** Vínculos familiares pendentes de sincronização com a nuvem. */
     @Query("SELECT * FROM family_bindings_local WHERE pendingSync = 1")

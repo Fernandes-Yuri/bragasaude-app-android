@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.sync
+package br.com.bragasaude.data.remote.sync
 
 import android.content.Context
 import androidx.hilt.work.HiltWorker
@@ -197,13 +197,25 @@ class SyncWorker @AssistedInject constructor(
     }
 
     private suspend fun syncFamilyMessages() {
+        familyDao.purgeExpiredMessages()
+        var failed = false
+        // D47: propagar exclusões feitas pelo usuário neste aparelho
+        for (msg in familyDao.getPendingDeletionMessages()) {
+            val confirmed = apiClient.deleteFamilyMessage(msg.remoteId ?: msg.id, msg.patientUserId, msg.sentAt)
+            if (!confirmed) failed = true else familyDao.markDeletionSynced(msg.id)
+        }
         val pending = familyDao.getPendingSyncMessages()
         for (msg in pending) {
             val remoteId = apiClient.syncFamilyMessage(msg)
             if (remoteId != null) {
                 familyDao.markMessageSynced(msg.id, remoteId)
+            } else {
+                failed = true
             }
         }
+        if (failed) throw java.io.IOException("Sincronização de mensagens pendente.")
+        // D47: purga local das mensagens que completaram 24h
+        familyDao.purgeExpiredMessages()
     }
 
     private suspend fun syncAuditLogs() {

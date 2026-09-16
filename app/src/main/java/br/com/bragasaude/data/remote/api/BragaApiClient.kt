@@ -42,6 +42,25 @@ class BragaApiClient @Inject constructor(
     private val isoFormat get() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
     private val dateFormat get() = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
+    /**
+     * Parser tolerante de ISO-8601 vindo do gateway Python (`datetime.isoformat()`):
+     * aceita fração de segundos com microssegundos e offsets "+00:00"/"Z".
+     */
+    private fun parseIsoMillis(raw: String?): Long? {
+        if (raw.isNullOrBlank()) return null
+        val match = Regex("""^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:?\d{2})?$""")
+            .find(raw.trim()) ?: return null
+        val base = match.groupValues[1]
+        val fraction = match.groupValues.getOrNull(2)?.take(3)?.padEnd(3, '0') ?: "000"
+        val zone = when (val z = match.groupValues.getOrNull(3) ?: "") {
+            "", "Z" -> "+0000"
+            else -> z.replace(":", "")
+        }
+        return try {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).parse("$base.$fraction$zone")?.time
+        } catch (_: Exception) { null }
+    }
+
     // ==================== PERFIL ====================
 
     suspend fun syncProfile(p: ProfileEntity): Boolean = withContext(Dispatchers.IO) {
@@ -394,14 +413,26 @@ class BragaApiClient @Inject constructor(
 
     suspend fun getFamilyMessages(patientId: String): List<FamilyMessageEntity> = withContext(Dispatchers.IO) {
         try {
-            val arr = getJsonArray("$baseUrl/api/family/messages/$patientId") ?: return@withContext emptyList()
+            val arr = org.json.JSONArray()
+            var offset = 0
+            while (true) {
+                val batch = getJsonArray("$baseUrl/api/family/messages/$patientId?limit=200&offset=$offset")
+                    ?: throw java.io.IOException("Não foi possível atualizar as mensagens.")
+                for (index in 0 until batch.length()) arr.put(batch.getJSONObject(index))
+                if (batch.length() < 200) break
+                offset += batch.length()
+            }
             val list = mutableListOf<FamilyMessageEntity>()
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
-                val sAt = try { isoFormat.parse(obj.getString("sent_at"))?.time ?: System.currentTimeMillis() } catch (_: Exception) { System.currentTimeMillis() }
+                val sAt = parseIsoMillis(obj.optString("sent_at", null)) ?: System.currentTimeMillis()
+                // D47: TTL e tombstone vindos do servidor (retrocompatível com gateway antigo)
+                val expAt = parseIsoMillis(obj.optString("expires_at", null)) ?: (sAt + FAMILY_MESSAGE_TTL_MS)
+                val delAt = parseIsoMillis(obj.optString("deleted_at", null))
                 list.add(
                     FamilyMessageEntity(
                         id = obj.getString("id"),
+                        remoteId = obj.getString("id"),
                         patientUserId = obj.getString("patient_id"),
                         senderUserId = obj.getString("sender_id"),
                         senderName = obj.getString("sender_name"),
@@ -409,14 +440,34 @@ class BragaApiClient @Inject constructor(
                         iconType = obj.optString("icon_type", "LOVE"),
                         isRead = obj.optBoolean("is_read", false),
                         sentAt = sAt,
-                        pendingSync = false
+                        pendingSync = false,
+                        expiresAt = expAt,
+                        deletedAt = delAt
                     )
                 )
             }
             return@withContext list
         } catch (e: Exception) {
-            Log.w(TAG, "Falha ao buscar mensagens familiares: ${e.message}")
-            return@withContext emptyList()
+            throw e
+        }
+    }
+
+    /**
+     * D47 — Exclusão da própria mensagem pelo remetente (tombstone no servidor).
+     * Retorna true quando o servidor confirmou a exclusão.
+     */
+    suspend fun deleteFamilyMessage(messageId: String, patientId: String? = null, sentAt: Long? = null): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                put("id", messageId)
+                patientId?.let { put("patientId", it) }
+                sentAt?.let { put("sentAt", isoFormat.format(Date(it))) }
+            }
+            val res = postJson("$baseUrl/api/family/message/delete", json)
+            return@withContext res?.optString("status") == "success"
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao apagar mensagem familiar no servidor: ${e.message}")
+            return@withContext false
         }
     }
 

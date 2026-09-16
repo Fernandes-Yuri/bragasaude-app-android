@@ -287,4 +287,37 @@ class FamilyBridgeRepositoryTest {
         coVerify(exactly = 1) { familyDao.deleteMessagesForPatient("patient-secret-uid") }
         coVerify(exactly = 1) { groceryListDao.clearGroceryList("patient-secret-uid") }
     }
+
+    @Test
+    fun deletedLocalMessageIsNotResurrectedByStaleDownload() = runBlocking {
+        val message = br.com.bragasaude.data.local.FamilyMessageEntity(
+            id="message", patientUserId="patient", senderName="", messageText="",
+            iconType="LOVE", senderUserId="caregiver-1", deletedAt=1L
+        )
+        coEvery { familyDao.getMessageById("message") } returns message
+        coEvery { apiClient.getFamilyMessages("patient") } returns listOf(message.copy(deletedAt=null, messageText="old"))
+        assertTrue(repository.syncFamilyMessages("patient").isSuccess)
+        coVerify(exactly=0) { familyDao.insertMessage(any()) }
+    }
+
+    @Test
+    fun deletionWithoutRemoteAckStillPropagatesStableId() = runBlocking {
+        val message = br.com.bragasaude.data.local.FamilyMessageEntity(
+            id="message", patientUserId="patient", senderName="Me", messageText="Hi",
+            iconType="LOVE", senderUserId="caregiver-1", pendingSync=true
+        )
+        coEvery { familyDao.getMessageById("message") } returns message
+        repository.deleteMessage("message")
+        coVerify { familyDao.softDeleteMessage("message", any()) }
+        coVerify { apiClient.deleteFamilyMessage("message", "patient", message.sentAt) }
+        coVerify(exactly=0) { familyDao.deleteMessage(any()) }
+        verify { syncScheduler.scheduleSync(any()) }
+    }
+
+    @Test
+    fun entityExpiryUsesOriginalSendTime() {
+        val message=br.com.bragasaude.data.local.FamilyMessageEntity(
+            id="message", patientUserId="patient", senderName="Me", messageText="Hi", iconType="LOVE", sentAt=123L)
+        assertEquals(86400123L, message.expiresAt)
+    }
 }

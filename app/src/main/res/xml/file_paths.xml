@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
+    <cache-path name="family_exports" path="family_exports/" />
     <cache-path name="shared_cache" path="shared_pdfs/" />
     <cache-path name="audio_cache" path="neural_tts/" />
     <files-path name="shared_files" path="exports/" />

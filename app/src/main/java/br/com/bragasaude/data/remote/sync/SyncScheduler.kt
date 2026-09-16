@@ -51,6 +51,14 @@ class SyncScheduler @Inject constructor(
      * Agenda sincronização periódica de recuperação para evitar dados órfãos com pendingSync=true.
      */
     fun schedulePeriodicRecoverySync() {
+        workManager.enqueueUniquePeriodicWork(
+            "family_retention", ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<FamilyRetentionWorker>(15, TimeUnit.MINUTES).build()
+        )
+        workManager.enqueueUniqueWork(
+            "family_retention_startup", ExistingWorkPolicy.KEEP,
+            OneTimeWorkRequestBuilder<FamilyRetentionWorker>().build()
+        )
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()

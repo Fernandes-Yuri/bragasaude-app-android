@@ -149,7 +149,7 @@ class FamilyViewModel @Inject constructor(
                         ?: watched.firstOrNull()?.patientUserId
                         ?: userId
                 }.distinctUntilChanged().collectLatest { targetPatientId ->
-                    familyRepository.getRecentMessagesForPatient(targetPatientId, 50).collectLatest { messages ->
+                    familyRepository.getRecentMessagesForPatient(targetPatientId, Int.MAX_VALUE).collectLatest { messages ->
                         _familyMessages.value = messages
                     }
                 }
@@ -172,6 +172,15 @@ class FamilyViewModel @Inject constructor(
             // Limpar códigos expirados ao iniciar
             launch {
                 familyRepository.cleanExpiredCodes()
+            }
+
+            // D47: purga local das mensagens familiares que completaram 24h
+            launch {
+                try {
+                    familyRepository.purgeExpiredFamilyMessages()
+                } catch (e: Exception) {
+                    android.util.Log.w("FamilyVM", "Falha na purga de mensagens expiradas: ${e.message}")
+                }
             }
 
             // Observar pacientes que este cuidador acompanha
@@ -256,6 +265,21 @@ class FamilyViewModel @Inject constructor(
                 familyRepository.markMessageAsRead(messageId)
             } catch (e: Exception) {
                 android.util.Log.e("FamilyVM", "Erro ao marcar mensagem como lida: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * D47 — Apaga a própria mensagem do usuário (janela de 24h).
+     * A exclusão some da tela imediatamente e é propagada ao servidor/família.
+     */
+    fun deleteFamilyMessage(messageId: String) {
+        viewModelScope.launch {
+            try {
+                familyRepository.deleteMessage(messageId)
+                _uiEvents.emit(FamilyUiEvent.Notice("Mensagem apagada."))
+            } catch (e: Exception) {
+                _uiEvents.emit(FamilyUiEvent.Error("Não foi possível apagar a mensagem."))
             }
         }
     }
@@ -358,7 +382,7 @@ class FamilyViewModel @Inject constructor(
 
         // Observar mensagens do paciente selecionado
         viewModelScope.launch {
-            familyRepository.getRecentMessagesForPatient(binding.patientUserId, 50).collectLatest { messages ->
+            familyRepository.getRecentMessagesForPatient(binding.patientUserId, Int.MAX_VALUE).collectLatest { messages ->
                 _familyMessages.value = messages
             }
         }

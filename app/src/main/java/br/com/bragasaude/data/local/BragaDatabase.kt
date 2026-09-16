@@ -33,7 +33,7 @@ import androidx.room.TypeConverters
         OrbConversation::class,
         ConsultationEntity::class
     ],
-    version = 43,
+    version = 44,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

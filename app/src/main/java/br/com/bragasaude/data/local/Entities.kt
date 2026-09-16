@@ -371,9 +371,16 @@ data class FamilyBindingEntity(
     val pendingSync: Boolean = false
 )
 
+/** TTL das mensagens familiares: 24 horas em milissegundos (decisão D47). */
+const val FAMILY_MESSAGE_TTL_MS: Long = 24L * 60 * 60 * 1000
+
 /**
  * Entidade de mensagens familiares - Bilhetes de carinho e incentivos.
  * Usada para comunicacao assincrona entre cuidadores e pacientes.
+ *
+ * D47 (Mensagens Efêmeras): cada mensagem nasce com [expiresAt] = sentAt + 24h
+ * e pode ser apagada pelo remetente via tombstone [deletedAt]. Nenhuma linha
+ * ultrapassa a retenção máxima de 24h (purga local + servidor).
  */
 @Entity(tableName = "family_messages_local")
 data class FamilyMessageEntity(
@@ -386,7 +393,9 @@ data class FamilyMessageEntity(
     val sentAt: Long = System.currentTimeMillis(),
     val senderUserId: String? = null,
     val remoteId: String? = null,
-    val pendingSync: Boolean = false
+    val pendingSync: Boolean = false,
+    val expiresAt: Long = sentAt + FAMILY_MESSAGE_TTL_MS,
+    val deletedAt: Long? = null
 )
 
 /**
