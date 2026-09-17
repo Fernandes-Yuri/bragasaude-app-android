@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.hydration
+package br.com.bragasaude.ui.hydration
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
@@ -102,10 +102,13 @@ class HydrationViewModel @Inject constructor(
                     cancelHydrationReminders(context)
                 }
 
-                // Sincronizar o valor de hidratação no perfil caso não exista ou seja padrão
+                // Sincronizar o valor de hidratação no perfil caso não exista ou seja diferente do calculado
+                val targetInt = target.toInt()
                 if (profile != null && (!isCustom || profile.hydrationTargetMl == null || profile.hydrationTargetMl <= 0)) {
-                    val updatedProfile = profile.toRemote().copy(hydrationTargetMl = target.toInt())
-                    profileRepository.saveProfile(updatedProfile)
+                    if (profile.hydrationTargetMl != targetInt) {
+                        val updatedProfile = profile.toRemote().copy(hydrationTargetMl = targetInt)
+                        profileRepository.saveProfile(updatedProfile)
+                    }
                 }
             }
         }
