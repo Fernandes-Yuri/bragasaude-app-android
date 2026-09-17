@@ -1,0 +1,258 @@
+# =============================================================================
+# Braga Saúde — Compilação do APK na nuvem (GitHub Actions)
+# Ver documentação completa em:
+#   Contexto/08_RELEASE_E_DISTRIBUICAO/03_CI_GITHUB_ACTIONS_BUILD_NA_NUVEM.md
+#
+# Duas "pistas" a partir de um único workflow (disparo manual):
+#   1. build-teste       -> só compila + salva artifact (NÃO é release)
+#   2. lancar-release    -> publica GitHub Release (e pronto p/ gateway)
+#
+# O APK de teste desce no seu PC com GitHub CLI:
+#   gh run download <run-id> -n braga-release-apk
+# e instala no celular com:
+#   adb install -r app-release.apk        (USB ou adb tcpip 5555)
+#
+# Segredos necessários (Settings > Secrets and variables > Actions):
+#   RELEASE_KEYSTORE_BASE64     .jks em base64 (uma linha)
+#   KEYSTORE_STORE_PASSWORD     senha do keystore
+#   KEYSTORE_KEY_ALIAS          alias da chave  (padrão: bragasaude_key)
+#   KEYSTORE_KEY_PASSWORD       senha da chave
+# Segredo opcional (libera a entrega no gateway — seção 8 do doc 03):
+#   GATEWAY_SSH_KEY             chave deploy-braga-ec2 (já existe na pasta de credenciais)
+# =============================================================================
+
+name: Build APK
+
+on:
+  # Toda vez que chega código novo no master: só build de teste (nunca release).
+  push:
+    branches: [ master ]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'releases/**'
+  # Disparo manual com escolha do destino.
+  workflow_dispatch:
+    inputs:
+      destino:
+        description: "O que fazer com o APK depois de compilar?"
+        type: choice
+        default: build-teste
+        options:
+          - build-teste
+          - lancar-release
+      run_id_testada:
+        description: "(só para lancar-release) ID da run testada, para promover o MESMO APK. Deixe vazio para usar a run atual."
+        required: false
+        default: ''
+
+# O release cria tag/GitHub Release (contents:write) e a pista de promoção
+# baixa artifact de outra run (actions:read).
+permissions:
+  contents: write
+  actions: read
+
+# Evita duas builds iguais correndo em paralelo (desperdício de minutos).
+concurrency:
+  group: build-apk-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # JOB 1 — BUILD: sempre roda. Compila o APK de release assinado e salva
+  # como artifact (descartável, não é release, some em 30 dias).
+  # ---------------------------------------------------------------------------
+  build:
+    name: Compilar APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # JDK 21 = JVM mínima do AGP 9. O Gradle pode precisar do JDK 25
+      # (pinado em gradle/gradle-daemon-jvm.properties); se precisar, ele
+      # acha nas instalações da runner via org.gradle.java.installations.paths.
+      - name: JDK 21 e 25 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            25
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Plataforma de compilação (compileSdk 35)
+        run: sdkmanager --install "platforms;android-35"
+
+      # Wrapper unix (./gradlew) NÃO está no repositório — só gradlew.bat.
+      # A action oficial provê o Gradle 9.5.0 (mesma versão do wrapper).
+      - name: Gradle 9.5.0
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      # Keystore e senhas saem dos secrets e viram arquivos locais do runner.
+      # NUNCA vão para o git (estão no .gitignore: *.jks e keystore.properties).
+      # Se os secrets ainda não foram cadastrados, a build segue SEM assinatura
+      # (app/build.gradle.kts trata o caso) — a primeira run serve de prova.
+      - name: Materializar keystore de release
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_STORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          KEYSTORE_KEY_ALIAS: ${{ secrets.KEYSTORE_KEY_ALIAS }}
+          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "⚠️ Secret RELEASE_KEYSTORE_BASE64 vazio — APK sai SEM assinatura."
+            echo "   Cadastre os 4 secrets da keystore (ver doc 03) para assinar."
+            exit 0
+          fi
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 -d > release-keystore.jks
+          printf 'storeFile=release-keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$KEYSTORE_STORE_PASSWORD" "$KEYSTORE_KEY_ALIAS" "$KEYSTORE_KEY_PASSWORD" \
+            > keystore.properties
+          echo "✅ Keystore materializada ($(wc -c < release-keystore.jks) bytes)"
+
+      # --no-daemon evita o download do JDK 25 pinado em
+      # gradle/gradle-daemon-jvm.properties; installations.paths dá o caminho
+      # das JDKs instaladas pela setup-java caso a criteria seja aplicada.
+      - name: Compilar APK de release
+        run: |
+          JDK_PATHS=$(ls -d "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}/Java_Temurin_jdk"/*/x64 2>/dev/null | paste -sd, -)
+          echo "JDKs visíveis ao Gradle: $JDK_PATHS"
+          gradle assembleRelease --no-daemon --stacktrace \
+            -Dorg.gradle.java.installations.paths="$JDK_PATHS"
+          # Se gerou unsigned (graceful degrade sem keystore), padroniza o nome para app-release.apk
+          if [ ! -f app/build/outputs/apk/release/app-release.apk ]; then
+            UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
+            if [ -n "$UNSIGNED_APK" ]; then
+              cp "$UNSIGNED_APK" app/build/outputs/apk/release/app-release.apk
+              echo "ℹ️ APK não-assinado padronizado para app-release.apk"
+            fi
+          fi
+
+      - name: Salvar APK como artifact (descartável)
+        uses: actions/upload-artifact@v4
+        with:
+          name: braga-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Resumo da build
+        run: |
+          {
+            echo "### :white_check_mark: APK compilado na nuvem"
+            echo
+            echo "| Item | Valor |"
+            echo "|---|---|"
+            echo "| Commit | \`${GITHUB_SHA::7}\` |"
+            echo "| Destino | \`${{ github.event.inputs.destino || 'build-teste (push)' }}\` |"
+            echo "| Artifact | \`braga-release-apk\` (expira em 30 dias) |"
+            echo
+            echo "> :bulb: Baixe no PC: \`gh run download ${GITHUB_RUN_ID} -n braga-release-apk\`"
+            echo "> :iphone: Instale no celular: \`adb install -r app-release.apk\`"
+            echo "> :warning: Artifact NÃO é release — nada foi publicado."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # JOB 2 — TESTES UNITÁRIOS: roda em paralelo. Se quebra, NÃO bloqueia o
+  # artifact (job independente). É o relatório de saúde do código.
+  # ---------------------------------------------------------------------------
+  unit-tests:
+    name: Testes unitários
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK 21 e 25 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            25
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Plataforma de compilação (compileSdk 35)
+        run: sdkmanager --install "platforms;android-35"
+
+      - name: Gradle 9.5.0
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Rodar testes unitários
+        run: |
+          JDK_PATHS=$(ls -d "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}/Java_Temurin_jdk"/*/x64 2>/dev/null | paste -sd, -)
+          gradle testDebugUnitTest --no-daemon \
+            -Dorg.gradle.java.installations.paths="$JDK_PATHS"
+
+      - name: Publicar relatório de testes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorio-testes-unitarios
+          path: app/build/reports/tests/testDebugUnitTest/
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # JOB 3 — RELEASE: só roda se você escolher "lancar-release".
+  # PRINCÍPIO CHAVE: promove o APK que você JÁ TESTOU (mesmos bytes), não
+  # recompila. Se veio de outra run, passe o run_id_testada.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Publicar GitHub Release
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.destino == 'lancar-release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ler versão do app
+        id: versao
+        run: |
+          echo "name=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts | head -n 1)" >> "$GITHUB_OUTPUT"
+          echo "code=$(grep -oP 'versionCode = \K\d+' app/build.gradle.kts | head -n 1)"   >> "$GITHUB_OUTPUT"
+
+      # run_id_testada vazio = promove a build desta própria run.
+      - name: Baixar APK (da run testada ou da atual)
+        uses: actions/download-artifact@v4
+        with:
+          name: braga-release-apk
+          run-id: ${{ inputs.run_id_testada || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Criar GitHub Release com o APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.versao.outputs.name }}-build${{ steps.versao.outputs.code }}
+          name: BragaSaude v${{ steps.versao.outputs.name }} (build ${{ steps.versao.outputs.code }})
+          files: app-release.apk
+          generate_release_notes: true
+          prerelease: false
+          body: |
+            ## 📦 Release oficial — BragaSaude v${{ steps.versao.outputs.name }}
+
+            APK assinado, compilado no GitHub Actions (run #${{ github.run_id }}).
+
+            > ⚠️ Assinatura nova (D46): usuários da v1.1.2 precisam **desinstalar e reinstalar**.
+            > Comunique o backup dos dados locais antes (LGPD).
+
+      # Entrega no gateway (libera o OTA /api/app/latest). DESATIVADO até você
+      # cadastrar o secret GATEWAY_SSH_KEY (use a chave deploy-braga-ec2 que já
+      # existe em CREDENCIAIS_E_SECRETS_BRAGA_SAUDE/chaves-ssh/). Ver doc 03, seção 8.
+      # - name: Publicar no gateway (EC2)
+      #   uses: appleboy/scp-action@v0.1.7
+      #   with:
+      #     host: api.bragasaude.online
+      #     username: ec2-user
+      #     key: ${{ secrets.GATEWAY_SSH_KEY }}
+      #     source: app-release.apk
+      #     target: /home/ec2-user/braga-gateway/releases/
+      # - name: Atualizar latest.apk e registrar release
+      #   uses: appleboy/ssh-action@v1.2.0
+      #   ...
