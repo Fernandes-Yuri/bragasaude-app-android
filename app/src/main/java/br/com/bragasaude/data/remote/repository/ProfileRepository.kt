@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.repository
+package br.com.bragasaude.data.remote.repository
 
 import br.com.bragasaude.data.local.ProfileDao
 import br.com.bragasaude.data.local.ProfileEntity
@@ -40,14 +40,36 @@ class ProfileRepository @Inject constructor(
         refreshProfileForLogin(userId)
     }
 
+    private var lastProfileSyncAttemptTime = 0L
+
     suspend fun saveProfile(profile: RemoteProfile) {
-        val entity = profile.toEntity().copy(pendingSync = true, customPhotoUri = profileDao.getProfileOneShot(profile.id)?.customPhotoUri)
+        val existing = profileDao.getProfileOneShot(profile.id)
+        val entity = profile.toEntity().copy(
+            pendingSync = true,
+            customPhotoUri = existing?.customPhotoUri
+        )
+        // Se a entidade já existe e não mudou nada relevante, e não está com sync pendente, não reenvia
+        if (existing != null && !existing.pendingSync &&
+            existing.copy(pendingSync = false, updatedAt = existing.updatedAt) == entity.copy(pendingSync = false, updatedAt = existing.updatedAt)
+        ) {
+            return
+        }
         profileDao.insert(entity)
         if (profile.id == guestId) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastProfileSyncAttemptTime < 4000L) {
+            triggerSync()
+            return
+        }
+        lastProfileSyncAttemptTime = now
+
         try {
             val success = apiClient.syncProfile(entity)
             if (success) {
-                if (profileDao.getProfileOneShot(profile.id) == entity) profileDao.insert(entity.copy(pendingSync = false))
+                if (profileDao.getProfileOneShot(profile.id) == entity) {
+                    profileDao.insert(entity.copy(pendingSync = false))
+                }
             } else {
                 triggerSync()
             }
