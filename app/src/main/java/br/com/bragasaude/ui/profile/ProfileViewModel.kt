@@ -99,6 +99,44 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun saveProfile(
+        input: ProfileInput,
+        onSaved: () -> Unit = {},
+        onComplete: () -> Unit
+    ) {
+        saveProfile(
+            name = input.name,
+            birthDate = input.birthDate,
+            gender = input.gender,
+            height = input.height,
+            weight = input.weight,
+            isSmoker = input.isSmoker,
+            hasDiabetes = input.hasDiabetes,
+            hasHypertension = input.hasHypertension,
+            hasThyroid = input.hasThyroid,
+            hasRenal = input.hasRenal,
+            hasBone = input.hasBone,
+            hasMuscular = input.hasMuscular,
+            hydrationTargetMl = input.hydrationTargetMl,
+            dailyCalorieTarget = input.dailyCalorieTarget,
+            stepGoal = input.stepGoal,
+            weightGoal = input.weightGoal,
+            sleepStart = input.sleepStart,
+            sleepEnd = input.sleepEnd,
+            emergencyName = input.emergencyName,
+            emergencyRelation = input.emergencyRelation,
+            emergencyPhone = input.emergencyPhone,
+            notificationsEnabled = input.notificationsEnabled,
+            locationEnabled = input.locationEnabled,
+            activityLevel = input.activityLevel,
+            diabetesType = input.diabetesType,
+            foodAllergies = input.foodAllergies,
+            customFoodRestrictions = input.customFoodRestrictions,
+            onSaved = onSaved,
+            onComplete = onComplete
+        )
+    }
+
+    fun saveProfile(
         name: String,
         birthDate: String?,
         gender: String?,
