@@ -50,7 +50,6 @@ androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navig
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
 
 # Firebase
-firebase-dataconnect = { group = "com.google.firebase", name = "firebase-dataconnect" }
 firebase-storage = { group = "com.google.firebase", name = "firebase-storage" }
 
 # Networking & Serialization

@@ -1,7 +1,7 @@
 ﻿package br.com.bragasaude.data.remote.sync
 
 import androidx.work.*
-import dagger.hilt.android.qualifiers.ApplicationContext
+import br.com.bragasaude.util.BragaConstants
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -9,7 +9,7 @@ import javax.inject.Singleton
 /**
  * Agendador unificado de sincronização do Braga Saúde.
  *
- * Centraliza o disparo e controle de workers de sincronização com o Firebase Data Connect,
+ * Centraliza o disparo e controle de workers de sincronização com o backend REST,
  * garantindo idempotência (enqueueUniqueWork), backoff exponencial e suporte a sync periódico.
  */
 @Singleton
@@ -30,6 +30,7 @@ class SyncScheduler @Inject constructor(
     fun scheduleSync(policy: ExistingWorkPolicy = ExistingWorkPolicy.KEEP) {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiresBatteryNotLow(true)
             .build()
 
         val request = OneTimeWorkRequestBuilder<SyncWorker>()
@@ -49,6 +50,7 @@ class SyncScheduler @Inject constructor(
 
     /**
      * Agenda sincronização periódica de recuperação para evitar dados órfãos com pendingSync=true.
+     * Respeita bateria baixa (Android 14+ Power Guidelines) e janela flex de 15min para Doze.
      */
     fun schedulePeriodicRecoverySync() {
         workManager.enqueueUniquePeriodicWork(
@@ -59,11 +61,16 @@ class SyncScheduler @Inject constructor(
             "family_retention_startup", ExistingWorkPolicy.KEEP,
             OneTimeWorkRequestBuilder<FamilyRetentionWorker>().build()
         )
+
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiresBatteryNotLow(true)
             .build()
 
-        val periodicRequest = PeriodicWorkRequestBuilder<SyncWorker>(6, TimeUnit.HOURS)
+        val periodicRequest = PeriodicWorkRequestBuilder<SyncWorker>(
+            BragaConstants.DEFAULT_SYNC_INTERVAL_HOURS, TimeUnit.HOURS,
+            15, TimeUnit.MINUTES // Flex window para otimização do Doze mode
+        )
             .setConstraints(constraints)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
