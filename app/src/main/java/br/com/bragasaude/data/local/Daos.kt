@@ -161,6 +161,9 @@ interface ExamDao {
     /** Busca o exame com maior localId para um remoteId */
     @Query("SELECT * FROM exams_local WHERE remoteId = :examId ORDER BY localId DESC LIMIT 1")
     suspend fun getLatestByExamId(examId: String): ExamEntity?
+
+    @Query("DELETE FROM exams_local WHERE remoteId = :examId")
+    suspend fun deleteByRemoteId(examId: String)
 }
 
 @Dao
@@ -266,6 +269,9 @@ interface ExamItemDao {
     /** Busca todos os itens de um exame especificado (por examId local ou remoto) */
     @Query("SELECT * FROM exam_items_local WHERE examId = :examId")
     suspend fun getByExamLocal(examId: String): List<ExamItemEntity>
+
+    @Query("DELETE FROM exam_items_local WHERE examId = :examId")
+    suspend fun deleteByExamId(examId: String)
 }
 
 @Dao

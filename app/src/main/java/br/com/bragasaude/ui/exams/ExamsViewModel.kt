@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.exams
+package br.com.bragasaude.ui.exams
 
 import android.content.Context
 import android.net.Uri
@@ -67,17 +67,154 @@ class ExamsViewModel @Inject constructor(
             _isLoading.value = true
             try {
                 val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
-                // Marcar exame como "analyzed" e itens com "analyzed" — aguarda conferência do usuário
-                repository.saveExam(exam.copy(status = "analyzed"), items.map { it.copy(status = "analyzed") })
-                
+                val confirmedExam = exam.copy(status = "confirmed")
+                val confirmedItems = items.map {
+                    it.copy(
+                        status = "confirmed",
+                        userId = userId,
+                        examId = confirmedExam.id ?: it.examId
+                    )
+                }
+                repository.saveExam(confirmedExam, confirmedItems)
+
                 // ANALISA OS ITENS (CÉREBRO)
-                healthEngine.analyzeExamItems(userId, items.map { it.copy(status = "analyzed") })
-                
+                healthEngine.analyzeExamItems(userId, confirmedItems)
+                checkGlucoseItems(confirmedItems, userId)
+
                 _pendingExamValidation.value = null
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
                 _isLoading.value = false
+            }
+        }
+    }
+
+    /**
+     * Salva exames inseridos diretamente pelo usuário via formulário estruturado.
+     * Gravação imediata no prontuário com status 'confirmed'.
+     */
+    fun saveManualExam(title: String, category: String, examDate: String, items: List<RemoteExamItem>) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+                val examId = UUID.randomUUID().toString()
+                val exam = RemoteExam(
+                    id = examId,
+                    userId = userId,
+                    title = title,
+                    category = category,
+                    examDate = examDate,
+                    status = "confirmed"
+                )
+                val confirmedItems = items.map {
+                    it.copy(
+                        id = it.id ?: UUID.randomUUID().toString(),
+                        examId = examId,
+                        userId = userId,
+                        status = "confirmed"
+                    )
+                }
+                repository.saveExam(exam, confirmedItems)
+                healthEngine.analyzeExamItems(userId, confirmedItems)
+                checkGlucoseItems(confirmedItems, userId)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    /**
+     * Processa páginas consecutivas capturadas com a câmera on-device (1 a 5 páginas).
+     * Extrai OCR via ML Kit, higieniza com LGPD e abre tela de conferência humana obrigatória.
+     */
+    fun processCapturedPages(title: String, category: String, date: Date, pages: List<android.graphics.Bitmap>) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+                val examId = UUID.randomUUID().toString()
+                val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val dateStr = dateFormat.format(date)
+
+                val rawText = examExtractor.extractTextFromBitmaps(pages)
+                val sanitizedText = examExtractor.sanitizeDocumentText(rawText)
+                val extractedItems = examExtractor.parseToExamItems(sanitizedText, userId, examId)
+
+                val exam = RemoteExam(
+                    id = examId,
+                    userId = userId,
+                    title = title,
+                    category = category,
+                    examDate = dateStr,
+                    status = "analyzed"
+                )
+
+                _pendingExamValidation.value = Pair(exam, extractedItems)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    /**
+     * Processa arquivo anexado (PDF ou Imagem da galeria) com extração OCR e triagem.
+     */
+    fun processAttachedFile(title: String, category: String, date: Date, fileUri: Uri, fileName: String) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _uploadProgress.value = 0.2f
+            try {
+                val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+                val examId = UUID.randomUUID().toString()
+                val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val dateStr = dateFormat.format(date)
+
+                val mimeType = context.contentResolver.getType(fileUri)
+                val isPdf = mimeType?.contains("pdf", true) == true || fileName.endsWith(".pdf", true)
+
+                val rawText = if (isPdf) {
+                    examExtractor.extractTextFromPdf(fileUri)
+                } else {
+                    examExtractor.extractTextFromImageUri(fileUri)
+                }
+
+                val sanitizedText = examExtractor.sanitizeDocumentText(rawText)
+                val extractedItems = examExtractor.parseToExamItems(sanitizedText, userId, examId)
+
+                _uploadProgress.value = 0.6f
+                var fileUrl: String? = null
+                try {
+                    val fileBytes = context.contentResolver.openInputStream(fileUri)?.use { it.readBytes() }
+                    if (fileBytes != null) {
+                        fileUrl = repository.uploadExamFile(userId, fileName, fileBytes)
+                    }
+                } catch (uploadEx: Exception) {
+                    uploadEx.printStackTrace()
+                }
+
+                val exam = RemoteExam(
+                    id = examId,
+                    userId = userId,
+                    title = title,
+                    category = category,
+                    examDate = dateStr,
+                    fileUrl = fileUrl,
+                    status = "analyzed"
+                )
+
+                _pendingExamValidation.value = Pair(exam, extractedItems)
+                _uploadProgress.value = 1f
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isLoading.value = false
+                _uploadProgress.value = null
             }
         }
     }

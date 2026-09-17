@@ -52,6 +52,7 @@ import br.com.bragasaude.data.util.HealthFormatter
 import br.com.bragasaude.ui.components.BragaBadgeType
 import br.com.bragasaude.ui.components.BragaStatusBadge
 import br.com.bragasaude.ui.components.EmeraldHeaderBanner
+import br.com.bragasaude.ui.exams.components.AddExamBottomSheet
 import br.com.bragasaude.ui.report.ReportViewModel
 import br.com.bragasaude.ui.theme.BragaBackground
 import br.com.bragasaude.ui.theme.BragaCardBorder
@@ -63,6 +64,12 @@ import br.com.bragasaude.ui.theme.BragaTextPrimary
 import br.com.bragasaude.ui.theme.BragaTextSecondary
 import java.io.File
 import java.util.*
+
+enum class ExamsSubFlow {
+    LIST,
+    CAPTURE_MULTIPAGE,
+    MANUAL_ENTRY
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,7 +87,8 @@ fun ExamsScreen(
     LaunchedEffect(uploadProgress == null) { if (uploadProgress == null) showUploadProgress = true }
     val pendingValidation by viewModel.pendingExamValidation.collectAsState()
     val showGlucosePrompt by viewModel.showGlucosePrompt.collectAsState()
-    var showAddDialog by remember { mutableStateOf(false) }
+    var showAddBottomSheet by remember { mutableStateOf(false) }
+    var currentFlow by remember { mutableStateOf(ExamsSubFlow.LIST) }
     
     val context = LocalContext.current
     val pdfFile by reportViewModel.pdfFile.collectAsState(initial = null)
@@ -103,6 +111,63 @@ fun ExamsScreen(
                 e.printStackTrace()
             }
         }
+    }
+
+    val fileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            val name = context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (cursor.moveToFirst()) cursor.getString(nameIndex) else null
+            } ?: "exame_anexo"
+            val cleanTitle = name.substringBeforeLast(".").replace("_", " ").replace("-", " ")
+            viewModel.processAttachedFile(
+                title = if (cleanTitle.isNotBlank()) cleanTitle else "Exame Anexado",
+                category = "Laboratorial",
+                date = Date(),
+                fileUri = it,
+                fileName = name
+            )
+        }
+    }
+
+    // 1. Conferência Humana Obrigatória (Tela Completa)
+    if (pendingValidation != null) {
+        val (exam, items) = pendingValidation!!
+        ExamReviewScreen(
+            exam = exam,
+            initialItems = items,
+            onBack = { viewModel.onValidationCancelled() },
+            onConfirm = { confirmedExam, confirmedItems ->
+                viewModel.onValidationConfirmed(confirmedExam, confirmedItems)
+            }
+        )
+        return
+    }
+
+    // 2. Assistente de Captura Multipage com Trava de Nitidez
+    if (currentFlow == ExamsSubFlow.CAPTURE_MULTIPAGE) {
+        MultipageCaptureScreen(
+            onBack = { currentFlow = ExamsSubFlow.LIST },
+            onDocumentCompleted = { title, category, date, pages ->
+                currentFlow = ExamsSubFlow.LIST
+                viewModel.processCapturedPages(title, category, date, pages)
+            }
+        )
+        return
+    }
+
+    // 3. Entrada Manual Estruturada
+    if (currentFlow == ExamsSubFlow.MANUAL_ENTRY) {
+        ManualExamEntryScreen(
+            onBack = { currentFlow = ExamsSubFlow.LIST },
+            onSave = { title, category, examDate, items ->
+                currentFlow = ExamsSubFlow.LIST
+                viewModel.saveManualExam(title, category, examDate, items)
+            }
+        )
+        return
     }
 
     Scaffold(
@@ -145,7 +210,7 @@ fun ExamsScreen(
                 ) {
                 // Card de upload em destaque com borda tracejada (padrão 110918/112059)
                 item {
-                    DashedUploadCard(onClick = { showAddDialog = true })
+                    DashedUploadCard(onClick = { showAddBottomSheet = true })
                     Spacer(Modifier.height(12.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -190,23 +255,24 @@ fun ExamsScreen(
         } // fecha PullToRefreshBox
     } // fecha Scaffold
 
-    if (showAddDialog) {
-        AddExamDialog(
-            onDismiss = { showAddDialog = false },
-            onConfirm = { title, category, uri, fileName ->
-                viewModel.uploadAndSaveExam(title, category, Date(), uri, fileName)
-                showAddDialog = false
-            }
-        )
-    }
-
-    pendingValidation?.let { (exam, items) ->
-        ValidationDialog(
-            exam = exam,
-            initialItems = items,
-            onDismiss = { viewModel.onValidationCancelled() },
-            onConfirm = { validatedExam, validatedItems ->
-                viewModel.onValidationConfirmed(validatedExam, validatedItems)
+    if (showAddBottomSheet) {
+        AddExamBottomSheet(
+            onDismiss = { showAddBottomSheet = false },
+            onTakePhoto = {
+                showAddBottomSheet = false
+                currentFlow = ExamsSubFlow.CAPTURE_MULTIPAGE
+            },
+            onAttachFile = {
+                showAddBottomSheet = false
+                try {
+                    fileLauncher.launch(arrayOf("application/pdf", "image/*"))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            },
+            onManualEntry = {
+                showAddBottomSheet = false
+                currentFlow = ExamsSubFlow.MANUAL_ENTRY
             }
         )
     }
@@ -239,7 +305,7 @@ fun ExamsScreen(
         AlertDialog(
             onDismissRequest = { showUploadProgress = false },
             confirmButton = { TextButton(onClick = { showUploadProgress = false }) { Text("Fechar aviso") } },
-            title = { Text("Enviando Exame...") },
+            title = { Text("Processando Exame...") },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     LinearProgressIndicator(
@@ -252,178 +318,6 @@ fun ExamsScreen(
             }
         )
     }
-}
-
-@Composable
-fun AddExamDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String, String, Uri?, String?) -> Unit
-) {
-    var title by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("Geral") }
-    var selectedUri by remember { mutableStateOf<Uri?>(null) }
-    var fileName by remember { mutableStateOf<String?>(null) }
-
-    val context = LocalContext.current
-
-    // DECISOES.md (D1): apenas PDF. Foto do papel saiu do fluxo (extração menos
-    // confiável e criaria necessidade de avaliação humana).
-    val fileLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let {
-            val name = context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (cursor.moveToFirst()) cursor.getString(nameIndex) else null
-            }
-            if (name != null && !name.endsWith(".pdf", ignoreCase = true)) {
-                Toast.makeText(context, context.getString(R.string.exam_pdf_only_error), Toast.LENGTH_LONG).show()
-            } else {
-                selectedUri = it
-                fileName = name ?: "arquivo_exame.pdf"
-                android.util.Log.d("ExamsScreen", "File selected: $fileName, uri: $it")
-                Toast.makeText(context, "Arquivo selecionado!", Toast.LENGTH_SHORT).show()
-            }
-        } ?: run {
-            android.util.Log.d("ExamsScreen", "No file selected")
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Novo Exame") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Título do Exame (ex: Hemograma)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = { category = it },
-                    label = { Text("Categoria") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                Button(
-                    onClick = {
-                        android.util.Log.d("ExamsScreen", "Button 'PDF' clicked")
-                        try {
-                            // D1: restrito a PDF
-                            fileLauncher.launch("application/pdf")
-                        } catch (e: Exception) {
-                            android.util.Log.e("ExamsScreen", "Error launching file picker", e)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer)
-                ) {
-                    Icon(Icons.Default.PictureAsPdf, contentDescription = null)
-                    Spacer(Modifier.width(4.dp))
-                    Text("Selecionar PDF")
-                }
-                Text(
-                    context.getString(R.string.exam_pdf_only_hint),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray
-                )
-                
-                if (selectedUri != null) {
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                        Row(modifier = Modifier.padding(8.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            val isPdf = fileName?.endsWith(".pdf") == true
-                            Icon(if (isPdf) Icons.Default.PictureAsPdf else Icons.Default.Image, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(fileName ?: "Selecionado", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
-                            IconButton(onClick = { selectedUri = null; fileName = null }) {
-                                Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(title, category, selectedUri, fileName) },
-                enabled = title.isNotEmpty() && selectedUri != null
-            ) {
-                Text("Enviar")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        }
-    )
-}
-
-@Composable
-fun ValidationDialog(
-    exam: RemoteExam,
-    initialItems: List<RemoteExamItem>,
-    onDismiss: () -> Unit,
-    onConfirm: (RemoteExam, List<RemoteExamItem>) -> Unit
-) {
-    val items = remember { SnapshotStateList<RemoteExamItem>().apply { addAll(initialItems) } }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Conferência da Transcrição por IA") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "Nossa IA extraiu os valores do seu PDF. Confira e ajuste os dados abaixo antes de confirmar no seu prontuário permanente:",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                
-                LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
-                    items(items.size) { index ->
-                        val item = items[index]
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(item.itemName, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                            OutlinedTextField(
-                                value = item.valueText ?: "",
-                                onValueChange = { 
-                                    items[index] = item.copy(
-                                        valueText = it, 
-                                        valueNumeric = HealthFormatter.parseDouble(it)
-                                    ) 
-                                },
-                                modifier = Modifier.width(100.dp),
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                            )
-                        }
-                    }
-                }
-                
-                if (items.isEmpty()) {
-                    Text("Nenhum dado extraído automaticamente.", color = MaterialTheme.colorScheme.error)
-                }
-                
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Este app não é dispositivo médico. Os dados são autorreportados e devem ser validados por profissional de saúde.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-        },
-        confirmButton = {
-            Button(onClick = { onConfirm(exam, items.toList()) }) {
-                Text("Salvar")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        }
-    )
 }
 
 @Composable

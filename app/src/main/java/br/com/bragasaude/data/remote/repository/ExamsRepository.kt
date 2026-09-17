@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.repository
+package br.com.bragasaude.data.remote.repository
 
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.api.BragaApiClient
@@ -35,11 +35,40 @@ class ExamsRepository @Inject constructor(
         if (exam.userId == guestId) return
         
         try {
-            examDao.insert(examEntity.copy(localId = localRowId, pendingSync = true))
-        } catch (e: Exception) {
-            examDao.insert(examEntity.copy(localId = localRowId, pendingSync = true))
-            examItemDao.insertAll(itemsWithIds.map { it.toEntity().copy(pendingSync = true) })
+            // Tenta sincronização direta com o backend
+            if (examWithId.fileUrl == null && items.isNotEmpty()) {
+                val synced = apiClient.syncManualExam(
+                    examId = examWithId.id,
+                    title = examWithId.title,
+                    category = examWithId.category ?: "Laboratorial",
+                    examDate = examWithId.examDate,
+                    items = itemsWithIds
+                )
+                if (synced) {
+                    examDao.insert(examEntity.copy(localId = localRowId, pendingSync = false))
+                    examItemDao.insertAll(itemsWithIds.map { it.toEntity().copy(pendingSync = false) })
+                    return
+                }
+            }
             triggerSync()
+        } catch (e: Exception) {
+            triggerSync()
+        }
+    }
+
+    suspend fun deleteExamAtomically(examId: String, userId: String): Boolean {
+        // 1. Exclusão local imediata no banco Room
+        examDao.deleteByRemoteId(examId)
+        examItemDao.deleteByExamId(examId)
+
+        if (userId == guestId) return true
+
+        // 2. Exclusão remota no PostgreSQL RDS e destruição de arquivo físico (LGPD Art. 18)
+        return try {
+            apiClient.deleteExam(examId)
+        } catch (e: Exception) {
+            android.util.Log.e("ExamsRepo", "Erro ao excluir exame remoto: ${e.message}", e)
+            false
         }
     }
 
@@ -93,6 +122,28 @@ class ExamsRepository @Inject constructor(
         if (userId == guestId) return null
         return apiClient.uploadExamFile(userId, fileName, byteArray)
     }
+
+    suspend fun uploadExamContract(
+        examId: String,
+        title: String,
+        category: String,
+        examDate: String,
+        examType: String,
+        cloudConsent: Boolean,
+        termsVersion: String,
+        fileName: String,
+        fileBytes: ByteArray
+    ) = apiClient.uploadExamContract(
+        examId = examId,
+        title = title,
+        category = category,
+        examDate = examDate,
+        examType = examType,
+        cloudConsent = cloudConsent,
+        termsVersion = termsVersion,
+        fileName = fileName,
+        fileBytes = fileBytes
+    )
 
     private fun triggerSync() {
         syncScheduler.scheduleSync()
