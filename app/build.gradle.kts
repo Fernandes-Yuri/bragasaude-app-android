@@ -161,8 +161,10 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
 
     // Extração de texto de PDF — pdfbox-android (Apache 2.0).
-    // iTextG (AGPLv3) substituído; ML Kit removido após decisão D1 (somente PDF, sem OCR de foto).
     implementation(libs.pdfbox.android)
+
+    // OCR de imagem On-Device — Google ML Kit Text Recognition (D49 / Fase 1)
+    implementation(libs.mlkit.text.recognition)
 
     // Movement & GPS
     implementation("com.google.android.gms:play-services-location:21.3.0")

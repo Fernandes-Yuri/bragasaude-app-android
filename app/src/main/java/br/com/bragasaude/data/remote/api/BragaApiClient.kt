@@ -1015,4 +1015,154 @@ class BragaApiClient @Inject constructor(
             try { conn?.disconnect() } catch (_: Exception) {}
         }
     }
+
+    // ==================== NOVOS CONTRATOS DE EXAMES (D49 / FASE 3) ====================
+
+    private fun deleteRequest(urlString: String): Boolean {
+        var conn: HttpURLConnection? = null
+        return try {
+            val url = URL(urlString)
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "DELETE"
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                setRequestProperty("Accept", "application/json")
+                instanceFollowRedirects = false
+                attachIdentity(urlString)
+            }
+            conn.responseCode in 200..299
+        } catch (e: Exception) {
+            false
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun deleteExam(examId: String): Boolean = withContext(Dispatchers.IO) {
+        deleteRequest("$baseUrl/api/exams/$examId")
+    }
+
+    suspend fun syncManualExam(
+        examId: String?,
+        title: String,
+        category: String,
+        examDate: String,
+        items: List<RemoteExamItem>
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                if (examId != null) put("exam_id", examId)
+                put("title", title)
+                put("category", category)
+                put("exam_date", examDate)
+                val itemsArr = JSONArray()
+                for (it in items) {
+                    val itObj = JSONObject().apply {
+                        put("item_key", it.itemKey)
+                        put("item_name", it.itemName)
+                        put("value_numeric", it.valueNumeric ?: 0.0)
+                        put("value_text", it.valueText ?: it.valueNumeric?.toString() ?: "")
+                        put("unit", it.unit ?: "")
+                        if (it.referenceText != null) put("reference_text", it.referenceText)
+                        put("status", it.status ?: "confirmed")
+                    }
+                    itemsArr.put(itObj)
+                }
+                put("items", itemsArr)
+            }
+            val res = postJson("$baseUrl/api/exams/manual", json)
+            res?.optBoolean("success", false) == true
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao sincronizar exame manual: ${e.message}", e)
+            false
+        }
+    }
+
+    suspend fun uploadExamContract(
+        examId: String,
+        title: String,
+        category: String,
+        examDate: String,
+        examType: String,
+        cloudConsent: Boolean,
+        termsVersion: String,
+        fileName: String,
+        fileBytes: ByteArray
+    ): RemoteExamUploadResponse? = withContext(Dispatchers.IO) {
+        val boundary = "Boundary-${System.currentTimeMillis()}"
+        val lineEnd = "\r\n"
+        val twoHyphens = "--"
+        var conn: HttpURLConnection? = null
+        try {
+            val url = URL("$baseUrl/api/exams/upload")
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 10000
+                readTimeout = 25000
+                doOutput = true
+                doInput = true
+                setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                setRequestProperty("Accept", "application/json")
+                attachIdentity(url.toString())
+            }
+
+            conn.outputStream.use { os ->
+                fun writeFormField(fieldName: String, value: String) {
+                    os.write("$twoHyphens$boundary$lineEnd".toByteArray())
+                    os.write("Content-Disposition: form-data; name=\"$fieldName\"$lineEnd$lineEnd".toByteArray())
+                    os.write("$value$lineEnd".toByteArray())
+                }
+
+                writeFormField("exam_id", examId)
+                writeFormField("title", title)
+                writeFormField("category", category)
+                writeFormField("exam_date", examDate)
+                writeFormField("exam_type", examType)
+                writeFormField("cloud_consent", cloudConsent.toString())
+                writeFormField("terms_version", termsVersion)
+
+                val mimeType = when {
+                    fileName.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
+                    fileName.endsWith(".png", ignoreCase = true) -> "image/png"
+                    fileName.endsWith(".webp", ignoreCase = true) -> "image/webp"
+                    else -> "image/jpeg"
+                }
+                os.write("$twoHyphens$boundary$lineEnd".toByteArray())
+                os.write("Content-Disposition: form-data; name=\"file\"; filename=\"$fileName\"$lineEnd".toByteArray())
+                os.write("Content-Type: $mimeType$lineEnd$lineEnd".toByteArray())
+                os.write(fileBytes)
+                os.write(lineEnd.toByteArray())
+
+                os.write("$twoHyphens$boundary$twoHyphens$lineEnd".toByteArray())
+                os.flush()
+            }
+
+            if (conn.responseCode in 200..299) {
+                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = JSONObject(responseText)
+                RemoteExamUploadResponse(
+                    success = json.optBoolean("success", false),
+                    examId = json.optString("exam_id", examId),
+                    storageStatus = json.optString("storage_status", "LOCAL_ONLY"),
+                    fileUrl = json.optString("file_url", null)
+                )
+            } else {
+                Log.w(TAG, "Falha no upload multipart do exame: HTTP ${conn.responseCode}")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao enviar exame multipart: ${e.message}", e)
+            null
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) {}
+        }
+    }
 }
+
+data class RemoteExamUploadResponse(
+    val success: Boolean,
+    val examId: String,
+    val storageStatus: String,
+    val fileUrl: String?
+)
+

@@ -1,23 +1,40 @@
-﻿package br.com.bragasaude.data.util
+package br.com.bragasaude.data.util
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import br.com.bragasaude.data.remote.model.RemoteExamItem
-import br.com.bragasaude.data.util.HealthFormatter
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Categoria funcional do exame detectada via heurística on-device.
+ * Conforme Decisão D49 e Seção 2 do Caderno de Contratos (Doc 08).
+ */
+enum class ExamCategoryType {
+    STRUCTURED_LAB,       // Tipo A: Exame laboratorial estruturado (Glicose, Colesterol, Hemograma)
+    UNSTRUCTURED_DOCUMENT // Tipo B: Imagem / Laudo dissertativo (Ultrassom, Tomografia, ECG, Raio-X)
+}
 
 @Singleton
 class ExamExtractor @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+
+    private val textRecognizer by lazy {
+        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    }
 
     init {
         try {
@@ -39,6 +56,140 @@ class ExamExtractor @Inject constructor(
             e.printStackTrace()
             ""
         }
+    }
+
+    /**
+     * Extração de texto on-device a partir de Bitmap utilizando Google ML Kit Text Recognition.
+     */
+    suspend fun extractTextFromBitmap(bitmap: Bitmap): String = withContext(Dispatchers.Default) {
+        try {
+            val image = InputImage.fromBitmap(bitmap, 0)
+            val result = textRecognizer.process(image).await()
+            result.text
+        } catch (e: Exception) {
+            e.printStackTrace()
+            ""
+        }
+    }
+
+    /**
+     * Extração de texto on-device para laudos multipage (1 a 5 páginas consecutivas).
+     */
+    suspend fun extractTextFromBitmaps(bitmaps: List<Bitmap>): String = withContext(Dispatchers.Default) {
+        val sb = StringBuilder()
+        for (bitmap in bitmaps) {
+            val pageText = extractTextFromBitmap(bitmap)
+            if (pageText.isNotBlank()) {
+                sb.append(pageText).append("\n\n")
+            }
+        }
+        sb.toString()
+    }
+
+    /**
+     * Extração de texto on-device a partir de Uri de imagem utilizando Google ML Kit Text Recognition.
+     */
+    suspend fun extractTextFromImageUri(uri: Uri): String = withContext(Dispatchers.IO) {
+        try {
+            val image = InputImage.fromFilePath(context, uri)
+            val result = textRecognizer.process(image).await()
+            result.text
+        } catch (e: Exception) {
+            // Fallback via decodificação de stream
+            try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val bitmap = BitmapFactory.decodeStream(stream)
+                    if (bitmap != null) {
+                        extractTextFromBitmap(bitmap)
+                    } else ""
+                } ?: ""
+            } catch (fallbackEx: Exception) {
+                fallbackEx.printStackTrace()
+                ""
+            }
+        }
+    }
+
+    /**
+     * Classifica o laudo entre Tipo A (STRUCTURED_LAB) e Tipo B (UNSTRUCTURED_DOCUMENT).
+     * Analisa palavras-chave dissertativas/radiológicas e marcadores de pares laboratoriais.
+     */
+    fun detectExamType(rawText: String): ExamCategoryType {
+        val lowerText = rawText.lowercase()
+
+        // Termos que caracterizam laudos de imagem / não estruturados (Tipo B)
+        val imageKeywords = listOf(
+            "ultrassonografia", "ultrassom", "ecografia", "ecocardiograma",
+            "tomografia", "tomografia computadorizada", "ressonância magnética", "ressonancia magnetica",
+            "raio-x", "radiografia", "mamografia", "densitometria óssea", "densitometria ossea",
+            "eletrocardiograma", "holter", "mapa 24h", "endoscopia", "colonoscopia",
+            "biópsia", "biopsia", "anatomopatológico", "anatomopatologico",
+            "laudo descritivo", "impressão diagnóstica", "conclusão radiológica"
+        )
+
+        // Termos laboratoriais padrão (Tipo A)
+        val labKeywords = listOf(
+            "glicose", "glicemia", "hemoglobina", "hematócrito", "hematocrito",
+            "colesterol", "hdl", "ldl", "vldl", "triglicerídeos", "triglicerides",
+            "creatinina", "ureia", "uréia", "ácido úrico", "acido urico",
+            "leucócitos", "leucocitos", "plaquetas", "tsh", "t4 livre",
+            "vitamina d", "vitamina b12", "pcr", "ferritina", "ferro sérico",
+            "transaminase", "tgo", "tgp", "sódio", "potássio", "cálcio"
+        )
+
+        val imageMatches = imageKeywords.count { lowerText.contains(it) }
+        val labMatches = labKeywords.count { lowerText.contains(it) }
+
+        // Se houver termos explícitos de imagem e poucos ou nenhum termo laboratorial: Tipo B
+        if (imageMatches > 0 && labMatches == 0) {
+            return ExamCategoryType.UNSTRUCTURED_DOCUMENT
+        }
+
+        // Se houver mais de 1 termo de imagem forte mesmo com termos dispersos: Tipo B
+        if (imageMatches >= 2 && labMatches < 3) {
+            return ExamCategoryType.UNSTRUCTURED_DOCUMENT
+        }
+
+        // Se encontrou termos laboratoriais: Tipo A
+        if (labMatches >= 1) {
+            return ExamCategoryType.STRUCTURED_LAB
+        }
+
+        // Padrão conservador caso não encontre parâmetros analíticos discretos
+        return ExamCategoryType.UNSTRUCTURED_DOCUMENT
+    }
+
+    /**
+     * Sanitização LGPD On-Device.
+     * Expurgar CPF, RG, telefones, CNPJ, CRM e dados de convênio do paciente
+     * antes de persistência ou tráfego de dados.
+     */
+    fun sanitizeDocumentText(raw: String): String {
+        if (raw.isBlank()) return raw
+
+        var sanitized = raw
+
+        // 1. CPF (formatado 000.000.000-00 ou 11 dígitos com label)
+        sanitized = sanitized.replace(Regex("""\b\d{3}\.\d{3}\.\d{3}-\d{2}\b"""), "[CPF_PROTEGIDO_LGPD]")
+        sanitized = sanitized.replace(Regex("""(?i)\b(?:cpf|cic)[:\s]*\d{11}\b"""), "[CPF_PROTEGIDO_LGPD]")
+
+        // 2. RG (formatado 00.000.000-0 ou com label RG:)
+        sanitized = sanitized.replace(Regex("""\b\d{1,2}\.\d{3}\.\d{3}-[\d|X|x]\b"""), "[RG_PROTEGIDO_LGPD]")
+        sanitized = sanitized.replace(Regex("""(?i)\b(?:rg|identidade|registro\s+geral)[:\s]*[0-9A-Za-z\.\-\/]{5,15}\b"""), "[RG_PROTEGIDO_LGPD]")
+
+        // 3. Telefones brasileiros com DDD: (XX) XXXX-XXXX ou (XX) 9XXXX-XXXX
+        sanitized = sanitized.replace(Regex("""(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)?(?:9\d{4}[-\s]?\d{4}|\d{4}[-\s]?\d{4})\b"""), "[TELEFONE_PROTEGIDO_LGPD]")
+
+        // 4. CNPJ de laboratórios/clínicas
+        sanitized = sanitized.replace(Regex("""\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b"""), "[CNPJ_PROTEGIDO_LGPD]")
+
+        // 5. CRM do médico solicitante
+        sanitized = sanitized.replace(Regex("""(?i)\b(?:crm|crm-[a-z]{2})[:\s]*\d+[-]?[\d|a-z]*\b"""), "[CRM_PROTEGIDO_LGPD]")
+
+        // 6. Matrícula / Convênio
+        sanitized = sanitized.replace(Regex("""(?i)\b(?:carteira|carteirinha|matr[íi]cula|conv[êe]nio)[:\s]+[A-Za-z0-9\.\-\/]{4,25}\b"""), "[CONVENIO_PROTEGIDO_LGPD]")
+
+        return sanitized
     }
 
     fun parseToExamItems(rawText: String, userId: String, examId: String): List<RemoteExamItem> {
