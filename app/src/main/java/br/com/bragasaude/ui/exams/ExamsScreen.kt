@@ -90,8 +90,45 @@ fun ExamsScreen(
     var showAddBottomSheet by remember { mutableStateOf(false) }
     var currentFlow by remember { mutableStateOf(ExamsSubFlow.LIST) }
     
+    // FASE 3: Governança LGPD e Consentimento
+    val showCloudConsentDialog by viewModel.showCloudConsentDialog.collectAsState()
+    var examToDelete by remember { mutableStateOf<RemoteExam?>(null) }
+
+    // FASE 4: Dossiê Médico Dinâmico
+    val isCompilingDossier by viewModel.isCompilingDossier.collectAsState()
+    val compiledDossierResult by viewModel.compiledDossierResult.collectAsState()
+    val statusMessage by viewModel.statusMessage.collectAsState()
+
     val context = LocalContext.current
     val pdfFile by reportViewModel.pdfFile.collectAsState(initial = null)
+
+    LaunchedEffect(statusMessage) {
+        statusMessage?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            viewModel.clearStatusMessage()
+        }
+    }
+
+    LaunchedEffect(compiledDossierResult) {
+        compiledDossierResult?.let { result ->
+            try {
+                val uri: Uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    result.pdfFile
+                )
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/pdf")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(intent, "Dossiê Médico Completo"))
+            } catch (e: Exception) {
+                Toast.makeText(context, "Dossiê gerado com sucesso (${result.totalPagesCount} páginas).", Toast.LENGTH_LONG).show()
+                e.printStackTrace()
+            }
+            viewModel.clearCompiledDossier()
+        }
+    }
 
     LaunchedEffect(pdfFile) {
         pdfFile?.let { file ->
@@ -178,12 +215,20 @@ fun ExamsScreen(
                 subtitle = "Histórico e Laudos Médicos",
                 onBack = onBack,
                 trailingContent = {
-                    Row {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = onNavigateToEvolution) {
                             Icon(Icons.Default.BarChart, contentDescription = "Evolução", tint = Color.White)
                         }
-                        IconButton(onClick = { reportViewModel.generatePdfReport() }) {
-                            Icon(Icons.Default.PictureAsPdf, contentDescription = "Gerar PDF", tint = Color.White)
+                        if (isCompilingDossier) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(20.dp).padding(2.dp)
+                            )
+                        } else {
+                            IconButton(onClick = { viewModel.compileMedicalDossier() }) {
+                                Icon(Icons.Default.PictureAsPdf, contentDescription = "Dossiê Médico", tint = Color.White)
+                            }
                         }
                     }
                 }
@@ -212,6 +257,32 @@ fun ExamsScreen(
                 item {
                     DashedUploadCard(onClick = { showAddBottomSheet = true })
                     Spacer(Modifier.height(12.dp))
+                    
+                    // Botão destacado de Dossiê Dinâmico Estilo PowerBI
+                    if (exams.isNotEmpty()) {
+                        Button(
+                            onClick = { viewModel.compileMedicalDossier() },
+                            enabled = !isCompilingDossier,
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF00897B),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            if (isCompilingDossier) {
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(10.dp))
+                                Text("Compilando Dossiê Dinâmico...", fontWeight = FontWeight.Bold)
+                            } else {
+                                Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(10.dp))
+                                Text("Gerar Dossiê Médico Dinâmico (PDF)", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                    }
+
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
@@ -246,7 +317,10 @@ fun ExamsScreen(
                 }
 
                 items(exams) { exam ->
-                    ExamCard(exam)
+                    ExamCard(
+                        exam = exam,
+                        onDelete = { examToDelete = exam }
+                    )
                 }
                 
                 item { Spacer(Modifier.height(80.dp)) }
@@ -318,10 +392,68 @@ fun ExamsScreen(
             }
         )
     }
+    // Diálogo de Exclusão Definitiva (LGPD Art. 18)
+    if (examToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { examToDelete = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.DeleteForever,
+                    contentDescription = null,
+                    tint = Color(0xFFE11D48),
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text("Exclusão Definitiva (LGPD)", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "Deseja excluir permanentemente o laudo \"${examToDelete?.title}\"?\n\nEsta ação destruirá o laudo deste aparelho e de todos os servidores remotos de forma definitiva e irrecuperável (Direito ao Esquecimento — LGPD Art. 18).",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF475569),
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        examToDelete?.id?.let { id ->
+                            viewModel.deleteExamAtomically(id)
+                        }
+                        examToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48))
+                ) {
+                    Text("Excluir Permanentemente", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { examToDelete = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // Diálogo de Consentimento de Nuvem LGPD (Art. 43, III)
+    if (showCloudConsentDialog) {
+        br.com.bragasaude.ui.exams.components.CloudConsentDialog(
+            onConfirm = { accepted ->
+                viewModel.onCloudConsentDecision(accepted)
+            },
+            onDismiss = {
+                viewModel.onCloudConsentDismissed()
+            }
+        )
+    }
 }
 
 @Composable
-fun ExamCard(exam: RemoteExam) {
+fun ExamCard(
+    exam: RemoteExam,
+    onDelete: () -> Unit = {}
+) {
     val badge = examStatusBadge(exam.status)
 
     Card(
@@ -367,8 +499,21 @@ fun ExamCard(exam: RemoteExam) {
                         )
                     }
                 }
-                Spacer(Modifier.width(8.dp))
-                BragaStatusBadge(text = badge.first, type = badge.second)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BragaStatusBadge(text = badge.first, type = badge.second)
+                    Spacer(Modifier.width(6.dp))
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = "Excluir exame",
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
             }
 
             examStatusHint(exam.status)?.let { hint ->

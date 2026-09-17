@@ -53,6 +53,22 @@ class ExamsViewModel @Inject constructor(
     private val _pendingExamValidation = MutableStateFlow<Pair<RemoteExam, List<RemoteExamItem>>?>(null)
     val pendingExamValidation = _pendingExamValidation.asStateFlow()
 
+    // FASE 3: Governança LGPD e Consentimento de Nuvem
+    private val _showCloudConsentDialog = MutableStateFlow(false)
+    val showCloudConsentDialog = _showCloudConsentDialog.asStateFlow()
+
+    private var pendingConsentCallback: ((Boolean) -> Unit)? = null
+
+    // FASE 4: Dossiê Médico Dinâmico
+    private val _isCompilingDossier = MutableStateFlow(false)
+    val isCompilingDossier = _isCompilingDossier.asStateFlow()
+
+    private val _compiledDossierResult = MutableStateFlow<br.com.bragasaude.domain.MedicalDossierCompiler.CompilationResult?>(null)
+    val compiledDossierResult = _compiledDossierResult.asStateFlow()
+
+    private val _statusMessage = MutableStateFlow<String?>(null)
+    val statusMessage = _statusMessage.asStateFlow()
+
     init {
         val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
         viewModelScope.launch {
@@ -60,6 +76,72 @@ class ExamsViewModel @Inject constructor(
                 _exams.value = entities.map { it.toRemote() }
             }
         }
+    }
+
+    fun promptCloudConsent(onDecision: (Boolean) -> Unit) {
+        pendingConsentCallback = onDecision
+        _showCloudConsentDialog.value = true
+    }
+
+    fun onCloudConsentDecision(acceptedCloud: Boolean) {
+        _showCloudConsentDialog.value = false
+        pendingConsentCallback?.invoke(acceptedCloud)
+        pendingConsentCallback = null
+    }
+
+    fun onCloudConsentDismissed() {
+        _showCloudConsentDialog.value = false
+        pendingConsentCallback = null
+    }
+
+    fun deleteExamAtomically(examId: String) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+                val success = repository.deleteExamAtomically(examId, userId)
+                if (success) {
+                    _statusMessage.value = "Exame excluído com sucesso (LGPD Art. 18)."
+                } else {
+                    _statusMessage.value = "Exame excluído localmente."
+                }
+            } catch (e: Exception) {
+                _statusMessage.value = "Falha ao excluir exame: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun compileMedicalDossier() {
+        viewModelScope.launch {
+            _isCompilingDossier.value = true
+            try {
+                val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+                val profile = profileRepository.getProfile(userId).firstOrNull()?.toRemote() 
+                    ?: br.com.bragasaude.data.remote.model.RemoteProfile(id = userId, fullName = "Paciente")
+
+                val examEntities = repository.getExams(userId).firstOrNull() ?: emptyList()
+                val itemEntities = repository.getExamItems(userId).firstOrNull() ?: emptyList()
+
+                val compiler = br.com.bragasaude.domain.MedicalDossierCompiler(context)
+                val result = compiler.compileDossier(profile, examEntities, itemEntities)
+                _compiledDossierResult.value = result
+            } catch (e: Exception) {
+                android.util.Log.e("ExamsViewModel", "Erro ao compilar dossiê: ${e.message}", e)
+                _statusMessage.value = "Erro ao compilar dossiê em PDF: ${e.message}"
+            } finally {
+                _isCompilingDossier.value = false
+            }
+        }
+    }
+
+    fun clearCompiledDossier() {
+        _compiledDossierResult.value = null
+    }
+
+    fun clearStatusMessage() {
+        _statusMessage.value = null
     }
 
     fun onValidationConfirmed(exam: RemoteExam, items: List<RemoteExamItem>) {
