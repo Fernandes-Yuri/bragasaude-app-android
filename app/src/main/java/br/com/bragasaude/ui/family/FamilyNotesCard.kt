@@ -215,7 +215,7 @@ fun FamilyNotesCard(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "Conversar com a Família / Responder",
+                    text = "Conversar com a Família",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -708,7 +708,7 @@ fun FamilyMessagesScreen(
                     ) {
                         Icon(Icons.Default.Forum, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Responder / Conversar no Chat", fontWeight = FontWeight.Bold)
+                        Text("Conversar com a Família", fontWeight = FontWeight.Bold)
                     }
                 }
             }
