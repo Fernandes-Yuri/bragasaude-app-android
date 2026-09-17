@@ -97,6 +97,10 @@ android {
 
 dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Retrofit & Serialization Converter
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
@@ -128,8 +132,15 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.auth)
-    implementation(libs.firebase.dataconnect)
     implementation("com.google.firebase:firebase-messaging")
+
+    // Criptografia de Banco Local (SQLCipher + Security Crypto para chaves de hardware)
+    implementation("net.zetetic:sqlcipher-android:4.6.1")
+    implementation("androidx.sqlite:sqlite-ktx:2.4.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // Autenticação Biométrica (Fingerprint / Face Unlock para áreas sensíveis)
+    implementation("androidx.biometric:biometric:1.2.0-alpha05")
 
     // Google Health Connect (Galaxy Watch & Wearables)
     implementation("androidx.health.connect:connect-client:1.1.0-alpha11")
