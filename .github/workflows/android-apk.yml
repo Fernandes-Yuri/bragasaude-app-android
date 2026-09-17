@@ -72,7 +72,7 @@ jobs:
       # (pinado em gradle/gradle-daemon-jvm.properties); se precisar, ele
       # acha nas instalações da runner via org.gradle.java.installations.paths.
       - name: JDK 21 e 25 (Temurin)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: |
@@ -80,10 +80,12 @@ jobs:
             25
 
       - name: Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
 
       - name: Plataforma de compilação (compileSdk 35)
-        run: sdkmanager --install "platforms;android-35"
+        run: yes | sdkmanager --install "platforms;android-35"
 
       # Wrapper unix (./gradlew) NÃO está no repositório — só gradlew.bat.
       # A action oficial provê o Gradle 9.5.0 (mesma versão do wrapper).
@@ -167,7 +169,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: JDK 21 e 25 (Temurin)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: |
@@ -175,10 +177,12 @@ jobs:
             25
 
       - name: Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
 
       - name: Plataforma de compilação (compileSdk 35)
-        run: sdkmanager --install "platforms;android-35"
+        run: yes | sdkmanager --install "platforms;android-35"
 
       - name: Gradle 9.5.0
         uses: gradle/actions/setup-gradle@v4
