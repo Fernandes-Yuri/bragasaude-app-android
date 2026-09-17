@@ -32,19 +32,25 @@ class RemindersViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
-    private val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+    private val userId = auth.currentUser?.uid ?: br.com.bragasaude.util.BragaConstants.GUEST_UID
 
-    private val ticker = flow {
+    /**
+     * Emite um timestamp a cada virada de minuto exata do relógio,
+     * evitando drift e recomposições fora do tempo.
+     */
+    private val minuteTicker = flow {
         while (true) {
-            emit(Unit)
-            kotlinx.coroutines.delay(60000)
+            val now = System.currentTimeMillis()
+            val delayUntilNextMinute = 60_000L - (now % 60_000L)
+            kotlinx.coroutines.delay(delayUntilNextMinute)
+            emit(System.currentTimeMillis() / 60_000L)
         }
-    }
+    }.distinctUntilChanged()
 
     val medications = combine(
         repository.getMedications(userId),
         repository.getLogsForToday(userId),
-        ticker
+        minuteTicker
     ) { meds, logs, _ ->
         val now = LocalDateTime.now()
         val today = now.toLocalDate()

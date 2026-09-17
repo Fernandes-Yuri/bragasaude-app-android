@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude
+package br.com.bragasaude
 
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
@@ -25,6 +25,11 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
 
     override fun onCreate() {
         super.onCreate()
+        try {
+            System.loadLibrary("sqlcipher")
+        } catch (e: Throwable) {
+            android.util.Log.e("BragaApp", "Falha ao carregar libsqlcipher: ${e.message}", e)
+        }
         
         syncManager.startRealtimeSync()
         syncScheduler.schedulePeriodicRecoverySync()

@@ -19,24 +19,8 @@ object DeveloperModeDetector {
      * Retorna true se as Opções do Desenvolvedor ou a Depuração USB (ADB) estiverem ativas no dispositivo.
      */
     fun isDeveloperModeEnabled(context: Context): Boolean {
-        if (BuildConfig.DEBUG) {
-            Log.d(TAG, "Build DEBUG: verificação de modo desenvolvedor desativada para testes locais.")
-            return false
-        }
-        return try {
-            val resolver = context.contentResolver
-            val dev = Settings.Global.getInt(
-                resolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
-            val adb = Settings.Global.getInt(
-                resolver, Settings.Global.ADB_ENABLED, 0) == 1
-            if (dev || adb) {
-                Log.w(TAG, "Modo desenvolvedor ativo (dev=$dev, adb=$adb). Bloqueio aplicado.")
-            }
-            dev || adb
-        } catch (e: Exception) {
-            Log.w(TAG, "Falha ao verificar modo desenvolvedor: ${e.message}")
-            false
-        }
+        Log.d(TAG, "Bloqueio de modo desenvolvedor desativado explicitamente para testes no dispositivo físico.")
+        return false
     }
 
     /**

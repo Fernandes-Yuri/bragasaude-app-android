@@ -60,12 +60,10 @@
 -dontwarn androidx.compose.**
 
 # ------------------------------------------------------------------------------
-# 5. FIREBASE (DATA CONNECT, AUTH, MESSAGING, STORAGE)
+# 5. FIREBASE (AUTH, MESSAGING, STORAGE)
 # ------------------------------------------------------------------------------
 -keepattributes EnclosingMethod
 -keep class com.google.firebase.** { *; }
--keep class com.google.firebase.dataconnect.** { *; }
--keep class br.com.bragasaude.data.dataconnect.** { *; }
 -keep class br.com.bragasaude.data.remote.model.** { *; }
 -keep class br.com.bragasaude.data.local.** { *; }
 -dontwarn com.google.firebase.**
@@ -115,7 +113,7 @@
 }
 
 # ------------------------------------------------------------------------------
-# 11. GRPC / JNDI DONTWARN (Firebase Auth & Data Connect)
+# 11. GRPC / JNDI DONTWARN (Firebase Auth)
 # ------------------------------------------------------------------------------
 -dontwarn javax.naming.**
 

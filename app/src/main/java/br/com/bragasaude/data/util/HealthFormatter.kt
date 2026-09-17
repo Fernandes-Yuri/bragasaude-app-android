@@ -141,40 +141,29 @@ object HealthFormatter {
     }
 
     /**
-     * Converte string de data (DD/MM/AAAA ou AAAA-MM-DD) para Firebase LocalDate.
+     * Converte string de data (DD/MM/AAAA ou AAAA-MM-DD) para java.time.LocalDate nativo.
+     * Substitui a dependência legada do com.google.firebase.dataconnect.LocalDate.
      */
-    fun parseLocalDate(str: String?): com.google.firebase.dataconnect.LocalDate? {
+    fun parseLocalDate(str: String?): java.time.LocalDate? {
         if (str.isNullOrBlank()) return null
         val clean = str.trim()
         return try {
             if (clean.contains("/")) {
                 val parts = clean.split("/")
                 if (parts.size == 3) {
-                    com.google.firebase.dataconnect.LocalDate(
-                        parts[2].toInt(),
-                        parts[1].toInt(),
-                        parts[0].toInt()
-                    )
+                    java.time.LocalDate.of(parts[2].toInt(), parts[1].toInt(), parts[0].toInt())
                 } else null
             } else if (clean.contains("-")) {
                 val parts = clean.split("-")
                 if (parts.size == 3) {
-                    com.google.firebase.dataconnect.LocalDate(
-                        parts[0].toInt(),
-                        parts[1].toInt(),
-                        parts[2].toInt()
-                    )
+                    java.time.LocalDate.of(parts[0].toInt(), parts[1].toInt(), parts[2].toInt())
                 } else null
             } else {
                 val yearMatch = Regex("""year\s*[:=]?\s*(\d{4})""", RegexOption.IGNORE_CASE).find(clean)?.groupValues?.get(1)?.toIntOrNull()
                 val monthMatch = Regex("""month\s*[:=]?\s*(\d{1,2})""", RegexOption.IGNORE_CASE).find(clean)?.groupValues?.get(1)?.toIntOrNull()
                 val dayMatch = Regex("""day\s*[:=]?\s*(\d{1,2})""", RegexOption.IGNORE_CASE).find(clean)?.groupValues?.get(1)?.toIntOrNull()
                 if (yearMatch != null) {
-                    com.google.firebase.dataconnect.LocalDate(
-                        yearMatch,
-                        monthMatch ?: 1,
-                        dayMatch ?: 1
-                    )
+                    java.time.LocalDate.of(yearMatch, monthMatch ?: 1, dayMatch ?: 1)
                 } else null
             }
         } catch (_: Exception) {

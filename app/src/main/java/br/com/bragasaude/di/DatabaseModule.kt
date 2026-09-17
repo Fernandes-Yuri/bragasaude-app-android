@@ -1,15 +1,17 @@
-﻿package br.com.bragasaude.di
+package br.com.bragasaude.di
 
 import android.content.Context
 import androidx.room.Room
 import androidx.work.WorkManager
 import br.com.bragasaude.BuildConfig
 import br.com.bragasaude.data.local.*
+import br.com.bragasaude.data.local.security.DatabaseKeyManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import javax.inject.Singleton
 
 @Module
@@ -18,7 +20,18 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): BragaDatabase {
+    fun provideDatabase(
+        @ApplicationContext context: Context,
+        keyManager: DatabaseKeyManager
+    ): BragaDatabase {
+        try {
+            System.loadLibrary("sqlcipher")
+        } catch (e: Throwable) {
+            android.util.Log.e("DatabaseModule", "libsqlcipher load error: ${e.message}")
+        }
+        val passphrase = keyManager.getOrCreatePassphrase()
+        val factory = SupportOpenHelperFactory(passphrase)
+
         // A2: Em release, nenhuma fallback destrutiva é aplicada para proteger dados locais (vitals, exames, medicações).
         // Em DEBUG, permite-se para agilizar o desenvolvimento.
         val builder = Room.databaseBuilder(
@@ -26,6 +39,9 @@ object DatabaseModule {
             BragaDatabase::class.java,
             BragaDatabase.DATABASE_NAME
         )
+
+        // Ativa a camada de criptografia de banco transparente SQLCipher
+        builder.openHelperFactory(factory)
 
         builder.addMigrations(*Migrations.ALL)
 
