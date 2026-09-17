@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.local.ProfileDao
 import br.com.bragasaude.data.remote.model.RemoteBiometry
@@ -35,7 +35,7 @@ class VoiceHealthExecutor @Inject constructor(
 ) {
 
     private val currentUserId: String
-        get() = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        get() = auth.currentUser?.uid ?: br.com.bragasaude.util.BragaConstants.GUEST_UID
 
     /**
      * Persiste a intenção e retorna uma descrição curta do que foi registrado.
