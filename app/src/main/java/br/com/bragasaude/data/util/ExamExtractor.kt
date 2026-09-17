@@ -258,7 +258,7 @@ class ExamExtractor @Inject constructor(
                                         valueNumeric = parsedVal,
                                         valueText = numStr.replace(".", ","),
                                         unit = def.defaultUnit,
-                                        status = "PENDING"
+                                        status = "analyzed"
                                     )
                                 )
                                 addedKeys.add(def.key)

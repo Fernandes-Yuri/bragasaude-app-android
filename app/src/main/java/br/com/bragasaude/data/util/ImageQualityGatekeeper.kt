@@ -50,28 +50,52 @@ object ImageQualityGatekeeper : IImageQualityGatekeeper {
     private const val MAX_ACCEPTABLE_LUMINANCE = 245.0
 
     override fun evaluateImageQuality(bitmap: Bitmap): QualityEvaluationResult {
-        val width = bitmap.width
-        val height = bitmap.height
+        val origWidth = bitmap.width
+        val origHeight = bitmap.height
 
-        if (width < MIN_RESOLUTION_WIDTH || height < MIN_RESOLUTION_HEIGHT) {
+        if (origWidth < MIN_RESOLUTION_WIDTH && origHeight < MIN_RESOLUTION_HEIGHT) {
             return QualityEvaluationResult.Rejected(
                 reason = RejectionReason.LOW_RESOLUTION,
-                userMessage = "Resolução insuficiente (${width}x${height}). Fotografe o documento com resolução mínima de ${MIN_RESOLUTION_WIDTH}x${MIN_RESOLUTION_HEIGHT}.",
+                userMessage = "Resolução insuficiente (${origWidth}x${origHeight}). Fotografe o documento com resolução mínima de ${MIN_RESOLUTION_WIDTH}x${MIN_RESOLUTION_HEIGHT}.",
                 currentScore = 0.0
             )
         }
 
-        val pixels = IntArray(width * height)
-        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-        return evaluatePixels(pixels, width, height)
+        // Proteção Anti-OOM: se a foto original for maior que 1280px (ex: 48MP/12MP de smartphones),
+        // redimensiona temporariamente para cálculo da nitidez sem estourar o limite de heap.
+        val maxDim = maxOf(origWidth, origHeight)
+        val workingBitmap = if (maxDim > 1280) {
+            val scale = 1280f / maxDim
+            val targetW = (origWidth * scale).toInt()
+            val targetH = (origHeight * scale).toInt()
+            Bitmap.createScaledBitmap(bitmap, targetW, targetH, true)
+        } else {
+            bitmap
+        }
+
+        val w = workingBitmap.width
+        val h = workingBitmap.height
+        val pixels = IntArray(w * h)
+        workingBitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+
+        if (workingBitmap != bitmap) {
+            workingBitmap.recycle()
+        }
+
+        return evaluatePixels(pixels, w, h, checkResolution = false)
     }
 
     /**
      * Avaliação pura sobre buffer de pixels ARGB_8888.
      * Permite testes unitários na JVM pura sem depender de mocks nativos do Android Bitmap.
      */
-    fun evaluatePixels(pixels: IntArray, width: Int, height: Int): QualityEvaluationResult {
-        if (width < MIN_RESOLUTION_WIDTH || height < MIN_RESOLUTION_HEIGHT) {
+    fun evaluatePixels(
+        pixels: IntArray,
+        width: Int,
+        height: Int,
+        checkResolution: Boolean = true
+    ): QualityEvaluationResult {
+        if (checkResolution && (width < MIN_RESOLUTION_WIDTH || height < MIN_RESOLUTION_HEIGHT)) {
             return QualityEvaluationResult.Rejected(
                 reason = RejectionReason.LOW_RESOLUTION,
                 userMessage = "Resolução insuficiente (${width}x${height}). Fotografe o documento com resolução mínima de ${MIN_RESOLUTION_WIDTH}x${MIN_RESOLUTION_HEIGHT}.",
