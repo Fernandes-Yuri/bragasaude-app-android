@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.ai
+package br.com.bragasaude.data.remote.ai
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -27,7 +27,12 @@ class OrbWebSocket @Inject constructor() {
 
     fun openSession(scope: CoroutineScope, baseUrl: String,
                     tokenProvider: suspend (Boolean) -> String): Session =
-        Session(scope, baseUrl, tokenProvider, client)
+        Session(scope, baseUrl, tokenProvider, client, maxFailures = 12)
+
+    fun openSession(scope: CoroutineScope, baseUrl: String,
+                    maxFailures: Int,
+                    tokenProvider: suspend (Boolean) -> String): Session =
+        Session(scope, baseUrl, tokenProvider, client, maxFailures = maxFailures)
 
     // Compatibility for the voice flow outside the dedicated chat.
     suspend fun chat(baseUrl: String, token: String, speech: String, onPartial: (String) -> Unit,
@@ -42,7 +47,8 @@ class OrbWebSocket @Inject constructor() {
                                       private val tokenProvider: suspend (Boolean) -> String,
                                       private val client: OkHttpClient,
                                       private val retryDelay: Long = 1000,
-                                      private val heartbeatMillis: Long = 10000) {
+                                      private val heartbeatMillis: Long = 10000,
+                                      private val maxFailures: Int = 5) {
         private val job = SupervisorJob(parent.coroutineContext[Job])
         private val scope = CoroutineScope(parent.coroutineContext + job)
         private val mutableState = MutableStateFlow(OrbConnectionState.CONNECTING)
@@ -60,12 +66,14 @@ class OrbWebSocket @Inject constructor() {
             if (!job.isActive || connectionJob?.isActive == true) return
             connectionJob = scope.launch {
                 var failures = 0
-                while (isActive && failures <= 5) {
+                while (isActive && failures <= maxFailures) {
                     if (failures > 0) {
                         mutableState.value = OrbConnectionState.RECONNECTING
-                        delay((retryDelay * (1L shl (failures - 1))).coerceAtMost(30000))
+                        val baseDelay = (retryDelay * (1L shl (failures - 1))).coerceAtMost(30000)
+                        val jitter = if (retryDelay > 50) (baseDelay * 0.15 * Math.random()).toLong() else 0L
+                        delay(baseDelay + jitter)
                     }
-                    val incoming = Channel<String>(128)
+                    val incoming = Channel<String>(512, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
                     val opened = CompletableDeferred<Unit>()
                     val started = System.nanoTime()
                     var heartbeat: Job? = null
@@ -115,7 +123,7 @@ class OrbWebSocket @Inject constructor() {
                                 "heartbeat" -> ws.send(JSONObject().put("type", "pong").put("id", event.opt("id")).toString())
                                 "pong" -> Unit
                                 else -> pending[event.optString("id")]?.let { channel ->
-                                    if (!channel.trySend(event).isSuccess) channel.close(IOException("Resposta excedeu o buffer."))
+                                    channel.trySend(event)
                                 }
                             }
                         }
@@ -200,7 +208,7 @@ class OrbWebSocket @Inject constructor() {
                 throw IOException("Sem conexão. Toque em Tentar novamente.")
             }
             val id = UUID.randomUUID().toString()
-            val events = Channel<JSONObject>(128)
+            val events = Channel<JSONObject>(512, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
             pending[id] = events
             var terminal = false
             val started = System.nanoTime()
