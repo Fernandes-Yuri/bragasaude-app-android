@@ -566,7 +566,10 @@ private fun TodayVitalsCard(
                     Text(
                         state.lastMeasurementLabel,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f, fill = false),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -1196,7 +1199,10 @@ private fun AppointmentDialog(
             Text("Agendar Consulta", fontWeight = FontWeight.Bold)
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 Text(
                     "Preencha os dados da consulta. Voce tambem pode salvar direto no Google Agenda.",
                     style = MaterialTheme.typography.bodyMedium,

@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.nutrition
+package br.com.bragasaude.ui.nutrition
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
@@ -143,13 +144,15 @@ fun NutritionScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text("Consumo de Hoje", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
                                     Text(
                                         "${consumedCal.toInt()} / ${dailyCal.toInt()} kcal",
                                         style = MaterialTheme.typography.headlineMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                                 val progress = if (dailyCal > 0) (consumedCal / dailyCal).toFloat().coerceIn(0f, 1f) else 0f

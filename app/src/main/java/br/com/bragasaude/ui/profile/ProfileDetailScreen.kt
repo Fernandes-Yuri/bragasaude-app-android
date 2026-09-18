@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -431,8 +432,20 @@ fun ProfileDetailScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(label, style = MaterialTheme.typography.bodyMedium)
-                                    Text(value, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                                    Text(
+                                        label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    Text(
+                                        value,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.Gray,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        textAlign = TextAlign.End
+                                    )
                                 }
                                 if (index < items.size - 1) {
                                     HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))

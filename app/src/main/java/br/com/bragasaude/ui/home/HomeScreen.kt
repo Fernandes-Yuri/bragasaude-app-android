@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -299,7 +300,10 @@ fun HomeScreen(
                                     text = if (medications.size == 1) medications.first().name else "${medications.size} remédios cadastrados",
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = BragaTextPrimary
+                                    color = BragaTextPrimary,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                             Spacer(Modifier.height(8.dp))

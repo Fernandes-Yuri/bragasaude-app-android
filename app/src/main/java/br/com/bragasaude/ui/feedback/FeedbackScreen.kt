@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.feedback
+package br.com.bragasaude.ui.feedback
 
 import android.content.Context
 import android.content.Intent
@@ -32,6 +32,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -99,7 +100,7 @@ fun FeedbackScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Falar com os Desenvolvedores", fontWeight = FontWeight.Bold) },
+                title = { Text("Falar com os Desenvolvedores", fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
@@ -356,7 +357,7 @@ fun FeedbackScreen(
                         ) {
                             Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Anexar print da tela com o problema")
+                            Text("Anexar print da tela com o problema", maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }

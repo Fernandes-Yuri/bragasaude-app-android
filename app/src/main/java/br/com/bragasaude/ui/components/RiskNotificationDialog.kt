@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.components
+package br.com.bragasaude.ui.components
 
 import android.content.Intent
 import android.net.Uri
@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.ui.profile.ProfileViewModel
@@ -113,7 +114,7 @@ fun RiskNotificationDialog(
                 ) {
                     Icon(Icons.Default.Person, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text(contactName)
+                    Text(contactName, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }

@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.components
+package br.com.bragasaude.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,6 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.bragasaude.ui.theme.TealLight
@@ -303,12 +305,20 @@ fun MetricInfoBottomSheet(
                                         text = cat,
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
                                     )
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = range,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        textAlign = TextAlign.End
                                     )
                                 }
                                 HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))

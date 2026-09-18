@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.family
+package br.com.bragasaude.ui.family
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -263,9 +263,24 @@ private fun BPRecordRow(record: VitalSignEntity) {
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(dateStr, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            dateStr,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f, fill = false),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
         Spacer(Modifier.width(12.dp))
-        Text("$systolic/$diastolic mmHg", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = classification.category.displayColor)
+        Text(
+            "$systolic/$diastolic mmHg",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = classification.category.displayColor,
+            modifier = Modifier.weight(1f, fill = false),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
         Spacer(Modifier.weight(1f))
         ChipLabel(classification.category.displayName, color = classification.category.displayColor)
     }
@@ -285,9 +300,24 @@ private fun GlucoseRecordRow(record: VitalSignEntity) {
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(dateStr, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            dateStr,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f, fill = false),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
         Spacer(Modifier.width(12.dp))
-        Text("$glucose mg/dL", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = classification.category.displayColor)
+        Text(
+            "$glucose mg/dL",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = classification.category.displayColor,
+            modifier = Modifier.weight(1f, fill = false),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
         Spacer(Modifier.weight(1f))
         ChipLabel(classification.category.displayName, color = classification.category.displayColor)
     }

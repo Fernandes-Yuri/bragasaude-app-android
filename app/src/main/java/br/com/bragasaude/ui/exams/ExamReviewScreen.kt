@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.bragasaude.data.remote.model.RemoteExam
@@ -285,12 +286,14 @@ fun ExamReviewScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Parâmetros Clínicos Identificados",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = BragaTextPrimary
+                            color = BragaTextPrimary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "${activeItems.size} parâmetros ativos",
@@ -450,12 +453,14 @@ private fun ExamItemReviewCard(
                         }
                     }
                     Spacer(Modifier.width(10.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = item.itemName,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = BragaTextPrimary
+                            color = BragaTextPrimary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                         if (item.isCustomAdded) {
                             Text(

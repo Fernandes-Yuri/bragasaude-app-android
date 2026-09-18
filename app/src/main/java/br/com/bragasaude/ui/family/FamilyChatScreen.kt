@@ -106,12 +106,16 @@ fun FamilyChatScreen(
                         Text(
                             text = titleText,
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = subtitleText,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 },
@@ -293,7 +297,10 @@ private fun ChatBubble(
             Spacer(Modifier.width(8.dp))
         }
         
-        Column(horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start) {
+        Column(
+            horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
+            modifier = Modifier.weight(1f, fill = false)
+        ) {
             // Balão da mensagem (toque longo na própria mensagem oferece exclusão — D47)
             val bubbleShape = RoundedCornerShape(
                 topStart = 16.dp,
