@@ -265,17 +265,24 @@ jobs:
 
       - name: Promover release no gateway (disco + RDS)
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          DB_URL: ${{ secrets.RDS_DATABASE_URL }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.GATEWAY_SSH_KEY }}
+          envs: DB_URL
           script: |
             set -e
             cd /home/ec2-user/braga-gateway
-            # Shell do SSH nao e login: carrega o .env explicitamente (DATABASE_URL).
-            set -a
-            . ./.env
-            set +a
+            # DATABASE_URL chega pela env DB_URL (secret RDS_DATABASE_URL),
+            # nao do .env: ler .env por SSH executa senhas sem aspas como
+            # comando (linha 6 do .env, senha de app do Gmail).
+            export DATABASE_URL="$DB_URL"
+            if [ -z "$DATABASE_URL" ]; then
+              echo "ERRO: DATABASE_URL ausente (secret RDS_DATABASE_URL)" >&2
+              exit 1
+            fi
             V='${{ steps.versao.outputs.name }}'
             C='${{ steps.versao.outputs.code }}'
             REL_DIR="/home/ec2-user/braga-gateway/releases"
