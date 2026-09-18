@@ -307,6 +307,18 @@ object Migrations {
         }
     }
 
+    /**
+     * 44 -> 45 (Vínculo de WhatsApp por TOTP): a conta guarda o segredo TOTP
+     * "sob o capo" e o número de WhatsApp já vinculado. Arquitetura temporária
+     * até a Meta aprovar o template de autenticação.
+     */
+    val MIGRATION_44_45 = object : Migration(44, 45) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE profiles_local ADD COLUMN whatsappTotpSecret TEXT")
+            db.execSQL("ALTER TABLE profiles_local ADD COLUMN whatsappPhone TEXT")
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -326,6 +338,7 @@ object Migrations {
         MIGRATION_40_41,
         MIGRATION_41_42,
         MIGRATION_42_43,
-        MIGRATION_43_44
+        MIGRATION_43_44,
+        MIGRATION_44_45
     )
 }

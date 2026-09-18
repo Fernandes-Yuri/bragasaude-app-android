@@ -44,7 +44,16 @@ class ProfileRepository @Inject constructor(
 
     suspend fun saveProfile(profile: RemoteProfile) {
         val existing = profileDao.getProfileOneShot(profile.id)
-        val entity = profile.toEntity().copy(
+        // Conta nasce com o segredo TOTP sob o capo (vínculo de WhatsApp). Só gera
+        // uma vez: regenerar invalidaria o código de um app já instalado.
+        val withTotp = if (existing?.whatsappTotpSecret.isNullOrBlank()
+            && profile.whatsappTotpSecret.isNullOrBlank()
+        ) {
+            profile.copy(whatsappTotpSecret = br.com.bragasaude.data.util.WhatsAppLinkTotp.generateSecret())
+        } else {
+            profile
+        }
+        val entity = withTotp.toEntity().copy(
             pendingSync = true,
             customPhotoUri = existing?.customPhotoUri
         )

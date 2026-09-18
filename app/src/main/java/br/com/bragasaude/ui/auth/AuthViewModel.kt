@@ -66,6 +66,13 @@ class AuthViewModel @Inject constructor(
     private val _suggestPhoneLink = MutableStateFlow(false)
     val suggestPhoneLink = _suggestPhoneLink.asStateFlow()
 
+    // Vínculo WhatsApp por TOTP: segredo "sob o capo" + número já vinculado.
+    // O app calcula o código no ato do clique; ver wa_link_totp.py no gateway.
+    private val _whatsappTotpSecret = MutableStateFlow<String?>(null)
+    val whatsappTotpSecret = _whatsappTotpSecret.asStateFlow()
+    private val _whatsappPhone = MutableStateFlow<String?>(null)
+    val whatsappPhone = _whatsappPhone.asStateFlow()
+
     // Plano B OTP (sem template): código só existe após sucesso real.
     private val _phoneLinkSent = MutableStateFlow(false)
     val phoneLinkSent = _phoneLinkSent.asStateFlow()
@@ -161,6 +168,9 @@ class AuthViewModel @Inject constructor(
                 val local = repository.getProfileOneShotLocal(userId)
                 currentCoroutineContext().ensureActive()
                 if (auth.currentUser?.uid != userId) return@withLock
+                // Segredo TOTP e número vinculado (vínculo WhatsApp temporário).
+                _whatsappTotpSecret.value = local?.whatsappTotpSecret
+                _whatsappPhone.value = local?.whatsappPhone
                 when (val resolution = resolveLoginProfile(local, remote)) {
                     LoginProfileResolution.Loading -> {
                         _isProfileComplete.value = null

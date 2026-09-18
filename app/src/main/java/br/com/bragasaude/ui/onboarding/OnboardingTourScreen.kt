@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.onboarding
+package br.com.bragasaude.ui.onboarding
 
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.bragasaude.ui.components.ShieldEcgIcon
+import br.com.bragasaude.ui.components.WhatsAppLinkButton
 import br.com.bragasaude.ui.theme.TealLight
 import br.com.bragasaude.ui.theme.TealPrimary
 import br.com.bragasaude.ui.theme.TealSurface
@@ -101,6 +102,8 @@ val caregiverTourSlides = listOf(
 @Composable
 fun OnboardingTourScreen(
     userRole: String? = "PATIENT",
+    totpSecret: String? = null,
+    whatsappPhone: String? = null,
     onFinishTour: () -> Unit
 ) {
     val context = LocalContext.current
@@ -260,6 +263,23 @@ fun OnboardingTourScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 24.sp
                 )
+
+                // Na última página, convida ao vínculo do WhatsApp. O usuário pode
+                // pular e fazer depois pela tela de Perfil.
+                if (page == tourSlides.size - 1) {
+                    Spacer(Modifier.height(28.dp))
+                    WhatsAppLinkButton(
+                        totpSecret = totpSecret,
+                        alreadyLinked = !whatsappPhone.isNullOrBlank()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Sem pressa: você também pode vincular depois, na tela de Perfil.",
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

@@ -85,7 +85,9 @@ fun RemoteProfile.toEntity() = ProfileEntity(
     basicProfileComplete = basicProfileComplete,
     selfCareComplete = selfCareComplete,
     selfCareSetupPending = selfCareSetupPending,
-    avatarIdentifier = avatarIdentifier
+    avatarIdentifier = avatarIdentifier,
+    whatsappTotpSecret = whatsappTotpSecret,
+    whatsappPhone = whatsappPhone
 )
 
 fun ProfileEntity.toRemote() = RemoteProfile(
@@ -132,7 +134,9 @@ fun ProfileEntity.toRemote() = RemoteProfile(
     basicProfileComplete = basicProfileComplete,
     selfCareComplete = selfCareComplete,
     selfCareSetupPending = selfCareSetupPending,
-    avatarIdentifier = avatarIdentifier
+    avatarIdentifier = avatarIdentifier,
+    whatsappTotpSecret = whatsappTotpSecret,
+    whatsappPhone = whatsappPhone
 )
 
 fun RemoteBiometry.toEntity() = BiometryEntity(

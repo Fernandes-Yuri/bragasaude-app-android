@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui
+package br.com.bragasaude.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -61,6 +61,8 @@ fun AppContent(activity: MainActivity) {
     val caregiverMode by authViewModel.caregiverMode.collectAsState()
     val needsSelfCare by authViewModel.needsSelfCare.collectAsState()
     val suggestPhoneLink by authViewModel.suggestPhoneLink.collectAsState()
+    val whatsappTotpSecret by authViewModel.whatsappTotpSecret.collectAsState()
+    val whatsappPhone by authViewModel.whatsappPhone.collectAsState()
     var tempRole by rememberSaveable { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
@@ -179,6 +181,8 @@ fun AppContent(activity: MainActivity) {
                                 }
                                 !hasSeenTutorial -> br.com.bragasaude.ui.onboarding.OnboardingTourScreen(
                                     userRole = userRole,
+                                    totpSecret = whatsappTotpSecret,
+                                    whatsappPhone = whatsappPhone,
                                     onFinishTour = { hasSeenTutorial = true }
                                 )
                                 isProfileComplete == true -> {
