@@ -272,6 +272,10 @@ jobs:
           script: |
             set -e
             cd /home/ec2-user/braga-gateway
+            # Shell do SSH nao e login: carrega o .env explicitamente (DATABASE_URL).
+            set -a
+            . ./.env
+            set +a
             V='${{ steps.versao.outputs.name }}'
             C='${{ steps.versao.outputs.code }}'
             REL_DIR="/home/ec2-user/braga-gateway/releases"
@@ -283,9 +287,14 @@ jobs:
             SHA=$(sha256sum "$VERSIONED" | awk '{print toupper($1)}')
             SIZE=$(stat -c%s "$VERSIONED")
             echo "Release v$V-build$C: $SIZE bytes, sha256=$SHA"
+            if [ -z "$DATABASE_URL" ]; then
+              echo "ERRO: DATABASE_URL ausente apos carregar .env" >&2
+              exit 1
+            fi
             # Registra no RDS (is_active=true) e desativa as anteriores.
-            venv/bin/python - <<PYEOF
-            import asyncio, os
+            venv/bin/python - "$V" "$C" "$SIZE" "$SHA" <<'PYEOF'
+            import asyncio, os, sys
+            version_name, code, size, sha = sys.argv[1:5]
             async def main():
                 import asyncpg
                 p = await asyncpg.connect(os.environ['DATABASE_URL'], ssl='require')
@@ -293,19 +302,19 @@ jobs:
                 await p.execute(
                     "INSERT INTO app_releases (version_name, version_code, release_type,"
                     " filename, file_size_bytes, sha256_hash, changelog, min_android_sdk, is_active)"
-                    " VALUES (\$1, \$2, 'release', 'BragaSaude.apk', \$3, \$4,"
-                    " 'Release v$V (build $C) entregue pelo CI.', 26, TRUE)"
+                    " VALUES ($1, $2, 'release', 'BragaSaude.apk', $3, $4,"
+                    " 'Release v' || $1 || ' (build ' || $2 || ') entregue pelo CI.', 26, TRUE)"
                     " ON CONFLICT (version_code) DO UPDATE SET is_active = TRUE,"
                     " file_size_bytes = EXCLUDED.file_size_bytes, sha256_hash = EXCLUDED.sha256_hash",
-                    'v$V', int('$C'), int('$SIZE'), '$SHA')
+                    'v' + version_name, int(code), int(size), sha)
                 await p.close()
             asyncio.run(main())
             PYEOF
+            echo "RELEASE REGISTRADA NO RDS"
             # Retencao D52 imediata: mantem so os 3 APKs mais recentes.
             venv/bin/python - <<'PYEOF'
             import asyncio, os, sys
             sys.path.insert(0, '/home/ec2-user/braga-gateway/scripts/server')
-            os.environ.setdefault('BRAGA_RELEASES_DIR', '/home/ec2-user/braga-gateway/releases')
             async def main():
                 import asyncpg
                 from release_retention import purge_old_releases
