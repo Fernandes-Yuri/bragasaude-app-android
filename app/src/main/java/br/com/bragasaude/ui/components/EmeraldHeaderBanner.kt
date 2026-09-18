@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.components
+package br.com.bragasaude.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.bragasaude.ui.theme.BragaEmerald
@@ -120,26 +121,32 @@ fun EmeraldHeaderBanner(
                         Spacer(Modifier.width(14.dp))
                     }
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         if (greetingPrefix != null) {
                             Text(
                                 text = greetingPrefix,
                                 color = Color.White.copy(alpha = 0.85f),
                                 fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Text(
                             text = title,
                             color = Color.White,
                             fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         if (subtitle != null) {
                             Text(
                                 text = subtitle,
                                 color = Color.White.copy(alpha = 0.8f),
-                                fontSize = 13.sp
+                                fontSize = 13.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }

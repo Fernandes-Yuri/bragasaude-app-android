@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -72,7 +73,10 @@ fun CloudConsentDialog(
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF1E293B),
                             fontSize = 18.sp
-                        )
+                        ),
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -214,7 +218,10 @@ private fun StorageOptionCard(
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF1E293B),
                             fontSize = 14.5.sp
-                        )
+                        ),
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Surface(
                         color = if (isSelected) Color(0xFF00897B) else Color(0xFFF1F5F9),
@@ -227,7 +234,9 @@ private fun StorageOptionCard(
                                 color = if (isSelected) Color.White else Color(0xFF64748B),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
-                            )
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

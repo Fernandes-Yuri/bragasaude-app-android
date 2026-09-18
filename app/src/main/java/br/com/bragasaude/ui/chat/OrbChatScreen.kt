@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.chat
+package br.com.bragasaude.ui.chat
 
 import android.Manifest
 import android.content.Intent
@@ -664,7 +664,10 @@ fun ChatTextSizeDialog(
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 Text(
                     "Escolha o tamanho ideal para ler as respostas do Braga com total conforto:",
                     style = MaterialTheme.typography.bodySmall,

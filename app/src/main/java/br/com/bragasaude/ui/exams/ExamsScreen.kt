@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.bragasaude.R
@@ -299,7 +300,10 @@ fun ExamsScreen(
                                 "A IA transcreve os valores do PDF automaticamente e você confere cada um antes de salvar no seu prontuário permanente.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = BragaTextPrimary,
-                                lineHeight = 18.sp
+                                lineHeight = 18.sp,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -490,7 +494,9 @@ fun ExamCard(
                             exam.title,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = BragaTextPrimary
+                            color = BragaTextPrimary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             exam.examDate,

@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.family
+package br.com.bragasaude.ui.family
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -164,7 +164,8 @@ fun FamilyConnectScreen(
                             "Compartilhe este código com seu filho ou familiar de confiança para que ele acompanhe sua saúde.",
                             style = MaterialTheme.typography.bodyMedium,
                             lineHeight = 20.sp,
-                            color = BragaTextPrimary
+                            color = BragaTextPrimary,
+                            modifier = Modifier.weight(1f)
                         )
                     }
 
