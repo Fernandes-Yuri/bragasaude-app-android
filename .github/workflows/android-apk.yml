@@ -246,17 +246,73 @@ jobs:
             > ⚠️ Assinatura nova (D46): usuários da v1.1.2 precisam **desinstalar e reinstalar**.
             > Comunique o backup dos dados locais antes (LGPD).
 
-      # Entrega no gateway (libera o OTA /api/app/latest). DESATIVADO até você
-      # cadastrar o secret GATEWAY_SSH_KEY (use a chave deploy-braga-ec2 que já
-      # existe em CREDENCIAIS_E_SECRETS_BRAGA_SAUDE/chaves-ssh/). Ver doc 03, seção 8.
-      # - name: Publicar no gateway (EC2)
-      #   uses: appleboy/scp-action@v0.1.7
-      #   with:
-      #     host: api.bragasaude.online
-      #     username: ec2-user
-      #     key: ${{ secrets.GATEWAY_SSH_KEY }}
-      #     source: app-release.apk
-      #     target: /home/ec2-user/braga-gateway/releases/
-      # - name: Atualizar latest.apk e registrar release
-      #   uses: appleboy/ssh-action@v1.2.0
-      #   ...
+      # Entrega no gateway (libera o download em https://api.bragasaude.online).
+      #
+      # host DEVE ser o DNS publico direto da EC2, NAO api.bragasaude.online:
+      # este dominio passa pelo Cloudflare Tunnel, que so faz proxy de 80/443.
+      # A porta 22 (SSH) nao chega na instancia por ele (doc 02, linha 177).
+      #
+      # Segredo GATEWAY_SSH_KEY: chave privada deploy-braga-ec2 (mesma do
+      # deploy.yml do gateway-api). Cadastro uma unica vez (doc 03, secao 8).
+      - name: Publicar APK no gateway (EC2)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.GATEWAY_SSH_KEY }}
+          source: app-release.apk
+          target: /home/ec2-user/braga-gateway/releases/
+
+      - name: Promover release no gateway (disco + RDS)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.GATEWAY_SSH_KEY }}
+          script: |
+            set -e
+            cd /home/ec2-user/braga-gateway
+            V='${{ steps.versao.outputs.name }}'
+            C='${{ steps.versao.outputs.code }}'
+            REL_DIR="/home/ec2-user/braga-gateway/releases"
+            SRC="$REL_DIR/app-release.apk"
+            VERSIONED="$REL_DIR/BragaSaude-v$V-build$C-release.apk"
+            SERVED="$REL_DIR/BragaSaude.apk"
+            cp -f "$SRC" "$VERSIONED"
+            cp -f "$SRC" "$SERVED"
+            SHA=$(sha256sum "$VERSIONED" | awk '{print toupper($1)}')
+            SIZE=$(stat -c%s "$VERSIONED")
+            echo "Release v$V-build$C: $SIZE bytes, sha256=$SHA"
+            # Registra no RDS (is_active=true) e desativa as anteriores.
+            venv/bin/python - <<PYEOF
+            import asyncio, os
+            async def main():
+                import asyncpg
+                p = await asyncpg.connect(os.environ['DATABASE_URL'], ssl='require')
+                await p.execute('UPDATE app_releases SET is_active = FALSE')
+                await p.execute(
+                    "INSERT INTO app_releases (version_name, version_code, release_type,"
+                    " filename, file_size_bytes, sha256_hash, changelog, min_android_sdk, is_active)"
+                    " VALUES (\$1, \$2, 'release', 'BragaSaude.apk', \$3, \$4,"
+                    " 'Release v$V (build $C) entregue pelo CI.', 26, TRUE)"
+                    " ON CONFLICT (version_code) DO UPDATE SET is_active = TRUE,"
+                    " file_size_bytes = EXCLUDED.file_size_bytes, sha256_hash = EXCLUDED.sha256_hash",
+                    'v$V', int('$C'), int('$SIZE'), '$SHA')
+                await p.close()
+            asyncio.run(main())
+            PYEOF
+            # Retencao D52 imediata: mantem so os 3 APKs mais recentes.
+            venv/bin/python - <<'PYEOF'
+            import asyncio, os, sys
+            sys.path.insert(0, '/home/ec2-user/braga-gateway/scripts/server')
+            os.environ.setdefault('BRAGA_RELEASES_DIR', '/home/ec2-user/braga-gateway/releases')
+            async def main():
+                import asyncpg
+                from release_retention import purge_old_releases
+                pool = await asyncpg.create_pool(os.environ['DATABASE_URL'], min_size=1, max_size=2)
+                res = await purge_old_releases(pool, '/home/ec2-user/braga-gateway/releases', keep=3)
+                print('[RETENTION]', res)
+                await pool.close()
+            asyncio.run(main())
+            PYEOF
+            echo "DEPLOY OTA CONCLUIDO"
