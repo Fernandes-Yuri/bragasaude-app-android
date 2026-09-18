@@ -107,6 +107,10 @@ class BragaApiClient @Inject constructor(
                 put("customFoodRestrictions", p.customFoodRestrictions ?: JSONObject.NULL)
                 put("caregiverMode", p.caregiverMode ?: JSONObject.NULL)
                 if (p.avatarIdentifier != null) put("avatarIdentifier", p.avatarIdentifier)
+                // Segredo TOTP do vínculo de WhatsApp (app gera; gateway só guarda).
+                if (!p.whatsappTotpSecret.isNullOrBlank()) {
+                    put("totpSecret", p.whatsappTotpSecret)
+                }
             }
             val res = postJson("$baseUrl/api/sync/profile", json)
             return@withContext res?.optString("status") == "success"

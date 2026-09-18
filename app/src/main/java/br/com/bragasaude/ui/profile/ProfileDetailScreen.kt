@@ -55,6 +55,7 @@ import android.net.Uri
 import android.content.Intent
 import android.widget.Toast
 import br.com.bragasaude.ui.components.PhoneLinkDialog
+import br.com.bragasaude.ui.components.WhatsAppLinkButton
 import br.com.bragasaude.ui.theme.BragaEmerald
 import br.com.bragasaude.ui.theme.BragaMint
 import br.com.bragasaude.ui.theme.BragaMintBorder
@@ -671,6 +672,17 @@ fun ProfileDetailScreen(
                             )
                         }
                     }
+                }
+            }
+
+            // Vínculo WhatsApp por TOTP (temporário até a Meta liberar template).
+            // Toque único abre o WhatsApp com o código atual pronto para enviar.
+            item {
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                    WhatsAppLinkButton(
+                        totpSecret = profile?.whatsappTotpSecret,
+                        alreadyLinked = !profile?.whatsappPhone.isNullOrBlank()
+                    )
                 }
             }
 

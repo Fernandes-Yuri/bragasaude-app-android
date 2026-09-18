@@ -74,7 +74,15 @@ data class ProfileEntity(
     val selfCareSetupPending: Boolean = false,
     val caregiverMode: String? = null,
     val avatarIdentifier: String? = null,
-    val customPhotoUri: String? = null
+    val customPhotoUri: String? = null,
+    /**
+     * Segredo TOTP (base32) do vínculo de WhatsApp. A conta nasce com ele "sob o
+     * capo"; o app calcula o código atual no ato do clique, sem chamar o servidor.
+     * Arquitetura temporária até a Meta liberar o template de autenticação.
+     */
+    val whatsappTotpSecret: String? = null,
+    /**Número de WhatsApp vinculado (verificado pela Meta via webhook). */
+    val whatsappPhone: String? = null
 )
 
 @Entity(tableName = "exams_local")
