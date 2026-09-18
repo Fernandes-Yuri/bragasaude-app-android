@@ -306,14 +306,15 @@ jobs:
                 import asyncpg
                 p = await asyncpg.connect(os.environ['DATABASE_URL'], ssl='require')
                 await p.execute('UPDATE app_releases SET is_active = FALSE')
+                changelog = 'Release v' + version_name + ' (build ' + code + ') entregue pelo CI.'
                 await p.execute(
                     "INSERT INTO app_releases (version_name, version_code, release_type,"
                     " filename, file_size_bytes, sha256_hash, changelog, min_android_sdk, is_active)"
-                    " VALUES ($1, $2, 'release', 'BragaSaude.apk', $3, $4,"
-                    " 'Release v' || $1 || ' (build ' || $2 || ') entregue pelo CI.', 26, TRUE)"
+                    " VALUES ($1, $2, 'release', 'BragaSaude.apk', $3, $4, $5, 26, TRUE)"
                     " ON CONFLICT (version_code) DO UPDATE SET is_active = TRUE,"
-                    " file_size_bytes = EXCLUDED.file_size_bytes, sha256_hash = EXCLUDED.sha256_hash",
-                    'v' + version_name, int(code), int(size), sha)
+                    " file_size_bytes = EXCLUDED.file_size_bytes, sha256_hash = EXCLUDED.sha256_hash,"
+                    " changelog = EXCLUDED.changelog",
+                    'v' + version_name, int(code), int(size), sha, changelog)
                 await p.close()
             asyncio.run(main())
             PYEOF
