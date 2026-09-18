@@ -659,9 +659,10 @@ class VoiceHealthViewModel @Inject constructor(
                 )
 
                 val aiResult = try {
-                    localAiClient.interpretSpeech(bestMatch, history = conversationMemory.snapshot()) { partial ->
-                        _partialResponse.value = partial
-                    }
+                    localAiClient.interpretSpeech(bestMatch, history = conversationMemory.snapshot(),
+                        onPartial = { partial ->
+                            _partialResponse.value = partial
+                        })
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     aiSpeechDeferred.cancel()
                     throw e

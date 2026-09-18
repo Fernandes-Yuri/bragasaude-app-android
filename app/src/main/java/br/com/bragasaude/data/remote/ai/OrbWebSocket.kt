@@ -150,11 +150,12 @@ class OrbWebSocket @Inject constructor() {
             }
         }
 
-        suspend fun chat(messages: List<Pair<String, String>>, onPartial: (String) -> Unit): OrbReply {
+        suspend fun chat(messages: List<Pair<String, String>>, onPartial: (String) -> Unit,
+                         actingAs: String? = null, patientId: String? = null): OrbReply {
             check(requestLock.tryLock()) { "Uma resposta já está em andamento." }
             try {
                 for (authAttempt in 0..1) {
-                    try { return request(messages, onPartial) }
+                    try { return request(messages, onPartial, actingAs, patientId) }
                     catch (e: OrbAuthExpiredException) {
                         if (authAttempt == 1) throw OrbRejectedException("Entre novamente para conversar.")
                         immediateRefresh = true
@@ -192,7 +193,8 @@ class OrbWebSocket @Inject constructor() {
             }
         }
 
-        private suspend fun request(messages: List<Pair<String, String>>, onPartial: (String) -> Unit): OrbReply {
+        private suspend fun request(messages: List<Pair<String, String>>, onPartial: (String) -> Unit,
+                                    actingAs: String? = null, patientId: String? = null): OrbReply {
             val freshToken = tokenProvider(false)
             if (connectedToken != null && connectedToken != freshToken) {
                 immediateRefresh = true
@@ -218,6 +220,10 @@ class OrbWebSocket @Inject constructor() {
                 messages.takeLast(30).forEach { (role, content) -> history.put(JSONObject().put("role", role).put("content", content)) }
                 val payload = JSONObject().put("type", "chat").put("id", id).put("messages", history)
                     .put("max_tokens", 512).put("temperature", 0.1)
+                // D50/D51: escopo de papel — modo cuidador agenda consulta por voz
+                if (actingAs == "caregiver" && !patientId.isNullOrBlank()) {
+                    payload.put("acting_as", "caregiver").put("patient_id", patientId)
+                }
                 if (socket?.send(payload.toString()) != true) throw IOException("Falha ao enviar.")
                 var full = ""
                 while (true) {
