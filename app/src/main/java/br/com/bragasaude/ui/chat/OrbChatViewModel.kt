@@ -1,9 +1,10 @@
-﻿package br.com.bragasaude.ui.chat
+package br.com.bragasaude.ui.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.ai.*
+import br.com.bragasaude.data.remote.repository.FamilyBridgeRepository
 import br.com.bragasaude.data.remote.service.NotificationClient
 import br.com.bragasaude.domain.VoiceHealthIntent
 import br.com.bragasaude.domain.VoiceHealthParser
@@ -59,6 +60,7 @@ class OrbChatViewModel @Inject constructor(
     private val audio: NeuralAudioPlayer,
     private val notifications: NotificationClient,
     private val profiles: ProfileDao,
+    private val familyRepository: FamilyBridgeRepository,
     private val voiceParser: VoiceHealthParser = VoiceHealthParser()
 ) : ViewModel() {
     private val mutable = MutableStateFlow(OrbChatUiState())
@@ -204,6 +206,9 @@ class OrbChatViewModel @Inject constructor(
             try {
                 previousGeneration?.join()
                 currentCoroutineContext().ensureActive()
+                // D50/D51: no modo cuidador, envia o escopo para o gateway
+                // habilitar o agendamento de consulta por voz do paciente.
+                val scope = caregiverScope()
                 val shortcut = when (value.lowercase()) {
                     "/pressão", "/pressao" -> "REGISTRAR_PRESSAO"
                     "/remédio", "/remedio" -> "LEMBRETES"
@@ -213,9 +218,9 @@ class OrbChatViewModel @Inject constructor(
                 }
                 val reply = if (shortcut != null) OrbReply(JSONObject().put("fala", "Abrir ${actionLabel(shortcut)}.")
                     .put("acao", shortcut).put("parametros", JSONObject()).toString())
-                else gateway.send(history) { partial ->
+                else gateway.send(history, { partial ->
                     if (version == revision) mutable.update { it.copy(partialText = partial) }
-                }
+                }, actingAs = scope?.first, patientId = scope?.second)
                 if (version != revision) return@launch
                 val parsed = JSONObject(reply.content)
                 val rawAction = parsed.optString("acao", "CONVERSA").takeUnless { it == "CONVERSA" }
@@ -241,6 +246,33 @@ class OrbChatViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * D50/D51: resolve o escopo de papel (actingAs, patientId) do usuario atual.
+     * Devolve "caregiver" + o patientId quando o usuario e cuidador ativo de
+     * alguem; devolve null no autocuidado puro (nao envia nada ao gateway).
+     */
+    private suspend fun caregiverScope(): Pair<String, String>? {
+        val owner = uid ?: return null
+        val profile = profiles.getProfileOneShot(owner) ?: return null
+        if (profile.userRole != "CAREGIVER") return null
+        return try {
+            familyRepository.getActiveBindingsForCaregiver(owner).first()
+                .firstOrNull { it.status.equals("ACTIVE", ignoreCase = true) }
+                ?.patientUserId?.takeIf { it.isNotBlank() }
+                ?.let { "caregiver" to it }
+        } catch (_: Exception) { null }
+    }
+
+    /** Converte ISO-8601 (do gateway) em epoch millis; fallback = agora. */
+    private fun parseIsoToEpoch(iso: String): Long = try {
+        if (iso.isBlank()) System.currentTimeMillis()
+        else java.time.Instant.parse(iso).toEpochMilli()
+    } catch (_: Exception) {
+        try { java.time.LocalDateTime.parse(iso)
+            .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        } catch (_: Exception) { System.currentTimeMillis() }
     }
 
     fun cancelGeneration() {
@@ -295,6 +327,27 @@ class OrbChatViewModel @Inject constructor(
                     "CONSULTAR_METRICAS" -> Screen.Report
                     "LEMBRETES" -> Screen.Reminders
                     "EXAMES" -> Screen.Exams
+                    // D51: confirma o rascunho -> grava a consulta no dispositivo
+                    // (espelha o que o gateway ja gravou ao confirmar por voz).
+                    "AGENDAR_RASCUNHO" -> {
+                        val owner = uid ?: error("Entre novamente.")
+                        val pid = p.optString("id").takeIf { it.isNotBlank() } ?: error("Rascunho inválido.")
+                        try {
+                            val scope = caregiverScope()
+                            val epoch = parseIsoToEpoch(p.optString("scheduledDate"))
+                            familyRepository.createConsultation(
+                                userId = scope?.second ?: owner,
+                                title = p.optString("title").ifBlank { "Consulta" },
+                                scheduledDate = epoch,
+                                caregiverUserId = owner,
+                                caregiverName = profile?.fullName,
+                                caregiverRelation = "Cuidador",
+                            )
+                        } catch (_: Exception) {
+                            // O gateway ja gravou; o espelho local e melhor-esforco.
+                        }
+                        Screen.Reminders
+                    }
                     "EMERGENCIA" -> {
                         navigation.send(OrbChatEvent.Emergency)
                         if (!notifications.triggerEmergency(owner, profile?.fullName ?: "Usuário Braga", "Alerta confirmado pelo usuário no chat Braga."))
@@ -351,7 +404,9 @@ class OrbChatViewModel @Inject constructor(
         return when (rawAction) {
             "EMERGENCIA", "LEMBRETES", "EXAMES", "CONSULTAR_METRICAS", "ABRIR_LISTA_COMPRAS",
             "REGISTRAR_PRESSAO", "REGISTRAR_GLICEMIA", "REGISTRAR_AGUA",
-            "REGISTRAR_BATIMENTOS", "REGISTRAR_OXIGENACAO" -> rawAction to rawParams
+            "REGISTRAR_BATIMENTOS", "REGISTRAR_OXIGENACAO",
+            // D51: rascunho de agendamento por voz — card com botao Confirmar
+            "AGENDAR_RASCUNHO" -> rawAction to rawParams
             else -> null to JSONObject()
         }
     }

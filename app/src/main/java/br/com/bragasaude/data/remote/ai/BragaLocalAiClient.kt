@@ -103,7 +103,8 @@ class BragaLocalAiClient @Inject constructor(
      */
     suspend fun interpretSpeech(userSpeech: String, preferWebSocket: Boolean = true,
                                 history: List<Pair<String, String>> = emptyList(),
-                                onPartial: (String) -> Unit = {}): BragaAiResult? = withContext(Dispatchers.IO) {
+                                onPartial: (String) -> Unit = {},
+                                actingAs: String? = null, patientId: String? = null): BragaAiResult? = withContext(Dispatchers.IO) {
         LocalConversationAnswers.answer(userSpeech, history)?.let {
             return@withContext BragaAiResult(tipo = "CONVERSA", fala = it)
         }
@@ -198,6 +199,10 @@ class BragaLocalAiClient @Inject constructor(
                 put("temperature", 0.1)
                 put("max_tokens", 150)
                 if (token != null) put("userId", user?.uid)
+                // D50/D51: escopo cuidador — habilita o agendamento por voz
+                if (actingAs == "caregiver" && !patientId.isNullOrBlank()) {
+                    put("acting_as", "caregiver").put("patient_id", patientId)
+                }
             }
 
             OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { writer ->
