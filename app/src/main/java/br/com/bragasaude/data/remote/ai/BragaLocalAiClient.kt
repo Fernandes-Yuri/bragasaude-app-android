@@ -103,8 +103,8 @@ class BragaLocalAiClient @Inject constructor(
      */
     suspend fun interpretSpeech(userSpeech: String, preferWebSocket: Boolean = true,
                                 history: List<Pair<String, String>> = emptyList(),
-                                onPartial: (String) -> Unit = {},
-                                actingAs: String? = null, patientId: String? = null): BragaAiResult? = withContext(Dispatchers.IO) {
+                                actingAs: String? = null, patientId: String? = null,
+                                onPartial: (String) -> Unit = {}): BragaAiResult? = withContext(Dispatchers.IO) {
         LocalConversationAnswers.answer(userSpeech, history)?.let {
             return@withContext BragaAiResult(tipo = "CONVERSA", fala = it)
         }

@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.ai
+package br.com.bragasaude.data.remote.ai
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -14,12 +14,12 @@ class OrbChatGatewayTest {
     @Test fun transportFailureUsesRestOnce() = runTest {
         val session = mockk<OrbWebSocket.Session>(relaxed = true)
         every { session.state } returns MutableStateFlow(OrbConnectionState.CONNECTED)
-        coEvery { session.chat(any(), any()) } throws IOException("Offline")
+        coEvery { session.chat(any(), any(), any(), any()) } throws IOException("Offline")
         val socket = mockk<OrbWebSocket>()
         every { socket.openSession(any(), any(), any()) } returns session
         val rest = mockk<BragaLocalAiClient>()
         every { rest.serverBaseUrl } returns "http://localhost"
-        coEvery { rest.interpretSpeech(any(), false, any(), any()) } returns BragaAiResult("CONVERSA", "Resposta REST")
+        coEvery { rest.interpretSpeech(any(), false, any(), any(), any(), any()) } returns BragaAiResult("CONVERSA", "Resposta REST")
         val auth = mockk<FirebaseAuth>()
         val user = mockk<FirebaseUser>()
         every { user.uid } returns "owner"
@@ -27,9 +27,9 @@ class OrbChatGatewayTest {
         val gateway = OrbChatGateway(socket, rest, auth)
         gateway.open(backgroundScope)
         try {
-            val reply = gateway.send(listOf("user" to "Oi")) {}
+            val reply = gateway.send(listOf("user" to "Oi"), onPartial = {})
             assertTrue(reply.content.contains("Resposta REST"))
-            coVerify(exactly = 1) { rest.interpretSpeech("Oi", false, any(), any()) }
+            coVerify(exactly = 1) { rest.interpretSpeech("Oi", false, any(), any(), any(), any()) }
         } finally { gateway.close() }
     }
 
@@ -37,7 +37,7 @@ class OrbChatGatewayTest {
         for (failure in listOf(OrbRejectedException("Bloqueado"), CancellationException("Cancelado"))) {
             val session = mockk<OrbWebSocket.Session>(relaxed = true)
             every { session.state } returns MutableStateFlow(OrbConnectionState.CONNECTED)
-            coEvery { session.chat(any(), any()) } throws failure
+            coEvery { session.chat(any(), any(), any(), any()) } throws failure
             val socket = mockk<OrbWebSocket>()
             every { socket.openSession(any(), any(), any()) } returns session
             val rest = mockk<BragaLocalAiClient>()
@@ -49,7 +49,7 @@ class OrbChatGatewayTest {
             val gateway = OrbChatGateway(socket, rest, auth)
             gateway.open(backgroundScope)
             try {
-                try { gateway.send(listOf("user" to "Oi")) {}; fail("Expected failure") }
+                try { gateway.send(listOf("user" to "Oi"), onPartial = {}); fail("Expected failure") }
                 catch (e: Exception) { assertSame(failure, e) }
                 coVerify(exactly = 0) { rest.interpretSpeech(any(), any(), any(), any()) }
             } finally { gateway.close() }

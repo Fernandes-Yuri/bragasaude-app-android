@@ -1,7 +1,8 @@
-﻿package br.com.bragasaude.ui.chat
+package br.com.bragasaude.ui.chat
 
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.ai.*
+import br.com.bragasaude.data.remote.repository.FamilyBridgeRepository
 import br.com.bragasaude.data.remote.service.NotificationClient
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -30,64 +31,65 @@ class OrbChatViewModelTest {
         every { user.uid } returns "owner"
         every { auth.currentUser } returns user
         vm = OrbChatViewModel(gateway, store, auth, mockk<NeuralAudioPlayer>(relaxed = true),
-            mockk<NotificationClient>(relaxed = true), mockk<ProfileDao>(relaxed = true))
+            mockk<NotificationClient>(relaxed = true), mockk<ProfileDao>(relaxed = true),
+            mockk<FamilyBridgeRepository>(relaxed = true))
     }
     @After fun tearDown() { vm.leaveScreen(); Dispatchers.resetMain() }
 
     @Test fun test_sendMessage_updatesState() = runTest(dispatcher) {
-        coEvery { gateway.send(any(), any()) } coAnswers { awaitCancellation() }
-        vm.updateInput("Minha pressão")
+        coEvery { gateway.send(any(), any(), any(), any()) } coAnswers { awaitCancellation() }
+        vm.updateInput("Minha pressÃ£o")
         vm.sendMessage()
-        assertEquals("Minha pressão", vm.state.value.messages.single().text)
+        assertEquals("Minha pressÃ£o", vm.state.value.messages.single().text)
         assertEquals("", vm.state.value.input)
         assertTrue(vm.state.value.isStreaming)
         runCurrent()
         vm.cancelGeneration()
     }
     @Test fun test_streamChunk_appendsText() = runTest(dispatcher) {
-        coEvery { gateway.send(any(), any()) } coAnswers {
-            secondArg<(String) -> Unit>()("Confira")
+        coEvery { gateway.send(any(), any(), any(), any()) } coAnswers {
+            arg<(String) -> Unit>(3)("Confira")
             yield()
-            secondArg<(String) -> Unit>()("Confira os valores")
+            arg<(String) -> Unit>(3)("Confira os valores")
             awaitCancellation()
         }
-        vm.sendMessage("pressão?")
+        vm.sendMessage("pressÃ£o?")
         runCurrent()
         assertEquals("Confira os valores", vm.state.value.partialText)
         vm.cancelGeneration()
     }
     @Test fun test_streamDone_delegatesRegistrationsToOrb() = runTest(dispatcher) {
-        coEvery { gateway.send(any(), any()) } returns reply
-        vm.sendMessage("minha pressão deu 12 por 8")
+        coEvery { gateway.send(any(), any(), any(), any()) } returns reply
+        vm.sendMessage("minha pressÃ£o deu 12 por 8")
         runCurrent()
         val answer = vm.state.value.messages.last()
-        // No chat com Agente B1, ações de registro geram cards para confirmação no app
+        // No chat com Agente B1, aÃ§Ãµes de registro geram cards para confirmaÃ§Ã£o no app
         assertEquals("REGISTRAR_PRESSAO", answer.action)
         assertFalse(vm.state.value.isStreaming)
         assertEquals("received", vm.state.value.messages.first().status)
     }
     @Test fun test_streamDone_ignoresActionWhenNoValuesProvided() = runTest(dispatcher) {
         val replyWithoutAction = OrbReply("""{"fala":"Como posso ajudar?","acao":null,"parametros":{}}""")
-        coEvery { gateway.send(any(), any()) } returns replyWithoutAction
-        vm.sendMessage("como está minha pressão?")
+        coEvery { gateway.send(any(), any(), any(), any()) } returns replyWithoutAction
+        vm.sendMessage("como estÃ¡ minha pressÃ£o?")
         runCurrent()
         val answer = vm.state.value.messages.last()
         assertNull(answer.action)
         assertFalse(vm.state.value.isStreaming)
     }
     @Test fun test_error_showsMessage() = runTest(dispatcher) {
-        coEvery { gateway.send(any(), any()) } throws java.io.IOException("Sem rede")
-        vm.sendMessage("Olá")
+        coEvery { gateway.send(any(), any(), any(), any()) } throws java.io.IOException("Sem rede")
+        vm.sendMessage("OlÃ¡")
         runCurrent()
         assertEquals("Sem rede", vm.state.value.error)
         assertFalse(vm.state.value.isStreaming)
     }
     @Test fun test_cancel_stopsStreaming() = runTest(dispatcher) {
         var cancelled = false
-        coEvery { gateway.send(any(), any()) } coAnswers {
+        coEvery { gateway.send(any(), any(), any(), any()) } coAnswers {
             try { awaitCancellation() } finally { cancelled = true }
         }
-        vm.sendMessage("Olá")
+        vm.sendMessage("OlÃ¡")
         runCurrent()
         vm.cancelGeneration()
         runCurrent()
@@ -100,6 +102,6 @@ class OrbChatViewModelTest {
         vm.sendMessage("x".repeat(16001))
         assertNotNull(vm.state.value.error)
         assertTrue(vm.state.value.messages.isEmpty())
-        coVerify(exactly = 0) { gateway.send(any(), any()) }
+        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
     }
 }
