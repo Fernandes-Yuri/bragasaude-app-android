@@ -218,9 +218,9 @@ class OrbChatViewModel @Inject constructor(
                 }
                 val reply = if (shortcut != null) OrbReply(JSONObject().put("fala", "Abrir ${actionLabel(shortcut)}.")
                     .put("acao", shortcut).put("parametros", JSONObject()).toString())
-                else gateway.send(history, { partial ->
+                else gateway.send(history, actingAs = scope?.first, patientId = scope?.second) { partial ->
                     if (version == revision) mutable.update { it.copy(partialText = partial) }
-                }, actingAs = scope?.first, patientId = scope?.second)
+                }
                 if (version != revision) return@launch
                 val parsed = JSONObject(reply.content)
                 val rawAction = parsed.optString("acao", "CONVERSA").takeUnless { it == "CONVERSA" }

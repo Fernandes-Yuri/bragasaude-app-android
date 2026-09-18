@@ -29,14 +29,15 @@ class OrbChatGateway @Inject constructor(
         observer = scope.launch { session?.state?.collect { status.value = it } }
     }
 
-    suspend fun send(history: List<Pair<String, String>>, onPartial: (String) -> Unit,
-                     actingAs: String? = null, patientId: String? = null): OrbReply {
+    suspend fun send(history: List<Pair<String, String>>,
+                     actingAs: String? = null, patientId: String? = null,
+                     onPartial: (String) -> Unit): OrbReply {
         LocalConversationAnswers.answer(history.lastOrNull()?.second.orEmpty(), history)?.let {
             return OrbReply(JSONObject().put("fala", it).put("acao", "CONVERSA")
                 .put("parametros", JSONObject()).toString())
         }
         try {
-            return session?.chat(history, onPartial, actingAs, patientId)
+            return session?.chat(history, actingAs, patientId, onPartial)
                 ?: throw IOException("Sem conexão")
         } catch (e: OrbRejectedException) {
             throw e
@@ -48,8 +49,10 @@ class OrbChatGateway @Inject constructor(
             // Provider errors and transport failure can use the REST gateway once.
         }
         onPartial("")
-        val result = rest.interpretSpeech(history.last().second, preferWebSocket = false, history = history,
-                                          actingAs = actingAs, patientId = patientId)
+        val result = rest.interpretSpeech(history.last().second, preferWebSocket = false,
+                                          history = history,
+                                          actingAs = actingAs, patientId = patientId,
+                                          onPartial = onPartial)
             ?: throw IOException("Não foi possível obter resposta. Tente novamente.")
         val raw = result.rawResponse
         val structured = try { JSONObject(raw ?: "").has("fala") } catch (_: Exception) { false }

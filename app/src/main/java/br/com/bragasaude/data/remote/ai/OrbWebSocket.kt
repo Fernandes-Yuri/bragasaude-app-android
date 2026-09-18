@@ -39,7 +39,8 @@ class OrbWebSocket @Inject constructor() {
                      history: List<Pair<String, String>> = emptyList()): String = coroutineScope {
         val session = openSession(this, baseUrl) { token }
         try {
-            session.chat(history.ifEmpty { listOf("user" to speech) }, onPartial).content
+            session.chat(history.ifEmpty { listOf("user" to speech) },
+                         onPartial = onPartial).content
         } finally { session.close() }
     }
 
@@ -150,12 +151,13 @@ class OrbWebSocket @Inject constructor() {
             }
         }
 
-        suspend fun chat(messages: List<Pair<String, String>>, onPartial: (String) -> Unit,
-                         actingAs: String? = null, patientId: String? = null): OrbReply {
+        suspend fun chat(messages: List<Pair<String, String>>,
+                         actingAs: String? = null, patientId: String? = null,
+                         onPartial: (String) -> Unit): OrbReply {
             check(requestLock.tryLock()) { "Uma resposta já está em andamento." }
             try {
                 for (authAttempt in 0..1) {
-                    try { return request(messages, onPartial, actingAs, patientId) }
+                    try { return request(messages, actingAs, patientId, onPartial) }
                     catch (e: OrbAuthExpiredException) {
                         if (authAttempt == 1) throw OrbRejectedException("Entre novamente para conversar.")
                         immediateRefresh = true
@@ -193,8 +195,9 @@ class OrbWebSocket @Inject constructor() {
             }
         }
 
-        private suspend fun request(messages: List<Pair<String, String>>, onPartial: (String) -> Unit,
-                                    actingAs: String? = null, patientId: String? = null): OrbReply {
+        private suspend fun request(messages: List<Pair<String, String>>,
+                                    actingAs: String? = null, patientId: String? = null,
+                                    onPartial: (String) -> Unit): OrbReply {
             val freshToken = tokenProvider(false)
             if (connectedToken != null && connectedToken != freshToken) {
                 immediateRefresh = true
