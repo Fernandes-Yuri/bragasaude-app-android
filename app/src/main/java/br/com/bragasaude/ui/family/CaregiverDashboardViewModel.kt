@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.family
+package br.com.bragasaude.ui.family
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
@@ -265,8 +265,8 @@ class CaregiverDashboardViewModel @Inject constructor(
                 )
                 _uiEvents.emit(FamilyUiEvent.Notice("Recado enviado com carinho!"))
 
-                // Notificar dispositivo do paciente
-                FamilyNotificationService.notifyPatientMessage(context, senderName, text)
+                // O destinatário é notificado pelo push do servidor (doc 10 §1A) e,
+                // como fallback, pela notificação local no momento do pull.
             } catch (e: Exception) {
                 _uiEvents.emit(FamilyUiEvent.Error("Erro ao enviar: ${e.message}"))
             }

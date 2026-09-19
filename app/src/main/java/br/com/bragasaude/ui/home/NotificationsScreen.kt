@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.home
+package br.com.bragasaude.ui.home
 
 import android.content.Context
 import android.content.ContextWrapper
@@ -82,7 +82,8 @@ fun NotificationsScreen(
                             AlertCard(
                                 message = message,
                                 modifier = Modifier.clickable {
-                                    mainViewModel.requestPermissions()
+                                    // G4 (doc 10 §3.4): este aviso é de NOTIFICAÇÃO — sinal certo.
+                                    mainViewModel.triggerNotificationPrompt()
                                     viewModel.dismissAlert(alert)
                                 },
                                 onDismiss = { viewModel.dismissAlert(alert) },

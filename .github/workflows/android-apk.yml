@@ -332,4 +332,12 @@ jobs:
                 await pool.close()
             asyncio.run(main())
             PYEOF
+            # doc 10 §1B: dispara o push de "nova versão" para todos os aparelhos
+            # registrados. Roda no próprio host da EC2 (127.0.0.1), então o endpoint
+            # aceita a chamada sem token. Falha AQUI não pode falhar a release — o
+            # APK já está servido e registrado.
+            NOTIFY_RESP=$(curl -sS -m 20 -X POST http://127.0.0.1:8080/api/app/notify-update \
+              -H "Content-Type: application/json" \
+              -d "{\"version_name\":\"v$V\",\"version_code\":$C,\"download_url\":\"https://api.bragasaude.online/api/app/download\"}" 2>&1) || true
+            echo "NOTIFY UPDATE: $NOTIFY_RESP"
             echo "DEPLOY OTA CONCLUIDO"
