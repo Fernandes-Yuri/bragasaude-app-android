@@ -475,6 +475,35 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    // ==================== ATUALIZAÇÃO DO APP — OTA (doc 10 §1B) ====================
+
+    /**
+     * Código da última versão publicada no gateway, ou null se indisponível.
+     * Rota pública — o AuthInterceptor libera /api/app/latest.
+     */
+    suspend fun getLatestAppVersionCode(): Int? = withContext(Dispatchers.IO) {
+        var conn: HttpURLConnection? = null
+        try {
+            val urlString = "$baseUrl/api/app/latest"
+            conn = (URL(urlString).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                setRequestProperty("Accept", "application/json")
+                attachIdentity(urlString)
+            }
+            if (conn.responseCode !in 200..299) return@withContext null
+            val body = BufferedReader(InputStreamReader(conn.inputStream, Charsets.UTF_8)).use { it.readText() }
+            val code = JSONObject(body).optInt("version_code", -1)
+            return@withContext if (code >= 0) code else null
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao consultar /api/app/latest: ${e.message}")
+            null
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) {}
+        }
+    }
+
     // ==================== FEEDBACK ====================
 
     suspend fun syncFeedback(json: JSONObject): String? = withContext(Dispatchers.IO) {

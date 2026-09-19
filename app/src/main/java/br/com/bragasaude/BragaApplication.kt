@@ -9,6 +9,7 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import br.com.bragasaude.data.remote.repository.CatalogRepository
 import br.com.bragasaude.data.remote.sync.SyncManager
 import br.com.bragasaude.data.remote.sync.SyncScheduler
+import br.com.bragasaude.ui.util.FamilyNotificationService
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +31,12 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
         } catch (e: Throwable) {
             android.util.Log.e("BragaApp", "Falha ao carregar libsqlcipher: ${e.message}", e)
         }
-        
+
+        // G1 (plano de notificações, doc 10 §3.1): os canais da família precisam ser
+        // criados no startup, senão o Android 8+ descarta silenciosamente as
+        // notificações de mensagem familiar e de cuidado.
+        FamilyNotificationService.initChannels(this)
+
         syncManager.startRealtimeSync()
         syncScheduler.schedulePeriodicRecoverySync()
         

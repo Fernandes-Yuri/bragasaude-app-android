@@ -9,7 +9,9 @@ import android.graphics.Color
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import br.com.bragasaude.MainActivity
+import br.com.bragasaude.R
 import br.com.bragasaude.data.remote.service.NotificationClient
+import br.com.bragasaude.ui.util.FamilyNotificationService
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -23,6 +25,9 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
         const val CHANNEL_EMERGENCY = "bragasaude_emergency"
         const val CHANNEL_CLINICAL = "bragasaude_clinic_alerts"
         const val CHANNEL_PROACTIVE = "bragasaude_proactive_reminders"
+
+        // IDs próprios do FCM (o FamilyNotificationService usa a faixa 1001-1005).
+        private const val ID_FAMILY_MESSAGE = 2001
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
@@ -36,6 +41,7 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
             when (type) {
                 "EMERGENCY" -> showEmergencyNotification(title, message)
                 "ALERT_CRITICAL" -> showClinicNotification(title, message, isCritical = true)
+                "FAMILY_MESSAGE" -> showFamilyMessageNotification(title, message)
                 "APP_UPDATE" -> {
                     val downloadUrl = remoteMessage.data["download_url"] ?: "https://api.bragasaude.online/api/app/download"
                     showUpdateNotification(title, message, downloadUrl)
@@ -99,7 +105,7 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_EMERGENCY)
-            .setContentTitle("🚨 $title")
+            .setContentTitle(title)
             .setContentText(message)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setAutoCancel(true)
@@ -152,6 +158,36 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
         manager.notify(System.currentTimeMillis().toInt(), notification)
     }
 
+    private fun showFamilyMessageNotification(title: String, message: String) {
+        // Canal da família (family_messages_channel): criado no startup pelo
+        // FamilyNotificationService.initChannels (plano de notificações, doc 10 §3.1/G1).
+        val context = applicationContext
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("OPEN_FAMILY_MESSAGES", true)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            ID_FAMILY_MESSAGE,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val notification = NotificationCompat.Builder(context, FamilyNotificationService.CHANNEL_MESSAGES)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setSmallIcon(R.drawable.ic_shield_ecg)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .build()
+
+        manager.notify(ID_FAMILY_MESSAGE, notification)
+    }
+
     private fun showUpdateNotification(title: String, message: String, downloadUrl: String) {
         val channelId = "bragasaude_app_updates"
         val channelName = "Atualizações do Braga Saúde"
@@ -181,7 +217,7 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
         )
 
         val notification = NotificationCompat.Builder(context, channelId)
-            .setContentTitle("🚀 $title")
+            .setContentTitle(title)
             .setContentText(message)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setAutoCancel(true)

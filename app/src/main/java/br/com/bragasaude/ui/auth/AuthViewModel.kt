@@ -8,10 +8,12 @@ import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.local.BragaDatabase
 import br.com.bragasaude.data.remote.repository.ProfileRepository
 import br.com.bragasaude.data.remote.model.RemoteProfile
+import br.com.bragasaude.data.remote.service.NotificationClient
 import br.com.bragasaude.data.remote.sync.SyncManager
 import br.com.bragasaude.data.util.toRemote
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
@@ -110,6 +112,8 @@ class AuthViewModel @Inject constructor(
             viewModelScope.launch {
                 syncManager.syncUserData(user.uid, force = false)
             }
+            // G2 (doc 10 §3.2): garante o token FCM do aparelho logado no gateway.
+            registerFcmToken()
             checkProfile(user.uid)
         } else {
             profileJob?.cancel()
@@ -141,6 +145,28 @@ class AuthViewModel @Inject constructor(
     }
 
     fun retryProfile() { auth.currentUser?.uid?.let { checkProfile(it) } }
+
+    /**
+     * G2 (doc 10 §3.2): registra o token FCM no gateway sempre que há um usuário
+     * autenticado. Antes o registro só ocorria em onNewToken (rotação de token),
+     * deixando o aparelho sem receber push até a próxima rotação.
+     */
+    private fun registerFcmToken() {
+        val user = auth.currentUser ?: return
+        viewModelScope.launch {
+            try {
+                val token = FirebaseMessaging.getInstance().token.await()
+                NotificationClient().registerDevice(
+                    userId = user.uid,
+                    token = token,
+                    role = _userRole.value ?: "USER",
+                    name = user.displayName ?: "Usuário Braga"
+                )
+            } catch (e: Exception) {
+                android.util.Log.w("AuthViewModel", "Falha ao registrar token FCM: ${e.message}")
+            }
+        }
+    }
 
     private fun checkProfile(userId: String) {
         profileJob?.cancel()
@@ -183,6 +209,10 @@ class AuthViewModel @Inject constructor(
                         _hasAcceptedConsent.value = profile?.consentAcceptedAt != null
                         _userRole.value = profile?.userRole
                         _caregiverMode.value = profile?.caregiverMode
+                        // G2 (doc 10 §3.2): o role agora é conhecido — re-registra o token
+                        // para que broadcasts por papel (ex.: alerta clínico ao CAREGIVER)
+                        // cheguem neste aparelho.
+                        registerFcmToken()
                         _needsSelfCare.value = ProfileOnboarding.needsSelfCare(profile?.userRole,
                             profile?.caregiverMode, profile?.basicProfileComplete == true, profile?.selfCareComplete == true)
                         _isProfileComplete.value = ProfileOnboarding.isComplete(profile?.userRole,

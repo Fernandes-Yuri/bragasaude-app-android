@@ -16,7 +16,10 @@ import br.com.bragasaude.data.local.VitalSignEntity
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.sync.SyncScheduler
 import br.com.bragasaude.data.util.parseDate
+import br.com.bragasaude.ui.util.FamilyNotificationService
 import com.google.firebase.auth.FirebaseAuth
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.combine
@@ -41,7 +44,8 @@ class FamilyBridgeRepository @Inject constructor(
     private val socialFeedDao: SocialFeedDao,
     private val apiClient: BragaApiClient,
     private val auth: FirebaseAuth,
-    private val syncScheduler: SyncScheduler
+    private val syncScheduler: SyncScheduler,
+    @ApplicationContext private val appContext: Context
 ) {
 
     // ==================== VÍNCULOS FAMILIARES ====================
@@ -256,6 +260,20 @@ class FamilyBridgeRepository @Inject constructor(
                 else -> {
                     val local = familyDao.getMessageById(msg.id)
                     if (local?.pendingSync != true && local?.deletedAt == null) familyDao.insertMessage(msg)
+                    // Fallback (doc 10 §1A.2): mensagem NOVA vinda do servidor e que
+                    // não foi enviada por este aparelho → notificação local. É a rota
+                    // que cobre quem não recebeu (ou não pode receber) o push FCM.
+                    if (local == null && msg.senderUserId != auth.currentUser?.uid && msg.messageText.isNotBlank()) {
+                        try {
+                            FamilyNotificationService.notifyPatientMessage(
+                                appContext,
+                                msg.senderName.ifBlank { "Familiar" },
+                                msg.messageText
+                            )
+                        } catch (e: Exception) {
+                            android.util.Log.w("FamilyBridgeRepo", "Aviso ao notificar mensagem recebida: ${e.message}")
+                        }
+                    }
                 }
             }
         }
