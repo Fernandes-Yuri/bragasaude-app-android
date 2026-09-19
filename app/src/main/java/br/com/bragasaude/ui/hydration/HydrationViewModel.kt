@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import java.text.SimpleDateFormat
 import java.util.*
+import br.com.bragasaude.util.BragaConstants
 
 data class HydrationEntry(
     val amountMl: Int,
@@ -66,7 +67,7 @@ class HydrationViewModel @Inject constructor(
     val milestoneAlert = _milestoneAlert.asSharedFlow()
 
     private val userId: String
-        get() = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        get() = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
 
     init {
         val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)

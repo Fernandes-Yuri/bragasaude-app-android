@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import br.com.bragasaude.util.BragaConstants
 
 @HiltViewModel
 class SocialFeedViewModel @Inject constructor(
@@ -22,7 +23,7 @@ class SocialFeedViewModel @Inject constructor(
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
-    private val guestId = "00000000-0000-0000-0000-000000000000"
+    private val guestId = BragaConstants.GUEST_UID
     val currentUserId: String
         get() = auth.currentUser?.uid ?: guestId
 

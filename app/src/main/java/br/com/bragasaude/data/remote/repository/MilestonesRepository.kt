@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.repository
+package br.com.bragasaude.data.remote.repository
 
 import br.com.bragasaude.data.local.MilestoneDao
 import br.com.bragasaude.data.local.MilestoneEntity
@@ -9,13 +9,14 @@ import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import br.com.bragasaude.util.BragaConstants
 
 @Singleton
 class MilestonesRepository @Inject constructor(
     private val milestoneDao: MilestoneDao,
     private val syncScheduler: SyncScheduler
 ) {
-    private val guestId = "00000000-0000-0000-0000-000000000000"
+    private val guestId = BragaConstants.GUEST_UID
 
     fun getMilestones(userId: String): Flow<List<MilestoneEntity>> = milestoneDao.getAll(userId)
 

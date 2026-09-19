@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.steps
+package br.com.bragasaude.ui.steps
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -22,6 +22,7 @@ import android.content.Context
 import android.content.Intent
 import br.com.bragasaude.ui.util.StepTrackingService
 import dagger.hilt.android.qualifiers.ApplicationContext
+import br.com.bragasaude.util.BragaConstants
 
 enum class ActivityMetricType(val label: String, val unit: String) {
     STEPS("Passos", "passos"),
@@ -91,7 +92,7 @@ class StepsViewModel @Inject constructor(
     val selectedMetric = _selectedMetric.asStateFlow()
 
     val targetSteps: StateFlow<Int> = profileRepository
-        .getProfile(auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000")
+        .getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
         .map { it?.stepGoal ?: 8000 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 8000)
 
@@ -268,7 +269,7 @@ class StepsViewModel @Inject constructor(
     }
 
     init {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
 
         viewModelScope.launch {
             val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
@@ -300,7 +301,7 @@ class StepsViewModel @Inject constructor(
         viewModelScope.launch {
             combine(currentSteps, targetSteps) { steps: Int, goal: Int -> steps to goal }.collect { (steps, goal) ->
                 if (goal > 0 && steps >= goal && stepGoalAwardAttempted.compareAndSet(false, true)) {
-                    val uid = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+                    val uid = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
                     xpGrantService.grantStepGoalXp(
                         userId = uid,
                         stepsTaken = steps,

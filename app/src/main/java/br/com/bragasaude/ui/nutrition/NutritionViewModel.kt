@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.nutrition
+package br.com.bragasaude.ui.nutrition
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -34,6 +34,7 @@ import br.com.bragasaude.data.remote.repository.VitalsRepository
 import br.com.bragasaude.domain.MealLogItem
 import br.com.bragasaude.domain.NutritionalSuggestionGroup
 import br.com.bragasaude.domain.NutritionSuggestionEngine
+import br.com.bragasaude.util.BragaConstants
 
 @HiltViewModel
 class NutritionViewModel @Inject constructor(
@@ -75,7 +76,7 @@ class NutritionViewModel @Inject constructor(
     private val _dislikedFoodNames = MutableStateFlow<Set<String>>(emptySet())
     val dislikedFoodNames = _dislikedFoodNames.asStateFlow()
 
-    private val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+    private val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
 
     val groceryList: StateFlow<List<GroceryListItemEntity>> = groceryRepository.getGroceryList(userId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -150,7 +151,7 @@ class NutritionViewModel @Inject constructor(
     }
 
     init {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
         viewModelScope.launch {
             catalogRepository.seedDatabaseIfNeeded()
@@ -245,7 +246,7 @@ class NutritionViewModel @Inject constructor(
         nutritionRepository.logMeal(item)
 
         // FASE 3 — XP quando a refeição é compatível com as condições clínicas do usuário
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         val profile = _profile.value
         val mealFlags = MealHealthFlags(
             isDiabetesSafe = food.isDiabetesSafe,

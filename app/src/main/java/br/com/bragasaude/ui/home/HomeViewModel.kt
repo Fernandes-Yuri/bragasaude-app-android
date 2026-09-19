@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.home
+package br.com.bragasaude.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -21,6 +21,7 @@ import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import br.com.bragasaude.data.remote.sync.SyncManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import br.com.bragasaude.util.BragaConstants
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -61,17 +62,17 @@ class HomeViewModel @Inject constructor(
     val clinicalAlerts = _clinicalAlerts.asStateFlow()
 
     val userStepGoal: StateFlow<Int> = profileRepository
-        .getProfile(auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000")
+        .getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
         .map { it?.stepGoal ?: 8000 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 8000)
 
     val profile: StateFlow<RemoteProfile?> = profileRepository
-        .getProfile(auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000")
+        .getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
         .map { it?.toRemote() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val medications = medicationRepository
-        .getMedications(auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000")
+        .getMedications(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val heartReadings = database.wearableReadingDao().observeRecent(auth.currentUser?.uid.orEmpty(), "HEART_RATE")
@@ -88,7 +89,7 @@ class HomeViewModel @Inject constructor(
     }
 
     init {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
         viewModelScope.launch {
             try {

@@ -16,6 +16,7 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import java.util.UUID
+import br.com.bragasaude.util.BragaConstants
 
 /**
  * Suíte de testes do Módulo 2/3/4 — Ponte Familiar & Modo Cuidador (PostgreSQL / BragaApiClient).
@@ -227,7 +228,7 @@ class FamilyBridgeRepositoryTest {
     @Test
     fun `syncBindingsForPatient skips when userId is blank or guest`() = runBlocking {
         repository.syncBindingsForPatient("")
-        repository.syncBindingsForPatient("00000000-0000-0000-0000-000000000000")
+        repository.syncBindingsForPatient(BragaConstants.GUEST_UID)
 
         coVerify(exactly = 0) { apiClient.getFamilyBindings(any()) }
     }

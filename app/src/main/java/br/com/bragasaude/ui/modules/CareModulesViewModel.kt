@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.modules
+package br.com.bragasaude.ui.modules
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import br.com.bragasaude.util.BragaConstants
 
 data class CareTask(
     val id: String,
@@ -54,7 +55,7 @@ class CareModulesViewModel @Inject constructor(
     val tasks = _tasks.asStateFlow()
 
     init {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
         viewModelScope.launch {
             profileRepository.getProfile(userId).collectLatest { entity ->

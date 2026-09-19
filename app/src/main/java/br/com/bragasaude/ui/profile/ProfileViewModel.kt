@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import br.com.bragasaude.util.BragaConstants
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
@@ -47,7 +48,7 @@ class ProfileViewModel @Inject constructor(
     val customPhotoUri = _customPhotoUri.asStateFlow()
 
     init {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
         viewModelScope.launch {
             repository.getProfile(userId).collectLatest { entity ->
@@ -64,7 +65,7 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun loadProfile() {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         viewModelScope.launch {
             // Puxa o perfil do backend: e dele que vem o segredo TOTP do vínculo
             // de WhatsApp (a fonte da verdade, D55). Sem isso, uma conta já
@@ -381,7 +382,7 @@ class ProfileViewModel @Inject constructor(
                 "Seu vínculo ainda não está pronto. Aguarde um segundo e toque novamente."
             // Dispara a sincronização que traz o segredo do backend.
             val userId = auth.currentUser?.uid
-                ?: "00000000-0000-0000-0000-000000000000"
+                ?: BragaConstants.GUEST_UID
             viewModelScope.launch {
                 try {
                     repository.syncProfile(userId)

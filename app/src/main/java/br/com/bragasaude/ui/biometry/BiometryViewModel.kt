@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.biometry
+package br.com.bragasaude.ui.biometry
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -17,6 +17,7 @@ import javax.inject.Inject
 
 import br.com.bragasaude.data.util.toRemote
 import kotlinx.coroutines.flow.collectLatest
+import br.com.bragasaude.util.BragaConstants
 
 @HiltViewModel
 class BiometryViewModel @Inject constructor(
@@ -35,7 +36,7 @@ class BiometryViewModel @Inject constructor(
     val alertMessage = _alertMessage.asSharedFlow()
 
     init {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         viewModelScope.launch {
             repository.getBiometry(userId).collectLatest { entities ->
                 _latestBiometry.value = entities.firstOrNull()?.toRemote()
@@ -48,7 +49,7 @@ class BiometryViewModel @Inject constructor(
     }
 
     fun saveBiometry(weight: Float, height: Float) {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         val imc = HealthCalculators.calculateIMC(weight, height)
         viewModelScope.launch {
             _isLoading.value = true

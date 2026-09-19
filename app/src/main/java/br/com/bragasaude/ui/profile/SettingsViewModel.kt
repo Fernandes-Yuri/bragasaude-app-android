@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import br.com.bragasaude.util.BragaConstants
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -52,7 +53,7 @@ class SettingsViewModel @Inject constructor(
     val voiceConfirmationEnabled = _voiceConfirmationEnabled.asStateFlow()
 
     init {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         viewModelScope.launch {
             profileRepository.getProfile(userId).collectLatest { entity ->
                 _profile.value = entity?.toRemote()
@@ -117,7 +118,7 @@ class SettingsViewModel @Inject constructor(
             _whatsappLinkError.value =
                 "Seu vínculo ainda não está pronto. Aguarde um segundo e toque novamente."
             val userId = auth.currentUser?.uid
-                ?: "00000000-0000-0000-0000-000000000000"
+                ?: BragaConstants.GUEST_UID
             viewModelScope.launch {
                 try {
                     profileRepository.syncProfile(userId)

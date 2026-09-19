@@ -18,6 +18,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
 import javax.inject.Inject
+import br.com.bragasaude.util.BragaConstants
 
 data class CaregiverDashboardState(
     val patientUserId: String = "",
@@ -56,7 +57,7 @@ class FamilyViewModel @Inject constructor(
     val uiEvents: SharedFlow<FamilyUiEvent> = _uiEvents.asSharedFlow()
 
     val currentUserId: String
-        get() = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        get() = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
 
     // ==================== LADO DO PACIENTE (IDOSO / TITULAR) ====================
 

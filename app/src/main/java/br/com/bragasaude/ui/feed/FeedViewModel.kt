@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.feed
+package br.com.bragasaude.ui.feed
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,6 +9,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import br.com.bragasaude.util.BragaConstants
 
 data class FeedUiState(
     val posts: List<SocialPostEntity> = emptyList(),
@@ -24,7 +25,7 @@ class FeedViewModel @Inject constructor(
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
-    private val guestId = "00000000-0000-0000-0000-000000000000"
+    private val guestId = BragaConstants.GUEST_UID
     val currentUserId: String
         get() = auth.currentUser?.uid ?: guestId
 

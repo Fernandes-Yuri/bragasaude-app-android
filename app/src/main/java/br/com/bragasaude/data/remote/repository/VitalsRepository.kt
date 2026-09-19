@@ -17,6 +17,7 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import dagger.hilt.android.qualifiers.ApplicationContext
+import br.com.bragasaude.util.BragaConstants
 
 /**
  * TASK-VIT-01 — Limiares de crise para disparo automatico de alerta ao cuidador.
@@ -41,7 +42,7 @@ class VitalsRepository @Inject constructor(
     private val syncScheduler: SyncScheduler,
     @ApplicationContext private val appContext: Context
 ) {
-    private val guestId = "00000000-0000-0000-0000-000000000000"
+    private val guestId = BragaConstants.GUEST_UID
 
     /** Cache em memoria das ultimas notificaciones de crise por (caregiverUserId + alertType). */
     private val recentAlertLog = mutableMapOf<String, Long>()
