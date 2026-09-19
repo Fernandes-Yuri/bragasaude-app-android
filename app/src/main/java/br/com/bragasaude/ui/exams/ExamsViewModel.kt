@@ -23,6 +23,7 @@ import br.com.bragasaude.data.remote.sync.SyncManager
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
+import br.com.bragasaude.util.BragaConstants
 
 @HiltViewModel
 class ExamsViewModel @Inject constructor(
@@ -70,7 +71,7 @@ class ExamsViewModel @Inject constructor(
     val statusMessage = _statusMessage.asStateFlow()
 
     init {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         viewModelScope.launch {
             repository.getExams(userId).collectLatest { entities ->
                 _exams.value = entities.map { it.toRemote() }
@@ -98,7 +99,7 @@ class ExamsViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+                val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
                 val success = repository.deleteExamAtomically(examId, userId)
                 if (success) {
                     _statusMessage.value = "Exame excluído com sucesso (LGPD Art. 18)."
@@ -117,7 +118,7 @@ class ExamsViewModel @Inject constructor(
         viewModelScope.launch {
             _isCompilingDossier.value = true
             try {
-                val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+                val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
                 val profile = profileRepository.getProfile(userId).firstOrNull()?.toRemote() 
                     ?: br.com.bragasaude.data.remote.model.RemoteProfile(id = userId, fullName = "Paciente")
 
@@ -148,7 +149,7 @@ class ExamsViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+                val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
                 val confirmedExam = exam.copy(status = "confirmed")
                 val confirmedItems = items.map {
                     it.copy(
@@ -180,7 +181,7 @@ class ExamsViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+                val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
                 val examId = UUID.randomUUID().toString()
                 val exam = RemoteExam(
                     id = examId,
@@ -217,7 +218,7 @@ class ExamsViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+                val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
                 val examId = UUID.randomUUID().toString()
                 val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
                 val dateStr = dateFormat.format(date)
@@ -252,7 +253,7 @@ class ExamsViewModel @Inject constructor(
             _isLoading.value = true
             _uploadProgress.value = 0.2f
             try {
-                val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+                val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
                 val examId = UUID.randomUUID().toString()
                 val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
                 val dateStr = dateFormat.format(date)
@@ -345,7 +346,7 @@ class ExamsViewModel @Inject constructor(
             _isLoading.value = true
             _uploadProgress.value = 0f
             try {
-                val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+                val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
                 val examId = UUID.randomUUID().toString()
                 
                 var fileUrl: String? = null

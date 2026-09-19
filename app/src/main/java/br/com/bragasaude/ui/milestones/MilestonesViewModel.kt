@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.milestones
+package br.com.bragasaude.ui.milestones
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import br.com.bragasaude.util.BragaConstants
 
 @HiltViewModel
 class MilestonesViewModel @Inject constructor(
@@ -28,7 +29,7 @@ class MilestonesViewModel @Inject constructor(
     val points = _points.asStateFlow()
 
     init {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
         viewModelScope.launch {
             milestonesRepository.getMilestones(userId).collectLatest { entities ->

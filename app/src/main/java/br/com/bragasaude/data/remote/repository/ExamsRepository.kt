@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import br.com.bragasaude.util.BragaConstants
 
 @Singleton
 class ExamsRepository @Inject constructor(
@@ -20,7 +21,7 @@ class ExamsRepository @Inject constructor(
     private val clinicalReferenceDao: ClinicalReferenceDao,
     private val syncScheduler: SyncScheduler
 ) {
-    private val guestId = "00000000-0000-0000-0000-000000000000"
+    private val guestId = BragaConstants.GUEST_UID
 
     fun getExams(userId: String): Flow<List<ExamEntity>> = examDao.getAll(userId)
 

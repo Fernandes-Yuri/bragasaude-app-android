@@ -13,6 +13,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import br.com.bragasaude.util.BragaConstants
 
 /**
  * ViewModel especializado para a perspectiva do Paciente (Titular/Idoso) na Ponte Familiar.
@@ -34,7 +35,7 @@ class PatientFamilyViewModel @Inject constructor(
     val uiEvents: SharedFlow<FamilyUiEvent> = _uiEvents.asSharedFlow()
 
     val currentUserId: String
-        get() = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        get() = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
 
     private val _connectionCode = MutableStateFlow<String?>(null)
     val connectionCode: StateFlow<String?> = _connectionCode.asStateFlow()

@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.repository
+package br.com.bragasaude.data.remote.repository
 
 import br.com.bragasaude.data.local.PostReactionEntity
 import br.com.bragasaude.data.local.ProfileDao
@@ -11,6 +11,7 @@ import java.util.Date
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import br.com.bragasaude.util.BragaConstants
 
 @Singleton
 class SocialFeedRepository @Inject constructor(
@@ -19,7 +20,7 @@ class SocialFeedRepository @Inject constructor(
     private val apiClient: BragaApiClient,
     private val syncScheduler: SyncScheduler
 ) {
-    private val guestId = "00000000-0000-0000-0000-000000000000"
+    private val guestId = BragaConstants.GUEST_UID
 
     fun getGlobalFeed(): Flow<List<SocialPostEntity>> = socialFeedDao.getGlobalFeed()
 

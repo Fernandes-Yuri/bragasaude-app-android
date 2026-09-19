@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.ensureActive
 import javax.inject.Inject
 import javax.inject.Singleton
+import br.com.bragasaude.util.BragaConstants
 
 @Singleton
 class ProfileRepository @Inject constructor(
@@ -18,7 +19,7 @@ class ProfileRepository @Inject constructor(
     private val profileDao: ProfileDao,
     private val syncScheduler: SyncScheduler
 ) {
-    private val guestId = "00000000-0000-0000-0000-000000000000"
+    private val guestId = BragaConstants.GUEST_UID
 
     fun getProfile(userId: String): Flow<ProfileEntity?> = profileDao.getProfile(userId)
 

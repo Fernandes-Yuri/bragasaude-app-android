@@ -20,6 +20,7 @@ import java.util.Date
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import br.com.bragasaude.util.BragaConstants
 
 @Singleton
 class XpGrantService @Inject constructor(
@@ -29,7 +30,7 @@ class XpGrantService @Inject constructor(
     private val leagueDao: LeagueDao,
     private val apiClient: BragaApiClient
 ) {
-    private val guestId = "00000000-0000-0000-0000-000000000000"
+    private val guestId = BragaConstants.GUEST_UID
 
     private val grantMutex = Mutex()
 

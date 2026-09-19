@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.report
+package br.com.bragasaude.ui.report
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
+import br.com.bragasaude.util.BragaConstants
 
 @HiltViewModel
 class ReportViewModel @Inject constructor(
@@ -45,7 +46,7 @@ class ReportViewModel @Inject constructor(
     val pdfErrorMessage = _pdfErrorMessage.asSharedFlow()
 
     init {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
         // Observe Biometry
         viewModelScope.launch {
@@ -70,7 +71,7 @@ class ReportViewModel @Inject constructor(
     }
 
     fun generatePdfReport() {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         viewModelScope.launch {
             _isGeneratingPdf.value = true
             try {

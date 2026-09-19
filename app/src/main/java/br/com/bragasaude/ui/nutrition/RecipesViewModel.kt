@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.nutrition
+package br.com.bragasaude.ui.nutrition
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import br.com.bragasaude.util.BragaConstants
 
 /**
  * Tipo de refeição com label para exibição na UI.
@@ -39,7 +40,7 @@ class RecipesViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val currentUserId: String
-        get() = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        get() = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
 
     // Estado de carregamento
     private val _isLoading = MutableStateFlow(false)

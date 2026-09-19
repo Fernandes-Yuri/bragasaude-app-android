@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.league
+package br.com.bragasaude.ui.league
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import br.com.bragasaude.util.BragaConstants
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -24,7 +25,7 @@ class LeagueViewModel @Inject constructor(
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
-    private val guestId = "00000000-0000-0000-0000-000000000000"
+    private val guestId = BragaConstants.GUEST_UID
     val currentUserId: String
         get() = auth.currentUser?.uid ?: guestId
 

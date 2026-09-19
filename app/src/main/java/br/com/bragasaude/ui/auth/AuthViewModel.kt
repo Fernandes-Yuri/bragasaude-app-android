@@ -32,6 +32,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import android.content.Context
+import br.com.bragasaude.util.BragaConstants
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
@@ -697,7 +698,7 @@ class AuthViewModel @Inject constructor(
     }
 
     fun signInAsGuest() {
-        val guestUid = "00000000-0000-0000-0000-000000000000"
+        val guestUid = BragaConstants.GUEST_UID
         viewModelScope.launch {
             val prefs = appContext.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
             val acceptedBeforeAuth = prefs.getBoolean("terms_accepted_before_auth", false)

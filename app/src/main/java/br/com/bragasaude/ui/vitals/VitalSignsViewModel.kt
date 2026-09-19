@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.vitals
+package br.com.bragasaude.ui.vitals
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -28,6 +28,7 @@ import br.com.bragasaude.data.util.toRemote
 import kotlinx.coroutines.flow.collectLatest
 
 import br.com.bragasaude.domain.util.BloodPressureParser
+import br.com.bragasaude.util.BragaConstants
 
 @HiltViewModel
 class VitalSignsViewModel @Inject constructor(
@@ -40,7 +41,7 @@ class VitalSignsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val profile: StateFlow<RemoteProfile?> = profileRepository
-        .getProfile(auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000")
+        .getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
         .map { it?.toRemote() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
@@ -63,7 +64,7 @@ class VitalSignsViewModel @Inject constructor(
     val isLoading = _isLoading.asStateFlow()
 
     init {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         viewModelScope.launch {
             repository.getVitalSigns(userId).collectLatest { entities ->
                 _allVitals.value = entities.map { it.toRemote() }
@@ -72,7 +73,7 @@ class VitalSignsViewModel @Inject constructor(
     }
 
     fun saveVitalSigns(systolic: Int, diastolic: Int, glucose: Int, hydration: Int) {
-        val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
+        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         viewModelScope.launch {
             _isLoading.value = true
             try {
