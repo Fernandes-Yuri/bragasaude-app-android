@@ -264,7 +264,7 @@ class NutritionViewModel @Inject constructor(
                 userId = userId,
                 action = GamificationActionType.SAFE_MEAL_RECORDED,
                 isActionValid = isSafe,
-                invalidReason = "Refeição registrada, mas fora do plano para suas condições 🍽️"
+                invalidReason = "Refeição registrada, mas fora do plano para suas condições"
             )
         }
     }

@@ -100,7 +100,7 @@ class VoiceHealthExecutor @Inject constructor(
                     measuredAt = nowIso
                 )
                 biometryRepository.saveBiometry(biometry)
-                "⚖️ Peso %.1f kg registrado!".format(intent.weightKg)
+                "Peso %.1f kg registrado!".format(intent.weightKg)
             }
 
             is VoiceHealthIntent.HeartRate -> {
@@ -112,7 +112,7 @@ class VoiceHealthExecutor @Inject constructor(
                     status = "recorded"
                 )
                 vitalsRepository.saveVitalSigns(listOf(vital))
-                "❤️ Batimentos: ${intent.heartRateBpm} bpm registrado!"
+                "Batimentos: ${intent.heartRateBpm} bpm registrado!"
             }
 
             is VoiceHealthIntent.OxygenSaturation -> {

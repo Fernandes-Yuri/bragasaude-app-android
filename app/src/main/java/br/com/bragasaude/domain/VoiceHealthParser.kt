@@ -553,17 +553,17 @@ class VoiceHealthParser @Inject constructor() {
                 options = listOf(
                     ClarificationOption(
                         id = "cups_equiv",
-                        label = "🥛 Eram $readableAmount copos (${cupsEquiv} ml)",
+                        label = "Eram $readableAmount copos (${cupsEquiv} ml)",
                         actionType = ClarificationActionType.LOG_HYDRATION_CUPS
                     ),
                     ClarificationOption(
                         id = "day_total",
-                        label = "💧 Foi ao longo do dia todo ($totalMl ml)",
+                        label = "Foi ao longo do dia todo ($totalMl ml)",
                         actionType = ClarificationActionType.LOG_HYDRATION_FULL
                     ),
                     ClarificationOption(
                         id = "cancel",
-                        label = "✏️ Corrigir quantidade",
+                        label = "Corrigir quantidade",
                         actionType = ClarificationActionType.CANCEL
                     )
                 ),

@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.steps
+package br.com.bragasaude.ui.steps
 
 import android.Manifest
 import android.content.Context
@@ -811,7 +811,7 @@ fun WeeklyStepsModal(
                                     if (day.steps > 0) {
                                         Text(
                                             text = if (day.steps >= 1000) "%.1fk".format(day.steps / 1000f) else "${day.steps}",
-                                            fontSize = 9.sp,
+                                            fontSize = 10.sp,
                                             fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Normal,
                                             color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray
                                         )
@@ -835,13 +835,13 @@ fun WeeklyStepsModal(
                                     Spacer(Modifier.height(6.dp))
                                     Text(
                                         text = day.dayLabel,
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Medium,
                                         color = if (isSelected || day.isToday) MaterialTheme.colorScheme.primary else Color.Gray
                                     )
                                     Text(
                                         text = day.dateFormatted,
-                                        fontSize = 9.sp,
+                                        fontSize = 10.sp,
                                         color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray
                                     )
                                 }
@@ -995,7 +995,7 @@ fun HeartPointsCard(
                     }
                 }
 
-                IconButton(onClick = { showInfoSheet = true }, modifier = Modifier.size(28.dp)) {
+                IconButton(onClick = { showInfoSheet = true }, modifier = Modifier.size(44.dp)) {
                     Icon(
                         Icons.Default.Info,
                         contentDescription = "Informações sobre Pontos de Cardio",
@@ -1279,7 +1279,7 @@ fun WeeklyCardioModal(
                                     if (day.points > 0) {
                                         Text(
                                             text = "${day.points}",
-                                            fontSize = 9.sp,
+                                            fontSize = 10.sp,
                                             fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Normal,
                                             color = if (isSelected) TealPrimary else Color.Gray
                                         )
@@ -1303,13 +1303,13 @@ fun WeeklyCardioModal(
                                     Spacer(Modifier.height(6.dp))
                                     Text(
                                         text = day.dayLabel,
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Medium,
                                         color = if (isSelected || day.isToday) TealPrimary else Color.Gray
                                     )
                                     Text(
                                         text = day.dateFormatted,
-                                        fontSize = 9.sp,
+                                        fontSize = 10.sp,
                                         color = if (isSelected) TealPrimary else Color.Gray
                                     )
                                 }

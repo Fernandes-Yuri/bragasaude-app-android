@@ -169,15 +169,15 @@ fun SocialFeedScreen(
     }
 
     if (showCreateDialog) {
-        var selectedAchievement by remember { mutableStateOf("Meta de Passos Concluída! 🚶‍♂️") }
+        var selectedAchievement by remember { mutableStateOf("Meta de Passos Concluída!") }
         var descriptionText by remember { mutableStateOf("Hoje alcancei minha meta diária de passos!") }
         var isPublic by remember { mutableStateOf(true) }
 
         val achievementOptions = listOf(
-            "Meta de Passos Concluída! 🚶‍♂️",
-            "Hidratação do Dia Completa! 💧",
-            "Consistência de Saúde! 🔥",
-            "Pressão Arterial Monitorada! 🩺"
+            "Meta de Passos Concluída!",
+            "Hidratação do Dia Completa!",
+            "Consistência de Saúde!",
+            "Pressão Arterial Monitorada!"
         )
 
         AlertDialog(

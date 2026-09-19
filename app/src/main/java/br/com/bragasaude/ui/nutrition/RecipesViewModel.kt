@@ -61,10 +61,10 @@ class RecipesViewModel @Inject constructor(
 
     // Abas disponíveis para navegação
     val mealTabs = listOf(
-        MealTab("BREAKFAST", "Café", "☀️"),
-        MealTab("LUNCH", "Almoço", "🍲"),
-        MealTab("SNACK", "Lanche", "🥪"),
-        MealTab("DINNER", "Jantar", "🌙")
+        MealTab("BREAKFAST", "Café", ""),
+        MealTab("LUNCH", "Almoço", ""),
+        MealTab("SNACK", "Lanche", ""),
+        MealTab("DINNER", "Jantar", "")
     )
 
     init {

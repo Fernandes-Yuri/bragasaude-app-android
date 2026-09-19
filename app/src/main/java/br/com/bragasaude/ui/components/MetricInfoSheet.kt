@@ -363,7 +363,7 @@ fun MetricInfoBottomSheet(
                     horizontalAlignment = Alignment.Start
                 ) {
                     Text(
-                        text = "⚖️ Transparência e Segurança",
+                        text = "Transparência e Segurança",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface

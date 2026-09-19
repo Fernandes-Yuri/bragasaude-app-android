@@ -467,7 +467,7 @@ private fun ExamItemReviewCard(
                                 text = "Adicionado manualmente",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = BragaEmerald,
-                                fontSize = 11.sp
+                                fontSize = 12.sp
                             )
                         }
                     }

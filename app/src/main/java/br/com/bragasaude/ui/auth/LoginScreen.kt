@@ -486,7 +486,7 @@ fun LoginScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Text(
-                                            text = "📧 O código de 6 dígitos será enviado para o e-mail digitado acima.",
+                                            text = "O código de 6 dígitos será enviado para o e-mail digitado acima.",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )

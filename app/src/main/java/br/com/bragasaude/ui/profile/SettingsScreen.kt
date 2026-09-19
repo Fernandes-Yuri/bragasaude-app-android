@@ -615,7 +615,7 @@ fun StepGoalDialog(
                             goalText = next.toString()
                         }
                     ) {
-                        Text("-500", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        Text("-500", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
 
                     OutlinedTextField(
@@ -641,7 +641,7 @@ fun StepGoalDialog(
                             goalText = next.toString()
                         }
                     ) {
-                        Text("+500", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        Text("+500", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
             }

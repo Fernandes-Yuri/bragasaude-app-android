@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.profile
+package br.com.bragasaude.ui.profile
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
@@ -93,7 +93,7 @@ fun ConsentScreen(
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                         ConsentItem(
-                            "⚖️ Autocuidado e Limites Clínicos",
+                            "Autocuidado e Limites Clínicos",
                             "O aplicativo não substitui consultas, diagnósticos ou prescrições médicas. É uma ferramenta de apoio ao seu bem-estar."
                         )
                     }

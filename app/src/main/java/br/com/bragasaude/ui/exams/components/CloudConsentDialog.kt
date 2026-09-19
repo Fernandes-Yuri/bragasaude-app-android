@@ -113,10 +113,10 @@ fun CloudConsentDialog(
                             .padding(12.dp)
                     ) {
                         Text(
-                            text = "⚖️ Termo LGPD (Art. 43, III): A Braga Saúde emprega criptografia de ponta a ponta e rígidas salvaguardas técnicas, ficando isenta de responsabilidade civil por acessos não autorizados provocados por ataques cibernéticos fortuitos ou ações ilícitas de terceiros externos.",
+                            text = "Termo LGPD (Art. 43, III): A Braga Saúde emprega criptografia de ponta a ponta e rígidas salvaguardas técnicas, ficando isenta de responsabilidade civil por acessos não autorizados provocados por ataques cibernéticos fortuitos ou ações ilícitas de terceiros externos.",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = Color(0xFF475569),
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 lineHeight = 16.sp
                             )
                         )
@@ -232,7 +232,7 @@ private fun StorageOptionCard(
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = if (isSelected) Color.White else Color(0xFF64748B),
-                                fontSize = 10.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             ),
                             maxLines = 1,
