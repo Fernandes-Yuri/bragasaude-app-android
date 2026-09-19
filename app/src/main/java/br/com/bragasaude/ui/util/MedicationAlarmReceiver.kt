@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.util
+package br.com.bragasaude.ui.util
 
 import android.app.AlarmManager
 import android.app.NotificationChannel
@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import br.com.bragasaude.MainActivity
@@ -98,10 +99,56 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
                 }
                 Log.d("MedAlarm", "Alarme agendado para ${medName} às ${timeHour}:${timeMinute}")
             } catch (e: SecurityException) {
-                // Android 12+ pode exigir SCHEDULE_EXACT_ALARM permission
-                Log.e("MedAlarm", "Sem permissão para alarme exato: ${e.message}")
+                // Android 13/14+ exige que o usuario approve "Alarmes e Lembretes"
+                // (SCHEDULE_EXACT_ALARM). Sem isso o alarme exato e recusado.
+                // FALLBACK: agenda um alarme INEXATO — ele ainda dispara (em
+                // geral alguns minutos atrasado), em vez de nao tocar de jeito
+                // nenhum. O usuario e avisado de que vale a pena liberar a
+                // permissao nas Configuracoes.
+                Log.w("MedAlarm", "Sem permissão para alarme exato: ${e.message}; usando alarme inexact")
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.timeInMillis,
+                    datedPending
+                )
+                avisarPermissaoAlarme(context)
             }
         }
+
+        /**
+         * Avisa (uma vez por dia, nao a cada remédio) que faltou a permissão de
+         * alarmes exatos. No Android 13+ so o usuario pode concede-la; o app nao
+         * pode pedir por dialog.
+         */
+        private fun avisarPermissaoAlarme(context: Context) {
+            try {
+                val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+                if (prefs.getString("aviso_alarme_exato_data", "") == hoje()) return
+                prefs.edit().putString("aviso_alarme_exato_data", hoje()).apply()
+
+                createChannel(context)
+                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                val pending = PendingIntent.getActivity(
+                    context, 7711, intent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+                val notif = NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setContentTitle("Toques de remédio limitados")
+                    .setContentText("Toque aqui e libere \"Alarmes e lembretes\" para que o lembrete toque na hora certa.")
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentIntent(pending)
+                    .setAutoCancel(true)
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .build()
+                (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                    .notify(7711, notif)
+            } catch (_: Exception) { }
+        }
+
+        private fun hoje(): String =
+            java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
 
         private const val MEDICATION_ALARM_ACTION_PREFIX = "medication_alarm_"
 

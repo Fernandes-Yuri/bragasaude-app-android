@@ -58,22 +58,57 @@ fun NotificationsScreen(
             )
         }
     ) { innerPadding ->
-        if (alerts.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("Nenhuma notificação no momento.", color = MaterialTheme.colorScheme.outline)
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            // Fabricantes (Xiaomi, Samsung, Motorola) matam apps em segundo
+            // plano e o push chega mas nao toca. So mostra se o app ainda nao
+            // esta liberado da otimizacao de bateria.
+            if (!br.com.bragasaude.ui.util.BatteryOptimizationHelper.estaLiberado(context)) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .clickable {
+                            br.com.bragasaude.ui.util.BatteryOptimizationHelper
+                                .pedirIgnorarOtimizacao(context)
+                        },
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
+                    ),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "Garanta que os avisos cheguem com o app fechado",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            if (br.com.bragasaude.ui.util.BatteryOptimizationHelper.fabricanteAgressivo())
+                                "Seu aparelho costuma economizar bateria fechando apps. Toque aqui e marque " +
+                                "\"Não otimizado\" para o Braga Saúde conseguir avisar a hora de um remédio ou " +
+                                "uma mensagem da família."
+                            else
+                                "Toque aqui e marque \"Não otimizado\" para que o Braga Saúde consiga avisar " +
+                                "a hora de um remédio ou uma mensagem da família com o app fechado.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+
+            if (alerts.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Nenhuma notificação no momento.", color = MaterialTheme.colorScheme.outline)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(alerts) { alert ->
                     when {
@@ -114,6 +149,7 @@ fun NotificationsScreen(
                     }
                 }
             }
+        }
         }
     }
 }

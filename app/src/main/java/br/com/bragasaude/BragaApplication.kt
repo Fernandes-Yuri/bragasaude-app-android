@@ -7,6 +7,7 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import br.com.bragasaude.data.remote.repository.CatalogRepository
+import br.com.bragasaude.data.remote.sync.BragaFirebaseMessagingService
 import br.com.bragasaude.data.remote.sync.SyncManager
 import br.com.bragasaude.data.remote.sync.SyncScheduler
 import br.com.bragasaude.ui.util.FamilyNotificationService
@@ -36,6 +37,11 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
         // criados no startup, senão o Android 8+ descarta silenciosamente as
         // notificações de mensagem familiar e de cuidado.
         FamilyNotificationService.initChannels(this)
+
+        // Canais de push (FCM): o canal padrao e o que o Play Services usa para
+        // desenhar o balao com o app FECHADO. Se nao existir no startup, o
+        // primeiro push chega e e descartado (Causa 6 do levantamento).
+        BragaFirebaseMessagingService.initChannels(this)
 
         syncManager.startRealtimeSync()
         syncScheduler.schedulePeriodicRecoverySync()
