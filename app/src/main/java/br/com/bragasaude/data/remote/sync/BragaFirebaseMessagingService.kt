@@ -25,9 +25,11 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
         const val CHANNEL_EMERGENCY = "bragasaude_emergency"
         const val CHANNEL_CLINICAL = "bragasaude_clinic_alerts"
         const val CHANNEL_PROACTIVE = "bragasaude_proactive_reminders"
+        const val CHANNEL_CONSULTATION = "bragasaude_consultation"
 
         // IDs próprios do FCM (o FamilyNotificationService usa a faixa 1001-1005).
         private const val ID_FAMILY_MESSAGE = 2001
+        private const val ID_CONSULTATION = 2010
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
@@ -42,6 +44,9 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
                 "EMERGENCY" -> showEmergencyNotification(title, message)
                 "ALERT_CRITICAL" -> showClinicNotification(title, message, isCritical = true)
                 "FAMILY_MESSAGE" -> showFamilyMessageNotification(title, message)
+                "CONSULTATION_CREATED", "CONSULTATION_ACCEPTED", "CONSULTATION_REJECTED",
+                "CONSULTATION_CANCELLED", "CONSULTATION_COMPLETED" ->
+                    showConsultationNotification(title, message)
                 "APP_UPDATE" -> {
                     val downloadUrl = remoteMessage.data["download_url"] ?: "https://api.bragasaude.online/api/app/download"
                     showUpdateNotification(title, message, downloadUrl)
@@ -186,6 +191,48 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
             .build()
 
         manager.notify(ID_FAMILY_MESSAGE, notification)
+    }
+
+    private fun showConsultationNotification(title: String, message: String) {
+        // Canal de consultas (bragasaude_consultation): mesmo id usado pelo
+        // NotificationHelper, então os lembretes locais e os pushes ficam juntos.
+        val context = applicationContext
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_CONSULTATION,
+                "Lembretes de Consulta",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Lembretes e avisos de consultas médicas"
+                enableVibration(true)
+            }
+            manager.createNotificationChannel(channel)
+        }
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("OPEN_CONSULTATION", true)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            ID_CONSULTATION,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_CONSULTATION)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setSmallIcon(android.R.drawable.ic_menu_my_calendar)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .build()
+
+        manager.notify(ID_CONSULTATION, notification)
     }
 
     private fun showUpdateNotification(title: String, message: String, downloadUrl: String) {

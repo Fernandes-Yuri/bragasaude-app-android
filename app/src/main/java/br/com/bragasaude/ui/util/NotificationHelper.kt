@@ -312,7 +312,7 @@ object NotificationHelper {
 
         val builder = NotificationCompat.Builder(context, GROCERY_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_agenda)
-            .setContentTitle("🛒 Lista de Feira Atualizada")
+            .setContentTitle("Lista de Feira Atualizada")
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -344,6 +344,48 @@ object NotificationHelper {
     fun cancelHydrationReminders(context: Context) {
         try {
             androidx.work.WorkManager.getInstance(context).cancelUniqueWork("braga_hydration_reminders")
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Agenda lembretes de consulta para 24h e 1h antes (doc 10 §2.4).
+     * WorkManager one-time com atraso — sobrevive a reinicialização do app.
+     * Lembretes cujo horário já passou são ignorados.
+     */
+    fun scheduleConsultationReminders(context: Context, consultationId: String, title: String, scheduledDateMillis: Long) {
+        try {
+            val now = System.currentTimeMillis()
+            val data = androidx.work.Data.Builder()
+                .putString("title", title)
+                .putLong("scheduledAt", scheduledDateMillis)
+                .build()
+
+            for ((tag, hoursBefore) in listOf("24h" to 24L, "1h" to 1L)) {
+                val delay = scheduledDateMillis - hoursBefore * 3_600_000 - now
+                if (delay <= 0) continue
+                val work = androidx.work.OneTimeWorkRequestBuilder<br.com.bragasaude.data.remote.sync.ConsultationReminderWorker>()
+                    .setInitialDelay(delay, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .setInputData(data)
+                    .build()
+                androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+                    "braga_consultation_reminder_${consultationId}_$tag",
+                    androidx.work.ExistingWorkPolicy.REPLACE,
+                    work
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /** Cancela lembretes pendentes de uma consulta (ex.: foi cancelada/recusada). */
+    fun cancelConsultationReminders(context: Context, consultationId: String) {
+        try {
+            val wm = androidx.work.WorkManager.getInstance(context)
+            wm.cancelUniqueWork("braga_consultation_reminder_${consultationId}_24h")
+            wm.cancelUniqueWork("braga_consultation_reminder_${consultationId}_1h")
         } catch (e: Exception) {
             e.printStackTrace()
         }
