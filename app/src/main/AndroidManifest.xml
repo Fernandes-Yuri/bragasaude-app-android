@@ -42,6 +42,17 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Bragasaude">
+
+        <!-- Canal padrao do FCM (Android 8+ exige canal para qualquer balao).
+             Sem esta metatag o Play Services joga num canal de fallback generico,
+             que em varios aparelhos aparece silenciado ou sem relevancia alta. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="bragasaude_family_alerts" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/teal_primary" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

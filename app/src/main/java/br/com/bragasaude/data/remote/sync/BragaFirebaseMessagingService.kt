@@ -26,6 +26,52 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
         const val CHANNEL_CLINICAL = "bragasaude_clinic_alerts"
         const val CHANNEL_PROACTIVE = "bragasaude_proactive_reminders"
         const val CHANNEL_CONSULTATION = "bragasaude_consultation"
+        const val CHANNEL_UPDATES = "bragasaude_app_updates"
+
+        /**
+         * Canal padrao declarado no AndroidManifest
+         * (com.google.firebase.messaging.default_notification_channel_id). E por
+         * ele que o Play Services desenha o balao quando o app esta FECHADO —
+         * nesse caso o onMessageReceived nao roda, e sem canal o Android 8+
+         * simplesmente descarta a notificacao.
+         */
+        const val CHANNEL_DEFAULT = "bragasaude_family_alerts"
+
+        /**
+         * Cria todos os canais de push no startup (chamado pelo BragaApplication).
+         *
+         * Antes cada canal so era criado dentro do seu showXxxNotification(), ou
+         * seja, so existia DEPOIS que um push daquele tipo chegava com o app
+         * aberto. Se o primeiro push chegava com o app fechado, o canal nao
+         * existia e a notificacao era descartada pelo NotificationManager.
+         */
+        fun initChannels(context: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            fun criar(id: String, nome: String, descricao: String, alta: Boolean) {
+                manager.createNotificationChannel(
+                    NotificationChannel(
+                        id, nome,
+                        if (alta) NotificationManager.IMPORTANCE_HIGH else NotificationManager.IMPORTANCE_DEFAULT
+                    ).apply {
+                        this.description = descricao
+                        enableVibration(true)
+                        if (alta) {
+                            enableLights(true)
+                            lightColor = Color.RED
+                        }
+                    }
+                )
+            }
+
+            criar(CHANNEL_DEFAULT, "Avisos da família", "Mensagens e avisos de cuidado da família", alta = true)
+            criar(CHANNEL_EMERGENCY, "Alertas de Emergência", "Alertas imediatos de socorro ou crise aguda", alta = true)
+            criar(CHANNEL_CLINICAL, "Alertas clínicos", "Leituras críticas (pressão, glicose) enviadas ao cuidador", alta = true)
+            criar(CHANNEL_PROACTIVE, "Lembretes proativos", "Lembretes de autocuidado (manhã, hidratação, noite)", alta = false)
+            criar(CHANNEL_CONSULTATION, "Consultas", "Status de consultas agendadas", alta = false)
+            criar(CHANNEL_UPDATES, "Atualizações do app", "Novas versões e melhorias do Braga Saúde", alta = true)
+        }
 
         // IDs próprios do FCM (o FamilyNotificationService usa a faixa 1001-1005).
         private const val ID_FAMILY_MESSAGE = 2001
