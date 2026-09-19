@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.repository
+package br.com.bragasaude.data.remote.repository
 
 import br.com.bragasaude.data.local.DailyMetricsDao
 import br.com.bragasaude.data.local.FamilyBindingEntity
@@ -38,6 +38,7 @@ class FamilyBridgeRepositoryTest {
     private lateinit var apiClient: BragaApiClient
     private lateinit var auth: FirebaseAuth
     private lateinit var syncScheduler: SyncScheduler
+    private lateinit var appContext: android.content.Context
 
     private lateinit var repository: FamilyBridgeRepository
 
@@ -54,6 +55,7 @@ class FamilyBridgeRepositoryTest {
         apiClient = mockk(relaxed = true)
         auth = mockk(relaxed = true)
         syncScheduler = mockk(relaxed = true)
+        appContext = mockk(relaxed = true)
         every { auth.currentUser?.uid } returns "caregiver-1"
 
         repository = FamilyBridgeRepository(
@@ -65,7 +67,8 @@ class FamilyBridgeRepositoryTest {
             socialFeedDao = socialFeedDao,
             apiClient = apiClient,
             auth = auth,
-            syncScheduler = syncScheduler
+            syncScheduler = syncScheduler,
+            appContext = appContext
         )
     }
 
