@@ -20,7 +20,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Whatsapp
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,11 +36,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.ui.components.EmeraldHeaderBanner
-import br.com.bragasaude.ui.components.PhoneLinkDialog
+import br.com.bragasaude.ui.theme.BragaMintBorder
 import br.com.bragasaude.ui.theme.BragaBackground
 import br.com.bragasaude.ui.theme.BragaEmerald
 import br.com.bragasaude.ui.theme.BragaMint
-import br.com.bragasaude.ui.theme.BragaMintBorder
 import br.com.bragasaude.ui.theme.BragaTextPrimary
 import br.com.bragasaude.ui.theme.BragaTextSecondary
 
@@ -61,9 +60,22 @@ fun SettingsScreen(
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
 
+    // Quando o ViewModel monta o link do WhatsApp (TOTP atual), abre e consome.
+    val waLink by viewModel.openWhatsAppLinkEvent.collectAsState()
+    LaunchedEffect(waLink) {
+        waLink?.let { url ->
+            runCatching {
+                context.startActivity(
+                    android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                        .apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
+                )
+            }
+            viewModel.consumeOpenWhatsAppLink()
+        }
+    }
+
     var showEmergencyDialog by remember { mutableStateOf(false) }
     var showStepGoalDialog by remember { mutableStateOf(false) }
-    var showPhoneLinkDialog by remember { mutableStateOf(false) }
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
     var deleteConfirmationText by remember { mutableStateOf("") }
 
@@ -138,16 +150,13 @@ fun SettingsScreen(
                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                     ) {
                         Column {
-                            val userPhone = profile?.phone
-                            val hasPhone = !userPhone.isNullOrBlank()
+                            val linkedPhone = profile?.whatsappPhone
+                            val hasWhatsapp = !linkedPhone.isNullOrBlank()
                             SettingsItem(
-                                title = if (hasPhone) "Meu WhatsApp" else "Cadastrar meu WhatsApp",
-                                subtitle = if (hasPhone) "$userPhone • Conectado (Toque para alterar)" else "Receba lembretes de exames e avisos (Toque para cadastrar)",
-                                icon = Icons.Default.Phone,
-                                onClick = {
-                                    viewModel.resetPhoneLinkState()
-                                    showPhoneLinkDialog = true
-                                }
+                                title = if (hasWhatsapp) "Meu WhatsApp" else "Vincular meu WhatsApp",
+                                subtitle = if (hasWhatsapp) "$linkedPhone • Toque para vincular de novo" else "Abre o WhatsApp com o código pronto. É só enviar.",
+                                icon = Icons.Default.Whatsapp,
+                                onClick = { viewModel.openWhatsAppLink() }
                             )
                             HorizontalDivider(color = BragaMintBorder.copy(alpha = 0.3f), thickness = 0.8.dp)
                             SettingsItem(
@@ -406,44 +415,6 @@ fun SettingsScreen(
             onSave = { name, relation, phone ->
                 viewModel.updateEmergencyContact(name, relation, phone)
                 showEmergencyDialog = false
-            }
-        )
-    }
-
-    if (showPhoneLinkDialog) {
-        val phoneLinkSent by viewModel.phoneLinkSent.collectAsState()
-        val phoneLinkWa by viewModel.phoneLinkWa.collectAsState()
-        val phoneLinkLoading by viewModel.phoneLinkLoading.collectAsState()
-        val phoneLinkError by viewModel.phoneLinkError.collectAsState()
-        val phoneLinkSuccess by viewModel.phoneLinkSuccess.collectAsState()
-
-        LaunchedEffect(phoneLinkSuccess) {
-            if (phoneLinkSuccess) {
-                showPhoneLinkDialog = false
-                viewModel.resetPhoneLinkState()
-            }
-        }
-
-        PhoneLinkDialog(
-            onDismiss = {
-                showPhoneLinkDialog = false
-                viewModel.resetPhoneLinkState()
-            },
-            onSendOtp = { phone -> viewModel.sendPhoneLinkOtp(phone) },
-            onVerifyOtp = { phone, code -> viewModel.verifyPhoneLinkOtp(phone, code) },
-            codeSent = phoneLinkSent,
-            waLink = phoneLinkWa,
-            initialPhone = profile?.phone ?: "",
-            isLoading = phoneLinkLoading,
-            errorMessage = phoneLinkError,
-            onResetStep = { viewModel.resetPhoneLinkState() },
-            onOpenWhatsApp = { link ->
-                try {
-                    context.startActivity(android.content.Intent(
-                        android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse(link)
-                    ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK })
-                } catch (_: Exception) { }
             }
         )
     }

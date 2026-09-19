@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.auth
 
+import android.net.Uri
+import br.com.bragasaude.data.util.WhatsAppLinkTotp
 import br.com.bragasaude.domain.ProfileOnboarding
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -72,12 +74,6 @@ class AuthViewModel @Inject constructor(
     val whatsappTotpSecret = _whatsappTotpSecret.asStateFlow()
     private val _whatsappPhone = MutableStateFlow<String?>(null)
     val whatsappPhone = _whatsappPhone.asStateFlow()
-
-    // Plano B OTP (sem template): código só existe após sucesso real.
-    private val _phoneLinkSent = MutableStateFlow(false)
-    val phoneLinkSent = _phoneLinkSent.asStateFlow()
-    private val _phoneLinkWa = MutableStateFlow<String?>(null)
-    val phoneLinkWa = _phoneLinkWa.asStateFlow()
 
     data class PendingRegistration(
         val email: String,
@@ -398,48 +394,30 @@ class AuthViewModel @Inject constructor(
         _suggestPhoneLink.value = false
     }
 
-    /**
-     * Envia OTP via WhatsApp para vincular telefone à conta Google (opcional).
-     */
-    fun sendPhoneLinkOtp(phoneNumber: String) {
+    // --- Vínculo de WhatsApp (fluxo TOTP temporário) ---
+    // O fluxo antigo de OTP por texto foi removido: a Meta não aprova template
+    // e o código nunca chegava ao usuário. Agora abrimos o WhatsApp com o
+    // código TOTP atual pronto para enviar.
+
+    private val _openWhatsAppLink = MutableStateFlow<String?>(null)
+    val openWhatsAppLinkEvent = _openWhatsAppLink.asStateFlow()
+
+    /** Monta o link wa.me com o código TOTP atual da conta. */
+    fun openWhatsAppLink(businessPhone: String = "5511967808252") {
+        val userId = auth.currentUser?.uid ?: return
         viewModelScope.launch {
-            _authState.value = AuthState.Loading
-            _phoneLinkSent.value = false
-            _phoneLinkWa.value = null
-            val result = apiClient.sendOtp(phoneNumber, purpose = "PHONE_LINKING", channel = "WHATSAPP")
-            result.fold(
-                onSuccess = {
-                    _phoneLinkSent.value = true
-                    _phoneLinkWa.value = it.waLink
-                    _authState.value = AuthState.OtpSent("WHATSAPP", it.waLink)
-                },
-                onFailure = { _authState.value = AuthState.Error(it.message ?: "Erro ao enviar código WhatsApp") }
-            )
+            val current = repository.getProfileOneShotLocal(userId)?.toRemote()
+            val secret = current?.whatsappTotpSecret
+            if (secret.isNullOrBlank()) return@launch
+            val code = WhatsAppLinkTotp.currentCode(secret)
+            val text = Uri.encode("Vincular Braga Saúde $code")
+            _openWhatsAppLink.value = "https://wa.me/$businessPhone?text=$text"
         }
     }
 
-    /**
-     * Valida OTP e salva o telefone vinculado ao perfil do usuário Google.
-     */
-    fun verifyPhoneLinkOtp(phoneNumber: String, code: String) {
-        viewModelScope.launch {
-            _authState.value = AuthState.Loading
-            val result = apiClient.verifyOtp(phoneNumber, code, purpose = "PHONE_LINKING")
-            result.fold(
-                onSuccess = {
-                    val userId = auth.currentUser?.uid
-                    if (userId != null) {
-                        val current = repository.getProfileOneShotLocal(userId)
-                        if (current != null) {
-                            repository.saveProfile(current.toRemote().copy(phone = phoneNumber))
-                        }
-                    }
-                    _suggestPhoneLink.value = false
-                    _authState.value = AuthState.PhoneLinkedSuccess
-                },
-                onFailure = { _authState.value = AuthState.Error(it.message ?: "Código de verificação incorreto") }
-            )
-        }
+    /** Consome o evento (a tela já abriu o link). */
+    fun consumeOpenWhatsAppLink() {
+        _openWhatsAppLink.value = null
     }
 
     fun signUpWithGoogle(idToken: String) {
@@ -451,14 +429,18 @@ class AuthViewModel @Inject constructor(
     }
 
     // ==============================================================
-    // CADASTRO DIRETO COM OTP OBRIGATÓRIO (WHATSAPP OU EMAIL)
+    // CADASTRO DIRETO COM OTP OBRIGATÓRIO (SÓ E-MAIL)
     // ==============================================================
 
     /**
      * Inicia cadastro direto: valida conflitos de conta (Google vs Direto vs Deletada)
-     * e dispara OTP obrigatório via canal escolhido (WHATSAPP ou EMAIL).
+     * e dispara OTP obrigatório por e-mail.
+     *
+     * O canal WhatsApp foi removido (18/09/2026): a Meta não aprova template de
+     * autenticação e o código nunca chegava. O vínculo de WhatsApp é feito depois,
+     * pelo fluxo TOTP (botão "Vincular meu WhatsApp").
      */
-    fun signUpWithEmail(email: String, password: String, phoneNumber: String = "", channel: String = "EMAIL") {
+    fun signUpWithEmail(email: String, password: String, phoneNumber: String = "") {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
@@ -484,19 +466,13 @@ class AuthViewModel @Inject constructor(
                     }
                 }
 
-                if (channel == "WHATSAPP" && phoneNumber.isBlank()) {
-                    _authState.value = AuthState.Error("Informe seu número de WhatsApp para receber o código de validação.")
-                    return@launch
-                }
-
                 // Salva estado pendente
-                _pendingRegistration = PendingRegistration(email, password, phoneNumber, channel)
+                _pendingRegistration = PendingRegistration(email, password, phoneNumber, "EMAIL")
 
-                // 2. Dispara OTP obrigatório pelo canal escolhido
-                val identifier = if (channel == "WHATSAPP") phoneNumber else email
-                val otpRes = apiClient.sendOtp(identifier, purpose = "REGISTRATION", channel = channel)
+                // 2. Dispara OTP obrigatório por e-mail
+                val otpRes = apiClient.sendOtp(email, purpose = "REGISTRATION", channel = "EMAIL")
                 otpRes.fold(
-                    onSuccess = { _authState.value = AuthState.OtpSent(channel, it.waLink) },
+                    onSuccess = { _authState.value = AuthState.OtpSent("EMAIL", it.waLink) },
                     onFailure = { _authState.value = AuthState.Error(it.message ?: "Erro ao enviar código de verificação") }
                 )
             } catch (e: Exception) {
@@ -518,7 +494,7 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
-                val identifier = if (pending.channel == "WHATSAPP") pending.phoneNumber else pending.email
+                val identifier = pending.email
                 val verifyRes = apiClient.verifyOtp(identifier, code, purpose = "REGISTRATION")
                 if (verifyRes.isFailure) {
                     _authState.value = AuthState.Error(verifyRes.exceptionOrNull()?.message ?: "Código de verificação incorreto")
@@ -593,15 +569,17 @@ class AuthViewModel @Inject constructor(
     }
 
     /**
-     * Envia código OTP de 6 dígitos para o e-mail ou telefone fornecido.
-     * Suporta canais EMAIL e WHATSAPP.
+     * Envia código OTP de 6 dígitos para o e-mail fornecido.
+     *
+     * Canal WhatsApp removido (18/09/2026): a Meta não aprova template.
+     * O vínculo de WhatsApp é feito depois, pelo fluxo TOTP.
      */
-    fun sendOtpCode(identifier: String, channel: String = "EMAIL") {
+    fun sendOtpCode(identifier: String) {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
-            val result = apiClient.sendOtp(identifier, purpose = "PASSWORD_RESET", channel = channel)
+            val result = apiClient.sendOtp(identifier, purpose = "PASSWORD_RESET", channel = "EMAIL")
             result.fold(
-                onSuccess = { _authState.value = AuthState.OtpSent(channel, it.waLink) },
+                onSuccess = { _authState.value = AuthState.OtpSent("EMAIL", it.waLink) },
                 onFailure = { _authState.value = AuthState.Error(it.message ?: "Erro ao enviar código") }
             )
         }

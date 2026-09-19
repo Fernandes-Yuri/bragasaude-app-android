@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Whatsapp
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.Diversity3
 import br.com.bragasaude.ui.components.BragaActionCard
@@ -54,8 +55,6 @@ import androidx.compose.ui.platform.LocalContext
 import android.net.Uri
 import android.content.Intent
 import android.widget.Toast
-import br.com.bragasaude.ui.components.PhoneLinkDialog
-import br.com.bragasaude.ui.components.WhatsAppLinkButton
 import br.com.bragasaude.ui.theme.BragaEmerald
 import br.com.bragasaude.ui.theme.BragaMint
 import br.com.bragasaude.ui.theme.BragaMintBorder
@@ -78,20 +77,19 @@ fun ProfileDetailScreen(
     val scope = rememberCoroutineScope()
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showAvatarDialog by remember { mutableStateOf(false) }
-    var showPhoneLinkDialog by remember { mutableStateOf(false) }
-
-    val phoneLinkSent by profileViewModel.phoneLinkSent.collectAsState()
-    val phoneLinkWa by profileViewModel.phoneLinkWa.collectAsState()
-    val phoneLinkLoading by profileViewModel.phoneLinkLoading.collectAsState()
-    val phoneLinkError by profileViewModel.phoneLinkError.collectAsState()
-    val phoneLinkSuccess by profileViewModel.phoneLinkSuccess.collectAsState()
     val context = LocalContext.current
 
-    LaunchedEffect(phoneLinkSuccess) {
-        if (phoneLinkSuccess) {
-            Toast.makeText(context, "WhatsApp vinculado com sucesso!", Toast.LENGTH_LONG).show()
-            showPhoneLinkDialog = false
-            profileViewModel.resetPhoneLinkState()
+    // Quando o ViewModel monta o link do WhatsApp (TOTP atual), abre e consome.
+    val waLink by profileViewModel.openWhatsAppLinkEvent.collectAsState()
+    LaunchedEffect(waLink) {
+        waLink?.let { url ->
+            runCatching {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        .apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+                )
+            }
+            profileViewModel.consumeOpenWhatsAppLink()
         }
     }
     
@@ -600,23 +598,25 @@ fun ProfileDetailScreen(
                 }
             }
 
-            // WhatsApp sempre visível: cadastrar se não tiver, alterar se já tiver cadastrado
+            // WhatsApp: o vínculo é feito pelo fluxo TOTP temporário (até a Meta
+            // liberar template). O card abre o WhatsApp com o código pronto —
+            // nunca mais pede número nem OTP por texto.
             item {
-                val userPhone = profile?.phone
-                val hasPhone = !userPhone.isNullOrBlank()
+                val linkedPhone = profile?.whatsappPhone
+                val hasWhatsapp = !linkedPhone.isNullOrBlank()
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp)
                         .clickable {
-                            profileViewModel.resetPhoneLinkState()
-                            showPhoneLinkDialog = true
+                            // Abre o WhatsApp com o código TOTP atual (fluxo novo).
+                            profileViewModel.openWhatsAppLink()
                         },
                     colors = CardDefaults.cardColors(
-                        containerColor = if (hasPhone) BragaMint.copy(alpha = 0.35f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                        containerColor = if (hasWhatsapp) BragaMint.copy(alpha = 0.35f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
                     ),
                     shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, if (hasPhone) BragaEmerald.copy(alpha = 0.5f) else BragaMintBorder)
+                    border = BorderStroke(1.dp, if (hasWhatsapp) BragaEmerald.copy(alpha = 0.5f) else BragaMintBorder)
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
@@ -624,12 +624,12 @@ fun ProfileDetailScreen(
                     ) {
                         Surface(
                             shape = CircleShape,
-                            color = if (hasPhone) BragaEmerald else MaterialTheme.colorScheme.primary,
+                            color = if (hasWhatsapp) BragaEmerald else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(42.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    Icons.Default.Phone,
+                                    Icons.Default.Whatsapp,
                                     contentDescription = "WhatsApp",
                                     tint = Color.White,
                                     modifier = Modifier.size(22.dp)
@@ -644,12 +644,12 @@ fun ProfileDetailScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    text = if (hasPhone) "Meu WhatsApp" else "Vincular seu WhatsApp",
+                                    text = if (hasWhatsapp) "Meu WhatsApp" else "Vincular seu WhatsApp",
                                     fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = BragaTextPrimary
                                 )
-                                if (hasPhone) {
+                                if (hasWhatsapp) {
                                     Surface(
                                         shape = RoundedCornerShape(8.dp),
                                         color = BragaEmerald.copy(alpha = 0.15f)
@@ -666,7 +666,7 @@ fun ProfileDetailScreen(
                             }
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                text = if (hasPhone) "$userPhone • Toque para alterar" else "Receba lembretes de exames e avisos no WhatsApp. Toque para cadastrar.",
+                                text = if (hasWhatsapp) "$linkedPhone • Toque para vincular de novo" else "Toque para abrir o WhatsApp com o código pronto. É só enviar a mensagem.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = BragaTextSecondary
                             )
@@ -675,16 +675,8 @@ fun ProfileDetailScreen(
                 }
             }
 
-            // Vínculo WhatsApp por TOTP (temporário até a Meta liberar template).
-            // Toque único abre o WhatsApp com o código atual pronto para enviar.
-            item {
-                Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                    WhatsAppLinkButton(
-                        totpSecret = profile?.whatsappTotpSecret,
-                        alreadyLinked = !profile?.whatsappPhone.isNullOrBlank()
-                    )
-                }
-            }
+            // (O card de WhatsApp acima já abre o fluxo TOTP. Mantivemos só ele:
+            // um único caminho, sem pedir número nem OTP por texto.)
 
             item {
                 Text(
@@ -780,34 +772,6 @@ fun ProfileDetailScreen(
                         Text("Cancelar")
                     }
                 }
-            )
-        }
-
-        if (showPhoneLinkDialog) {
-            PhoneLinkDialog(
-                onDismiss = {
-                    showPhoneLinkDialog = false
-                    profileViewModel.resetPhoneLinkState()
-                },
-                onSendOtp = { profileViewModel.sendPhoneLinkOtp(it) },
-                onVerifyOtp = { phone, code -> profileViewModel.verifyPhoneLinkOtp(phone, code) },
-                codeSent = phoneLinkSent,
-                waLink = phoneLinkWa,
-                onOpenWhatsApp = { waUrl ->
-                    try {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(waUrl)).apply {
-                            setPackage("com.whatsapp")
-                        }
-                        context.startActivity(intent)
-                    } catch (e: Exception) {
-                        val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse(waUrl))
-                        context.startActivity(webIntent)
-                    }
-                },
-                initialPhone = profile?.phone ?: "",
-                isLoading = phoneLinkLoading,
-                errorMessage = phoneLinkError,
-                onResetStep = { profileViewModel.resetPhoneLinkState() }
             )
         }
     }
