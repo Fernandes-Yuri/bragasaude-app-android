@@ -72,7 +72,23 @@ interface ProfileDao {
     @Transaction
     suspend fun cacheRemoteProfile(remote: ProfileEntity, expected: ProfileEntity?): ProfileEntity? {
         val current = getProfileOneShot(remote.userId)
-        if (current != expected || current?.pendingSync == true) return current
+        if (current != expected || current?.pendingSync == true) {
+            // Ha sync pendente: nao sobrescreve o perfil local. Mas o segredo
+            // TOTP do vinculo de WhatsApp tem que ser o do backend (a fonte da
+            // verdade) — se os dois divergirem, o codigo nunca casa no webhook.
+            // Mescla so este campo e devolve o estado local.
+            return current?.let {
+                if (!remote.whatsappTotpSecret.isNullOrBlank() &&
+                    it.whatsappTotpSecret != remote.whatsappTotpSecret
+                ) {
+                    val merged = it.copy(whatsappTotpSecret = remote.whatsappTotpSecret)
+                    insert(merged)
+                    merged
+                } else {
+                    it
+                }
+            }
+        }
         val merged = remote.copy(customPhotoUri = current?.customPhotoUri)
         insert(merged)
         return merged

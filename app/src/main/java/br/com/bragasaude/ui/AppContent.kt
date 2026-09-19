@@ -361,6 +361,14 @@ fun AppContent(activity: MainActivity) {
                             authViewModel.consumeOpenWhatsAppLink()
                         }
                     }
+                    // Avisa quando o vínculo ainda não está pronto.
+                    val waError by authViewModel.whatsappLinkError.collectAsState()
+                    LaunchedEffect(waError) {
+                        waError?.let { msg ->
+                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                            authViewModel.consumeWhatsappLinkError()
+                        }
+                    }
                     AlertDialog(
                         onDismissRequest = { authViewModel.dismissPhoneLinkSuggestion() },
                         title = { Text("Vincular seu WhatsApp") },

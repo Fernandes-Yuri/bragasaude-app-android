@@ -74,6 +74,15 @@ fun SettingsScreen(
         }
     }
 
+    // Avisa quando o vínculo ainda não está pronto (antes o botão era mudo).
+    val waError by viewModel.whatsappLinkError.collectAsState()
+    LaunchedEffect(waError) {
+        waError?.let { msg ->
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+            viewModel.consumeWhatsappLinkError()
+        }
+    }
+
     var showEmergencyDialog by remember { mutableStateOf(false) }
     var showStepGoalDialog by remember { mutableStateOf(false) }
     var showDeleteAccountDialog by remember { mutableStateOf(false) }

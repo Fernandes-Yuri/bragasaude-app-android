@@ -171,7 +171,12 @@ class BragaApiClient @Inject constructor(
                 foodAllergies = res.optJSONArray("food_allergies")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
                 customFoodRestrictions = res.nullableString("custom_food_restrictions"),
                 caregiverMode = res.nullableString("caregiver_mode"),
-                avatarIdentifier = res.nullableString("avatar_identifier")
+                avatarIdentifier = res.nullableString("avatar_identifier"),
+                // Segredo TOTP do vínculo de WhatsApp. Sem ler este campo, o
+                // app nunca fica sabendo do segredo que o backend garante — e o
+                // botão "Vincular meu WhatsApp" não tem ação (ProfileViewModel
+                // sai quando o segredo é null).
+                whatsappTotpSecret = res.nullableString("totp_secret")
             ))
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
