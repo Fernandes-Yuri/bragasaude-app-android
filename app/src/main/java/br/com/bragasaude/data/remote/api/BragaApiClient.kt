@@ -516,6 +516,21 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    /**
+     * doc 10 §4.1: pull incremental das respostas da equipe aos feedbacks.
+     * Retorna a lista de respostas ainda não entregues a este aparelho.
+     */
+    suspend fun getFeedbackReplies(): List<JSONObject> = withContext(Dispatchers.IO) {
+        try {
+            val res = getJson("$baseUrl/api/feedback/replies") ?: return@withContext emptyList()
+            val arr = res.optJSONArray("replies") ?: JSONArray()
+            (0 until arr.length()).map { arr.getJSONObject(it) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao puxar respostas de feedback: ${e.message}")
+            emptyList()
+        }
+    }
+
     // ==================== EXAMES ====================
 
     suspend fun syncExam(exam: ExamEntity): String? = withContext(Dispatchers.IO) {
