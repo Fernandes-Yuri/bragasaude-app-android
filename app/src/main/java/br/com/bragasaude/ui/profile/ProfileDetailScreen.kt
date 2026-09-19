@@ -92,6 +92,15 @@ fun ProfileDetailScreen(
             profileViewModel.consumeOpenWhatsAppLink()
         }
     }
+
+    // Avisa o usuário quando o vínculo ainda não está pronto (antes o botão era mudo).
+    val waError by profileViewModel.whatsappLinkError.collectAsState()
+    LaunchedEffect(waError) {
+        waError?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            profileViewModel.consumeWhatsappLinkError()
+        }
+    }
     
     // Launcher para escolher foto da galeria
     val galleryLauncher = rememberLauncherForActivityResult(

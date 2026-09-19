@@ -432,15 +432,32 @@ class AuthViewModel @Inject constructor(
     private val _openWhatsAppLink = MutableStateFlow<String?>(null)
     val openWhatsAppLinkEvent = _openWhatsAppLink.asStateFlow()
 
-    /** Monta o link wa.me com o código TOTP atual da conta. */
+    // Feedback para o usuário quando o link não pode ser aberto ainda.
+    private val _whatsappLinkError = MutableStateFlow<String?>(null)
+    val whatsappLinkError = _whatsappLinkError.asStateFlow()
+
+    /**
+     * Monta o link wa.me com o código TOTP atual da conta.
+     *
+     * Sem segredo (perfil ainda não sincronizou), avisa o usuário em vez de
+     * ficar mudo e tenta sincronizar com o backend.
+     */
     fun openWhatsAppLink(businessPhone: String = "5511967808252") {
         val userId = auth.currentUser?.uid ?: return
         viewModelScope.launch {
             val current = repository.getProfileOneShotLocal(userId)?.toRemote()
             val secret = current?.whatsappTotpSecret
-            if (secret.isNullOrBlank()) return@launch
+            if (secret.isNullOrBlank()) {
+                _whatsappLinkError.value =
+                    "Seu vínculo ainda não está pronto. Aguarde um segundo e toque novamente."
+                try {
+                    repository.syncProfile(userId)
+                } catch (_: Exception) { }
+                return@launch
+            }
+            _whatsappLinkError.value = null
             val code = WhatsAppLinkTotp.currentCode(secret)
-            val text = Uri.encode("Vincular Braga Saúde $code")
+            val text = Uri.encode("Olá Braga, eu desejo vincular meu número a minha conta. Esta é minha credencial: $code")
             _openWhatsAppLink.value = "https://wa.me/$businessPhone?text=$text"
         }
     }
@@ -448,6 +465,11 @@ class AuthViewModel @Inject constructor(
     /** Consome o evento (a tela já abriu o link). */
     fun consumeOpenWhatsAppLink() {
         _openWhatsAppLink.value = null
+    }
+
+    /** Consome a mensagem de erro (a tela já mostrou). */
+    fun consumeWhatsappLinkError() {
+        _whatsappLinkError.value = null
     }
 
     fun signUpWithGoogle(idToken: String) {

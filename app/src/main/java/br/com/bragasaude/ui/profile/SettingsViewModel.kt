@@ -101,18 +101,44 @@ class SettingsViewModel @Inject constructor(
     private val _openWhatsAppLink = MutableStateFlow<String?>(null)
     val openWhatsAppLinkEvent = _openWhatsAppLink.asStateFlow()
 
-    /** Abre o WhatsApp com o código TOTP atual pronto para enviar. */
+    // Feedback para o usuário quando o link não pode ser aberto ainda.
+    private val _whatsappLinkError = MutableStateFlow<String?>(null)
+    val whatsappLinkError = _whatsappLinkError.asStateFlow()
+
+    /**
+     * Abre o WhatsApp com a mensagem de vínculo pronta (código TOTP atual).
+     *
+     * Sem segredo no perfil local (ainda não sincronizou com o backend), avisa o
+     * usuário em vez de ficar mudo e dispara a sincronização.
+     */
     fun openWhatsAppLink(businessPhone: String = "5511967808252") {
         val secret = _profile.value?.whatsappTotpSecret
-        if (secret.isNullOrBlank()) return
+        if (secret.isNullOrBlank()) {
+            _whatsappLinkError.value =
+                "Seu vínculo ainda não está pronto. Aguarde um segundo e toque novamente."
+            val userId = auth.currentUser?.uid
+                ?: "00000000-0000-0000-0000-000000000000"
+            viewModelScope.launch {
+                try {
+                    profileRepository.syncProfile(userId)
+                } catch (_: Exception) { }
+            }
+            return
+        }
+        _whatsappLinkError.value = null
         val code = WhatsAppLinkTotp.currentCode(secret)
-        val text = Uri.encode("Vincular Braga Saúde $code")
+        val text = Uri.encode("Olá Braga, eu desejo vincular meu número a minha conta. Esta é minha credencial: $code")
         _openWhatsAppLink.value = "https://wa.me/$businessPhone?text=$text"
     }
 
     /** Consome o evento (a tela já abriu o link). */
     fun consumeOpenWhatsAppLink() {
         _openWhatsAppLink.value = null
+    }
+
+    /** Consome a mensagem de erro (a tela já mostrou). */
+    fun consumeWhatsappLinkError() {
+        _whatsappLinkError.value = null
     }
 
     private fun saveProfile(updatedProfile: RemoteProfile) {

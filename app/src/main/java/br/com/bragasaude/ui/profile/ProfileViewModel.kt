@@ -66,6 +66,14 @@ class ProfileViewModel @Inject constructor(
     fun loadProfile() {
         val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
         viewModelScope.launch {
+            // Puxa o perfil do backend: e dele que vem o segredo TOTP do vínculo
+            // de WhatsApp (a fonte da verdade, D55). Sem isso, uma conta já
+            // logada que tinha segredo nulo no Room continua sem ele — o botão
+            // "Vincular meu WhatsApp" abre a conversa.
+            try {
+                repository.syncProfile(userId)
+            } catch (_: Exception) { }
+
             repository.getProfile(userId).collectLatest { entity ->
                 _profile.value = entity?.toRemote()
                 _customPhotoUri.value = entity?.customPhotoUri
@@ -353,17 +361,47 @@ class ProfileViewModel @Inject constructor(
     private val _openWhatsAppLink = MutableStateFlow<String?>(null)
     val openWhatsAppLinkEvent = _openWhatsAppLink.asStateFlow()
 
-    /** Abre o WhatsApp com o código TOTP atual pronto para enviar. */
+    // Mensagem de feedback para o usuário quando o botão não consegue abrir o
+    // link (antes o botão era mudo — "sem ação alguma").
+    private val _whatsappLinkError = MutableStateFlow<String?>(null)
+    val whatsappLinkError = _whatsappLinkError.asStateFlow()
+
+    /**
+     * Abre o WhatsApp com a mensagem de vínculo pronta (código TOTP atual).
+     *
+     * Se o segredo ainda não chegou (perfil do backend não sincronizou), não
+     * fica mudo: avisa o usuário e dispara a sincronização — o retry fica fácil
+     * (basta tocar de novo).
+     */
     fun openWhatsAppLink(businessPhone: String = "5511967808252") {
-        val secret = _profile.value?.whatsappTotpSecret
-        if (secret.isNullOrBlank()) return
+        val profile = _profile.value
+        val secret = profile?.whatsappTotpSecret
+        if (secret.isNullOrBlank()) {
+            _whatsappLinkError.value =
+                "Seu vínculo ainda não está pronto. Aguarde um segundo e toque novamente."
+            // Dispara a sincronização que traz o segredo do backend.
+            val userId = auth.currentUser?.uid
+                ?: "00000000-0000-0000-0000-000000000000"
+            viewModelScope.launch {
+                try {
+                    repository.syncProfile(userId)
+                } catch (_: Exception) { }
+            }
+            return
+        }
+        _whatsappLinkError.value = null
         val code = WhatsAppLinkTotp.currentCode(secret)
-        val text = Uri.encode("Vincular Braga Saúde $code")
+        val text = Uri.encode("Olá Braga, eu desejo vincular meu número a minha conta. Esta é minha credencial: $code")
         _openWhatsAppLink.value = "https://wa.me/$businessPhone?text=$text"
     }
 
     /** Consome o evento (a tela já abriu o link). */
     fun consumeOpenWhatsAppLink() {
         _openWhatsAppLink.value = null
+    }
+
+    /** Consome a mensagem de erro (a tela já mostrou). */
+    fun consumeWhatsappLinkError() {
+        _whatsappLinkError.value = null
     }
 }
