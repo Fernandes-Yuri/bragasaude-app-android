@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.local.ProfileEntity
 import br.com.bragasaude.data.local.ExamItemEntity
@@ -293,7 +293,7 @@ object NutritionSuggestionEngine {
     private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
     private fun FoodEntity.toSuggestedOption(defaultBenefit: String, isPantry: Boolean = false): SuggestedFoodOption {
-        val pantryBadge = if (isPantry) "🏷️ Na sua despensa • " else ""
+        val pantryBadge = if (isPantry) "Na sua despensa • " else ""
         return SuggestedFoodOption(
             foodId = remoteId,
             name = name,

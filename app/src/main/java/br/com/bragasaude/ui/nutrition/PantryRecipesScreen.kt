@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.nutrition
+package br.com.bragasaude.ui.nutrition
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -463,7 +463,7 @@ private fun IngredientRow(
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = color,
-                fontSize = 11.sp
+                fontSize = 12.sp
             )
         }
         Spacer(Modifier.width(10.dp))

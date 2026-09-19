@@ -106,7 +106,7 @@ fun FamilyConnectScreen(
                             ) {
                                 Text(
                                     text = if (unreadCount > 9) "9+" else unreadCount.toString(),
-                                    fontSize = 10.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
@@ -634,10 +634,10 @@ private fun InviteHistoryItem(
                     Text(
                         text = when (binding.status) {
                             "ACTIVE" -> "✓"
-                            "PENDING" -> "⏳"
-                            "EXPIRED" -> "✖"
-                            "REVOKED" -> "🚫"
-                            else -> "?"
+                            "PENDING" -> "Aguardando"
+                            "EXPIRED" -> "Expirado"
+                            "REVOKED" -> "Revogado"
+                            else -> "—"
                         },
                         fontSize = 18.sp
                     )

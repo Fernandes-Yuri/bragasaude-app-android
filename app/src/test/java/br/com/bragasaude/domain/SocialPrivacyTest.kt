@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import org.junit.Test
 import org.junit.Assert.assertFalse
@@ -7,10 +7,10 @@ class SocialPrivacyTest {
 
     // Lista de frases reais que o sistema pode gerar (hardcoded para teste)
     private val generatedPosts = listOf(
-        "Fulano bateu a meta de passos hoje! 👣",
-        "conquistou um novo marco: Hidratação de Ouro! 🎊",
-        "subiu para o Nível 3! Parabéns pela dedicação! 🚀",
-        "completou uma sequência de 7 dias se cuidando! 🔥"
+        "Fulano bateu a meta de passos hoje!",
+        "conquistou um novo marco: Hidratação de Ouro!",
+        "subiu para o Nível 3! Parabéns pela dedicação!",
+        "completou uma sequência de 7 dias se cuidando!"
     )
 
     // Regex para detectar dados clínicos identificáveis

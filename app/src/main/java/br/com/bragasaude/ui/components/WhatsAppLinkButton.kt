@@ -74,7 +74,7 @@ fun WhatsAppLinkButton(
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ) {
             Text(
-                "Assim que seu cadastro for concluído, liberamos o vínculo do WhatsApp aqui. 💚",
+                "Assim que seu cadastro for concluído, liberamos o vínculo do WhatsApp aqui.",
                 modifier = Modifier.padding(16.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -161,7 +161,7 @@ fun FamilyNotesCard(
                         "Visíveis por 24 horas",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -467,7 +467,7 @@ private fun FamilyMessageItem(
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            fontSize = 11.sp
+                            fontSize = 12.sp
                         )
                     }
                 }
@@ -479,7 +479,7 @@ private fun FamilyMessageItem(
                     formatMessageDate(message.sentAt),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    fontSize = 11.sp
+                    fontSize = 12.sp
                 )
             }
 
@@ -497,7 +497,7 @@ private fun FamilyMessageItem(
                         "Nova mensagem",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }

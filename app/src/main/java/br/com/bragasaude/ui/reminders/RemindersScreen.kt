@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.reminders
+package br.com.bragasaude.ui.reminders
 
 import android.content.Intent
 import android.provider.CalendarContract
@@ -225,11 +225,11 @@ fun MedicationCard(
                 Row {
                     IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, contentDescription = "Editar medicamento") }
                     if (!isTaken) {
-                        IconButton(onClick = onSyncCalendar, modifier = Modifier.size(32.dp)) {
+                        IconButton(onClick = onSyncCalendar, modifier = Modifier.size(44.dp)) {
                             Icon(Icons.Default.CalendarMonth, contentDescription = "Agenda", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                         }
                     }
-                    IconButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.size(44.dp)) {
                         Icon(Icons.Default.DeleteOutline, contentDescription = "Remover", tint = Color.Gray.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
                     }
                 }

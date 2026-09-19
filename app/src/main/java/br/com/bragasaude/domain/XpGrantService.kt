@@ -69,7 +69,7 @@ class XpGrantService @Inject constructor(
             .mapNotNull { runCatching { GamificationActionType.valueOf(it) }.getOrNull() }
             .toSet()
         if (!GamificationEngine.canAwardDailyAction(action, awardedToday)) {
-            return@withLock denied(action, "Você já pontuou por isso hoje 😉")
+            return@withLock denied(action, "Você já pontuou por isso hoje.")
         }
 
         // ---- [R1] Streak ----

@@ -332,7 +332,7 @@ fun OrbChatContent(
                         }
                     }
                     item { Button(onClick = onNew, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00897B))) { Text("Nova conversa") } }
-                    if (state.conversations.isEmpty()) item { Text("Bom dia! 👋 Comece uma conversa com o Braga sobre sua rotina de saúde.", color = Color(0xFF64748B)) }
+                    if (state.conversations.isEmpty()) item { Text("Bom dia! Comece uma conversa com o Braga sobre sua rotina de saúde.", color = Color(0xFF64748B)) }
                     items(state.conversations, key = { it.id }) { conversation ->
                         OutlinedCard(onClick = { onOpenConversation(conversation.id) }, modifier = Modifier.fillMaxWidth()) {
                             Row(
@@ -456,7 +456,7 @@ fun ChatBubble(message: ChatMessage, textScale: Float = 1f, speaking: Boolean = 
                                     Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF00897B)))
                                     Spacer(Modifier.width(6.dp))
                                 }
-                                Text(if (user) "Você" else "🩺 Braga", style = MaterialTheme.typography.labelMedium, color = if (user) Color.White else Color(0xFF1E293B))
+                                Text(if (user) "Você" else "Braga", style = MaterialTheme.typography.labelMedium, color = if (user) Color.White else Color(0xFF1E293B))
                             }
                             Text(linkedText(message.text), color = if (user) Color.White else Color(0xFF1E293B), fontSize = (17 * textScale).sp,
                                 modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()))
@@ -685,7 +685,7 @@ fun ChatTextSizeDialog(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF00897B)))
                             Spacer(Modifier.width(6.dp))
-                            Text("🩺 Braga", style = MaterialTheme.typography.labelSmall, color = Color(0xFF00897B), fontWeight = FontWeight.Bold)
+                            Text("Braga", style = MaterialTheme.typography.labelSmall, color = Color(0xFF00897B), fontWeight = FontWeight.Bold)
                         }
                         Spacer(Modifier.height(6.dp))
                         Text(

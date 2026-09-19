@@ -356,7 +356,7 @@ private fun ChatBubble(
                     Text(
                         formatMessageDate(message.sentAt),
                         style = MaterialTheme.typography.labelSmall,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         color = if (isFromMe) BragaTextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

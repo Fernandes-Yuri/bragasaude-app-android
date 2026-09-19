@@ -172,13 +172,13 @@ fun FeedbackScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FeedbackCategoryChip(
-                        label = "💡 Ideia / Sugestão",
+                        label = "Ideia / Sugestão",
                         selected = category == "sugestao",
                         onClick = { viewModel.setCategory("sugestao") },
                         modifier = Modifier.weight(1f)
                     )
                     FeedbackCategoryChip(
-                        label = "🐛 Problema / Bug",
+                        label = "Problema / Bug",
                         selected = category == "bug",
                         onClick = { viewModel.setCategory("bug") },
                         modifier = Modifier.weight(1f)
@@ -190,7 +190,7 @@ fun FeedbackScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FeedbackCategoryChip(
-                        label = "⏱️ Passos / Sensores",
+                        label = "Passos / Sensores",
                         selected = category == "passos",
                         onClick = { viewModel.setCategory("passos") },
                         modifier = Modifier.weight(1f)
@@ -335,7 +335,7 @@ fun FeedbackScreen(
                                     Spacer(Modifier.width(12.dp))
                                     Column {
                                         Text("Print anexado com sucesso", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                                        Text("Pronto para envio", fontSize = 11.sp, color = Color.Gray)
+                                        Text("Pronto para envio", fontSize = 12.sp, color = Color.Gray)
                                     }
                                 }
 
@@ -378,7 +378,7 @@ fun FeedbackScreen(
                         }
                         Text(
                             "CPFs e telefones ditados são mascarados automaticamente antes do salvamento. Modelo do aparelho, versão do Android e status de passos são anexados para diagnóstico.",
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

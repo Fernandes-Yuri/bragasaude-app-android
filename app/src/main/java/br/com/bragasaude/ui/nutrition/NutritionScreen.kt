@@ -854,7 +854,7 @@ fun FunctionalSuggestionGroupCard(
                     text = group.disclaimer,
                     modifier = Modifier.padding(8.dp),
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.outline,
                     lineHeight = 14.sp
                 )

@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.nutrition
+package br.com.bragasaude.ui.nutrition
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
@@ -164,7 +164,7 @@ fun GroceryListBottomSheet(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "🏷️ Na Despensa",
+                            "Na Despensa",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color(0xFF2E7D32)
                         )
