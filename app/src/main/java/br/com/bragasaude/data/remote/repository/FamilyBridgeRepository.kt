@@ -17,6 +17,7 @@ import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.sync.SyncScheduler
 import br.com.bragasaude.data.util.parseDate
 import br.com.bragasaude.ui.util.FamilyNotificationService
+import br.com.bragasaude.ui.util.NotificationHelper
 import com.google.firebase.auth.FirebaseAuth
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -490,26 +491,61 @@ suspend fun sendMessageBidirectional(
             updatedAt = System.currentTimeMillis()
         )
         familyDao.insertConsultation(consultation)
+        // Lembretes 24h e 1h antes (doc 10 §2.4).
+        NotificationHelper.scheduleConsultationReminders(appContext, consultation.id, title, scheduledDate)
+        // Registra no gateway: é de lá que sai o push para os cuidadores (doc 10 §2.2).
+        try {
+            val iso = java.time.Instant.ofEpochMilli(scheduledDate).toString()
+            apiClient.createConsultation(title, iso)
+        } catch (e: Exception) {
+            android.util.Log.w("FamilyBridgeRepo", "Consulta local criada, mas falhou o registro no gateway: ${e.message}")
+        }
         return consultation
     }
 
     suspend fun acceptConsultation(consultationId: String, caregiverUserId: String): Boolean {
         familyDao.updateConsultationStatus(consultationId, "ACCEPTED", System.currentTimeMillis())
+        // Aceitar no gateway dispara o push ao paciente (doc 10 §2.2). Best-effort:
+        // a ação local já foi registrada; falha de rede não desfaz o aceite.
+        try {
+            apiClient.acceptConsultation(consultationId, null, null)
+        } catch (e: Exception) {
+            android.util.Log.w("FamilyBridgeRepo", "Aceite local ok, mas falhou no gateway: ${e.message}")
+        }
         return true
     }
 
     suspend fun rejectConsultation(consultationId: String, userId: String): Boolean {
         familyDao.updateConsultationStatus(consultationId, "REJECTED", System.currentTimeMillis())
+        // Consulta recusada não deve mais lembrar (doc 10 §2.4).
+        NotificationHelper.cancelConsultationReminders(appContext, consultationId)
+        try {
+            apiClient.rejectConsultation(consultationId)
+        } catch (e: Exception) {
+            android.util.Log.w("FamilyBridgeRepo", "Recusa local ok, mas falhou no gateway: ${e.message}")
+        }
         return true
     }
 
     suspend fun completeConsultation(consultationId: String, userId: String): Boolean {
         familyDao.updateConsultationStatus(consultationId, "COMPLETED", System.currentTimeMillis())
+        NotificationHelper.cancelConsultationReminders(appContext, consultationId)
+        try {
+            apiClient.completeConsultation(consultationId)
+        } catch (e: Exception) {
+            android.util.Log.w("FamilyBridgeRepo", "Conclusão local ok, mas falhou no gateway: ${e.message}")
+        }
         return true
     }
 
     suspend fun cancelConsultation(consultationId: String, userId: String): Boolean {
         familyDao.updateConsultationStatus(consultationId, "CANCELLED", System.currentTimeMillis())
+        NotificationHelper.cancelConsultationReminders(appContext, consultationId)
+        try {
+            apiClient.cancelConsultation(consultationId)
+        } catch (e: Exception) {
+            android.util.Log.w("FamilyBridgeRepo", "Cancelamento local ok, mas falhou no gateway: ${e.message}")
+        }
         return true
     }
 

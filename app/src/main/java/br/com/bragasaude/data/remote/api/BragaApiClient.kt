@@ -608,6 +608,75 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    // ==================== CONSULTAS (doc 10 §2.2) ====================
+
+    /**
+     * Cria uma consulta no gateway. Retorna o id remoto, ou null em falha.
+     * O push para os cuidadores ativos é disparado pelo servidor.
+     */
+    suspend fun createConsultation(title: String, scheduledDateIso: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val res = postJson("$baseUrl/api/consultation/create", JSONObject().apply {
+                put("title", title)
+                put("scheduledDate", scheduledDateIso)
+            })
+            res?.optString("id", null)
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao criar consulta: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun acceptConsultation(consultationId: String, caregiverName: String?, caregiverRelation: String?): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val res = postJson("$baseUrl/api/consultation/accept", JSONObject().apply {
+                put("consultationId", consultationId)
+                if (!caregiverName.isNullOrBlank()) put("caregiverName", caregiverName)
+                if (!caregiverRelation.isNullOrBlank()) put("caregiverRelation", caregiverRelation)
+            })
+            res?.optString("status") == "success"
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao aceitar consulta: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun rejectConsultation(consultationId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val res = postJson("$baseUrl/api/consultation/reject", JSONObject().apply {
+                put("consultationId", consultationId)
+            })
+            res?.optString("status") == "success"
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao recusar consulta: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun completeConsultation(consultationId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val res = postJson("$baseUrl/api/consultation/complete", JSONObject().apply {
+                put("consultationId", consultationId)
+            })
+            res?.optString("status") == "success"
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao concluir consulta: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun cancelConsultation(consultationId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val res = postJson("$baseUrl/api/consultation/cancel", JSONObject().apply {
+                put("consultationId", consultationId)
+            })
+            res?.optString("status") == "success"
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao cancelar consulta: ${e.message}")
+            false
+        }
+    }
+
     // ==================== MEDICAMENTOS ====================
 
     suspend fun syncMedication(m: MedicationEntity): String? = withContext(Dispatchers.IO) {
