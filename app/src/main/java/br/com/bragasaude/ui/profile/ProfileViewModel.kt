@@ -1,5 +1,6 @@
 package br.com.bragasaude.ui.profile
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.local.BragaDatabase
@@ -7,6 +8,7 @@ import br.com.bragasaude.data.remote.model.RemoteProfile
 import br.com.bragasaude.data.remote.repository.FeedbackRepository
 import br.com.bragasaude.data.remote.repository.ProfileRepository
 import br.com.bragasaude.data.remote.api.BragaApiClient
+import br.com.bragasaude.data.util.WhatsAppLinkTotp
 import br.com.bragasaude.data.util.toEntity
 import br.com.bragasaude.data.util.toRemote
 import com.google.firebase.auth.FirebaseAuth
@@ -43,22 +45,6 @@ class ProfileViewModel @Inject constructor(
     // Foto customizada escolhida da galeria (persistida localmente pelo DAO)
     private val _customPhotoUri = MutableStateFlow<String?>(null)
     val customPhotoUri = _customPhotoUri.asStateFlow()
-
-    // Estado do vínculo WhatsApp via OTP
-    private val _phoneLinkSent = MutableStateFlow(false)
-    val phoneLinkSent = _phoneLinkSent.asStateFlow()
-
-    private val _phoneLinkWa = MutableStateFlow<String?>(null)
-    val phoneLinkWa = _phoneLinkWa.asStateFlow()
-
-    private val _phoneLinkLoading = MutableStateFlow(false)
-    val phoneLinkLoading = _phoneLinkLoading.asStateFlow()
-
-    private val _phoneLinkError = MutableStateFlow<String?>(null)
-    val phoneLinkError = _phoneLinkError.asStateFlow()
-
-    private val _phoneLinkSuccess = MutableStateFlow(false)
-    val phoneLinkSuccess = _phoneLinkSuccess.asStateFlow()
 
     init {
         val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
@@ -360,57 +346,24 @@ class ProfileViewModel @Inject constructor(
     // Alias retrocompatível
     fun resetProfile(onComplete: () -> Unit) = deleteProfile(onComplete)
 
-    // --- Vinculação WhatsApp via OTP ---
+    // --- Vínculo de WhatsApp (fluxo TOTP temporário) ---
+    // O fluxo antigo de OTP por texto foi removido: a Meta não aprova template
+    // e o código nunca chegava. Agora é só abrir o WhatsApp com o código atual.
 
-    fun resetPhoneLinkState() {
-        _phoneLinkSent.value = false
-        _phoneLinkWa.value = null
-        _phoneLinkLoading.value = false
-        _phoneLinkError.value = null
-        _phoneLinkSuccess.value = false
+    private val _openWhatsAppLink = MutableStateFlow<String?>(null)
+    val openWhatsAppLinkEvent = _openWhatsAppLink.asStateFlow()
+
+    /** Abre o WhatsApp com o código TOTP atual pronto para enviar. */
+    fun openWhatsAppLink(businessPhone: String = "5511967808252") {
+        val secret = _profile.value?.whatsappTotpSecret
+        if (secret.isNullOrBlank()) return
+        val code = WhatsAppLinkTotp.currentCode(secret)
+        val text = Uri.encode("Vincular Braga Saúde $code")
+        _openWhatsAppLink.value = "https://wa.me/$businessPhone?text=$text"
     }
 
-    fun sendPhoneLinkOtp(phoneNumber: String) {
-        viewModelScope.launch {
-            _phoneLinkLoading.value = true
-            _phoneLinkError.value = null
-            _phoneLinkSent.value = false
-            _phoneLinkWa.value = null
-            val result = apiClient.sendOtp(phoneNumber, purpose = "PHONE_LINKING", channel = "WHATSAPP")
-            _phoneLinkLoading.value = false
-            result.fold(
-                onSuccess = {
-                    _phoneLinkSent.value = true
-                    _phoneLinkWa.value = it.waLink
-                },
-                onFailure = {
-                    _phoneLinkError.value = it.message ?: "Erro ao enviar código via WhatsApp"
-                }
-            )
-        }
-    }
-
-    fun verifyPhoneLinkOtp(phoneNumber: String, code: String) {
-        viewModelScope.launch {
-            _phoneLinkLoading.value = true
-            _phoneLinkError.value = null
-            val result = apiClient.verifyOtp(phoneNumber, code, purpose = "PHONE_LINKING")
-            _phoneLinkLoading.value = false
-            result.fold(
-                onSuccess = {
-                    val userId = auth.currentUser?.uid ?: "00000000-0000-0000-0000-000000000000"
-                    val current = _profile.value ?: repository.getProfileOneShotLocal(userId)?.toRemote()
-                    if (current != null) {
-                        val updated = current.copy(phone = phoneNumber)
-                        repository.saveProfile(updated)
-                        _profile.value = updated
-                    }
-                    _phoneLinkSuccess.value = true
-                },
-                onFailure = {
-                    _phoneLinkError.value = it.message ?: "Código de verificação incorreto ou expirado"
-                }
-            )
-        }
+    /** Consome o evento (a tela já abriu o link). */
+    fun consumeOpenWhatsAppLink() {
+        _openWhatsAppLink.value = null
     }
 }

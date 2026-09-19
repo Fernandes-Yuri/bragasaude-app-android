@@ -19,7 +19,6 @@ import br.com.bragasaude.domain.XpGrantService
 import br.com.bragasaude.ui.auth.AppSessionStatus
 import br.com.bragasaude.ui.auth.AuthViewModel
 import br.com.bragasaude.ui.auth.LoginScreen
-import br.com.bragasaude.ui.components.PhoneLinkDialog
 import br.com.bragasaude.ui.components.RiskNotificationDialog
 import br.com.bragasaude.ui.legal.PrivacyPolicyScreen
 import br.com.bragasaude.ui.legal.TermsOfUseScreen
@@ -287,25 +286,41 @@ fun AppContent(activity: MainActivity) {
                     )
                 }
 
-                // Sugestão de vinculação WhatsApp para usuários Google
+                // Sugestão de vinculação WhatsApp para usuários Google.
+                // Fluxo TOTP: abre o WhatsApp com o código pronto (sem OTP por texto).
                 if (suggestPhoneLink) {
-                    val phoneLinkSent by authViewModel.phoneLinkSent.collectAsState()
-                    val phoneLinkWa by authViewModel.phoneLinkWa.collectAsState()
-                    PhoneLinkDialog(
-                        onDismiss = { authViewModel.dismissPhoneLinkSuggestion() },
-                        onSendOtp = { phone -> authViewModel.sendPhoneLinkOtp(phone) },
-                        onVerifyOtp = { phone, code -> authViewModel.verifyPhoneLinkOtp(phone, code) },
-                        codeSent = phoneLinkSent,
-                        waLink = phoneLinkWa,
-                        onOpenWhatsApp = { link ->
-                            try {
+                    val waLink by authViewModel.openWhatsAppLinkEvent.collectAsState()
+                    LaunchedEffect(waLink) {
+                        waLink?.let { url ->
+                            runCatching {
                                 context.startActivity(
                                     android.content.Intent(
                                         android.content.Intent.ACTION_VIEW,
-                                        android.net.Uri.parse(link)
+                                        android.net.Uri.parse(url)
                                     ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
                                 )
-                            } catch (_: Exception) { }
+                            }
+                            authViewModel.consumeOpenWhatsAppLink()
+                        }
+                    }
+                    AlertDialog(
+                        onDismissRequest = { authViewModel.dismissPhoneLinkSuggestion() },
+                        title = { Text("Vincular seu WhatsApp") },
+                        text = {
+                            Text(
+                                "Para receber lembretes e avisos no WhatsApp, vamos abrir o " +
+                                "WhatsApp com uma mensagem pronta. É só enviar."
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { authViewModel.openWhatsAppLink() }) {
+                                Text("Abrir WhatsApp")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { authViewModel.dismissPhoneLinkSuggestion() }) {
+                                Text("Agora não")
+                            }
                         }
                     )
                 }

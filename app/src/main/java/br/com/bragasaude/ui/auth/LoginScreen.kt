@@ -43,12 +43,8 @@ fun LoginScreen(
     val scope = rememberCoroutineScope()
     val credentialManager = CredentialManager.create(context)
     val authState by viewModel.authState.collectAsState()
-    val suggestPhoneLink by viewModel.suggestPhoneLink.collectAsState()
     var emailMode by remember { mutableStateOf("login") } // "login", "signup" ou "forgot"
     var googleAccountConflictMessage by remember { mutableStateOf<String?>(null) }
-    var phoneLinkNumber by remember { mutableStateOf("") }
-    var phoneLinkOtpCode by remember { mutableStateOf("") }
-    var phoneLinkOtpSent by remember { mutableStateOf(false) }
 
     // Observador de Erros e Mudanças de Estado
     LaunchedEffect(authState) {
@@ -85,16 +81,6 @@ fun LoginScreen(
                 ).show()
                 viewModel.clearAuthState()
             }
-            is AuthViewModel.AuthState.PhoneLinkedSuccess -> {
-                Toast.makeText(
-                    context,
-                    "WhatsApp vinculado com sucesso ao seu perfil!",
-                    Toast.LENGTH_SHORT
-                ).show()
-                phoneLinkOtpSent = false
-                phoneLinkOtpCode = ""
-                viewModel.clearAuthState()
-            }
             is AuthViewModel.AuthState.EmailVerificationSent -> {
                 Toast.makeText(
                     context,
@@ -120,16 +106,11 @@ fun LoginScreen(
                 viewModel.clearAuthState()
             }
             is AuthViewModel.AuthState.OtpSent -> {
-                val canalNome = if (state.channel == "WHATSAPP") "WhatsApp" else "e-mail"
                 Toast.makeText(
                     context,
-                    if (state.waLink != null) "Abra a conversa no WhatsApp para receber o código!"
-                    else "Código de verificação enviado para seu $canalNome!",
+                    "Código de verificação enviado para seu e-mail!",
                     Toast.LENGTH_SHORT
                 ).show()
-                if (suggestPhoneLink) {
-                    phoneLinkOtpSent = true
-                }
             }
             is AuthViewModel.AuthState.OtpVerified -> {
                 Toast.makeText(
@@ -196,8 +177,6 @@ fun LoginScreen(
                 var email by remember { mutableStateOf("") }
                 var password by remember { mutableStateOf("") }
                 var confirmPassword by remember { mutableStateOf("") }
-                var phoneNumber by remember { mutableStateOf("") }
-                var channel by remember { mutableStateOf("EMAIL") }
                 var signupOtpCode by remember { mutableStateOf("") }
                 var signupOtpVerified by remember { mutableStateOf(false) }
 
@@ -382,8 +361,6 @@ fun LoginScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         if (emailMode == "signup" && authState is AuthViewModel.AuthState.OtpSent) {
-                            val sentChannel = (authState as AuthViewModel.AuthState.OtpSent).channel
-                            val sentWaLink = (authState as AuthViewModel.AuthState.OtpSent).waLink
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(16.dp),
@@ -403,23 +380,10 @@ fun LoginScreen(
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                     Text(
-                                        text = if (sentChannel == "WHATSAPP")
-                                            "Digite o código de 6 dígitos enviado para seu WhatsApp ($phoneNumber):"
-                                        else
-                                            "Digite o código de 6 dígitos enviado para seu e-mail ($email):",
+                                        text = "Digite o código de 6 dígitos enviado para seu e-mail ($email):",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    if (sentWaLink != null) {
-                                        val uriHandler = LocalUriHandler.current
-                                        OutlinedButton(
-                                            onClick = { uriHandler.openUri(sentWaLink) },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(14.dp)
-                                        ) {
-                                            Text("Abrir conversa no WhatsApp")
-                                        }
-                                    }
                                     OutlinedTextField(
                                         value = signupOtpCode,
                                         onValueChange = { if (it.length <= 6) signupOtpCode = it.filter { c -> c.isDigit() } },
@@ -449,7 +413,7 @@ fun LoginScreen(
                                     ) {
                                         TextButton(
                                             onClick = {
-                                                viewModel.signUpWithEmail(email.trim(), password, phoneNumber.trim(), channel)
+                                                viewModel.signUpWithEmail(email.trim(), password)
                                             }
                                         ) {
                                             Text("Reenviar código", color = MaterialTheme.colorScheme.primary)
@@ -517,53 +481,15 @@ fun LoginScreen(
                                             color = MaterialTheme.colorScheme.primary
                                         )
                                         Text(
-                                            text = "Escolha 1 canal para receber seu código OTP de 6 dígitos e ativar a conta:",
+                                            text = "Vamos enviar um código de 6 dígitos para o seu e-mail para ativar a conta:",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                        ) {
-                                            FilterChip(
-                                                selected = channel == "WHATSAPP",
-                                                onClick = { channel = "WHATSAPP" },
-                                                label = { Text("💬 Via WhatsApp", fontWeight = FontWeight.Bold) },
-                                                shape = RoundedCornerShape(12.dp),
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            FilterChip(
-                                                selected = channel == "EMAIL",
-                                                onClick = { channel = "EMAIL" },
-                                                label = { Text("📧 Via E-mail", fontWeight = FontWeight.Bold) },
-                                                shape = RoundedCornerShape(12.dp),
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                        }
-
-                                        if (channel == "WHATSAPP") {
-                                            OutlinedTextField(
-                                                value = phoneNumber,
-                                                onValueChange = { phoneNumber = HealthFormatter.formatPhoneInput(it) },
-                                                label = { Text("Número do WhatsApp com DDD") },
-                                                placeholder = { Text("(11) 99999-8888") },
-                                                singleLine = true,
-                                                modifier = Modifier.fillMaxWidth(),
-                                                shape = RoundedCornerShape(14.dp),
-                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
-                                            )
-                                            Text(
-                                                text = "👉 O código de 6 dígitos será enviado no seu WhatsApp.",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        } else {
-                                            Text(
-                                                text = "👉 O código de 6 dígitos será enviado para o e-mail digitado acima.",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
+                                        Text(
+                                            text = "📧 O código de 6 dígitos será enviado para o e-mail digitado acima.",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
                                     }
                                 }
                             }
@@ -583,8 +509,7 @@ fun LoginScreen(
                                 email.isNotBlank() &&
                                 password.isNotBlank() &&
                                 password.length >= 6 &&
-                                password == confirmPassword &&
-                                (channel != "WHATSAPP" || phoneNumber.filter { it.isDigit() }.length >= 10)
+                                password == confirmPassword
 
                             val isLoginValid = emailMode == "login" && email.isNotBlank() && password.isNotBlank()
 
@@ -594,7 +519,7 @@ fun LoginScreen(
                                     if (emailMode == "login") {
                                         viewModel.signInWithEmail(email.trim(), password)
                                     } else {
-                                        viewModel.signUpWithEmail(email.trim(), password, phoneNumber.trim(), channel)
+                                        viewModel.signUpWithEmail(email.trim(), password)
                                     }
                                 },
                                 enabled = if (emailMode == "login") isLoginValid else isSignupValid,
