@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.local.LeagueDao
 import br.com.bragasaude.data.local.LeagueMembershipEntity
@@ -6,6 +6,9 @@ import br.com.bragasaude.data.local.ProfileDao
 import br.com.bragasaude.data.local.XpAwardDao
 import br.com.bragasaude.data.local.XpAwardEntity
 import br.com.bragasaude.data.remote.api.BragaApiClient
+import br.com.bragasaude.ui.util.NotificationHelper
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -20,6 +23,7 @@ import javax.inject.Singleton
 
 @Singleton
 class XpGrantService @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val profileDao: ProfileDao,
     private val xpAwardDao: XpAwardDao,
     private val leagueDao: LeagueDao,
@@ -129,6 +133,17 @@ class XpGrantService @Inject constructor(
             reason = ""
         )
         _xpEvents.tryEmit(result)
+
+        // doc 10 §4.2: level-up com app em background. O XpToastHost só mostra a
+        // Snackbar com a UI aberta; o SharedFlow não persiste, e o evento seria
+        // descartado. A notificação local garante que a conquista não se perca.
+        if (leveledUp) {
+            try {
+                NotificationHelper.sendLevelUpNotification(appContext, newLevel)
+            } catch (e: Exception) {
+                // best-effort: a concessão de XP já foi gravada.
+            }
+        }
         result
     }
 

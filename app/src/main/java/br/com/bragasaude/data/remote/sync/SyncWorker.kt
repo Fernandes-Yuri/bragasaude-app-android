@@ -6,6 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.api.BragaApiClient
+import br.com.bragasaude.ui.util.NotificationHelper
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
@@ -152,6 +153,19 @@ class SyncWorker @AssistedInject constructor(
             val res = apiClient.syncFeedback(json)
             if (res != null) {
                 feedbackDao.markAsSynced(f.id)
+            }
+        }
+
+        // doc 10 §4.1: pull das respostas da equipe. Aparelho em background também
+        // recebe — a notificação local é o canal de aviso de que responderam.
+        val replies = apiClient.getFeedbackReplies()
+        for (reply in replies) {
+            val body = reply.optString("body", "").takeIf { it.isNotBlank() } ?: continue
+            val author = reply.optString("author", "Suporte Braga Saúde")
+            try {
+                NotificationHelper.sendFeedbackReplyNotification(applicationContext, author, body)
+            } catch (e: Exception) {
+                android.util.Log.w("SyncWorker", "Falha ao notificar resposta de feedback: ${e.message}")
             }
         }
     }

@@ -13,6 +13,8 @@ object NotificationHelper {
     private const val CHANNEL_ID = "bragasaude_alerts"
     private const val CHANNEL_NAME = "Alertas do Braga Saúde"
     private const val NOTIFICATION_ID = 2001
+    private const val ID_LEVEL_UP = 2006
+    private const val ID_FEEDBACK_REPLY = 2007
 
     private const val HYDRATION_CHANNEL_ID = "bragasaude_hydration"
     private const val HYDRATION_CHANNEL_NAME = "Lembretes de Hidratação"
@@ -386,6 +388,105 @@ object NotificationHelper {
             val wm = androidx.work.WorkManager.getInstance(context)
             wm.cancelUniqueWork("braga_consultation_reminder_${consultationId}_24h")
             wm.cancelUniqueWork("braga_consultation_reminder_${consultationId}_1h")
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Conquista de level-up com o app em background (doc 10 §4.2).
+     *
+     * O XpToastHost só mostra a Snackbar com a UI aberta; o SharedFlow dele não
+     * persiste, então a conquista se perderia. Canal de alertas (IMPORTANCE_HIGH).
+     */
+    fun sendLevelUpNotification(context: Context, newLevel: Int) {
+        try {
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    CHANNEL_NAME,
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Avisos de bem-estar, cuidados e conquistas"
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("OPEN_GAMIFICATION", true)
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                ID_LEVEL_UP,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val text = "Parabéns! Você subiu para o Nível $newLevel. Continue cuidando de você!"
+
+            val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_menu_add)
+                .setContentTitle("Nova Conquista")
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+
+            notificationManager.notify(ID_LEVEL_UP, builder.build())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Resposta da equipe a um feedback do usuário (doc 10 §4.1).
+     *
+     * Disparada pelo SyncWorker no pull incremental — funciona com o app em
+     * background. Canal de alertas, prioridade padrão (não é emergência).
+     */
+    fun sendFeedbackReplyNotification(context: Context, author: String, body: String) {
+        try {
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    CHANNEL_NAME,
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Avisos de bem-estar, cuidados e conquistas"
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("OPEN_FEEDBACK", true)
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                ID_FEEDBACK_REPLY,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val title = "Resposta do $author"
+            val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_menu_send)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+
+            notificationManager.notify(ID_FEEDBACK_REPLY, builder.build())
         } catch (e: Exception) {
             e.printStackTrace()
         }
