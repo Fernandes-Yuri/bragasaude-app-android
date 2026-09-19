@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.util
+package br.com.bragasaude.ui.util
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -180,6 +180,45 @@ object FamilyNotificationService {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(ID_HYDRATION_REMINDER, builder.build())
+    }
+
+    /**
+     * Aviso de AUTOCUIDADO para o próprio paciente (doc 10 §3.4).
+     *
+     * Antes a notificação local de sinal vital crítico era escrita para o cuidador
+     * ("A pressão de Dona Maria foi registrada...") e exibida no aparelho de quem
+     * mediu — o paciente lia um texto sobre si mesmo em terceira pessoa. O cuidador
+     * continua sendo avisado pelo push do servidor (VitalsRepository ->
+     * /api/family/health-alert); a notificação LOCAL fica com o autocuidado.
+     */
+    fun notifyPatientSelfCareAlert(
+        context: Context,
+        alertTitle: String,
+        alertMessage: String
+    ) {
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            ID_CRITICAL_ALERT,
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("SHOW_CRITICAL_ALERT", true)
+                putExtra("ALERT_MESSAGE", alertMessage)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
+            .setSmallIcon(R.drawable.ic_shield_ecg)
+            .setContentTitle(alertTitle)
+            .setContentText(alertMessage)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(alertMessage))
+
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(ID_CRITICAL_ALERT, builder.build())
     }
 
     /**

@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.R
 import android.app.NotificationChannel
@@ -7,6 +7,7 @@ import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import br.com.bragasaude.data.local.DailyMetricsEntity
+import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.model.*
 import br.com.bragasaude.data.remote.repository.*
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,7 +28,10 @@ class HealthEngine @Inject constructor(
     private val profileRepository: ProfileRepository,
     private val biometryRepository: BiometryRepository,
     private val riskManager: RiskManager,
-    private val auth: com.google.firebase.auth.FirebaseAuth
+    private val auth: com.google.firebase.auth.FirebaseAuth,
+    // doc 10 §3.3: exame crítico avisa o cuidador pelo mesmo caminho dos vitais.
+    private val apiClient: BragaApiClient,
+    private val familyDao: br.com.bragasaude.data.local.FamilyDao
 ) {
 
     private val CHANNEL_ID = "health_alerts_channel"
@@ -398,6 +402,9 @@ class HealthEngine @Inject constructor(
                     
                     if (!silent) {
                         showNotification(context.getString(R.string.exam_critical_alert), "${rec.message} ${rec.action}", NOTIFICATION_ID_EMERGENCY)
+                        // doc 10 §3.3: exame crítico avisa os cuidadores ativos,
+                        // pelo mesmo caminho do alerta de sinal vital.
+                        notifyCaregiversOfCriticalExam(userId, item.itemName, numVal, isLow)
                         conditions.add(RemoteDetectedCondition(
                             userId = userId,
                             conditionName = context.getString(if (isLow) R.string.observation_exam_low else R.string.observation_exam_high, item.itemName),
@@ -438,6 +445,39 @@ class HealthEngine @Inject constructor(
         }
 
         return AnalysisResult(alerts, recommendations.sortedByDescending { it.isEmergency }, emptyList(), conditions)
+    }
+
+    /**
+     * Avisa os cuidadores ativos sobre um exame laboratorial crítico (doc 10 §3.3).
+     *
+     * Mesmo caminho do alerta de sinal vital: /api/family/health-alert, que
+     * valida o vínculo no servidor e entrega o push FCM no aparelho do cuidador.
+     * Best-effort — a notificação local de autocuidado já foi ao paciente.
+     */
+    private suspend fun notifyCaregiversOfCriticalExam(
+        userId: String,
+        itemName: String,
+        value: Double,
+        isLow: Boolean
+    ) {
+        try {
+            val patientName = profileRepository.getProfile(userId).firstOrNull()?.fullName
+                ?: "Seu familiar"
+            val direction = if (isLow) "abaixo" else "acima"
+            val message = "Aviso de cuidado: O exame de $patientName ($itemName) " +
+                "veio $direction da faixa crítica: ${value}. Vale acompanhar com a equipe de saúde."
+
+            val bindings = familyDao.getActiveBindingsForPatient(userId).first()
+            for (binding in bindings) {
+                try {
+                    apiClient.sendCaregiverHealthAlert(userId, binding.caregiverUserId, message)
+                } catch (e: Exception) {
+                    android.util.Log.w("HealthEngine", "Falha ao avisar cuidador do exame crítico: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("HealthEngine", "Falha ao resolver destinatários do exame crítico: ${e.message}")
+        }
     }
 
     suspend fun analyzeActivityPatterns(userId: String, dailyMetrics: List<DailyMetricsEntity>): List<ActivityRecommendation> {

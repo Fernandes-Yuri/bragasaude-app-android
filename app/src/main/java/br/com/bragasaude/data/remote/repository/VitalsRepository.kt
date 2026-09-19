@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.repository
+package br.com.bragasaude.data.remote.repository
 
 import android.content.Context
 import br.com.bragasaude.data.local.*
@@ -171,8 +171,10 @@ class VitalsRepository @Inject constructor(
         val now = System.currentTimeMillis()
         val cooldownMs = CriticalVitalThresholds.ALERT_DEBOUNCE_MINUTES * 60 * 1000L
 
-        // Lista de alerts a disparar: pair(alertType, messageText)
-        val alertsToNotify = mutableListOf<Pair<String, String>>()
+        // Lista de alerts a disparar: triple(alertType, msg cuidador, msg autocuidado).
+        // doc 10 §3.4: a notificação LOCAL é de autocuidado (mesmo aparelho que mediu);
+        // o cuidador é avisado pelo push do servidor, não pela notificação local.
+        val alertsToNotify = mutableListOf<Triple<String, String, String>>()
 
         // Verificar PA Sistolica
         val sys = vital.systolicPressure
@@ -181,37 +183,52 @@ class VitalsRepository @Inject constructor(
             val severityLabel = if (sys >= 180) "Pressão bem acima da faixa habitual"
             else if (sys >= 160) "Pressão Muito Alta"
             else "Pressão Alta"
-            val msg = "Aviso de cuidado: A pressão de $patientName foi registrada como ${sys}/${dia ?: '?'}. $severityLabel. Vale conversar ou mandar uma mensagem para saber como ele(a) está."
-            alertsToNotify.add("CRITICAL_BP_SYSTOLIC:$patientId" to msg)
+            alertsToNotify.add(Triple(
+                "CRITICAL_BP_SYSTOLIC:$patientId",
+                "Aviso de cuidado: A pressão de $patientName foi registrada como ${sys}/${dia ?: '?'}. $severityLabel. Vale conversar ou mandar uma mensagem para saber como ele(a) está.",
+                "Sua pressão foi registrada como ${sys}/${dia ?: '?'} mmHg. $severityLabel. Se sentir dor de cabeça forte, tontura ou falta de ar, procure atendimento médico."
+            ))
         }
 
         // Verificar PA Diastolica
         if (dia != null && dia >= CriticalVitalThresholds.CRITICAL_DIASTOLIC && !(sys != null && sys >= CriticalVitalThresholds.CRITICAL_SYSTOLIC)) {
-            val msg = "Aviso de cuidado: A pressão diastólica de $patientName foi registrada como ${sys ?: '?'}/${dia} mmHg. Valor acima do esperado. Vale acompanhar com carinho."
-            alertsToNotify.add("CRITICAL_BP_DIASTOLIC:$patientId" to msg)
+            alertsToNotify.add(Triple(
+                "CRITICAL_BP_DIASTOLIC:$patientId",
+                "Aviso de cuidado: A pressão diastólica de $patientName foi registrada como ${sys ?: '?'}/${dia} mmHg. Valor acima do esperado. Vale acompanhar com carinho.",
+                "Sua pressão foi registrada como ${sys ?: '?'}/${dia} mmHg. Valor acima do esperado. Beba água, descanse e, se não melhorar, procure atendimento médico."
+            ))
         }
 
         // Verificar Glicose
         val glu = vital.glucoseLevel
         if (glu != null && glu > CriticalVitalThresholds.CRITICAL_GLUCOSE_HIGH) {
-            val msg = "Aviso de cuidado: A glicemia de $patientName foi registrada como ${glu} mg/dL. Valor acima da faixa esperada. Vale checar como ele(a) está se sentindo."
-            alertsToNotify.add("CRITICAL_GLUCOSE:$patientId" to msg)
+            alertsToNotify.add(Triple(
+                "CRITICAL_GLUCOSE:$patientId",
+                "Aviso de cuidado: A glicemia de $patientName foi registrada como ${glu} mg/dL. Valor acima da faixa esperada. Vale checar como ele(a) está se sentindo.",
+                "Sua glicemia foi registrada como ${glu} mg/dL. Valor acima da faixa esperada. Beba água e, se sentir sede excessiva ou visão turva, procure atendimento médico."
+            ))
         }
 
         // Verificar Frequencia Cardiaca
         val hr = vital.heartRate
         if (hr != null && hr > CriticalVitalThresholds.CRITICAL_HEART_RATE_HIGH) {
-            val msg = "Aviso de cuidado: A frequência cardíaca de $patientName foi registrada como ${hr} bpm. Vale checar com carinho como ele(a) está se sentindo."
-            alertsToNotify.add("CRITICAL_HR_HIGH:$patientId" to msg)
+            alertsToNotify.add(Triple(
+                "CRITICAL_HR_HIGH:$patientId",
+                "Aviso de cuidado: A frequência cardíaca de $patientName foi registrada como ${hr} bpm. Vale checar com carinho como ele(a) está sentindo.",
+                "Sua frequência cardíaca foi registrada como ${hr} bpm. Se sentir palpitação forte, dor no peito ou falta de ar, procure atendimento médico."
+            ))
         }
         if (hr != null && hr < CriticalVitalThresholds.CRITICAL_HEART_RATE_LOW) {
-            val msg = "Aviso de cuidado: A frequência cardíaca de $patientName foi registrada como ${hr} bpm. Vale checar com carinho como ele(a) está se sentindo."
-            alertsToNotify.add("CRITICAL_HR_LOW:$patientId" to msg)
+            alertsToNotify.add(Triple(
+                "CRITICAL_HR_LOW:$patientId",
+                "Aviso de cuidado: A frequência cardíaca de $patientName foi registrada como ${hr} bpm. Vale checar com carinho como ele(a) está se sentindo.",
+                "Sua frequência cardíaca foi registrada como ${hr} bpm. Se sentir tontura, fraqueza ou desmaio, procure atendimento médico."
+            ))
         }
 
         // Para cada alert unico, notificar TODOS os cuidadores ativos
         val seenAlertTypes = mutableSetOf<String>()
-        for ((alertKey, alertMessage) in alertsToNotify) {
+        for ((alertKey, caregiverMessage, selfCareMessage) in alertsToNotify) {
             if (alertKey in seenAlertTypes) continue
             seenAlertTypes.add(alertKey)
 
@@ -226,11 +243,8 @@ class VitalsRepository @Inject constructor(
                 if ((lastAlert != null && now - lastAlert < cooldownMs) ||
                     dbAlert?.lastSentAtMs?.let { now - it < cooldownMs } == true) continue
 
-                // Disparar notificacao local Android
-                sendLocalCriticalAlert(appContext, patientName, binding, alertMessage)
-
                 // Só registra cooldown de entrega quando o FCM aceita o destinatário autorizado.
-                val accepted = apiClient.sendCaregiverHealthAlert(patientId, caregiverId, alertMessage)
+                val accepted = apiClient.sendCaregiverHealthAlert(patientId, caregiverId, caregiverMessage)
                 if (!accepted) {
                     android.util.Log.w("VitalsRepo", "Alerta remoto não aceito; não há confirmação de entrega.")
                     continue
@@ -243,7 +257,7 @@ class VitalsRepository @Inject constructor(
                         alertType = alertKey,
                         patientUserId = patientId,
                         alertTitle = "Alerta Critico: $patientName",
-                        alertText = alertMessage,
+                        alertText = caregiverMessage,
                         lastSentAtMs = now
                     ))
                 } catch (e: Exception) {
@@ -256,21 +270,26 @@ class VitalsRepository @Inject constructor(
 
             }
         }
+
+        // Aviso LOCAL de autocuidado para quem mediu (uma única vez por alerta).
+        if (seenAlertTypes.isNotEmpty()) {
+            sendLocalSelfCareAlert(patientName, alertsToNotify.first { it.first in seenAlertTypes }.third)
+        }
     }
 
     /**
-     * Envia notificacao local Android de alta prioridade para o cuidador.
+     * Notificação local de AUTOCUIDADO no aparelho de quem mediu (doc 10 §3.4).
+     * O cuidador já foi avisado pelo push do servidor; esta é para o próprio paciente.
      */
-    private fun sendLocalCriticalAlert(
-        context: Context,
-        patientName: String,
-        binding: FamilyBindingEntity,
-        alertMessage: String
-    ) {
+    private fun sendLocalSelfCareAlert(patientName: String, selfCareMessage: String) {
         try {
-            FamilyNotificationService.notifyCaregiverCriticalVitals(context, patientName, alertMessage)
+            FamilyNotificationService.notifyPatientSelfCareAlert(
+                appContext,
+                "Aviso de Autocuidado",
+                selfCareMessage
+            )
         } catch (e: Exception) {
-            android.util.Log.e("VitalsRepo", "Erro ao enviar notificacao local de crise: ${e.message}")
+            android.util.Log.e("VitalsRepo", "Erro ao enviar notificação local de autocuidado: ${e.message}")
         }
     }
 
