@@ -299,12 +299,18 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
             manager.createNotificationChannel(channel)
         }
 
+        // AUD-AN26: este ID 1001 colidia com a faixa do FamilyNotificationService
+        // (1001-1005). Na prática a notificação de update podia SOBRESCREVER a
+        // notificação familiar (e vice-versa) e, no Android 14+, um notify() com ID
+        // de foreground service pode fazer o sistema ENCERRAR o StepTrackingService.
+        // Faixa dedicada e alta para updates de app.
+        val notifyId = 7777
         val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(downloadUrl)).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pendingIntent = PendingIntent.getActivity(
             context,
-            1001,
+            notifyId,
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
@@ -319,6 +325,6 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .build()
 
-        manager.notify(1001, notification)
+        manager.notify(notifyId, notification)
     }
 }

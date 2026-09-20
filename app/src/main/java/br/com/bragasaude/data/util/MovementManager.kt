@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.util
+package br.com.bragasaude.data.util
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -605,12 +605,17 @@ class MovementManager @Inject constructor(
         }
     }
 
-    private fun onSingleStepDetected() {
+    private fun onSingleStepDetected(fromBurst: Boolean = false) {
         checkDateRollover()
         val now = System.currentTimeMillis()
 
         // 1. Filtro Biomecânico de Frequência (Anti-Shake rápido: rejeita agitação frenética de mão > 230 passos/min)
-        if (lastAcceptedStepTimestamp > 0L && (now - lastAcceptedStepTimestamp) < MIN_STEP_INTERVAL_MS) {
+        // AUD-AN20: o TYPE_STEP_COUNTER entrega um BURST (ex: 40 passos de uma vez)
+        // e este filtro rejeitaria 39 dos 40 por virem no mesmo instante — em
+        // aparelhos baratos (só counter, sem detector) TODOS os passos do dia eram
+        // descartados. Quando vem de burst, o filtro de intervalo não se aplica;
+        // o anti-fraude por GPS (passo 2) continua protegendo contra sacudida.
+        if (!fromBurst && lastAcceptedStepTimestamp > 0L && (now - lastAcceptedStepTimestamp) < MIN_STEP_INTERVAL_MS) {
             return
         }
         lastAcceptedStepTimestamp = now
@@ -794,8 +799,10 @@ class MovementManager @Inject constructor(
 
             if (delta > 0) {
                 lastSensorStepCount = count
+                // AUD-AN20: burst do counter — passa fromBurst=true para não cair no
+                // filtro de intervalo e perder passos legítimos.
                 repeat(delta) {
-                    onSingleStepDetected()
+                    onSingleStepDetected(fromBurst = true)
                 }
             }
         }

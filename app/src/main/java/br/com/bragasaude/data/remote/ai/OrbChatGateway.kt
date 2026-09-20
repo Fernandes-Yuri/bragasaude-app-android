@@ -49,7 +49,11 @@ class OrbChatGateway @Inject constructor(
             // Provider errors and transport failure can use the REST gateway once.
         }
         onPartial("")
-        val result = rest.interpretSpeech(history.last().second, preferWebSocket = false,
+        // AUD-AN05: history.last() crashava com NoSuchElementException se o
+        // histórico estiver vazio (primeira fala após login/limpeza). A própria
+        // linha 35 já usa lastOrNull; aqui era inconsistente.
+        val lastMessage = history.lastOrNull()?.second.orEmpty()
+        val result = rest.interpretSpeech(lastMessage, preferWebSocket = false,
                                           history = history,
                                           actingAs = actingAs, patientId = patientId,
                                           onPartial = onPartial)

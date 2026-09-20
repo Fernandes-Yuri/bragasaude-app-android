@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.feed
+package br.com.bragasaude.ui.feed
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -228,12 +228,12 @@ private fun formatRelativeTime(date: Date): String {
 
 /**
  * Selo visual das Publicações de Orgulho Familiar (Rede Social Intergeracional).
- * Formato: 👨‍👧 Publicação em Família • [Nome do Filho/Cuidador] & [Nome do Idoso]
+ * Formato: Publicação em Família • [Nome do Filho/Cuidador] & [Nome do Idoso]
  */
 @Composable
 fun FamilyPrideBadge(caregiverName: String?, patientName: String?) {
     val label = buildString {
-        append("👨‍👧 Publicação em Família")
+        append("Publicação em Família")
         if (!caregiverName.isNullOrBlank() && !patientName.isNullOrBlank()) {
             append(" • $caregiverName & $patientName")
         }
