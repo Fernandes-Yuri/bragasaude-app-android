@@ -22,8 +22,14 @@ class BiometryRepository @Inject constructor(
 
     suspend fun saveBiometry(biometry: RemoteBiometry) {
         val biometryWithId = if (biometry.id == null) biometry.copy(id = UUID.randomUUID().toString()) else biometry
-        val entity = biometryWithId.toEntity().copy(pendingSync = false)
+        // AUD-AN39: era pendingSync = false — a biometria era gravada como
+        // "sincronizada" sem nunca subir ao Postgres (BiometryDao.getPendingSync()
+        // e syncBiometry sequer existem). Agora entra na fila do SyncWorker;
+        // remoteId continua null até o servidor confirmar (antes um UUID local
+        // era usado como remoteId, fingindo sincronização).
+        val entity = biometryWithId.toEntity().copy(pendingSync = true)
         biometryDao.insert(entity)
+        triggerSync()
     }
 
     private fun triggerSync() {
