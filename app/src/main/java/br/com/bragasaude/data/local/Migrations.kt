@@ -329,6 +329,25 @@ object Migrations {
         }
     }
 
+    /**
+     * AUD-AN28: NENHUM índice existia no banco local (exceto OrbChatStore).
+     * Queries por userId/measuredAt/pendingSync/expiresAt faziam full table
+     * scan sobre SQLCipher em tabelas que crescem sem bound. Índices nas
+     * colunas mais filtradas; o schema do Room passa a validá-los.
+     */
+    val MIGRATION_46_47 = object : Migration(46, 47) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_medication_logs_local_userId_takenAt ON medication_logs_local(userId, takenAt)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_medication_logs_local_pendingSync ON medication_logs_local(pendingSync)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_family_messages_local_patientUserId_sentAt ON family_messages_local(patientUserId, sentAt)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_family_messages_local_expiresAt ON family_messages_local(expiresAt)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_family_messages_local_deletedAt_pendingSync ON family_messages_local(deletedAt, pendingSync)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_vital_signs_local_userId_measuredAt ON vital_signs_local(userId, measuredAt)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_vital_signs_local_remoteId ON vital_signs_local(remoteId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_vital_signs_local_pendingSync ON vital_signs_local(pendingSync)")
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -350,6 +369,7 @@ object Migrations {
         MIGRATION_42_43,
         MIGRATION_43_44,
         MIGRATION_44_45,
-        MIGRATION_45_46
+        MIGRATION_45_46,
+        MIGRATION_46_47
     )
 }

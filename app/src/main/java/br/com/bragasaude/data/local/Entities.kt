@@ -5,7 +5,16 @@ import androidx.room.PrimaryKey
 import kotlinx.serialization.Serializable
 import java.util.Date
 
-@Entity(tableName = "vital_signs_local")
+// AUD-AN28: índice composto — getRecent30Days e getLastN filtram por userId
+// e ordenam por measuredAt desc (a quente).
+@Entity(
+    tableName = "vital_signs_local",
+    indices = [
+        Index("userId", "measuredAt"),
+        Index("remoteId"),
+        Index("pendingSync")
+    ]
+)
 data class VitalSignEntity(
     @PrimaryKey(autoGenerate = true) val localId: Long = 0,
     val remoteId: String? = null,
@@ -204,7 +213,16 @@ data class MedicationEntity(
     val pendingSync: Boolean = false
 )
 
-@Entity(tableName = "medication_logs_local")
+// AUD-AN28: zero índices no banco local — todas as queries por userId/measuredAt
+// /pendingSync faziam full table scan em tabelas que crescem sem bound, sobre
+// SQLCipher (~10-15% mais lento por linha). Índices nas colunas mais filtradas.
+@Entity(
+    tableName = "medication_logs_local",
+    indices = [
+        Index("userId", "takenAt"),
+        Index("pendingSync")
+    ]
+)
 data class MedicationLogEntity(
     @PrimaryKey val id: String, // UUID
     val userId: String,
@@ -390,7 +408,15 @@ const val FAMILY_MESSAGE_TTL_MS: Long = 24L * 60 * 60 * 1000
  * e pode ser apagada pelo remetente via tombstone [deletedAt]. Nenhuma linha
  * ultrapassa a retenção máxima de 24h (purga local + servidor).
  */
-@Entity(tableName = "family_messages_local")
+// AUD-AN28: índices nas colunas de query + purga (expiresAt é varrido a cada 30s).
+@Entity(
+    tableName = "family_messages_local",
+    indices = [
+        Index("patientUserId", "sentAt"),
+        Index("expiresAt"),
+        Index("deletedAt", "pendingSync")
+    ]
+)
 data class FamilyMessageEntity(
     @PrimaryKey val id: String, // UUID
     val patientUserId: String,
