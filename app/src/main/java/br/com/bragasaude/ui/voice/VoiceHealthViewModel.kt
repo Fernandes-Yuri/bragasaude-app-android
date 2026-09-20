@@ -309,7 +309,12 @@ class VoiceHealthViewModel @Inject constructor(
         if (!_isLiveMode.value) voiceSession.reset()
         _isLiveMode.value = true
         val listenTicket = voiceSession.begin()
-        currentContext = context
+        // AUD-AN08: antes guardava a Activity direto — o ViewModel sobrevive à
+        // rotação, então a Activity destruída era retida até a próxima
+        // startListening (leak de memória de um objeto pesado com view tree).
+        // O applicationContext cumpre o mesmo papel (TTS e SpeechRecognizer
+        // funcionam com ele) e nunca é destruído.
+        currentContext = context.applicationContext
         initTts(context)
         
         // Parar qualquer áudio residual
@@ -325,7 +330,8 @@ class VoiceHealthViewModel @Inject constructor(
             try {
                 if (speechRecognizer == null) {
                     android.util.Log.i("VoiceHealthVM", "Criando nova instância de SpeechRecognizer")
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+                    // AUD-AN08: applicationContext — nunca retém a Activity.
+                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context.applicationContext)
                 } else {
                     speechRecognizer?.cancel()
                 }

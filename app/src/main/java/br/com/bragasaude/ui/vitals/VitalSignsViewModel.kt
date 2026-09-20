@@ -97,8 +97,15 @@ class VitalSignsViewModel @Inject constructor(
                 val analysis = healthEngine.analyzeVitals(userId, listOf(vital))
                 
                 // Processa Recomendações Estruturadas
-                analysis.recommendations.firstOrNull()?.let { 
-                    _latestRecommendation.emit(it) 
+                analysis.recommendations.firstOrNull()?.let {
+                    _latestRecommendation.emit(it)
+                    // AUD-AN09: o canal sosAlert existia mas NUNCA era emitido
+                    // — e o coletor na tela tinha corpo vazio. Em emergências
+                    // (ex: PA Stage 3) a notificação pode passar despercebida;
+                    // um alerta in-app é a segunda camada de aviso.
+                    if (it.isEmergency) {
+                        _sosAlert.emit(it.message)
+                    }
                 }
                 
                 // Processa Marcos (Recompensas)

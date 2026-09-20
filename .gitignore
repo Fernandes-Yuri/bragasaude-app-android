@@ -11,3 +11,7 @@ keystore.properties
 # Bloqueio estrito de binários de compilação, permitindo apenas a release oficial em releases/
 *.apk
 !releases/*.apk
+
+# Arquivos temporarios de mensagem de commit ( nunca devem ser versionados )
+_commit*.txt
+

@@ -14,6 +14,7 @@ import br.com.bragasaude.ui.util.FamilyNotificationService
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -46,7 +47,10 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
         syncManager.startRealtimeSync()
         syncScheduler.schedulePeriodicRecoverySync()
         
-        CoroutineScope(Dispatchers.IO).launch {
+        // AUD-AN07: CoroutineScope sem SupervisorJob — uma exceção no seeding
+        // do catálogo propagava e derrubava o processo na inicialização. O
+        // scope de aplicação deve sobreviver a falhas de um filho.
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             catalogRepository.seedDatabaseIfNeeded()
         }
     }
