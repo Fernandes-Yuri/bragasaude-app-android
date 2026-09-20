@@ -543,7 +543,14 @@ class MovementManager @Inject constructor(
             for (j in i until locations.size) {
                 if (assigned[j]) continue
                 val dist = earthDistanceMeters(centerLat, centerLng, locations[j].first, locations[j].second)
-                if (dist <= ZONE_RADIUS_METERS * 5) {
+                // AUD-AN37: antes o cluster aceitava ZONE_RADIUS_METERS * 5
+                // (500m) mas "estar em casa" exigia <= ZONE_RADIUS_METERS
+                // (100m). Quem se exercitava em casa ficava dentro do cluster
+                // mas fora da zona — minutos ativos (OMS) subcontados. Agora a
+                // tolerância do cluster é a MESMA da zona: a determinação e a
+                // pertença ficam consistentes. (GPS jitter ~20-50m é absorvido
+                // pela média do centro, não por raio inflado.)
+                if (dist <= ZONE_RADIUS_METERS) {
                     cluster.add(locations[j])
                     assigned[j] = true
                     centerLat = cluster.map { it.first }.average()

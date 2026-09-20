@@ -33,7 +33,7 @@ import androidx.room.TypeConverters
         OrbConversation::class,
         ConsultationEntity::class
     ],
-    version = 46, // AUD-AN23: coluna deletionAttempts (limite de tentativas de tombstone)
+    version = 47, // AUD-AN28: índices no banco local (AN23 havia subido para 46)
     exportSchema = true
 )
 @TypeConverters(Converters::class)

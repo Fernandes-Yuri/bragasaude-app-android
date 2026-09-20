@@ -234,10 +234,22 @@ fun CaregiverDashboardScreen(
                 }
 
                 item {
-                    val bpRecords by viewModel.getBPHistory(dashboard.patientUserId).collectAsState(initial = emptyList())
-                    val glucoseRecords by viewModel.getGlucoseHistory(dashboard.patientUserId).collectAsState(initial = emptyList())
-                    val hydrationRecords by viewModel.getHydrationHistory(dashboard.patientUserId).collectAsState(initial = emptyList())
-                    val dailyMetrics by viewModel.getDailyMetricsHistory(dashboard.patientUserId).collectAsState(initial = emptyList())
+                    // AUD-AN11: getBPHistory() devolve um flow FRIO novo a cada
+                    // chamada; dentro de item{} o collectAsState reiniciava a
+                    // coleta (e a query do Room) a CADA recomposição do painel.
+                    // remember pela chave do paciente reutiliza a mesma instância.
+                    val bpRecords by remember(dashboard.patientUserId) {
+                        viewModel.getBPHistory(dashboard.patientUserId)
+                    }.collectAsState(initial = emptyList())
+                    val glucoseRecords by remember(dashboard.patientUserId) {
+                        viewModel.getGlucoseHistory(dashboard.patientUserId)
+                    }.collectAsState(initial = emptyList())
+                    val hydrationRecords by remember(dashboard.patientUserId) {
+                        viewModel.getHydrationHistory(dashboard.patientUserId)
+                    }.collectAsState(initial = emptyList())
+                    val dailyMetrics by remember(dashboard.patientUserId) {
+                        viewModel.getDailyMetricsHistory(dashboard.patientUserId)
+                    }.collectAsState(initial = emptyList())
 
                     val sdf = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()) }
 

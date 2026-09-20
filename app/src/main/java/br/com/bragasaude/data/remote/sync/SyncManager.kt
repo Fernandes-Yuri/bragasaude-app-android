@@ -112,6 +112,13 @@ class SyncManager @Inject constructor(
                 }
                 vitalSignDao.deduplicateVitals()
                 syncPreferences.recordEntitySyncSuccess(userId, "vitals", nowUtc)
+            } else {
+                // AUD-AN29: o cursor só avançava quando havia resultados. Se
+                // nada mudou, o sync TEVE SUCESSO — mas como o cursor nunca
+                // avançava, a próxima execução baixava a lista COMPLETA de
+                // novo (filtro em memória sobre tudo). Custo de dados móveis
+                // a cada ciclo. Agora registramos o sucesso mesmo sem novidades.
+                syncPreferences.recordEntitySyncSuccess(userId, "vitals", nowUtc)
             }
 
             // 3. Daily Metrics (Delta Sync)
