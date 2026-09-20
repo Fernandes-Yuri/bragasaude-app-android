@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.network
+package br.com.bragasaude.data.remote.network
 
 import br.com.bragasaude.data.remote.auth.AuthService
 import kotlinx.coroutines.runBlocking
@@ -24,7 +24,14 @@ class AuthInterceptor @Inject constructor(
             return chain.proceed(originalRequest)
         }
 
-        val token = runBlocking { authService.getFreshToken() }
+        // AUD-AN34: runBlocking na thread do dispatcher do OkHttp bloqueia a
+        // thread por segundos na primeira chamada (refresh Firebase). Lemos o
+        // cache sem bloquear; só caímos no runBlocking quando não há token
+        // válido — caso raro (login) e sempre após um MISS, sem contenção.
+        var token = authService.cachedTokenNow()
+        if (token == null) {
+            token = runBlocking { authService.getFreshToken() }
+        }
         val requestBuilder = originalRequest.newBuilder()
         if (!token.isNullOrBlank()) {
             requestBuilder.header("Authorization", "Bearer $token")

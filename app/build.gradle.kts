@@ -35,6 +35,10 @@ android {
         versionName = "1.2.5"
 
         buildConfigField("String", "BASE_URL", "\"https://api.bragasaude.online\"")
+        // AUD-AN33: o feedback ia pra URL hardcoded do Firebase Hosting
+        // (braga-saude.web.app — landing page, NÃO o portal de operações).
+        // Agora configurável por flavor; default = o portal de operações real.
+        buildConfigField("String", "WEBSERVICE_BASE_URL", "\"https://portal.bragasaude.online\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- AUD-AN36: antes havia <cache-path name="cache_root" path="." /> — expunha
+     TODO o cache do app via content URI (áudio TTS derivado de texto de saúde,
+     PDFs de exame). Qualquer URI vazada lia tudo. Agora só as subpastas que
+     realmente precisam ser compartilhadas. -->
 <paths>
-    <cache-path name="cache_root" path="." />
     <cache-path name="family_exports" path="family_exports/" />
     <cache-path name="shared_cache" path="shared_pdfs/" />
     <cache-path name="audio_cache" path="neural_tts/" />
+    <cache-path name="relatorios" path="relatorios/" />
+    <cache-path name="dossiers" path="dossiers/" />
     <files-path name="shared_files" path="exports/" />
     <external-cache-path name="shared_ext_cache" path="shared/" />
 </paths>

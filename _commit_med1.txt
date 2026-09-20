@@ -1,0 +1,38 @@
+fix(audit-AN): MEDIAS da auditoria 20/09 — lote 1 (seguranca local + dados)
+
+AUD-AN27 DATE() sobre epoch-millis devolvia NULL (SQLite trata numero como
+  dia juliano — verificado empiricamente). countTodayTaken sempre 0 e
+  getDistinctTakeDays colapsava tudo num grupo. Corrigido com
+  date(takenAt/1000, 'unixepoch', 'localtime').
+
+AUD-AN30 deduplicateVitals usava chave measuredAt + hydrationMl. A voz que
+  registra "pressao 12x8 e glicemia 100" cria duas entidades no mesmo
+  milissegundo com hydrationMl null — mesma chave, uma era DELETADA (perda
+  silenciosa de um sinal valido). Agora a chave inclui todos os valores
+  clinicos; so duplicatas verdadeiras colapsam.
+
+AUD-AN31 saveMedication: bloco "Sincronizacao via API" injetava apiClient e
+  nunca o usava — so re-inseria a mesma entity (insert duplicado no catch).
+  Codigo morto com comentario enganoso removido; a sincronizacao real e o
+  SyncWorker via pendingSync.
+
+AUD-AN33 feedback ia pra URL hardcoded do Firebase Hosting
+  (braga-saude.web.app — a LANDING PAGE, nao o portal de operacoes) e a
+  versao travada em "1.2.0" (a real e 1.2.5). O feedback nunca chegava ao
+  painel. Agora WEBSERVICE_BASE_URL e BuildConfig.VERSION_NAME.
+
+AUD-AN34 runBlocking no AuthInterceptor bloqueava a thread do dispatcher
+  OkHttp por segundos na primeira chamada. Agora le o cache sem bloquear
+  (cachedTokenNow) e so faz runBlocking no miss; novo BragaAuthenticator
+  recupera 401 forcando refresh, em vez de seguir sem auth.
+
+AUD-AN35 HttpLoggingInterceptor nivel BODY logava o header Authorization
+  (Bearer) e corpos clinicos no logcat dos builds debug (testadores com
+  contas e PHI reais). Reduzido para HEADERS.
+
+AUD-AN36 FileProvider expunha TODO o cache (<cache-path path="."/>): qualquer
+  content URI vazada lia PDFs de exame e audio TTS derivado de texto de
+  saude. Removido o cache_root; o relatorio clinico agora vai pra subpasta
+  propria; a pasta dossiers/ (usada pelo MedicalDossierCompiler e AUSENTE
+  da config) foi adicionada — o compartilhamento do dossie falhava
+  silenciosamente.

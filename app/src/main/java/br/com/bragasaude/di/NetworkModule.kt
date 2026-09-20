@@ -31,12 +31,16 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(authInterceptor: AuthInterceptor): OkHttpClient {
+    fun provideOkHttpClient(
+        authInterceptor: AuthInterceptor,
+        tokenAuthenticator: BragaAuthenticator
+    ): OkHttpClient {
         val builder = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
             .addInterceptor(authInterceptor)
+            .authenticator(tokenAuthenticator) // AUD-AN34: recupera 401 forçando refresh do token
 
         if (!BuildConfig.DEBUG) {
             // Em RELEASE, aplica Certificate Pinning rígido contra interceptação (MITM).
@@ -55,8 +59,12 @@ object NetworkModule {
                 .build()
             builder.certificatePinner(certificatePinner)
         } else {
+            // AUD-AN35: nível BODY loga o header Authorization (Bearer token) e
+            // corpos clínicos no logcat. Builds debug rodam em aparelhos de
+            // testadores com contas e PHI reais — um logcat vazado expõe o
+            // token de sessão. Redire as headers e mantém o corpo em HEADERS.
             val logger = HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BODY
+                level = HttpLoggingInterceptor.Level.HEADERS
             }
             builder.addInterceptor(logger)
         }
