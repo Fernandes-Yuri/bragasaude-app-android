@@ -587,7 +587,7 @@ interface FamilyDao {
     suspend fun getMessageById(messageId: String): FamilyMessageEntity?
 
     /** Exclusao pelo usuario (D47): tombstone imediato; propagacao ao servidor pelo SyncWorker. */
-    @Query("UPDATE family_messages_local SET deletedAt = :deletedAt, pendingSync = 1, messageText = '', senderName = '', iconType = 'LOVE' WHERE id = :messageId")
+    @Query("UPDATE family_messages_local SET deletedAt = :deletedAt, pendingSync = 1, deletionAttempts = deletionAttempts + 1, messageText = '', senderName = '', iconType = 'LOVE' WHERE id = :messageId")
     suspend fun softDeleteMessage(messageId: String, deletedAt: Long = System.currentTimeMillis())
 
     /** Mensagens apagadas localmente que ja existem no servidor e precisam propagar a exclusao (D47). */
@@ -596,6 +596,15 @@ interface FamilyDao {
 
     @Query("UPDATE family_messages_local SET pendingSync = 0 WHERE id = :id AND deletedAt IS NOT NULL")
     suspend fun markDeletionSynced(id: String)
+
+    /**
+     * AUD-AN23: desiste de um tombstone após MAX_DELETION_ATTEMPTS falhas.
+     * Sem isto o SyncWorker re-tentava a mesma exclusão para SEMPRE (a cada
+     * ciclo de WorkManager), pois a IOException final sempre re-agendava o
+     * worker. A mensagem expira sozinha aos 24h (purgeExpiredMessages).
+     */
+    @Query("UPDATE family_messages_local SET pendingSync = 0 WHERE id = :id AND deletedAt IS NOT NULL AND deletionAttempts >= :maxAttempts")
+    suspend fun abandonDeletion(id: String, maxAttempts: Int)
 
     /** Purga local D47: remove definitivamente tudo o que completou 24h (com ou sem tombstone). */
     @Query("DELETE FROM family_messages_local WHERE expiresAt > 0 AND expiresAt <= :now")

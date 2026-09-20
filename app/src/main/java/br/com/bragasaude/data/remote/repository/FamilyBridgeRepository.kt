@@ -21,11 +21,16 @@ import br.com.bragasaude.ui.util.NotificationHelper
 import com.google.firebase.auth.FirebaseAuth
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.Dispatchers
 import java.util.Date
 import java.util.UUID
 import javax.inject.Inject
@@ -48,6 +53,9 @@ class FamilyBridgeRepository @Inject constructor(
     private val syncScheduler: SyncScheduler,
     @ApplicationContext private val appContext: Context
 ) {
+
+    // AUD-AN22: escopo único para o ticker de purga compartilhado.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // ==================== VÍNCULOS FAMILIARES ====================
 
@@ -384,19 +392,30 @@ class FamilyBridgeRepository @Inject constructor(
         }
     }
 
-    private fun liveMessages(source: Flow<List<FamilyMessageEntity>>): Flow<List<FamilyMessageEntity>> =
-        source.combine(flow {
-            var lastPurge = 0L
-            while (true) {
-                val now = System.currentTimeMillis()
-                if (now / 30_000 != lastPurge / 30_000) {
-                    familyDao.purgeExpiredMessages(now)
-                    lastPurge = now
-                }
-                emit(now)
-                delay(1000)
+    /**
+     * Flow de purga COMPARTILHADO — um único ticker global, não um por coletor.
+     * AUD-AN22: antes cada liveMessages() instanciava seu próprio while(true)
+     * com delay(1000) e chamava purgeExpiredMessages() a cada 30s POR COLETOR.
+     * N coletores ativos = N timers + N writes no SQLCipher por ciclo, mesmo
+     * com a app em background.
+     */
+    private val purgeTicker: Flow<Long> = flow {
+        var lastPurge = 0L
+        while (true) {
+            val now = System.currentTimeMillis()
+            if (now / 30_000 != lastPurge / 30_000) {
+                familyDao.purgeExpiredMessages(now)
+                lastPurge = now
             }
-        }) { messages, now -> messages.filter { it.deletedAt == null && it.expiresAt > now } }
+            emit(now)
+            delay(1000)
+        }
+    }.shareIn(scope, SharingStarted.WhileSubscribed(), replay = 1)
+
+    private fun liveMessages(source: Flow<List<FamilyMessageEntity>>): Flow<List<FamilyMessageEntity>> =
+        source.combine(purgeTicker) { messages, now ->
+            messages.filter { it.deletedAt == null && it.expiresAt > now }
+        }
 
     /** D47 — Purga local: remove definitivamente mensagens que completaram 24h. */
     suspend fun purgeExpiredFamilyMessages() {

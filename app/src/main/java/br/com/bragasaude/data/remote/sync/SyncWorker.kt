@@ -216,7 +216,21 @@ class SyncWorker @AssistedInject constructor(
         // D47: propagar exclusões feitas pelo usuário neste aparelho
         for (msg in familyDao.getPendingDeletionMessages()) {
             val confirmed = apiClient.deleteFamilyMessage(msg.remoteId ?: msg.id, msg.patientUserId, msg.sentAt)
-            if (!confirmed) failed = true else familyDao.markDeletionSynced(msg.id)
+            if (confirmed) {
+                familyDao.markDeletionSynced(msg.id)
+            } else {
+                // AUD-AN23: sem este teto, uma exclusão que o servidor nunca
+                // confirma (msg já expirada lá, id inexistente, bug de rota)
+                // fazia o SyncWorker falhar em loop para SEMPRE — toda
+                // execução re-agendada, bateria e dados gastos à toa. Após o
+                // limite, o tombstone é abandonado; a mensagem expira e é
+                // purgada localmente aos 24h de qualquer forma.
+                if (msg.deletionAttempts >= MAX_DELETION_ATTEMPTS) {
+                    familyDao.abandonDeletion(msg.id, MAX_DELETION_ATTEMPTS)
+                } else {
+                    failed = true
+                }
+            }
         }
         val pending = familyDao.getPendingSyncMessages()
         for (msg in pending) {
@@ -230,6 +244,11 @@ class SyncWorker @AssistedInject constructor(
         if (failed) throw java.io.IOException("Sincronização de mensagens pendente.")
         // D47: purga local das mensagens que completaram 24h
         familyDao.purgeExpiredMessages()
+    }
+
+    private companion object {
+        /** AUD-AN23: teto de tentativas antes de abandonar um tombstone. */
+        private const val MAX_DELETION_ATTEMPTS = 10
     }
 
     private suspend fun syncAuditLogs() {

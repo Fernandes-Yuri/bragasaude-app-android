@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain.util
+package br.com.bragasaude.domain.util
 
 import br.com.bragasaude.domain.model.BloodPressureCategory
 import br.com.bragasaude.domain.model.BloodPressureResult
@@ -94,15 +94,15 @@ object BloodPressureParser {
                 detail = "Atenção Imediata: $systolic/$diastolic mmHg atinge a faixa de Hipertensão Estágio 3 da SBC (≥ 180 ou ≥ 110 mmHg). Recomenda-se atendimento médico."
             }
 
-            // 2. Transição Estágio 2 para Estágio 3 (ex: 175/108 ou 160/110)
-            (sysLevel == 5 && diaLevel >= 5) || (sysLevel >= 5 && diaLevel == 5) -> {
-                if (sysLevel == 6 || diaLevel == 6) {
-                    category = BloodPressureCategory.STAGE_2_TO_3_TRANSITION
-                    detail = "Valores de $systolic/$diastolic mmHg estão oscilando na transição entre Estágio 2 e Estágio 3 segundo a SBC."
-                } else {
-                    category = BloodPressureCategory.STAGE_2_HYPERTENSION
-                    detail = "Valores de $systolic/$diastolic mmHg estão na faixa de Hipertensão Estágio 2 da SBC (160-179 ou 100-109 mmHg)."
-                }
+            // 2. Transição Estágio 2 para Estágio 3 (ex: 175/108 ou 160/110).
+            // AUD-AN06: este ramo era MORTO — a condição interna testava
+            // `sysLevel == 6 || diaLevel == 6`, mas a regra 1 acima JÁ captura
+            // exatamente esses níveis. STAGE_2_TO_3_TRANSITION nunca era
+            // atribuído. A transição real é Estágio 2 puro (nível 5) em um
+            // parâmetro e Estágio 3 (nível 6) no OUTRO — ex: 170/110.
+            (sysLevel == 5 && diaLevel == 6) || (sysLevel == 6 && diaLevel == 5) -> {
+                category = BloodPressureCategory.STAGE_2_TO_3_TRANSITION
+                detail = "Valores de $systolic/$diastolic mmHg estão oscilando na transição entre Estágio 2 e Estágio 3 segundo a SBC."
             }
 
             // 3. Transição Estágio 1 para Estágio 2 (ex: 140/100, 160/92)
