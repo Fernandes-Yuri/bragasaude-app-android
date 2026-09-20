@@ -37,7 +37,9 @@ class BragaApiClient @Inject constructor(
         private const val READ_TIMEOUT_MS = 10000
     }
 
-    var baseUrl: String = DEFAULT_BASE_URL
+    // AUD-AN40: era `var` publico mutavel num @Singleton — ninguem mutava,
+    // mas nada impedia (race de concorrencia se um dia mutassem). Imutavel.
+    val baseUrl: String = DEFAULT_BASE_URL
 
     private val isoFormat get() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
     private val dateFormat get() = SimpleDateFormat("yyyy-MM-dd", Locale.US)

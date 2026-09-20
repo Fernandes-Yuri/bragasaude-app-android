@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.local
+package br.com.bragasaude.data.local
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -38,9 +38,16 @@ class SyncPreferences @Inject constructor(
     }
 
     fun clear(userId: String) {
+        // AUD-AN40: antes era `endsWith(userId)` — frágil: as chaves sao
+        // "last_sync_<entity>_$userId", e um userId que e SUFIXO de outro
+        // ("abc" vs "xyzabc") fazia o clear apagar os cursores do usuario
+        // errado. Compara o segmento depois do ultimo "_".
         val editor = prefs.edit()
-        prefs.all.keys.filter { it.endsWith(userId) }.forEach { key ->
-            editor.remove(key)
+        prefs.all.keys.forEach { key ->
+            val sep = key.lastIndexOf('_')
+            if (sep >= 0 && key.substring(sep + 1) == userId) {
+                editor.remove(key)
+            }
         }
         editor.apply()
     }
