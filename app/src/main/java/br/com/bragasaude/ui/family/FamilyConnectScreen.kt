@@ -604,7 +604,7 @@ private fun InviteHistoryItem(
     }
     
     val statusText = when (binding.status) {
-        "ACTIVE" -> "Ativo ✓"
+        "ACTIVE" -> "Ativo"
         "PENDING" -> "Aguardando conexão"
         "EXPIRED" -> "Expirado"
         "REVOKED" -> "Revogado"
@@ -633,7 +633,7 @@ private fun InviteHistoryItem(
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = when (binding.status) {
-                            "ACTIVE" -> "✓"
+                            "ACTIVE" -> "Conectado"
                             "PENDING" -> "Aguardando"
                             "EXPIRED" -> "Expirado"
                             "REVOKED" -> "Revogado"

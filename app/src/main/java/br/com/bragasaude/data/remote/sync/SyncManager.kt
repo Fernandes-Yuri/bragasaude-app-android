@@ -99,6 +99,11 @@ class SyncManager @Inject constructor(
                             glucoseLevel = v.glucoseLevel,
                             glucoseType = v.glucoseType,
                             hydrationMl = v.hydrationMl,
+                            // AUD-AN18: steps e distancia vinham do servidor mas
+                            // eram descartados no mapeamento — o resumo de atividade
+                            // do app nunca refletia o que foi medido em outro aparelho.
+                            steps = v.steps,
+                            distanceMeters = v.distanceMeters,
                             measuredAt = measuredDate,
                             status = "recorded",
                             pendingSync = false

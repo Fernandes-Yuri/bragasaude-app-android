@@ -221,7 +221,7 @@ fun SocialFeedScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            if (isPublic) "🌐 Visível para Todos" else "👨‍👩‍👧 Círculo Familiar",
+                            if (isPublic) "Visível para Todos" else "Círculo Familiar",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )

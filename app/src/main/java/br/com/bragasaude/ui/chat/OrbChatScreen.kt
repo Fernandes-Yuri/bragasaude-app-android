@@ -169,7 +169,11 @@ fun OrbChatContent(
 
     LaunchedEffect(state.error) { state.error?.let { snackbar.showSnackbar(it); onClearError() } }
     LaunchedEffect(exported) { if (exported) { snackbar.showSnackbar("Conversa copiada."); exported = false } }
-    LaunchedEffect(state.messages.size, state.partialText, state.isStreaming, state.showHistory) {
+    // AUD-AN04: antes era keyado em state.partialText, que muda a CADA TOKEN do
+    // streaming — o efeito era cancelado e re-lançado a cada token, reiniciando
+    // o scrollToItem e fazendo o auto-scroll engasgar. Keyar em isStreaming cobre
+    // o início e o fim da resposta sem oscilar.
+    LaunchedEffect(state.messages.size, state.isStreaming, state.showHistory) {
         if (!state.showHistory) scroll.scrollToItem(state.messages.size)
     }
 

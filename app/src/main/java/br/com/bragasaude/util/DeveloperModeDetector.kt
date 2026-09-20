@@ -17,10 +17,39 @@ object DeveloperModeDetector {
 
     /**
      * Retorna true se as Opções do Desenvolvedor ou a Depuração USB (ADB) estiverem ativas no dispositivo.
+     *
+     * AUD-AN25: antes retornava `false` hardcoded ("desativado explicitamente para
+     * testes no dispositivo físico") — a blindagem LGPD anunciada na doc e no
+     * comentário de classe não existia. Agora detecta de verdade em RELEASE; em
+     * DEBUG continua desligado para não travar o desenvolvimento no aparelho.
      */
     fun isDeveloperModeEnabled(context: Context): Boolean {
-        Log.d(TAG, "Bloqueio de modo desenvolvedor desativado explicitamente para testes no dispositivo físico.")
-        return false
+        if (BuildConfig.DEBUG) {
+            // Desenvolvimento: não atrapalha testes no aparelho físico.
+            return false
+        }
+        return try {
+            // Opções do Desenvolvedor ativas (global settings).
+            val devOptions = Settings.Global.getInt(
+                context.contentResolver,
+                Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,
+                0
+            ) == 1
+            // Depuração USB ativa.
+            val adbEnabled = Settings.Global.getInt(
+                context.contentResolver,
+                Settings.Global.ADB_ENABLED,
+                0
+            ) == 1
+            val detected = devOptions || adbEnabled
+            if (detected) {
+                Log.w(TAG, "Modo desenvolvedor/ADB detectado em build de release — dado clínico sob risco.")
+            }
+            detected
+        } catch (e: Exception) {
+            Log.e(TAG, "Falha ao ler configurações de desenvolvedor: ${e.message}")
+            false
+        }
     }
 
     /**

@@ -227,6 +227,18 @@ class VitalsRepository @Inject constructor(
             ))
         }
 
+        // Verificar Saturacao de Oxigenio (AUD-AN19): a constante CRITICAL_SPO2_LOW
+        // existia mas NUNCA era usada — um idoso com 78% de SpO2 não alertava o
+        // cuidador. Hipoxemia silenciosa é uma das maiores urgências geriátricas.
+        val spo2 = vital.oxygenSaturation
+        if (spo2 != null && spo2 < CriticalVitalThresholds.CRITICAL_SPO2_LOW) {
+            alertsToNotify.add(Triple(
+                "CRITICAL_SPO2_LOW:$patientId",
+                "Aviso de cuidado: A saturação de oxigênio de $patientName foi registrada como ${spo2}%. Abaixo de 90% é sinal de alerta. Vale checar como ele(a) está respirando e considerar atendimento médico.",
+                "Sua saturação de oxigênio foi registrada como ${spo2}%. Abaixo de 90% é sinal de alerta. Se sentir falta de ar, confusão ou lábios/dedos arroxeados, procure atendimento médico imediatamente."
+            ))
+        }
+
         // Para cada alert unico, notificar TODOS os cuidadores ativos
         val seenAlertTypes = mutableSetOf<String>()
         for ((alertKey, caregiverMessage, selfCareMessage) in alertsToNotify) {

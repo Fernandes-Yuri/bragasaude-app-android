@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.remote.model.RemoteFood
 import br.com.bragasaude.data.remote.model.RemoteProfile
@@ -49,7 +49,11 @@ object HealthCalculators {
         caloriePercentage: Float,
         catalog: List<RemoteFood>
     ): MealRecommendation {
-        val dailyCal = profile.pointsDiscipline.let { 1800f } // Default por enquanto
+        // AUD-AN03: antes era `profile.pointsDiscipline.let { 1800f }` — literal
+        // fixo pra TODOS (idoso de 60kg, cuidador, qualquer condição clínica) e a
+        // expressão morta fazia crer que o perfil era considerado. Agora usa a meta
+        // calórica real do perfil; 1800 só como fallback de segurança.
+        val dailyCal = (profile.dailyCalorieTarget ?: 1800.0).toFloat()
         val mealAvgCal = dailyCal * caloriePercentage
         
         // Tríade de Escolha (02_ALIMENTACAO_INTELIGENTE.md)

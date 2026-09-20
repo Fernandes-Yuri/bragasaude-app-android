@@ -83,12 +83,12 @@ fun ConsentScreen(
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         ConsentItem(
-                            "📍 Localização & Movimento",
+                            "Localização & Movimento",
                             "Utilizamos sensores e GPS local para apoiar seu registro de passos e atividade física com total transparência."
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                         ConsentItem(
-                            "📄 Processamento de Laudos em PDF",
+                            "Processamento de Laudos em PDF",
                             "A extração de parâmetros laboratoriais dos seus PDFs tem como único objetivo organizar seu histórico de saúde."
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
