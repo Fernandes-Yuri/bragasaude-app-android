@@ -399,10 +399,30 @@ fun AppContent(activity: MainActivity) {
 
 @Composable
 fun LoadingOverlay(onExit: (() -> Unit)? = null) {
+    // D-AUTH1: antes o botão "Sair e tentar entrar novamente" aparecia no instante
+    // em que o perfil era carregado de forma rotineira, dando a falsa impressão de
+    // que o login tinha falhado. Agora a tela mostra uma mensagem acolhedora e só
+    // exibe a saída de emergência após alguns segundos — fora do fluxo normal,
+    // que é rápido e silencioso.
+    var showExit by remember { mutableStateOf(false) }
+    LaunchedEffect(onExit) {
+        if (onExit != null) {
+            kotlinx.coroutines.delay(6000)
+            showExit = true
+        }
+    }
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator(strokeWidth = 3.dp)
-            if (onExit != null) TextButton(onClick = onExit) { Text("Sair e tentar entrar novamente") }
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Acessando seu espaço de saúde...",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            if (showExit && onExit != null) {
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = onExit) { Text("Sair e tentar entrar novamente") }
+            }
         }
     }
 }
