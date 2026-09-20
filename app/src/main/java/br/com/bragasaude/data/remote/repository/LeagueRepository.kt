@@ -72,6 +72,10 @@ class LeagueRepository @Inject constructor(
         val existingMember = leagueDao.getMyMembershipOneShot(userId, fallbackCycleId)
         if (existingMember == null) {
             val profile = profileDao.getProfileOneShot(userId)
+            // AUD-AN39: era pendingSync = false — a filiação local era gravada
+            // como "sincronizada" sem nunca ter ido ao Postgres. Divergência
+            // silenciosa entre aparelhos (cuidador via XP diferente do
+            // paciente). Agora entra na fila do SyncWorker.
             val memberEntity = LeagueMembershipEntity(
                 id = UUID.randomUUID().toString(),
                 userId = userId,
@@ -82,7 +86,7 @@ class LeagueRepository @Inject constructor(
                 xpEarned = 0,
                 rankAtClose = null,
                 outcome = null,
-                pendingSync = false
+                pendingSync = true
             )
             leagueDao.insertMembership(memberEntity)
         }
@@ -148,7 +152,9 @@ class LeagueRepository @Inject constructor(
         val outcome = myOutcome ?: LeagueOutcome.MAINTAINED
         val finalLevel = if (myFinalLevel > 0) myFinalLevel else maxOf(1, profileDao.getProfileOneShot(userId)?.currentLevel ?: 1)
         profileDao.getProfileOneShot(userId)?.let { profile ->
-            profileDao.insert(profile.copy(currentLevel = finalLevel, updatedAt = java.util.Date(), pendingSync = false))
+            // AUD-AN39: era pendingSync = false — level do perfil gravado como
+            // sincronizado sem ir ao Postgres. Agora entra na fila.
+            profileDao.insert(profile.copy(currentLevel = finalLevel, updatedAt = java.util.Date(), pendingSync = true))
         }
 
         _cycleOutcomeMessage.tryEmit(GamificationEngine.buildOutcomeMessage(outcome, finalLevel))

@@ -1,19 +1,16 @@
 package br.com.bragasaude.di
 
 import br.com.bragasaude.BuildConfig
-import br.com.bragasaude.data.remote.api.BragaApiService
 import br.com.bragasaude.data.remote.network.AuthInterceptor
+import br.com.bragasaude.data.remote.network.BragaAuthenticator
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.serialization.json.Json
 import okhttp3.CertificatePinner
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.Retrofit
-import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
@@ -72,24 +69,10 @@ object NetworkModule {
         return builder.build()
     }
 
-    @Provides
-    @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
-        val contentType = "application/json".toMediaType()
-        return Retrofit.Builder()
-            .baseUrl(BuildConfig.BASE_URL.ensureTrailingSlash())
-            .client(okHttpClient)
-            .addConverterFactory(json.asConverterFactory(contentType))
-            .build()
-    }
-
-    @Provides
-    @Singleton
-    fun provideBragaApiService(retrofit: Retrofit): BragaApiService {
-        return retrofit.create(BragaApiService::class.java)
-    }
-
-    private fun String.ensureTrailingSlash(): String {
-        return if (endsWith("/")) this else "$this/"
-    }
+    // AUD-AN32: provideRetrofit / provideBragaApiService removidos — cadeia
+    // Retrofit morta (BragaApiService tinha contrato incompatível com o gateway
+    // real: "api/profile/sync" vs "api/sync/profile", e DTOs com campos
+    // inexistentes). O app usa BragaApiClient (HttpURLConnection). Se a
+    // migração Retrofit for retomada, reconstrua a interface a partir do
+    // contrato real do gateway; NÃO confie nas rotas de BragaApiService.kt.
 }
