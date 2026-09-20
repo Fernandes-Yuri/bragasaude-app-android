@@ -403,7 +403,9 @@ data class FamilyMessageEntity(
     val remoteId: String? = null,
     val pendingSync: Boolean = false,
     val expiresAt: Long = sentAt + FAMILY_MESSAGE_TTL_MS,
-    val deletedAt: Long? = null
+    val deletedAt: Long? = null,
+    /** AUD-AN23: contador de tentativas de propagação do tombstone (limite no SyncWorker). */
+    val deletionAttempts: Int = 0
 )
 
 /**

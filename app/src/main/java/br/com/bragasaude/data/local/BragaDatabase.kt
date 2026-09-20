@@ -33,7 +33,7 @@ import androidx.room.TypeConverters
         OrbConversation::class,
         ConsultationEntity::class
     ],
-    version = 45,
+    version = 46, // AUD-AN23: coluna deletionAttempts (limite de tentativas de tombstone)
     exportSchema = true
 )
 @TypeConverters(Converters::class)

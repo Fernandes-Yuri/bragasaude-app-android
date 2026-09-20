@@ -240,17 +240,27 @@ class OrbWebSocket @Inject constructor() {
                         }
                         "done" -> {
                             terminal = true
-                            val content = event.getString("fullContent")
-                            val parsed = JSONObject(content)
-                            require(parsed.getString("fala").isNotBlank())
-                            parsed.getString("acao")
-                            parsed.getJSONObject("parametros")
-                            val metrics = event.optJSONObject("metrics")
-                            val total = (System.nanoTime() - started) / 1_000_000
-                            android.util.Log.d("OrbWebSocket", "time_to_first_chunk=${firstMs}ms total_generation_time=${total}ms")
-                            val tokens = metrics?.takeUnless { it.isNull("tokens") }?.optInt("tokens")
-                            val label = "Resposta em %.1fs".format(total / 1000.0) + (tokens?.let { " ($it tokens)" } ?: "")
-                            return OrbReply(content, label)
+                            // AUD-AN21: antes o JSON do "done" era parses sem
+                            // try/catch. Se o gateway enviasse um done
+                            // malformado (ou o "fullContent" vazio/parcial por
+                            // timeout upstream), JSONException escapava e
+                            // derrubava a conversa inteira. Agora tratado.
+                            try {
+                                val content = event.getString("fullContent")
+                                if (content.isBlank()) throw IOException("Resposta vazia do servidor.")
+                                val parsed = JSONObject(content)
+                                require(parsed.getString("fala").isNotBlank())
+                                parsed.getString("acao")
+                                parsed.getJSONObject("parametros")
+                                val metrics = event.optJSONObject("metrics")
+                                val total = (System.nanoTime() - started) / 1_000_000
+                                android.util.Log.d("OrbWebSocket", "time_to_first_chunk=${firstMs}ms total_generation_time=${total}ms")
+                                val tokens = metrics?.takeUnless { it.isNull("tokens") }?.optInt("tokens")
+                                val label = "Resposta em %.1fs".format(total / 1000.0) + (tokens?.let { " ($it tokens)" } ?: "")
+                                return OrbReply(content, label)
+                            } catch (je: org.json.JSONException) {
+                                throw IOException("Resposta do servidor malformada.", je)
+                            }
                         }
                         "cancelled" -> { terminal = true; throw CancellationException("Geração cancelada") }
                         "error" -> {
