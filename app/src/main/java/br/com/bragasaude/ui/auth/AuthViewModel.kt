@@ -397,11 +397,15 @@ class AuthViewModel @Inject constructor(
                 if (userId != null) {
                     syncManager.downloadAllUserData(userId)
 
-                    // 1. Envio de e-mail de boas-vindas assíncrono para a conta Google
-                    val email = user.email
-                    val displayName = user.displayName
-                    if (!email.isNullOrBlank()) {
-                        apiClient.sendWelcomeEmail(email, displayName)
+                    // 1. E-mail de boas-vindas assíncrono — SOMENTE na primeira vez que a
+                    // conta Google entra no app (D-AUTH2). Antes o disparo era cego: todo
+                    // login reenviava "Bem-vindo ao Braga Saúde" para usuários antigos.
+                    if (result.additionalUserInfo?.isNewUser == true) {
+                        val email = user.email
+                        val displayName = user.displayName
+                        if (!email.isNullOrBlank()) {
+                            apiClient.sendWelcomeEmail(email, displayName)
+                        }
                     }
 
                     // 2. Verifica se o usuário tem telefone cadastrado; se não tiver, sugere WhatsApp (opcional)

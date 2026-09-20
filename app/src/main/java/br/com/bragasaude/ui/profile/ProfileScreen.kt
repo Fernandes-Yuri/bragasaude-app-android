@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.profile
+package br.com.bragasaude.ui.profile
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
@@ -116,7 +116,7 @@ fun ProfileScreen(
         profile?.let {
             hydratedProfileId = it.id
             fullName = it.fullName ?: ""
-            birthDate = HealthFormatter.formatDisplayDate(it.birthDate)
+            birthDate = HealthFormatter.formatDisplayDate(it.birthDate).filter { c -> c.isDigit() }.take(8)
             gender = it.gender ?: ""
             weight = it.weight?.toString()?.replace(".", ",") ?: ""
             height = it.height?.toString()?.replace(".", ",") ?: ""
@@ -130,7 +130,7 @@ fun ProfileScreen(
             hasThyroid = it.hasThyroidIssue
             emergencyName = it.emergencyContactName ?: ""
             emergencyRelation = it.emergencyContactRelation ?: ""
-            emergencyPhone = it.emergencyContactPhone ?: ""
+            emergencyPhone = it.emergencyContactPhone?.filter { c -> c.isDigit() }?.take(11) ?: ""
             sleepStart = it.sleepStartTime ?: "22:00"
             sleepEnd = it.sleepEndTime ?: "06:00"
         }
@@ -147,7 +147,7 @@ fun ProfileScreen(
                         val year = cal.get(Calendar.YEAR)
                         val month = cal.get(Calendar.MONTH) + 1
                         val day = cal.get(Calendar.DAY_OF_MONTH)
-                        birthDate = "%02d/%02d/%04d".format(day, month, year)
+                        birthDate = "%02d%02d%04d".format(day, month, year)
                     }
                     showDatePicker = false
                 }) { Text("Confirmar") }
@@ -252,7 +252,7 @@ fun ProfileScreen(
                             }
                             viewModel.saveProfile(
                                 name = fullName,
-                                birthDate = birthDate,
+                                birthDate = HealthFormatter.formatDateInput(birthDate),
                                 gender = gender,
                                 activityLevel = activityLevel,
                                 height = parsedHeight?.let { if (it <= 2.5) it * 100 else it },
@@ -268,7 +268,7 @@ fun ProfileScreen(
                                 sleepEnd = HealthFormatter.normalizeTime(sleepEnd, "06:00"),
                                 emergencyName = emergencyName,
                                 emergencyRelation = emergencyRelation,
-                                emergencyPhone = emergencyPhone,
+                                emergencyPhone = HealthFormatter.formatPhoneInput(emergencyPhone),
                                 onComplete = onProfileSaved
                             )
                         },
@@ -319,12 +319,15 @@ fun ProfileScreen(
                         
                         OutlinedTextField(
                             value = birthDate,
-                            onValueChange = { 
-                                birthDate = HealthFormatter.formatDateInput(it)
+                            onValueChange = {
+                                // D-INP1: estado guarda apenas dígitos; a máscara é
+                                // renderizada pelo VisualTransformation (sem saltar cursor).
+                                birthDate = it.filter { c -> c.isDigit() }.take(8)
                             },
                             label = { Text("Data de Nascimento") },
                             modifier = Modifier.fillMaxWidth(),
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                            visualTransformation = DateMaskTransformation(),
                             trailingIcon = { 
                                 IconButton(onClick = { showDatePicker = true }) {
                                     Icon(Icons.Default.DateRange, contentDescription = "Selecionar Data") 
@@ -563,12 +566,17 @@ fun ProfileScreen(
                         )
                         OutlinedTextField(
                             value = emergencyPhone,
-                            onValueChange = { emergencyPhone = HealthFormatter.formatPhoneInput(it) },
+                            onValueChange = {
+                                // D-INP1: estado guarda apenas dígitos; a máscara é
+                                // renderizada pelo VisualTransformation (sem saltar cursor).
+                                emergencyPhone = it.filter { c -> c.isDigit() }.take(11)
+                            },
                             label = { Text("Telefone (com DDD)") },
                             placeholder = { Text("(11) 98765-4321") },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                            visualTransformation = PhoneMaskTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
                         )
                     }

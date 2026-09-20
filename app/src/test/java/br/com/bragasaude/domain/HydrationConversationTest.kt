@@ -9,33 +9,36 @@ class HydrationConversationTest {
     private fun speech(text: String) = (say(text) as HydrationConversation.Reply.Say).text
     private fun amount(text: String) = (say(text) as HydrationConversation.Reply.Review).amountMl
 
-    @Test fun `asks quantity then cup size without guessing`() {
+    // D-VOZ1: um único turno com valor completo já entrega o preenchimento na tela
+    // (Reply.Review). A pergunta só persiste quando falta informação.
+
+    @Test fun `asks quantity then cup size without guessing, then fills directly`() {
         assertTrue(speech("Bebi água").contains("Quanto"))
         assertTrue(speech("Dois copos").contains("quantos ml"))
-        assertTrue(speech("Trezentos").contains("600 ml"))
-        assertEquals(600, amount("sim"))
+        assertEquals(600, amount("Trezentos"))
     }
 
-    @Test fun `correction before review changes count and does not create another action`() {
-        assertTrue(speech("bebi dois copos de 300 ml").contains("600 ml"))
-        assertTrue(speech("espera, foram três").contains("900 ml"))
-        assertEquals(900, amount("pode preparar"))
+    @Test fun `complete utterance fills the form immediately without confirmation turn`() {
+        assertEquals(300, amount("bebi 300 ml de água"))
+    }
+
+    @Test fun `correction after direct review directs to the form`() {
+        assertEquals(600, amount("bebi dois copos de 300 ml"))
+        assertTrue(speech("espera, foram três").contains("Corrija"))
         assertTrue(say("sim") is HydrationConversation.Reply.Say)
     }
 
     @Test fun `correction in same sentence uses final count`() {
-        assertTrue(speech("bebi dois copos de 300 ml, não, foram três").contains("900 ml"))
-        assertEquals(900, amount("sim"))
+        assertEquals(900, amount("bebi dois copos de 300 ml, não, foram três"))
     }
 
     @Test fun `correction after review directs to existing form instead of creating another`() {
-        speech("bebi 500 ml de água")
-        amount("sim")
+        amount("bebi 500 ml de água")
         assertTrue(speech("não, eram 300 ml").contains("Corrija"))
         assertTrue(say("sim") is HydrationConversation.Reply.Say)
     }
 
-    @Test fun `cancel clears pending confirmation`() {
+    @Test fun `cancel clears pending question`() {
         speech("bebi dois copos")
         assertTrue(speech("cancela").contains("descartei"))
         assertNull(say("300"))
@@ -66,21 +69,18 @@ class HydrationConversationTest {
     }
 
     @Test fun `reset discards pending review`() {
-        speech("bebi 500 ml")
+        amount("bebi 500 ml")
         chat.reset()
         assertNull(say("sim"))
     }
 
-    @Test fun `decimal liters and spoken hundreds retain value`() {
-        assertTrue(speech("bebi 0,5 litro de água").contains("500 ml"))
-        assertEquals(500, amount("sim"))
-        assertTrue(speech("bebi duzentos e cinquenta ml de água").contains("250 ml"))
-        assertEquals(250, amount("sim"))
+    @Test fun `decimal liters and spoken hundreds fill the form directly`() {
+        assertEquals(500, amount("bebi 0,5 litro de água"))
+        assertEquals(250, amount("bebi duzentos e cinquenta ml de água"))
     }
 
     @Test fun `half liter works`() {
-        assertTrue(speech("bebi meio litro de água").contains("500 ml"))
-        assertEquals(500, amount("sim"))
+        assertEquals(500, amount("bebi meio litro de água"))
     }
 
     @Test fun `conversation queries and other beverages do not start water draft`() {
@@ -111,19 +111,16 @@ class HydrationConversationTest {
     @Test fun `bare number needs unit when quantity is unknown`() {
         speech("bebi água")
         assertTrue(speech("500").contains("unidade"))
-        assertTrue(speech("500 ml").contains("500 ml"))
-        assertEquals(500, amount("sim"))
+        assertEquals(500, amount("500 ml"))
     }
 
-    @Test fun `short correction changes count`() {
-        speech("bebi dois copos de 300 ml")
-        assertTrue(speech("foram três").contains("900 ml"))
-        assertEquals(900, amount("sim"))
+    @Test fun `short correction after review keeps only one action`() {
+        assertEquals(600, amount("bebi dois copos de 300 ml"))
+        assertTrue(speech("foram três").contains("Corrija"))
     }
 
     @Test fun `bare cups still require actual size`() {
         assertTrue(speech("dois copos de água").contains("quantos ml"))
-        assertTrue(speech("200 ml").contains("400 ml"))
-        assertEquals(400, amount("sim"))
+        assertEquals(400, amount("200 ml"))
     }
 }

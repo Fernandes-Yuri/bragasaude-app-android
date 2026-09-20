@@ -1076,8 +1076,11 @@ class VoiceHealthViewModel @Inject constructor(
 
                     val friendlyName = br.com.bragasaude.util.PortuguesePhoneticHelper.toTtsFriendlyName(currentUserName)
                     val nameSuffix = if (friendlyName.isNotBlank()) ", $friendlyName" else ""
-                    val defaultEmergencyFala = "Então$nameSuffix... Sintomas agudos exigem avaliação médica urgente. O mais seguro e prudente é não esperar: procure um pronto atendimento ou acione o socorro, combinado? Já abri as opções de ajuda na sua tela!"
-                    val fala = if (aiResult.fala.isNotBlank()) aiResult.fala else defaultEmergencyFala
+                    // D-EMERG1: em emergência, NÃO usa o texto gerado pela IA — ele pode
+                    // alucinar cidade/endereço e ainda consome tokens num momento crítico.
+                    // Orienta sempre pelo botão "UPA mais próxima" (GPS real do aparelho),
+                    // que já está aberto na tela do usuário: zero alucinação e zero latência.
+                    val fala = "Atenção$nameSuffix! Sintomas agudos exigem avaliação médica urgente, não espere. Toque no botão \"UPA mais próxima\" que está na sua tela: o mapa usa sua localização real e te leva direto. Já abri as opções de ajuda!"
                     speak(fala) {
                         onSpeechFinished()
                     }
