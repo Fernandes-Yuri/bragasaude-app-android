@@ -109,20 +109,20 @@ class FamilyViewModel @Inject constructor(
     private fun setupAuthAndLoadData() {
         authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
             val uid = firebaseAuth.currentUser?.uid
-            if (uid != null && !uid.startsWith("00000000")) {
+            if (uid != null && uid != br.com.bragasaude.util.BragaConstants.GUEST_UID) {
                 loadData(uid)
             }
         }
         authListener?.let { auth.addAuthStateListener(it) }
 
         val initialUid = auth.currentUser?.uid
-        if (initialUid != null && !initialUid.startsWith("00000000")) {
+        if (initialUid != null && initialUid != br.com.bragasaude.util.BragaConstants.GUEST_UID) {
             loadData(initialUid)
         }
     }
 
     private fun loadData(userId: String = currentUserId) {
-        if (userId.isBlank() || userId.startsWith("00000000")) return
+        if (userId.isBlank() || userId == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
 
         dataLoadJob?.cancel()
         dataLoadJob = viewModelScope.launch {
@@ -202,7 +202,7 @@ class FamilyViewModel @Inject constructor(
 
     fun loadExistingCode() {
         val uid = currentUserId
-        if (uid.isBlank() || uid.startsWith("00000000")) return
+        if (uid.isBlank() || uid == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
 
         viewModelScope.launch {
             try {
@@ -229,7 +229,7 @@ class FamilyViewModel @Inject constructor(
 
     fun generateInvite(caregiverName: String = "Familiar", caregiverRelation: String = "Filho") {
         val uid = currentUserId
-        if (uid.isBlank() || uid.startsWith("00000000")) return
+        if (uid.isBlank() || uid == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
 
         viewModelScope.launch {
             try {

@@ -220,19 +220,10 @@ data class RemoteMilestone(
 )
 
 @Serializable
-data class RemoteDailyMetrics(
-    @SerialName("user_id") val userId: String,
-    val date: String, // yyyy-MM-dd
-    val steps: Int,
-    @SerialName("distance_meters") val distanceMeters: Float,
-    // Fase 2 — reconciliação de atividade (opcionais; default 0/null mantém compat)
-    @SerialName("distance_gps_meters") val distanceGpsMeters: Float? = null,
-    @SerialName("distance_steps_meters") val distanceStepsMeters: Float? = null,
-    @SerialName("distance_final_meters") val distanceFinalMeters: Float? = null,
-    @SerialName("reliability_score") val reliabilityScore: Float? = null,
-    @SerialName("calories_burned") val caloriesBurned: Float,
-    @SerialName("active_minutes") val activeMinutes: Int
-)
+// AUD-AN40: REMOVIDO RemoteDailyMetrics — integralmente morto. So existia
+// a definicao e os 2 mappers (Mappers.kt:305-321), sem NENHUM uso real.
+// O parse de /api/metrics/daily e manual (JSONObject) em
+// BragaApiClient.getDailyMetrics; o upload usa a entity direta.
 
 @Serializable
 data class RemoteUserStats(

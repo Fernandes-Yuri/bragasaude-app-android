@@ -543,7 +543,7 @@ fun LoginScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
-                            Text("ou continuar com", modifier = Modifier.padding(horizontal = 12.dp), color = Color.Gray, fontSize = 12.sp)
+                            Text("ou continuar com", modifier = Modifier.padding(horizontal = 12.dp), color = Color.Gray, fontSize = 13.sp)
                             HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
                         }
 

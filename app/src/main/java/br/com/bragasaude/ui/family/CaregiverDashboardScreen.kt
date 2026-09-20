@@ -1283,7 +1283,7 @@ private fun AppointmentDialog(
                 ) {
                     Icon(Icons.Default.Event, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Google Agenda", fontSize = 12.sp)
+                    Text("Google Agenda", fontSize = 13.sp)
                 }
                 Button(
                     onClick = {

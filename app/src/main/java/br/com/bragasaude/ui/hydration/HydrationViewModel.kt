@@ -169,8 +169,8 @@ class HydrationViewModel @Inject constructor(
     }
 
     /**
-     * Inicia os lembretes periƅdicos de hidrataƌo via WorkManager (TASK-HYD-01).
-     * Usa unique periodic work com policy UPDATE para evitar duplicaçāo.
+     * Inicia os lembretes periódicos de hidratação via WorkManager (TASK-HYD-01).
+     * Usa unique periodic work com policy UPDATE para evitar duplicação.
      */
     private fun startHydrationReminders(appContext: Context) {
         viewModelScope.launch {
@@ -180,26 +180,26 @@ class HydrationViewModel @Inject constructor(
                     NotificationHelper.scheduleHydrationReminders(appContext)
                 }
             } catch (e: Exception) {
-                android.util.Log.e("HydrationVM", "Erro ao iniciar lembretes de hidrataƌo: ${e.message}")
+                android.util.Log.e("HydrationVM", "Erro ao iniciar lembretes de hidratação: ${e.message}")
             }
         }
     }
 
     /**
-     * Cancela os lembretes periƅdicos de hidrataƌo (TASK-HYD-01).
+     * Cancela os lembretes periódicos de hidratação (TASK-HYD-01).
      */
     private fun cancelHydrationReminders(appContext: Context) {
         viewModelScope.launch {
             try {
                 NotificationHelper.cancelHydrationReminders(appContext)
             } catch (e: Exception) {
-                android.util.Log.e("HydrationVM", "Erro ao cancelar lembres de hidrataƌo: ${e.message}")
+                android.util.Log.e("HydrationVM", "Erro ao cancelar lembretes de hidratação: ${e.message}")
             }
         }
     }
 
     /**
-     * Verifica se jǇ existe um HydrationReminderWorker ativo/enfileirado (TASK-HYD-01).
+     * Verifica se já existe um HydrationReminderWorker ativo/enfileirado (TASK-HYD-01).
      */
     private suspend fun isHydrationWorkRunning(appContext: Context): Boolean {
         return try {

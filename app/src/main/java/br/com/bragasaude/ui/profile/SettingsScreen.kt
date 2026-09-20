@@ -595,7 +595,7 @@ fun StepGoalDialog(
                             label = {
                                 Text(
                                     if (preset >= 1000) "${preset / 1000}k" else "$preset",
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = if (currentInt == preset) FontWeight.Bold else FontWeight.Normal
                                 )
                             }
@@ -615,7 +615,7 @@ fun StepGoalDialog(
                             goalText = next.toString()
                         }
                     ) {
-                        Text("-500", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("-500", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
 
                     OutlinedTextField(
@@ -641,7 +641,7 @@ fun StepGoalDialog(
                             goalText = next.toString()
                         }
                     ) {
-                        Text("+500", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("+500", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
             }

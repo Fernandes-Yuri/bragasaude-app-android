@@ -73,20 +73,20 @@ class CaregiverDashboardViewModel @Inject constructor(
     private fun setupAuthAndLoadData() {
         authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
             val uid = firebaseAuth.currentUser?.uid
-            if (uid != null && !uid.startsWith("00000000")) {
+            if (uid != null && uid != br.com.bragasaude.util.BragaConstants.GUEST_UID) {
                 loadData(uid)
             }
         }
         authListener?.let { auth.addAuthStateListener(it) }
 
         val initialUid = auth.currentUser?.uid
-        if (initialUid != null && !initialUid.startsWith("00000000")) {
+        if (initialUid != null && initialUid != br.com.bragasaude.util.BragaConstants.GUEST_UID) {
             loadData(initialUid)
         }
     }
 
     private fun loadData(caregiverUid: String = currentUserId) {
-        if (caregiverUid.isBlank() || caregiverUid.startsWith("00000000")) return
+        if (caregiverUid.isBlank() || caregiverUid == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
 
         bindingsJob?.cancel()
         bindingsJob = viewModelScope.launch {
@@ -312,7 +312,7 @@ class CaregiverDashboardViewModel @Inject constructor(
 
     fun refreshPatientData() {
         val uid = currentUserId
-        if (uid.isNotBlank() && !uid.startsWith("00000000")) {
+        if (uid.isNotBlank() && uid != br.com.bragasaude.util.BragaConstants.GUEST_UID) {
             viewModelScope.launch {
                 try {
                     familyRepository.syncBindingsForCaregiver(uid)
