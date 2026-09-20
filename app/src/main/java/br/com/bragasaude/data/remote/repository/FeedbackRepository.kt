@@ -1,6 +1,7 @@
-﻿package br.com.bragasaude.data.remote.repository
+package br.com.bragasaude.data.remote.repository
 
 import android.content.Context
+import br.com.bragasaude.BuildConfig
 import br.com.bragasaude.data.local.FeedbackDao
 import br.com.bragasaude.data.local.FeedbackEntity
 import br.com.bragasaude.data.remote.model.RemoteFeedback
@@ -29,7 +30,11 @@ class FeedbackRepository @Inject constructor(
     private val syncScheduler: SyncScheduler
 ) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-    private val webserviceBaseUrl = "https://braga-saude.web.app"
+    // AUD-AN33: antes hardcoded em "https://braga-saude.web.app" — o Firebase
+    // Hosting da LANDING PAGE, não o portal de operações. O feedback nunca
+    // chegava ao painel (falha silenciosa). Agora vem do BuildConfig, e a
+    // versão do app também é a real (era travada em "1.2.0").
+    private val webserviceBaseUrl = BuildConfig.WEBSERVICE_BASE_URL
 
     fun getUserFeedbacks(userId: String): Flow<List<FeedbackEntity>> {
         return feedbackDao.getFeedbacksByUser(userId)
@@ -63,7 +68,7 @@ class FeedbackRepository @Inject constructor(
                 title = sanitizedTitle,
                 message = sanitizedMessage,
                 inputMethod = inputMethod,
-                appVersion = "1.2.0",
+                appVersion = BuildConfig.VERSION_NAME, // AUD-AN33: era "1.2.0" travado
                 deviceInfo = telemetry,
                 screenshotBase64 = screenshotBase64,
                 status = "pending",

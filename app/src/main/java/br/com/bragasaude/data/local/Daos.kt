@@ -48,7 +48,25 @@ interface VitalSignDao {
     @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND remoteId IS NULL AND hydrationMl = :hydrationMl AND abs(measuredAt - :measuredAtMillis) < 10000 ORDER BY measuredAt DESC LIMIT 1")
     suspend fun findMatchingLocalHydration(userId: String, measuredAtMillis: Long, hydrationMl: Int): VitalSignEntity?
 
-    @Query("DELETE FROM vital_signs_local WHERE localId NOT IN (SELECT MIN(localId) FROM vital_signs_local GROUP BY userId, COALESCE(remoteId, measuredAt || '_' || COALESCE(hydrationMl, 0)))")
+    // AUD-AN30: a chave era só measuredAt + hydrationMl. A voz que registra
+    // "pressão 12x8 e glicemia 100" cria DUAS entidades no mesmo milissegundo
+    // com hydrationMl null → mesma chave → uma era apagada (perda silenciosa
+    // de um sinal válido). Agora a chave inclui todos os valores clínicos: só
+    // duplicatas verdadeiras (mesmo sinal, mesmo valor, mesmo instante) colapsam.
+    @Query("""DELETE FROM vital_signs_local WHERE localId NOT IN (
+        SELECT MIN(localId) FROM vital_signs_local
+        GROUP BY userId,
+            COALESCE(remoteId, measuredAt || '_' ||
+                COALESCE(systolicPressure, 0) || '_' ||
+                COALESCE(diastolicPressure, 0) || '_' ||
+                COALESCE(heartRate, 0) || '_' ||
+                COALESCE(oxygenSaturation, 0) || '_' ||
+                COALESCE(glucoseLevel, 0) || '_' ||
+                COALESCE(glucoseType, '') || '_' ||
+                COALESCE(hydrationMl, 0) || '_' ||
+                COALESCE(steps, 0) || '_' ||
+                COALESCE(distanceMeters, 0)
+            ))""")
     suspend fun deduplicateVitals()
 
     @Query("DELETE FROM vital_signs_local WHERE localId = :localId")
@@ -220,13 +238,18 @@ interface MedicationLogDao {
     @Query("SELECT * FROM medication_logs_local WHERE pendingSync = 1")
     suspend fun getPendingSync(): List<MedicationLogEntity>
 
-    @Query("SELECT COUNT(*) FROM medication_logs_local WHERE userId = :userId AND DATE(takenAt) = DATE(:currentTimestamp)")
+    // AUD-AN27: takenAt é epoch-MILLIS. SQLite trata número como DIA JULIANO,
+    // então DATE(1690000000000) → NULL (verificado empiricamente) e a
+    // comparação DATE(x)=DATE(y) era NULL=NULL (sempre falso), fazendo
+    // countTodayTaken devolver 0 e getDistinctTakeDays colapsar tudo em 1
+    // grupo. A conversão correta é millis/1000 → 'unixepoch'.
+    @Query("SELECT COUNT(*) FROM medication_logs_local WHERE userId = :userId AND date(takenAt/1000, 'unixepoch', 'localtime') = date(:currentTimestamp/1000, 'unixepoch', 'localtime')")
     suspend fun countTodayTaken(userId: String, currentTimestamp: Long): Int
 
     @Query("SELECT * FROM medication_logs_local WHERE userId = :userId ORDER BY takenAt DESC LIMIT :count")
     suspend fun getLastNMedications(userId: String, count: Int): List<MedicationLogEntity>
 
-    @Query("SELECT DATE(takenAt) FROM medication_logs_local WHERE userId = :userId GROUP BY DATE(takenAt) ORDER BY DATE(takenAt) DESC")
+    @Query("SELECT date(takenAt/1000, 'unixepoch', 'localtime') AS d FROM medication_logs_local WHERE userId = :userId GROUP BY d ORDER BY d DESC")
     fun getDistinctTakeDays(userId: String): Flow<List<String>>
 }
 

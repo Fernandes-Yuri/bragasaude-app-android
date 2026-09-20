@@ -44,15 +44,12 @@ class MedicationRepository @Inject constructor(
         syncAlarmsWithDatabase(entity.userId)
         triggerSync()
 
+        // AUD-AN31: REMOVIDO bloco "Sincronização via API" — apiClient era
+        // injetado e nunca usado; o bloco só re-inseria a MESMA entity (insert
+        // duplicado no catch "por segurança"). A sincronização real é feita
+        // pelo SyncWorker via pendingSync, já setado acima. Código morto com
+        // comentário enganoso removido.
         if (med.userId == guestId) return
-
-        try {
-            // Sincronização via API
-            medicationDao.insert(entity.copy(pendingSync = true))
-        } catch (e: Exception) {
-            medicationDao.insert(entity.copy(pendingSync = true))
-            triggerSync()
-        }
     }
 
     suspend fun takeMedication(userId: String, medId: String, time: String? = null,

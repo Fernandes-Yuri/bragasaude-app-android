@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.auth
+package br.com.bragasaude.data.remote.auth
 
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.tasks.await
@@ -45,5 +45,20 @@ class AuthService @Inject constructor(
     fun clearTokenCache() {
         cachedToken = null
         tokenExpiresAt = 0L
+    }
+
+    /**
+     * AUD-AN34: leitura NÃO bloqueante do token em cache. Retorna null quando
+     * não há token válido (ainda não logado, ou expirou). Feita para o
+     * AuthInterceptor não precisar de runBlocking na thread do OkHttp — o
+     * refresh Firebase pode levar segundos e entupir o dispatcher.
+     */
+    fun cachedTokenNow(): String? {
+        val now = System.currentTimeMillis()
+        return if (cachedToken != null && now < (tokenExpiresAt - 60_000)) {
+            cachedToken
+        } else {
+            null
+        }
     }
 }

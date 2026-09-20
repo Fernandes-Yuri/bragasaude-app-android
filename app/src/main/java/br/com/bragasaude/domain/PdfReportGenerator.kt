@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import android.content.Context
 import android.graphics.*
@@ -346,7 +346,12 @@ class PdfReportGenerator(private val context: Context) {
 
         // Salva o arquivo no armazenamento
         return try {
-            val file = File(context.cacheDir, "relatorio_clinico_${System.currentTimeMillis()}.pdf")
+            // AUD-AN36: antes escrevia na RAIZ do cacheDir — só compartilhável
+            // porque o FileProvider expunha "cache_root" path="." (TODO o cache,
+            // incluindo áudio TTS derivado de texto de saúde). Agora em
+            // subpasta própria, e o cache_root foi removido do file_paths.xml.
+            val outDir = File(context.cacheDir, "relatorios").apply { if (!exists()) mkdirs() }
+            val file = File(outDir, "relatorio_clinico_${System.currentTimeMillis()}.pdf")
             val outputStream = FileOutputStream(file)
             pdfDocument.writeTo(outputStream)
             pdfDocument.close()
