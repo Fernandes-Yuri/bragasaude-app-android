@@ -120,6 +120,13 @@ class HydrationConversation(private val nowMs: () -> Long = { System.nanoTime() 
                 return Reply.Say("Essa quantidade não cabe no registro de água do app. Pode conferir o valor em ml?")
             }
             totalMl = computed.toInt()
+            // D-VOZ1: valor totalmente determinado neste turno — entrega direto na tela
+            // de hidratação. O ViewModel navega e já fala "Preparei N ml de água na
+            // tela", sem o turno redundante "São N ml. Quer conferir?". A pergunta só
+            // é mantida quando realmente falta informação (ex.: copos sem tamanho).
+            active = false
+            handedOff = true
+            return Reply.Review(totalMl!!)
         }
         return question()
     }
