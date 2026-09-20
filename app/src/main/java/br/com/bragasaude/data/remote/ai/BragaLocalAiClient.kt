@@ -2,6 +2,8 @@ package br.com.bragasaude.data.remote.ai
 
 import android.util.Log
 import android.content.Context
+// AUD-AN40: reusa o normalizador canonico de PA do app.
+import br.com.bragasaude.domain.util.BloodPressureParser
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CancellationException
@@ -110,7 +112,9 @@ class BragaLocalAiClient @Inject constructor(
         }
         // Camada 1 de Defesa: Proteção ética e prevenção de sobrecargas
         if (INJECTION_PATTERNS.any { it.containsMatchIn(userSpeech) }) {
-            Log.w(TAG, "Tentativa de injeção ou sobrecarga interceptada: $userSpeech")
+            // AUD-AN40: NAO loga userSpeech — e fala de saude (PHI). Loga so
+            // o tamanho; o conteudo nunca vai pro logcat.
+            Log.w(TAG, "Tentativa de injeicao ou sobrecarga interceptada (${userSpeech.length} chars)")
             val friendlyFala = when {
                 Regex("(?i)(cont[ea]|livro|poema|linhas)").containsMatchIn(userSpeech) ->
                     "Eita! Contar isso tudo vai gastar todo o nosso fôlego! Que tal a gente focar no que realmente importa para a sua saúde e rotina hoje?"
@@ -298,13 +302,14 @@ class BragaLocalAiClient @Inject constructor(
                     } else null
                     val motivoClinico = params.optString("motivo_clinico", "").takeIf { it.isNotBlank() }
 
-                    // Normalização médica defensiva (ex: 12 por 8 -> 120/80)
-                    if (sistolica != null && sistolica in 8..25) {
-                        sistolica *= 10
-                    }
-                    if (diastolica != null && diastolica in 4..15) {
-                        diastolica *= 10
-                    }
+                    // AUD-AN40: antes era heuristica FRAGIL local
+                    // (sistolica in 8..25 -> *10). Duas armadilhas: (1) uma PA
+                    // REAL de 25 (choque severo) virava 250; (2) uma PA de 8
+                    // legitima (crienca) virava 80. Reusa o normalizador
+                    // CANONICO do app (BloodPressureParser, mesma regra do
+                    // parser de voz e do HealthScoreCalculator): <30 e >0.
+                    sistolica = sistolica?.let { BloodPressureParser.normalizePressure(it) }
+                    diastolica = diastolica?.let { BloodPressureParser.normalizePressure(it) }
 
                     return BragaAiResult(
                         tipo = tipo,
