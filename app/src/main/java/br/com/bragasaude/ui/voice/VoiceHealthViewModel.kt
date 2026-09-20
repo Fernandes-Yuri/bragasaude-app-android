@@ -992,16 +992,21 @@ class VoiceHealthViewModel @Inject constructor(
             when (aiResult.tipo) {
                 "PRESSAO" -> {
                     if (aiResult.sistolica != null && aiResult.diastolica != null) {
-                        val systolic = aiResult.sistolica!!
-                        val diastolic = aiResult.diastolica!!
-                        val sysFmt = if (systolic > 30) systolic / 10 else systolic
-                        val diaFmt = if (diastolic > 20) diastolic / 10 else diastolic
+                        // AUD-AN01: a IA pode devolver pressão em escala coloquial
+                        // ("12/8" em vez de 120/80). O parser local e a tela normalizam;
+                        // este caminho usava o valor cru. Normalizar ANTES de navegar,
+                        // gravar e anunciar — senão 12/8 salvo dispara falso alerta
+                        // clínico no HealthEngine (value < 90).
+                        var systolic = aiResult.sistolica!!
+                        var diastolic = aiResult.diastolica!!
+                        if (systolic > 30) systolic /= 10
+                        if (diastolic > 20) diastolic /= 10
                         telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", rawTranscript, "BloodPressure")
-                        
+
                         _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToVitals("PRESSURE", "$systolic/$diastolic"))
                         _state.value = VoiceUiState.Saved(summary = "Pressão $systolic/$diastolic", isConversational = false)
                         val spokenPrompt = if (aiResult.fala.isNotBlank()) aiResult.fala
-                            else "Já preenchi $sysFmt por $diaFmt aqui para você! A sua pressão está ótima e dentro da faixa normal. Dá uma conferida certinha nos valores e é só tocar em salvar!"
+                            else "Já preenchi $systolic por $diastolic aqui para você! A sua pressão está ótima e dentro da faixa normal. Dá uma conferida certinha nos valores e é só tocar em salvar!"
                         speak(spokenPrompt) {
                         onSpeechFinished()
                     }

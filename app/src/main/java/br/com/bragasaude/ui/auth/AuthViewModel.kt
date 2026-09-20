@@ -764,6 +764,14 @@ class AuthViewModel @Inject constructor(
             }
             
             // Limpar todas as tabelas locais (exceto catálogo de alimentos persistido)
+            // AUD-AN17: fechar a conexão ANTES de apagar o arquivo, senão o fd aberto
+            // do SupportOpenHelperFactory segura o inode desvinculado e a próxima
+            // sessão perde tudo o que gravar.
+            try {
+                database.close()
+            } catch (e: Exception) {
+                android.util.Log.w("AuthViewModel", "Erro ao fechar DB antes de apagar: ${e.message}")
+            }
             database.clearAllTables()
             
             // Apagar o arquivo inteiro do banco Room para garantir limpeza total
@@ -831,6 +839,15 @@ class AuthViewModel @Inject constructor(
                 androidx.work.WorkManager.getInstance(appContext).cancelAllWork()
             } catch (e: Exception) {
                 android.util.Log.w("AuthViewModel", "Erro ao cancelar workers no deleteAccount: ${e.message}")
+            }
+            // AUD-AN17: FECHAR a conexão Room/SQLCipher ANTES de clearAllTables() e
+            // deleteDatabase(). Sem isso o SupportOpenHelperFactory mantém o fd aberto
+            // sobre o inode desvinculado; a nova sessão escreve no inode órfão e os
+            // dados (vitals, medicações, biometria) somem quando o processo reinicia.
+            try {
+                database.close()
+            } catch (e: Exception) {
+                android.util.Log.w("AuthViewModel", "Erro ao fechar DB antes de apagar: ${e.message}")
             }
             database.clearAllTables()
             try {

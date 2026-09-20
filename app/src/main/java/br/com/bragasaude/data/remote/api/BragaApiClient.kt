@@ -1164,6 +1164,15 @@ class BragaApiClient @Inject constructor(
         deleteRequest("$baseUrl/api/exams/$examId")
     }
 
+    /**
+     * Exclusão da conta na nuvem — Direito ao Esquecimento (LGPD Art. 18).
+     * O gateway remove o perfil; ON DELETE CASCADE cuida das 14 tabelas filhas.
+     * Retorna true somente se o servidor confirmou (204/200).
+     */
+    suspend fun deleteAccount(userId: String): Boolean = withContext(Dispatchers.IO) {
+        deleteRequest("$baseUrl/api/profile/$userId")
+    }
+
     suspend fun syncManualExam(
         examId: String?,
         title: String,
