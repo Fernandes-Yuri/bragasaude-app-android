@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.di
+package br.com.bragasaude.di
 
 import br.com.bragasaude.BuildConfig
 import br.com.bragasaude.data.remote.api.BragaApiService
@@ -39,11 +39,19 @@ object NetworkModule {
             .addInterceptor(authInterceptor)
 
         if (!BuildConfig.DEBUG) {
-            // Em RELEASE, aplica Certificate Pinning rígido contra interceptação (MITM)
+            // Em RELEASE, aplica Certificate Pinning rígido contra interceptação (MITM).
+            // AUD-AN15: antes havia dois hashes PLACEHOLDER ("GenPlaceholder111…") — falsa
+            // segurança que, no instante em que o BragaApiService entrasse em uso, faria
+            // TODO o tráfego de release morrer com SSLPeerUnverifiedException.
+            // Pins reais extraídos da cadeia ao vivo de api.bragasaude.online (20/09/2026):
+            //   primário  = certificado leaf (bragasaude.online, Let's Encrypt)
+            //   backup    = CA intermediária (Let's Encrypt YE1) — mantém tráfego se o
+            //                leaf for renovado, mas não se a CA raiz mudar.
+            // RENOVAÇÃO: o leaf Let's Encrypt expira em ~90 dias. Sempre que trocar,
+            // atualize o pin primário; o de backup cobre a transição.
             val certificatePinner = CertificatePinner.Builder()
-                // Pin primário do domínio e pin de backup
-                .add("api.bragasaude.online", "sha256/k2oTQLGenPlaceholder1111111111111111111111111=")
-                .add("api.bragasaude.online", "sha256/k2oTQLGenBackupCA222222222222222222222222222=")
+                .add("api.bragasaude.online", "sha256/u5RhQ4d7GV6gMQo1uHKCPtHTCSOQn6UZYiQilLwCi8I=")
+                .add("api.bragasaude.online", "sha256/brzvtCELCIZUo4sD/qPX0ccRtPsd3DY6RfmxpOU9oB4=")
                 .build()
             builder.certificatePinner(certificatePinner)
         } else {

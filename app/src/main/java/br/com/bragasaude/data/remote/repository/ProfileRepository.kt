@@ -190,8 +190,17 @@ class ProfileRepository @Inject constructor(
      * conectividade, mas a falha precisa ser logada e re-tentada depois).
      */
     suspend fun deleteProfileRemotely(userId: String): Boolean {
+        // AUD-AN16: antes era `return true` incondicional — o usuário "excluía" a
+        // conta e todo o PHI permanecia no RDS. Agora chama o endpoint de exclusão;
+        // só retorna true se o servidor confirmar. Em falha de rede devolve false
+        // para o chamador avisar o usuário e re-tentar (LGPD não pode fingir sucesso).
         if (userId == guestId) return true
-        return true
+        return try {
+            apiClient.deleteAccount(userId)
+        } catch (e: Exception) {
+            android.util.Log.e("ProfileRepository", "Falha ao excluir conta na nuvem: ${e.message}")
+            false
+        }
     }
 
     private fun triggerSync() {
