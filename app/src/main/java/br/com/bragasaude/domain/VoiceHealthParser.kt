@@ -499,12 +499,21 @@ class VoiceHealthParser @Inject constructor() {
 
     private fun detectHydration(text: String, raw: String): VoiceHealthIntent? {
         // Descrever um recipiente ou pedir para lembrar seu tamanho não relata consumo.
-        val intake = Regex("\\b(?:bebi|tomei|consumi|registre|registra|registrar|anote|anota|adicionar|adicione)\\b").containsMatchIn(text)
+        // D-VOZ1: inclui os infinitivos "beber"/"tomar" — "beber água", "tomar dois
+        // copos de água" são as falas mais naturais no uso real. Sem eles a frase
+        // escapa do parser local, vai ao servidor, e o servidor responde no modo
+        // conversa (orientador) sem acionar a tela do app.
+        val intake = Regex("\\b(?:bebi|beber|tomei|tomar|consumi|consumir|registre|registra|registrar|anote|anota|adicionar|adicione)\\b").containsMatchIn(text)
         val bareAmount = Regex("(?:agua\\s+)?\\d+(?:[.,]\\d+)?\\s*(?:copos?|garrafinhas?|garrafas?|xicaras?|copinhos?|canecas?|litros?|l|ml|mililitros?)(?:\\s+de\\s+agua)?").matches(text)
         if (!intake && !bareAmount) return null
         // Precisa mencionar água OU recipiente para ser hidratação
         val mentionsWater = hydrationWaterRegex.containsMatchIn(text)
         val containerMatch = hydrationContainerRegex.find(text)
+
+        // D-VOZ1: guarda anti-alucinação — "beber um copo de suco"/"tomar um café"
+        // não podem virar registro de água. Espelha o otherDrink do HydrationConversation.
+        val otherDrink = Regex("\\b(?:cafe|leite|suco|cerveja|vinho|refrigerante|cha|remedio|medicamento|xarope)\\b").containsMatchIn(text)
+        if (otherDrink && !mentionsWater) return null
 
         if (!mentionsWater && containerMatch == null) return null
         if (containerMatch == null && mentionsWater) {

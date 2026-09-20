@@ -152,6 +152,31 @@ class VoiceHealthParserTest {
         assertEquals(250, hydration.amountMl)
     }
 
+    // D-VOZ1: os infinitivos "beber"/"tomar" são a forma natural de falar no uso real.
+    // Antes deste fix a frase escapava do parser local, ia ao servidor e voltava como
+    // CONVERSA (modo orientador) — o assistente entendia mas não acionava a tela.
+    @Test
+    fun `detect hydration infinitivo beber agua`() {
+        val result = parser.parse("beber água")
+        assertTrue(result is VoiceHealthIntent.Hydration)
+        val hydration = result as VoiceHealthIntent.Hydration
+        assertEquals(250, hydration.amountMl)
+    }
+
+    @Test
+    fun `detect hydration infinitivo tomar copos`() {
+        val result = parser.parse("tomar dois copos de água")
+        assertTrue(result is VoiceHealthIntent.Hydration)
+        val hydration = result as VoiceHealthIntent.Hydration
+        assertEquals(500, hydration.amountMl)
+    }
+
+    @Test
+    fun `beber outra bebida nao vira hidratacao`() {
+        assertTrue(parser.parse("beber um copo de suco") is VoiceHealthIntent.Unknown)
+        assertTrue(parser.parse("tomar um café agora") is VoiceHealthIntent.Unknown)
+    }
+
     @Test
     fun `detect consumed meal continues to conversation`() {
         val result = parser.parse("comi filé de frango no almoço")
