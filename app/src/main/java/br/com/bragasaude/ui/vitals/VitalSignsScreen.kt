@@ -63,6 +63,9 @@ fun VitalSignsScreen(
     var showConfirmation by remember { mutableStateOf(false) }
     var sosRecommendation by remember { mutableStateOf<br.com.bragasaude.domain.HealthEngine.HealthRecommendation?>(null) }
     var milestoneMessage by remember { mutableStateOf<String?>(null) }
+    // AUD-AN09: alerta SOS in-app — antes o coletor tinha corpo vazio e os
+    // eventos de emergência eram descartados silenciosamente.
+    var sosMessage by remember { mutableStateOf<String?>(null) }
     
     var selectedTab by remember { 
         mutableIntStateOf(
@@ -107,7 +110,9 @@ fun VitalSignsScreen(
     LaunchedEffect(viewModel.sosAlert, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             viewModel.sosAlert.collect { message ->
-                // Precisamos que o ViewModel emita o objeto de recomendação
+                // AUD-AN09: antes este coletor era vazio — o canal de SOS
+                // estava morto das duas pontas. Agora surfamos a emergência.
+                sosMessage = message
             }
         }
     }
@@ -436,6 +441,19 @@ fun VitalSignsScreen(
             text = { Text(milestoneMessage!!) },
             confirmButton = {
                 Button(onClick = { milestoneMessage = null }) { Text("Parabéns!") }
+            }
+        )
+    }
+
+    // AUD-AN09: segunda camada de aviso — a notificação do sistema pode ser
+    // perdida; o alerta in-app garante que o idoso veja a emergência.
+    if (sosMessage != null) {
+        AlertDialog(
+            onDismissRequest = { sosMessage = null },
+            title = { Text("Atenção imediata", color = MaterialTheme.colorScheme.error) },
+            text = { Text(sosMessage!!) },
+            confirmButton = {
+                Button(onClick = { sosMessage = null }) { Text("Entendido") }
             }
         )
     }
