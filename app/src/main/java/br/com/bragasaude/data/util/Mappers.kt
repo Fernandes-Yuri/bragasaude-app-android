@@ -302,23 +302,8 @@ fun ExamItemEntity.toRemote() = RemoteExamItem(
     measuredAt = measuredAt?.let { formatDate(it) }
 )
 
-fun DailyMetricsEntity.toRemote() = RemoteDailyMetrics(
-    userId = userId,
-    date = date,
-    steps = steps,
-    distanceMeters = distanceMeters,
-    caloriesBurned = caloriesBurned,
-    activeMinutes = activeMinutes
-)
-
-fun RemoteDailyMetrics.toEntity() = DailyMetricsEntity(
-    date = date,
-    userId = userId,
-    steps = steps,
-    distanceMeters = distanceMeters,
-    caloriesBurned = caloriesBurned,
-    activeMinutes = activeMinutes
-)
+// AUD-AN40: mappers de DailyMetrics REMOVIDOS — mortos junto com a
+// RemoteDailyMetrics. O parse real e manual em BragaApiClient.
 
 fun RemoteLeagueCycle.toEntity() = LeagueCycleEntity(
     id = id,

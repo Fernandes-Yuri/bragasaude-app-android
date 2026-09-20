@@ -108,7 +108,7 @@ fun GroceryListBottomSheet(
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Adicionar (${suggestedItems.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Adicionar (${suggestedItems.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -187,7 +187,7 @@ fun GroceryListBottomSheet(
                 ) {
                     Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Gerar PDF / WhatsApp", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("Gerar PDF / WhatsApp", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
 
                 OutlinedButton(
@@ -196,7 +196,7 @@ fun GroceryListBottomSheet(
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Recriar", fontSize = 12.sp)
+                    Text("Recriar", fontSize = 13.sp)
                 }
             }
 

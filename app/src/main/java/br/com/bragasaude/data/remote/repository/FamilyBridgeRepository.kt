@@ -181,7 +181,7 @@ class FamilyBridgeRepository @Inject constructor(
     // ==================== SINCRONIZAÇÃO REMOTA ====================
 
     suspend fun syncBindingsForPatient(patientUserId: String) {
-        if (patientUserId.isBlank() || patientUserId.startsWith("00000000")) return
+        if (patientUserId.isBlank() || patientUserId == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
         try {
             val list = apiClient.getFamilyBindings(patientUserId)
             list.forEach { item ->
@@ -200,7 +200,7 @@ class FamilyBridgeRepository @Inject constructor(
     }
 
     suspend fun syncBindingsForCaregiver(caregiverUserId: String) {
-        if (caregiverUserId.isBlank() || caregiverUserId.startsWith("00000000")) return
+        if (caregiverUserId.isBlank() || caregiverUserId == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
         try {
             val list = apiClient.getFamilyBindings(caregiverUserId)
             list.forEach { item ->

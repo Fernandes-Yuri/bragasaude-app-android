@@ -464,7 +464,7 @@ fun MultipageCaptureScreen(
                                 ) {
                                     Icon(Icons.Default.Delete, contentDescription = null, tint = BragaEmergencyOrange, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("Excluir", color = BragaEmergencyOrange, fontSize = 12.sp)
+                                    Text("Excluir", color = BragaEmergencyOrange, fontSize = 13.sp)
                                 }
                             }
 
