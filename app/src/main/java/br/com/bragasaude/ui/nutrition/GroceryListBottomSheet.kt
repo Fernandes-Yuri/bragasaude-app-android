@@ -108,7 +108,7 @@ fun GroceryListBottomSheet(
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Adicionar (${suggestedItems.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("Adicionar (${suggestedItems.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -119,7 +119,7 @@ fun GroceryListBottomSheet(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 border = BorderStroke(1.dp, Color(0xFFC8E6C9))
             ) {
                 Row(
@@ -133,26 +133,26 @@ fun GroceryListBottomSheet(
                         Text(
                             "Estimativa da Semana",
                             style = MaterialTheme.typography.labelMedium,
-                            color = Color(0xFF2E7D32),
+                            color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             String.format(Locale.getDefault(), "R$ %.2f", totalCost),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1B5E20)
+                            color = MaterialTheme.colorScheme.primary
                         )
                         Text(
                             String.format(Locale.getDefault(), "Média: ~R$ %.2f / dia", dailyAvg),
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF388E3C)
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
 
                     Column(horizontalAlignment = Alignment.End) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = if (checkedCount > 0) Color(0xFF2E7D32) else Color.Gray.copy(alpha = 0.2f)
+                            color = if (checkedCount > 0) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.2f)
                         ) {
                             Text(
                                 "$checkedCount de ${groceryList.size} comprados",
@@ -166,7 +166,7 @@ fun GroceryListBottomSheet(
                         Text(
                             "Na Despensa",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF2E7D32)
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -183,11 +183,11 @@ fun GroceryListBottomSheet(
                     onClick = onExportPdf,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20))
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Gerar PDF / WhatsApp", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("Gerar PDF / WhatsApp", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
 
                 OutlinedButton(
@@ -196,7 +196,7 @@ fun GroceryListBottomSheet(
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Recriar", fontSize = 13.sp)
+                    Text("Recriar", fontSize = 14.sp)
                 }
             }
 
@@ -293,7 +293,7 @@ fun GroceryItemRow(
                 checked = item.isCheckedInPantry,
                 onCheckedChange = onToggle,
                 colors = CheckboxDefaults.colors(
-                    checkedColor = Color(0xFF2E7D32),
+                    checkedColor = MaterialTheme.colorScheme.primary,
                     uncheckedColor = Color.Gray
                 )
             )
@@ -319,7 +319,7 @@ fun GroceryItemRow(
                 text = String.format(Locale.getDefault(), "R$ %.2f", item.estimatedPriceBrl),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (item.isCheckedInPantry) Color(0xFF388E3C) else MaterialTheme.colorScheme.primary
+                color = if (item.isCheckedInPantry) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary
             )
         }
     }
