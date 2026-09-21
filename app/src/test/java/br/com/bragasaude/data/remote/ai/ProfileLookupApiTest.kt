@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.ai
+package br.com.bragasaude.data.remote.ai
 
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.model.ProfileLookup
@@ -20,8 +20,8 @@ class ProfileLookupApiTest {
         every { auth.currentUser } returns null
         server = MockWebServer()
         server.start()
-        api = BragaApiClient(mockk(relaxed = true))
-        api.baseUrl = server.url("/").toString().trimEnd('/')
+        // AUD-AN40: baseUrl agora imutavel — injeta a URL do mock no construtor.
+        api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'))
     }
     @After fun cleanup() { server.shutdown(); unmockkStatic(FirebaseAuth::class) }
     @Test fun only404MeansMissing() = runBlocking {
@@ -45,8 +45,8 @@ class ProfileLookupApiTest {
     @Test fun refusedConnectionIsUnavailable() = runBlocking {
         val closedServer = MockWebServer()
         closedServer.start()
-        api.baseUrl = closedServer.url("/").toString().trimEnd('/')
+        val deadApi = BragaApiClient(mockk(relaxed = true), closedServer.url("/").toString().trimEnd('/'))
         closedServer.shutdown()
-        assertTrue(api.getProfileLookup("owner") is ProfileLookup.Unavailable)
+        assertTrue(deadApi.getProfileLookup("owner") is ProfileLookup.Unavailable)
     }
 }
