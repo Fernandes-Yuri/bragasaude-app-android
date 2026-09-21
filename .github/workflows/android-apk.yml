@@ -189,6 +189,13 @@ jobs:
         with:
           gradle-version: '9.5.0'
 
+      # AUD-AN02 — gate anti-regressão de emojis em strings de UI.
+      # O item quitou e REGREDIU 2x (limpeza por commit seguida de reinserção).
+      # Agora quebra o CI se alguém voltar a colocar emoji numa string de UI.
+      # Python puro, sem dependências — vem com o ubuntu-latest.
+      - name: Gate AUD-AN02 (emojis em strings de UI)
+        run: python3 tools/check_emojis_ui.py
+
       - name: Rodar testes unitários
         run: |
           JDK_PATHS=$(ls -d "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}/Java_Temurin_jdk"/*/x64 2>/dev/null | paste -sd, -)

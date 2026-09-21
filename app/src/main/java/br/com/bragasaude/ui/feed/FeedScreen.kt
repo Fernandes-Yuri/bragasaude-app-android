@@ -113,7 +113,7 @@ fun SocialPostCard(post: SocialPostEntity, onReact: () -> Unit) {
             Spacer(Modifier.height(12.dp))
 
             // Selo visual da Rede Social Intergeracional (D11):
-            // "👨‍👧 Publicação em Família • [Nome do Filho] & [Nome do Idoso]"
+            // "Publicação em Família • [Nome do Filho] & [Nome do Idoso]"
             if (post.isFamilyPost) {
                 FamilyPrideBadge(
                     caregiverName = post.caregiverName,
