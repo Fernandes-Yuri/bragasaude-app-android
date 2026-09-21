@@ -75,4 +75,11 @@ object NetworkModule {
     // inexistentes). O app usa BragaApiClient (HttpURLConnection). Se a
     // migração Retrofit for retomada, reconstrua a interface a partir do
     // contrato real do gateway; NÃO confie nas rotas de BragaApiService.kt.
+
+    // AUD-AN40: BragaApiClient agora recebe baseUrl no construtor (imutavel).
+    // Producao pega do BuildConfig; testes injetam a URL do MockWebServer.
+    @Provides
+    @Singleton
+    @BaseUrl
+    fun provideBaseUrl(): String = BuildConfig.BASE_URL
 }

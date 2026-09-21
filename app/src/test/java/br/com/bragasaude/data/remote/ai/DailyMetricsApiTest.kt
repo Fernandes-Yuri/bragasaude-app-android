@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.ai
+package br.com.bragasaude.data.remote.ai
 
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import com.google.firebase.auth.FirebaseAuth
@@ -20,8 +20,8 @@ class DailyMetricsApiTest {
         every { auth.currentUser } returns null
         server = MockWebServer()
         server.start()
-        api = BragaApiClient(mockk(relaxed = true))
-        api.baseUrl = server.url("/").toString().trimEnd('/')
+        // AUD-AN40: baseUrl agora imutavel — injeta a URL do mock no construtor.
+        api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'))
     }
 
     @After fun cleanup() {

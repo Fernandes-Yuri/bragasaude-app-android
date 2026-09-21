@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.model.*
+import br.com.bragasaude.di.BaseUrl
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,7 +29,11 @@ import javax.inject.Singleton
  */
 @Singleton
 class BragaApiClient @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    // AUD-AN40: baseUrl era `var` publico mutavel num @Singleton — ninguem mutava
+    // em producao, mas nada impedia (race de concorrencia se um dia mutassem).
+    // Imutavel; producao vem do @BaseUrl (BuildConfig) e testes injetam o mock.
+    @BaseUrl private val _baseUrl: String = DEFAULT_BASE_URL
 ) {
     companion object {
         private const val TAG = "BragaApiClient"
@@ -37,9 +42,7 @@ class BragaApiClient @Inject constructor(
         private const val READ_TIMEOUT_MS = 10000
     }
 
-    // AUD-AN40: era `var` publico mutavel num @Singleton — ninguem mutava,
-    // mas nada impedia (race de concorrencia se um dia mutassem). Imutavel.
-    val baseUrl: String = DEFAULT_BASE_URL
+    val baseUrl: String get() = _baseUrl
 
     private val isoFormat get() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
     private val dateFormat get() = SimpleDateFormat("yyyy-MM-dd", Locale.US)
