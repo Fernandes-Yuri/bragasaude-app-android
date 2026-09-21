@@ -13,14 +13,14 @@ import androidx.compose.ui.platform.LocalContext
 
 // ESQUEMA CLARO MODERNO (Base Teal com Neutros Limpos)
 private val LightColorScheme = lightColorScheme(
-    primary = TealPrimary,
+    primary = BragaEmeraldDark,
     onPrimary = OnPrimary,
     primaryContainer = TealLight,
-    onPrimaryContainer = TealPrimary,
-    secondary = TealSecondary,
+    onPrimaryContainer = BragaEmeraldDark,
+    secondary = BragaEmeraldDark,
     onSecondary = Color.White,
     secondaryContainer = TealSurface,
-    onSecondaryContainer = TealPrimary,
+    onSecondaryContainer = BragaEmeraldDark,
     background = Background,
     onBackground = OnBackground,
     surface = Surface,

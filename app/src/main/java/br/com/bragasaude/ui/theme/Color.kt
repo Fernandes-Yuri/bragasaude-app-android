@@ -3,7 +3,7 @@
 import androidx.compose.ui.graphics.Color
 
 // === PALETA OFICIAL BRAGA SAÚDE — LUMINOSA, LEVE E ACOLHEDORA ===
-val BragaEmerald = Color(0xFF00897B)        // Verde Teal/Esmeralda Luminoso (não escuro/sombrio)
+val BragaEmerald = Color(0xFF00A884)        // Verde Teal/Esmeralda Luminoso (não escuro/sombrio)
 val BragaEmeraldDark = Color(0xFF00695C)    // Tom intermediário suave para gradientes leves
 val BragaEmeraldLight = Color(0xFF26A69A)   // Destaque luminoso acolhedor
 val BragaMint = Color(0xFFE0F2F1)           // Verde menta bem clarinho e fresco

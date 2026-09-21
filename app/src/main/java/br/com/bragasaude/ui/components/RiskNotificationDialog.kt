@@ -3,6 +3,9 @@ package br.com.bragasaude.ui.components
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -34,27 +37,28 @@ fun RiskNotificationDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color.White,
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Fechar", color = Color.Gray)
-            }
-        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(24.dp),
         title = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
             ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Fechar")
+                    }
+                }
                 Icon(
                     Icons.Default.Warning,
                     contentDescription = null,
-                    tint = Color(0xFFDC2626),
+                    tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(48.dp)
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "ALERTA CRÍTICO",
-                    color = Color(0xFFDC2626),
+                    "Emergência e apoio",
+                    color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.ExtraBold,
                     textAlign = TextAlign.Center
                 )
@@ -63,6 +67,7 @@ fun RiskNotificationDialog(
         text = {
             Text(
                 message,
+                modifier = Modifier.heightIn(max = 200.dp).verticalScroll(rememberScrollState()),
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Medium
@@ -70,8 +75,8 @@ fun RiskNotificationDialog(
         },
         confirmButton = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // BOTÃO 1: Ligar para Emergência (192)
                 Button(
@@ -79,7 +84,8 @@ fun RiskNotificationDialog(
                         val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:192"))
                         context.startActivity(intent)
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
                 ) {
                     Icon(Icons.Default.Call, contentDescription = null)
@@ -93,10 +99,15 @@ fun RiskNotificationDialog(
                         val gmmIntentUri = Uri.parse("geo:0,0?q=UNIDADE+DE+PRONTO+ATENDIMENTO")
                         val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
                         mapIntent.setPackage("com.google.android.apps.maps")
-                        context.startActivity(mapIntent)
+                        try {
+                            context.startActivity(mapIntent)
+                        } catch (_: android.content.ActivityNotFoundException) {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/search/?api=1&query=UPA")))
+                        }
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Success)
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Icon(Icons.Default.LocationOn, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
@@ -110,7 +121,8 @@ fun RiskNotificationDialog(
                         val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))
                         context.startActivity(intent)
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Icon(Icons.Default.Person, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
