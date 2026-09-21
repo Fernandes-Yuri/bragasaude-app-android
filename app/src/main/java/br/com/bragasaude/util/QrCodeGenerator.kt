@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.util
+package br.com.bragasaude.util
 
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -48,12 +48,15 @@ object QrCodeGenerator {
     
     /**
      * Formata a data de expiração para exibição na UI.
-     * 
+     *
      * @param expiresAt Timestamp da expiração em millis
+     * @param now Relogio injetavel (default: real). Testes fixam o instante para
+     *           nao depender da meia-noite — antes o teste somava 3 dias a
+     *           System.currentTimeMillis() e a implementacao lia de novo, numa
+     *           race que fazia o CI falhar (flaky) perto da virada do dia.
      * @return String formatada (ex: "Expira em 3 dias")
      */
-    fun formatExpiration(expiresAt: Long): String {
-        val now = System.currentTimeMillis()
+    fun formatExpiration(expiresAt: Long, now: Long = System.currentTimeMillis()): String {
         val diffMillis = expiresAt - now
         
         if (diffMillis <= 0) {
