@@ -134,7 +134,7 @@ fun NutritionScreen(
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         border = BorderStroke(0.5.dp, Color.LightGray.copy(alpha = 0.3f))
                     ) {
@@ -197,9 +197,9 @@ fun NutritionScreen(
                                 }
                                 showGroceryBottomSheet = true
                             },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
-                        border = BorderStroke(1.dp, Color(0xFFA5D6A7))
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primaryContainer)
                     ) {
                         Row(
                             modifier = Modifier
@@ -214,7 +214,7 @@ fun NutritionScreen(
                             ) {
                                 Surface(
                                     shape = CircleShape,
-                                    color = Color(0xFF2E7D32),
+                                    color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(44.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
@@ -232,20 +232,20 @@ fun NutritionScreen(
                                         "Lista Semanal de Compras",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF1B5E20)
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                     Text(
                                         if (groceryList.isEmpty()) "Toque para gerar a lista"
                                         else "R$ ${String.format(java.util.Locale.getDefault(), "%.2f", totalEstimated)} • $checkedPantry/${groceryList.size} na despensa",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFF388E3C)
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                 }
                             }
                             Icon(
                                 Icons.Default.ChevronRight,
                                 contentDescription = null,
-                                tint = Color(0xFF2E7D32)
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
@@ -296,23 +296,11 @@ fun NutritionScreen(
 
                 // Seletor de Refeições (Tabs)
                 item {
-                    ScrollableTabRow(
-                        selectedTabIndex = mealTabs.indexOf(selectedMealTab),
-                        edgePadding = 0.dp,
-                        containerColor = Color.Transparent,
-                        divider = {}
-                    ) {
-                        mealTabs.forEach { tab ->
-                            Tab(
-                                selected = selectedMealTab == tab,
-                                onClick = { viewModel.selectMealTab(tab) },
-                                text = {
-                                    Text(
-                                        tab,
-                                        fontWeight = if (selectedMealTab == tab) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                }
-                            )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(mealTabs) { tab ->
+                            FilterChip(selected = selectedMealTab == tab, onClick = { viewModel.selectMealTab(tab) },
+                                label = { Text(tab, style = MaterialTheme.typography.bodyMedium) },
+                                shape = RoundedCornerShape(50), modifier = Modifier.heightIn(min = 48.dp))
                         }
                     }
                 }
@@ -325,7 +313,7 @@ fun NutritionScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(20.dp)
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(
@@ -701,7 +689,7 @@ fun MealCard(mealName: String, recommendation: HealthCalculators.MealRecommendat
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = BorderStroke(0.5.dp, Color.LightGray.copy(alpha = 0.3f))
@@ -854,7 +842,7 @@ fun FunctionalSuggestionGroupCard(
                     text = group.disclaimer,
                     modifier = Modifier.padding(8.dp),
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.outline,
                     lineHeight = 14.sp
                 )
@@ -912,7 +900,7 @@ private fun SuggestedOptionCard(
                 Text(
                     option.functionalBenefit,
                     style = MaterialTheme.typography.bodySmall,
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     lineHeight = 16.sp,
                     color = BragaTextSecondary,
                     maxLines = 3
@@ -920,7 +908,7 @@ private fun SuggestedOptionCard(
                 Text(
                     option.portionTip,
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     color = BragaEmerald,
                     maxLines = 2
                 )
@@ -1130,7 +1118,7 @@ fun HydrationProgressCard(
                     Text("Entendido")
                 }
             },
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             containerColor = BragaCardSurface
         )
     }

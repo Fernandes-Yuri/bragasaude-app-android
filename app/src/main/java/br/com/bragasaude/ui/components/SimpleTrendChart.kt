@@ -1,266 +1,133 @@
-﻿package br.com.bragasaude.ui.components
+package br.com.bragasaude.ui.components
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import br.com.bragasaude.ui.theme.TealLight
-import br.com.bragasaude.ui.theme.TealPrimary
-import br.com.bragasaude.ui.theme.TealSecondary
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 enum class ChartPeriod(val label: String, val days: Int) {
-    SEVEN_DAYS("7D", 7),
-    FIFTEEN_DAYS("15D", 15),
-    THIRTY_DAYS("30D", 30)
+    SEVEN_DAYS("7D", 7), FIFTEEN_DAYS("15D", 15), THIRTY_DAYS("30D", 30)
 }
 
 @Composable
 fun SimpleTrendChart(
-    data: List<Double>,
-    modifier: Modifier = Modifier,
-    label: String? = null,
-    color: Color = TealPrimary,
-    targetValue: Double? = null,
-    unit: String = "",
-    showPeriodSelector: Boolean = false,
-    onPeriodSelected: (ChartPeriod) -> Unit = {}
+    data: List<Double>, modifier: Modifier = Modifier, label: String? = null,
+    color: Color = MaterialTheme.colorScheme.primary, targetValue: Double? = null,
+    unit: String = "", showPeriodSelector: Boolean = false,
+    onPeriodSelected: (ChartPeriod) -> Unit = {}, timestamps: List<String> = emptyList(),
+    referenceRange: ClosedFloatingPointRange<Double>? = null
 ) {
-    var selectedPeriod by remember { mutableStateOf(ChartPeriod.SEVEN_DAYS) }
-
-    if (data.isEmpty()) {
-        Card(
-            modifier = modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-        ) {
-            Box(modifier = Modifier.padding(20.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(
-                    "Sem dados registrados para este período.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        return
+    var period by remember { mutableStateOf(ChartPeriod.SEVEN_DAYS) }
+    val hasDates = timestamps.size == data.size && timestamps.isNotEmpty() && timestamps.all { runCatching { Instant.parse(it) }.isSuccess }
+    val samples = remember(data, timestamps, period, hasDates, showPeriodSelector) {
+        val cutoff = java.time.LocalDate.now().minusDays(period.days.toLong() - 1).atStartOfDay(ZoneId.systemDefault()).toInstant()
+        data.mapIndexedNotNull { index, value ->
+            if (!value.isFinite()) null
+            else if (showPeriodSelector && hasDates && Instant.parse(timestamps[index]).isBefore(cutoff)) null
+            else index to value
+        }.let { if (showPeriodSelector && !hasDates) it.takeLast(period.days) else it }
     }
-
-    val displayData = remember(data, selectedPeriod) {
-        data.takeLast(selectedPeriod.days)
-    }
-
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Header: Título, Último Valor e Seletor
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f, fill = false)) {
-                    if (label != null) {
-                        Text(
-                            label,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                    }
-                    displayData.lastOrNull()?.let {
-                        val formattedVal = if (unit == "km" || (it % 1.0 != 0.0 && it < 100)) {
-                            "%.2f".format(it)
-                        } else {
-                            "${it.toInt()}"
-                        }
-                        Text(
-                            "$formattedVal $unit",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = color
-                        )
-                    }
-                }
-
-                if (showPeriodSelector) {
-                    Spacer(Modifier.width(8.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(20.dp)
-                    ) {
-                        Row(modifier = Modifier.padding(2.dp)) {
-                            ChartPeriod.values().forEach { period ->
-                                val isSelected = selectedPeriod == period
-                                Surface(
-                                    color = if (isSelected) color else Color.Transparent,
-                                    shape = RoundedCornerShape(16.dp),
-                                    modifier = Modifier.clickable {
-                                        selectedPeriod = period
-                                        onPeriodSelected(period)
-                                    }
-                                ) {
-                                    Text(
-                                        period.label,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-                        }
+    var selected by remember(samples) { mutableIntStateOf((samples.size - 1).coerceAtLeast(0)) }
+    val surface = MaterialTheme.colorScheme.surface
+    Card(modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = surface)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            label?.let { Text(it, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+            if (showPeriodSelector) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChartPeriod.entries.forEach { option ->
+                        FilterChip(selected = period == option, onClick = { period = option; onPeriodSelected(option) },
+                            label = { Text(if (hasDates) option.label else "${option.days} registros") },
+                            modifier = Modifier.heightIn(min = 48.dp), shape = RoundedCornerShape(50))
                     }
                 }
             }
-
-            Spacer(Modifier.height(16.dp))
-
-            // Canvas Gráfico
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(140.dp)
-            ) {
-                val width = size.width
-                val height = size.height
-                
-                val verticalPadding = 20.dp.toPx()
-                val horizontalPadding = 12.dp.toPx()
-                val availableHeight = height - (verticalPadding * 2)
-                val availableWidth = width - (horizontalPadding * 2)
-
-                val maxVal = displayData.maxOrNull() ?: 1.0
-                val minVal = displayData.minOrNull() ?: 0.0
-                
-                val effectiveMax = maxOf(maxVal, targetValue ?: maxVal)
-                val effectiveMin = minOf(minVal, targetValue ?: minVal)
-                
-                val range = (effectiveMax - effectiveMin).coerceAtLeast(1.0)
-                val spacing = if (displayData.size > 1) availableWidth / (displayData.size - 1) else availableWidth
-
-                // Linha Guia de Referência (Tracejada suave)
-                targetValue?.let { target ->
-                    val targetY = height - verticalPadding - ((target - effectiveMin) / range * availableHeight).toFloat()
-                    drawLine(
-                        color = Color.LightGray.copy(alpha = 0.8f),
-                        start = Offset(horizontalPadding, targetY),
-                        end = Offset(width - horizontalPadding, targetY),
-                        strokeWidth = 1.dp.toPx(),
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
-                    )
+            if (samples.isEmpty()) {
+                Text("Sem registros neste período.", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                val current = samples[selected.coerceIn(samples.indices)]
+                val formatted = if (current.second % 1.0 == 0.0) current.second.toInt().toString() else "%.2f".format(current.second)
+                val date = timestamps.getOrNull(current.first)?.let {
+                    runCatching { DateTimeFormatter.ofPattern("dd/MM/yyyy 'às' HH:mm").withZone(ZoneId.systemDefault()).format(Instant.parse(it)) }.getOrNull()
                 }
-
-                if (displayData.isNotEmpty()) {
-                    val points = displayData.mapIndexed { index, value ->
-                        val x = horizontalPadding + (index * spacing)
-                        val y = height - verticalPadding - ((value - effectiveMin) / range * availableHeight).toFloat()
-                        Offset(x, y)
+                Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(16.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                        Text("$formatted $unit", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text(date ?: "Registro ${current.first + 1}", style = MaterialTheme.typography.labelLarge)
                     }
-
-                    // Caminho de Linha
-                    val linePath = Path().apply {
-                        points.forEachIndexed { i, pt ->
-                            if (i == 0) moveTo(pt.x, pt.y) else lineTo(pt.x, pt.y)
+                }
+                Canvas(Modifier.fillMaxWidth().height(160.dp)
+                    .semantics { contentDescription = "${label.orEmpty()}: $formatted $unit. ${date.orEmpty()}" }
+                    .pointerInput(samples) {
+                        detectTapGestures { point ->
+                            val inset = 12.dp.toPx()
+                            selected = (((point.x - inset) / (size.width - inset * 2).coerceAtLeast(1f)) * (samples.size - 1)).roundToInt().coerceIn(samples.indices)
                         }
                     }
-
-                    // Preenchimento de Gradiente Suave
-                    val fillPath = Path().apply {
-                        addPath(linePath)
-                        lineTo(points.last().x, height - verticalPadding)
-                        lineTo(points.first().x, height - verticalPadding)
-                        close()
+                    .pointerInput(samples) {
+                        detectHorizontalDragGestures { change, _ ->
+                            val inset = 12.dp.toPx()
+                            selected = (((change.position.x - inset) / (size.width - inset * 2).coerceAtLeast(1f)) * (samples.size - 1)).roundToInt().coerceIn(samples.indices)
+                            change.consume()
+                        }
+                    }) {
+                    val inset = 12.dp.toPx()
+                    val bottom = size.height - inset
+                    val guides = listOfNotNull(targetValue, referenceRange?.start, referenceRange?.endInclusive)
+                    val min = (samples.map { it.second } + guides).minOrNull() ?: 0.0
+                    val max = (samples.map { it.second } + guides).maxOrNull() ?: 1.0
+                    val range = (max - min).coerceAtLeast(1.0)
+                    fun y(value: Double) = bottom - ((value - min) / range * (size.height - 2 * inset)).toFloat()
+                    referenceRange?.let {
+                        drawRect(color.copy(alpha = 0.09f), Offset(inset, y(it.endInclusive)), Size(size.width - 2 * inset, y(it.start) - y(it.endInclusive)))
                     }
-
-                    drawPath(
-                        path = fillPath,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                color.copy(alpha = 0.20f),
-                                color.copy(alpha = 0.01f)
-                            ),
-                            startY = verticalPadding,
-                            endY = height - verticalPadding
-                        )
-                    )
-
-                    // Linha Fina (2dp)
-                    drawPath(
-                        path = linePath,
-                        color = color,
-                        style = Stroke(width = 2.2.dp.toPx())
-                    )
-
-                    // Pontos
-                    points.forEachIndexed { index, pt ->
-                        val isLast = index == points.size - 1
-                        if (isLast) {
-                            // Destaque para o último ponto
-                            drawCircle(
-                                color = color.copy(alpha = 0.25f),
-                                radius = 6.5.dp.toPx(),
-                                center = pt
-                            )
-                            drawCircle(
-                                color = Color.White,
-                                radius = 4.5.dp.toPx(),
-                                center = pt
-                            )
-                            drawCircle(
-                                color = color,
-                                radius = 3.dp.toPx(),
-                                center = pt
-                            )
-                        } else {
-                            drawCircle(
-                                color = color.copy(alpha = 0.6f),
-                                radius = 2.dp.toPx(),
-                                center = pt
-                            )
+                    targetValue?.let { drawLine(color.copy(alpha = 0.4f), Offset(inset, y(it)), Offset(size.width - inset, y(it)), 1.dp.toPx()) }
+                    val points = samples.mapIndexed { index, sample ->
+                        Offset(if (samples.size == 1) size.width / 2 else inset + index * (size.width - 2 * inset) / (samples.size - 1), y(sample.second))
+                    }
+                    val path = Path().apply {
+                        moveTo(points.first().x, points.first().y)
+                        points.zipWithNext().forEach { (a, b) ->
+                            // Horizontal handles keep the curve inside each pair of measured extrema.
+                            val middle = (a.x + b.x) / 2
+                            cubicTo(middle, a.y, middle, b.y, b.x, b.y)
                         }
                     }
+                    val fill = Path().apply { addPath(path); lineTo(points.last().x, bottom); lineTo(points.first().x, bottom); close() }
+                    drawPath(fill, Brush.verticalGradient(listOf(color.copy(alpha = 0.28f), Color.Transparent)))
+                    drawPath(path, color, style = Stroke(2.5.dp.toPx()))
+                    points.forEach { drawCircle(color, 3.dp.toPx(), it) }
+                    val point = points[selected.coerceIn(points.indices)]
+                    drawLine(color.copy(alpha = 0.5f), Offset(point.x, inset), Offset(point.x, bottom), 1.dp.toPx())
+                    drawCircle(surface, 7.dp.toPx(), point)
+                    drawCircle(color, 4.dp.toPx(), point)
                 }
-            }
-
-            Spacer(Modifier.height(8.dp))
-            
-            // Rodapé com Metadados
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                if (targetValue != null) {
-                    Text(
-                        "Referência: ${targetValue.toInt()} $unit",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    Spacer(Modifier.width(1.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton(onClick = { selected-- }, enabled = selected > 0) { Text("Anterior") }
+                    TextButton(onClick = { selected++ }, enabled = selected < samples.lastIndex) { Text("Próximo") }
                 }
-                Text(
-                    "${displayData.size} registros recentes",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                referenceRange?.let { Text("Faixa geral: ${it.start.toInt()}–${it.endInclusive.toInt()} $unit", style = MaterialTheme.typography.labelLarge) }
+                Text("${samples.size} registros • toque para consultar", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

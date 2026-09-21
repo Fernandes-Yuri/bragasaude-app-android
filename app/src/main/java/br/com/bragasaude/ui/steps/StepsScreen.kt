@@ -24,6 +24,11 @@ import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -277,13 +282,13 @@ fun DailySummaryCard(
                     .size(160.dp)
                     .clickable(onClick = { onMetricClick(ActivityMetricType.STEPS) })
             ) {
-                CircularProgressIndicator(
-                    progress = { (steps.toFloat() / target).coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 12.dp,
-                    trackColor = Color.LightGray.copy(alpha = 0.2f)
-                )
+                val progress by animateFloatAsState(if (target > 0) (steps.toFloat() / target).coerceIn(0f, 1f) else 0f, label = "Progrès des pas")
+                val track = MaterialTheme.colorScheme.primaryContainer
+                val accent = MaterialTheme.colorScheme.primary
+                Canvas(Modifier.fillMaxSize().padding(8.dp)) {
+                    drawArc(track, -90f, 360f, false, style = Stroke(12.dp.toPx(), cap = StrokeCap.Round))
+                    if (progress > 0f) drawArc(Brush.sweepGradient(listOf(accent, br.com.bragasaude.ui.theme.BragaEmeraldLight, accent)), -90f, progress * 360f, false, style = Stroke(12.dp.toPx(), cap = StrokeCap.Round))
+                }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
                         when(activityState) {
@@ -295,10 +300,18 @@ fun DailySummaryCard(
                         modifier = Modifier.size(32.dp)
                     )
                     Text("$steps", fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                    Text("de $target", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Text("de $target", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
+            AnimatedVisibility(visible = target > 0 && steps >= target) {
+                Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.EmojiEvents, contentDescription = null)
+                        Spacer(Modifier.width(8.dp)); Text("Meta do dia alcançada!", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
             Spacer(Modifier.height(8.dp))
 
             TextButton(
@@ -369,7 +382,7 @@ fun SubtleMetricItem(
             )
             Spacer(Modifier.height(4.dp))
             Text(value, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Text(unit, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+            Text(unit, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -478,7 +491,7 @@ fun MetricDetailModal(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Total de Hoje", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                            Text("Total de Hoje", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             val displayVal = when (metric) {
                                 ActivityMetricType.STEPS -> "%,d".format(currentSteps)
                                 ActivityMetricType.HEART_POINTS -> "$currentMinutes"
@@ -739,19 +752,19 @@ fun WeeklyStepsModal(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Média da Semana", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                            Text("Média da Semana", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
                                 "%,d".format(avgSteps),
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Text("passos / dia", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                            Text("passos / dia", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
 
                         Column(horizontalAlignment = Alignment.End) {
                             val totalSteps = weeklyHistory.filter { !it.isFuture }.sumOf { it.steps }
-                            Text("Total da Semana", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                            Text("Total da Semana", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
                                 "%,d".format(totalSteps),
                                 fontSize = 20.sp,
@@ -811,7 +824,7 @@ fun WeeklyStepsModal(
                                     if (day.steps > 0) {
                                         Text(
                                             text = if (day.steps >= 1000) "%.1fk".format(day.steps / 1000f) else "${day.steps}",
-                                            fontSize = 10.sp,
+                                            fontSize = 14.sp,
                                             fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Normal,
                                             color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray
                                         )
@@ -835,13 +848,13 @@ fun WeeklyStepsModal(
                                     Spacer(Modifier.height(6.dp))
                                     Text(
                                         text = day.dayLabel,
-                                        fontSize = 12.sp,
+                                        fontSize = 14.sp,
                                         fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Medium,
                                         color = if (isSelected || day.isToday) MaterialTheme.colorScheme.primary else Color.Gray
                                     )
                                     Text(
                                         text = day.dateFormatted,
-                                        fontSize = 10.sp,
+                                        fontSize = 14.sp,
                                         color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray
                                     )
                                 }
@@ -913,7 +926,7 @@ fun WeeklyStepsModal(
                                         Text(
                                             text = "Primeiro dia da semana (Segunda-feira)",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = Color.Gray
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -1021,7 +1034,7 @@ fun HeartPointsCard(
                     Text(
                         "Ganhos hoje",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -1036,7 +1049,7 @@ fun HeartPointsCard(
                     Text(
                         "Meta Semanal OMS ($percent%)",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -1207,14 +1220,14 @@ fun WeeklyCardioModal(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Total da Semana", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                            Text("Total da Semana", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
                                 "$weeklyPoints",
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = TealPrimary
                             )
-                            Text("pontos acumulados", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                            Text("pontos acumulados", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
 
                         Column(horizontalAlignment = Alignment.End) {
@@ -1279,7 +1292,7 @@ fun WeeklyCardioModal(
                                     if (day.points > 0) {
                                         Text(
                                             text = "${day.points}",
-                                            fontSize = 10.sp,
+                                            fontSize = 14.sp,
                                             fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Normal,
                                             color = if (isSelected) TealPrimary else Color.Gray
                                         )
@@ -1303,13 +1316,13 @@ fun WeeklyCardioModal(
                                     Spacer(Modifier.height(6.dp))
                                     Text(
                                         text = day.dayLabel,
-                                        fontSize = 12.sp,
+                                        fontSize = 14.sp,
                                         fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Medium,
                                         color = if (isSelected || day.isToday) TealPrimary else Color.Gray
                                     )
                                     Text(
                                         text = day.dateFormatted,
-                                        fontSize = 10.sp,
+                                        fontSize = 14.sp,
                                         color = if (isSelected) TealPrimary else Color.Gray
                                     )
                                 }
@@ -1382,7 +1395,7 @@ fun WeeklyCardioModal(
                                     Text(
                                         text = "Primeiro dia da semana (Segunda-feira)",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Color.Gray
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
