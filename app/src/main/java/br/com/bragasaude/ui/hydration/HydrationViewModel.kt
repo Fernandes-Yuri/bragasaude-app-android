@@ -239,14 +239,8 @@ class HydrationViewModel @Inject constructor(
 
                 // FASE 3 — XP quando a meta diária de hidratação é atingida
                 // (o Flow do banco ainda pode não ter atualizado, então somamos manualmente)
-                val totalToday = _currentHydration.value.toInt() + ml
-                val goalHit = GamificationEngine.isHydrationGoalHit(totalToday, _targetHydration.value.toInt())
-                xpGrantService.grantXp(
-                    userId = userId,
-                    action = GamificationActionType.HYDRATION_GOAL_HIT,
-                    isActionValid = goalHit,
-                    invalidReason = "Meta de hidratação ainda não atingida"
-                )
+                val totalToday = repository.getDailyHydration(userId).first()
+                xpGrantService.grantHydrationProgressXp(userId, totalToday, _targetHydration.value.toInt())
             } catch (e: Exception) {
                 e.printStackTrace()
             }

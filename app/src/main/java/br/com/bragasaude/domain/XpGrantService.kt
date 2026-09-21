@@ -52,7 +52,8 @@ class XpGrantService @Inject constructor(
         action: GamificationActionType,
         isActionValid: Boolean,
         invalidReason: String = "Ação fora dos critérios de pontuação",
-        at: Date = Date()
+        at: Date = Date(),
+        hydrationMilestone: Int? = null
     ): XpGrantResult = grantMutex.withLock {
         val profile = profileDao.getProfileOneShot(userId)
             ?: return@withLock denied(action, "Perfil não encontrado")
@@ -61,16 +62,21 @@ class XpGrantService @Inject constructor(
             return@withLock denied(action, invalidReason)
         }
 
-        val today = LocalDate.now()
+        val today = at.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
         val dateStr = today.toString() // yyyy-MM-dd
 
-        // ---- [R3] Anti-farming: uma concessão por tipo de ação por dia ----
-        val awardedToday = xpAwardDao.getAwardedActionTypes(userId, dateStr)
-            .mapNotNull { runCatching { GamificationActionType.valueOf(it) }.getOrNull() }
-            .toSet()
-        if (!GamificationEngine.canAwardDailyAction(action, awardedToday)) {
-            return@withLock denied(action, "Você já pontuou por isso hoje.")
-        }
+        val awardedKeys = xpAwardDao.getAwardedActionTypes(userId, dateStr)
+        val awardKey = when {
+            action == GamificationActionType.VITALS_RECORDED ->
+                GamificationEngine.nextVitalsAwardKey(awardedKeys)
+            action == GamificationActionType.HYDRATION_GOAL_HIT && hydrationMilestone != null -> {
+                // A full reward from an older app already covers today's milestones.
+                if (action.name in awardedKeys || GamificationEngine.hydrationMilestoneXp(hydrationMilestone) == 0) null
+                else "${action.name}:$hydrationMilestone".takeUnless { it in awardedKeys }
+            }
+            else -> action.name.takeUnless { it in awardedKeys ||
+                (action == GamificationActionType.HYDRATION_GOAL_HIT && awardedKeys.any { key -> key.startsWith("${action.name}:") }) }
+        } ?: return@withLock denied(action, "Você já pontuou por isso hoje.")
 
         // ---- [R1] Streak ----
         val lastXpDate = profile.lastXpAt?.toInstant()
@@ -80,10 +86,11 @@ class XpGrantService @Inject constructor(
 
         // ---- [R16] Multiplicador de streak ----
         val multiplier = GamificationEngine.getStreakMultiplier(newStreak)
-        var finalXp = (baseXpFor(action) * multiplier).toInt().coerceAtLeast(1)
+        val baseXp = if (hydrationMilestone != null && action == GamificationActionType.HYDRATION_GOAL_HIT) GamificationEngine.hydrationMilestoneXp(hydrationMilestone) else baseXpFor(action)
+        var finalXp = (baseXp * multiplier).toInt().coerceAtLeast(1)
 
         // ---- [R2] Bônus semanal de streak (7, 14, 21, 28...) ----
-        val streakBonusXp = if (GamificationEngine.isStreakBonusEligible(newStreak)) {
+        val streakBonusXp = if (awardedKeys.isEmpty() && GamificationEngine.isStreakBonusEligible(newStreak)) {
             XpRewards.STREAK_7_DAYS_BONUS_XP
         } else {
             0
@@ -111,7 +118,7 @@ class XpGrantService @Inject constructor(
             XpAwardEntity(
                 userId = userId,
                 date = dateStr,
-                actionType = action.name,
+                actionType = awardKey,
                 xp = finalXp,
                 awardedAt = Date()
             )
@@ -173,6 +180,12 @@ class XpGrantService @Inject constructor(
         )
     }
 
+    suspend fun grantHydrationProgressXp(userId: String, totalMl: Int, targetMl: Int) {
+        for (milestone in GamificationEngine.hydrationMilestones(totalMl, targetMl)) {
+            grantXp(userId, GamificationActionType.HYDRATION_GOAL_HIT, true, hydrationMilestone = milestone)
+        }
+    }
+
     // ------------------------------------------------------------------
     // LIGA SEMANAL
     // ------------------------------------------------------------------
@@ -211,7 +224,7 @@ class XpGrantService @Inject constructor(
     }
 
     private fun baseXpFor(action: GamificationActionType): Int = when (action) {
-        GamificationActionType.VITALS_RECORDED -> XpRewards.VITALS_IN_TARGET_XP
+        GamificationActionType.VITALS_RECORDED -> XpRewards.VITALS_LOGGED_XP
         GamificationActionType.MEDICATION_TAKEN_ON_TIME -> XpRewards.MEDICATION_ON_TIME_XP
         GamificationActionType.STEP_GOAL_HIT -> XpRewards.STEP_GOAL_HIT_XP
         GamificationActionType.HYDRATION_GOAL_HIT -> XpRewards.HYDRATION_GOAL_HIT_XP

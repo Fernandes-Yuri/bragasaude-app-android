@@ -37,8 +37,10 @@ class SocialFeedRepository @Inject constructor(
         }
     }
 
-    suspend fun reactToPost(postId: String, userId: String) {
-        val reactionId = UUID.randomUUID().toString()
+    fun reactionsForPost(postId: String) = socialFeedDao.getReactionsForPost(postId)
+
+    suspend fun reactToPost(postId: String, userId: String, reactionType: String = "apoio") {
+        val reactionId = UUID.nameUUIDFromBytes((postId + ":" + userId).toByteArray()).toString()
         val userProfile = profileDao.getProfileOneShot(userId)
 
         val reactionEntity = PostReactionEntity(
@@ -46,7 +48,7 @@ class SocialFeedRepository @Inject constructor(
             postId = postId,
             userId = userId,
             userName = userProfile?.fullName ?: "Você",
-            reactionType = "apoio",
+            reactionType = reactionType,
             createdAt = Date(),
             pendingSync = false
         )
@@ -65,7 +67,7 @@ class SocialFeedRepository @Inject constructor(
         if (userId == guestId) return
 
         try {
-            val ok = apiClient.reactToPost(postId, userId, "apoio")
+            val ok = apiClient.reactToPost(postId, userId, reactionType)
             if (!ok) {
                 socialFeedDao.insertReaction(reactionEntity.copy(pendingSync = true))
                 triggerSync()

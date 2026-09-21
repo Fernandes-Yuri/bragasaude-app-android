@@ -1,5 +1,13 @@
 package br.com.bragasaude.ui.social
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -7,6 +15,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material.icons.filled.Medication
+import androidx.compose.material.icons.filled.VolunteerActivism
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Diversity3
@@ -152,14 +166,16 @@ fun SocialFeedScreen(
                             .fillMaxSize()
                             .padding(horizontal = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp)
+                        contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
                     ) {
                         items(filteredPosts, key = { it.id }) { post ->
-                            val isReacted = viewModel.getOptimisticReaction(post.id) ?: post.hasUserReacted
+                            val reactions by remember(post.id) { viewModel.reactionsForPost(post.id) }.collectAsState(initial = emptyList())
+                            val reaction = reactions.firstOrNull { it.userId == viewModel.currentUserId }?.reactionType
+                                ?: if (post.hasUserReacted) "apoio" else null
                             SocialPostCard(
                                 post = post,
-                                isReacted = isReacted,
-                                onToggleReaction = { viewModel.toggleReaction(post) }
+                                selectedReaction = reaction,
+                                onReact = { viewModel.react(post, it) }
                             )
                         }
                     }
@@ -177,107 +193,78 @@ fun SocialFeedScreen(
             "Meta de Passos Concluída!",
             "Hidratação do Dia Completa!",
             "Consistência de Saúde!",
-            "Pressão Arterial Monitorada!"
+            "Pressão Arterial Monitorada!",
+            "Rotina de Remédios em Dia!"
         )
 
-        AlertDialog(
-            onDismissRequest = { showCreateDialog = false },
-            title = {
-                Text(
-                    "Publicar Conquista",
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleLarge
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        "Escolha a conquista para comemorar:",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    achievementOptions.forEach { opt ->
-                        FilterChip(
-                            selected = selectedAchievement == opt,
-                            onClick = { selectedAchievement = opt },
-                            label = { Text(opt, fontSize = 13.sp) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    OutlinedTextField(
-                        value = descriptionText,
-                        onValueChange = { descriptionText = it },
-                        label = { Text("Mensagem (opcional)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        maxLines = 3,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            if (isPublic) "Visível para Todos" else "Círculo Familiar",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Switch(
-                            checked = isPublic,
-                            onCheckedChange = { isPublic = it }
-                        )
+        ModalBottomSheet(onDismissRequest = { showCreateDialog = false }) {
+            Column(
+                Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("Compartilhar conquista", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                achievementOptions.chunked(2).forEach { options ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        options.forEach { option ->
+                            FilterChip(
+                                selected = selectedAchievement == option,
+                                onClick = { selectedAchievement = option },
+                                leadingIcon = { Icon(achievementIcon(option), contentDescription = null) },
+                                label = { Text(option, style = MaterialTheme.typography.labelLarge) },
+                                modifier = Modifier.weight(1f).heightIn(min = 64.dp)
+                            )
+                        }
                     }
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.createAchievementPost(
-                            title = selectedAchievement,
-                            description = descriptionText,
-                            postType = "MILESTONE",
-                            visibility = if (isPublic) "PUBLIC" else "FAMILY"
-                        )
-                        showCreateDialog = false
-                    },
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Publicar", fontWeight = FontWeight.Bold)
+                OutlinedTextField(value = descriptionText, onValueChange = { descriptionText = it.take(500) },
+                    label = { Text("Sua mensagem") }, modifier = Modifier.fillMaxWidth(), maxLines = 4,
+                    shape = RoundedCornerShape(16.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (isPublic) "Público: comunidade" else "Público: família", modifier = Modifier.weight(1f))
+                    Switch(checked = isPublic, onCheckedChange = { isPublic = it })
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCreateDialog = false }) {
-                    Text("Cancelar")
+                Text("Prévia", style = MaterialTheme.typography.labelLarge)
+                Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                    Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(achievementIcon(selectedAchievement), contentDescription = null)
+                        Text(selectedAchievement, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        if (descriptionText.isNotBlank()) Text(descriptionText)
+                    }
                 }
+                Button(onClick = {
+                    viewModel.createAchievementPost(selectedAchievement, descriptionText, "MILESTONE", if (isPublic) "PUBLIC" else "FAMILY")
+                    showCreateDialog = false
+                }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(16.dp)) {
+                    Text("Publicar conquista")
+                }
+                Spacer(Modifier.height(24.dp))
             }
-        )
+        }
     }
 }
 
 @Composable
 private fun SocialPostCard(
     post: SocialPostEntity,
-    isReacted: Boolean,
-    onToggleReaction: () -> Unit
+    selectedReaction: String?,
+    onReact: (String) -> Unit
 ) {
     val (typeIcon, typeColor, typeLabel) = getPostTypeBadge(post.postType)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp),
+                .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f), MaterialTheme.colorScheme.surface)))
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Header do Post: Avatar/Nome + Tipo de Conquista
@@ -372,7 +359,7 @@ private fun SocialPostCard(
                     Text(
                         text = post.description,
                         style = MaterialTheme.typography.bodyLarge,
-                        fontSize = 15.sp,
+                        fontSize = 16.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis
@@ -384,49 +371,21 @@ private fun SocialPostCard(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
             )
 
-            // Botão de Apoio / Reação (Target de Toque >= 48dp)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                TextButton(
-                    onClick = onToggleReaction,
-                    modifier = Modifier.heightIn(min = 48.dp),
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = if (isReacted) Color(0xFFE91E63) else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                ) {
-                    Icon(
-                        if (isReacted) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Apoiar conquista",
-                        tint = if (isReacted) Color(0xFFE91E63) else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (isReacted) "Apoiado!" else "Dar Apoio",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
-                }
-
-                if (post.reactionCount > 0) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        Text(
-                            text = "${post.reactionCount}",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+            val haptics = LocalHapticFeedback.current
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(Triple("apoio", "Cuidado", Icons.Default.VolunteerActivism),
+                    Triple("palmas", "Palmas", Icons.Default.ThumbUp),
+                    Triple("forca", "Força", Icons.Default.FitnessCenter)).forEach { (type, label, icon) ->
+                    val selected = selectedReaction == type
+                    val reactionScale by animateFloatAsState(if (selected) 1.05f else 1f, label = "Reação")
+                    FilterChip(selected = selected, onClick = {
+                        if (!selected) { haptics.performHapticFeedback(HapticFeedbackType.LongPress); onReact(type) }
+                    }, label = { Text(label) }, leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        modifier = Modifier.heightIn(min = 48.dp).scale(reactionScale), shape = RoundedCornerShape(50))
                 }
             }
+            if (post.reactionCount > 0) Text(post.reactionCount.toString() + " apoios", style = MaterialTheme.typography.labelLarge)
+
         }
     }
 }
@@ -502,4 +461,12 @@ private fun FamilyPostBanner(caregiverName: String?, patientName: String?) {
             overflow = TextOverflow.Ellipsis
         )
     }
+}
+
+private fun achievementIcon(title: String): ImageVector = when {
+    title.contains("Passos") -> androidx.compose.material.icons.Icons.AutoMirrored.Filled.DirectionsWalk
+    title.contains("Hidratação") -> androidx.compose.material.icons.Icons.Default.WaterDrop
+    title.contains("Remédios") -> androidx.compose.material.icons.Icons.Default.Medication
+    title.contains("Pressão") -> androidx.compose.material.icons.Icons.Default.Favorite
+    else -> androidx.compose.material.icons.Icons.Default.LocalFireDepartment
 }
