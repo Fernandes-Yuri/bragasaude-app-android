@@ -20,6 +20,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -243,7 +246,7 @@ fun HydrationScreen(
                         WaterQuickButton(label = "+300 ml", icon = Icons.Default.WaterDrop, sub = "Copo Grande") {
                             viewModel.addWater(300)
                         }
-                        WaterQuickButton(label = "+500 ml", icon = Icons.Default.SportsBar, sub = "Garrafa") {
+                        WaterQuickButton(label = "+500 ml", painter = painterResource(br.com.bragasaude.R.drawable.ic_water_bottle), sub = "Garrafa") {
                             viewModel.addWater(500)
                         }
                     }
@@ -679,13 +682,13 @@ fun HydrationScreen(
 @Composable
 private fun WaterQuickButton(
     label: String,
-    icon: ImageVector,
+    painter: Painter,
     sub: String,
     onClick: () -> Unit
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }
+        modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).clickable(role = androidx.compose.ui.semantics.Role.Button) { onClick() }
     ) {
         Surface(
             shape = CircleShape,
@@ -695,7 +698,7 @@ private fun WaterQuickButton(
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                 Icon(
-                    icon,
+                    painter = painter,
                     contentDescription = label,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(26.dp)
@@ -712,7 +715,12 @@ private fun WaterQuickButton(
         Text(
             sub,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.outline
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+@Composable
+private fun WaterQuickButton(label: String, icon: ImageVector, sub: String, onClick: () -> Unit) {
+    WaterQuickButton(label, rememberVectorPainter(icon), sub, onClick)
 }
