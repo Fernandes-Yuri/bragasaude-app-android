@@ -219,7 +219,6 @@ data class RemoteMilestone(
     @SerialName("achieved_at") val achievedAt: String? = null
 )
 
-@Serializable
 // AUD-AN40: REMOVIDO RemoteDailyMetrics — integralmente morto. So existia
 // a definicao e os 2 mappers (Mappers.kt:305-321), sem NENHUM uso real.
 // O parse de /api/metrics/daily e manual (JSONObject) em

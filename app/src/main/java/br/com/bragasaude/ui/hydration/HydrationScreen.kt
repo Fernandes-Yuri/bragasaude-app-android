@@ -577,12 +577,14 @@ fun HydrationScreen(
                                 )
                             }
                             Spacer(Modifier.height(6.dp))
+                            // AUD-AN12: `!!` redundante apos a checagem de null — o `!= null`
+                            // ja garante; o `!!` so adiciona uma falha possivel. Como
+                            // userWeight e delegated property (State), o Kotlin nao faz
+                            // smart cast — captura em local para o compilador aceitar.
+                            val weight = userWeight
                             Text(
-                                // AUD-AN12: `!!` redundante apos a checagem de null
-                                // — o `!= null` ja garante smart cast; o `!!`
-                                // so adiciona uma falha possivel.
-                                if (userWeight != null && userWeight > 0) {
-                                    "Com base no seu peso cadastrado (${userWeight} kg), sua meta calculada é de ${autoRecommendedTarget} ml por dia."
+                                if (weight != null && weight > 0) {
+                                    "Com base no seu peso cadastrado (${weight} kg), sua meta calculada é de ${autoRecommendedTarget} ml por dia."
                                 } else {
                                     "Calculamos 35 ml por cada quilo corporal. Como seu peso ainda não foi cadastrado no perfil, a meta padrão sugerida é de ${autoRecommendedTarget} ml."
                                 },
