@@ -84,7 +84,7 @@ class VoiceHealthExecutor @Inject constructor(
                     status = "recorded"
                 )
                 vitalsRepository.saveVitalSigns(listOf(vital))
-                "🩸 Glicemia ${intent.glucoseMgDl} mg/dL registrada!"
+                "Glicemia ${intent.glucoseMgDl} mg/dL registrada!"
             }
 
             is VoiceHealthIntent.Weight -> {
@@ -124,7 +124,7 @@ class VoiceHealthExecutor @Inject constructor(
                     status = "recorded"
                 )
                 vitalsRepository.saveVitalSigns(listOf(vital))
-                "🫁 Saturação: ${intent.oxygenPercent}% registrado!"
+                "Saturação: ${intent.oxygenPercent}% registrado!"
             }
 
             is VoiceHealthIntent.Medication -> {

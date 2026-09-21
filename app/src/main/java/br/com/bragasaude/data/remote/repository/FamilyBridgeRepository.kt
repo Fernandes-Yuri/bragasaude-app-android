@@ -465,7 +465,9 @@ suspend fun sendMessageBidirectional(
         val message = FamilyMessageEntity(
             id = messageId,
             patientUserId = binding.patientUserId,
-            senderName = auth.currentUser?.displayName ?: "Paciente" ?: "Usuário",
+            // AUD-AN(B): segundo elvis inalcançável — "Paciente" ?: "Usuário"
+            // nunca disparava (o primeiro ?: já devolve não-null). Removido.
+            senderName = auth.currentUser?.displayName ?: "Paciente",
             messageText = messageText,
             iconType = "CUSTOM",
             isRead = false,
