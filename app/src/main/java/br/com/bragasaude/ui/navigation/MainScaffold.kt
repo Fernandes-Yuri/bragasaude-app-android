@@ -143,7 +143,7 @@ data class BottomNavItem(
  * nome exato ou o prefixo seguido de "?" — âncora que acaba com a colisão de
  * substring.
  */
-private fun isCurrentRoute(currentRoute: String?, screen: Screen): Boolean {
+internal fun isCurrentRoute(currentRoute: String?, screen: Screen): Boolean {
     val name = "Screen\$${screen::class.simpleName}"
     return currentRoute != null && (currentRoute == name || currentRoute.startsWith("$name?"))
 }
