@@ -23,6 +23,13 @@ class SocialFeedViewModel @Inject constructor(
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
+    sealed interface PublishState {
+        data object Idle : PublishState
+        data object Loading : PublishState
+        data object Success : PublishState
+        data class Error(val message: String) : PublishState
+    }
+
     private val guestId = BragaConstants.GUEST_UID
     val currentUserId: String
         get() = auth.currentUser?.uid ?: guestId
@@ -32,6 +39,10 @@ class SocialFeedViewModel @Inject constructor(
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+    private val _publishState = MutableStateFlow<PublishState>(PublishState.Idle)
+    val publishState: StateFlow<PublishState> = _publishState.asStateFlow()
+    private val _feedError = MutableStateFlow<String?>(null)
+    val feedError: StateFlow<String?> = _feedError.asStateFlow()
 
     init {
         refresh()
@@ -41,11 +52,13 @@ class SocialFeedViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             _isRefreshing.value = true
+            _feedError.value = null
             try {
                 telemetryService.logEvent(currentUserId, "SOCIAL_FEED", "REFRESH")
                 socialFeedRepository.fetchGlobalFeed(currentUserId = currentUserId)
             } catch (e: Exception) {
                 android.util.Log.w("SocialFeedVM", "Refresh failed: ${e.message}")
+                _feedError.value = e.message ?: "Não foi possível atualizar o mural."
             } finally {
                 _isRefreshing.value = false
             }
@@ -77,18 +90,35 @@ class SocialFeedViewModel @Inject constructor(
         visibility: String = "PUBLIC",
         milestoneId: String? = null
     ) {
-        telemetryService.logSocialFeed(currentUserId, "CREATE", title, postType)
+        if (_publishState.value == PublishState.Loading) return
+        val userId = currentUserId
         viewModelScope.launch {
-            socialFeedRepository.createPost(
-                userId = currentUserId,
-                userName = null,
-                postType = postType,
-                title = title,
-                description = description,
-                visibility = visibility,
-                relatedMilestoneId = milestoneId
-            )
-            refresh()
+            _publishState.value = PublishState.Loading
+            try {
+                socialFeedRepository.createPost(
+                    userId = userId,
+                    userName = null,
+                    postType = postType,
+                    title = title,
+                    description = description,
+                    visibility = visibility,
+                    relatedMilestoneId = milestoneId
+                )
+                telemetryService.logSocialFeed(userId, "CREATE", title, postType)
+                _publishState.value = PublishState.Success
+            } catch (e: Exception) {
+                _publishState.value = PublishState.Error(
+                    e.message ?: "Não foi possível publicar agora. Tente novamente."
+                )
+            }
         }
+    }
+
+    fun clearPublishState() {
+        _publishState.value = PublishState.Idle
+    }
+
+    fun clearFeedError() {
+        _feedError.value = null
     }
 }

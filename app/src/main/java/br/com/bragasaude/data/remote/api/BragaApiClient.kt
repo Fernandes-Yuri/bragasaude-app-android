@@ -333,7 +333,8 @@ class BragaApiClient @Inject constructor(
 
     suspend fun getSocialFeed(currentUserId: String, limit: Int = 30): List<SocialPostEntity> = withContext(Dispatchers.IO) {
         try {
-            val arr = getJsonArray("$baseUrl/api/social/feed?limit=$limit") ?: return@withContext emptyList()
+            val arr = getJsonArray("$baseUrl/api/social/feed?limit=$limit")
+                ?: throw java.io.IOException("Não foi possível carregar o mural.")
             val list = mutableListOf<SocialPostEntity>()
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
@@ -359,7 +360,7 @@ class BragaApiClient @Inject constructor(
             return@withContext list
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao buscar feed social: ${e.message}")
-            return@withContext emptyList()
+            throw e
         }
     }
 
