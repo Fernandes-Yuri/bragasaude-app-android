@@ -1,9 +1,8 @@
 package br.com.bragasaude.data.remote.ai
 
-import com.google.firebase.auth.FirebaseAuth
+import br.com.bragasaude.data.remote.auth.AuthService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.tasks.await
 import java.io.IOException
 import javax.inject.Inject
 import org.json.JSONObject
@@ -11,7 +10,7 @@ import org.json.JSONObject
 class OrbChatGateway @Inject constructor(
     private val socket: OrbWebSocket,
     private val rest: BragaLocalAiClient,
-    private val auth: FirebaseAuth
+    private val authService: AuthService
 ) {
     private var session: OrbWebSocket.Session? = null
     private var observer: Job? = null
@@ -20,11 +19,10 @@ class OrbChatGateway @Inject constructor(
 
     fun open(scope: CoroutineScope) {
         if (session != null) return
-        val uid = auth.currentUser?.uid ?: return
+        val uid = authService.currentUserId ?: return
         session = socket.openSession(scope, rest.serverBaseUrl) { force ->
-            val user = auth.currentUser
-            if (user == null || user.uid != uid) throw OrbRejectedException("Entre na sua conta novamente.")
-            user.getIdToken(force).await().token ?: throw OrbRejectedException("Sessão indisponível.")
+            if (authService.currentUserId != uid) throw OrbRejectedException("Entre na sua conta novamente.")
+            authService.getFreshToken(force) ?: throw OrbRejectedException("Sessão indisponível.")
         }
         observer = scope.launch { session?.state?.collect { status.value = it } }
     }

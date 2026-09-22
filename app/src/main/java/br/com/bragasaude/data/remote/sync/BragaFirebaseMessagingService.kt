@@ -18,8 +18,13 @@ import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class BragaFirebaseMessagingService : FirebaseMessagingService() {
+
+    @Inject lateinit var notificationClient: NotificationClient
 
     companion object {
         const val CHANNEL_EMERGENCY = "bragasaude_emergency"
@@ -114,8 +119,7 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
         val userId = auth.currentUser?.uid ?: "anonymous"
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val client = NotificationClient()
-                client.registerDevice(
+                notificationClient.registerDevice(
                     userId = userId,
                     token = token,
                     role = "USER",

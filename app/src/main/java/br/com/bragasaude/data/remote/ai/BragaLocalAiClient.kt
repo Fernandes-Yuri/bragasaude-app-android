@@ -5,12 +5,11 @@ import android.content.Context
 // AUD-AN40: reusa o normalizador canonico de PA do app.
 import br.com.bragasaude.domain.util.BloodPressureParser
 import dagger.hilt.android.qualifiers.ApplicationContext
-import com.google.firebase.auth.FirebaseAuth
+import br.com.bragasaude.data.remote.auth.AuthService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -31,7 +30,7 @@ import javax.inject.Singleton
 @Singleton
 class BragaLocalAiClient @Inject constructor(
     private val orbWebSocket: OrbWebSocket,
-    private val auth: FirebaseAuth,
+    private val authService: AuthService,
     @ApplicationContext private val context: Context
 ) {
 
@@ -75,10 +74,10 @@ class BragaLocalAiClient @Inject constructor(
 
     /** Lê a preferência confirmada da conta; indisponibilidade nunca inventa um tamanho. */
     suspend fun loadCupPreference(): Int? = withContext(Dispatchers.IO) {
-        val user = auth.currentUser ?: return@withContext null
+        val userId = authService.currentUserId ?: return@withContext null
         var connection: HttpURLConnection? = null
         try {
-            val token = user.getIdToken(false).await().token ?: return@withContext null
+            val token = authService.getFreshToken() ?: return@withContext null
             connection = (URL("$serverBaseUrl/api/assistant/preferences").openConnection() as HttpURLConnection).apply {
                 connectTimeout = 2500
                 readTimeout = 2500
@@ -87,7 +86,7 @@ class BragaLocalAiClient @Inject constructor(
             if (connection.responseCode != 200) return@withContext null
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             currentCoroutineContext().ensureActive()
-            if (auth.currentUser?.uid != user.uid) return@withContext null
+            if (authService.currentUserId != userId) return@withContext null
             JSONObject(body).optJSONObject("preferences")?.optInt("cup_ml")?.takeIf { it in 50..2000 }
         } catch (e: CancellationException) {
             throw e
@@ -136,9 +135,8 @@ class BragaLocalAiClient @Inject constructor(
             )
         }
 
-        val user = auth.currentUser
         val token = try {
-            user?.getIdToken(false)?.await()?.token
+            authService.getFreshToken()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -202,7 +200,7 @@ class BragaLocalAiClient @Inject constructor(
                 })
                 put("temperature", 0.1)
                 put("max_tokens", 150)
-                if (token != null) put("userId", user?.uid)
+                if (token != null) put("userId", authService.currentUserId)
                 // D50/D51: escopo cuidador — habilita o agendamento por voz
                 if (actingAs == "caregiver" && !patientId.isNullOrBlank()) {
                     put("acting_as", "caregiver").put("patient_id", patientId)

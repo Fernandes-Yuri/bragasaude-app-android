@@ -39,7 +39,7 @@ class SocialFeedRepository @Inject constructor(
 
     fun reactionsForPost(postId: String) = socialFeedDao.getReactionsForPost(postId)
 
-    suspend fun reactToPost(postId: String, userId: String, reactionType: String = "apoio") {
+    suspend fun reactToPost(postId: String, userId: String, reactionType: String = "apoio"): Boolean {
         val reactionId = UUID.nameUUIDFromBytes((postId + ":" + userId).toByteArray()).toString()
         val userProfile = profileDao.getProfileOneShot(userId)
 
@@ -47,7 +47,7 @@ class SocialFeedRepository @Inject constructor(
             id = reactionId,
             postId = postId,
             userId = userId,
-            userName = userProfile?.fullName ?: "Você",
+            userName = userProfile?.fullName?.takeIf { it.isNotBlank() } ?: "Você",
             reactionType = reactionType,
             createdAt = Date(),
             pendingSync = false
@@ -64,7 +64,7 @@ class SocialFeedRepository @Inject constructor(
             )
         }
 
-        if (userId == guestId) return
+        if (userId == guestId) return false
 
         try {
             val ok = apiClient.reactToPost(postId, userId, reactionType)
@@ -72,9 +72,11 @@ class SocialFeedRepository @Inject constructor(
                 socialFeedDao.insertReaction(reactionEntity.copy(pendingSync = true))
                 triggerSync()
             }
+            return ok
         } catch (e: Exception) {
             socialFeedDao.insertReaction(reactionEntity.copy(pendingSync = true))
             triggerSync()
+            return false
         }
     }
 
@@ -102,7 +104,9 @@ class SocialFeedRepository @Inject constructor(
         relatedMilestoneId: String? = null
     ): SocialPostEntity {
         val userProfile = profileDao.getProfileOneShot(userId)
-        val name = if (!userName.isNullOrBlank()) userName else (userProfile?.fullName ?: "Você")
+        val name = userName?.takeIf { it.isNotBlank() }
+            ?: userProfile?.fullName?.takeIf { it.isNotBlank() }
+            ?: "Você"
         val level = userProfile?.currentLevel ?: 1
         var remoteId: String? = null
         var isPending = true

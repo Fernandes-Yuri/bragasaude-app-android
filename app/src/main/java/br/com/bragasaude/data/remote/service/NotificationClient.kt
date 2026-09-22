@@ -1,6 +1,7 @@
 ﻿package br.com.bragasaude.data.remote.service
 
 import android.util.Log
+import br.com.bragasaude.data.remote.auth.AuthService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -17,7 +18,9 @@ import javax.inject.Singleton
  * aciona o canal de emergência familiar com dependência zero e fail-safe silencioso.
  */
 @Singleton
-class NotificationClient @Inject constructor() {
+class NotificationClient @Inject constructor(
+    private val authService: AuthService
+) {
 
     companion object {
         private const val TAG = "NotificationClient"
@@ -114,9 +117,7 @@ class NotificationClient @Inject constructor() {
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 setRequestProperty("Accept", "application/json")
-                val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                    ?: throw java.io.IOException("Entre na conta para enviar notificações.")
-                val token = com.google.android.gms.tasks.Tasks.await(user.getIdToken(false), 15, java.util.concurrent.TimeUnit.SECONDS).token
+                val token = authService.getTokenBlocking()
                     ?: throw java.io.IOException("Sessão expirada.")
                 setRequestProperty("Authorization", "Bearer $token")
             }

@@ -43,6 +43,7 @@ class AuthViewModel @Inject constructor(
     private val movementManager: br.com.bragasaude.data.util.MovementManager,
     private val medicationRepository: br.com.bragasaude.data.remote.repository.MedicationRepository,
     private val apiClient: br.com.bragasaude.data.remote.api.BragaApiClient,
+    private val notificationClient: NotificationClient,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -157,7 +158,7 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val token = FirebaseMessaging.getInstance().token.await()
-                NotificationClient().registerDevice(
+                notificationClient.registerDevice(
                     userId = user.uid,
                     token = token,
                     role = _userRole.value ?: "USER",

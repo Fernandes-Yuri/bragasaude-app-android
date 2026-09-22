@@ -99,3 +99,8 @@ app/src/main/java/br/com/bragasaude/
 O app consulta `/api/app/latest` no gateway para verificar updates.
 
 As releases são gerenciadas via `app/build.gradle.kts` → `versionCode` / `versionName`.
+## Identidade e autenticação
+
+- Tokens Firebase usados pela API, IA, áudio e notificações passam pelo `AuthService`, com cache por usuário e renovação centralizada.
+- Posts e reações do Mural usam o `fullName` do perfil local como nome público; o UID permanece como identificador técnico.
+- O envio de reação registra `postId`, `userId` e o resultado da sincronização para facilitar o diagnóstico sem bloquear a atualização otimista.

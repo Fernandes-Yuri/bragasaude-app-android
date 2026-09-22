@@ -33,7 +33,7 @@ class AuthProfileRecoveryTest {
         coEvery { repository.getProfileOneShotLocal(any()) } answers { local.value }
         coEvery { repository.refreshProfileForLogin(any()) } returns ProfileLookup.Unavailable()
         vm = AuthViewModel(auth, mockk(relaxed = true), repository, mockk(relaxed = true), mockk(relaxed = true),
-            mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+            mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
     }
     @After fun cleanup() {
         every { auth.currentUser } returns null
