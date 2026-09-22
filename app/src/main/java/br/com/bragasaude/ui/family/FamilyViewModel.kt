@@ -92,6 +92,11 @@ class FamilyViewModel @Inject constructor(
         }
     }
 
+    fun groupName(patientId: String): Flow<String> = profileDao.getProfile(patientId).map {
+        if (patientId == currentUserId) "Minha família"
+        else it?.fullName?.takeIf(String::isNotBlank) ?: "Familiar ${patientId.takeLast(6)}"
+    }
+
     private val _inviteHistory = MutableStateFlow<List<FamilyBindingEntity>>(emptyList())
     val inviteHistory: StateFlow<List<FamilyBindingEntity>> = _inviteHistory.asStateFlow()
 
@@ -213,7 +218,7 @@ class FamilyViewModel @Inject constructor(
                 familyRepository.getActiveBindingsForCaregiver(userId).collectLatest { bindings ->
                     _watchedPatients.value = bindings
                     if (bindings.size == 1 && _dashboard.value.patientUserId.isEmpty()) {
-                        selectPatient(bindings.first())
+                        selectPatient(bindings.first(), selectChat = false)
                     } else if (bindings.isEmpty()) {
                         _dashboard.value = CaregiverDashboardState()
                     }
@@ -321,8 +326,8 @@ class FamilyViewModel @Inject constructor(
 
     // ==================== AÇÕES DO CUIDADOR ====================
 
-    fun selectPatient(binding: FamilyBindingEntity) {
-        selectedGroup.value = binding.patientUserId
+    fun selectPatient(binding: FamilyBindingEntity, selectChat: Boolean = true) {
+        if (selectChat) selectedGroup.value = binding.patientUserId
         dashboardJob?.cancel()
         dashboardJob = viewModelScope.launch {
             _dashboard.value = _dashboard.value.copy(
@@ -514,13 +519,26 @@ class FamilyViewModel @Inject constructor(
         }
     }
 
-    fun sendMessageToGroup(text: String, onComplete: () -> Unit) {
+    fun sendMessageToGroup(text: String, onComplete: (Boolean) -> Unit) {
         val patientId = chatPatientId.value
         val binding = activeBindingsForCurrentUser.value.firstOrNull {
             it.patientUserId == patientId && it.status == "ACTIVE"
         }
-        if (binding == null) { onComplete(); return }
-        sendMessageToFamily(binding.id, text, onComplete = onComplete)
+        if (binding == null || text.isBlank()) { onComplete(false); return }
+        viewModelScope.launch {
+            try {
+                val currentBinding = familyRepository.getBindingById(binding.id)
+                check(currentBinding?.status == "ACTIVE") { "Vínculo indisponível." }
+                val message = familyRepository.createFamilyMessage(binding.patientUserId,
+                    auth.currentUser?.displayName ?: "Familiar", text)
+                onComplete(true)
+                _uiEvents.emit(FamilyUiEvent.Notice(if (message.pendingSync)
+                    "Mensagem salva no aparelho, aguardando sincronização." else "Mensagem enviada ao grupo."))
+            } catch (e: Exception) {
+                onComplete(false)
+                _uiEvents.emit(FamilyUiEvent.Error("Não foi possível enviar a mensagem."))
+            }
+        }
     }
 
     fun sendMessageToFamily(bindingId: String, text: String, iconType: String = "CUSTOM", onComplete: (() -> Unit)? = null) {
