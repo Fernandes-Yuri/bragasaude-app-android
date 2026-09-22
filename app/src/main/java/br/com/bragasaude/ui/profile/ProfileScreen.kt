@@ -250,7 +250,9 @@ fun ProfileScreen(
                                 Toast.makeText(context, "Por favor, digite uma altura válida (ex: 170 cm ou 1,70 m).", Toast.LENGTH_LONG).show()
                                 return@Button
                             }
-                            viewModel.saveProfile(
+                            // APP-8: perfil chega ao ViewModel via ProfileInput
+                            // em vez do overload monolítico de ~28 parâmetros.
+                            val input = ProfileInput(
                                 name = fullName,
                                 birthDate = HealthFormatter.formatDateInput(birthDate),
                                 gender = gender,
@@ -268,9 +270,9 @@ fun ProfileScreen(
                                 sleepEnd = HealthFormatter.normalizeTime(sleepEnd, "06:00"),
                                 emergencyName = emergencyName,
                                 emergencyRelation = emergencyRelation,
-                                emergencyPhone = HealthFormatter.formatPhoneInput(emergencyPhone),
-                                onComplete = onProfileSaved
+                                emergencyPhone = HealthFormatter.formatPhoneInput(emergencyPhone)
                             )
+                            viewModel.saveProfile(input, onComplete = onProfileSaved)
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
