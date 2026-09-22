@@ -1,6 +1,7 @@
 package br.com.bragasaude.data.remote.ai
 
 import br.com.bragasaude.data.remote.api.BragaApiClient
+import br.com.bragasaude.data.remote.auth.AuthService
 import com.google.firebase.auth.FirebaseAuth
 import io.mockk.*
 import kotlinx.coroutines.runBlocking
@@ -20,8 +21,10 @@ class DailyMetricsApiTest {
         every { auth.currentUser } returns null
         server = MockWebServer()
         server.start()
+        val authService = mockk<AuthService>()
+        every { authService.getTokenBlocking(any(), any()) } returns "test-token"
         // AUD-AN40: baseUrl agora imutavel — injeta a URL do mock no construtor.
-        api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'))
+        api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), authService)
     }
 
     @After fun cleanup() {
