@@ -76,6 +76,11 @@ android {
         }
         debug {
             isDebuggable = true
+            // APK interno: mantém o applicationId/Firebase da produção e pode
+            // atualizar a instalação release, mas continua com BuildConfig.DEBUG=true.
+            if (hasKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
