@@ -11,7 +11,8 @@ import java.time.temporal.ChronoUnit
  */
 object XpRewards {
     // Tabela de XP por Ação
-    const val VITALS_IN_TARGET_XP = 10
+    const val VITALS_LOGGED_XP = 10
+    const val MAX_VITALS_AWARDS_PER_DAY = 3
     const val MEDICATION_ON_TIME_XP = 10
     const val STEP_GOAL_HIT_XP = 15
     const val HYDRATION_GOAL_HIT_XP = 10
@@ -103,6 +104,35 @@ data class ProfileHealthFlags(
 )
 
 object GamificationEngine {
+    /** Adherence rewards do not depend on whether a measurement is in range. */
+    fun isVitalsRecordEligible(systolic: Int?, diastolic: Int?, glucose: Int?): Boolean =
+        ((systolic ?: 0) > 0 && (diastolic ?: 0) > 0) || (glucose ?: 0) > 0
+
+    fun nextVitalsAwardKey(awarded: Collection<String>): String? {
+        val prefix = GamificationActionType.VITALS_RECORDED.name
+        val slots = listOf(prefix, "$prefix:2", "$prefix:3")
+        return slots.firstOrNull { it !in awarded }
+    }
+
+    fun hydrationMilestones(totalMl: Int, targetMl: Int): List<Int> {
+        if (targetMl <= 0 || totalMl <= 0) return emptyList()
+        return listOf(25, 50, 75, 100).filter { totalMl.toLong() * 100 >= targetMl.toLong() * it }
+    }
+
+    fun hydrationMilestoneXp(percent: Int): Int = when (percent) {
+        25, 75 -> 2
+        50, 100 -> 3
+        else -> 0
+    }
+
+    fun leagueName(level: Int): String = when {
+        level <= 1 -> "Bronze"
+        level == 2 -> "Prata"
+        level == 3 -> "Ouro"
+        level == 4 -> "Esmeralda"
+        else -> "Diamante"
+    }
+
 
     /**
      * [R12] ANTI-FRAUDE DE XP DE ATIVIDADE FÍSICA (Fase 2)

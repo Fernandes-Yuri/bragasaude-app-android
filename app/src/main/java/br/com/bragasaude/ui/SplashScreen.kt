@@ -18,7 +18,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.ui.res.painterResource
+import br.com.bragasaude.R
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -59,7 +60,7 @@ fun SplashScreen(onTimeout: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BragaEmerald)
+            .background(br.com.bragasaude.ui.theme.BragaEmeraldDark)
             .windowInsetsPadding(WindowInsets.safeDrawing),
         contentAlignment = Alignment.Center
     ) {
@@ -77,10 +78,10 @@ fun SplashScreen(onTimeout: () -> Unit) {
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = Icons.Default.ShowChart,
+                        painter = painterResource(R.drawable.ic_logo_braga),
                         contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(48.dp)
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(96.dp)
                     )
                 }
             }

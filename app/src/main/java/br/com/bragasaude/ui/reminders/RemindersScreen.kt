@@ -2,6 +2,10 @@ package br.com.bragasaude.ui.reminders
 
 import android.content.Intent
 import android.provider.CalendarContract
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -107,12 +111,12 @@ fun RemindersScreen(
                 .padding(horizontal = 16.dp)
         ) {
             Spacer(Modifier.height(8.dp))
-            Text(
-                "Registre conforme a prescrição. O botão disponível não orienta antecipar a dose. XP: até 1 hora antes ou depois do horário.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray
-            )
-            
+            Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Default.Shield, contentDescription = null)
+                    Text("Siga a prescrição. A janela de 1 hora vale apenas para pontuação; não antecipe nem repita doses por causa do app.", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
             Spacer(Modifier.height(16.dp))
 
             if (isLoading && medicationItems.isEmpty()) {
@@ -121,7 +125,12 @@ fun RemindersScreen(
                 }
             } else if (medicationItems.isEmpty()) {
                 Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                    Text("Nenhum medicamento cadastrado.", color = Color.Gray)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.Medication, contentDescription = null, modifier = Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text("Nenhum lembrete ativo", style = MaterialTheme.typography.titleMedium)
+                        Text("Adicione os remédios da sua rotina.")
+                        Button(onClick = { showAddDialog = true }) { Icon(Icons.Default.Add, null); Text("Adicionar lembrete") }
+                    }
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -178,7 +187,7 @@ fun MedicationCard(
                             else MaterialTheme.colorScheme.surface 
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isTaken) 0.dp else 1.dp),
-        shape = MaterialTheme.shapes.medium
+        shape = RoundedCornerShape(24.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -218,19 +227,19 @@ fun MedicationCard(
                         if (med.pillQuantity != null) append("${med.pillQuantity} comp. • ")
                         append(med.scheduleTimes ?: med.scheduleTime ?: "--")
                     }
-                    Text(detail, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
                 // Ações discretas
                 Row {
                     IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, contentDescription = "Editar medicamento") }
                     if (!isTaken) {
-                        IconButton(onClick = onSyncCalendar, modifier = Modifier.size(44.dp)) {
+                        IconButton(onClick = onSyncCalendar, modifier = Modifier.size(48.dp)) {
                             Icon(Icons.Default.CalendarMonth, contentDescription = "Agenda", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                         }
                     }
-                    IconButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.size(44.dp)) {
-                        Icon(Icons.Default.DeleteOutline, contentDescription = "Remover", tint = Color.Gray.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                    IconButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = "Remover", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -242,9 +251,14 @@ fun MedicationCard(
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(dose.time, style = MaterialTheme.typography.titleMedium)
                     when {
-                        dose.taken -> Text("Registrada hoje", color = MaterialTheme.colorScheme.primary)
-                        dose.available -> Button(onClick = { onTakeDose(dose.time) }) { Text("Registrar dose") }
-                        else -> Text("Disponível perto do horário", style = MaterialTheme.typography.bodySmall)
+                        dose.taken -> Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) {
+                            Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp)); Text("Dose registrada", style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
+                        dose.available -> Button(onClick = { onTakeDose(dose.time) }, modifier = Modifier.heightIn(min = 48.dp), shape = RoundedCornerShape(12.dp)) { Text("Registrar dose") }
+                        else -> Text("Horário: " + dose.time, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -288,7 +302,7 @@ fun AddMedicationDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (initial == null) "Novo Medicamento" else "Editar Medicamento") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (error != null) Text(error, color = MaterialTheme.colorScheme.error)
                 OutlinedTextField(
                     value = name,
@@ -315,6 +329,22 @@ fun AddMedicationDialog(
                         singleLine = true
                     )
                 }
+                Text("Atalhos de horário", style = MaterialTheme.typography.labelLarge)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Café" to "08:00", "Almoço" to "12:00", "Jantar" to "19:00", "Ao deitar" to "22:00").forEach { (label, hour) ->
+                        FilterChip(selected = hour in time.split(",").map { it.trim() }, onClick = {
+                            val hours = time.split(",").map { it.trim() }.filter { it.isNotBlank() }.toMutableList()
+                            if (hour in hours) hours.remove(hour) else hours.add(hour)
+                            time = hours.joinToString(", ")
+                        }, label = { Text(label + " " + hour) }, modifier = Modifier.heightIn(min = 48.dp))
+                    }
+                }
+                OutlinedTextField(value = dosage, onValueChange = { dosage = it }, label = { Text("Apresentação / observação") }, modifier = Modifier.fillMaxWidth())
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Comprimido", "Gotas", "Cápsula").forEach { form ->
+                        FilterChip(selected = dosage == form, onClick = { dosage = form }, label = { Text(form) }, modifier = Modifier.heightIn(min = 48.dp))
+                    }
+                }
                 OutlinedTextField(
                     value = time,
                     onValueChange = { time = it },
@@ -327,7 +357,7 @@ fun AddMedicationDialog(
                 Text(
                     "Informe o horário prescrito. Você pode editar este lembrete depois.",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }

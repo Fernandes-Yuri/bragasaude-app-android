@@ -120,18 +120,15 @@ class VitalSignsViewModel @Inject constructor(
                     )
                 }
 
-                // FASE 3 — Concessão de XP quando os sinais vitais estão na meta clínica
-                val inTarget = GamificationEngine.isVitalsInTarget(
-                    systolic = vital.systolicPressure,
-                    diastolic = vital.diastolicPressure,
-                    glucose = vital.glucoseLevel,
-                    glucoseType = vital.glucoseType ?: "fasting"
+                // Reward the act of recording, never the clinical result.
+                val recorded = GamificationEngine.isVitalsRecordEligible(
+                    vital.systolicPressure, vital.diastolicPressure, vital.glucoseLevel
                 )
                 xpGrantService.grantXp(
                     userId = userId,
                     action = GamificationActionType.VITALS_RECORDED,
-                    isActionValid = inTarget,
-                    invalidReason = "Valores fora da faixa ideal hoje - continue monitorando"
+                    isActionValid = recorded,
+                    invalidReason = "Registre uma medição para pontuar"
                 )
             } catch (e: Exception) {
                 e.printStackTrace()

@@ -102,6 +102,12 @@ fun LeagueScreen(
                     )
                 }
 
+                if (ranking.isNotEmpty()) {
+                    item { LeaguePodium(ranking.take(3)) }
+                }
+                item {
+                    Text("Sua rotina conta: medições, água, passos e remédios no horário. Cada registro é um passo de cuidado.", style = MaterialTheme.typography.bodyMedium)
+                }
                 // Legenda de Zonas (UX Geriátrica Positiva)
                 item {
                     LeagueZonesLegend()
@@ -250,7 +256,7 @@ private fun LeagueHeaderCard(
                     }
                     Column {
                         Text(
-                            "Nível $level",
+                            "Liga ${GamificationEngine.leagueName(level)}",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -504,8 +510,33 @@ private fun LeagueMemberItem(
                     style = MaterialTheme.typography.bodySmall,
                     color = zoneColor,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp
+                    fontSize = 14.sp
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LeaguePodium(leaders: List<LeagueMembershipEntity>) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+        listOf(1, 0, 2).filter { it < leaders.size }.forEach { index ->
+            val member = leaders[index]
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)) {
+                    Box(Modifier.size(if (index == 0) 64.dp else 52.dp), contentAlignment = Alignment.Center) {
+                        if (index == 0) Icon(Icons.Default.EmojiEvents, contentDescription = "Primeiro lugar", tint = MaterialTheme.colorScheme.primary)
+                        else Text((member.userName ?: "Participante").take(1), fontWeight = FontWeight.Bold)
+                    }
+                }
+                Text(member.userName ?: "Participante", maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(8.dp))
+                Surface(shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                    Column(Modifier.fillMaxWidth().heightIn(min = if (index == 0) 120.dp else if (index == 1) 90.dp else 72.dp).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("${index + 1}º", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text("${member.xpEarned} XP", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
             }
         }
     }

@@ -453,6 +453,7 @@ suspend fun sendMessageBidirectional(
         } catch (e: Exception) {
             android.util.Log.w("FamilyBridgeRepo", "Aviso ao sincronizar mensagem bidirecional: ${e.message}")
         }
+        syncScheduler.scheduleSync()
         return message
     }
 

@@ -9,7 +9,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -103,7 +106,11 @@ fun NotificationsScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Nenhuma notificação no momento.", color = MaterialTheme.colorScheme.outline)
+                    Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.NotificationsNone, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(56.dp))
+                        Text("Tudo tranquilo por aqui", style = MaterialTheme.typography.titleLarge)
+                        Text("Nenhuma notificação pendente.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             } else {
                 LazyColumn(
@@ -122,7 +129,8 @@ fun NotificationsScreen(
                                     viewModel.dismissAlert(alert)
                                 },
                                 onDismiss = { viewModel.dismissAlert(alert) },
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                category = "Sistema"
                             )
                         }
                         alert.startsWith("PERMISSION_REQUIRED:") -> {
@@ -134,7 +142,8 @@ fun NotificationsScreen(
                                     viewModel.dismissAlert(alert)
                                 },
                                 onDismiss = { viewModel.dismissAlert(alert) },
-                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                category = "Sistema"
                             )
                         }
                         else -> {
@@ -159,22 +168,34 @@ fun AlertCard(
     message: String,
     modifier: Modifier = Modifier,
     onDismiss: (() -> Unit)? = null,
-    containerColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surfaceVariant
+    containerColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surfaceVariant,
+    category: String = "Acompanhamento"
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        shape = RoundedCornerShape(24.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f)
-            )
+            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface) {
+                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                    Icon(if (category == "Sistema") Icons.Default.Settings else Icons.Default.Shield,
+                        contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(category, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                    Box(Modifier.size(8.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
+                }
+                Text(message, style = MaterialTheme.typography.bodyMedium)
+            }
             if (onDismiss != null) {
                 IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
                     Icon(
