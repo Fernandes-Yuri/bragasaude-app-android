@@ -9,6 +9,7 @@ import br.com.bragasaude.data.remote.sync.SyncScheduler
 import kotlinx.coroutines.flow.Flow
 import java.util.Date
 import java.util.UUID
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 import br.com.bragasaude.util.BragaConstants
@@ -25,21 +26,16 @@ class SocialFeedRepository @Inject constructor(
     fun getGlobalFeed(): Flow<List<SocialPostEntity>> = socialFeedDao.getGlobalFeed()
 
     suspend fun fetchGlobalFeed(limit: Int = 20, offset: Int = 0, currentUserId: String): Int {
-        return try {
-            val posts = apiClient.getSocialFeed(currentUserId, limit)
-            if (posts.isNotEmpty()) {
-                socialFeedDao.insertPosts(posts)
-            }
-            posts.size
-        } catch (e: Exception) {
-            android.util.Log.e("SocialFeedRepo", "Falha ao buscar feed global: ${e.message}")
-            0
+        val posts = apiClient.getSocialFeed(currentUserId, limit)
+        if (posts.isNotEmpty()) {
+            socialFeedDao.insertPosts(posts)
         }
+        return posts.size
     }
 
     fun reactionsForPost(postId: String) = socialFeedDao.getReactionsForPost(postId)
 
-    suspend fun reactToPost(postId: String, userId: String, reactionType: String = "apoio") {
+    suspend fun reactToPost(postId: String, userId: String, reactionType: String = "apoio"): Boolean {
         val reactionId = UUID.nameUUIDFromBytes((postId + ":" + userId).toByteArray()).toString()
         val userProfile = profileDao.getProfileOneShot(userId)
 
@@ -47,7 +43,7 @@ class SocialFeedRepository @Inject constructor(
             id = reactionId,
             postId = postId,
             userId = userId,
-            userName = userProfile?.fullName ?: "Você",
+            userName = userProfile?.fullName?.takeIf { it.isNotBlank() } ?: "Você",
             reactionType = reactionType,
             createdAt = Date(),
             pendingSync = false
@@ -64,7 +60,7 @@ class SocialFeedRepository @Inject constructor(
             )
         }
 
-        if (userId == guestId) return
+        if (userId == guestId) return false
 
         try {
             val ok = apiClient.reactToPost(postId, userId, reactionType)
@@ -72,9 +68,11 @@ class SocialFeedRepository @Inject constructor(
                 socialFeedDao.insertReaction(reactionEntity.copy(pendingSync = true))
                 triggerSync()
             }
+            return ok
         } catch (e: Exception) {
             socialFeedDao.insertReaction(reactionEntity.copy(pendingSync = true))
             triggerSync()
+            return false
         }
     }
 
@@ -102,11 +100,10 @@ class SocialFeedRepository @Inject constructor(
         relatedMilestoneId: String? = null
     ): SocialPostEntity {
         val userProfile = profileDao.getProfileOneShot(userId)
-        val name = if (!userName.isNullOrBlank()) userName else (userProfile?.fullName ?: "Você")
+        val name = userName?.takeIf { it.isNotBlank() }
+            ?: userProfile?.fullName?.takeIf { it.isNotBlank() }
+            ?: "Você"
         val level = userProfile?.currentLevel ?: 1
-        var remoteId: String? = null
-        var isPending = true
-
         val post = SocialPostEntity(
             id = UUID.randomUUID().toString(),
             userId = userId,
@@ -124,25 +121,26 @@ class SocialFeedRepository @Inject constructor(
             visibility = visibility
         )
 
-        if (userId != guestId) {
-            try {
-                remoteId = apiClient.syncSocialPost(post)
-                if (remoteId != null) {
-                    isPending = false
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("SocialFeedRepo", "Falha ao sincronizar post com servidor: ${e.message}")
-            }
+        // A publicação aparece imediatamente, mas só permanece se o servidor confirmar.
+        socialFeedDao.insertPost(post)
+        if (userId == guestId) {
+            socialFeedDao.deletePostById(post.id)
+            throw IllegalStateException("Entre na sua conta para publicar uma conquista.")
         }
 
-        val finalPost = post.copy(
-            id = remoteId ?: post.id,
-            pendingSync = isPending
-        )
-        socialFeedDao.insertPost(finalPost)
-        if (isPending && userId != guestId) {
-            triggerSync()
+        val remoteId = try {
+            apiClient.syncSocialPost(post)
+        } catch (e: Exception) {
+            null
         }
+        if (remoteId.isNullOrBlank()) {
+            socialFeedDao.deletePostById(post.id)
+            throw IOException("Não foi possível publicar agora. Tente novamente.")
+        }
+
+        if (remoteId != post.id) socialFeedDao.deletePostById(post.id)
+        val finalPost = post.copy(id = remoteId, pendingSync = false)
+        socialFeedDao.insertPost(finalPost)
         return finalPost
     }
 

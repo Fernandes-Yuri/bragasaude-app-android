@@ -2,6 +2,7 @@ package br.com.bragasaude.data.remote.ai
 
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.model.ProfileLookup
+import br.com.bragasaude.data.remote.auth.AuthService
 import com.google.firebase.auth.FirebaseAuth
 import io.mockk.*
 import kotlinx.coroutines.runBlocking
@@ -13,6 +14,7 @@ import org.junit.Assert.*
 class ProfileLookupApiTest {
     private lateinit var server: MockWebServer
     private lateinit var api: BragaApiClient
+    private lateinit var authService: AuthService
     @Before fun setup() {
         mockkStatic(FirebaseAuth::class)
         val auth = mockk<FirebaseAuth>()
@@ -20,8 +22,10 @@ class ProfileLookupApiTest {
         every { auth.currentUser } returns null
         server = MockWebServer()
         server.start()
+        authService = mockk()
+        every { authService.getTokenBlocking(any(), any()) } returns "test-token"
         // AUD-AN40: baseUrl agora imutavel — injeta a URL do mock no construtor.
-        api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'))
+        api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), authService)
     }
     @After fun cleanup() { server.shutdown(); unmockkStatic(FirebaseAuth::class) }
     @Test fun only404MeansMissing() = runBlocking {
@@ -45,7 +49,7 @@ class ProfileLookupApiTest {
     @Test fun refusedConnectionIsUnavailable() = runBlocking {
         val closedServer = MockWebServer()
         closedServer.start()
-        val deadApi = BragaApiClient(mockk(relaxed = true), closedServer.url("/").toString().trimEnd('/'))
+        val deadApi = BragaApiClient(mockk(relaxed = true), closedServer.url("/").toString().trimEnd('/'), authService)
         closedServer.shutdown()
         assertTrue(deadApi.getProfileLookup("owner") is ProfileLookup.Unavailable)
     }

@@ -59,8 +59,33 @@ fun SocialFeedScreen(
 ) {
     val posts by viewModel.posts.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val publishState by viewModel.publishState.collectAsState()
+    val feedError by viewModel.feedError.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
     var searchQuery by remember { mutableStateOf("") }
     var showCreateDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(publishState) {
+        when (val state = publishState) {
+            SocialFeedViewModel.PublishState.Success -> {
+                showCreateDialog = false
+                snackbarHostState.showSnackbar("Conquista publicada!")
+                viewModel.clearPublishState()
+            }
+            is SocialFeedViewModel.PublishState.Error -> {
+                snackbarHostState.showSnackbar(state.message)
+                viewModel.clearPublishState()
+            }
+            else -> Unit
+        }
+    }
+
+    LaunchedEffect(feedError) {
+        feedError?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearFeedError()
+        }
+    }
 
     val filteredPosts = remember(posts, searchQuery) {
         if (searchQuery.isBlank()) {
@@ -75,6 +100,7 @@ fun SocialFeedScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -197,7 +223,12 @@ fun SocialFeedScreen(
             "Rotina de Remédios em Dia!"
         )
 
-        ModalBottomSheet(onDismissRequest = { showCreateDialog = false }) {
+        ModalBottomSheet(onDismissRequest = {
+            if (publishState != SocialFeedViewModel.PublishState.Loading) {
+                showCreateDialog = false
+                viewModel.clearPublishState()
+            }
+        }) {
             Column(
                 Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -231,11 +262,25 @@ fun SocialFeedScreen(
                         if (descriptionText.isNotBlank()) Text(descriptionText)
                     }
                 }
-                Button(onClick = {
-                    viewModel.createAchievementPost(selectedAchievement, descriptionText, "MILESTONE", if (isPublic) "PUBLIC" else "FAMILY")
-                    showCreateDialog = false
-                }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(16.dp)) {
-                    Text("Publicar conquista")
+                Button(
+                    onClick = {
+                        viewModel.createAchievementPost(selectedAchievement, descriptionText, "MILESTONE", if (isPublic) "PUBLIC" else "FAMILY")
+                    },
+                    enabled = publishState != SocialFeedViewModel.PublishState.Loading,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    if (publishState == SocialFeedViewModel.PublishState.Loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text("Publicando…")
+                    } else {
+                        Text("Publicar conquista")
+                    }
                 }
                 Spacer(Modifier.height(24.dp))
             }
