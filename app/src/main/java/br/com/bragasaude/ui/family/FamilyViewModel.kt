@@ -12,6 +12,9 @@ import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -77,6 +80,17 @@ class FamilyViewModel @Inject constructor(
     ) { caregivers, watched ->
         (caregivers + watched).distinctBy { it.id }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val selectedGroup = MutableStateFlow<String?>(null)
+    val chatPatientId = combine(activeBindingsForCurrentUser, selectedGroup) { bindings, selected ->
+        resolveFamilyChatGroup(bindings, currentUserId, selected)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun selectChatGroup(patientId: String) {
+        if (familyChatGroups(activeBindingsForCurrentUser.value, currentUserId).contains(patientId)) {
+            selectedGroup.value = patientId
+        }
+    }
 
     private val _inviteHistory = MutableStateFlow<List<FamilyBindingEntity>>(emptyList())
     val inviteHistory: StateFlow<List<FamilyBindingEntity>> = _inviteHistory.asStateFlow()
@@ -145,13 +159,23 @@ class FamilyViewModel @Inject constructor(
 
             // Observar mensagens da família no celular do paciente ou cuidador
             launch {
-                combine(_activeCaregivers, _watchedPatients) { caregivers, watched ->
-                    caregivers.firstOrNull()?.patientUserId
-                        ?: watched.firstOrNull()?.patientUserId
-                        ?: userId
-                }.distinctUntilChanged().collectLatest { targetPatientId ->
-                    familyRepository.getRecentMessagesForPatient(targetPatientId, Int.MAX_VALUE).collectLatest { messages ->
-                        _familyMessages.value = messages
+                chatPatientId.collectLatest { targetPatientId ->
+                    _familyMessages.value = emptyList()
+                    if (targetPatientId == null) return@collectLatest
+                    coroutineScope {
+                        launch {
+                            familyRepository.getRecentMessagesForPatient(targetPatientId, Int.MAX_VALUE).collectLatest {
+                                _familyMessages.value = it
+                            }
+                        }
+                        launch {
+                            while (isActive) {
+                                familyRepository.syncBindingsForPatient(userId)
+                                familyRepository.syncBindingsForCaregiver(userId)
+                                familyRepository.syncFamilyMessages(targetPatientId)
+                                delay(15_000)
+                            }
+                        }
                     }
                 }
             }
@@ -188,7 +212,7 @@ class FamilyViewModel @Inject constructor(
             launch {
                 familyRepository.getActiveBindingsForCaregiver(userId).collectLatest { bindings ->
                     _watchedPatients.value = bindings
-                    if (bindings.isNotEmpty() && _dashboard.value.patientUserId.isEmpty()) {
+                    if (bindings.size == 1 && _dashboard.value.patientUserId.isEmpty()) {
                         selectPatient(bindings.first())
                     } else if (bindings.isEmpty()) {
                         _dashboard.value = CaregiverDashboardState()
@@ -298,6 +322,7 @@ class FamilyViewModel @Inject constructor(
     // ==================== AÇÕES DO CUIDADOR ====================
 
     fun selectPatient(binding: FamilyBindingEntity) {
+        selectedGroup.value = binding.patientUserId
         dashboardJob?.cancel()
         dashboardJob = viewModelScope.launch {
             _dashboard.value = _dashboard.value.copy(
@@ -381,12 +406,8 @@ class FamilyViewModel @Inject constructor(
             }
         }
 
-        // Observar mensagens do paciente selecionado
-        viewModelScope.launch {
-            familyRepository.getRecentMessagesForPatient(binding.patientUserId, Int.MAX_VALUE).collectLatest { messages ->
-                _familyMessages.value = messages
-            }
-        }
+        // As mensagens têm um único observador, vinculado a chatPatientId.
+
     }
 
     fun toggleGroceryItem(itemId: String, isChecked: Boolean) {
@@ -493,6 +514,15 @@ class FamilyViewModel @Inject constructor(
         }
     }
 
+    fun sendMessageToGroup(text: String, onComplete: () -> Unit) {
+        val patientId = chatPatientId.value
+        val binding = activeBindingsForCurrentUser.value.firstOrNull {
+            it.patientUserId == patientId && it.status == "ACTIVE"
+        }
+        if (binding == null) { onComplete(); return }
+        sendMessageToFamily(binding.id, text, onComplete = onComplete)
+    }
+
     fun sendMessageToFamily(bindingId: String, text: String, iconType: String = "CUSTOM", onComplete: (() -> Unit)? = null) {
         if (text.isBlank()) {
             onComplete?.invoke()
@@ -506,6 +536,10 @@ class FamilyViewModel @Inject constructor(
                     return@launch
                 }
 
+                check(binding.status == "ACTIVE" &&
+                    currentUserId in listOf(binding.patientUserId, binding.caregiverUserId)) {
+                    "Vínculo indisponível. Atualize sua família."
+                }
                 val isCaregiver = binding.caregiverUserId == currentUserId
                 val recipientId = if (isCaregiver) binding.patientUserId else binding.caregiverUserId
                 val actualSenderName = if (isCaregiver) {
