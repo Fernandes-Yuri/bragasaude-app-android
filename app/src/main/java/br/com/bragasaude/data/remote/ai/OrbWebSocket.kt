@@ -67,10 +67,17 @@ class OrbWebSocket @Inject constructor() {
             if (!job.isActive || connectionJob?.isActive == true) return
             connectionJob = scope.launch {
                 var failures = 0
-                while (isActive && failures <= maxFailures) {
+                // APP-7: o laço só termina quando a sessão é explicitamente
+                // encerrada (close()) ou cancelada. Esgotar maxFailures sinaliza
+                // FAILED para a UI, mas a reconexão continua — FAILED deixa de
+                // ser terminal e passa a ter o mesmo retry+backoff dos outros
+                // estados (RECONNECTING).
+                while (isActive) {
                     if (failures > 0) {
-                        mutableState.value = OrbConnectionState.RECONNECTING
-                        val baseDelay = (retryDelay * (1L shl (failures - 1))).coerceAtMost(30000)
+                        mutableState.value =
+                            if (failures > maxFailures) OrbConnectionState.FAILED
+                            else OrbConnectionState.RECONNECTING
+                        val baseDelay = (retryDelay * (1L shl (failures - 1).coerceAtMost(29))).coerceAtMost(30000)
                         val jitter = if (retryDelay > 50) (baseDelay * 0.15 * Math.random()).toLong() else 0L
                         delay(baseDelay + jitter)
                     }

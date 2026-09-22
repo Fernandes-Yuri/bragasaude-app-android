@@ -18,6 +18,7 @@ import br.com.bragasaude.ui.components.DraggableAiAssistantFab
 import br.com.bragasaude.ui.components.XpToastHost
 import br.com.bragasaude.ui.util.Screen
 import br.com.bragasaude.util.AppPreferences
+import kotlinx.serialization.serializer
 
 /**
  * Scaffold global da aplicação após autenticação.
@@ -76,7 +77,7 @@ fun MainScaffold(
                     tonalElevation = 0.dp
                 ) {
                     navItems.forEach { item ->
-                        val selected = currentRoute?.contains(item.route::class.simpleName ?: "") == true
+                        val selected = isCurrentRoute(currentRoute, item.route)
                         NavigationBarItem(
                             icon = { Icon(item.icon, contentDescription = item.label) },
                             label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
@@ -114,7 +115,7 @@ fun MainScaffold(
         }
 
         // FAB Metamórfico de Voz flutuante — oculto na própria tela do OrbChat
-        if (currentRoute?.contains("OrbChat") != true &&
+        if (!isCurrentRoute(currentRoute, Screen.OrbChat) &&
             AppPreferences.isVoiceAssistantEnabled(appContext)
         ) {
             DraggableAiAssistantFab(
@@ -131,3 +132,15 @@ data class BottomNavItem(
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val route: Screen
 )
+
+/**
+ * Compara a rota atual do back stack com uma tela da sealed interface [Screen]
+ * de forma type-safe. O Navigation Compose 2.8 deriva a rota do serialName do
+ * serializador (ex.: "Screen$Home", ou "Screen$Nutrition?searchFood=..."), e
+ * este helper lê a mesma fonte em vez de comparar [String.contains] — que
+ * casava "Profile" contra "ProfileEdit" (APP-6).
+ */
+private fun isCurrentRoute(currentRoute: String?, screen: Screen): Boolean {
+    val name = screen::class.serializer().descriptor.serialName
+    return currentRoute != null && (currentRoute == name || currentRoute.startsWith("$name?"))
+}
