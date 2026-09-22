@@ -2,8 +2,8 @@ package br.com.bragasaude.data.remote.ai
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
 import okhttp3.*
+import okhttp3.mockwebserver.*
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -11,34 +11,48 @@ import org.junit.Test
  * APP-7: FAILED deixou de ser um estado terminal. A sessão anuncia FAILED
  * (para a UI mostrar a falha) e em seguida retoma o ciclo de reconexão com
  * backoff, em vez de encerrar a coroutine de conexão.
+ *
+ * Modelo do OrbWebSocketTest existente: runBlocking + Dispatchers.Default
+ * (tempo real), evitando o congelamento de tempo virtual do runTest com
+ * sockets reais.
  */
 class OrbFailedNotTerminalTest {
 
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    @Test fun failed_isFollowedByReconnectionAttempt() = runTest {
+    @Test fun failed_isFollowedByReconnectionAttempt(): Unit = runBlocking {
         val client = OkHttpClient()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        var connects = 0
-        val server = okhttp3.mockwebserver.MockWebServer().apply { start() }
-        // Primeira conexão: 401 (auth expirada) → falha.
-        server.enqueue(okhttp3.mockwebserver.MockResponse().setResponseCode(401))
-        // Segunda: upgrade aceito → a sessão se reconecta sozinha.
-        server.enqueue(okhttp3.mockwebserver.MockResponse().withWebSocketUpgrade(object : WebSocketListener() {}))
+        val server = MockWebServer().apply { start() }
+        // Dispatcher determinístico: falha as primeiras N tentativas com 401
+        // (auth expirada) e a partir daí aceita o upgrade. Com maxFailures
+        // padrão (5), a sessão anuncia FAILED quando failures o excede — e a
+        // reconexão seguinte precisa encontrar o servidor "recuperado".
+        var failuresServed = 0
+        server.dispatcher = object : QueueDispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                // Heartbeats/pings não são HTTP; só conta tentativas de /ws/orb.
+                return if (failuresServed < 7) {
+                    failuresServed++
+                    MockResponse().setResponseCode(401)
+                } else {
+                    MockResponse().withWebSocketUpgrade(object : WebSocketListener() {})
+                }
+            }
+        }
 
         val session = OrbWebSocket.Session(scope, server.url("/").toString().trimEnd('/'), { "valid" },
-            client, retryDelay = 1, heartbeatMillis = 60000)
+            client, retryDelay = 10, heartbeatMillis = 60000)
 
         try {
-            // A sessão passa por FAILED (anunciado) e depois volta a tentar.
-            withTimeout(5000) { session.state.first { it == OrbConnectionState.FAILED } }
-            // A reconexão efetiva acontece: volta a conectar.
-            withTimeout(5000) { session.state.first { it == OrbConnectionState.CONNECTED } }
+            // 1. A sessão anuncia FAILED ao esgotar maxFailures.
+            withTimeout(10000) { session.state.first { it == OrbConnectionState.FAILED } }
+            // 2. ...mas não é terminal: a reconexão acontece e volta a conectar.
+            withTimeout(10000) { session.state.first { it == OrbConnectionState.CONNECTED } }
         } finally {
             session.close()
             scope.cancel()
             client.dispatcher.executorService.shutdown()
             client.connectionPool.evictAll()
-            server.close()
+            try { server.close() } catch (_: Exception) {}
         }
     }
 }
