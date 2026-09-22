@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.navigation
+package br.com.bragasaude.ui.navigation
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,7 +18,6 @@ import br.com.bragasaude.ui.components.DraggableAiAssistantFab
 import br.com.bragasaude.ui.components.XpToastHost
 import br.com.bragasaude.ui.util.Screen
 import br.com.bragasaude.util.AppPreferences
-import kotlinx.serialization.serializer
 
 /**
  * Scaffold global da aplicação após autenticação.
@@ -135,12 +134,16 @@ data class BottomNavItem(
 
 /**
  * Compara a rota atual do back stack com uma tela da sealed interface [Screen]
- * de forma type-safe. O Navigation Compose 2.8 deriva a rota do serialName do
- * serializador (ex.: "Screen$Home", ou "Screen$Nutrition?searchFood=..."), e
- * este helper lê a mesma fonte em vez de comparar [String.contains] — que
- * casava "Profile" contra "ProfileEdit" (APP-6).
+ * de forma type-safe, substituindo o [String.contains] antigo — que casava
+ * "Profile" contra "ProfileEdit" (APP-6).
+ *
+ * O Navigation Compose 2.8 derive a rota do nome do serializador da classe:
+ * para a sealed interface aninhada o formato é "Screen$Home" (e
+ * "Screen$Nutrition?arg=..." para rotas com argumentos). Este helper casa o
+ * nome exato ou o prefixo seguido de "?" — âncora que acaba com a colisão de
+ * substring.
  */
 private fun isCurrentRoute(currentRoute: String?, screen: Screen): Boolean {
-    val name = screen::class.serializer().descriptor.serialName
+    val name = "Screen\$${screen::class.simpleName}"
     return currentRoute != null && (currentRoute == name || currentRoute.startsWith("$name?"))
 }
