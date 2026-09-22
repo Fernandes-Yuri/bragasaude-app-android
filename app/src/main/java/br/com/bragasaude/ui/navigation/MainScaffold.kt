@@ -76,7 +76,7 @@ fun MainScaffold(
                     tonalElevation = 0.dp
                 ) {
                     navItems.forEach { item ->
-                        val selected = currentRoute?.contains(item.route::class.simpleName ?: "") == true
+                        val selected = isCurrentRoute(currentRoute, item.route)
                         NavigationBarItem(
                             icon = { Icon(item.icon, contentDescription = item.label) },
                             label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
@@ -114,7 +114,7 @@ fun MainScaffold(
         }
 
         // FAB Metamórfico de Voz flutuante — oculto na própria tela do OrbChat
-        if (currentRoute?.contains("OrbChat") != true &&
+        if (!isCurrentRoute(currentRoute, Screen.OrbChat) &&
             AppPreferences.isVoiceAssistantEnabled(appContext)
         ) {
             DraggableAiAssistantFab(
@@ -131,3 +131,19 @@ data class BottomNavItem(
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val route: Screen
 )
+
+/**
+ * Compara a rota atual do back stack com uma tela da sealed interface [Screen]
+ * de forma type-safe, substituindo o [String.contains] antigo — que casava
+ * "Profile" contra "ProfileEdit" (APP-6).
+ *
+ * O Navigation Compose 2.8 derive a rota do nome do serializador da classe:
+ * para a sealed interface aninhada o formato é "Screen$Home" (e
+ * "Screen$Nutrition?arg=..." para rotas com argumentos). Este helper casa o
+ * nome exato ou o prefixo seguido de "?" — âncora que acaba com a colisão de
+ * substring.
+ */
+internal fun isCurrentRoute(currentRoute: String?, screen: Screen): Boolean {
+    val name = "Screen\$${screen::class.simpleName}"
+    return currentRoute != null && (currentRoute == name || currentRoute.startsWith("$name?"))
+}

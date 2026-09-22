@@ -99,6 +99,7 @@ app/src/main/java/br/com/bragasaude/
 O app consulta `/api/app/latest` no gateway para verificar updates.
 
 As releases são gerenciadas via `app/build.gradle.kts` → `versionCode` / `versionName`.
+
 ## Identidade e autenticação
 
 - Tokens Firebase usados pela API, IA, áudio e notificações passam pelo `AuthService`, com cache por usuário e renovação centralizada.
@@ -110,3 +111,24 @@ As releases são gerenciadas via `app/build.gradle.kts` → `versionCode` / `ver
 - O bottom sheet do Mural permanece aberto durante o envio e mostra progresso no botão.
 - A publicação entra de forma otimista no banco local, mas é removida se `POST /api/sync/social-post` não devolver um identificador.
 - Sucesso e falha são apresentados por snackbar; em falha, o texto preenchido permanece disponível para nova tentativa.
+
+## 🧹 Higiene Android (T-12)
+
+Refactors de baixo risco, sem toque no gateway, na branch `fase-higiene-android`:
+
+- **Navegação type-safe (APP-6):** `MainScaffold.kt` deixou de detectar a aba
+  ativa por `String.contains(simpleName)` — que casava `Profile` contra
+  `ProfileEdit`. Agora a rota atual é comparada ao nome da tela da `sealed
+  interface Screen` com match exato ou prefixo seguido de `?` para rotas com
+  argumentos (`isCurrentRoute`).
+- **Orb resiliente (APP-7):** em `OrbWebSocket.kt`, esgotar `maxFailures`
+  não encerra mais a coroutine de conexão. O estado `FAILED` é anunciado à
+  UI, mas o ciclo de reconexão com backoff continua — o Orb se recupera
+  sozinho de uma falha transitória.
+- **`ProfileInput` (APP-8):** `ProfileScreen.kt` chama o wrapper
+  `ProfileInput` (18 campos) em vez do `saveProfile` monolítico de ~28
+  parâmetros.
+
+Testes de regressão: `MainScaffoldRouteMatchingTest` (colisão
+Profile/ProfileEdit) e `OrbFailedNotTerminalTest` (FAILED seguido de
+reconexão), além da suíte existente do `OrbWebSocketTest`.
