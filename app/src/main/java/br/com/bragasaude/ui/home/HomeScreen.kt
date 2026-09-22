@@ -155,7 +155,7 @@ fun HomeScreen(
             ) {
                 item { Spacer(Modifier.height(4.dp)) }
 
-                // 1. Atalhos Rápidos de Navegação (Hidratação, Pressão, Glicose, Liga, Mural, Exames, Remédios) — topo visível
+                // 1. Atalhos Rápidos de Navegação — topo visível
                 item {
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -171,7 +171,6 @@ fun HomeScreen(
                             if (isHybridCaregiver) {
                                 add(Triple("Dados", Icons.Default.BarChart, br.com.bragasaude.ui.util.Screen.Report))
                             }
-                            add(Triple("Liga", Icons.Default.EmojiEvents, br.com.bragasaude.ui.util.Screen.League))
                             add(Triple("Mural", Icons.Default.Groups, br.com.bragasaude.ui.util.Screen.SocialFeed))
                             add(Triple("Exames", Icons.Default.Assignment, br.com.bragasaude.ui.util.Screen.Exams))
                             if (medications.isNotEmpty()) {

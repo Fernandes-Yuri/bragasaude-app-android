@@ -256,8 +256,8 @@ async function getMembershipsRankedForCycleAdmin(
 // export const onWriteRelevantEvent = onRequest(async (req, res) => { ... });
 
 /**
- * [F2] FECHAMENTO SEMANAL DE LIGAS
- * Roda todo domingo às 23:59 America/Sao_Paulo
+ * LEGADO D61: fechamento semanal preservado como referência, mas não exportado.
+ * Sem export, o Firebase não publica nem agenda esta função.
  *
  * Implementação alinhada com GamificationEngine.kt Fase 3:
  *  - Anti-sandbagging: promocão só ocorre com percentil + XP mínimo
@@ -265,7 +265,7 @@ async function getMembershipsRankedForCycleAdmin(
  *  - Piso de proteção: nivel final >= nivel derivado do XP total
  *  - Processamento assíncrono com tolerancia a falhas individuais
  */
-export const weeklyLeagueCloseJob = onSchedule(
+const legacyWeeklyLeagueCloseJob = onSchedule(
     {
         schedule: "59 23 * * 0",
         timeZone: "America/Sao_Paulo",
@@ -455,6 +455,8 @@ export const weeklyLeagueCloseJob = onSchedule(
         }
     }
 );
+
+void legacyWeeklyLeagueCloseJob;
 
 /**
  * [F3] DIREITO AO ESQUECIMENTO (LGPD)

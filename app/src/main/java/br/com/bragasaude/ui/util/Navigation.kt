@@ -24,6 +24,7 @@ import kotlinx.serialization.Serializable
     @Serializable data object Notifications : Screen
     @Serializable data object Settings : Screen
     @Serializable data object Feedback : Screen
+    @Deprecated("Liga Semanal desativada por D61; rota preservada apenas para compatibilidade")
     @Serializable data object League : Screen
     @Serializable data object SocialFeed : Screen
     

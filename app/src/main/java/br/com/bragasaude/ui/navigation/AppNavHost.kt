@@ -16,7 +16,6 @@ import br.com.bragasaude.ui.steps.StepsScreen
 import br.com.bragasaude.ui.nutrition.NutritionScreen
 import br.com.bragasaude.ui.nutrition.PantryRecipesScreen
 import br.com.bragasaude.ui.exams.ExamsScreen
-import br.com.bragasaude.ui.league.LeagueScreen
 import br.com.bragasaude.ui.social.SocialFeedScreen
 import br.com.bragasaude.ui.profile.ProfileScreen
 import br.com.bragasaude.ui.profile.ProfileDetailScreen
@@ -189,7 +188,7 @@ fun AppNavHost(
             ProfileScreen(onBack = navigateBack, onProfileSaved = navigateBack)
         }
         composable<Screen.League> {
-            LeagueScreen(onBack = navigateBack)
+            SocialFeedScreen(onBack = navigateBack)
         }
         composable<Screen.SocialFeed> {
             SocialFeedScreen(onBack = navigateBack)
