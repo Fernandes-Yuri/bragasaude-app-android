@@ -25,6 +25,10 @@ val Typography = Typography(
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp,
         letterSpacing = 0.5.sp
-    )
-    // Mantenha outros estilos como estão ou ajuste conforme necessário
+    ),
+    bodyMedium = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
+    bodySmall = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
+    labelMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
+    labelSmall = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
+    titleSmall = TextStyle(fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold)
 )

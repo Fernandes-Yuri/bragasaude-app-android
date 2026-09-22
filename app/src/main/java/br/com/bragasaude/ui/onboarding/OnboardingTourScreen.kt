@@ -14,6 +14,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -162,10 +166,11 @@ fun OnboardingTourScreen(
                 ) {
                     repeat(tourSlides.size) { index ->
                         val isSelected = pagerState.currentPage == index
+                        val dotWidth by animateDpAsState(if (isSelected) 28.dp else 8.dp, label = "Página atual")
                         Box(
                             modifier = Modifier
                                 .height(8.dp)
-                                .width(if (isSelected) 24.dp else 8.dp)
+                                .width(dotWidth)
                                 .clip(CircleShape)
                                 .background(if (isSelected) TealPrimary else MaterialTheme.colorScheme.outlineVariant)
                         )
@@ -189,7 +194,7 @@ fun OnboardingTourScreen(
                         .fillMaxWidth()
                         .height(54.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = TealPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -221,7 +226,8 @@ fun OnboardingTourScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 32.dp),
+                    .padding(horizontal = 32.dp)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -231,6 +237,8 @@ fun OnboardingTourScreen(
                     modifier = Modifier.size(140.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(124.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.06f), CircleShape))
+                        Box(Modifier.size(96.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), CircleShape))
                         if (slide.useShieldIcon) {
                             ShieldEcgIcon(sizeDp = 80.dp, shieldColor = TealPrimary)
                         } else if (slide.icon != null) {

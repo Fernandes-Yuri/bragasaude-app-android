@@ -50,19 +50,20 @@ fun FamilyChatScreen(
     viewModel: FamilyViewModel = hiltViewModel()
 ) {
     val currentUserId by remember { derivedStateOf { viewModel.currentUserId } }
-    val messages by viewModel.familyMessages.collectAsState()
+    val allMessages by viewModel.familyMessages.collectAsState()
+    val patientId by viewModel.chatPatientId.collectAsState()
+    val messages = allMessages.filter { it.patientUserId == patientId }
     val binding by viewModel.activeBindingsForCurrentUser.collectAsState()
     val context = LocalContext.current
     val exportScope = androidx.compose.runtime.rememberCoroutineScope()
 
-    var messageText by remember { mutableStateOf("") }
+    var messageText by remember(patientId) { mutableStateOf("") }
     var isSending by remember { mutableStateOf(false) }
     // D47: mensagem aguardando confirmação de exclusão (toque longo)
     var messagePendingDelete by remember { mutableStateOf<FamilyMessageEntity?>(null) }
     
     // Marcar mensagens como lidas quando os vínculos estiverem carregados
-    LaunchedEffect(binding) {
-        val patientId = binding.firstOrNull()?.patientUserId
+    LaunchedEffect(patientId, messages.size) {
         if (!patientId.isNullOrBlank()) {
             viewModel.markAllMessagesAsRead(patientId)
         }
@@ -90,19 +91,9 @@ fun FamilyChatScreen(
                     }
                 },
                 title = {
-                    val activeBinding = binding.firstOrNull()
-                    val titleText = when {
-                        activeBinding == null -> "Conversa com a Família"
-                        activeBinding.caregiverUserId == currentUserId -> "Paciente / Familiar"
-                        activeBinding.caregiverName.isNotBlank() -> activeBinding.caregiverName
-                        else -> "Familiar"
-                    }
-                    val subtitleText = when {
-                        activeBinding == null -> "Ponte Familiar Braga Saúde"
-                        activeBinding.caregiverUserId == currentUserId -> "Acompanhado por você"
-                        activeBinding.caregiverRelation.isNotBlank() -> activeBinding.caregiverRelation
-                        else -> "Acompanhante"
-                    }
+                    val titleText = "Grupo da família"
+                    val subtitleText = if (patientId == null) "Selecione o grupo abaixo"
+                        else "Titular e cuidadores • mensagens por 24h"
                     Column {
                         Text(
                             text = titleText,
@@ -143,6 +134,22 @@ fun FamilyChatScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
+            val groups = familyChatGroups(binding, currentUserId)
+            if (groups.size > 1) {
+                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(groups) { groupId ->
+                        val groupName by remember(groupId) { viewModel.groupName(groupId) }
+                            .collectAsState(initial = "Carregando família...")
+                        FilterChip(
+                            selected = groupId == patientId,
+                            enabled = !isSending,
+                            onClick = { messageText = ""; viewModel.selectChatGroup(groupId) },
+                            label = { Text(groupName) },
+                            modifier = Modifier.heightIn(min = 48.dp)
+                        )
+                    }
+                }
+            }
             // D47: aviso permanente de retenção — as mensagens vivem por 24 horas
             FamilyRetentionNotice(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -212,18 +219,16 @@ fun FamilyChatScreen(
                 messageText = messageText,
                 onMessageChange = { messageText = it },
                 onSend = {
-                    if (messageText.isNotBlank() && !isSending) {
+                    if (patientId != null && messageText.isNotBlank() && !isSending) {
                         isSending = true
-                        val bindingId = binding.firstOrNull()?.id
-                        if (bindingId != null) {
-                            viewModel.sendMessageToFamily(bindingId, messageText, iconType = "CUSTOM") {
-                                messageText = ""
-                                isSending = false
-                            }
+                        viewModel.sendMessageToGroup(messageText) { saved ->
+                            if (saved) messageText = ""
+                            isSending = false
                         }
                     }
                 },
-                isSending = isSending
+                isSending = isSending,
+                hasGroup = patientId != null
             )
         }
     }
@@ -425,7 +430,8 @@ private fun MessageInputField(
     messageText: String,
     onMessageChange: (String) -> Unit,
     onSend: () -> Unit,
-    isSending: Boolean
+    isSending: Boolean,
+    hasGroup: Boolean
 ) {
     Surface(
         tonalElevation = 2.dp,
@@ -452,14 +458,14 @@ private fun MessageInputField(
                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
                 ),
                 maxLines = 5,
-                enabled = !isSending
+                enabled = hasGroup && !isSending
             )
             
             Spacer(Modifier.width(12.dp))
             
             Button(
                 onClick = onSend,
-                enabled = messageText.isNotBlank() && !isSending,
+                enabled = hasGroup && messageText.isNotBlank() && !isSending,
                 shape = CircleShape,
                 modifier = Modifier.size(48.dp),
                 contentPadding = PaddingValues(0.dp),

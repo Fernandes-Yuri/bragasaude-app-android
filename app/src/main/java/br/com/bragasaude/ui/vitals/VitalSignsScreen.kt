@@ -59,7 +59,7 @@ fun VitalSignsScreen(
         mutableStateOf(if (initialType == "GLUCOSE" && initialValue != null) initialValue else "") 
     }
     var hydration by remember { mutableStateOf("") }
-    var abbreviatedPressure by remember { mutableStateOf(false) }
+
     var showConfirmation by remember { mutableStateOf(false) }
     var sosRecommendation by remember { mutableStateOf<br.com.bragasaude.domain.HealthEngine.HealthRecommendation?>(null) }
     var milestoneMessage by remember { mutableStateOf<String?>(null) }
@@ -185,7 +185,7 @@ fun VitalSignsScreen(
                 Text(
                     "Insira o valor abaixo ou utilize o botão de voz.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
@@ -208,54 +208,26 @@ fun VitalSignsScreen(
                         MetricInfoIcon(metricInfo = MetricInfoCatalog.bloodPressure)
                     }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = bpPair.first,
-                            onValueChange = { newSystolic -> 
-                                bloodPressure = "$newSystolic/${bpPair.second}"
-                            },
-                            label = { Text("Sistólica") },
-                            placeholder = { Text("120") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = BragaEmerald,
-                                focusedLabelColor = BragaEmerald,
-                                cursorColor = BragaEmerald
-                            )
-                        )
-                        OutlinedTextField(
-                            value = bpPair.second,
-                            onValueChange = { newDiastolic -> 
-                                bloodPressure = "${bpPair.first}/$newDiastolic"
-                            },
-                            label = { Text("Diastólica") },
-                            placeholder = { Text("80") },
-                            suffix = { Text("mmHg", style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = BragaEmerald,
-                                focusedLabelColor = BragaEmerald,
-                                cursorColor = BragaEmerald
-                            )
-                        )
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = abbreviatedPressure, onCheckedChange = { abbreviatedPressure = it })
-                        Text("Usei forma abreviada (12/8 equivale a 120/80 mmHg)", style = MaterialTheme.typography.bodySmall)
-                    }
+                    OutlinedTextField(
+                        value = bloodPressure,
+                        onValueChange = { bloodPressure = it },
+                        label = { Text("Pressão arterial") },
+                        placeholder = { Text("120/80 ou 12/8") },
+                        supportingText = { Text("Confira o valor em mmHg antes de salvar.") },
+                        suffix = { Text("mmHg") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)
+                    )
                     val sys = bpPair.first.toIntOrNull()
                     val dia = bpPair.second.toIntOrNull()
                     if (sys != null && dia != null && sys > 0 && dia > 0) {
                         Spacer(Modifier.height(10.dp))
-                        BloodPressureRiskBadge(if (abbreviatedPressure) sys * 10 else sys, if (abbreviatedPressure) dia * 10 else dia)
+                        val normalized = BloodPressureParser.parsePressureString(bloodPressure)
+                        if (normalized != null) {
+                            Text("Leitura: " + normalized.first + "/" + normalized.second + " mmHg", fontWeight = FontWeight.SemiBold)
+                            BloodPressureRiskBadge(normalized.first, normalized.second)
+                        }
                     }
                 }
             } else if (selectedTab == 1) {
@@ -296,7 +268,7 @@ fun VitalSignsScreen(
 
             item {
                 val canSave = if (currentType == "PRESSURE") {
-                    bpPair.first.isNotEmpty() && bpPair.second.isNotEmpty()
+                    BloodPressureParser.parsePressureString(bloodPressure) != null
                 } else {
                     glucose.isNotEmpty()
                 }
@@ -308,7 +280,7 @@ fun VitalSignsScreen(
                         .height(56.dp),
                     enabled = !isLoading && canSave,
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
@@ -336,6 +308,8 @@ fun VitalSignsScreen(
                                 )
                                 br.com.bragasaude.ui.components.SimpleTrendChart(
                                     data = pressureHistory,
+                                    timestamps = allVitals.filter { it.systolicPressure != null }.map { it.measuredAt ?: "" }.reversed(),
+                                    referenceRange = 90.0..129.0,
                                     label = "Sistólica",
                                     color = MaterialTheme.colorScheme.primary,
                                     targetValue = 120.0,
@@ -356,6 +330,7 @@ fun VitalSignsScreen(
                                 )
                                 br.com.bragasaude.ui.components.SimpleTrendChart(
                                     data = glucoseHistory,
+                                    timestamps = allVitals.filter { it.glucoseLevel != null }.map { it.measuredAt ?: "" }.reversed(),
                                     label = "Glicemia",
                                     color = Color(0xFFEA580C),
                                     targetValue = 99.0,
@@ -461,8 +436,8 @@ fun VitalSignsScreen(
     if (showConfirmation) {
         val sysRaw = bpPair.first.toIntOrNull() ?: 0
         val diaRaw = bpPair.second.toIntOrNull() ?: 0
-        val sysNorm = if (abbreviatedPressure) sysRaw * 10 else sysRaw
-        val diaNorm = if (abbreviatedPressure) diaRaw * 10 else diaRaw
+        val sysNorm = BloodPressureParser.normalizePressure(sysRaw)
+        val diaNorm = BloodPressureParser.normalizePressure(diaRaw)
 
         AlertDialog(
             onDismissRequest = { showConfirmation = false },
@@ -575,12 +550,12 @@ fun VitalHistoryCard(vital: RemoteVitalSign, metricType: String = "PRESSURE") {
                     Text(
                         text = vital.measuredAt?.take(10) ?: "",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = vital.measuredAt?.substringAfter("T")?.take(5) ?: "",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 
@@ -617,7 +592,7 @@ fun VitalHistoryCard(vital: RemoteVitalSign, metricType: String = "PRESSURE") {
 @Composable
 fun VitalValueBadge(label: String, value: String, unit: String) {
     Column {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("$value $unit", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
     }
 }

@@ -52,36 +52,17 @@ class SocialFeedViewModel @Inject constructor(
         }
     }
 
-    /** Estado otimista: reações aparecem instantaneamente na UI. */
-    private val _optimisticReactions = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    fun reactionsForPost(postId: String) = socialFeedRepository.reactionsForPost(postId)
 
-    fun toggleReaction(post: SocialPostEntity) {
-        val isReacting = !post.hasUserReacted
-        // Atualiza a UI imediatamente (optimistic)
-        _optimisticReactions.value = _optimisticReactions.value.toMutableMap().apply {
-            set(post.id, isReacting)
-        }
-        val action = if (isReacting) "LIKE" else "UNLIKE"
-        telemetryService.logSocialFeed(currentUserId, action, post.id, post.postType)
+    private val reacting = mutableSetOf<String>()
+    fun react(post: SocialPostEntity, reactionType: String) {
+        if (!reacting.add(post.id)) return
         viewModelScope.launch {
-            try {
-                if (isReacting) {
-                    socialFeedRepository.reactToPost(post.id, currentUserId)
-                } else {
-                    socialFeedRepository.removeReaction(post.id, currentUserId)
-                }
-            } catch (e: Exception) {
-                // Reverte em caso de erro (pessimistic rollback)
-                _optimisticReactions.value = _optimisticReactions.value.toMutableMap().apply {
-                    set(post.id, !isReacting)
-                }
-            }
+            try { socialFeedRepository.reactToPost(post.id, currentUserId, reactionType) }
+            finally { reacting.remove(post.id) }
         }
     }
 
-    /** Retorna o estado otimista da reação para um post. null = use o estado do post. */
-    fun getOptimisticReaction(postId: String): Boolean? = _optimisticReactions.value[postId]
-    
     /**
      * Criar nova publicação de conquista/meta.
      */
