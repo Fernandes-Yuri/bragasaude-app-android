@@ -57,7 +57,7 @@ fun FamilyChatScreen(
     val context = LocalContext.current
     val exportScope = androidx.compose.runtime.rememberCoroutineScope()
 
-    var messageText by remember { mutableStateOf("") }
+    var messageText by remember(patientId) { mutableStateOf("") }
     var isSending by remember { mutableStateOf(false) }
     // D47: mensagem aguardando confirmação de exclusão (toque longo)
     var messagePendingDelete by remember { mutableStateOf<FamilyMessageEntity?>(null) }
@@ -138,10 +138,13 @@ fun FamilyChatScreen(
             if (groups.size > 1) {
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(groups) { groupId ->
+                        val groupName by remember(groupId) { viewModel.groupName(groupId) }
+                            .collectAsState(initial = "Carregando família...")
                         FilterChip(
                             selected = groupId == patientId,
+                            enabled = !isSending,
                             onClick = { messageText = ""; viewModel.selectChatGroup(groupId) },
-                            label = { Text(if (groupId == currentUserId) "Minha família" else "Família ${groups.indexOf(groupId) + 1}") },
+                            label = { Text(groupName) },
                             modifier = Modifier.heightIn(min = 48.dp)
                         )
                     }
@@ -218,13 +221,14 @@ fun FamilyChatScreen(
                 onSend = {
                     if (patientId != null && messageText.isNotBlank() && !isSending) {
                         isSending = true
-                        viewModel.sendMessageToGroup(messageText) {
-                            messageText = ""
+                        viewModel.sendMessageToGroup(messageText) { saved ->
+                            if (saved) messageText = ""
                             isSending = false
                         }
                     }
                 },
-                isSending = isSending
+                isSending = isSending,
+                hasGroup = patientId != null
             )
         }
     }
@@ -426,7 +430,8 @@ private fun MessageInputField(
     messageText: String,
     onMessageChange: (String) -> Unit,
     onSend: () -> Unit,
-    isSending: Boolean
+    isSending: Boolean,
+    hasGroup: Boolean
 ) {
     Surface(
         tonalElevation = 2.dp,
@@ -453,14 +458,14 @@ private fun MessageInputField(
                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
                 ),
                 maxLines = 5,
-                enabled = !isSending
+                enabled = hasGroup && !isSending
             )
             
             Spacer(Modifier.width(12.dp))
             
             Button(
                 onClick = onSend,
-                enabled = messageText.isNotBlank() && !isSending,
+                enabled = hasGroup && messageText.isNotBlank() && !isSending,
                 shape = CircleShape,
                 modifier = Modifier.size(48.dp),
                 contentPadding = PaddingValues(0.dp),
