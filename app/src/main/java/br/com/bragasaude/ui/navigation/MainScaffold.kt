@@ -1,4 +1,4 @@
-package br.com.bragasaude.ui.navigation
+﻿package br.com.bragasaude.ui.navigation
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
