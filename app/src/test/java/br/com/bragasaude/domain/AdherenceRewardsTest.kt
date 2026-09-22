@@ -28,7 +28,7 @@ class AdherenceRewardsTest {
             val award: XpAwardEntity = firstArg()
             awards[award.date + ":" + award.actionType] = award
         }
-        return XpGrantService(mockk(relaxed = true), profiles, xpAwards, mockk(relaxed = true), mockk(relaxed = true))
+        return XpGrantService(mockk(relaxed = true), profiles, xpAwards, mockk(relaxed = true))
     }
 
     @Test fun `recording outside reference range is rewarded equally`() {

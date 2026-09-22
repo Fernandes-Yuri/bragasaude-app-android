@@ -1,7 +1,5 @@
 package br.com.bragasaude.domain
 
-import br.com.bragasaude.data.local.LeagueDao
-import br.com.bragasaude.data.local.LeagueMembershipEntity
 import br.com.bragasaude.data.local.ProfileDao
 import br.com.bragasaude.data.local.XpAwardDao
 import br.com.bragasaude.data.local.XpAwardEntity
@@ -27,7 +25,6 @@ class XpGrantService @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val profileDao: ProfileDao,
     private val xpAwardDao: XpAwardDao,
-    private val leagueDao: LeagueDao,
     private val apiClient: BragaApiClient
 ) {
     private val guestId = BragaConstants.GUEST_UID
@@ -124,9 +121,6 @@ class XpGrantService @Inject constructor(
             )
         )
 
-        // ---- [Fase 3] XP da liga semanal ----
-        addLeagueXp(userId, newLevel, finalXp)
-
         // ---- Sync do perfil (best-effort) ----
         syncProfileGamification(updatedProfile)
 
@@ -169,7 +163,7 @@ class XpGrantService @Inject constructor(
         val reliable = GamificationEngine.isActivityXPEligible(reliabilityScore)
         val reason = when {
             !goalHit -> "Meta de passos ainda não atingida"
-            !reliable -> "Meta de passos atingida! Para pontuar na liga, procure caminhar com GPS ativo e sinal estável."
+            !reliable -> "Meta de passos atingida! Para validar o registro, procure caminhar com GPS ativo e sinal estável."
             else -> ""
         }
         return grantXp(
@@ -184,29 +178,6 @@ class XpGrantService @Inject constructor(
         for (milestone in GamificationEngine.hydrationMilestones(totalMl, targetMl)) {
             grantXp(userId, GamificationActionType.HYDRATION_GOAL_HIT, true, hydrationMilestone = milestone)
         }
-    }
-
-    // ------------------------------------------------------------------
-    // LIGA SEMANAL
-    // ------------------------------------------------------------------
-
-    /**
-     * Soma o XP ganho ao membership do ciclo ativo do nível do usuário.
-     * Se ainda não ingressou, o auto-join acontece no próximo sync da Liga.
-     */
-    private suspend fun addLeagueXp(userId: String, level: Int, xpDelta: Int) {
-        if (userId == guestId) return
-        val cycle = leagueDao.getActiveCycleOneShot(level) ?: return
-        val membership = leagueDao.getMyMembershipOneShot(userId, cycle.id) ?: return
-
-        val updated = membership.copy(
-            xpEarned = membership.xpEarned + xpDelta,
-            userLevel = level,
-            pendingSync = true
-        )
-        leagueDao.insertMembership(updated)
-
-        leagueDao.insertMembership(updated.copy(pendingSync = false))
     }
 
     // ------------------------------------------------------------------

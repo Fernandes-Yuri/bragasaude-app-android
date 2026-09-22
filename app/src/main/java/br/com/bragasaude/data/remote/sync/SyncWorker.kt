@@ -25,7 +25,6 @@ class SyncWorker @AssistedInject constructor(
     private val milestoneDao: MilestoneDao,
     private val dailyMetricsDao: DailyMetricsDao,
     private val feedbackDao: FeedbackDao,
-    private val leagueDao: LeagueDao,
     private val socialFeedDao: SocialFeedDao,
     private val familyDao: FamilyDao,
     private val auditLogDao: AuditLogDao
@@ -44,7 +43,6 @@ class SyncWorker @AssistedInject constructor(
         if (!safeSync { syncFeedbacks() }) hasErrors = true
         if (!safeSync { syncSocialPosts() }) hasErrors = true
         if (!safeSync { syncPostReactions() }) hasErrors = true
-        if (!safeSync { syncLeagueMemberships() }) hasErrors = true
         if (!safeSync { syncFamilyBindings() }) hasErrors = true
         if (!safeSync { syncFamilyMessages() }) hasErrors = true
         if (!safeSync { syncAuditLogs() }) hasErrors = true
@@ -186,16 +184,6 @@ class SyncWorker @AssistedInject constructor(
             val ok = apiClient.reactToPost(r.postId, r.userId, r.reactionType)
             if (ok) {
                 socialFeedDao.markReactionSynced(r.id)
-            }
-        }
-    }
-
-    private suspend fun syncLeagueMemberships() {
-        val pending = leagueDao.getPendingSyncMemberships()
-        for (m in pending) {
-            val remoteId = apiClient.syncLeagueMembership(m)
-            if (remoteId != null) {
-                leagueDao.insertMembership(m.copy(pendingSync = false))
             }
         }
     }
