@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.model.*
+import br.com.bragasaude.data.remote.auth.AuthService
 import br.com.bragasaude.di.BaseUrl
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -33,7 +34,8 @@ class BragaApiClient @Inject constructor(
     // AUD-AN40: baseUrl era `var` publico mutavel num @Singleton — ninguem mutava
     // em producao, mas nada impedia (race de concorrencia se um dia mutassem).
     // Imutavel; producao vem do @BaseUrl (BuildConfig) e testes injetam o mock.
-    @BaseUrl private val _baseUrl: String = DEFAULT_BASE_URL
+    @BaseUrl private val _baseUrl: String = DEFAULT_BASE_URL,
+    private val authService: AuthService
 ) {
     companion object {
         private const val TAG = "BragaApiClient"
@@ -956,10 +958,8 @@ class BragaApiClient @Inject constructor(
     private fun HttpURLConnection.attachIdentity(urlString: String) {
         val path = URL(urlString).path
         if (path.startsWith("/api/auth/")) return
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
-        val token = com.google.android.gms.tasks.Tasks.await(
-            user.getIdToken(false), 15, java.util.concurrent.TimeUnit.SECONDS
-        ).token ?: throw java.io.IOException("Sessão expirada. Entre novamente.")
+        val token = authService.getTokenBlocking()
+            ?: throw java.io.IOException("Sessão expirada. Entre novamente.")
         setRequestProperty("Authorization", "Bearer $token")
     }
 

@@ -6,6 +6,7 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.util.Log
 import br.com.bragasaude.R
+import br.com.bragasaude.data.remote.auth.AuthService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
@@ -32,7 +33,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class NeuralAudioPlayer @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val authService: AuthService
 ) {
     companion object {
         private const val TAG = "NeuralAudioPlayer"
@@ -187,16 +189,8 @@ class NeuralAudioPlayer @Inject constructor(
                 doInput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 setRequestProperty("Accept", "audio/wav")
-                val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                if (user != null) {
-                    try {
-                        val token = com.google.android.gms.tasks.Tasks.await(
-                            user.getIdToken(false), 5, java.util.concurrent.TimeUnit.SECONDS
-                        ).token
-                        if (token != null) {
-                            setRequestProperty("Authorization", "Bearer $token")
-                        }
-                    } catch (_: Exception) {}
+                authService.getTokenBlocking(timeoutSeconds = 5)?.let {
+                    setRequestProperty("Authorization", "Bearer $it")
                 }
             }
 
@@ -244,16 +238,8 @@ class NeuralAudioPlayer @Inject constructor(
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
                 doInput = true
-                val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                if (user != null) {
-                    try {
-                        val token = com.google.android.gms.tasks.Tasks.await(
-                            user.getIdToken(false), 5, java.util.concurrent.TimeUnit.SECONDS
-                        ).token
-                        if (token != null) {
-                            setRequestProperty("Authorization", "Bearer $token")
-                        }
-                    } catch (_: Exception) {}
+                authService.getTokenBlocking(timeoutSeconds = 5)?.let {
+                    setRequestProperty("Authorization", "Bearer $it")
                 }
             }
 

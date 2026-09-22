@@ -57,8 +57,12 @@ class SocialFeedViewModel @Inject constructor(
     private val reacting = mutableSetOf<String>()
     fun react(post: SocialPostEntity, reactionType: String) {
         if (!reacting.add(post.id)) return
+        val userId = currentUserId
         viewModelScope.launch {
-            try { socialFeedRepository.reactToPost(post.id, currentUserId, reactionType) }
+            try {
+                val synced = socialFeedRepository.reactToPost(post.id, userId, reactionType)
+                android.util.Log.i("SocialFeedVM", "reaction postId=${post.id} userId=$userId synced=$synced")
+            }
             finally { reacting.remove(post.id) }
         }
     }
@@ -77,7 +81,7 @@ class SocialFeedViewModel @Inject constructor(
         viewModelScope.launch {
             socialFeedRepository.createPost(
                 userId = currentUserId,
-                userName = currentUserId,
+                userName = null,
                 postType = postType,
                 title = title,
                 description = description,

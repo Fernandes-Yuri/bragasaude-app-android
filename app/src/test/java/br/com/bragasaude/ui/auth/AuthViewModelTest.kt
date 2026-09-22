@@ -87,7 +87,8 @@ class AuthViewModelTest {
         appContext = mockk(relaxed = true)
         every { auth.currentUser } returns null
 
-        viewModel = AuthViewModel(auth, database, repository, syncManager, movementManager, medicationRepository, mockk(relaxed = true), appContext)
+        viewModel = AuthViewModel(auth, database, repository, syncManager, movementManager, medicationRepository,
+            mockk(relaxed = true), mockk(relaxed = true), appContext)
     }
 
     @After
