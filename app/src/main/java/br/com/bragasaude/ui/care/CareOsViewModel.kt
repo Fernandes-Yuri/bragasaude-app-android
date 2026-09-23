@@ -158,9 +158,18 @@ class CareOsViewModel @Inject constructor(
     private suspend fun refreshAll(id: String) {
         medicationRepository.syncStockFromServer(id)
         careOsRepository.syncCareWall(id)
+        careOsRepository.syncSymptomsDiary(id)
         val bulletin = careOsRepository.getDailyBulletin(id)
         val correlations = careOsRepository.getClinicalCorrelations(id)
-        _ui.update { it.copy(dailyBulletin = bulletin, correlations = correlations?.correlations.orEmpty(), correlationsDisclaimer = correlations?.disclaimer) }
+        val checkInDone = careOsRepository.hasCheckInForToday(id)
+        _ui.update {
+            it.copy(
+                dailyBulletin = bulletin,
+                correlations = correlations?.correlations.orEmpty(),
+                correlationsDisclaimer = correlations?.disclaimer,
+                checkInDoneToday = checkInDone
+            )
+        }
     }
 
     // ==================== ESTOQUE + DOSES ====================

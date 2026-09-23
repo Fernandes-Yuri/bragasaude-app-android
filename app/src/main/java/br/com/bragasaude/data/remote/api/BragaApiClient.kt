@@ -1576,6 +1576,31 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    /** GET /api/patients/{patient_id}/symptoms-diary?limit=30 — histórico de check-ins de sintomas na nuvem. */
+    suspend fun getSymptomsDiary(patientId: String, limit: Int = 30): List<RemoteSymptomsDiaryEntry> = withContext(Dispatchers.IO) {
+        try {
+            val arr = getJsonArray("$baseUrl/api/patients/$patientId/symptoms-diary?limit=${limit.coerceIn(1, 100)}")
+                ?: getJsonArray("$baseUrl/api/symptoms/check-in?patient_id=$patientId&limit=${limit.coerceIn(1, 100)}")
+                ?: return@withContext emptyList()
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                RemoteSymptomsDiaryEntry(
+                    id = o.optString("id", null),
+                    patientId = o.optString("patient_id", patientId),
+                    reportedBy = o.optString("reported_by", patientId),
+                    reportedAt = o.optString("reported_at"),
+                    symptomsText = o.optString("symptoms_text"),
+                    sleepQuality = if (o.has("sleep_quality") && !o.isNull("sleep_quality")) o.optInt("sleep_quality") else null,
+                    disposition = if (o.has("disposition") && !o.isNull("disposition")) o.optInt("disposition") else null,
+                    inputMethod = o.optString("input_method", "VOICE")
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao buscar diário de sintomas: ${e.message}")
+            emptyList()
+        }
+    }
+
     /** POST /api/patients/{patient_id}/medical-access/generate — modo "Leva pro Doutor". */
     suspend fun generateMedicalAccess(patientId: String): MedicalAccessGrant? = withContext(Dispatchers.IO) {
         try {

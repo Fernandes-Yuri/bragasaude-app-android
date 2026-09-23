@@ -127,4 +127,36 @@ class BragaApiClientCareOsTest {
         server.enqueue(MockResponse().setResponseCode(201).setBody("""{"access_token":"","qr_code_payload":""}"""))
         assertNull(api.generateMedicalAccess("p1"))
     }
+
+    @Test
+    fun `get symptoms diary parses remote entries and falls back on error`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""
+            [
+              {
+                "id": "sym-1",
+                "patient_id": "p1",
+                "reported_by": "p1",
+                "reported_at": "2026-09-23T08:00:00Z",
+                "symptoms_text": "Dormi bem, sem dores",
+                "sleep_quality": 4,
+                "disposition": 5,
+                "input_method": "VOICE"
+              }
+            ]
+        """.trimIndent()))
+
+        val diary = api.getSymptomsDiary("p1")
+        assertEquals(1, diary.size)
+        assertEquals("sym-1", diary.first().id)
+        assertEquals("p1", diary.first().patientId)
+        assertEquals(4, diary.first().sleepQuality)
+        assertEquals(5, diary.first().disposition)
+        assertEquals("Dormi bem, sem dores", diary.first().symptomsText)
+        assertEquals("/api/patients/p1/symptoms-diary?limit=30", server.takeRequest().path)
+
+        // Test fallback on 500 error
+        server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"internal"}"""))
+        val emptyOnErr = api.getSymptomsDiary("p1")
+        assertTrue(emptyOnErr.isEmpty())
+    }
 }

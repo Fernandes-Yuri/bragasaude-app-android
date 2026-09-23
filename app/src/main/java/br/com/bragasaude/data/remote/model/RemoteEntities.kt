@@ -453,3 +453,15 @@ data class BleTelemetryRequest(
     val protocol: String = "GATT"
 )
 
+/** GET /api/patients/{patient_id}/symptoms-diary — histórico de check-ins de sintomas. */
+@Serializable
+data class RemoteSymptomsDiaryEntry(
+    val id: String? = null,
+    @SerialName("patient_id") val patientId: String? = null,
+    @SerialName("reported_by") val reportedBy: String? = null,
+    @SerialName("reported_at") val reportedAt: String? = null,
+    @SerialName("symptoms_text") val symptomsText: String = "",
+    @SerialName("sleep_quality") val sleepQuality: Int? = null,
+    val disposition: Int? = null,
+    @SerialName("input_method") val inputMethod: String? = "VOICE"
+)
