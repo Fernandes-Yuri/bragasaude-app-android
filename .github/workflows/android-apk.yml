@@ -41,6 +41,13 @@ on:
         options:
           - build-teste
           - lancar-release
+      variante:
+        description: "Variante do APK (debug desativa bloqueio de dev para testes)"
+        type: choice
+        default: debug
+        options:
+          - debug
+          - release
       run_id_testada:
         description: "(só para lancar-release) ID da run testada, para promover o MESMO APK. Deixe vazio para usar a run atual."
         required: false
@@ -121,10 +128,12 @@ jobs:
       # das JDKs instaladas pela setup-java caso a criteria seja aplicada.
       - name: Compilar APK
         id: apk
+        env:
+          INPUT_VARIANTE: ${{ inputs.variante }}
         run: |
           JDK_PATHS=$(ls -d "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}/Java_Temurin_jdk"/*/x64 2>/dev/null | paste -sd, -)
           echo "JDKs visíveis ao Gradle: $JDK_PATHS"
-          if [ "$GITHUB_REF_NAME" = "codex/debug-sem-bloqueio-dev" ]; then
+          if [ "$INPUT_VARIANTE" = "debug" ] || [ "$GITHUB_REF_NAME" = "codex/debug-sem-bloqueio-dev" ]; then
             gradle assembleDebug --no-daemon --stacktrace \
               -Dorg.gradle.java.installations.paths="$JDK_PATHS"
             echo "path=app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
@@ -168,8 +177,8 @@ jobs:
             echo "| Variante | \`${{ steps.apk.outputs.variant }}\` |"
             echo "| Artifact | \`${{ steps.apk.outputs.artifact }}\` |"
             echo
-            echo "> :bulb: Baixe no PC: \`gh run download ${GITHUB_RUN_ID} -n braga-release-apk\`"
-            echo "> :iphone: Instale no celular: \`adb install -r app-release.apk\`"
+            echo "> :bulb: Baixe no PC: \`gh run download ${GITHUB_RUN_ID} -n ${{ steps.apk.outputs.artifact }}\`"
+            echo "> :iphone: Instale no celular: \`adb install -r $(basename ${{ steps.apk.outputs.path }})\`"
             echo "> :warning: Artifact NÃO é release — nada foi publicado."
           } >> "$GITHUB_STEP_SUMMARY"
 
