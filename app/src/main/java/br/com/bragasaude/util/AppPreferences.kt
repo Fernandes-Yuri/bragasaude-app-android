@@ -48,6 +48,18 @@ object AppPreferences {
             .edit().putString(KEY_APP_THEME_MODE, mode).apply()
     }
 
+    // Preferência de Check-in Matinal Automático (C37) — Padrão: false (Desligado)
+    const val KEY_AUTO_MORNING_CHECKIN_ENABLED = "auto_morning_checkin_enabled"
+
+    fun isAutoMorningCheckinEnabled(context: Context): Boolean =
+        context.getSharedPreferences(BRAGA_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AUTO_MORNING_CHECKIN_ENABLED, false)
+
+    fun setAutoMorningCheckinEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(BRAGA_PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_AUTO_MORNING_CHECKIN_ENABLED, enabled).apply()
+    }
+
     // Preferência de Foto do Google no Avatar
     const val KEY_USE_GOOGLE_PHOTO = "use_google_photo"
 

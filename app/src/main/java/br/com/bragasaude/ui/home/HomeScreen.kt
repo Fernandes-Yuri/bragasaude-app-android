@@ -20,6 +20,12 @@ import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Mic
+import br.com.bragasaude.ui.care.CareOsViewModel
+import br.com.bragasaude.ui.care.MorningCheckInSheet
+import br.com.bragasaude.ui.theme.BragaMintSurface
+import br.com.bragasaude.ui.theme.BragaMintBorder
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -89,6 +95,10 @@ fun HomeScreen(
     val oxygenReadings by viewModel.oxygenReadings.collectAsState()
     
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+
+    val careViewModel: CareOsViewModel = hiltViewModel()
+    val careUi by careViewModel.ui.collectAsState()
+    var showMorningCheckIn by remember { mutableStateOf(false) }
     
     var showScoreDetails by remember { mutableStateOf(false) }
     var showEmergencyDialog by remember { mutableStateOf(false) }
@@ -96,6 +106,13 @@ fun HomeScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val useGooglePhoto = remember { br.com.bragasaude.util.AppPreferences.isUseGooglePhotoEnabled(context) }
     val avatarPhotoUrl = if (useGooglePhoto) com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.photoUrl?.toString() else null
+
+    if (showMorningCheckIn) {
+        MorningCheckInSheet(
+            onDismiss = { showMorningCheckIn = false },
+            viewModel = careViewModel
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -195,6 +212,117 @@ fun HomeScreen(
                                 }
                                 Spacer(Modifier.height(8.dp))
                                 Text(label, style = MaterialTheme.typography.labelSmall, color = BragaTextPrimary)
+                            }
+                        }
+                    }
+                }
+
+                // Card Acolhedor de Check-in Matinal do Dia (C37)
+                item {
+                    val checkInDone = careUi.checkInDoneToday
+                    if (!checkInDone) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                            border = BorderStroke(1.dp, BragaMintBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = BragaEmerald,
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Mic,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.width(14.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Check-in de Hoje",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        color = BragaTextPrimary
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = "Conte para o Braga como você passou a noite e como está se sentindo.",
+                                        fontSize = 13.sp,
+                                        color = BragaTextSecondary,
+                                        lineHeight = 18.sp
+                                    )
+                                    Spacer(Modifier.height(10.dp))
+                                    Button(
+                                        onClick = { showMorningCheckIn = true },
+                                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                                        shape = RoundedCornerShape(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                                        modifier = Modifier.heightIn(min = 44.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Mic,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = Color.White
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            text = "Conversar agora",
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Estado concluído discreto
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showMorningCheckIn = true },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = BragaCardSurface),
+                            border = BorderStroke(1.dp, BragaCardBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = BragaEmerald,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    text = "Check-in de hoje concluído",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = BragaTextPrimary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    text = "Ver",
+                                    fontSize = 13.sp,
+                                    color = BragaEmerald,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             }
                         }
                     }
