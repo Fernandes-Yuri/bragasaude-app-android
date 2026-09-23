@@ -6,7 +6,9 @@ import android.speech.tts.TextToSpeech
 import android.util.Log
 import br.com.bragasaude.data.remote.ai.NeuralAudioPlayer
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.UUID
@@ -35,6 +37,7 @@ class CareCelebrationTts @Inject constructor(
 
     private var tts: TextToSpeech? = null
     private val ttsReady = AtomicBoolean(false)
+    private var ttsInitialization: CompletableDeferred<Boolean>? = null
 
     /**
      * Fala a mensagem de celebração. Recebe o nome do paciente para
@@ -60,7 +63,11 @@ class CareCelebrationTts @Inject constructor(
     private suspend fun fallbackToSystemTts(text: String, onStart: () -> Unit, onDone: () -> Unit) =
         withContext(Dispatchers.Main) {
             try {
-                ensureSystemTts()
+                if (!ensureSystemTts()) {
+                    Log.w(TAG, "TextToSpeech nativo indisponível em pt-BR.")
+                    onDone()
+                    return@withContext
+                }
                 val id = UUID.randomUUID().toString()
                 tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) { onStart() }
@@ -79,14 +86,29 @@ class CareCelebrationTts @Inject constructor(
             }
         }
 
-    private fun ensureSystemTts() {
-        if (ttsReady.get()) return
-        tts = TextToSpeech(context.applicationContext) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                val result = tts?.setLanguage(Locale("pt", "BR"))
-                ttsReady.set(result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED)
+    /** Aguarda a inicialização assíncrona antes de chamar speak(). */
+    private suspend fun ensureSystemTts(): Boolean {
+        if (ttsReady.get()) return true
+        val initialization = ttsInitialization ?: CompletableDeferred<Boolean>().also { pending ->
+            ttsInitialization = pending
+            tts = TextToSpeech(context.applicationContext) { status ->
+                val ready = if (status == TextToSpeech.SUCCESS) {
+                    val result = tts?.setLanguage(Locale("pt", "BR"))
+                    result != TextToSpeech.LANG_MISSING_DATA &&
+                        result != TextToSpeech.LANG_NOT_SUPPORTED
+                } else {
+                    false
+                }
+                ttsReady.set(ready)
+                pending.complete(ready)
             }
         }
+        return withTimeoutOrNull(5_000L) { initialization.await() } ?: false
+    }
+
+    private fun resetSystemTts() {
+        ttsInitialization = null
+        ttsReady.set(false)
     }
 
     /** Libera o sintetizador (chamar em onCleared do ViewModel). */
@@ -96,6 +118,6 @@ class CareCelebrationTts @Inject constructor(
             tts?.shutdown()
         } catch (_: Exception) { /* best-effort */ }
         tts = null
-        ttsReady.set(false)
+        resetSystemTts()
     }
 }
