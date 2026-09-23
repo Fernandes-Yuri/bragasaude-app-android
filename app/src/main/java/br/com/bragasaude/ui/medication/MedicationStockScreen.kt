@@ -1,14 +1,19 @@
 package br.com.bragasaude.ui.medication
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Warning
@@ -48,6 +53,8 @@ fun MedicationStockScreen(
     val ui by viewModel.ui.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showCheckIn by remember { mutableStateOf(false) }
+    var showAddChoice by remember { mutableStateOf(false) }
+    var showManualAddDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.ui.collectLatest { state ->
@@ -62,6 +69,145 @@ fun MedicationStockScreen(
         MorningCheckInSheet(onDismiss = { showCheckIn = false })
     }
 
+    if (showAddChoice) {
+        ModalBottomSheet(
+            onDismissRequest = { showAddChoice = false },
+            containerColor = BragaCardSurface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    "Adicionar Medicamento",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    color = BragaTextPrimary
+                )
+                Text(
+                    "Como você prefere cadastrar o remédio?",
+                    fontSize = 15.sp,
+                    color = BragaTextSecondary
+                )
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showAddChoice = false
+                            onScanNew()
+                        },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                    border = BorderStroke(1.dp, BragaMintBorder)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = BragaEmerald,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Filled.QrCodeScanner,
+                                    contentDescription = null,
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Escanear Caixa (EAN-13 ANVISA)",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp,
+                                color = BragaTextPrimary
+                            )
+                            Text(
+                                "Leitura automática da embalagem",
+                                fontSize = 13.sp,
+                                color = BragaTextSecondary
+                            )
+                        }
+                    }
+                }
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showAddChoice = false
+                            showManualAddDialog = true
+                        },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                    border = BorderStroke(1.dp, BragaMintBorder)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = BragaEmerald,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Filled.Edit,
+                                    contentDescription = null,
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Cadastrar Manualmente",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp,
+                                color = BragaTextPrimary
+                            )
+                            Text(
+                                "Digite nome, dosagem e horários",
+                                fontSize = 13.sp,
+                                color = BragaTextSecondary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showManualAddDialog) {
+        ManualMedicationDialog(
+            onDismiss = { showManualAddDialog = false },
+            onSave = { name, dosageMg, totalUnits, times ->
+                viewModel.createManualMedication(
+                    name = name,
+                    dosageMg = dosageMg,
+                    totalUnits = totalUnits,
+                    scheduleTimes = times
+                ) { ok ->
+                    if (ok) showManualAddDialog = false
+                }
+            },
+            isLoading = ui.loading
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -69,6 +215,20 @@ fun MedicationStockScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
+                    }
+                },
+                actions = {
+                    if (ui.isAuthenticated && ui.selectedPatient.canWriteMedication) {
+                        IconButton(
+                            onClick = { showAddChoice = true },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Add,
+                                contentDescription = "Adicionar Medicamento",
+                                tint = Color.White
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -82,12 +242,15 @@ fun MedicationStockScreen(
         floatingActionButton = {
             if (ui.isAuthenticated && ui.selectedPatient.canWriteMedication) {
                 ExtendedFloatingActionButton(
-                    onClick = onScanNew,
-                    icon = { Icon(Icons.Filled.QrCodeScanner, contentDescription = null) },
-                    text = { Text("Escanear caixa") },
+                    onClick = { showAddChoice = true },
+                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    text = { Text("Adicionar Medicamento", fontWeight = FontWeight.SemiBold) },
                     containerColor = BragaEmerald,
                     contentColor = Color.White,
-                    modifier = Modifier.heightIn(min = 56.dp)
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .padding(bottom = 8.dp)
+                        .heightIn(min = 56.dp)
                 )
             }
         },
@@ -111,7 +274,7 @@ fun MedicationStockScreen(
             CheckInCard(ui.checkInDoneToday) { showCheckIn = true }
 
             if (ui.medications.isEmpty()) {
-                EmptyStockCard(ui.selectedPatient.canWriteMedication, onScanNew)
+                EmptyStockCard(ui.selectedPatient.canWriteMedication) { showAddChoice = true }
             } else {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -182,7 +345,7 @@ private fun CheckInCard(doneToday: Boolean, onOpenCheckIn: () -> Unit) {
 }
 
 @Composable
-private fun EmptyStockCard(canWrite: Boolean, onScanNew: () -> Unit) {
+private fun EmptyStockCard(canWrite: Boolean, onAddClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -209,25 +372,153 @@ private fun EmptyStockCard(canWrite: Boolean, onScanNew: () -> Unit) {
                 color = BragaTextPrimary
             )
             Text(
-                "Escanee o código de barras da caixa para cadastrar com a receita em mãos.",
+                "Cadastre seus medicamentos manualmente ou escaneie o código de barras da caixa.",
                 fontSize = 15.sp,
                 color = BragaTextSecondary
             )
             if (canWrite) {
                 Button(
-                    onClick = onScanNew,
+                    onClick = onAddClick,
                     colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
                     modifier = Modifier.heightIn(min = 48.dp)
                 ) {
-                    Icon(Icons.Filled.QrCodeScanner, contentDescription = null)
+                    Icon(Icons.Filled.Add, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Escanear primeira caixa", color = Color.White)
+                    Text("Adicionar medicamento", color = Color.White)
                 }
             } else {
                 Text("Seu vínculo permite consultar o estoque, sem alterar medicamentos.", color = BragaTextSecondary)
             }
         }
     }
+}
+
+@Composable
+private fun ManualMedicationDialog(
+    onDismiss: () -> Unit,
+    onSave: (name: String, dosageMg: Double?, totalUnits: Int, times: List<String>) -> Unit,
+    isLoading: Boolean
+) {
+    var name by remember { mutableStateOf("") }
+    var dosageMgText by remember { mutableStateOf("") }
+    var totalUnitsText by remember { mutableStateOf("30") }
+    var scheduleTimeText by remember { mutableStateOf("08:00") }
+    var confirmedWithPrescription by remember { mutableStateOf(true) }
+
+    val canSave = name.trim().length >= 2 &&
+        totalUnitsText.toIntOrNull()?.let { it > 0 } == true &&
+        scheduleTimeText.isNotBlank() &&
+        confirmedWithPrescription &&
+        !isLoading
+
+    AlertDialog(
+        onDismissRequest = { if (!isLoading) onDismiss() },
+        title = {
+            Text(
+                "Cadastrar Medicamento",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = BragaTextPrimary
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nome do remédio *") },
+                    placeholder = { Text("Ex: Losartana") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = dosageMgText,
+                    onValueChange = { dosageMgText = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("Dosagem em mg (opcional)") },
+                    placeholder = { Text("Ex: 50") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = totalUnitsText,
+                    onValueChange = { totalUnitsText = it.filter { c -> c.isDigit() }.take(5) },
+                    label = { Text("Quantidade inicial de comprimidos *") },
+                    placeholder = { Text("Ex: 30") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = scheduleTimeText,
+                    onValueChange = { scheduleTimeText = it },
+                    label = { Text("Horários da rotina (ex: 08:00, 20:00) *") },
+                    placeholder = { Text("08:00") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clickable { confirmedWithPrescription = !confirmedWithPrescription },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = confirmedWithPrescription,
+                        onCheckedChange = { confirmedWithPrescription = it },
+                        colors = CheckboxDefaults.colors(checkedColor = BragaEmerald)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Conferido com a receita médica",
+                        fontSize = 14.sp,
+                        color = BragaTextPrimary
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val times = scheduleTimeText.split(",")
+                        .map { it.trim() }
+                        .filter { it.isNotBlank() }
+                        .ifEmpty { listOf("08:00") }
+                    onSave(
+                        name.trim(),
+                        dosageMgText.toDoubleOrNull(),
+                        totalUnitsText.toIntOrNull() ?: 30,
+                        times
+                    )
+                },
+                enabled = canSave,
+                colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Salvar Remédio", color = Color.White)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isLoading) {
+                Text("Cancelar")
+            }
+        }
+    )
 }
 
 @Composable
