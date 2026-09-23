@@ -11,9 +11,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,28 +22,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.remote.model.BarcodeMedication
-import br.com.bragasaude.ui.care.CareOsViewModel
 import br.com.bragasaude.ui.care.CareAuthenticationRequired
+import br.com.bragasaude.ui.care.CareOsViewModel
 import br.com.bragasaude.ui.care.CarePatientSelector
 import br.com.bragasaude.ui.theme.*
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
-import androidx.core.content.FileProvider
-import br.com.bragasaude.util.BragaTime
-import java.io.File
-import java.time.LocalDate
 
 /**
- * Scanner de Caixa de Remédio (Care OS — D62).
+ * Scanner e Cadastro Limpo de Medicamento (Care OS — D62 / Fase B).
  *
- * TRAVA REGULATÓRIA (RDC 657/2022 & CDC Art. 14): o leitor lê EXCLUSIVAMENTE o
- * código de barras EAN-13 da caixa/embalagem para bater na ANVISA. O app NUNCA
- * identifica comprimido solto por foto — a câmera é do código de barras, ponto.
- * A foto do rótulo/receita é só referência visual humana (photo_reference_url).
+ * TRAVA REGULATÓRIA (RDC 657/2022 & CDC Art. 14):
+ * - O leitor lê exclusivamente o código de barras EAN-13 da caixa/embalagem (ANVISA).
+ * - O app NUNCA identifica comprimido solto por foto.
+ * - Desburocratizado: sem campos cartoriais desnecessários (CRM, validade, fotos soltas).
+ * - Checkbox de conferência da receita mantido (requisito SaMD).
+ * - Suporte opcional moderno para anexar receita (PDF ou imagem).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,28 +57,27 @@ fun BarcodeScannerScreen(
     var ean by remember { mutableStateOf("") }
     var found by remember { mutableStateOf<BarcodeMedication?>(null) }
     var name by remember { mutableStateOf("") }
-    var totalUnits by remember { mutableStateOf("") }
+    var totalUnits by remember { mutableStateOf("30") }
     var scheduleTime by remember { mutableStateOf("08:00") }
     var confirmed by remember { mutableStateOf(false) }
     var lookupError by remember { mutableStateOf<String?>(null) }
-    var prescriptionIssuedOn by remember { mutableStateOf(LocalDate.now(BragaTime.ZONE).toString()) }
-    var prescriptionValidityDays by remember { mutableStateOf("30") }
-    var prescriberName by remember { mutableStateOf("") }
-    var prescriberCrm by remember { mutableStateOf("") }
-    var medicationPhotoUri by remember { mutableStateOf<Uri?>(null) }
-    var prescriptionPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var prescriptionDocumentUri by remember { mutableStateOf<Uri?>(null) }
+    var prescriptionFileName by remember { mutableStateOf<String?>(null) }
 
-    fun newPhotoUri(prefix: String): Uri {
-        val directory = File(context.cacheDir, "medication_photos").apply { mkdirs() }
-        val file = File(directory, "$prefix-${System.currentTimeMillis()}.jpg")
-        return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-    }
-
-    val medicationCamera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
-        if (!saved) medicationPhotoUri = null
-    }
-    val prescriptionCamera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
-        if (!saved) prescriptionPhotoUri = null
+    val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        prescriptionDocumentUri = uri
+        prescriptionFileName = uri?.let {
+            var fileName: String? = null
+            runCatching {
+                context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex >= 0 && cursor.moveToFirst()) {
+                        fileName = cursor.getString(nameIndex)
+                    }
+                }
+            }
+            fileName ?: "Receita anexada"
+        }
     }
 
     val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
@@ -139,7 +138,10 @@ fun BarcodeScannerScreen(
                 return@Column
             }
 
-            CarePatientSelector(ui, viewModel::selectPatient)
+            // Exibir seletor apenas quando o usuário logado for Cuidador gerenciando dependentes
+            if (ui.isCaregiver && ui.patients.size > 1) {
+                CarePatientSelector(ui, viewModel::selectPatient)
+            }
 
             // Aviso regulatório — clareza total para o usuário idoso.
             Card(
@@ -180,7 +182,8 @@ fun BarcodeScannerScreen(
                     ean = it.filter { c -> c.isDigit() }.take(13)
                     found = null
                 },
-                label = { Text("Código EAN-13 (13 dígitos)") },
+                label = { Text("Código EAN-13 (opcional)") },
+                placeholder = { Text("13 dígitos da caixa") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -224,80 +227,77 @@ fun BarcodeScannerScreen(
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Nome do remédio") },
+                label = { Text("Nome do remédio *") },
+                placeholder = { Text("Ex: Losartana 50mg") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+
             OutlinedTextField(
                 value = totalUnits,
                 onValueChange = { totalUnits = it.filter { c -> c.isDigit() }.take(5) },
                 label = { Text("Quantidade da caixa (ex: 30 comprimidos)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = scheduleTime,
-                onValueChange = { scheduleTime = it },
-                label = { Text("Horário da dose (HH:mm)") },
+                placeholder = { Text("30") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Text("Receita médica", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
             OutlinedTextField(
-                value = prescriptionIssuedOn,
-                onValueChange = { prescriptionIssuedOn = it.take(10) },
-                label = { Text("Data da receita (AAAA-MM-DD)") },
+                value = scheduleTime,
+                onValueChange = { scheduleTime = it.take(5) },
+                label = { Text("Horário da dose (HH:mm) *") },
+                placeholder = { Text("08:00") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            OutlinedTextField(
-                value = prescriptionValidityDays,
-                onValueChange = { prescriptionValidityDays = it.filter(Char::isDigit).take(3) },
-                label = { Text("Validade em dias") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = prescriberName,
-                onValueChange = { prescriberName = it.take(150) },
-                label = { Text("Nome do médico") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = prescriberCrm,
-                onValueChange = { prescriberCrm = it.take(32) },
-                label = { Text("CRM e UF") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+            // Campo opcional moderno: Anexar Receita (PDF ou Imagem)
+            if (prescriptionDocumentUri == null) {
                 OutlinedButton(
-                    onClick = {
-                        medicationPhotoUri = newPhotoUri("caixa")
-                        medicationCamera.launch(medicationPhotoUri!!)
-                    },
-                    modifier = Modifier.weight(1f).heightIn(min = 52.dp)
+                    onClick = { documentPicker.launch(arrayOf("image/*", "application/pdf")) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = BragaEmeraldDark)
                 ) {
-                    Icon(Icons.Filled.PhotoCamera, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (medicationPhotoUri == null) "Foto da caixa" else "Caixa pronta")
+                    Icon(Icons.Filled.UploadFile, contentDescription = null, tint = BragaEmerald)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Anexar Receita (PDF ou Imagem)", fontSize = 15.sp, fontWeight = FontWeight.Medium)
                 }
-                OutlinedButton(
-                    onClick = {
-                        prescriptionPhotoUri = newPhotoUri("receita")
-                        prescriptionCamera.launch(prescriptionPhotoUri!!)
-                    },
-                    modifier = Modifier.weight(1f).heightIn(min = 52.dp)
+            } else {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                    border = BorderStroke(1.dp, BragaMintBorder)
                 ) {
-                    Icon(Icons.Filled.PhotoCamera, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (prescriptionPhotoUri == null) "Foto da receita" else "Receita pronta")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = BragaEmerald, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Receita anexada", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = BragaTextPrimary)
+                            Text(prescriptionFileName ?: "Documento selecionado", fontSize = 12.sp, color = BragaTextSecondary, maxLines = 1)
+                        }
+                        IconButton(
+                            onClick = {
+                                prescriptionDocumentUri = null
+                                prescriptionFileName = null
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(Icons.Filled.Close, contentDescription = "Remover receita", tint = BragaTextSecondary)
+                        }
+                    }
                 }
             }
 
-            // Checkbox OBRIGATÓRIO — sem ele, o cadastro não existe.
+            // Checkbox OBRIGATÓRIO (SaMD RDC 657/2022 mantido)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -313,39 +313,55 @@ fun BarcodeScannerScreen(
                 Text("Conferido com a receita médica", fontSize = 16.sp, color = BragaTextPrimary)
             }
 
-            val canSave = name.length >= 2 && totalUnits.toIntOrNull()?.let { it > 0 } == true &&
-                confirmed && runCatching { LocalDate.parse(prescriptionIssuedOn) }.isSuccess &&
-                prescriptionValidityDays.toIntOrNull()?.let { it in 1..365 } == true &&
-                prescriberName.trim().length >= 2 && prescriberCrm.trim().length >= 4 &&
-                ui.selectedPatient.canWriteMedication && !ui.loading
+            // Validação Reativa
+            val isNameValid = name.trim().length >= 2
+            val isTimeValid = scheduleTime.trim().matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$"))
+            val isConfirmed = confirmed
+            val canSave = isNameValid && isTimeValid && isConfirmed && ui.selectedPatient.canWriteMedication && !ui.loading
+
+            val missingList = buildList {
+                if (!isNameValid) add("o nome do remédio")
+                if (!isTimeValid) add("o horário da dose (HH:mm)")
+                if (!isConfirmed) add("a confirmação da receita médica")
+            }
+            val helperText = if (missingList.isNotEmpty()) {
+                "Para cadastrar: preencha ${missingList.joinToString(" e ")}."
+            } else null
 
             Button(
                 onClick = {
+                    val units = totalUnits.toIntOrNull()?.takeIf { it > 0 } ?: 30
                     viewModel.createMedication(
                         name = name.trim(),
-                        totalUnits = totalUnits.toInt(),
+                        totalUnits = units,
                         scheduleTimes = listOf(scheduleTime.trim()),
                         confirmedWithPrescription = confirmed,
                         barcode = found,
-                        photoUri = medicationPhotoUri,
-                        prescriptionImageUri = prescriptionPhotoUri,
-                        prescriptionIssuedOn = prescriptionIssuedOn,
-                        prescriptionValidityDays = prescriptionValidityDays.toInt(),
-                        prescriberName = prescriberName,
-                        prescriberCrm = prescriberCrm
+                        prescriptionImageUri = prescriptionDocumentUri
                     ) { ok -> if (ok) onSaved() }
                 },
                 enabled = canSave,
-                colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BragaEmerald,
+                    disabledContainerColor = BragaCardBorder,
+                    disabledContentColor = BragaTextSecondary
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 56.dp)
             ) {
                 Icon(Icons.Filled.CheckCircle, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
+                Text("Cadastrar remédio", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            }
+
+            helperText?.let {
                 Text(
-                    if (confirmed) "Cadastrar remédio" else "Marque a conferência da receita",
-                    color = Color.White, fontSize = 17.sp
+                    text = it,
+                    color = BragaTextSecondary,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
