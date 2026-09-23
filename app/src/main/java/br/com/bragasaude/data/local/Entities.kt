@@ -200,6 +200,11 @@ data class MilestoneEntity(
     val pendingSync: Boolean = false
 )
 
+/**
+ * Care OS (D62 — First Contract): replica as colunas exatas da tabela
+ * PostgreSQL `medications` (migration 017_care_os_global_contracts.sql).
+ * O app é offline-first: tudo é gravado aqui (SQLCipher) e sincronizado depois.
+ */
 @Entity(tableName = "medications_local")
 data class MedicationEntity(
     @PrimaryKey val id: String, // UUID
@@ -211,17 +216,35 @@ data class MedicationEntity(
     val scheduleTime: String? = null,
     val scheduleTimes: String? = null,
     val notes: String? = null,
+    // ---- Care OS: catálogo ANVISA + estoque ----
+    /** Código de barras EAN-13 da caixa/embalagem (13 dígitos). */
+    val eanBarcode: String? = null,
+    val activePrinciple: String? = null,
+    val manufacturer: String? = null,
+    val pharmaceuticalForm: String? = null,
+    val totalUnits: Int = 0,
+    val currentUnits: Int = 0,
+    val alertThresholdDays: Int = 5,
+    /** Foto do rótulo/receita como referência visual humana (nunca identificação de comprimido). */
+    val photoReferenceUrl: String? = null,
+    /** RDC 657/2022: todo cadastro exige confirmação contra a receita médica. */
+    val confirmedWithPrescription: Boolean = false,
+    val lastRestockDate: Long? = null,
     val pendingSync: Boolean = false
 )
 
 // AUD-AN28: zero índices no banco local — todas as queries por userId/measuredAt
 // /pendingSync faziam full table scan em tabelas que crescem sem bound, sobre
 // SQLCipher (~10-15% mais lento por linha). Índices nas colunas mais filtradas.
+// Care OS (D62): índice único de idempotência — SQLite trata NULLs como
+// distintos, então o comportamento é idêntico ao do PostgreSQL
+// `UNIQUE(user_id, idempotency_key) WHERE idempotency_key IS NOT NULL`.
 @Entity(
     tableName = "medication_logs_local",
     indices = [
         Index("userId", "takenAt"),
-        Index("pendingSync")
+        Index("pendingSync"),
+        Index(value = ["userId", "idempotencyKey"], unique = true)
     ]
 )
 data class MedicationLogEntity(
@@ -230,6 +253,10 @@ data class MedicationLogEntity(
     val medicationId: String,
     val takenAt: Date = Date(),
     val scheduledFor: String? = null,
+    // ---- Care OS: quem tomou, quantas unidades, chave idempotente ----
+    val actorId: String? = null,
+    val unitsTaken: Int = 1,
+    val idempotencyKey: String? = null,
     val pendingSync: Boolean = false
 )
 
@@ -492,5 +519,69 @@ data class ConsultationEntity(
 data class ConsultationStatusCount(
     val status: String,
     val count: Long
+)
+
+// ============================================================================
+// CARE OS — D62 (First Contract). Espelho local offline-first das tabelas do
+// gateway (migration 017_care_os_global_contracts.sql). Ver openapi_care_os.json.
+// ============================================================================
+
+/**
+ * Cena C37 — Check-in matinal por voz. Espelha a tabela PostgreSQL
+ * `symptoms_diary`. `inputMethod` é 'VOICE' ou 'TEXT'.
+ */
+@Entity(
+    tableName = "symptoms_diary_local",
+    indices = [Index("patientId", "reportedAt")]
+)
+data class SymptomsDiaryEntity(
+    @PrimaryKey val id: String,
+    val patientId: String,
+    val reportedBy: String,
+    val reportedAt: Date = Date(),
+    val symptomsText: String,
+    /** Qualidade do sono 1-5 (null = não informado). */
+    val sleepQuality: Int? = null,
+    /** Disposição 1-5 (null = não informado). */
+    val disposition: Int? = null,
+    val inputMethod: String = "VOICE",
+    val pendingSync: Boolean = false
+)
+
+/**
+ * Mural de Cuidado Compartilhado — auditoria de quem cuidou do paciente.
+ * Espelha a tabela PostgreSQL `care_audit_trail`.
+ */
+@Entity(
+    tableName = "care_audit_local",
+    indices = [Index("patientId", "occurredAt")]
+)
+data class CareAuditEntity(
+    @PrimaryKey val id: String,
+    val patientId: String,
+    val actorId: String,
+    val actorName: String,
+    /** MEDICATION_TAKEN, VITAL_RECORDED, SYMPTOM_CHECKIN, RESTOCK, etc. */
+    val actionType: String,
+    val detailsJson: String = "{}",
+    val occurredAt: Date = Date()
+)
+
+/**
+ * Telemetria BLE GATT ingerida do gateway. Espelha a tabela PostgreSQL
+ * `ble_telemetry_receipts`. `deviceType` é 'BLOOD_PRESSURE' ou 'GLUCOSE'.
+ */
+@Entity(
+    tableName = "ble_telemetry_receipts_local",
+    indices = [Index(value = ["patientId", "deviceId", "measuredAt"], unique = true)]
+)
+data class BleTelemetryReceiptEntity(
+    @PrimaryKey val id: String,
+    val patientId: String,
+    val deviceId: String,
+    val deviceType: String,
+    val protocol: String = "GATT",
+    val measuredAt: Date = Date(),
+    val pendingSync: Boolean = false
 )
 

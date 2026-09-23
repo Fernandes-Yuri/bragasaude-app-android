@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.navigation
+package br.com.bragasaude.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -94,7 +94,13 @@ fun AppNavHost(
         composable<Screen.Biometry> {
             BiometryScreen(onBack = navigateBack)
         }
-        composable<Screen.Modules> { CareModulesScreen() }
+        composable<Screen.Modules> {
+            CareModulesScreen(
+                onMedicationStock = { navController.navigate(Screen.MedicationStock) },
+                onCareWall = { navController.navigate(Screen.CareWall) },
+                onDoctorMode = { navController.navigate(Screen.DoctorMode) }
+            )
+        }
         composable<Screen.Milestones> { MilestonesScreen() }
         composable<Screen.Hydration> { entry ->
             val hydration: Screen.Hydration = entry.toRoute()
@@ -238,6 +244,26 @@ fun AppNavHost(
                 },
                 onBack = navigateBack
             )
+        }
+
+        // ==================== CARE OS — D62 (First Contract) ====================
+        composable<Screen.MedicationStock> {
+            br.com.bragasaude.ui.medication.MedicationStockScreen(
+                onBack = navigateBack,
+                onScanNew = { navController.navigate(Screen.BarcodeScanner) }
+            )
+        }
+        composable<Screen.BarcodeScanner> {
+            br.com.bragasaude.ui.medication.BarcodeScannerScreen(
+                onBack = navigateBack,
+                onSaved = { navController.popBackStack() }
+            )
+        }
+        composable<Screen.CareWall> {
+            br.com.bragasaude.ui.care.CareWallScreen(onBack = navigateBack)
+        }
+        composable<Screen.DoctorMode> {
+            br.com.bragasaude.ui.care.DoctorModeScreen(onBack = navigateBack)
         }
     }
 }

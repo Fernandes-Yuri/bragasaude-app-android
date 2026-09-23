@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.util
+package br.com.bragasaude.ui.util
 
 import android.content.Intent
 import android.speech.RecognizerIntent
@@ -23,6 +23,7 @@ fun createVoiceInputIntent(context: String = "GERAL"): Intent {
         "HEART_RATE" -> "Fale seus batimentos (exemplo: 72)"
         "OXYGEN_SATURATION" -> "Fale sua saturação (exemplo: 98)"
         "HYDRATION" -> "Quantos ml de água você bebeu?"
+        "CHECKIN" -> "Como foi sua noite e como você está se sentindo hoje?"
         else -> "Fale os valores de saúde"
     }
     

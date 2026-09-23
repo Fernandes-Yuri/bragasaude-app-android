@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,7 +27,10 @@ import br.com.bragasaude.ui.theme.Success
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CareModulesScreen(
-    viewModel: CareModulesViewModel = hiltViewModel()
+    viewModel: CareModulesViewModel = hiltViewModel(),
+    onMedicationStock: () -> Unit = {},
+    onCareWall: () -> Unit = {},
+    onDoctorMode: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val detected by viewModel.detectedConditions.collectAsState()
@@ -59,6 +63,31 @@ fun CareModulesScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.Gray
             )
+        }
+
+        item {
+            Text("Care OS", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                CareOsShortcut(
+                    title = "Meus remédios",
+                    subtitle = "Estoque, doses e leitor EAN-13",
+                    icon = Icons.Default.Medication,
+                    onClick = onMedicationStock
+                )
+                CareOsShortcut(
+                    title = "Mural de cuidado",
+                    subtitle = "Veja quem cuidou e o que foi registrado",
+                    icon = Icons.Default.VolunteerActivism,
+                    onClick = onCareWall
+                )
+                CareOsShortcut(
+                    title = "Leva pro Doutor",
+                    subtitle = "Relatório e acesso médico temporário",
+                    icon = Icons.Default.MedicalServices,
+                    onClick = onDoctorMode
+                )
+            }
         }
 
         // DECISOES.md (D4): observações descrevem valor x faixa geral e SEMPRE
@@ -233,5 +262,34 @@ fun CareModulesScreen(
         }
 
         item { Spacer(Modifier.height(40.dp)) }
+    }
+}
+
+@Composable
+private fun CareOsShortcut(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Abrir $title")
+        }
     }
 }
