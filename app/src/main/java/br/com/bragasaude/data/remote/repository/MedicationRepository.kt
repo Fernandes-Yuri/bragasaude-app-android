@@ -324,9 +324,10 @@ class MedicationRepository @Inject constructor(
             val items = apiClient.getMedicationStock(patientId)
             val local = medicationDao.getAllSync(patientId)
             for (item in items) {
+                // best-effort match: id remoto primeiro; sem id, só nome único.
                 val match = item.id?.let { id -> local.firstOrNull { it.id == id } }
                     ?: if (item.id == null) local.singleOrNull { matchByName(it, item) } else null
-                    ?: continue
+                if (match == null) continue
                 medicationDao.applyAuthoritativeStock(match.id, item.currentUnits)
             }
         } catch (e: Exception) {
