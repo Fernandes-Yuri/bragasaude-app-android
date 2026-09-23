@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.navigation
+package br.com.bragasaude.ui.navigation
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -113,8 +113,10 @@ fun MainScaffold(
             )
         }
 
-        // FAB Metamórfico de Voz flutuante — oculto na própria tela do OrbChat
+        // FAB Metamórfico de Voz flutuante — oculto no OrbChat e nas telas de cadastro/estoque de remédios (Fase B)
         if (!isCurrentRoute(currentRoute, Screen.OrbChat) &&
+            !isCurrentRoute(currentRoute, Screen.BarcodeScanner) &&
+            !isCurrentRoute(currentRoute, Screen.MedicationStock) &&
             AppPreferences.isVoiceAssistantEnabled(appContext)
         ) {
             DraggableAiAssistantFab(

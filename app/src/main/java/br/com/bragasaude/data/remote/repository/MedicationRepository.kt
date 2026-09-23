@@ -307,9 +307,10 @@ class MedicationRepository @Inject constructor(
 
     suspend fun uploadMedicationPhoto(patientId: String, uri: android.net.Uri): String? = try {
         val resolver = context.contentResolver
-        val mime = resolver.getType(uri)?.takeIf { it in setOf("image/jpeg", "image/png", "image/webp") }
+        val mime = resolver.getType(uri)?.takeIf { it in setOf("image/jpeg", "image/png", "image/webp", "application/pdf") }
             ?: "image/jpeg"
         val extension = when (mime) {
+            "application/pdf" -> "pdf"
             "image/png" -> "png"
             "image/webp" -> "webp"
             else -> "jpg"

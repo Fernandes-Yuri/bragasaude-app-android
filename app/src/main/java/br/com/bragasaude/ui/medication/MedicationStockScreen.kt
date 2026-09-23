@@ -268,7 +268,9 @@ fun MedicationStockScreen(
                 return@Column
             }
 
-            CarePatientSelector(ui, viewModel::selectPatient)
+            if (ui.isCaregiver && ui.patients.size > 1) {
+                CarePatientSelector(ui, viewModel::selectPatient)
+            }
 
             // Ação de check-in matinal (Cena C37)
             CheckInCard(ui.checkInDoneToday) { showCheckIn = true }
