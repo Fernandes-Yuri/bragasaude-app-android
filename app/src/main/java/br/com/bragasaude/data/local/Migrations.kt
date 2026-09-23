@@ -361,6 +361,11 @@ object Migrations {
      */
     val MIGRATION_47_48 = object : Migration(47, 48) {
         override fun migrate(db: SupportSQLiteDatabase) {
+            // ---------- family_bindings_local: papel e permissões Care OS ----------
+            db.execSQL("ALTER TABLE family_bindings_local ADD COLUMN caregiverRole TEXT NOT NULL DEFAULT 'CAREGIVER_VIEWER'")
+            db.execSQL("ALTER TABLE family_bindings_local ADD COLUMN permissionsJson TEXT NOT NULL DEFAULT '[]'")
+            db.execSQL("ALTER TABLE family_bindings_local ADD COLUMN patientName TEXT")
+
             // ---------- medications_local: catálogo ANVISA + estoque ----------
             db.execSQL("ALTER TABLE medications_local ADD COLUMN eanBarcode TEXT")
             db.execSQL("ALTER TABLE medications_local ADD COLUMN activePrinciple TEXT")
@@ -377,6 +382,7 @@ object Migrations {
             db.execSQL("ALTER TABLE medication_logs_local ADD COLUMN actorId TEXT")
             db.execSQL("ALTER TABLE medication_logs_local ADD COLUMN unitsTaken INTEGER NOT NULL DEFAULT 1")
             db.execSQL("ALTER TABLE medication_logs_local ADD COLUMN idempotencyKey TEXT")
+            db.execSQL("ALTER TABLE medication_logs_local ADD COLUMN careOsScheduledFor TEXT")
             // SQLite UNIQUE trata NULLs como distintos — mesma semântica do
             // PostgreSQL `WHERE idempotency_key IS NOT NULL`.
             db.execSQL(
@@ -427,6 +433,9 @@ object Migrations {
                     "deviceType TEXT NOT NULL, " +
                     "protocol TEXT NOT NULL, " +
                     "measuredAt INTEGER NOT NULL, " +
+                    "systolicPressure INTEGER, " +
+                    "diastolicPressure INTEGER, " +
+                    "glucoseLevel INTEGER, " +
                     "pendingSync INTEGER NOT NULL)"
             )
             db.execSQL(

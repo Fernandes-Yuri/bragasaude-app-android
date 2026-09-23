@@ -1,6 +1,11 @@
 package br.com.bragasaude.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -40,6 +45,9 @@ import br.com.bragasaude.ui.devices.WearablesScreen
 import br.com.bragasaude.ui.devices.HealthReadingsScreen
 import br.com.bragasaude.ui.util.NotificationHelper
 import androidx.compose.ui.platform.LocalContext
+import androidx.hilt.navigation.compose.hiltViewModel
+import br.com.bragasaude.ui.care.CareOsViewModel
+import br.com.bragasaude.ui.care.MorningCheckInSheet
 
 /**
  * Declara todas as rotas de navegação da aplicação.
@@ -55,6 +63,9 @@ fun AppNavHost(
     modifier: Modifier = Modifier
 ) {
     val appContext = LocalContext.current.applicationContext
+    val globalCareViewModel: CareOsViewModel = hiltViewModel()
+    val careState by globalCareViewModel.ui.collectAsState()
+    var dismissedCheckInFor by remember { mutableStateOf<String?>(null) }
 
     val navigateBack: () -> Unit = {
         if (navController.previousBackStackEntry != null) {
@@ -265,5 +276,18 @@ fun AppNavHost(
         composable<Screen.DoctorMode> {
             br.com.bragasaude.ui.care.DoctorModeScreen(onBack = navigateBack)
         }
+    }
+
+    // C37 pertence à abertura geral do app, não à tela de medicamentos.
+    val selfCareEnabled = userRole == "PATIENT" || (userRole == "CAREGIVER" && caregiverMode == "HYBRID")
+    val selected = careState.selectedPatientId
+    if (selfCareEnabled && careState.isAuthenticated && careState.patients.isNotEmpty() &&
+        selected != null && careState.selectedPatient.role == "PATIENT" &&
+        !careState.checkInDoneToday && dismissedCheckInFor != selected
+    ) {
+        MorningCheckInSheet(
+            onDismiss = { dismissedCheckInFor = selected },
+            viewModel = globalCareViewModel
+        )
     }
 }

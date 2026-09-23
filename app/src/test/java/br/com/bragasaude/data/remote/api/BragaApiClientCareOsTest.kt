@@ -3,6 +3,7 @@ package br.com.bragasaude.data.remote.api
 import br.com.bragasaude.data.remote.auth.AuthService
 import br.com.bragasaude.data.remote.model.MedicationCreate
 import br.com.bragasaude.data.remote.model.MedicationTakeRequest
+import br.com.bragasaude.data.remote.model.MedicationRestockRequest
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -82,6 +83,43 @@ class BragaApiClientCareOsTest {
         val failure = api.takeMedication("med1", body)
         assertTrue(failure is BragaApiClient.TakeMedicationResult.Failure)
         assertTrue((failure as BragaApiClient.TakeMedicationResult.Failure).message.contains("Estoque insuficiente"))
+    }
+
+    @Test
+    fun `restock uses canonical idempotent contract`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"status":"recorded","current_units":60}"""))
+
+        val units = api.restockMedication("med1", MedicationRestockRequest(60, "restock-key-123"))
+
+        assertEquals(60, units)
+        val request = server.takeRequest()
+        assertEquals("/api/medications/med1/restock", request.path)
+        val body = request.body.readUtf8()
+        assertTrue(body.contains("\"new_total_units\":60"))
+        assertTrue(body.contains("\"idempotency_key\":\"restock-key-123\""))
+    }
+
+    @Test
+    fun `daily bulletin and clinical correlations are consumed`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""
+            {"patient_id":"p1","day":"2026-09-23","medications_taken":2,
+             "medications_expected":3,"latest_blood_pressure":"120/80","hydration_ml":1500}
+        """.trimIndent()))
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""
+            {"patient_id":"p1","correlations":[{"event_at":"2026-09-23T12:00:00Z",
+             "event_type":"BLOOD_PRESSURE_SPIKE","observation":"Pico após noite ruim",
+             "evidence":["sleep_quality=1"],"window_hours":24}],
+             "disclaimer":"Associação temporal; não é diagnóstico."}
+        """.trimIndent()))
+
+        val bulletin = api.getDailyBulletin("p1")
+        val correlations = api.getClinicalCorrelations("p1")
+
+        assertEquals(2, bulletin?.medicationsTaken)
+        assertEquals(1500, bulletin?.hydrationMl)
+        assertEquals("BLOOD_PRESSURE_SPIKE", correlations?.correlations?.single()?.eventType)
+        assertEquals("/api/family/patients/p1/daily-bulletin", server.takeRequest().path)
+        assertEquals("/api/patients/p1/clinical-correlations", server.takeRequest().path)
     }
 
     @Test

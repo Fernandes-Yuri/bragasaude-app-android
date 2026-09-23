@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -70,8 +71,8 @@ fun CareWallScreen(
         },
         containerColor = BragaBackground
     ) { padding ->
-        if (ui.wall.isEmpty()) {
-            EmptyWall(modifier = Modifier.padding(padding))
+        if (!ui.isAuthenticated) {
+            CareAuthenticationRequired(Modifier.padding(padding).padding(16.dp))
         } else {
             LazyColumn(
                 modifier = Modifier
@@ -81,6 +82,39 @@ fun CareWallScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
             ) {
+                item { CarePatientSelector(ui, viewModel::selectPatient) }
+                ui.dailyBulletin?.let { bulletin ->
+                    item {
+                        Card(colors = CardDefaults.cardColors(containerColor = BragaMintSurface)) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("Boletim do dia", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text("Remédios: ${bulletin.medicationsTaken}/${bulletin.medicationsExpected}")
+                                Text("Pressão mais recente: ${bulletin.latestBloodPressure ?: "sem registro"}")
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Filled.WaterDrop, contentDescription = null, tint = BragaEmerald)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Hidratação: ${bulletin.hydrationMl} ml")
+                                }
+                            }
+                        }
+                    }
+                }
+                if (ui.correlations.isNotEmpty()) {
+                    item { Text("Correlações preventivas", fontWeight = FontWeight.Bold, fontSize = 18.sp) }
+                    items(ui.correlations, key = { "${it.eventAt}|${it.eventType}" }) { correlation ->
+                        Card(colors = CardDefaults.cardColors(containerColor = BragaEmergencyLight)) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text(correlation.observation, fontWeight = FontWeight.SemiBold)
+                                correlation.evidence.forEach { Text("• $it", fontSize = 14.sp) }
+                                Text("Associação temporal; não é diagnóstico.", fontSize = 12.sp, color = BragaTextSecondary)
+                            }
+                        }
+                    }
+                    ui.correlationsDisclaimer?.let { disclaimer ->
+                        item { Text(disclaimer, fontSize = 12.sp, color = BragaTextSecondary) }
+                    }
+                }
+                if (ui.wall.isEmpty()) item { EmptyWall(Modifier.heightIn(min = 240.dp)) }
                 items(ui.wall, key = { it.id }) { entry ->
                     CareWallItem(entry)
                 }

@@ -24,6 +24,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.local.MedicationEntity
 import br.com.bragasaude.ui.care.CareOsViewModel
 import br.com.bragasaude.ui.care.MorningCheckInSheet
+import br.com.bragasaude.ui.care.CareAuthenticationRequired
+import br.com.bragasaude.ui.care.CarePatientSelector
 import br.com.bragasaude.ui.theme.*
 import kotlinx.coroutines.flow.collectLatest
 
@@ -56,11 +58,6 @@ fun MedicationStockScreen(
         }
     }
 
-    // Cena C37: abre o check-in matinal automaticamente na primeira abertura do dia.
-    LaunchedEffect(ui.checkInDoneToday) {
-        if (!ui.checkInDoneToday) showCheckIn = true
-    }
-
     if (showCheckIn) {
         MorningCheckInSheet(onDismiss = { showCheckIn = false })
     }
@@ -83,14 +80,16 @@ fun MedicationStockScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onScanNew,
-                icon = { Icon(Icons.Filled.QrCodeScanner, contentDescription = null) },
-                text = { Text("Escanear caixa") },
-                containerColor = BragaEmerald,
-                contentColor = Color.White,
-                modifier = Modifier.heightIn(min = 56.dp)
-            )
+            if (ui.isAuthenticated && ui.selectedPatient.canWriteMedication) {
+                ExtendedFloatingActionButton(
+                    onClick = onScanNew,
+                    icon = { Icon(Icons.Filled.QrCodeScanner, contentDescription = null) },
+                    text = { Text("Escanear caixa") },
+                    containerColor = BragaEmerald,
+                    contentColor = Color.White,
+                    modifier = Modifier.heightIn(min = 56.dp)
+                )
+            }
         },
         containerColor = BragaBackground
     ) { padding ->
@@ -101,11 +100,18 @@ fun MedicationStockScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            if (!ui.isAuthenticated) {
+                CareAuthenticationRequired()
+                return@Column
+            }
+
+            CarePatientSelector(ui, viewModel::selectPatient)
+
             // Ação de check-in matinal (Cena C37)
             CheckInCard(ui.checkInDoneToday) { showCheckIn = true }
 
             if (ui.medications.isEmpty()) {
-                EmptyStockCard(onScanNew)
+                EmptyStockCard(ui.selectedPatient.canWriteMedication, onScanNew)
             } else {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -118,6 +124,8 @@ fun MedicationStockScreen(
                             isCritical = viewModel.isStockCritical(med),
                             onTake = { viewModel.takeDose(med.id) },
                             onRestock = { units -> viewModel.restock(med.id, units) },
+                            canTake = ui.selectedPatient.canTakeMedication,
+                            canRestock = ui.selectedPatient.canWriteMedication,
                             loading = ui.loading
                         )
                     }
@@ -174,7 +182,7 @@ private fun CheckInCard(doneToday: Boolean, onOpenCheckIn: () -> Unit) {
 }
 
 @Composable
-private fun EmptyStockCard(onScanNew: () -> Unit) {
+private fun EmptyStockCard(canWrite: Boolean, onScanNew: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -205,14 +213,18 @@ private fun EmptyStockCard(onScanNew: () -> Unit) {
                 fontSize = 15.sp,
                 color = BragaTextSecondary
             )
-            Button(
-                onClick = onScanNew,
-                colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                modifier = Modifier.heightIn(min = 48.dp)
-            ) {
-                Icon(Icons.Filled.QrCodeScanner, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Escanear primeira caixa", color = Color.White)
+            if (canWrite) {
+                Button(
+                    onClick = onScanNew,
+                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Icon(Icons.Filled.QrCodeScanner, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Escanear primeira caixa", color = Color.White)
+                }
+            } else {
+                Text("Seu vínculo permite consultar o estoque, sem alterar medicamentos.", color = BragaTextSecondary)
             }
         }
     }
@@ -225,6 +237,8 @@ private fun MedicationStockCard(
     isCritical: Boolean,
     onTake: () -> Unit,
     onRestock: (Int) -> Unit,
+    canTake: Boolean,
+    canRestock: Boolean,
     loading: Boolean
 ) {
     var showRestock by remember { mutableStateOf(false) }
@@ -334,7 +348,7 @@ private fun MedicationStockCard(
             ) {
                 Button(
                     onClick = onTake,
-                    enabled = !loading && medication.currentUnits > 0,
+                    enabled = !loading && medication.currentUnits > 0 && canTake,
                     colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
                     modifier = Modifier
                         .weight(1f)
@@ -346,6 +360,7 @@ private fun MedicationStockCard(
                 }
                 OutlinedButton(
                     onClick = { showRestock = !showRestock },
+                    enabled = canRestock,
                     modifier = Modifier
                         .weight(1f)
                         .heightIn(min = 52.dp)

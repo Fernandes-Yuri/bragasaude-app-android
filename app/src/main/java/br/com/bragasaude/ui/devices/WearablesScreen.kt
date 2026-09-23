@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -43,6 +44,7 @@ fun WearablesScreen(onBack: () -> Unit, viewModel: WearablesViewModel = hiltView
     val error by viewModel.error.collectAsState()
     val heart by viewModel.heartReadings.collectAsState()
     val oxygen by viewModel.oxygenReadings.collectAsState()
+    val ble by viewModel.bleState.collectAsState()
     var oxygenTab by rememberSaveable { mutableStateOf(false) }
     var showGuide by rememberSaveable { mutableStateOf(false) }
     var showHistory by rememberSaveable { mutableStateOf(false) }
@@ -52,6 +54,12 @@ fun WearablesScreen(onBack: () -> Unit, viewModel: WearablesViewModel = hiltView
     val permissionLauncher = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) {
         viewModel.refresh()
         if (it.intersect(manager.permissions).isNotEmpty()) viewModel.sync()
+    }
+    val bluetoothPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        if (result.values.all { it }) viewModel.connectBleDevice()
+        else Toast.makeText(context, "O Bluetooth precisa ser autorizado para ler o medidor.", Toast.LENGTH_LONG).show()
     }
     fun authorize() {
         try { permissionLauncher.launch(manager.permissions) } catch (_: Exception) {
@@ -72,6 +80,29 @@ fun WearablesScreen(onBack: () -> Unit, viewModel: WearablesViewModel = hiltView
     }
     Scaffold(containerColor = BragaBackground, topBar = { EmeraldHeaderBanner(title = "Relógios e saúde", subtitle = "Suas leituras, sem complicação", onBack = onBack) }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(vertical = 16.dp)) {
+            item {
+                Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = BragaCardSurface), border = BorderStroke(1.dp, BragaCardBorder)) {
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Icon(Icons.Default.Bluetooth, null, tint = BragaEmerald)
+                            Column(Modifier.weight(1f)) {
+                                Text("Medidor de pressão ou glicemia", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text("Leitura direta por Bluetooth", color = BragaTextSecondary)
+                            }
+                        }
+                        Text(ble.message, color = BragaTextSecondary)
+                        Button(
+                            onClick = {
+                                if (viewModel.hasBlePermissions()) viewModel.connectBleDevice()
+                                else bluetoothPermissionLauncher.launch(viewModel.requiredBlePermissions())
+                            },
+                            enabled = viewModel.isAuthenticated && !ble.running,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                        ) { Text(if (ble.running) "Conectando…" else "Conectar medidor Bluetooth") }
+                        if (!viewModel.isAuthenticated) Text("Entre na sua conta para enviar medições com segurança.", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
             item {
                 Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = BragaCardSurface), border = BorderStroke(1.dp, BragaCardBorder)) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {

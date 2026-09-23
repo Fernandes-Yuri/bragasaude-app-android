@@ -7,6 +7,7 @@ import br.com.bragasaude.data.local.MedicationEntity
 import br.com.bragasaude.data.local.MedicationLogDao
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.sync.SyncScheduler
+import br.com.bragasaude.data.remote.model.MedicationStockItem
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -58,6 +59,8 @@ class MedicationRepositoryTest {
     @Test
     fun `successful dose decrements local stock exactly once`() = runBlocking {
         coEvery { api.takeMedication(any(), any()) } returns BragaApiClient.TakeMedicationResult.Success
+        coEvery { api.getMedicationStock("patient-1") } returns emptyList()
+        coEvery { medicationDao.getAllSync("patient-1") } returns listOf(medication)
 
         val result = repository.takeDose("patient-1", "med-1", "08:00")
 
@@ -65,6 +68,32 @@ class MedicationRepositoryTest {
         coVerify(exactly = 1) { medicationDao.decrementUnits("med-1", 1) }
         coVerify(exactly = 1) { logDao.markSynced(any()) }
         verify(exactly = 1) { scheduler.scheduleSync(any()) }
+    }
+
+    @Test
+    fun `restock updates local mirror only after canonical gateway confirms`() = runBlocking {
+        coEvery { api.restockMedication("med-1", any()) } returns 60
+
+        assertTrue(repository.restock("med-1", 60))
+
+        coVerify(exactly = 1) { api.restockMedication("med-1", match { it.newTotalUnits == 60 }) }
+        coVerify(exactly = 1) { medicationDao.insert(match { it.currentUnits == 60 && !it.pendingSync }) }
+    }
+
+    @Test
+    fun `stock reconciliation prefers Care OS id and never guesses duplicate names`() = runBlocking {
+        val duplicate = medication.copy(id = "med-2")
+        coEvery { medicationDao.getAllSync("patient-1") } returns listOf(medication, duplicate)
+        coEvery { api.getMedicationStock("patient-1") } returns listOf(
+            MedicationStockItem(id = "med-2", name = medication.name, currentUnits = 7),
+            MedicationStockItem(id = null, name = medication.name, currentUnits = 99)
+        )
+
+        repository.syncStockFromServer("patient-1")
+
+        coVerify(exactly = 1) { medicationDao.applyAuthoritativeStock("med-2", 7) }
+        coVerify(exactly = 0) { medicationDao.applyAuthoritativeStock("med-1", 99) }
+        coVerify(exactly = 0) { medicationDao.applyAuthoritativeStock("med-2", 99) }
     }
 
     @Test
