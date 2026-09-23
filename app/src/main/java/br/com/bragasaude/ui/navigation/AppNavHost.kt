@@ -278,10 +278,14 @@ fun AppNavHost(
         }
     }
 
-    // C37 pertence à abertura geral do app, não à tela de medicamentos.
+    // C37: Abertura automática no startup configurável pelo usuário (default = false).
+    val navContext = androidx.compose.ui.platform.LocalContext.current
+    val autoMorningCheckinEnabled = remember {
+        br.com.bragasaude.util.AppPreferences.isAutoMorningCheckinEnabled(navContext)
+    }
     val selfCareEnabled = userRole == "PATIENT" || (userRole == "CAREGIVER" && caregiverMode == "HYBRID")
     val selected = careState.selectedPatientId
-    if (selfCareEnabled && careState.isAuthenticated && careState.patients.isNotEmpty() &&
+    if (autoMorningCheckinEnabled && selfCareEnabled && careState.isAuthenticated && careState.patients.isNotEmpty() &&
         selected != null && careState.selectedPatient.role == "PATIENT" &&
         !careState.checkInDoneToday && dismissedCheckInFor != selected
     ) {

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Whatsapp
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -57,6 +58,7 @@ fun SettingsScreen(
     val isSaving by viewModel.isSaving.collectAsState()
     val voiceAssistantEnabled by viewModel.voiceAssistantEnabled.collectAsState()
     val voiceConfirmationEnabled by viewModel.voiceConfirmationEnabled.collectAsState()
+    val autoMorningCheckinEnabled by viewModel.autoMorningCheckinEnabled.collectAsState()
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
 
@@ -206,6 +208,14 @@ fun SettingsScreen(
                                 icon = Icons.Default.LocationOn,
                                 checked = profile?.locationEnabled ?: true,
                                 onCheckedChange = { viewModel.updateLocation(it) }
+                            )
+                            HorizontalDivider(color = BragaMintBorder.copy(alpha = 0.3f), thickness = 0.8.dp)
+                            SettingsSwitchItem(
+                                title = "Check-in matinal automático",
+                                subtitle = "Abrir o diálogo de como você passou a noite ao iniciar o aplicativo pela manhã.",
+                                icon = Icons.Default.WbSunny,
+                                checked = autoMorningCheckinEnabled,
+                                onCheckedChange = { viewModel.updateAutoMorningCheckin(it) }
                             )
                         }
                     }

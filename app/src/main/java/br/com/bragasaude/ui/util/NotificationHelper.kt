@@ -15,6 +15,8 @@ object NotificationHelper {
     private const val NOTIFICATION_ID = 2001
     private const val ID_LEVEL_UP = 2006
     private const val ID_FEEDBACK_REPLY = 2007
+    private const val ID_STEP_GOAL_50 = 2008
+    private const val ID_STEP_GOAL_100 = 2009
 
     private const val HYDRATION_CHANNEL_ID = "bragasaude_hydration"
     private const val HYDRATION_CHANNEL_NAME = "Lembretes de Hidratação"
@@ -487,6 +489,136 @@ object NotificationHelper {
                 .setContentIntent(pendingIntent)
 
             notificationManager.notify(ID_FEEDBACK_REPLY, builder.build())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Verifica se os passos atuais cruzaram 50% ou 100% da meta e dispara a notificação
+     * correspondente se ainda não foi disparada hoje (trava anti-spam).
+     */
+    fun checkAndNotifyStepGoal(context: Context, currentSteps: Int, targetSteps: Int) {
+        if (targetSteps <= 0 || currentSteps <= 0) return
+
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+        val prefs = context.getSharedPreferences("braga_movement_prefs", Context.MODE_PRIVATE)
+        val lastNotified50 = prefs.getString("step_goal_50_notified_date", "")
+        val lastNotified100 = prefs.getString("step_goal_100_notified_date", "")
+
+        val halfTarget = targetSteps / 2
+
+        if (currentSteps >= targetSteps) {
+            if (lastNotified100 != today) {
+                sendStepGoal100Notification(context)
+                prefs.edit()
+                    .putString("step_goal_100_notified_date", today)
+                    .putString("step_goal_50_notified_date", today)
+                    .apply()
+            }
+        } else if (currentSteps >= halfTarget) {
+            if (lastNotified50 != today) {
+                sendStepGoal50Notification(context)
+                prefs.edit()
+                    .putString("step_goal_50_notified_date", today)
+                    .apply()
+            }
+        }
+    }
+
+    /**
+     * Dispara notificação de 50% da meta de passos diários.
+     * Compliance AUD-AN02: zero emojis em strings literais.
+     */
+    fun sendStepGoal50Notification(context: Context) {
+        try {
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    CHANNEL_NAME,
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Avisos de bem-estar, cuidados e conquistas"
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("OPEN_STEPS", true)
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                ID_STEP_GOAL_50,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val title = "Você está no caminho!"
+            val text = "Você já completou metade da sua meta de passos de hoje. Que tal mais uma caminhada leve?"
+
+            val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+
+            notificationManager.notify(ID_STEP_GOAL_50, builder.build())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Dispara notificação comemorativa de 100% da meta de passos diários.
+     * Compliance AUD-AN02: zero emojis em strings literais.
+     */
+    fun sendStepGoal100Notification(context: Context) {
+        try {
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    CHANNEL_NAME,
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Avisos de bem-estar, cuidados e conquistas"
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("OPEN_STEPS", true)
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                ID_STEP_GOAL_100,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val title = "Meta de passos batida!"
+            val text = "Parabéns! Você atingiu sua meta de passos hoje. Continue cuidando bem da sua saúde!"
+
+            val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+
+            notificationManager.notify(ID_STEP_GOAL_100, builder.build())
         } catch (e: Exception) {
             e.printStackTrace()
         }
