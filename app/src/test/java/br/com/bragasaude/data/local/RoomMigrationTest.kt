@@ -35,11 +35,13 @@ class RoomMigrationTest {
 
         assertTrue(sql.any { it.contains("ALTER TABLE medications_local ADD COLUMN currentUnits") })
         assertTrue(sql.any { it.contains("ALTER TABLE medication_logs_local ADD COLUMN idempotencyKey") })
+        assertTrue(sql.any { it.contains("ALTER TABLE medication_logs_local ADD COLUMN careOsScheduledFor") })
+        assertTrue(sql.any { it.contains("ALTER TABLE family_bindings_local ADD COLUMN caregiverRole") })
         assertTrue(sql.any { it.contains("CREATE TABLE IF NOT EXISTS symptoms_diary_local") })
         assertTrue(sql.any { it.contains("CREATE TABLE IF NOT EXISTS care_audit_local") })
         assertTrue(sql.any { it.contains("CREATE TABLE IF NOT EXISTS ble_telemetry_receipts_local") })
         assertTrue(sql.any { it.contains("index_medication_logs_local_userId_idempotencyKey") })
-        assertEquals(20, sql.size)
+        assertEquals(24, sql.size)
     }
 
     @Test
@@ -48,7 +50,8 @@ class RoomMigrationTest {
         assertTrue("Schema 48.json deve estar exportado", schema != null)
         val text = schema!!.readText()
         listOf(
-            "eanBarcode", "currentUnits", "idempotencyKey",
+            "eanBarcode", "currentUnits", "idempotencyKey", "careOsScheduledFor",
+            "caregiverRole", "permissionsJson", "patientName", "systolicPressure",
             "symptoms_diary_local", "care_audit_local", "ble_telemetry_receipts_local"
         ).forEach { assertTrue("Schema v48 sem $it", text.contains(it)) }
     }

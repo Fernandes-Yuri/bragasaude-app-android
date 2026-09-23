@@ -31,6 +31,10 @@ import br.com.bragasaude.ui.theme.*
 import br.com.bragasaude.util.QrCodeGenerator
 import androidx.compose.material3.*
 import kotlinx.coroutines.flow.collectLatest
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import br.com.bragasaude.util.BragaTime
 
 /**
  * Tela "Leva pro Doutor" — Modo Consulta (Care OS — D62).
@@ -49,9 +53,21 @@ fun DoctorModeScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(Unit) {
-        if (ui.medicalAccess == null && !ui.isGeneratingAccess) {
+    LaunchedEffect(ui.selectedPatientId, ui.isAuthenticated) {
+        if (ui.isAuthenticated && ui.selectedPatient.canShareMedical && ui.medicalAccess == null && !ui.isGeneratingAccess) {
             viewModel.generateMedicalAccess()
+        }
+    }
+
+    LaunchedEffect(ui.reportFile) {
+        ui.reportFile?.let { file ->
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/pdf")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            runCatching { context.startActivity(intent) }
+                .onFailure { Toast.makeText(context, "Instale um leitor de PDF para abrir o relatório.", Toast.LENGTH_LONG).show() }
         }
     }
 
@@ -92,6 +108,13 @@ fun DoctorModeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            if (!ui.isAuthenticated) {
+                CareAuthenticationRequired()
+                return@Column
+            }
+
+            CarePatientSelector(ui, viewModel::selectPatient)
+
             Text(
                 "Mostre este QR Code ao médico na consulta. " +
                     "Ele dá acesso ao resumo de saúde por 2 horas.",
@@ -138,7 +161,7 @@ fun DoctorModeScreen(
                     )
                 }
 
-                AssistChipRow("Válido por 2 horas (até ${access.expiresAt.take(16).replace("T", " ")})")
+                AssistChipRow("Válido por 2 horas (até ${formatBragaExpiry(access.expiresAt)})")
 
                 // Compartilhar Magic Link (WhatsApp ou qualquer app)
                 Button(
@@ -189,10 +212,15 @@ fun DoctorModeScreen(
 
             // Ficha de emergência
             HorizontalDivider()
-            EmergencyCard(viewModel)
+            EmergencyCard(viewModel, enabled = ui.selectedPatient.canShareEmergency)
         }
     }
 }
+
+private fun formatBragaExpiry(raw: String): String = runCatching {
+    OffsetDateTime.parse(raw).atZoneSameInstant(BragaTime.ZONE)
+        .format(DateTimeFormatter.ofPattern("dd/MM 'às' HH:mm", Locale("pt", "BR")))
+}.getOrDefault(raw)
 
 @Composable
 private fun AssistChipRow(text: String) {
@@ -208,7 +236,7 @@ private fun AssistChipRow(text: String) {
 }
 
 @Composable
-private fun EmergencyCard(viewModel: CareOsViewModel) {
+private fun EmergencyCard(viewModel: CareOsViewModel, enabled: Boolean) {
     var token by remember { mutableStateOf<br.com.bragasaude.data.remote.model.EmergencyTokenGrant?>(null) }
     val context = LocalContext.current
 
@@ -247,6 +275,7 @@ private fun EmergencyCard(viewModel: CareOsViewModel) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 52.dp),
+                enabled = enabled,
                 border = BorderStroke(1.dp, BragaEmergencyOrange)
             ) { Text("Gerar ficha de emergência", fontSize = 16.sp) }
             token?.let {

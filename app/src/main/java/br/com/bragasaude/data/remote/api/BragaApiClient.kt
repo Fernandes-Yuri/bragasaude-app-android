@@ -394,6 +394,8 @@ class BragaApiClient @Inject constructor(
                 put("status", b.status)
                 put("createdAt", isoFormat.format(Date(b.createdAt)))
                 put("expiresAt", isoFormat.format(Date(b.expiresAt)))
+                put("caregiverRole", b.caregiverRole)
+                put("permissions", JSONArray(b.permissionsJson))
             }
             val res = postJson("$baseUrl/api/sync/family-binding", json)
             return@withContext res?.optString("id", null)
@@ -972,9 +974,12 @@ class BragaApiClient @Inject constructor(
         caregiverUserId = if (obj.isNull("caregiver_id")) "" else obj.getString("caregiver_id"),
         caregiverName = obj.optString("caregiver_name", ""),
         caregiverRelation = obj.optString("caregiver_relation", ""),
+        patientName = obj.optString("patient_name", null),
         connectionCode = obj.getString("connection_code"), status = obj.getString("status"),
         createdAt = java.time.OffsetDateTime.parse(obj.getString("created_at")).toInstant().toEpochMilli(),
         expiresAt = if (obj.isNull("expires_at")) 0L else java.time.OffsetDateTime.parse(obj.getString("expires_at")).toInstant().toEpochMilli(),
+        caregiverRole = obj.optString("caregiver_role", "CAREGIVER_VIEWER"),
+        permissionsJson = (obj.optJSONArray("permissions") ?: JSONArray()).toString(),
         pendingSync = false
     )
 
@@ -1391,6 +1396,64 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    /** POST /api/medications/{id}/restock — ajuste autoritativo e idempotente. */
+    suspend fun restockMedication(medicationId: String, body: MedicationRestockRequest): Int? =
+        withContext(Dispatchers.IO) {
+            try {
+                val res = postJsonDetailed(
+                    "$baseUrl/api/medications/$medicationId/restock",
+                    JSONObject()
+                        .put("new_total_units", body.newTotalUnits.coerceIn(1, 10_000))
+                        .put("idempotency_key", body.idempotencyKey)
+                )
+                if (res.code in 200..299) res.body?.optInt("current_units") else null
+            } catch (e: Exception) {
+                Log.w(TAG, "Falha ao repor estoque no Care OS: ${e.message}")
+                null
+            }
+        }
+
+    /** Upload real de foto da caixa/receita; devolve a URL protegida. */
+    suspend fun uploadMedicationPhoto(
+        patientId: String,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray
+    ): String? = withContext(Dispatchers.IO) {
+        if (bytes.isEmpty() || bytes.size > 8 * 1024 * 1024) return@withContext null
+        val boundary = "Boundary-${System.currentTimeMillis()}"
+        var conn: HttpURLConnection? = null
+        try {
+            val url = URL("$baseUrl/api/family/patients/$patientId/medications/photo")
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                doOutput = true
+                setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                setRequestProperty("Accept", "application/json")
+                attachIdentity(url.toString())
+            }
+            conn.outputStream.use { output ->
+                output.write("--$boundary\r\n".toByteArray())
+                output.write(
+                    "Content-Disposition: form-data; name=\"file\"; filename=\"${fileName.replace("\"", "")}\"\r\n".toByteArray()
+                )
+                output.write("Content-Type: $mimeType\r\n\r\n".toByteArray())
+                output.write(bytes)
+                output.write("\r\n--$boundary--\r\n".toByteArray())
+            }
+            if (conn.responseCode !in 200..299) return@withContext null
+            val json = JSONObject(conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
+            json.optString("file_url").takeIf(String::isNotBlank)
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha no upload da foto do medicamento: ${e.message}")
+            null
+        } finally {
+            runCatching { conn?.disconnect() }
+        }
+    }
+
     /**
      * POST /api/medications/{medication_id}/take. Trata 409 graciosamente:
      * dose já registrada por outro cuidador/dispositivo → AlreadyTaken.
@@ -1443,6 +1506,56 @@ class BragaApiClient @Inject constructor(
             emptyList()
         }
     }
+
+    suspend fun getDailyBulletin(patientId: String, day: String? = null): DailyCareBulletin? =
+        withContext(Dispatchers.IO) {
+            try {
+                val suffix = day?.let { "?day=$it" }.orEmpty()
+                val o = getJson("$baseUrl/api/family/patients/$patientId/daily-bulletin$suffix")
+                    ?: return@withContext null
+                DailyCareBulletin(
+                    patientId = o.optString("patient_id", patientId),
+                    day = o.optString("day"),
+                    medicationsTaken = o.optInt("medications_taken"),
+                    medicationsExpected = o.optInt("medications_expected"),
+                    latestBloodPressure = o.optString("latest_blood_pressure", null),
+                    hydrationMl = o.optInt("hydration_ml"),
+                    privacyScope = o.optString("privacy_scope", "CONSOLIDATED_SAFETY_ONLY")
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Falha ao buscar boletim diário: ${e.message}")
+                null
+            }
+        }
+
+    suspend fun getClinicalCorrelations(patientId: String): ClinicalCorrelationsResult? =
+        withContext(Dispatchers.IO) {
+            try {
+                val o = getJson("$baseUrl/api/patients/$patientId/clinical-correlations")
+                    ?: return@withContext null
+                val arr = o.optJSONArray("correlations") ?: JSONArray()
+                val items = (0 until arr.length()).map { index ->
+                    val item = arr.getJSONObject(index)
+                    val evidence = item.optJSONArray("evidence") ?: JSONArray()
+                    ClinicalCorrelation(
+                        eventAt = item.optString("event_at"),
+                        eventType = item.optString("event_type"),
+                        observation = item.optString("observation"),
+                        evidence = (0 until evidence.length()).map { evidence.optString(it) },
+                        windowHours = item.optInt("window_hours", 24),
+                        interpretation = item.optString("interpretation", "TEMPORAL_ASSOCIATION_NOT_DIAGNOSIS")
+                    )
+                }
+                ClinicalCorrelationsResult(
+                    patientId = o.optString("patient_id", patientId),
+                    correlations = items,
+                    disclaimer = o.optString("disclaimer")
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Falha ao buscar correlações clínicas: ${e.message}")
+                null
+            }
+        }
 
     /** POST /api/symptoms/check-in — Cena C37 (check-in matinal). */
     suspend fun symptomCheckIn(body: SymptomCheckInCreate): Boolean = withContext(Dispatchers.IO) {

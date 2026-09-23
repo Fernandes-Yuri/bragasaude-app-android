@@ -6,6 +6,10 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.api.BragaApiClient
+import br.com.bragasaude.data.remote.model.BleTelemetryRequest
+import br.com.bragasaude.data.remote.model.MedicationTakeRequest
+import br.com.bragasaude.data.remote.model.SymptomCheckInCreate
+import br.com.bragasaude.util.BragaTime
 import br.com.bragasaude.ui.util.NotificationHelper
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -27,7 +31,9 @@ class SyncWorker @AssistedInject constructor(
     private val feedbackDao: FeedbackDao,
     private val socialFeedDao: SocialFeedDao,
     private val familyDao: FamilyDao,
-    private val auditLogDao: AuditLogDao
+    private val auditLogDao: AuditLogDao,
+    private val symptomsDiaryDao: SymptomsDiaryDao,
+    private val bleTelemetryReceiptDao: BleTelemetryReceiptDao
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
@@ -39,6 +45,8 @@ class SyncWorker @AssistedInject constructor(
         if (!safeSync { syncExamItems() }) hasErrors = true
         if (!safeSync { syncMedications() }) hasErrors = true
         if (!safeSync { syncMedicationLogs() }) hasErrors = true
+        if (!safeSync { syncSymptomsDiary() }) hasErrors = true
+        if (!safeSync { syncBleTelemetry() }) hasErrors = true
         if (!safeSync { syncDailyMetrics() }) hasErrors = true
         if (!safeSync { syncFeedbacks() }) hasErrors = true
         if (!safeSync { syncSocialPosts() }) hasErrors = true
@@ -117,10 +125,64 @@ class SyncWorker @AssistedInject constructor(
     private suspend fun syncMedicationLogs() {
         val pending = medicationLogDao.getPendingSync()
         for (l in pending) {
-            val remoteId = apiClient.syncMedicationLog(l)
-            if (remoteId != null) {
-                medicationLogDao.insert(l.copy(pendingSync = false))
+            val idempotencyKey = l.idempotencyKey
+            val scheduledFor = l.careOsScheduledFor
+            if (!idempotencyKey.isNullOrBlank() && !scheduledFor.isNullOrBlank()) {
+                when (apiClient.takeMedication(
+                    l.medicationId,
+                    MedicationTakeRequest(scheduledFor, l.unitsTaken.coerceAtLeast(1), idempotencyKey)
+                )) {
+                    is BragaApiClient.TakeMedicationResult.Success,
+                    is BragaApiClient.TakeMedicationResult.AlreadyTaken -> {
+                        medicationLogDao.markSynced(l.id)
+                        // O servidor é a fonte de verdade após retry/409.
+                        apiClient.getMedicationStock(l.userId)
+                            .firstOrNull { it.id == l.medicationId }
+                            ?.let { medicationDao.applyAuthoritativeStock(l.medicationId, it.currentUnits) }
+                    }
+                    is BragaApiClient.TakeMedicationResult.Failure ->
+                        throw java.io.IOException("Dose Care OS aguardando sincronização")
+                }
+            } else {
+                // Compatibilidade exclusiva com logs anteriores ao D62.
+                val remoteId = apiClient.syncMedicationLog(l)
+                if (remoteId != null) medicationLogDao.insert(l.copy(pendingSync = false))
             }
+        }
+    }
+
+    private suspend fun syncSymptomsDiary() {
+        for (entry in symptomsDiaryDao.getPendingSync()) {
+            val ok = apiClient.symptomCheckIn(
+                SymptomCheckInCreate(
+                    patientId = entry.patientId,
+                    reportedAt = BragaTime.toIso(entry.reportedAt.time),
+                    symptomsText = entry.symptomsText,
+                    sleepQuality = entry.sleepQuality,
+                    disposition = entry.disposition,
+                    inputMethod = entry.inputMethod
+                )
+            )
+            if (ok) symptomsDiaryDao.markSynced(entry.id)
+            else throw java.io.IOException("Check-in aguardando sincronização")
+        }
+    }
+
+    private suspend fun syncBleTelemetry() {
+        for (entry in bleTelemetryReceiptDao.getPendingSync()) {
+            val ok = apiClient.ingestBleTelemetry(
+                BleTelemetryRequest(
+                    patientId = entry.patientId,
+                    deviceId = entry.deviceId,
+                    deviceType = entry.deviceType,
+                    measuredAt = BragaTime.toIso(entry.measuredAt.time),
+                    systolicPressure = entry.systolicPressure,
+                    diastolicPressure = entry.diastolicPressure,
+                    glucoseLevel = entry.glucoseLevel
+                )
+            )
+            if (ok) bleTelemetryReceiptDao.markSynced(entry.id)
+            else throw java.io.IOException("Telemetria BLE aguardando sincronização")
         }
     }
 

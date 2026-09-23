@@ -353,6 +353,13 @@ data class MedicationTakeRequest(
     @SerialName("idempotency_key") val idempotencyKey: String
 )
 
+/** POST /api/medications/{medication_id}/restock. */
+@Serializable
+data class MedicationRestockRequest(
+    @SerialName("new_total_units") val newTotalUnits: Int,
+    @SerialName("idempotency_key") val idempotencyKey: String
+)
+
 /** GET /api/family/patients/{patient_id}/medications/stock — item do estoque. */
 @Serializable
 data class MedicationStockItem(
@@ -373,6 +380,35 @@ data class CareActivityEntry(
     @SerialName("action_type") val actionType: String,
     val details: String? = null,
     @SerialName("occurred_at") val occurredAt: String
+)
+
+/** GET .../daily-bulletin — resumo consolidado do dia. */
+@Serializable
+data class DailyCareBulletin(
+    @SerialName("patient_id") val patientId: String,
+    val day: String,
+    @SerialName("medications_taken") val medicationsTaken: Int,
+    @SerialName("medications_expected") val medicationsExpected: Int,
+    @SerialName("latest_blood_pressure") val latestBloodPressure: String? = null,
+    @SerialName("hydration_ml") val hydrationMl: Int = 0,
+    @SerialName("privacy_scope") val privacyScope: String = "CONSOLIDATED_SAFETY_ONLY"
+)
+
+@Serializable
+data class ClinicalCorrelation(
+    @SerialName("event_at") val eventAt: String,
+    @SerialName("event_type") val eventType: String,
+    val observation: String,
+    val evidence: List<String> = emptyList(),
+    @SerialName("window_hours") val windowHours: Int = 24,
+    val interpretation: String = "TEMPORAL_ASSOCIATION_NOT_DIAGNOSIS"
+)
+
+@Serializable
+data class ClinicalCorrelationsResult(
+    @SerialName("patient_id") val patientId: String,
+    val correlations: List<ClinicalCorrelation> = emptyList(),
+    val disclaimer: String
 )
 
 /** POST /api/symptoms/check-in — Cena C37. */
@@ -416,5 +452,4 @@ data class BleTelemetryRequest(
     @SerialName("glucose_level") val glucoseLevel: Int? = null,
     val protocol: String = "GATT"
 )
-
 

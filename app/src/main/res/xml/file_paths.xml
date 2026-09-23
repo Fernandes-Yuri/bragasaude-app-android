@@ -8,6 +8,7 @@
     <cache-path name="shared_cache" path="shared_pdfs/" />
     <cache-path name="audio_cache" path="neural_tts/" />
     <cache-path name="relatorios" path="relatorios/" />
+    <cache-path name="medication_photos" path="medication_photos/" />
     <cache-path name="dossiers" path="dossiers/" />
     <files-path name="shared_files" path="exports/" />
     <external-cache-path name="shared_ext_cache" path="shared/" />

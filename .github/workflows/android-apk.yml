@@ -225,6 +225,14 @@ jobs:
           path: app/build/reports/tests/testDebugUnitTest/
           retention-days: 14
 
+      - name: Publicar schemas Room gerados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-schemas-${{ github.sha }}
+          path: app/schemas/
+          retention-days: 14
+
   # ---------------------------------------------------------------------------
   # JOB 3 — RELEASE: só roda se você escolher "lancar-release".
   # PRINCÍPIO CHAVE: promove o APK que você JÁ TESTOU (mesmos bytes), não

@@ -1,6 +1,8 @@
 package br.com.bragasaude.ui.medication
 
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -11,20 +13,28 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.remote.model.BarcodeMedication
 import br.com.bragasaude.ui.care.CareOsViewModel
+import br.com.bragasaude.ui.care.CareAuthenticationRequired
+import br.com.bragasaude.ui.care.CarePatientSelector
 import br.com.bragasaude.ui.theme.*
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import androidx.core.content.FileProvider
+import br.com.bragasaude.util.BragaTime
+import java.io.File
+import java.time.LocalDate
 
 /**
  * Scanner de Caixa de Remédio (Care OS — D62).
@@ -42,6 +52,7 @@ fun BarcodeScannerScreen(
     viewModel: CareOsViewModel = hiltViewModel()
 ) {
     val ui by viewModel.ui.collectAsState()
+    val context = LocalContext.current
 
     var ean by remember { mutableStateOf("") }
     var found by remember { mutableStateOf<BarcodeMedication?>(null) }
@@ -50,6 +61,25 @@ fun BarcodeScannerScreen(
     var scheduleTime by remember { mutableStateOf("08:00") }
     var confirmed by remember { mutableStateOf(false) }
     var lookupError by remember { mutableStateOf<String?>(null) }
+    var prescriptionIssuedOn by remember { mutableStateOf(LocalDate.now(BragaTime.ZONE).toString()) }
+    var prescriptionValidityDays by remember { mutableStateOf("30") }
+    var prescriberName by remember { mutableStateOf("") }
+    var prescriberCrm by remember { mutableStateOf("") }
+    var medicationPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var prescriptionPhotoUri by remember { mutableStateOf<Uri?>(null) }
+
+    fun newPhotoUri(prefix: String): Uri {
+        val directory = File(context.cacheDir, "medication_photos").apply { mkdirs() }
+        val file = File(directory, "$prefix-${System.currentTimeMillis()}.jpg")
+        return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    }
+
+    val medicationCamera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        if (!saved) medicationPhotoUri = null
+    }
+    val prescriptionCamera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        if (!saved) prescriptionPhotoUri = null
+    }
 
     val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
         val code = result.contents?.trim()
@@ -104,6 +134,13 @@ fun BarcodeScannerScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            if (!ui.isAuthenticated) {
+                CareAuthenticationRequired()
+                return@Column
+            }
+
+            CarePatientSelector(ui, viewModel::selectPatient)
+
             // Aviso regulatório — clareza total para o usuário idoso.
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -206,6 +243,60 @@ fun BarcodeScannerScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            Text("Receita médica", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+            OutlinedTextField(
+                value = prescriptionIssuedOn,
+                onValueChange = { prescriptionIssuedOn = it.take(10) },
+                label = { Text("Data da receita (AAAA-MM-DD)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = prescriptionValidityDays,
+                onValueChange = { prescriptionValidityDays = it.filter(Char::isDigit).take(3) },
+                label = { Text("Validade em dias") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = prescriberName,
+                onValueChange = { prescriberName = it.take(150) },
+                label = { Text("Nome do médico") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = prescriberCrm,
+                onValueChange = { prescriberCrm = it.take(32) },
+                label = { Text("CRM e UF") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        medicationPhotoUri = newPhotoUri("caixa")
+                        medicationCamera.launch(medicationPhotoUri!!)
+                    },
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp)
+                ) {
+                    Icon(Icons.Filled.PhotoCamera, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (medicationPhotoUri == null) "Foto da caixa" else "Caixa pronta")
+                }
+                OutlinedButton(
+                    onClick = {
+                        prescriptionPhotoUri = newPhotoUri("receita")
+                        prescriptionCamera.launch(prescriptionPhotoUri!!)
+                    },
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp)
+                ) {
+                    Icon(Icons.Filled.PhotoCamera, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (prescriptionPhotoUri == null) "Foto da receita" else "Receita pronta")
+                }
+            }
+
             // Checkbox OBRIGATÓRIO — sem ele, o cadastro não existe.
             Row(
                 modifier = Modifier
@@ -223,7 +314,10 @@ fun BarcodeScannerScreen(
             }
 
             val canSave = name.length >= 2 && totalUnits.toIntOrNull()?.let { it > 0 } == true &&
-                confirmed && !ui.loading
+                confirmed && runCatching { LocalDate.parse(prescriptionIssuedOn) }.isSuccess &&
+                prescriptionValidityDays.toIntOrNull()?.let { it in 1..365 } == true &&
+                prescriberName.trim().length >= 2 && prescriberCrm.trim().length >= 4 &&
+                ui.selectedPatient.canWriteMedication && !ui.loading
 
             Button(
                 onClick = {
@@ -232,7 +326,13 @@ fun BarcodeScannerScreen(
                         totalUnits = totalUnits.toInt(),
                         scheduleTimes = listOf(scheduleTime.trim()),
                         confirmedWithPrescription = confirmed,
-                        barcode = found
+                        barcode = found,
+                        photoUri = medicationPhotoUri,
+                        prescriptionImageUri = prescriptionPhotoUri,
+                        prescriptionIssuedOn = prescriptionIssuedOn,
+                        prescriptionValidityDays = prescriptionValidityDays.toInt(),
+                        prescriberName = prescriberName,
+                        prescriberCrm = prescriberCrm
                     ) { ok -> if (ok) onSaved() }
                 },
                 enabled = canSave,

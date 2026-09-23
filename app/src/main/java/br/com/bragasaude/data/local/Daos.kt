@@ -243,6 +243,10 @@ interface MedicationDao {
     )
     suspend fun restock(id: String, units: Int, restockAt: Long)
 
+    /** Aplica o saldo autoritativo devolvido pelo Care OS sem criar novo push legado. */
+    @Query("UPDATE medications_local SET currentUnits = :units, pendingSync = 0 WHERE id = :id")
+    suspend fun applyAuthoritativeStock(id: String, units: Int)
+
     /** Medicamentos cadastrados sem a confirmação da receita (RDC 657/2022). */
     @Query("SELECT * FROM medications_local WHERE userId = :userId AND confirmedWithPrescription = 0")
     suspend fun getUnconfirmedWithPrescription(userId: String): List<MedicationEntity>

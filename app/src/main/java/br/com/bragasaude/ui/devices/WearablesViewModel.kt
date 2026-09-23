@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.local.BragaDatabase
 import br.com.bragasaude.data.util.HealthConnectManager
+import br.com.bragasaude.data.util.BleGattManager
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -14,10 +15,13 @@ import javax.inject.Inject
 @HiltViewModel
 class WearablesViewModel @Inject constructor(
     val manager: HealthConnectManager,
+    val bleManager: BleGattManager,
     database: BragaDatabase,
     auth: FirebaseAuth
 ) : ViewModel() {
     private val uid = auth.currentUser?.uid.orEmpty()
+    val isAuthenticated = uid.isNotEmpty()
+    val bleState = bleManager.state
     val heartReadings = database.wearableReadingDao().observeRecent(uid, "HEART_RATE")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val oxygenReadings = database.wearableReadingDao().observeRecent(uid, "OXYGEN_SATURATION")
@@ -48,5 +52,20 @@ class WearablesViewModel @Inject constructor(
             manager.syncHealthConnectData(force = true)
             refresh()
         }
+    }
+
+    fun requiredBlePermissions(): Array<String> = bleManager.requiredPermissions()
+    fun hasBlePermissions(): Boolean = bleManager.hasPermissions()
+    fun connectBleDevice() {
+        if (uid.isEmpty()) {
+            _error.value = "Entre na sua conta para conectar um medidor."
+            return
+        }
+        bleManager.scanAndConnect(uid)
+    }
+
+    override fun onCleared() {
+        bleManager.close()
+        super.onCleared()
     }
 }

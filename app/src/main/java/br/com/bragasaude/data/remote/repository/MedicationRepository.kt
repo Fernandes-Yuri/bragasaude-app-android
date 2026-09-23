@@ -6,6 +6,7 @@ import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.model.MedicationCreate
 import br.com.bragasaude.data.remote.model.MedicationStockItem
 import br.com.bragasaude.data.remote.model.MedicationTakeRequest
+import br.com.bragasaude.data.remote.model.MedicationRestockRequest
 import br.com.bragasaude.data.remote.model.PrescriptionCreate
 import br.com.bragasaude.data.remote.model.BarcodeMedication
 import br.com.bragasaude.data.remote.model.RemoteMedication
@@ -155,7 +156,8 @@ class MedicationRepository @Inject constructor(
         medId: String,
         time: String? = null,
         date: java.time.LocalDate = java.time.LocalDate.now(BragaTime.ZONE),
-        units: Int = 1
+        units: Int = 1,
+        actorId: String = userId
     ): BragaApiClient.TakeMedicationResult {
         val med = medicationDao.getById(medId)
             ?: return BragaApiClient.TakeMedicationResult.Failure("Medicamento não encontrado.")
@@ -174,9 +176,10 @@ class MedicationRepository @Inject constructor(
             medicationId = medId,
             scheduledFor = scheduleKey,
             takenAt = Date(),
-            actorId = userId,
+            actorId = actorId,
             unitsTaken = units.coerceAtLeast(1),
             idempotencyKey = idemKey,
+            careOsScheduledFor = scheduledForIso,
             pendingSync = true
         )
         if (medicationLogDao.insertOnce(log) == -1L) {
@@ -193,7 +196,8 @@ class MedicationRepository @Inject constructor(
             is BragaApiClient.TakeMedicationResult.Success -> {
                 medicationDao.decrementUnits(medId, units.coerceAtLeast(1))
                 medicationLogDao.markSynced(logId)
-                recordAudit(userId, "MEDICATION_TAKEN", "${med.name} registrado")
+                syncStockFromServer(userId)
+                recordAudit(userId, "MEDICATION_TAKEN", "${med.name} registrado", actorId)
                 triggerSync()
                 BragaApiClient.TakeMedicationResult.Success
             }
@@ -275,13 +279,40 @@ class MedicationRepository @Inject constructor(
         return localId
     }
 
-    /** Reabastece a caixa e carimba o reposicionamento (local + servidor). */
+    /** Reabastece pelo contrato canônico; só então atualiza o espelho local. */
     suspend fun restock(medId: String, units: Int, actorName: String? = null): Boolean {
         val med = medicationDao.getById(medId) ?: return false
-        medicationDao.restock(medId, units, BragaTime.nowMillis())
+        if (units !in 1..10_000) return false
+        val authoritative = apiClient.restockMedication(
+            medId,
+            MedicationRestockRequest(units, "restock-${UUID.randomUUID()}")
+        ) ?: return false
+        medicationDao.insert(
+            med.copy(
+                totalUnits = authoritative,
+                currentUnits = authoritative,
+                lastRestockDate = BragaTime.nowMillis(),
+                pendingSync = false
+            )
+        )
         recordAudit(med.userId, "RESTOCK", "${med.name} reabastecido ($units unidades)")
-        triggerSync()
         return true
+    }
+
+    suspend fun uploadMedicationPhoto(patientId: String, uri: android.net.Uri): String? = try {
+        val resolver = context.contentResolver
+        val mime = resolver.getType(uri)?.takeIf { it in setOf("image/jpeg", "image/png", "image/webp") }
+            ?: "image/jpeg"
+        val extension = when (mime) {
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            else -> "jpg"
+        }
+        val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+        apiClient.uploadMedicationPhoto(patientId, "medication-${UUID.randomUUID()}.$extension", mime, bytes)
+    } catch (e: Exception) {
+        android.util.Log.w("CareOs", "uploadMedicationPhoto: ${e.message}")
+        null
     }
 
     /**
@@ -293,9 +324,10 @@ class MedicationRepository @Inject constructor(
             val items = apiClient.getMedicationStock(patientId)
             val local = medicationDao.getAllSync(patientId)
             for (item in items) {
-                // best-effort match por nome — o id remoto não vive no local.
-                val match = local.firstOrNull { matchByName(it, item) } ?: continue
-                medicationDao.insert(match.copy(currentUnits = item.currentUnits, pendingSync = false))
+                val match = item.id?.let { id -> local.firstOrNull { it.id == id } }
+                    ?: if (item.id == null) local.singleOrNull { matchByName(it, item) } else null
+                    ?: continue
+                medicationDao.applyAuthoritativeStock(match.id, item.currentUnits)
             }
         } catch (e: Exception) {
             android.util.Log.w("CareOs", "syncStockFromServer: ${e.message}")

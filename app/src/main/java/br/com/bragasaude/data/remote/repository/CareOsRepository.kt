@@ -10,9 +10,12 @@ import br.com.bragasaude.data.local.SymptomsDiaryEntity
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.model.BleTelemetryRequest
 import br.com.bragasaude.data.remote.model.CareActivityEntry
+import br.com.bragasaude.data.remote.model.ClinicalCorrelationsResult
+import br.com.bragasaude.data.remote.model.DailyCareBulletin
 import br.com.bragasaude.data.remote.model.EmergencyTokenGrant
 import br.com.bragasaude.data.remote.model.MedicalAccessGrant
 import br.com.bragasaude.data.remote.model.SymptomCheckInCreate
+import br.com.bragasaude.data.remote.sync.SyncScheduler
 import br.com.bragasaude.util.BragaTime
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -34,7 +37,8 @@ class CareOsRepository @Inject constructor(
     private val apiClient: BragaApiClient,
     private val symptomsDiaryDao: SymptomsDiaryDao,
     private val careAuditDao: CareAuditDao,
-    private val bleTelemetryReceiptDao: BleTelemetryReceiptDao
+    private val bleTelemetryReceiptDao: BleTelemetryReceiptDao,
+    private val syncScheduler: SyncScheduler
 ) {
 
     // ==================== CENA C37 — CHECK-IN MATINAL ====================
@@ -45,6 +49,7 @@ class CareOsRepository @Inject constructor(
      */
     suspend fun submitCheckIn(
         patientId: String,
+        reportedBy: String = patientId,
         symptomsText: String,
         sleepQuality: Int? = null,
         disposition: Int? = null,
@@ -55,7 +60,7 @@ class CareOsRepository @Inject constructor(
         val entry = SymptomsDiaryEntity(
             id = UUID.randomUUID().toString(),
             patientId = patientId,
-            reportedBy = patientId,
+            reportedBy = reportedBy,
             reportedAt = Date(now),
             symptomsText = symptomsText.take(1000),
             sleepQuality = sleepQuality?.coerceIn(1, 5),
@@ -76,6 +81,7 @@ class CareOsRepository @Inject constructor(
             )
         )
         if (ok) symptomsDiaryDao.markSynced(entry.id)
+        else syncScheduler.scheduleSync()
         return ok
     }
 
@@ -112,6 +118,12 @@ class CareOsRepository @Inject constructor(
         careAuditDao.insertAll(entities)
     }
 
+    suspend fun getDailyBulletin(patientId: String): DailyCareBulletin? =
+        apiClient.getDailyBulletin(patientId)
+
+    suspend fun getClinicalCorrelations(patientId: String): ClinicalCorrelationsResult? =
+        apiClient.getClinicalCorrelations(patientId)
+
     private fun parseOccurredAt(raw: String): Date {
         return try {
             Date.from(java.time.OffsetDateTime.parse(raw).toInstant())
@@ -138,7 +150,8 @@ class CareOsRepository @Inject constructor(
     ): File? {
         apiClient.getDoctorReportPdf(patientId, days)?.let { bytes ->
             if (bytes.isNotEmpty()) {
-                val file = File(context.cacheDir, "doctor_report_${patientId}_$days.pdf")
+                val directory = File(context.cacheDir, "shared_pdfs").apply { mkdirs() }
+                val file = File(directory, "doctor_report_${patientId}_$days.pdf")
                 file.outputStream().use { it.write(bytes) }
                 return file
             }
@@ -189,9 +202,13 @@ class CareOsRepository @Inject constructor(
                 deviceType = deviceType,
                 protocol = "GATT",
                 measuredAt = Date(measuredAt),
+                systolicPressure = systolic,
+                diastolicPressure = diastolic,
+                glucoseLevel = glucose,
                 pendingSync = !ok
             )
         )
+        if (!ok) syncScheduler.scheduleSync()
         return ok
     }
 

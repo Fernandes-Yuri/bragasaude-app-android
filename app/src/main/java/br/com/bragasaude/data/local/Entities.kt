@@ -257,6 +257,8 @@ data class MedicationLogEntity(
     val actorId: String? = null,
     val unitsTaken: Int = 1,
     val idempotencyKey: String? = null,
+    /** Instante canônico com offset usado para repetir POST /take offline. */
+    val careOsScheduledFor: String? = null,
     val pendingSync: Boolean = false
 )
 
@@ -422,6 +424,10 @@ data class FamilyBindingEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val expiresAt: Long = System.currentTimeMillis() + (7 * 24 * 60 * 60 * 1000), // 7 dias de validade
     val remoteId: String? = null, // UUID no Firebase Data Connect (null enquanto não sincronizado)
+    val patientName: String? = null,
+    val caregiverRole: String = "CAREGIVER_VIEWER",
+    /** JSON array das permissões explícitas concedidas pelo paciente. */
+    val permissionsJson: String = "[]",
     val pendingSync: Boolean = false
 )
 
@@ -582,6 +588,9 @@ data class BleTelemetryReceiptEntity(
     val deviceType: String,
     val protocol: String = "GATT",
     val measuredAt: Date = Date(),
+    /** Payload persistido para que o SyncWorker possa repetir a ingestão. */
+    val systolicPressure: Int? = null,
+    val diastolicPressure: Int? = null,
+    val glucoseLevel: Int? = null,
     val pendingSync: Boolean = false
 )
-
