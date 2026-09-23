@@ -348,6 +348,94 @@ object Migrations {
         }
     }
 
+    /**
+     * D62 — Care OS (First Contract). Espelha localmente o migration 017 do
+     * gateway (`017_care_os_global_contracts.sql`):
+     *   - Estoque do medicamento (total/current/alert_threshold/photo/receita)
+     *   - Idempotência de doses (actor, units_taken, idempotency_key)
+     *   - Cenas C37 (diário de sintomas), mural de cuidado e telemetria BLE.
+     *
+     * 100% preservacional: só ALTER TABLE aditivo e CREATE TABLE/INDEX novos.
+     * Nenhum dado existente é tocado. DEFAULTs NOT NULL são obrigatórios no
+     * ALTER (SQLite recusa coluna NOT NULL sem default em tabela populada).
+     */
+    val MIGRATION_47_48 = object : Migration(47, 48) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // ---------- medications_local: catálogo ANVISA + estoque ----------
+            db.execSQL("ALTER TABLE medications_local ADD COLUMN eanBarcode TEXT")
+            db.execSQL("ALTER TABLE medications_local ADD COLUMN activePrinciple TEXT")
+            db.execSQL("ALTER TABLE medications_local ADD COLUMN manufacturer TEXT")
+            db.execSQL("ALTER TABLE medications_local ADD COLUMN pharmaceuticalForm TEXT")
+            db.execSQL("ALTER TABLE medications_local ADD COLUMN totalUnits INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE medications_local ADD COLUMN currentUnits INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE medications_local ADD COLUMN alertThresholdDays INTEGER NOT NULL DEFAULT 5")
+            db.execSQL("ALTER TABLE medications_local ADD COLUMN photoReferenceUrl TEXT")
+            db.execSQL("ALTER TABLE medications_local ADD COLUMN confirmedWithPrescription INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE medications_local ADD COLUMN lastRestockDate INTEGER")
+
+            // ---------- medication_logs_local: idempotência de doses ----------
+            db.execSQL("ALTER TABLE medication_logs_local ADD COLUMN actorId TEXT")
+            db.execSQL("ALTER TABLE medication_logs_local ADD COLUMN unitsTaken INTEGER NOT NULL DEFAULT 1")
+            db.execSQL("ALTER TABLE medication_logs_local ADD COLUMN idempotencyKey TEXT")
+            // SQLite UNIQUE trata NULLs como distintos — mesma semântica do
+            // PostgreSQL `WHERE idempotency_key IS NOT NULL`.
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS index_medication_logs_local_userId_idempotencyKey " +
+                    "ON medication_logs_local(userId, idempotencyKey)"
+            )
+
+            // ---------- Cena C37: diário de sintomas ----------
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS symptoms_diary_local (" +
+                    "id TEXT NOT NULL PRIMARY KEY, " +
+                    "patientId TEXT NOT NULL, " +
+                    "reportedBy TEXT NOT NULL, " +
+                    "reportedAt INTEGER NOT NULL, " +
+                    "symptomsText TEXT NOT NULL, " +
+                    "sleepQuality INTEGER, " +
+                    "disposition INTEGER, " +
+                    "inputMethod TEXT NOT NULL, " +
+                    "pendingSync INTEGER NOT NULL)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_symptoms_diary_local_patientId_reportedAt " +
+                    "ON symptoms_diary_local(patientId, reportedAt)"
+            )
+
+            // ---------- Mural de Cuidado Compartilhado (auditoria) ----------
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS care_audit_local (" +
+                    "id TEXT NOT NULL PRIMARY KEY, " +
+                    "patientId TEXT NOT NULL, " +
+                    "actorId TEXT NOT NULL, " +
+                    "actorName TEXT NOT NULL, " +
+                    "actionType TEXT NOT NULL, " +
+                    "detailsJson TEXT NOT NULL, " +
+                    "occurredAt INTEGER NOT NULL)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_care_audit_local_patientId_occurredAt " +
+                    "ON care_audit_local(patientId, occurredAt)"
+            )
+
+            // ---------- Telemetria BLE GATT (receipts) ----------
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS ble_telemetry_receipts_local (" +
+                    "id TEXT NOT NULL PRIMARY KEY, " +
+                    "patientId TEXT NOT NULL, " +
+                    "deviceId TEXT NOT NULL, " +
+                    "deviceType TEXT NOT NULL, " +
+                    "protocol TEXT NOT NULL, " +
+                    "measuredAt INTEGER NOT NULL, " +
+                    "pendingSync INTEGER NOT NULL)"
+            )
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS index_ble_telemetry_receipts_local_patientId_deviceId_measuredAt " +
+                    "ON ble_telemetry_receipts_local(patientId, deviceId, measuredAt)"
+            )
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -370,6 +458,7 @@ object Migrations {
         MIGRATION_43_44,
         MIGRATION_44_45,
         MIGRATION_45_46,
-        MIGRATION_46_47
+        MIGRATION_46_47,
+        MIGRATION_47_48
     )
 }

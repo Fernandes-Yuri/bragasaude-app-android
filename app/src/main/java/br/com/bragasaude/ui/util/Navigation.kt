@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.util
+package br.com.bragasaude.ui.util
 
 import kotlinx.serialization.Serializable
 
@@ -40,4 +40,10 @@ import kotlinx.serialization.Serializable
     @Serializable data object PantryRecipes : Screen
     @Serializable data object RoleSelection : Screen
     @Serializable data object CaregiverRegistration : Screen
+
+    // Care OS — D62 (First Contract)
+    @Serializable data object MedicationStock : Screen
+    @Serializable data object BarcodeScanner : Screen
+    @Serializable data object CareWall : Screen
+    @Serializable data object DoctorMode : Screen
 }

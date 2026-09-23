@@ -31,9 +31,13 @@ import androidx.room.TypeConverters
         AuditLogEntity::class,
         WearableReading::class,
         OrbConversation::class,
-        ConsultationEntity::class
+        ConsultationEntity::class,
+        // Care OS — D62 (First Contract)
+        SymptomsDiaryEntity::class,
+        CareAuditEntity::class,
+        BleTelemetryReceiptEntity::class
     ],
-    version = 47, // AUD-AN28: índices no banco local (AN23 havia subido para 46)
+    version = 48, // D62: Care OS — colunas de estoque, idempotência e mural/telemetria
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -60,6 +64,11 @@ abstract class BragaDatabase : RoomDatabase() {
     abstract fun vitalAlertLogDao(): VitalAlertLogDao
     abstract fun auditLogDao(): AuditLogDao
     abstract fun wearableReadingDao(): WearableReadingDao
+
+    // Care OS — D62 (First Contract)
+    abstract fun symptomsDiaryDao(): SymptomsDiaryDao
+    abstract fun careAuditDao(): CareAuditDao
+    abstract fun bleTelemetryReceiptDao(): BleTelemetryReceiptDao
 
     companion object {
         const val DATABASE_NAME = "braga_saude_db"

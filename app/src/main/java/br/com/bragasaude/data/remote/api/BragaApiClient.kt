@@ -1294,6 +1294,268 @@ class BragaApiClient @Inject constructor(
             try { conn?.disconnect() } catch (_: Exception) {}
         }
     }
+
+    // ==================== CARE OS — D62 (FIRST CONTRACT) ====================
+    // Contratos canônicos de scripts/server/openapi_care_os.json. Tipos estritos
+    // em data/remote/model/RemoteEntities.kt — sem "achismo" de dados.
+
+    /**
+     * Resultado de uma tentativa de registro de dose (POST .../take).
+     * O 409 é um caminho feliz: a dose já foi registrada por outro
+     * cuidador/dispositivo e NÃO deve decrementar estotoque duplicado.
+     */
+    sealed class TakeMedicationResult {
+        /** Decremento efetuado no servidor (HTTP 200). */
+        data object Success : TakeMedicationResult()
+        /** HTTP 409 — dose já registrada por outro ator. Estado local sincroniza. */
+        data object AlreadyTaken : TakeMedicationResult()
+        /** Falha real de rede/servidor (o app mantém o registro local e re-tenta). */
+        data class Failure(val message: String) : TakeMedicationResult()
+    }
+
+    /** GET /api/anvisa/medications/barcode/{ean} — catálogo ANVISA (EAN-13 da caixa). */
+    suspend fun lookupBarcode(ean: String): BarcodeMedication? = withContext(Dispatchers.IO) {
+        try {
+            val res = getJson("$baseUrl/api/anvisa/medications/barcode/${java.net.URLEncoder.encode(ean, "UTF-8")}", strict = true)
+                ?: return@withContext null
+            BarcodeMedication(
+                eanBarcode = res.optString("ean_barcode"),
+                name = res.optString("name"),
+                activePrinciple = res.nullableString("active_principle"),
+                concentration = res.nullableString("concentration"),
+                pharmaceuticalForm = res.nullableString("pharmaceutical_form"),
+                manufacturer = res.nullableString("manufacturer"),
+                farmaciaPopularEligible = if (res.has("farmacia_popular_eligible") && !res.isNull("farmacia_popular_eligible")) res.getBoolean("farmacia_popular_eligible") else null,
+                sourceName = res.optString("source_name"),
+                sourceUrl = res.nullableString("source_url"),
+                sourceCheckedAt = res.nullableString("source_checked_at")
+            ).takeIf { it.eanBarcode.length == 13 && it.name.isNotBlank() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao consultar catálogo ANVISA: ${e.message}")
+            null
+        }
+    }
+
+    /** POST /api/family/patients/{patient_id}/medications — cadastro com receita. */
+    suspend fun createMedication(patientId: String, body: MedicationCreate): String? = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                body.eanBarcode?.let { if (it.matches(Regex("^\\d{13}$"))) put("ean_barcode", it) }
+                put("name", body.name)
+                body.activePrinciple?.let { put("active_principle", it) }
+                body.manufacturer?.let { put("manufacturer", it) }
+                body.dosageMg?.let { put("dosage_mg", it) }
+                body.pharmaceuticalForm?.let { put("pharmaceutical_form", it) }
+                put("schedule_times", JSONArray(body.scheduleTimes))
+                put("total_units", body.totalUnits)
+                put("alert_threshold_days", body.alertThresholdDays)
+                body.photoReferenceUrl?.let { put("photo_reference_url", it) }
+                put("confirmed_with_prescription", body.confirmedWithPrescription)
+                body.prescription?.let { p ->
+                    put("prescription", JSONObject().apply {
+                        p.imageUrl?.let { put("image_url", it) }
+                        put("issued_on", p.issuedOn)
+                        put("validity_days", p.validityDays)
+                        put("prescriber_name", p.prescriberName)
+                        put("prescriber_crm", p.prescriberCrm)
+                    })
+                }
+            }
+            val res = postJsonDetailed("$baseUrl/api/family/patients/$patientId/medications", json)
+            if (res.code in 200..299) res.body?.optString("id")?.takeIf { it.isNotBlank() } else null
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao cadastrar medicamento no Care OS: ${e.message}")
+            null
+        }
+    }
+
+    /** GET /api/family/patients/{patient_id}/medications/stock. */
+    suspend fun getMedicationStock(patientId: String): List<MedicationStockItem> = withContext(Dispatchers.IO) {
+        try {
+            val arr = getJsonArray("$baseUrl/api/family/patients/$patientId/medications/stock")
+                ?: return@withContext emptyList()
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                MedicationStockItem(
+                    id = o.optString("id", null),
+                    name = o.optString("name"),
+                    currentUnits = o.optInt("current_units", 0),
+                    daysRemaining = if (o.isNull("days_remaining")) null else o.optDouble("days_remaining").takeIf { !it.isNaN() },
+                    isCritical = if (o.has("is_critical") && !o.isNull("is_critical")) o.getBoolean("is_critical") else null,
+                    alertThresholdDays = o.optInt("alert_threshold_days", 5)
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao buscar estoque de medicamentos: ${e.message}")
+            emptyList()
+        }
+    }
+
+    /**
+     * POST /api/medications/{medication_id}/take. Trata 409 graciosamente:
+     * dose já registrada por outro cuidador/dispositivo → AlreadyTaken.
+     */
+    suspend fun takeMedication(medicationId: String, body: MedicationTakeRequest): TakeMedicationResult =
+        withContext(Dispatchers.IO) {
+            try {
+                val json = JSONObject().apply {
+                    put("scheduled_for", body.scheduledFor)
+                    put("units_taken", body.unitsTaken.coerceIn(1, 20))
+                    put("idempotency_key", body.idempotencyKey)
+                }
+                val res = postJsonDetailed("$baseUrl/api/medications/$medicationId/take", json)
+                when (res.code) {
+                    in 200..299 -> TakeMedicationResult.Success
+                    409 -> {
+                        val detail = res.errorDetail.orEmpty()
+                        if (detail.contains("confirmad", ignoreCase = true) ||
+                            detail.contains("registrad", ignoreCase = true) ||
+                            detail.contains("duplic", ignoreCase = true)
+                        ) TakeMedicationResult.AlreadyTaken
+                        else TakeMedicationResult.Failure(detail.ifBlank { "Conflito ao registrar dose" })
+                    }
+                    else -> TakeMedicationResult.Failure("HTTP ${res.code}: ${res.errorDetail ?: "Erro ao registrar dose"}")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Falha ao registrar dose no Care OS: ${e.message}")
+                TakeMedicationResult.Failure(e.message ?: "Erro de conexão")
+            }
+        }
+
+    /** GET /api/family/patients/{patient_id}/activity-feed?limit=50 — mural de cuidado. */
+    suspend fun getActivityFeed(patientId: String, limit: Int = 50): List<CareActivityEntry> = withContext(Dispatchers.IO) {
+        try {
+            val arr = getJsonArray("$baseUrl/api/family/patients/$patientId/activity-feed?limit=${limit.coerceIn(1, 100)}")
+                ?: return@withContext emptyList()
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                CareActivityEntry(
+                    id = o.optString("id", null),
+                    actorId = o.optString("actor_id", null),
+                    actorName = o.optString("actor_name"),
+                    actionType = o.optString("action_type"),
+                    details = o.opt("details")?.takeUnless { it === JSONObject.NULL }?.toString(),
+                    occurredAt = o.optString("occurred_at")
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao buscar mural de cuidado: ${e.message}")
+            emptyList()
+        }
+    }
+
+    /** POST /api/symptoms/check-in — Cena C37 (check-in matinal). */
+    suspend fun symptomCheckIn(body: SymptomCheckInCreate): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                body.patientId?.let { put("patient_id", it) }
+                put("reported_at", body.reportedAt)
+                put("symptoms_text", body.symptomsText.take(1000))
+                body.sleepQuality?.let { put("sleep_quality", it.coerceIn(1, 5)) }
+                body.disposition?.let { put("disposition", it.coerceIn(1, 5)) }
+                put("input_method", if (body.inputMethod == "TEXT") "TEXT" else "VOICE")
+            }
+            val res = postJsonDetailed("$baseUrl/api/symptoms/check-in", json)
+            res.code in 200..299
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao enviar check-in de sintomas: ${e.message}")
+            false
+        }
+    }
+
+    /** POST /api/patients/{patient_id}/medical-access/generate — modo "Leva pro Doutor". */
+    suspend fun generateMedicalAccess(patientId: String): MedicalAccessGrant? = withContext(Dispatchers.IO) {
+        try {
+            val res = postJsonDetailed(
+                "$baseUrl/api/patients/$patientId/medical-access/generate",
+                JSONObject().put("purpose", "CONSULTATION")
+            )
+            val body = res.body
+            if (res.code !in 200..299 || body == null) return@withContext null
+            MedicalAccessGrant(
+                accessToken = body.optString("access_token"),
+                magicLink = body.optString("magic_link"),
+                qrCodePayload = body.optString("qr_code_payload"),
+                expiresAt = body.optString("expires_at"),
+                expiresInSeconds = body.optInt("expires_in_seconds", 7200)
+            ).takeIf { it.accessToken.isNotBlank() && it.qrCodePayload.isNotBlank() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao gerar acesso médico: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * GET /api/family/patients/{patient_id}/doctor-report/pdf?days=30 — PDF
+     * executivo de 1 página. Bytes prontos para abrir; nulo deixa o fallback
+     * on-device (PdfReportGenerator) assumir.
+     */
+    suspend fun getDoctorReportPdf(patientId: String, days: Int = 30): ByteArray? = withContext(Dispatchers.IO) {
+        getBytes("$baseUrl/api/family/patients/$patientId/doctor-report/pdf?days=${days.coerceIn(1, 90)}")
+    }
+
+    /** POST /api/patients/{patient_id}/emergency-access/generate — ficha de emergência. */
+    suspend fun generateEmergencyAccess(patientId: String): EmergencyTokenGrant? = withContext(Dispatchers.IO) {
+        try {
+            val res = postJsonDetailed("$baseUrl/api/patients/$patientId/emergency-access/generate", JSONObject())
+            val body = res.body
+            if (res.code !in 200..299 || body == null) return@withContext null
+            EmergencyTokenGrant(
+                emergencyToken = body.optString("emergency_token"),
+                rescueLink = body.optString("rescue_link"),
+                expiresAt = body.optString("expires_at")
+            ).takeIf { it.emergencyToken.isNotBlank() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao gerar acesso de emergência: ${e.message}")
+            null
+        }
+    }
+
+    /** POST /api/telemetry/ble — ingestão GATT (BLOOD_PRESSURE / GLUCOSE). */
+    suspend fun ingestBleTelemetry(body: BleTelemetryRequest): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                put("patient_id", body.patientId)
+                put("device_id", body.deviceId)
+                put("device_type", body.deviceType)
+                put("measured_at", body.measuredAt)
+                body.systolicPressure?.let { put("systolic_pressure", it) }
+                body.diastolicPressure?.let { put("diastolic_pressure", it) }
+                body.glucoseLevel?.let { put("glucose_level", it) }
+                put("protocol", "GATT")
+            }
+            val res = postJsonDetailed("$baseUrl/api/telemetry/ble", json)
+            res.code in 200..299
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao ingerir telemetria BLE: ${e.message}")
+            false
+        }
+    }
+
+    /** Download de bytes (PDF do relatório executivo). Aceita só PDF válido. */
+    private fun getBytes(urlString: String): ByteArray? {
+        var conn: HttpURLConnection? = null
+        return try {
+            conn = (URL(urlString).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                setRequestProperty("Accept", "application/pdf")
+                instanceFollowRedirects = true
+                attachIdentity(urlString)
+            }
+            if (conn.responseCode !in 200..299) return null
+            val contentType = conn.contentType.orEmpty()
+            // gateway pode devolver JSON em vez de PDF em falhas known — não engole.
+            if (!contentType.contains("pdf", ignoreCase = true)) return null
+            conn.inputStream.use { it.readBytes() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha no download do PDF: ${e.message}")
+            null
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) {}
+        }
+    }
 }
 
 data class RemoteExamUploadResponse(

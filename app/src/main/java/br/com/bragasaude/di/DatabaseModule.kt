@@ -151,6 +151,23 @@ object DatabaseModule {
         return database.auditLogDao()
     }
 
+    // ---- Care OS — D62 (First Contract) ----
+
+    @Provides
+    fun provideSymptomsDiaryDao(database: BragaDatabase): SymptomsDiaryDao {
+        return database.symptomsDiaryDao()
+    }
+
+    @Provides
+    fun provideCareAuditDao(database: BragaDatabase): CareAuditDao {
+        return database.careAuditDao()
+    }
+
+    @Provides
+    fun provideBleTelemetryReceiptDao(database: BragaDatabase): BleTelemetryReceiptDao {
+        return database.bleTelemetryReceiptDao()
+    }
+
     @Provides
     @Singleton
     fun providePdfReportGenerator(@ApplicationContext context: Context): br.com.bragasaude.domain.PdfReportGenerator {

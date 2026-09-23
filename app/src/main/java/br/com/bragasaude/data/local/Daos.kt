@@ -214,11 +214,38 @@ interface MedicationDao {
     @Query("SELECT * FROM medications_local WHERE userId = :userId")
     suspend fun getAllSync(userId: String): List<MedicationEntity>
 
+    @Query("SELECT * FROM medications_local WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): MedicationEntity?
+
     @Query("SELECT * FROM medications_local WHERE pendingSync = 1")
     suspend fun getPendingSync(): List<MedicationEntity>
 
     @Query("DELETE FROM medications_local WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    // ---- Care OS (D62): gestão de estoque offline-first ----
+
+    /**
+     * Decrementa o estoque local ao tomar a dose. Só decrementa se houver
+     * unidades suficientes (nunca negativa — constraint do servidor).
+     * Retorna o número de linhas afetadas (0 = estoque insuficiente).
+     */
+    @Query(
+        "UPDATE medications_local SET currentUnits = currentUnits - :units, pendingSync = 1 " +
+            "WHERE id = :id AND currentUnits >= :units"
+    )
+    suspend fun decrementUnits(id: String, units: Int): Int
+
+    /** Reabastece a caixa e carimba a data do último reposicionamento. */
+    @Query(
+        "UPDATE medications_local SET currentUnits = :units, totalUnits = :units, " +
+            "lastRestockDate = :restockAt, pendingSync = 1 WHERE id = :id"
+    )
+    suspend fun restock(id: String, units: Int, restockAt: Long)
+
+    /** Medicamentos cadastrados sem a confirmação da receita (RDC 657/2022). */
+    @Query("SELECT * FROM medications_local WHERE userId = :userId AND confirmedWithPrescription = 0")
+    suspend fun getUnconfirmedWithPrescription(userId: String): List<MedicationEntity>
 }
 
 @Dao
@@ -251,6 +278,19 @@ interface MedicationLogDao {
 
     @Query("SELECT date(takenAt/1000, 'unixepoch', 'localtime') AS d FROM medication_logs_local WHERE userId = :userId GROUP BY d ORDER BY d DESC")
     fun getDistinctTakeDays(userId: String): Flow<List<String>>
+
+    // ---- Care OS (D62): idempotência de doses ----
+
+    /** Busca um log pela chave idempotente (userId + chave). */
+    @Query("SELECT * FROM medication_logs_local WHERE userId = :userId AND idempotencyKey = :key LIMIT 1")
+    suspend fun findByIdempotencyKey(userId: String, key: String): MedicationLogEntity?
+
+    /** Conta logs com a mesma chave idempotente (0 = ainda não registrada). */
+    @Query("SELECT COUNT(*) FROM medication_logs_local WHERE userId = :userId AND idempotencyKey = :key")
+    suspend fun countByIdempotencyKey(userId: String, key: String): Int
+
+    @Query("UPDATE medication_logs_local SET pendingSync = 0 WHERE id = :id")
+    suspend fun markSynced(id: String)
 }
 
 @Dao
@@ -754,4 +794,81 @@ interface AuditLogDao {
     
     @Query("DELETE FROM audit_logs_local WHERE timestamp < :cutoffTimestamp")
     suspend fun purgeOlderThan(cutoffTimestamp: Long)
+}
+
+// ============================================================================
+// CARE OS — D62 (First Contract)
+// ============================================================================
+
+/**
+ * Cena C37 — Check-in matinal por voz (sintomas, sono, disposição).
+ */
+@Dao
+interface SymptomsDiaryDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(entry: SymptomsDiaryEntity)
+
+    @Query("SELECT * FROM symptoms_diary_local WHERE patientId = :patientId ORDER BY reportedAt DESC")
+    fun getAll(patientId: String): Flow<List<SymptomsDiaryEntity>>
+
+    @Query("SELECT * FROM symptoms_diary_local WHERE patientId = :patientId ORDER BY reportedAt DESC LIMIT :limit")
+    suspend fun getRecentSync(patientId: String, limit: Int = 30): List<SymptomsDiaryEntity>
+
+    /** Check-in da data informada (epoch-millis) — controla a primeira abertura matinal. */
+    @Query(
+        "SELECT * FROM symptoms_diary_local WHERE patientId = :patientId " +
+            "AND date(reportedAt/1000, 'unixepoch', 'localtime') = date(:dayMillis/1000, 'unixepoch', 'localtime') LIMIT 1"
+    )
+    suspend fun getForDay(patientId: String, dayMillis: Long): SymptomsDiaryEntity?
+
+    @Query("SELECT * FROM symptoms_diary_local WHERE pendingSync = 1")
+    suspend fun getPendingSync(): List<SymptomsDiaryEntity>
+
+    @Query("UPDATE symptoms_diary_local SET pendingSync = 0 WHERE id = :id")
+    suspend fun markSynced(id: String)
+
+    @Query("DELETE FROM symptoms_diary_local WHERE patientId = :patientId")
+    suspend fun deleteForPatient(patientId: String)
+}
+
+/**
+ * Mural de Cuidado Compartilhado — auditoria de quem cuidou do paciente.
+ */
+@Dao
+interface CareAuditDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(entry: CareAuditEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(entries: List<CareAuditEntity>)
+
+    @Query("SELECT * FROM care_audit_local WHERE patientId = :patientId ORDER BY occurredAt DESC LIMIT :limit")
+    fun getRecent(patientId: String, limit: Int = 50): Flow<List<CareAuditEntity>>
+
+    @Query("SELECT * FROM care_audit_local WHERE patientId = :patientId ORDER BY occurredAt DESC LIMIT :limit")
+    suspend fun getRecentSync(patientId: String, limit: Int = 50): List<CareAuditEntity>
+
+    @Query("DELETE FROM care_audit_local WHERE patientId = :patientId")
+    suspend fun deleteForPatient(patientId: String)
+}
+
+/**
+ * Telemetria BLE GATT ingerida (pressão arterial / glicemia).
+ */
+@Dao
+interface BleTelemetryReceiptDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(entry: BleTelemetryReceiptEntity)
+
+    @Query("SELECT * FROM ble_telemetry_receipts_local WHERE patientId = :patientId ORDER BY measuredAt DESC")
+    fun getAll(patientId: String): Flow<List<BleTelemetryReceiptEntity>>
+
+    @Query("SELECT * FROM ble_telemetry_receipts_local WHERE pendingSync = 1")
+    suspend fun getPendingSync(): List<BleTelemetryReceiptEntity>
+
+    @Query("UPDATE ble_telemetry_receipts_local SET pendingSync = 0 WHERE id = :id")
+    suspend fun markSynced(id: String)
+
+    @Query("DELETE FROM ble_telemetry_receipts_local WHERE patientId = :patientId")
+    suspend fun deleteForPatient(patientId: String)
 }

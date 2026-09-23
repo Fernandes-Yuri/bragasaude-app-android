@@ -298,5 +298,123 @@ data class RemotePostReaction(
     @SerialName("created_at") val createdAt: String? = null
 )
 
+// ============================================================================
+// CARE OS — D62 (First Contract). Tipos estritos do openapi_care_os.json.
+// O Android consome exatamente estes shapes; nada de "achismo" de dados.
+// ============================================================================
+
+/** GET /api/anvisa/medications/barcode/{ean} — catálogo ANVISA por EAN-13. */
+@Serializable
+data class BarcodeMedication(
+    @SerialName("ean_barcode") val eanBarcode: String,
+    val name: String,
+    @SerialName("active_principle") val activePrinciple: String? = null,
+    val concentration: String? = null,
+    @SerialName("pharmaceutical_form") val pharmaceuticalForm: String? = null,
+    val manufacturer: String? = null,
+    @SerialName("farmacia_popular_eligible") val farmaciaPopularEligible: Boolean? = null,
+    @SerialName("source_name") val sourceName: String,
+    @SerialName("source_url") val sourceUrl: String? = null,
+    @SerialName("source_checked_at") val sourceCheckedAt: String? = null
+)
+
+/** Anexo de receita (RDC 657/2022) — obrigatório no cadastro. */
+@Serializable
+data class PrescriptionCreate(
+    @SerialName("image_url") val imageUrl: String? = null,
+    @SerialName("issued_on") val issuedOn: String,
+    @SerialName("validity_days") val validityDays: Int,
+    @SerialName("prescriber_name") val prescriberName: String,
+    @SerialName("prescriber_crm") val prescriberCrm: String
+)
+
+/** POST /api/family/patients/{patient_id}/medications. */
+@Serializable
+data class MedicationCreate(
+    @SerialName("ean_barcode") val eanBarcode: String? = null,
+    val name: String,
+    @SerialName("active_principle") val activePrinciple: String? = null,
+    val manufacturer: String? = null,
+    @SerialName("dosage_mg") val dosageMg: Double? = null,
+    @SerialName("pharmaceutical_form") val pharmaceuticalForm: String? = null,
+    @SerialName("schedule_times") val scheduleTimes: List<String>,
+    @SerialName("total_units") val totalUnits: Int,
+    @SerialName("alert_threshold_days") val alertThresholdDays: Int = 5,
+    @SerialName("photo_reference_url") val photoReferenceUrl: String? = null,
+    @SerialName("confirmed_with_prescription") val confirmedWithPrescription: Boolean,
+    val prescription: PrescriptionCreate? = null
+)
+
+/** POST /api/medications/{medication_id}/take. */
+@Serializable
+data class MedicationTakeRequest(
+    @SerialName("scheduled_for") val scheduledFor: String,
+    @SerialName("units_taken") val unitsTaken: Int = 1,
+    @SerialName("idempotency_key") val idempotencyKey: String
+)
+
+/** GET /api/family/patients/{patient_id}/medications/stock — item do estoque. */
+@Serializable
+data class MedicationStockItem(
+    val id: String? = null,
+    val name: String,
+    @SerialName("current_units") val currentUnits: Int,
+    @SerialName("days_remaining") val daysRemaining: Double? = null,
+    @SerialName("is_critical") val isCritical: Boolean? = null,
+    @SerialName("alert_threshold_days") val alertThresholdDays: Int? = null
+)
+
+/** GET /api/family/patients/{patient_id}/activity-feed — linha do mural. */
+@Serializable
+data class CareActivityEntry(
+    val id: String? = null,
+    @SerialName("actor_id") val actorId: String? = null,
+    @SerialName("actor_name") val actorName: String,
+    @SerialName("action_type") val actionType: String,
+    val details: String? = null,
+    @SerialName("occurred_at") val occurredAt: String
+)
+
+/** POST /api/symptoms/check-in — Cena C37. */
+@Serializable
+data class SymptomCheckInCreate(
+    @SerialName("patient_id") val patientId: String? = null,
+    @SerialName("reported_at") val reportedAt: String,
+    @SerialName("symptoms_text") val symptomsText: String,
+    @SerialName("sleep_quality") val sleepQuality: Int? = null,
+    val disposition: Int? = null,
+    @SerialName("input_method") val inputMethod: String = "VOICE"
+)
+
+/** POST /api/patients/{patient_id}/medical-access/generate — modo consulta. */
+@Serializable
+data class MedicalAccessGrant(
+    @SerialName("access_token") val accessToken: String,
+    @SerialName("magic_link") val magicLink: String,
+    @SerialName("qr_code_payload") val qrCodePayload: String,
+    @SerialName("expires_at") val expiresAt: String,
+    @SerialName("expires_in_seconds") val expiresInSeconds: Int = 7200
+)
+
+/** POST /api/patients/{patient_id}/emergency-access/generate — ficha de emergência. */
+@Serializable
+data class EmergencyTokenGrant(
+    @SerialName("emergency_token") val emergencyToken: String,
+    @SerialName("rescue_link") val rescueLink: String,
+    @SerialName("expires_at") val expiresAt: String
+)
+
+/** POST /api/telemetry/ble — ingestão GATT. */
+@Serializable
+data class BleTelemetryRequest(
+    @SerialName("patient_id") val patientId: String,
+    @SerialName("device_id") val deviceId: String,
+    @SerialName("device_type") val deviceType: String,
+    @SerialName("measured_at") val measuredAt: String,
+    @SerialName("systolic_pressure") val systolicPressure: Int? = null,
+    @SerialName("diastolic_pressure") val diastolicPressure: Int? = null,
+    @SerialName("glucose_level") val glucoseLevel: Int? = null,
+    val protocol: String = "GATT"
+)
 
 
