@@ -52,6 +52,11 @@ class SettingsViewModel @Inject constructor(
     )
     val voiceConfirmationEnabled = _voiceConfirmationEnabled.asStateFlow()
 
+    private val _autoMorningCheckinEnabled = MutableStateFlow(
+        br.com.bragasaude.util.AppPreferences.isAutoMorningCheckinEnabled(appContext)
+    )
+    val autoMorningCheckinEnabled = _autoMorningCheckinEnabled.asStateFlow()
+
     init {
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         viewModelScope.launch {
@@ -64,6 +69,11 @@ class SettingsViewModel @Inject constructor(
     fun updateVoiceAssistant(enabled: Boolean) {
         _voiceAssistantEnabled.value = enabled
         br.com.bragasaude.util.AppPreferences.setVoiceAssistantEnabled(appContext, enabled)
+    }
+
+    fun updateAutoMorningCheckin(enabled: Boolean) {
+        _autoMorningCheckinEnabled.value = enabled
+        br.com.bragasaude.util.AppPreferences.setAutoMorningCheckinEnabled(appContext, enabled)
     }
 
     fun updateVoiceConfirmation(enabled: Boolean) {
