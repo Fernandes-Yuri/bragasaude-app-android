@@ -132,3 +132,25 @@ Refactors de baixo risco, sem toque no gateway, na branch `fase-higiene-android`
 Testes de regressão: `MainScaffoldRouteMatchingTest` (colisão
 Profile/ProfileEdit) e `OrbFailedNotTerminalTest` (FAILED seguido de
 reconexão), além da suíte existente do `OrbWebSocketTest`.
+
+## 👨‍👩‍👧 Ponte familiar resiliente
+
+O chat da família sincronizava de forma cega: um `while(isActive)` com 3
+chamadas de rede a cada 15s, rodando até com o app em background, sem
+backoff em falha e sem detectar se algo havia mudado — ruído constante no
+log do gateway e consumo de bateria/dados sem necessidade.
+
+Agora o polling é **lifecycle-aware** e resiliente:
+
+- **Gate de tela:** só sincroniza com a `FamilyChatScreen` em primeiro plano
+  (`FamilyViewModel.setChatScreenVisible`, acionado pelo ciclo de vida).
+- **Backoff exponencial em falha:** 15s → 30s → 60s (teto) após falhas
+  consecutivas; retorna a 15s no primeiro sucesso.
+- **Skip de ciclo idêntico:** o fingerprint do payload de mensagens
+  (`FamilyBridgeRepository.messagesFingerprint`) é comparado entre ciclos;
+  conversa parada não gera mais tráfego repetido.
+- **Erro visível:** `FamilyViewModel.chatSyncState` mostra um aviso discreto
+  na UI ("Tentando atualizar…" / "Não foi possível atualizar…") em vez do
+  `Log.e` silencioso. O histórico local segue legível.
+- **Isolamento de falhas:** `chatCycleSnapshot` executa vínculos e mensagens
+  de forma independente — um erro numa parte não cancela a outra.

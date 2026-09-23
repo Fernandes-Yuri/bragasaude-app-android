@@ -257,7 +257,27 @@ class FamilyBridgeRepository @Inject constructor(
         iconType: String = "LOVE"
     ): FamilyMessageEntity = createFamilyMessage(patientUserId, senderName, messageText, iconType)
 
-    suspend fun syncFamilyMessages(patientUserId: String): Result<Unit> = runCatching {
+    /**
+     * Um ciclo completo de sincronização da ponte familiar (vínculos de
+     * paciente + cuidador, e mensagens do chat). Devolve um snapshot imutável
+     * que o ViewModel usa para detectar mudança entre ciclos — o polling só
+     * reage quando algo realmente mudou, evitando tráfego e trabalho
+     * redundantes quando a conversa está parada.
+     *
+     * Falhas individuais não abortam o ciclo: cada parte é independente e um
+     * erro numa não pode impedir a outra (antes, uma exceção em bindings
+     * cancelava a sincronização de mensagens inteira).
+     */
+    suspend fun chatCycleSnapshot(userId: String, patientId: String): ChatCycleSnapshot {
+        // Vínculos: payload pequeno e barato; sincroniza a cada ciclo.
+        runCatching { syncBindingsForPatient(userId) }
+        runCatching { syncBindingsForCaregiver(userId) }
+        // Mensagens: só há mudança real quando o fingerprint do payload muda.
+        val messages = runCatching { syncFamilyMessages(patientId) }.getOrNull()
+        return ChatCycleSnapshot(messagesFingerprint = messages?.getOrNull())
+    }
+
+    suspend fun syncFamilyMessages(patientUserId: String): Result<String?> = runCatching {
         val now = System.currentTimeMillis()
         val remote = apiClient.getFamilyMessages(patientUserId)
         for (msg in remote) {
@@ -288,7 +308,20 @@ class FamilyBridgeRepository @Inject constructor(
         }
         // D47: higiene local a cada ciclo de sincronização
         familyDao.purgeExpiredMessages(now)
+        // Fingerprint do payload recebido, para o polling poder pular o próximo
+        // ciclo quando a conversa não mudou (skip de ciclo idêntico).
+        messagesFingerprint(remote)
     }
+
+    /**
+     * Assinatura barata do estado atual das mensagens no servidor. Não é
+     * criptográfica — só precisa mudar quando o conteúdo muda. O ViewModel
+     * compara com o ciclo anterior e só reage quando difere.
+     */
+    private fun messagesFingerprint(messages: List<FamilyMessageEntity>): String =
+        messages.joinToString(separator = "|") { "${it.id}:${it.sentAt}:${it.deletedAt}" }
+            .hashCode()
+            .toString()
 
     suspend fun syncPatientDataForCaregiver(patientUserId: String): Result<Unit> = runCatching {
         // 1. Sincronizar perfil
@@ -692,4 +725,13 @@ data class MessageTemplate(
     val icon: String,
     val text: String,
     val type: String
+)
+
+/**
+ * Resultado imutável de um ciclo de sincronização da ponte familiar. Serve de
+ * "versão" para o polling: o ViewModel só reage quando o fingerprint muda.
+ */
+data class ChatCycleSnapshot(
+    /** Fingerprint do payload de mensagens; null quando o ciclo falhou. */
+    val messagesFingerprint: String?
 )

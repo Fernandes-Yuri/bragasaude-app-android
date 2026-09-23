@@ -54,8 +54,24 @@ fun FamilyChatScreen(
     val patientId by viewModel.chatPatientId.collectAsState()
     val messages = allMessages.filter { it.patientUserId == patientId }
     val binding by viewModel.activeBindingsForCurrentUser.collectAsState()
+    val chatSyncState by viewModel.chatSyncState.collectAsState()
     val context = LocalContext.current
     val exportScope = androidx.compose.runtime.rememberCoroutineScope()
+
+    // Gate do polling: só sincroniza com a tela em primeiro plano. Em
+    // background o loop pausa e o gateway deixa de receber os hits de 15s.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_START -> viewModel.setChatScreenVisible(true)
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> viewModel.setChatScreenVisible(false)
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     var messageText by remember(patientId) { mutableStateOf("") }
     var isSending by remember { mutableStateOf(false) }
@@ -154,6 +170,27 @@ fun FamilyChatScreen(
             FamilyRetentionNotice(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
+
+            // Estado da sincronização periódica: discreto, não bloqueia a leitura
+            // do histórico local. Antes toda falha era invisível (só Log.e).
+            val syncWarning = chatSyncState.warning
+            if (syncWarning != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = syncWarning,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (chatSyncState.isFailing)
+                            MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
             // Lista de mensagens
             LazyColumn(
