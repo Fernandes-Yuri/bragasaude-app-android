@@ -45,6 +45,21 @@ sealed interface FamilyUiEvent {
     data class Error(val text: String) : FamilyUiEvent
 }
 
+/**
+ * Estado não-fatal do polling de mensagens da família. A UI mostra uma faixa
+ * discreta; o histórico local continua legível.
+ */
+data class ChatSyncState(
+    val isPolling: Boolean = false,
+    val consecutiveFailures: Int = 0,
+    /** Mensagem curta pronta para UI; null quando está saudável. */
+    val warning: String? = null
+) {
+    val isHealthy: Boolean get() = consecutiveFailures == 0
+    val isRecovering: Boolean get() = consecutiveFailures in 1..2
+    val isFailing: Boolean get() = consecutiveFailures > 2
+}
+
 @HiltViewModel
 class FamilyViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -103,6 +118,14 @@ class FamilyViewModel @Inject constructor(
     private val _familyMessages = MutableStateFlow<List<FamilyMessageEntity>>(emptyList())
     val familyMessages: StateFlow<List<FamilyMessageEntity>> = _familyMessages.asStateFlow()
 
+    /**
+     * Estado da sincronização periódica do chat da família. Não é fatal: a UI
+     * usa para mostrar "tentando reconectar"/"falhou" sem interromper a leitura
+     * do histórico local. Antes toda falha era silenciosa (só Log.e).
+     */
+    private val _chatSyncState = MutableStateFlow(ChatSyncState())
+    val chatSyncState: StateFlow<ChatSyncState> = _chatSyncState.asStateFlow()
+
     private val _unreadMessageCount = MutableStateFlow(0)
     val unreadMessageCount: StateFlow<Int> = _unreadMessageCount.asStateFlow()
 
@@ -120,6 +143,49 @@ class FamilyViewModel @Inject constructor(
     private var dashboardJob: Job? = null
     private var authListener: FirebaseAuth.AuthStateListener? = null
     private var dataLoadJob: Job? = null
+
+    // ==================== Polling resiliente do chat ====================
+
+    /** Apenas a FamilyChatScreen ativa; evita polling em background. */
+    private val isChatScreenVisible = MutableStateFlow(false)
+
+    private companion object {
+        /** Intervalo base do polling com a tela ativa e saudável. */
+        const val POLL_INTERVAL_MS = 15_000L
+        /** Teto do backoff exponencial em falhas consecutivas. */
+        const val POLL_INTERVAL_MAX_MS = 60_000L
+        /** Limite do shift (2^N) para evitar estouro do Long. */
+        const val BACKOFF_SHIFT_CAP = 4
+        /** Intervalo de checagem do gate de visibilidade (pausa barata). */
+        const val VISIBILITY_GATE_INTERVAL_MS = 5_000L
+    }
+
+    /**
+     * Marca a tela de chat como visível/oculta. Chamado a partir do ciclo de
+     * vida da FamilyChatScreen (DisposableEffect) — é o liga/desliga do polling.
+     */
+    fun setChatScreenVisible(visible: Boolean) {
+        isChatScreenVisible.value = visible
+    }
+
+    /**
+     * Executa um ciclo de sincronização do chat e devolve true quando a
+     * resposta do servidor mudou desde o último ciclo (e portanto vale a pena
+     * reagir). Skip por fingerprint elimina o tráfego repetido quando a
+     * conversa parou — a causa do ruído no log do gateway.
+     */
+    private suspend fun syncChatCycle(
+        userId: String,
+        patientId: String,
+        lastHash: String?,
+        onHashChanged: (String) -> Unit
+    ): Boolean {
+        val snapshot = familyRepository.chatCycleSnapshot(userId, patientId)
+        val hash = snapshot.messagesFingerprint ?: return false
+        if (hash == lastHash) return false
+        onHashChanged(hash)
+        return true
+    }
 
     init {
         setupAuthAndLoadData()
@@ -174,12 +240,44 @@ class FamilyViewModel @Inject constructor(
                             }
                         }
                         launch {
+                            // Polling resiliente: só corre com a tela em primeiro
+                            // plano, usa backoff exponencial em falha e pula o
+                            // ciclo quando a resposta não mudou (fim do ruído de
+                            // 6 hits/15s no gateway). Antes era um while cego e
+                            // ininterrupto, rodando até com o app em background.
+                            var consecutiveFailures = 0
+                            var lastPayloadHash: String? = null
                             while (isActive) {
-                                familyRepository.syncBindingsForPatient(userId)
-                                familyRepository.syncBindingsForCaregiver(userId)
-                                familyRepository.syncFamilyMessages(targetPatientId)
-                                delay(15_000)
+                                if (!isChatScreenVisible.value) {
+                                    _chatSyncState.value = _chatSyncState.value.copy(isPolling = false)
+                                    // Pausa barata até a tela voltar (gate de ciclo).
+                                    delay(VISIBILITY_GATE_INTERVAL_MS)
+                                    continue
+                                }
+                                _chatSyncState.value = _chatSyncState.value.copy(isPolling = true)
+                                val cycleFailed = try {
+                                    val changed = syncChatCycle(userId, targetPatientId, lastPayloadHash) { newHash ->
+                                        lastPayloadHash = newHash
+                                    }
+                                    !changed
+                                } catch (e: Exception) {
+                                    android.util.Log.w("FamilyVM", "Falha no ciclo de sync do chat: ${e.message}")
+                                    true
+                                }
+                                consecutiveFailures = if (cycleFailed) consecutiveFailures + 1 else 0
+                                _chatSyncState.value = ChatSyncState(
+                                    isPolling = true,
+                                    consecutiveFailures = consecutiveFailures,
+                                    warning = if (consecutiveFailures == 0) null
+                                        else if (consecutiveFailures in 1..2) "Tentando atualizar as mensagens…"
+                                        else "Não foi possível atualizar as mensagens. Mostrando as salvas no aparelho."
+                                )
+                                // Backoff exponencial capped: 15s → 30s → 60s (teto).
+                                val base = if (consecutiveFailures == 0) POLL_INTERVAL_MS
+                                    else POLL_INTERVAL_MS * (1L shl consecutiveFailures.coerceAtMost(BACKOFF_SHIFT_CAP))
+                                delay(base.coerceAtMost(POLL_INTERVAL_MAX_MS))
                             }
+                            _chatSyncState.value = ChatSyncState(isPolling = false)
                         }
                     }
                 }
