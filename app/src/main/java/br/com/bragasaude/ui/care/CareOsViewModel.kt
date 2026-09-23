@@ -254,6 +254,44 @@ class CareOsViewModel @Inject constructor(
         }
     }
 
+    fun createManualMedication(
+        name: String,
+        dosageMg: Double?,
+        totalUnits: Int,
+        scheduleTimes: List<String>,
+        onDone: (Boolean) -> Unit
+    ) {
+        viewModelScope.launch {
+            if (authenticatedUserId == null) {
+                requireAuthentication(); onDone(false); return@launch
+            }
+            if (!_ui.value.selectedPatient.canWriteMedication) {
+                _ui.update { it.copy(message = "Seu vínculo não permite cadastrar medicamentos.") }
+                onDone(false); return@launch
+            }
+            _ui.value = _ui.value.copy(loading = true, message = null)
+            val id = try {
+                medicationRepository.createCareOsMedication(
+                    patientId = patientId,
+                    name = name.trim(),
+                    totalUnits = totalUnits,
+                    scheduleTimes = scheduleTimes,
+                    confirmedWithPrescription = true,
+                    dosageMg = dosageMg,
+                    prescription = null
+                )
+            } catch (e: Exception) {
+                _ui.value = _ui.value.copy(loading = false, message = e.message)
+                null
+            }
+            _ui.value = _ui.value.copy(
+                loading = false,
+                message = if (id != null) "Medicamento cadastrado com sucesso." else "Não foi possível cadastrar. Verifique sua conexão."
+            )
+            onDone(id != null)
+        }
+    }
+
     fun createMedication(
         name: String,
         totalUnits: Int,

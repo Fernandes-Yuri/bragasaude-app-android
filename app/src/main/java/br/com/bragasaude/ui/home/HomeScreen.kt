@@ -165,6 +165,7 @@ fun HomeScreen(
                         val items = buildList {
                             add(Triple("Hidratação", Icons.Default.WaterDrop, br.com.bragasaude.ui.util.Screen.Hydration()))
                             add(Triple("Pressão", Icons.Default.Favorite, br.com.bragasaude.ui.util.Screen.Vitals("PRESSURE")))
+                            add(Triple("Remédios", Icons.Default.Medication, br.com.bragasaude.ui.util.Screen.MedicationStock))
                             if (profile?.hasDiabetes == true || vitals.glucoseLevel != null) {
                                 add(Triple("Glicose", Icons.Default.Bloodtype, br.com.bragasaude.ui.util.Screen.Vitals("GLUCOSE")))
                             }
@@ -173,9 +174,6 @@ fun HomeScreen(
                             }
                             add(Triple("Mural", Icons.Default.Groups, br.com.bragasaude.ui.util.Screen.SocialFeed))
                             add(Triple("Exames", Icons.Default.Assignment, br.com.bragasaude.ui.util.Screen.Exams))
-                            if (medications.isNotEmpty()) {
-                                add(Triple("Remédios", Icons.Default.Medication, br.com.bragasaude.ui.util.Screen.Reminders))
-                            }
                         }
                         
                         items(items.size) { index ->
