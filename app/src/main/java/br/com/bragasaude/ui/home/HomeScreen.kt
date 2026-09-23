@@ -99,6 +99,7 @@ fun HomeScreen(
     val careViewModel: CareOsViewModel = hiltViewModel()
     val careUi by careViewModel.ui.collectAsState()
     var showMorningCheckIn by remember { mutableStateOf(false) }
+    var showCompletedCheckInDialog by remember { mutableStateOf(false) }
     
     var showScoreDetails by remember { mutableStateOf(false) }
     var showEmergencyDialog by remember { mutableStateOf(false) }
@@ -111,6 +112,45 @@ fun HomeScreen(
         MorningCheckInSheet(
             onDismiss = { showMorningCheckIn = false },
             viewModel = careViewModel
+        )
+    }
+
+    if (showCompletedCheckInDialog) {
+        AlertDialog(
+            onDismissRequest = { showCompletedCheckInDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = BragaEmerald,
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Check-in de hoje realizado!",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = BragaTextPrimary
+                )
+            },
+            text = {
+                Text(
+                    text = "Sua rotina matinal já está em dia! Você já registrou como passou a noite e como está se sentindo hoje. Se sentir qualquer sintoma novo ao longo do dia, pode relatar para a assistente ou nos cuidados.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = BragaTextSecondary,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { showCompletedCheckInDialog = false }
+                ) {
+                    Text("Entendido", color = BragaEmerald, fontWeight = FontWeight.Bold)
+                }
+            },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = BragaCardSurface
         )
     }
 
@@ -288,11 +328,11 @@ fun HomeScreen(
                             }
                         }
                     } else {
-                        // Estado concluído discreto
+                        // Estado concluído acolhedor (não reabre formulário de preenchimento)
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { showMorningCheckIn = true },
+                                .clickable { showCompletedCheckInDialog = true },
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = BragaCardSurface),
                             border = BorderStroke(1.dp, BragaCardBorder)
@@ -311,14 +351,14 @@ fun HomeScreen(
                                 )
                                 Spacer(Modifier.width(10.dp))
                                 Text(
-                                    text = "Check-in de hoje concluído",
+                                    text = "Check-in de hoje realizado!",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = BragaTextPrimary,
                                     modifier = Modifier.weight(1f)
                                 )
                                 Text(
-                                    text = "Ver",
+                                    text = "Em dia",
                                     fontSize = 13.sp,
                                     color = BragaEmerald,
                                     fontWeight = FontWeight.SemiBold
