@@ -60,7 +60,7 @@ class StepTrackingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val initialNotification = createNotification(0, targetSteps)
+        val initialNotification = createNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
                 NOTIFICATION_ID, 
@@ -81,16 +81,17 @@ class StepTrackingService : Service() {
             return START_NOT_STICKY
         }
 
-        // Carrega a meta estimada com base no perfil
+        // Carrega a meta de passos do perfil de forma reativa
         serviceScope.launch {
             val userId = auth.currentUser?.uid
             if (userId != null) {
-                val profile = profileDao.getProfileOneShot(userId)
-                targetSteps = when (profile?.activityLevel?.lowercase()) {
-                    "sedentary", "sedentário" -> 6000
-                    "active", "ativo" -> 10000
-                    "very_active", "muito ativo" -> 12000
-                    else -> 8000
+                profileDao.getProfile(userId).collectLatest { profile ->
+                    targetSteps = profile?.stepGoal?.takeIf { it > 0 } ?: when (profile?.activityLevel?.lowercase()) {
+                        "sedentary", "sedentário" -> 6000
+                        "active", "ativo" -> 10000
+                        "very_active", "muito ativo" -> 12000
+                        else -> 8000
+                    }
                 }
             }
         }
@@ -98,19 +99,15 @@ class StepTrackingService : Service() {
         movementManager.startStepCounter()
         movementManager.startLocationUpdates()
         
+        // Rastreio silencioso em background: não posta atualizações repetitivas na barra de status.
+        // Apenas verifica se atingiu 50% ou 100% da meta para celebrar conquistas pontuais (D62).
         serviceScope.launch {
             movementManager.currentSteps.collectLatest { steps ->
-                updateNotification(steps, targetSteps)
+                NotificationHelper.checkAndNotifyStepGoal(this@StepTrackingService, steps, targetSteps)
             }
         }
         
         return START_STICKY
-    }
-
-    private fun updateNotification(steps: Int, target: Int) {
-        val notification = createNotification(steps, target)
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, notification)
     }
 
     override fun onDestroy() {
@@ -123,7 +120,11 @@ class StepTrackingService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun createNotification(steps: Int, target: Int): Notification {
+    /**
+     * Notificação silenciosa exigida pelo Android para Foreground Services.
+     * ongoing = false e PRIORITY_MIN garantem que não polua a gaveta ou a barra de status.
+     */
+    private fun createNotification(): Notification {
         val notificationIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
@@ -132,22 +133,15 @@ class StepTrackingService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val km = (steps * 0.00075f)
-        val kcal = (steps * 0.04f).toInt()
-        val percent = if (target > 0) ((steps.toFloat() / target) * 100).toInt() else 0
-
-        val detailText = String.format(Locale.getDefault(), "%d passos (%.1f km - %d kcal) - %d%% da meta diaria", steps, km, kcal, percent)
-
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Braga Saúde • Monitor de Atividade")
-            .setContentText(detailText)
+            .setContentTitle("Braga Saúde")
+            .setContentText("Monitoramento de atividade em segundo plano")
             .setSmallIcon(android.R.drawable.ic_menu_directions)
             .setContentIntent(pendingIntent)
-            .setProgress(target, steps.coerceAtMost(target), false)
-            .setOngoing(true)
+            .setOngoing(false)
             .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .build()
     }
 
@@ -156,10 +150,12 @@ class StepTrackingService : Service() {
             val serviceChannel = NotificationChannel(
                 CHANNEL_ID,
                 "Monitor de Passos e Atividade",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_MIN
             ).apply {
-                description = "Exibe o progresso de passos e caminhada em tempo real"
+                description = "Monitoramento silencioso de atividade em segundo plano"
                 setShowBadge(false)
+                enableLights(false)
+                enableVibration(false)
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(serviceChannel)

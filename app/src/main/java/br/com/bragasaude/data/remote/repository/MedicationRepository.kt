@@ -253,7 +253,12 @@ class MedicationRepository @Inject constructor(
             confirmedWithPrescription = true,
             prescription = prescription
         )
-        val localId = apiClient.createMedication(patientId, body) ?: return null
+        val serverId = try {
+            apiClient.createMedication(patientId, body)
+        } catch (e: Exception) {
+            null
+        }
+        val localId = serverId ?: "med-${UUID.randomUUID()}"
         medicationDao.insert(
             MedicationEntity(
                 id = localId,
@@ -271,11 +276,12 @@ class MedicationRepository @Inject constructor(
                 photoReferenceUrl = photoReferenceUrl,
                 confirmedWithPrescription = true,
                 lastRestockDate = BragaTime.nowMillis(),
-                pendingSync = false
+                pendingSync = serverId == null
             )
         )
         recordAudit(patientId, "MEDICATION_REGISTERED", "$name cadastrado${barcode?.eanBarcode?.let { " (EAN $it)" } ?: ""}")
         syncAlarmsWithDatabase(patientId)
+        if (serverId == null) triggerSync()
         return localId
     }
 

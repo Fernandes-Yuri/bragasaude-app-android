@@ -59,7 +59,6 @@ fun AppContent(activity: MainActivity) {
     val userRole by authViewModel.userRole.collectAsState()
     val caregiverMode by authViewModel.caregiverMode.collectAsState()
     val needsSelfCare by authViewModel.needsSelfCare.collectAsState()
-    val suggestPhoneLink by authViewModel.suggestPhoneLink.collectAsState()
     val whatsappTotpSecret by authViewModel.whatsappTotpSecret.collectAsState()
     val whatsappPhone by authViewModel.whatsappPhone.collectAsState()
     var tempRole by rememberSaveable { mutableStateOf<String?>(null) }
@@ -344,52 +343,7 @@ fun AppContent(activity: MainActivity) {
                     )
                 }
 
-                // Sugestão de vinculação WhatsApp para usuários Google.
-                // Fluxo TOTP: abre o WhatsApp com o código pronto (sem OTP por texto).
-                if (suggestPhoneLink) {
-                    val waLink by authViewModel.openWhatsAppLinkEvent.collectAsState()
-                    LaunchedEffect(waLink) {
-                        waLink?.let { url ->
-                            runCatching {
-                                context.startActivity(
-                                    android.content.Intent(
-                                        android.content.Intent.ACTION_VIEW,
-                                        android.net.Uri.parse(url)
-                                    ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
-                                )
-                            }
-                            authViewModel.consumeOpenWhatsAppLink()
-                        }
-                    }
-                    // Avisa quando o vínculo ainda não está pronto.
-                    val waError by authViewModel.whatsappLinkError.collectAsState()
-                    LaunchedEffect(waError) {
-                        waError?.let { msg ->
-                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
-                            authViewModel.consumeWhatsappLinkError()
-                        }
-                    }
-                    AlertDialog(
-                        onDismissRequest = { authViewModel.dismissPhoneLinkSuggestion() },
-                        title = { Text("Vincular seu WhatsApp") },
-                        text = {
-                            Text(
-                                "Para receber lembretes e avisos no WhatsApp, vamos abrir o " +
-                                "WhatsApp com uma mensagem pronta. É só enviar."
-                            )
-                        },
-                        confirmButton = {
-                            TextButton(onClick = { authViewModel.openWhatsAppLink() }) {
-                                Text("Abrir WhatsApp")
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { authViewModel.dismissPhoneLinkSuggestion() }) {
-                                Text("Agora não")
-                            }
-                        }
-                    )
-                }
+
             }
         }
     }
