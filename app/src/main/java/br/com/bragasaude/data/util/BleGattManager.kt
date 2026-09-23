@@ -2,6 +2,7 @@ package br.com.bragasaude.data.util
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
@@ -102,7 +103,7 @@ class BleGattManager @Inject constructor(
                 .adapter?.bluetoothLeScanner
             scanner?.stopScan(this)
             _state.value = BleGattState(true, "Conectando ao medidor…")
-            gatt = result.device.connectGatt(context, false, gattCallback, BluetoothGatt.TRANSPORT_LE)
+            gatt = result.device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         }
 
         override fun onScanFailed(errorCode: Int) {
