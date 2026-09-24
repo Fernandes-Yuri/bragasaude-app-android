@@ -370,8 +370,10 @@ class MedicationRepository @Inject constructor(
                 id = localId,
                 userId = patientId,
                 name = name,
+                dosage = dosageMg?.let { if (it % 1.0 == 0.0) "${it.toLong()}mg" else "${it}mg" },
                 dosageMg = dosageMg,
                 scheduleTimes = scheduleTimes.sorted().joinToString(","),
+                scheduleTime = scheduleTimes.sorted().firstOrNull() ?: "08:00",
                 eanBarcode = barcode?.eanBarcode,
                 activePrinciple = barcode?.activePrinciple,
                 manufacturer = barcode?.manufacturer,
@@ -387,7 +389,11 @@ class MedicationRepository @Inject constructor(
         )
         recordAudit(patientId, "MEDICATION_REGISTERED", "$name cadastrado${barcode?.eanBarcode?.let { " (EAN $it)" } ?: ""}")
         syncAlarmsWithDatabase(patientId)
-        if (serverId == null) triggerSync()
+        if (serverId != null) {
+            syncMedicationsFromServer(patientId)
+        } else {
+            triggerSync()
+        }
         return localId
     }
 
@@ -467,15 +473,15 @@ class MedicationRepository @Inject constructor(
             val remoteMeds = apiClient.getPatientMedications(patientId)
             if (remoteMeds.isNotEmpty()) {
                 medicationDao.insertAll(remoteMeds)
-                val localMeds = medicationDao.getAllSync(patientId)
-                val remoteIds = remoteMeds.map { it.id }.toSet()
-                for (local in localMeds) {
-                    if (!local.pendingSync && local.id !in remoteIds) {
-                        medicationDao.deleteById(local.id)
-                    }
-                }
-                syncAlarmsWithDatabase(patientId)
             }
+            val localMeds = medicationDao.getAllSync(patientId)
+            val remoteIds = remoteMeds.map { it.id }.toSet()
+            for (local in localMeds) {
+                if (!local.pendingSync && local.id !in remoteIds) {
+                    medicationDao.deleteById(local.id)
+                }
+            }
+            syncAlarmsWithDatabase(patientId)
         } catch (e: Exception) {
             android.util.Log.w("CareOs", "syncMedicationsFromServer: ${e.message}")
         }
