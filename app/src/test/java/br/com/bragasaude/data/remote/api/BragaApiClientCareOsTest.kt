@@ -4,6 +4,7 @@ import br.com.bragasaude.data.remote.auth.AuthService
 import br.com.bragasaude.data.remote.model.MedicationCreate
 import br.com.bragasaude.data.remote.model.MedicationTakeRequest
 import br.com.bragasaude.data.remote.model.MedicationRestockRequest
+import br.com.bragasaude.data.remote.model.MedicationBatchItemCreateDto
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -11,6 +12,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -166,6 +168,8 @@ class BragaApiClientCareOsTest {
             {
               "status": "success",
               "prescription_image_url": "https://api.bragasaude.online/api/files/prescriptions/uuid_foto.jpg",
+              "total_pages_analyzed": 2,
+              "duplicates_merged_count": 1,
               "medications": [
                 {
                   "name": "Losartana Potássica",
@@ -180,7 +184,8 @@ class BragaApiClientCareOsTest {
                   "active_principle": "Losartana Potássica",
                   "confidence_score": 0.98,
                   "requires_human_fill": false,
-                  "divergence_reason": null
+                  "divergence_reason": null,
+                  "source_pages": [1, 2]
                 },
                 {
                   "name": "",
@@ -195,7 +200,8 @@ class BragaApiClientCareOsTest {
                   "active_principle": null,
                   "confidence_score": 0.42,
                   "requires_human_fill": true,
-                  "divergence_reason": "Caligrafia médica duvidosa no item 2"
+                  "divergence_reason": "Caligrafia médica duvidosa no item 2",
+                  "source_pages": [1]
                 }
               ],
               "raw_ocr_snippet": "1. Losartana 50mg 1x dia 08:00\n2. ???"
@@ -207,6 +213,8 @@ class BragaApiClientCareOsTest {
 
         assertEquals("success", result?.status)
         assertEquals("https://api.bragasaude.online/api/files/prescriptions/uuid_foto.jpg", result?.prescriptionImageUrl)
+        assertEquals(2, result?.totalPagesAnalyzed)
+        assertEquals(1, result?.duplicatesMergedCount)
         assertEquals(2, result?.medications?.size)
 
         val med1 = result?.medications?.get(0)
@@ -220,6 +228,7 @@ class BragaApiClientCareOsTest {
         assertEquals(0.98, med1?.confidenceScore ?: 0.0, 0.001)
         assertEquals(false, med1?.requiresHumanFill)
         assertNull(med1?.divergenceReason)
+        assertEquals(listOf(1, 2), med1?.sourcePages)
 
         val med2 = result?.medications?.get(1)
         assertEquals("", med2?.name)
@@ -227,11 +236,64 @@ class BragaApiClientCareOsTest {
         assertEquals(true, med2?.dosageDivergent)
         assertEquals(true, med2?.requiresHumanFill)
         assertEquals("Caligrafia médica duvidosa no item 2", med2?.divergenceReason)
+        assertEquals(listOf(1), med2?.sourcePages)
 
         val request = server.takeRequest()
         assertEquals("/api/family/patients/p1/prescriptions/analyze", request.path)
         assertEquals("POST", request.method)
         assertEquals("Bearer care-os-token", request.getHeader("Authorization"))
         assertTrue(request.getHeader("Content-Type")?.contains("multipart/form-data") == true)
+    }
+
+    @Test
+    fun `createMedicationsBatch sends batch request and returns success`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(201).setBody("""
+            {
+              "status": "success",
+              "created_count": 2,
+              "ids": ["med-1", "med-2"]
+            }
+        """.trimIndent()))
+
+        val items = listOf(
+            MedicationBatchItemCreateDto(
+                name = "Losartana Potássica 50mg",
+                dosageMg = 50.0,
+                scheduleTimes = listOf("08:00"),
+                totalUnits = 30,
+                eanBarcode = "7896004715506",
+                confirmedWithPrescription = true
+            ),
+            MedicationBatchItemCreateDto(
+                name = "Metformina 850mg",
+                dosageMg = 850.0,
+                scheduleTimes = listOf("12:00", "20:00"),
+                totalUnits = 60,
+                eanBarcode = "7896004715507",
+                confirmedWithPrescription = true
+            )
+        )
+
+        val result = api.createMedicationsBatch("p1", items)
+        assertTrue(result)
+
+        val request = server.takeRequest()
+        assertEquals("/api/family/patients/p1/medications/batch", request.path)
+        assertEquals("POST", request.method)
+        assertEquals("Bearer care-os-token", request.getHeader("Authorization"))
+        assertEquals("application/json", request.getHeader("Content-Type"))
+
+        val body = request.body.readUtf8()
+        assertTrue(body.contains(""""name":"Losartana Potássica 50mg""""))
+        assertTrue(body.contains(""""dosage_mg":50"""))
+        assertTrue(body.contains(""""total_units":30"""))
+        assertTrue(body.contains(""""name":"Metformina 850mg""""))
+        assertTrue(body.contains(""""total_units":60"""))
+        assertTrue(body.contains(""""confirmed_with_prescription":true"""))
+
+        // Error case: 500 response
+        server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"internal"}"""))
+        val failResult = api.createMedicationsBatch("p1", items)
+        assertFalse(failResult)
     }
 }
