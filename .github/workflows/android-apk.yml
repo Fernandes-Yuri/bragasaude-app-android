@@ -133,7 +133,7 @@ jobs:
         run: |
           JDK_PATHS=$(ls -d "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}/Java_Temurin_jdk"/*/x64 2>/dev/null | paste -sd, -)
           echo "JDKs visíveis ao Gradle: $JDK_PATHS"
-          if [ "$INPUT_VARIANTE" = "debug" ] || [ "$GITHUB_REF_NAME" = "codex/debug-sem-bloqueio-dev" ]; then
+          if [ "$INPUT_VARIANTE" = "debug" ] || [ -z "$INPUT_VARIANTE" ] || [ "$GITHUB_REF_NAME" = "codex/debug-sem-bloqueio-dev" ]; then
             gradle assembleDebug --no-daemon --stacktrace \
               -Dorg.gradle.java.installations.paths="$JDK_PATHS"
             echo "path=app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
