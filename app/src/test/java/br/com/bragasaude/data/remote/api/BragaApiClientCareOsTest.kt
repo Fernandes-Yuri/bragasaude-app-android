@@ -354,4 +354,59 @@ class BragaApiClientCareOsTest {
         assertNull(json.safeNullableString("missing_key"))
         assertEquals("Losartana 50mg", json.safeNullableString("valid_str"))
     }
+
+    @Test
+    fun `deleteMedication sends DELETE to canonical endpoint with LGPD compliance`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(204))
+
+        val result = api.deleteMedication("patient-42", "med-uuid-999")
+        assertTrue(result)
+
+        val request = server.takeRequest()
+        assertEquals("/api/family/patients/patient-42/medications/med-uuid-999", request.path)
+        assertEquals("DELETE", request.method)
+        assertEquals("Bearer care-os-token", request.getHeader("Authorization"))
+
+        // Error case: 500
+        server.enqueue(MockResponse().setResponseCode(500))
+        val failResult = api.deleteMedication("patient-42", "med-uuid-999")
+        assertFalse(failResult)
+    }
+
+    @Test
+    fun `updateMedicationSchedule sends PATCH with schedule and meal context payload`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"status":"updated"}"""))
+
+        val result = api.updateMedicationSchedule(
+            patientId = "patient-42",
+            medicationId = "med-uuid-999",
+            scheduleTimes = listOf("08:00", "20:00"),
+            mealContext = "AFTER_MEAL",
+            frequencyIntervalHours = 12
+        )
+        assertTrue(result)
+
+        val request = server.takeRequest()
+        assertEquals("/api/family/patients/patient-42/medications/med-uuid-999", request.path)
+        assertEquals("PATCH", request.method)
+        assertEquals("Bearer care-os-token", request.getHeader("Authorization"))
+        assertTrue(request.getHeader("Content-Type")?.contains("application/json") == true)
+
+        val body = JSONObject(request.body.readUtf8())
+        assertEquals(2, body.getJSONArray("schedule_times").length())
+        assertEquals("08:00", body.getJSONArray("schedule_times").getString(0))
+        assertEquals("20:00", body.getJSONArray("schedule_times").getString(1))
+        assertEquals("AFTER_MEAL", body.getString("meal_context"))
+        assertEquals(12, body.getInt("frequency_interval_hours"))
+
+        // Error case: 400
+        server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"invalid_times"}"""))
+        val failResult = api.updateMedicationSchedule(
+            patientId = "patient-42",
+            medicationId = "med-uuid-999",
+            scheduleTimes = listOf("08:00")
+        )
+        assertFalse(failResult)
+    }
 }
+
