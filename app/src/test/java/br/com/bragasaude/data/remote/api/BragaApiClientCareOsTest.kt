@@ -159,4 +159,79 @@ class BragaApiClientCareOsTest {
         val emptyOnErr = api.getSymptomsDiary("p1")
         assertTrue(emptyOnErr.isEmpty())
     }
+
+    @Test
+    fun `analyze prescription maps dual check response with divergence flags`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""
+            {
+              "status": "success",
+              "prescription_image_url": "https://api.bragasaude.online/api/files/prescriptions/uuid_foto.jpg",
+              "medications": [
+                {
+                  "name": "Losartana Potássica",
+                  "name_divergent": false,
+                  "dosage": "50mg",
+                  "dosage_divergent": false,
+                  "dosage_mg": 50.0,
+                  "frequency": "1x ao dia",
+                  "frequency_divergent": false,
+                  "suggested_times": ["08:00"],
+                  "ean_barcode": "7896004715506",
+                  "active_principle": "Losartana Potássica",
+                  "confidence_score": 0.98,
+                  "requires_human_fill": false,
+                  "divergence_reason": null
+                },
+                {
+                  "name": "",
+                  "name_divergent": true,
+                  "dosage": "",
+                  "dosage_divergent": true,
+                  "dosage_mg": null,
+                  "frequency": "",
+                  "frequency_divergent": true,
+                  "suggested_times": [],
+                  "ean_barcode": null,
+                  "active_principle": null,
+                  "confidence_score": 0.42,
+                  "requires_human_fill": true,
+                  "divergence_reason": "Caligrafia médica duvidosa no item 2"
+                }
+              ],
+              "raw_ocr_snippet": "1. Losartana 50mg 1x dia 08:00\n2. ???"
+            }
+        """.trimIndent()))
+
+        val dummyBytes = "fake prescription image bytes".toByteArray()
+        val result = api.analyzePrescription("p1", "receita.jpg", "image/jpeg", dummyBytes)
+
+        assertEquals("success", result?.status)
+        assertEquals("https://api.bragasaude.online/api/files/prescriptions/uuid_foto.jpg", result?.prescriptionImageUrl)
+        assertEquals(2, result?.medications?.size)
+
+        val med1 = result?.medications?.get(0)
+        assertEquals("Losartana Potássica", med1?.name)
+        assertEquals(false, med1?.nameDivergent)
+        assertEquals("50mg", med1?.dosage)
+        assertEquals(false, med1?.dosageDivergent)
+        assertEquals(50.0, med1?.dosageMg ?: 0.0, 0.001)
+        assertEquals(listOf("08:00"), med1?.suggestedTimes)
+        assertEquals("7896004715506", med1?.eanBarcode)
+        assertEquals(0.98, med1?.confidenceScore ?: 0.0, 0.001)
+        assertEquals(false, med1?.requiresHumanFill)
+        assertNull(med1?.divergenceReason)
+
+        val med2 = result?.medications?.get(1)
+        assertEquals("", med2?.name)
+        assertEquals(true, med2?.nameDivergent)
+        assertEquals(true, med2?.dosageDivergent)
+        assertEquals(true, med2?.requiresHumanFill)
+        assertEquals("Caligrafia médica duvidosa no item 2", med2?.divergenceReason)
+
+        val request = server.takeRequest()
+        assertEquals("/api/family/patients/p1/prescriptions/analyze", request.path)
+        assertEquals("POST", request.method)
+        assertEquals("Bearer care-os-token", request.getHeader("Authorization"))
+        assertTrue(request.getHeader("Content-Type")?.contains("multipart/form-data") == true)
+    }
 }

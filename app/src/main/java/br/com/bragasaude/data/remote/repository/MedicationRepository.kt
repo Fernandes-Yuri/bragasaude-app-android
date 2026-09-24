@@ -8,6 +8,7 @@ import br.com.bragasaude.data.remote.model.MedicationStockItem
 import br.com.bragasaude.data.remote.model.MedicationTakeRequest
 import br.com.bragasaude.data.remote.model.MedicationRestockRequest
 import br.com.bragasaude.data.remote.model.PrescriptionCreate
+import br.com.bragasaude.data.remote.model.PrescriptionAnalysisResponseDto
 import br.com.bragasaude.data.remote.model.BarcodeMedication
 import br.com.bragasaude.data.remote.model.RemoteMedication
 import br.com.bragasaude.data.remote.model.RemoteMedicationLog
@@ -319,6 +320,23 @@ class MedicationRepository @Inject constructor(
         apiClient.uploadMedicationPhoto(patientId, "medication-${UUID.randomUUID()}.$extension", mime, bytes)
     } catch (e: Exception) {
         android.util.Log.w("CareOs", "uploadMedicationPhoto: ${e.message}")
+        null
+    }
+
+    suspend fun analyzePrescription(patientId: String, uri: android.net.Uri): PrescriptionAnalysisResponseDto? = try {
+        val resolver = context.contentResolver
+        val mime = resolver.getType(uri)?.takeIf { it in setOf("image/jpeg", "image/png", "image/webp", "application/pdf") }
+            ?: "image/jpeg"
+        val extension = when (mime) {
+            "application/pdf" -> "pdf"
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            else -> "jpg"
+        }
+        val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+        apiClient.analyzePrescription(patientId, "prescription-${UUID.randomUUID()}.$extension", mime, bytes)
+    } catch (e: Exception) {
+        android.util.Log.w("CareOs", "analyzePrescription: ${e.message}")
         null
     }
 

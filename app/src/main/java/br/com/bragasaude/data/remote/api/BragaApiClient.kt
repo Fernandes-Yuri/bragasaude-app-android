@@ -1454,6 +1454,79 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    suspend fun analyzePrescription(
+        patientId: String,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray
+    ): PrescriptionAnalysisResponseDto? = withContext(Dispatchers.IO) {
+        if (bytes.isEmpty() || bytes.size > 10 * 1024 * 1024) return@withContext null
+        val boundary = "Boundary-${System.currentTimeMillis()}"
+        var conn: HttpURLConnection? = null
+        try {
+            val url = URL("$baseUrl/api/family/patients/$patientId/prescriptions/analyze")
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 30000
+                readTimeout = 45000
+                doOutput = true
+                setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                setRequestProperty("Accept", "application/json")
+                attachIdentity(url.toString())
+            }
+            conn.outputStream.use { output ->
+                output.write("--$boundary\r\n".toByteArray())
+                output.write(
+                    "Content-Disposition: form-data; name=\"file\"; filename=\"${fileName.replace("\"", "")}\"\r\n".toByteArray()
+                )
+                output.write("Content-Type: $mimeType\r\n\r\n".toByteArray())
+                output.write(bytes)
+                output.write("\r\n--$boundary--\r\n".toByteArray())
+            }
+            if (conn.responseCode !in 200..299) return@withContext null
+            val rawJson = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val jsonObj = JSONObject(rawJson)
+            val status = jsonObj.optString("status", "success")
+            val imageUrl = jsonObj.optString("prescription_image_url").takeIf { it.isNotBlank() }
+            val snippet = jsonObj.optString("raw_ocr_snippet").takeIf { it.isNotBlank() }
+            val medsArray = jsonObj.optJSONArray("medications")
+            val medsList = mutableListOf<AnalyzedMedicationItemDto>()
+            if (medsArray != null) {
+                for (i in 0 until medsArray.length()) {
+                    val m = medsArray.getJSONObject(i)
+                    val timesArray = m.optJSONArray("suggested_times")
+                    val times = mutableListOf<String>()
+                    if (timesArray != null) {
+                        for (t in 0 until timesArray.length()) times.add(timesArray.getString(t))
+                    }
+                    medsList.add(
+                        AnalyzedMedicationItemDto(
+                            name = m.optString("name", ""),
+                            nameDivergent = m.optBoolean("name_divergent", false),
+                            dosage = m.optString("dosage", ""),
+                            dosageDivergent = m.optBoolean("dosage_divergent", false),
+                            dosageMg = if (m.has("dosage_mg") && !m.isNull("dosage_mg")) m.optDouble("dosage_mg") else null,
+                            frequency = m.optString("frequency", ""),
+                            frequencyDivergent = m.optBoolean("frequency_divergent", false),
+                            suggestedTimes = times,
+                            eanBarcode = m.optString("ean_barcode").takeIf { it.isNotBlank() },
+                            activePrinciple = m.optString("active_principle").takeIf { it.isNotBlank() },
+                            confidenceScore = m.optDouble("confidence_score", 0.0),
+                            requiresHumanFill = m.optBoolean("requires_human_fill", false),
+                            divergenceReason = m.optString("divergence_reason").takeIf { it.isNotBlank() }
+                        )
+                    )
+                }
+            }
+            PrescriptionAnalysisResponseDto(status, imageUrl, medsList, snippet)
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha na análise de receita: ${e.message}")
+            null
+        } finally {
+            runCatching { conn?.disconnect() }
+        }
+    }
+
     /**
      * POST /api/medications/{medication_id}/take. Trata 409 graciosamente:
      * dose já registrada por outro cuidador/dispositivo → AlreadyTaken.

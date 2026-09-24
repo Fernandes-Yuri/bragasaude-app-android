@@ -261,7 +261,8 @@ fun AppNavHost(
         composable<Screen.MedicationStock> {
             br.com.bragasaude.ui.medication.MedicationStockScreen(
                 onBack = navigateBack,
-                onScanNew = { navController.navigate(Screen.BarcodeScanner) }
+                onScanNew = { navController.navigate(Screen.BarcodeScanner) },
+                onScanPrescription = { navController.navigate(Screen.BarcodeScanner) }
             )
         }
         composable<Screen.BarcodeScanner> {

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -48,6 +49,7 @@ import kotlinx.coroutines.flow.collectLatest
 fun MedicationStockScreen(
     onBack: () -> Unit,
     onScanNew: () -> Unit,
+    onScanPrescription: () -> Unit = onScanNew,
     viewModel: CareOsViewModel = hiltViewModel()
 ) {
     val ui by viewModel.ui.collectAsState()
@@ -134,6 +136,54 @@ fun MedicationStockScreen(
                             )
                             Text(
                                 "Leitura automática da embalagem",
+                                fontSize = 13.sp,
+                                color = BragaTextSecondary
+                            )
+                        }
+                    }
+                }
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showAddChoice = false
+                            viewModel.requestPrescriptionPicker()
+                            onScanPrescription()
+                        },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                    border = BorderStroke(1.dp, BragaMintBorder)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = BragaEmerald,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Filled.UploadFile,
+                                    contentDescription = null,
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Escanear ou Anexar Receita (Dupla Checagem com IA)",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp,
+                                color = BragaTextPrimary
+                            )
+                            Text(
+                                "Foto ou PDF com conferência ANVISA e IA",
                                 fontSize = 13.sp,
                                 color = BragaTextSecondary
                             )
