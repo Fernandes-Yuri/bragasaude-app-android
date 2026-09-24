@@ -32,7 +32,7 @@ import br.com.bragasaude.ui.theme.BragaTextSecondary
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CarePatientSelector(state: CareOsUiState, onSelect: (String) -> Unit) {
-    if (!state.isAuthenticated || state.patients.isEmpty()) return
+    if (!state.isAuthenticated || state.patients.size <= 1 || !state.isCaregiver || state.userRole == "PATIENT") return
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
         OutlinedTextField(
