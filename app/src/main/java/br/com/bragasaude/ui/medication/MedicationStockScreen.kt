@@ -626,12 +626,12 @@ private fun MedicationStockCard(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Deseja realmente remover o medicamento \"${medication.name}\"?",
+                        "Deseja excluir este medicamento do seu tratamento? Esta ação removerá o remédio e seus registros de rotina.",
                         fontSize = 15.sp,
                         color = BragaTextPrimary
                     )
                     Text(
-                        "Esta ação é definitiva e removerá todos os horários e histórico de estoque deste medicamento no dispositivo e na nuvem, em conformidade com o Direito ao Esquecimento (LGPD Art. 18).",
+                        "A exclusão é definitiva em conformidade com o Direito ao Esquecimento (LGPD Art. 18).",
                         fontSize = 13.sp,
                         color = BragaTextSecondary,
                         lineHeight = 18.sp
@@ -664,7 +664,7 @@ private fun MedicationStockCard(
     }
 
     if (showEditSchedule) {
-        EditScheduleDialog(
+        EditScheduleSheet(
             medicationName = medication.name,
             initialTimes = currentTimes,
             initialMealContext = medication.notes,
@@ -919,8 +919,9 @@ private fun MedicationStockCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EditScheduleDialog(
+private fun EditScheduleSheet(
     medicationName: String,
     initialTimes: List<String>,
     initialMealContext: String?,
@@ -934,63 +935,105 @@ private fun EditScheduleDialog(
     var selectedIntervalHours by remember { mutableStateOf<Int?>(null) }
     var newTimeText by remember { mutableStateOf("") }
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = {
+        containerColor = BragaCardSurface,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
             Text(
                 "Editar Horários e Posologia",
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp,
                 color = BragaTextPrimary
             )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Text(
-                    medicationName,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = BragaEmeraldDark
-                )
+            Text(
+                medicationName,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = BragaEmeraldDark
+            )
 
-                // 1) Chips rápidos de frequência/intervalo
-                Text(
-                    "Intervalos sugeridos:",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = BragaTextSecondary
-                )
+            // 1) Chips rápidos de frequência/intervalo
+            Text(
+                "Intervalos sugeridos:",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = BragaTextSecondary
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(
+                    "8h/8h" to Pair(8, listOf("08:00", "16:00", "00:00")),
+                    "12h/12h" to Pair(12, listOf("08:00", "20:00")),
+                    "24h (1x/dia)" to Pair(24, listOf("08:00"))
+                ).forEach { (label, data) ->
+                    val isSelected = selectedIntervalHours == data.first
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) BragaEmerald else BragaMintSurface,
+                        border = BorderStroke(1.dp, if (isSelected) BragaEmerald else BragaMintBorder),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                selectedIntervalHours = data.first
+                                times = data.second
+                            }
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isSelected) Color.White else BragaEmeraldDark,
+                            modifier = Modifier
+                                .padding(vertical = 8.dp)
+                                .wrapContentWidth(Alignment.CenterHorizontally)
+                        )
+                    }
+                }
+            }
+
+            // 2) Chips rápidos de contexto alimentar
+            Text(
+                "Contexto alimentar:",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = BragaTextSecondary
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf(
-                        "8h/8h" to Pair(8, listOf("08:00", "16:00", "00:00")),
-                        "12h/12h" to Pair(12, listOf("08:00", "20:00")),
-                        "24h (1x/dia)" to Pair(24, listOf("08:00"))
-                    ).forEach { (label, data) ->
-                        val isSelected = selectedIntervalHours == data.first
+                        "FASTING" to "Em Jejum",
+                        "AFTER_MEAL" to "Após Refeição"
+                    ).forEach { (key, label) ->
+                        val isSelected = selectedMealContext == key
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = if (isSelected) BragaEmerald else BragaMintSurface,
-                            border = BorderStroke(1.dp, if (isSelected) BragaEmerald else BragaMintBorder),
+                            color = if (isSelected) BragaEmerald else BragaCardSurface,
+                            border = BorderStroke(1.dp, if (isSelected) BragaEmerald else BragaCardBorder),
                             modifier = Modifier
                                 .weight(1f)
                                 .clickable {
-                                    selectedIntervalHours = data.first
-                                    times = data.second
+                                    selectedMealContext = if (isSelected) "" else key
                                 }
                         ) {
                             Text(
                                 text = label,
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isSelected) Color.White else BragaEmeraldDark,
+                                fontWeight = FontWeight.Medium,
+                                color = if (isSelected) Color.White else BragaTextPrimary,
                                 modifier = Modifier
                                     .padding(vertical = 8.dp)
                                     .wrapContentWidth(Alignment.CenterHorizontally)
@@ -998,176 +1041,145 @@ private fun EditScheduleDialog(
                         }
                     }
                 }
-
-                // 2) Chips rápidos de contexto alimentar
-                Text(
-                    "Contexto alimentar:",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = BragaTextSecondary
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf(
-                            "FASTING" to "Em Jejum",
-                            "AFTER_MEAL" to "Após Refeição"
-                        ).forEach { (key, label) ->
-                            val isSelected = selectedMealContext == key
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (isSelected) BragaEmerald else BragaCardSurface,
-                                border = BorderStroke(1.dp, if (isSelected) BragaEmerald else BragaCardBorder),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable {
-                                        selectedMealContext = if (isSelected) "" else key
-                                    }
-                            ) {
-                                Text(
-                                    text = label,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (isSelected) Color.White else BragaTextPrimary,
-                                    modifier = Modifier
-                                        .padding(vertical = 8.dp)
-                                        .wrapContentWidth(Alignment.CenterHorizontally)
-                                )
-                            }
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf(
-                            "BEFORE_MEAL" to "Antes da Refeição",
-                            "AT_BEDTIME" to "Ao Deitar"
-                        ).forEach { (key, label) ->
-                            val isSelected = selectedMealContext == key
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (isSelected) BragaEmerald else BragaCardSurface,
-                                border = BorderStroke(1.dp, if (isSelected) BragaEmerald else BragaCardBorder),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable {
-                                        selectedMealContext = if (isSelected) "" else key
-                                    }
-                            ) {
-                                Text(
-                                    text = label,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (isSelected) Color.White else BragaTextPrimary,
-                                    modifier = Modifier
-                                        .padding(vertical = 8.dp)
-                                        .wrapContentWidth(Alignment.CenterHorizontally)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // 3) Lista de horários configurados
-                Text(
-                    "Horários configurados (${times.size}):",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = BragaTextSecondary
-                )
-                times.forEachIndexed { index, timeStr ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "BEFORE_MEAL" to "Antes da Refeição",
+                        "AT_BEDTIME" to "Ao Deitar"
+                    ).forEach { (key, label) ->
+                        val isSelected = selectedMealContext == key
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = BragaMintSurface,
-                            border = BorderStroke(1.dp, BragaMintBorder)
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) BragaEmerald else BragaCardSurface,
+                            border = BorderStroke(1.dp, if (isSelected) BragaEmerald else BragaCardBorder),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    selectedMealContext = if (isSelected) "" else key
+                                }
                         ) {
                             Text(
-                                text = timeStr,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                color = BragaEmeraldDark,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                text = label,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (isSelected) Color.White else BragaTextPrimary,
+                                modifier = Modifier
+                                    .padding(vertical = 8.dp)
+                                    .wrapContentWidth(Alignment.CenterHorizontally)
                             )
-                        }
-                        if (times.size > 1) {
-                            IconButton(
-                                onClick = {
-                                    times = times.filterIndexed { i, _ -> i != index }
-                                },
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Icon(
-                                    Icons.Filled.Delete,
-                                    contentDescription = "Remover horário",
-                                    tint = BragaEmergencyOrange,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
                         }
                     }
                 }
+            }
 
-                // 4) Adicionar novo horário
+            // 3) Lista de horários configurados
+            Text(
+                "Horários configurados (${times.size}):",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = BragaTextSecondary
+            )
+            times.forEachIndexed { index, timeStr ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    OutlinedTextField(
-                        value = newTimeText,
-                        onValueChange = {
-                            val filtered = it.filter { c -> c.isDigit() || c == ':' }.take(5)
-                            newTimeText = filtered
-                        },
-                        label = { Text("Novo horário (HH:mm)") },
-                        placeholder = { Text("14:00") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Button(
-                        onClick = {
-                            val trimmed = newTimeText.trim()
-                            if (trimmed.matches(Regex("^([01]\\d|2[0-3]):[0-5]\\d$")) && trimmed !in times) {
-                                times = (times + trimmed).sorted()
-                                newTimeText = ""
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                        modifier = Modifier.heightIn(min = 48.dp)
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = BragaMintSurface,
+                        border = BorderStroke(1.dp, BragaMintBorder)
                     ) {
-                        Text("Adicionar", color = Color.White)
+                        Text(
+                            text = timeStr,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = BragaEmeraldDark,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                    if (times.size > 1) {
+                        IconButton(
+                            onClick = {
+                                times = times.filterIndexed { i, _ -> i != index }
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = "Remover horário",
+                                tint = BragaEmergencyOrange,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onSave(times.sorted(), selectedMealContext.takeIf { it.isNotBlank() }, selectedIntervalHours)
-                    onDismiss()
-                },
-                enabled = times.isNotEmpty(),
-                colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                modifier = Modifier.heightIn(min = 48.dp)
+
+            // 4) Adicionar novo horário
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Salvar Horários", color = Color.White, fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    value = newTimeText,
+                    onValueChange = {
+                        val filtered = it.filter { c -> c.isDigit() || c == ':' }.take(5)
+                        newTimeText = filtered
+                    },
+                    label = { Text("Novo horário (HH:mm)") },
+                    placeholder = { Text("14:00") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = {
+                        val trimmed = newTimeText.trim()
+                        if (trimmed.matches(Regex("^([01]\\d|2[0-3]):[0-5]\\d$")) && trimmed !in times) {
+                            times = (times + trimmed).sorted()
+                            newTimeText = ""
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Text("Adicionar", color = Color.White)
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text("Cancelar", color = BragaTextSecondary)
+
+            Spacer(Modifier.height(8.dp))
+
+            // 5) Botões de Ação
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                ) {
+                    Text("Cancelar", color = BragaTextSecondary)
+                }
+                Button(
+                    onClick = {
+                        onSave(times.sorted(), selectedMealContext.takeIf { it.isNotBlank() }, selectedIntervalHours)
+                        onDismiss()
+                    },
+                    enabled = times.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                ) {
+                    Text("Salvar Horários", color = Color.White, fontWeight = FontWeight.Bold)
+                }
             }
-        },
-        containerColor = BragaCardSurface,
-        shape = RoundedCornerShape(20.dp)
-    )
+        }
+    }
 }
 

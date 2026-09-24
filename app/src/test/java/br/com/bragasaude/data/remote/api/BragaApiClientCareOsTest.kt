@@ -408,5 +408,63 @@ class BragaApiClientCareOsTest {
         )
         assertFalse(failResult)
     }
+
+    @Test
+    fun `getPatientMedications parses list of medications and maps to MedicationEntity correctly`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""
+            [
+              {
+                "id": "med-101",
+                "user_id": "p1",
+                "name": "Losartana Potássica",
+                "dosage_mg": 50.0,
+                "schedule_times": ["08:00", "20:00"],
+                "total_units": 30,
+                "current_units": 28,
+                "ean_barcode": "7896004715506",
+                "meal_context": "AFTER_MEAL",
+                "photo_reference_url": "https://cdn.bragasaude.com/meds/losartana.png",
+                "confirmed_with_prescription": true
+              },
+              {
+                "id": "med-102",
+                "name": "Sinvastatina 20mg",
+                "dosage": "20mg",
+                "schedule_times": "21:00",
+                "total_units": 30
+              }
+            ]
+        """.trimIndent()))
+
+        val meds = api.getPatientMedications("p1")
+        assertEquals(2, meds.size)
+
+        val m1 = meds[0]
+        assertEquals("med-101", m1.id)
+        assertEquals("p1", m1.userId)
+        assertEquals("Losartana Potássica", m1.name)
+        assertEquals(50.0, m1.dosageMg)
+        assertEquals("08:00", m1.scheduleTime)
+        assertEquals("08:00,20:00", m1.scheduleTimes)
+        assertEquals(28, m1.currentUnits)
+        assertEquals(30, m1.totalUnits)
+        assertEquals("7896004715506", m1.eanBarcode)
+        assertEquals("AFTER_MEAL", m1.notes)
+        assertEquals("https://cdn.bragasaude.com/meds/losartana.png", m1.photoReferenceUrl)
+        assertTrue(m1.confirmedWithPrescription)
+
+        val m2 = meds[1]
+        assertEquals("med-102", m2.id)
+        assertEquals("p1", m2.userId)
+        assertEquals("Sinvastatina 20mg", m2.name)
+        assertEquals("20mg", m2.dosage)
+        assertEquals("21:00", m2.scheduleTime)
+        assertEquals("21:00", m2.scheduleTimes)
+
+        val request = server.takeRequest()
+        assertEquals("/api/family/patients/p1/medications", request.path)
+        assertEquals("GET", request.method)
+        assertEquals("Bearer care-os-token", request.getHeader("Authorization"))
+    }
 }
 
