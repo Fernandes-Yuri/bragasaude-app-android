@@ -9,6 +9,7 @@ import br.com.bragasaude.data.remote.model.MedicationTakeRequest
 import br.com.bragasaude.data.remote.model.MedicationRestockRequest
 import br.com.bragasaude.data.remote.model.PrescriptionCreate
 import br.com.bragasaude.data.remote.model.PrescriptionAnalysisResponseDto
+import br.com.bragasaude.data.remote.model.MedicationBatchItemCreateDto
 import br.com.bragasaude.data.remote.model.BarcodeMedication
 import br.com.bragasaude.data.remote.model.RemoteMedication
 import br.com.bragasaude.data.remote.model.RemoteMedicationLog
@@ -338,6 +339,18 @@ class MedicationRepository @Inject constructor(
     } catch (e: Exception) {
         android.util.Log.w("CareOs", "analyzePrescription: ${e.message}")
         null
+    }
+
+    suspend fun createMedicationsBatch(
+        patientId: String,
+        items: List<MedicationBatchItemCreateDto>
+    ): Boolean {
+        val ok = apiClient.createMedicationsBatch(patientId, items)
+        if (ok) {
+            syncStockFromServer(patientId)
+            triggerSync()
+        }
+        return ok
     }
 
     /**
