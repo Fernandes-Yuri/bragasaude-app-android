@@ -183,18 +183,6 @@ class SettingsViewModel @Inject constructor(
                     } catch (e: Exception) {
                         android.util.Log.w("SettingsViewModel", "Erro ao cancelar workers: ${e.message}")
                     }
-                    database.clearAllTables()
-                    try {
-                        appContext.deleteDatabase(BragaDatabase.DATABASE_NAME)
-                    } catch (e: Exception) {
-                        android.util.Log.w("SettingsViewModel", "Erro ao apagar DB Room: ${e.message}")
-                    }
-                    try {
-                        appContext.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
-                            .edit().clear().apply()
-                    } catch (e: Exception) {
-                        android.util.Log.w("SettingsViewModel", "Erro ao limpar prefs: ${e.message}")
-                    }
                 }
 
                 auth.signOut()

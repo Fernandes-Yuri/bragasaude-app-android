@@ -1454,6 +1454,79 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    suspend fun analyzePrescription(
+        patientId: String,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray
+    ): PrescriptionAnalysisResponseDto? = withContext(Dispatchers.IO) {
+        if (bytes.isEmpty() || bytes.size > 10 * 1024 * 1024) return@withContext null
+        val boundary = "Boundary-${System.currentTimeMillis()}"
+        var conn: HttpURLConnection? = null
+        try {
+            val url = URL("$baseUrl/api/family/patients/$patientId/prescriptions/analyze")
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 30000
+                readTimeout = 45000
+                doOutput = true
+                setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                setRequestProperty("Accept", "application/json")
+                attachIdentity(url.toString())
+            }
+            conn.outputStream.use { output ->
+                output.write("--$boundary\r\n".toByteArray())
+                output.write(
+                    "Content-Disposition: form-data; name=\"file\"; filename=\"${fileName.replace("\"", "")}\"\r\n".toByteArray()
+                )
+                output.write("Content-Type: $mimeType\r\n\r\n".toByteArray())
+                output.write(bytes)
+                output.write("\r\n--$boundary--\r\n".toByteArray())
+            }
+            if (conn.responseCode !in 200..299) return@withContext null
+            val rawJson = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val jsonObj = JSONObject(rawJson)
+            val status = jsonObj.optString("status", "success")
+            val imageUrl = jsonObj.optString("prescription_image_url").takeIf { it.isNotBlank() }
+            val snippet = jsonObj.optString("raw_ocr_snippet").takeIf { it.isNotBlank() }
+            val medsArray = jsonObj.optJSONArray("medications")
+            val medsList = mutableListOf<AnalyzedMedicationItemDto>()
+            if (medsArray != null) {
+                for (i in 0 until medsArray.length()) {
+                    val m = medsArray.getJSONObject(i)
+                    val timesArray = m.optJSONArray("suggested_times")
+                    val times = mutableListOf<String>()
+                    if (timesArray != null) {
+                        for (t in 0 until timesArray.length()) times.add(timesArray.getString(t))
+                    }
+                    medsList.add(
+                        AnalyzedMedicationItemDto(
+                            name = m.optString("name", ""),
+                            nameDivergent = m.optBoolean("name_divergent", false),
+                            dosage = m.optString("dosage", ""),
+                            dosageDivergent = m.optBoolean("dosage_divergent", false),
+                            dosageMg = if (m.has("dosage_mg") && !m.isNull("dosage_mg")) m.optDouble("dosage_mg") else null,
+                            frequency = m.optString("frequency", ""),
+                            frequencyDivergent = m.optBoolean("frequency_divergent", false),
+                            suggestedTimes = times,
+                            eanBarcode = m.optString("ean_barcode").takeIf { it.isNotBlank() },
+                            activePrinciple = m.optString("active_principle").takeIf { it.isNotBlank() },
+                            confidenceScore = m.optDouble("confidence_score", 0.0),
+                            requiresHumanFill = m.optBoolean("requires_human_fill", false),
+                            divergenceReason = m.optString("divergence_reason").takeIf { it.isNotBlank() }
+                        )
+                    )
+                }
+            }
+            PrescriptionAnalysisResponseDto(status, imageUrl, medsList, snippet)
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha na análise de receita: ${e.message}")
+            null
+        } finally {
+            runCatching { conn?.disconnect() }
+        }
+    }
+
     /**
      * POST /api/medications/{medication_id}/take. Trata 409 graciosamente:
      * dose já registrada por outro cuidador/dispositivo → AlreadyTaken.
@@ -1573,6 +1646,31 @@ class BragaApiClient @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao enviar check-in de sintomas: ${e.message}")
             false
+        }
+    }
+
+    /** GET /api/patients/{patient_id}/symptoms-diary?limit=30 — histórico de check-ins de sintomas na nuvem. */
+    suspend fun getSymptomsDiary(patientId: String, limit: Int = 30): List<RemoteSymptomsDiaryEntry> = withContext(Dispatchers.IO) {
+        try {
+            val arr = getJsonArray("$baseUrl/api/patients/$patientId/symptoms-diary?limit=${limit.coerceIn(1, 100)}")
+                ?: getJsonArray("$baseUrl/api/symptoms/check-in?patient_id=$patientId&limit=${limit.coerceIn(1, 100)}")
+                ?: return@withContext emptyList()
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                RemoteSymptomsDiaryEntry(
+                    id = o.optString("id", null),
+                    patientId = o.optString("patient_id", patientId),
+                    reportedBy = o.optString("reported_by", patientId),
+                    reportedAt = o.optString("reported_at"),
+                    symptomsText = o.optString("symptoms_text"),
+                    sleepQuality = if (o.has("sleep_quality") && !o.isNull("sleep_quality")) o.optInt("sleep_quality") else null,
+                    disposition = if (o.has("disposition") && !o.isNull("disposition")) o.optInt("disposition") else null,
+                    inputMethod = o.optString("input_method", "VOICE")
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao buscar diário de sintomas: ${e.message}")
+            emptyList()
         }
     }
 

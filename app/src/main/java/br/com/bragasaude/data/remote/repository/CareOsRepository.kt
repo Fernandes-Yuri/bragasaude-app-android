@@ -92,6 +92,34 @@ class CareOsRepository @Inject constructor(
     fun getCheckInHistory(patientId: String): Flow<List<SymptomsDiaryEntity>> =
         symptomsDiaryDao.getAll(patientId)
 
+    /** Sincroniza entradas recentes do diário de sintomas com a nuvem e persiste no Room local. */
+    suspend fun syncSymptomsDiary(patientId: String) {
+        val remote = apiClient.getSymptomsDiary(patientId, limit = 30)
+        if (remote.isEmpty()) return
+        val entities = remote.map {
+            val reportedTime = it.reportedAt?.let { raw -> parseOccurredAt(raw) } ?: Date()
+            SymptomsDiaryEntity(
+                id = it.id ?: UUID.nameUUIDFromBytes(
+                    "${it.patientId}|$reportedTime|${it.symptomsText}".toByteArray()
+                ).toString(),
+                patientId = patientId,
+                reportedBy = it.reportedBy ?: patientId,
+                reportedAt = reportedTime,
+                symptomsText = it.symptomsText,
+                sleepQuality = it.sleepQuality,
+                disposition = it.disposition,
+                inputMethod = it.inputMethod ?: "VOICE",
+                pendingSync = false
+            )
+        }
+        entities.forEach { symptomsDiaryDao.insert(it) }
+    }
+
+    suspend fun refreshAll(patientId: String) {
+        syncCareWall(patientId)
+        syncSymptomsDiary(patientId)
+    }
+
     // ==================== MURAL DE CUIDADO (ACTIVITY FEED) ====================
 
     /** Linha do tempo de quem cuidou do paciente (local + servidor). */

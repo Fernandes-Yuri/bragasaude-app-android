@@ -2,6 +2,7 @@ package br.com.bragasaude.ui.care
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.net.Uri
 import br.com.bragasaude.data.local.BragaDatabase
 import br.com.bragasaude.data.local.CareAuditEntity
 import br.com.bragasaude.data.local.DailyMetricsDao
@@ -13,6 +14,7 @@ import br.com.bragasaude.data.remote.model.MedicalAccessGrant
 import br.com.bragasaude.data.remote.model.ClinicalCorrelation
 import br.com.bragasaude.data.remote.model.DailyCareBulletin
 import br.com.bragasaude.data.remote.model.PrescriptionCreate
+import br.com.bragasaude.data.remote.model.PrescriptionAnalysisResponseDto
 import br.com.bragasaude.data.remote.repository.CareOsRepository
 import br.com.bragasaude.data.remote.repository.MedicationRepository
 import br.com.bragasaude.data.remote.repository.ProfileRepository
@@ -37,6 +39,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+import java.time.LocalDate
 import javax.inject.Inject
 
 /**
@@ -78,7 +81,8 @@ class CareOsViewModel @Inject constructor(
                     familyDao.getActiveBindingsForCaregiver(uid)
                 ) { profile, bindings ->
                     val selfAllowed = profile?.userRole != "CAREGIVER" || profile.caregiverMode == "HYBRID"
-                    buildList {
+                    val isCaregiver = profile?.userRole == "CAREGIVER" && bindings.isNotEmpty()
+                    val options = buildList {
                         if (selfAllowed) add(
                             CarePatientOption(
                                 id = uid,
@@ -115,10 +119,19 @@ class CareOsViewModel @Inject constructor(
                             )
                         }
                     }.distinctBy { it.id }
-                }.collect { options ->
+                    Triple(options, profile?.userRole, isCaregiver)
+                }.collect { (options, role, isCaregiver) ->
                     val selected = _ui.value.selectedPatientId?.takeIf { id -> options.any { it.id == id } }
                         ?: options.firstOrNull()?.id
-                    _ui.update { it.copy(isAuthenticated = true, patients = options, selectedPatientId = selected) }
+                    _ui.update {
+                        it.copy(
+                            isAuthenticated = true,
+                            patients = options,
+                            selectedPatientId = selected,
+                            userRole = role,
+                            isCaregiver = isCaregiver
+                        )
+                    }
                 }
             }
 
@@ -158,9 +171,18 @@ class CareOsViewModel @Inject constructor(
     private suspend fun refreshAll(id: String) {
         medicationRepository.syncStockFromServer(id)
         careOsRepository.syncCareWall(id)
+        careOsRepository.syncSymptomsDiary(id)
         val bulletin = careOsRepository.getDailyBulletin(id)
         val correlations = careOsRepository.getClinicalCorrelations(id)
-        _ui.update { it.copy(dailyBulletin = bulletin, correlations = correlations?.correlations.orEmpty(), correlationsDisclaimer = correlations?.disclaimer) }
+        val checkInDone = careOsRepository.hasCheckInForToday(id)
+        _ui.update {
+            it.copy(
+                dailyBulletin = bulletin,
+                correlations = correlations?.correlations.orEmpty(),
+                correlationsDisclaimer = correlations?.disclaimer,
+                checkInDoneToday = checkInDone
+            )
+        }
     }
 
     // ==================== ESTOQUE + DOSES ====================
@@ -254,6 +276,38 @@ class CareOsViewModel @Inject constructor(
         }
     }
 
+    private var pendingPrescriptionPickerLaunch = false
+
+    fun requestPrescriptionPicker() {
+        pendingPrescriptionPickerLaunch = true
+    }
+
+    fun consumePrescriptionPickerRequest(): Boolean {
+        val launch = pendingPrescriptionPickerLaunch
+        pendingPrescriptionPickerLaunch = false
+        return launch
+    }
+
+    fun analyzePrescription(patientId: String, uri: Uri, onResult: (PrescriptionAnalysisResponseDto?) -> Unit) {
+        viewModelScope.launch {
+            if (authenticatedUserId == null) {
+                requireAuthentication()
+                onResult(null)
+                return@launch
+            }
+            _ui.update { it.copy(loading = true, message = null) }
+            val result = try {
+                medicationRepository.analyzePrescription(patientId, uri)
+            } catch (e: Exception) {
+                android.util.Log.w("CareOs", "Falha na análise de receita: ${e.message}")
+                null
+            } finally {
+                _ui.update { it.copy(loading = false) }
+            }
+            onResult(result)
+        }
+    }
+
     fun createManualMedication(
         name: String,
         dosageMg: Double?,
@@ -301,10 +355,10 @@ class CareOsViewModel @Inject constructor(
         dosageMg: Double? = null,
         photoUri: android.net.Uri? = null,
         prescriptionImageUri: android.net.Uri? = null,
-        prescriptionIssuedOn: String,
-        prescriptionValidityDays: Int,
-        prescriberName: String,
-        prescriberCrm: String,
+        prescriptionIssuedOn: String? = null,
+        prescriptionValidityDays: Int? = null,
+        prescriberName: String? = null,
+        prescriberCrm: String? = null,
         onDone: (Boolean) -> Unit
     ) {
         viewModelScope.launch {
@@ -320,7 +374,18 @@ class CareOsViewModel @Inject constructor(
                 val photoUrl = photoUri?.let { medicationRepository.uploadMedicationPhoto(patientId, it) }
                 if (photoUri != null && photoUrl == null) error("Não foi possível enviar a foto da caixa.")
                 val prescriptionUrl = prescriptionImageUri?.let { medicationRepository.uploadMedicationPhoto(patientId, it) }
-                if (prescriptionImageUri != null && prescriptionUrl == null) error("Não foi possível enviar a foto da receita.")
+                if (prescriptionImageUri != null && prescriptionUrl == null) error("Não foi possível enviar o documento da receita.")
+
+                val prescription = if (prescriptionUrl != null || !prescriberName.isNullOrBlank() || !prescriberCrm.isNullOrBlank()) {
+                    PrescriptionCreate(
+                        imageUrl = prescriptionUrl,
+                        issuedOn = prescriptionIssuedOn ?: LocalDate.now(BragaTime.ZONE).toString(),
+                        validityDays = prescriptionValidityDays ?: 30,
+                        prescriberName = prescriberName?.trim().orEmpty(),
+                        prescriberCrm = prescriberCrm?.trim().orEmpty()
+                    )
+                } else null
+
                 medicationRepository.createCareOsMedication(
                     patientId = patientId,
                     name = name,
@@ -330,13 +395,7 @@ class CareOsViewModel @Inject constructor(
                     barcode = barcode,
                     dosageMg = dosageMg,
                     photoReferenceUrl = photoUrl,
-                    prescription = PrescriptionCreate(
-                        imageUrl = prescriptionUrl,
-                        issuedOn = prescriptionIssuedOn,
-                        validityDays = prescriptionValidityDays,
-                        prescriberName = prescriberName.trim(),
-                        prescriberCrm = prescriberCrm.trim()
-                    )
+                    prescription = prescription
                 )
             } catch (e: Exception) {
                 _ui.value = _ui.value.copy(loading = false, message = e.message)
@@ -472,6 +531,8 @@ data class CareOsUiState(
     val isAuthenticated: Boolean = true,
     val patients: List<CarePatientOption> = emptyList(),
     val selectedPatientId: String? = null,
+    val userRole: String? = null,
+    val isCaregiver: Boolean = false,
     val loading: Boolean = false,
     val medications: List<MedicationEntity> = emptyList(),
     val wall: List<CareAuditEntity> = emptyList(),
