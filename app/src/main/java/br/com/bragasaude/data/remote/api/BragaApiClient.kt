@@ -13,6 +13,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import br.com.bragasaude.util.safeString
 import br.com.bragasaude.util.safeNullableString
+import br.com.bragasaude.util.BragaTime
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
