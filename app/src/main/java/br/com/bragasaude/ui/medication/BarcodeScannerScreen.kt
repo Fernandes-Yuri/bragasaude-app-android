@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +32,7 @@ import br.com.bragasaude.ui.care.CareAuthenticationRequired
 import br.com.bragasaude.ui.care.CareOsViewModel
 import br.com.bragasaude.ui.care.CarePatientSelector
 import br.com.bragasaude.ui.theme.*
+import br.com.bragasaude.util.BragaConstants
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 
@@ -42,7 +44,7 @@ import com.journeyapps.barcodescanner.ScanOptions
  * - O app NUNCA identifica comprimido solto por foto.
  * - Desburocratizado: sem campos cartoriais desnecessários (CRM, validade, fotos soltas).
  * - Checkbox de conferência da receita mantido (requisito SaMD).
- * - Suporte opcional moderno para anexar receita (PDF ou imagem).
+ * - Suporte opcional moderno para anexar receita (PDF ou imagem) com dupla checagem de IA.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,6 +65,8 @@ fun BarcodeScannerScreen(
     var lookupError by remember { mutableStateOf<String?>(null) }
     var prescriptionDocumentUri by remember { mutableStateOf<Uri?>(null) }
     var prescriptionFileName by remember { mutableStateOf<String?>(null) }
+    var isAnalyzingPrescription by remember { mutableStateOf(false) }
+    var prescriptionDivergenceReason by remember { mutableStateOf<String?>(null) }
 
     val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         prescriptionDocumentUri = uri
@@ -77,6 +81,62 @@ fun BarcodeScannerScreen(
                 }
             }
             fileName ?: "Receita anexada"
+        }
+        if (uri != null) {
+            isAnalyzingPrescription = true
+            prescriptionDivergenceReason = null
+            val patientId = ui.selectedPatientId ?: BragaConstants.GUEST_UID
+            viewModel.analyzePrescription(patientId, uri) { response ->
+                isAnalyzingPrescription = false
+                val med = response?.medications?.firstOrNull()
+                if (med != null) {
+                    val hasDivergence = med.nameDivergent || med.dosageDivergent
+
+                    if (!hasDivergence) {
+                        var resolvedName = ""
+                        if (!med.nameDivergent && med.name.isNotBlank()) {
+                            resolvedName = med.name
+                        }
+                        if (!med.dosageDivergent && med.dosage.isNotBlank()) {
+                            resolvedName = if (resolvedName.isNotBlank()) {
+                                "$resolvedName ${med.dosage}".trim()
+                            } else {
+                                med.dosage.trim()
+                            }
+                        }
+                        if (resolvedName.isNotBlank()) {
+                            name = resolvedName
+                        }
+                    } else {
+                        // SaMD: Divergência detectada — campo de medicamento permanece estritamente VAZIO
+                        name = ""
+                        prescriptionDivergenceReason = med.divergenceReason
+                            ?: "Por segurança, digite os dados da sua receita médica."
+                    }
+
+                    if (med.suggestedTimes.isNotEmpty() && !med.frequencyDivergent) {
+                        scheduleTime = med.suggestedTimes.first()
+                    }
+
+                    if (!med.eanBarcode.isNullOrBlank()) {
+                        ean = med.eanBarcode
+                        viewModel.lookupBarcode(med.eanBarcode) { anvisaMed ->
+                            found = anvisaMed
+                            if (!hasDivergence && name.isBlank() && anvisaMed != null) {
+                                name = anvisaMed.name
+                            }
+                        }
+                    }
+                } else if (response != null && response.medications.isEmpty()) {
+                    prescriptionDivergenceReason = "Não foi possível identificar medicamentos legíveis na receita. Por favor, digite os dados manualmente."
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (viewModel.consumePrescriptionPickerRequest()) {
+            documentPicker.launch(arrayOf("image/*", "application/pdf"))
         }
     }
 
@@ -176,6 +236,20 @@ fun BarcodeScannerScreen(
                 Text("Escanear código de barras", color = Color.White, fontSize = 17.sp)
             }
 
+            OutlinedButton(
+                onClick = { documentPicker.launch(arrayOf("image/*", "application/pdf")) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 52.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = BragaEmeraldDark),
+                border = BorderStroke(1.dp, BragaEmeraldLight)
+            ) {
+                Icon(Icons.Filled.UploadFile, contentDescription = null, tint = BragaEmerald)
+                Spacer(Modifier.width(8.dp))
+                Text("Escanear ou Anexar Receita (Dupla Checagem com IA)", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            }
+
             OutlinedTextField(
                 value = ean,
                 onValueChange = {
@@ -251,6 +325,71 @@ fun BarcodeScannerScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // Indicador de progresso acolhedor da análise da receita
+            if (isAnalyzingPrescription) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                    border = BorderStroke(1.dp, BragaEmeraldLight)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = BragaEmerald,
+                            strokeWidth = 3.dp
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            "Analisando receita com dupla checagem de segurança...",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = BragaTextPrimary
+                        )
+                    }
+                }
+            }
+
+            // Tratamento Obrigatório de Divergências (Alerta Âmbar — AUD-AN02 compliance via ícone)
+            if (prescriptionDivergenceReason != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB)),
+                    border = BorderStroke(1.dp, Color(0xFFF59E0B))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(
+                            Icons.Filled.Warning,
+                            contentDescription = "Alerta de divergência",
+                            tint = Color(0xFFD97706),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                "Divergência na caligrafia da receita:",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = Color(0xFFB45309)
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                prescriptionDivergenceReason ?: "Por segurança, digite os dados da sua receita médica.",
+                                fontSize = 13.sp,
+                                color = Color(0xFF92400E)
+                            )
+                        }
+                    }
+                }
+            }
+
             // Campo opcional moderno: Anexar Receita (PDF ou Imagem)
             if (prescriptionDocumentUri == null) {
                 OutlinedButton(
@@ -288,6 +427,7 @@ fun BarcodeScannerScreen(
                             onClick = {
                                 prescriptionDocumentUri = null
                                 prescriptionFileName = null
+                                prescriptionDivergenceReason = null
                             },
                             modifier = Modifier.size(36.dp)
                         ) {
@@ -296,6 +436,13 @@ fun BarcodeScannerScreen(
                     }
                 }
             }
+
+            // Validação Reativa e SaMD (RDC 657/2022)
+            val isNameValid = name.trim().length >= 2
+            val isTimeValid = scheduleTime.trim().matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$"))
+            val canConfirm = isNameValid && isTimeValid && !isAnalyzingPrescription
+            val isConfirmed = confirmed && canConfirm
+            val canSave = isNameValid && isTimeValid && isConfirmed && ui.selectedPatient.canWriteMedication && !ui.loading && !isAnalyzingPrescription
 
             // Checkbox OBRIGATÓRIO (SaMD RDC 657/2022 mantido)
             Row(
@@ -306,23 +453,26 @@ fun BarcodeScannerScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Checkbox(
-                    checked = confirmed,
-                    onCheckedChange = { confirmed = it },
-                    colors = CheckboxDefaults.colors(checkedColor = BragaEmerald)
+                    checked = isConfirmed,
+                    onCheckedChange = { if (canConfirm) confirmed = it },
+                    enabled = canConfirm,
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = BragaEmerald,
+                        disabledCheckedColor = BragaCardBorder,
+                        disabledUncheckedColor = BragaCardBorder
+                    )
                 )
-                Text("Conferido com a receita médica", fontSize = 16.sp, color = BragaTextPrimary)
+                Text(
+                    "Conferido com a receita médica",
+                    fontSize = 16.sp,
+                    color = if (canConfirm) BragaTextPrimary else BragaTextSecondary
+                )
             }
-
-            // Validação Reativa
-            val isNameValid = name.trim().length >= 2
-            val isTimeValid = scheduleTime.trim().matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$"))
-            val isConfirmed = confirmed
-            val canSave = isNameValid && isTimeValid && isConfirmed && ui.selectedPatient.canWriteMedication && !ui.loading
 
             val missingList = buildList {
                 if (!isNameValid) add("o nome do remédio")
                 if (!isTimeValid) add("o horário da dose (HH:mm)")
-                if (!isConfirmed) add("a confirmação da receita médica")
+                if (!isConfirmed) add("a conferência com a receita médica")
             }
             val helperText = if (missingList.isNotEmpty()) {
                 "Para cadastrar: preencha ${missingList.joinToString(" e ")}."

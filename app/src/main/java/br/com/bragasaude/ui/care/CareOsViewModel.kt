@@ -2,6 +2,7 @@ package br.com.bragasaude.ui.care
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.net.Uri
 import br.com.bragasaude.data.local.BragaDatabase
 import br.com.bragasaude.data.local.CareAuditEntity
 import br.com.bragasaude.data.local.DailyMetricsDao
@@ -13,6 +14,7 @@ import br.com.bragasaude.data.remote.model.MedicalAccessGrant
 import br.com.bragasaude.data.remote.model.ClinicalCorrelation
 import br.com.bragasaude.data.remote.model.DailyCareBulletin
 import br.com.bragasaude.data.remote.model.PrescriptionCreate
+import br.com.bragasaude.data.remote.model.PrescriptionAnalysisResponseDto
 import br.com.bragasaude.data.remote.repository.CareOsRepository
 import br.com.bragasaude.data.remote.repository.MedicationRepository
 import br.com.bragasaude.data.remote.repository.ProfileRepository
@@ -271,6 +273,38 @@ class CareOsViewModel @Inject constructor(
             if (result == null) {
                 _ui.value = _ui.value.copy(message = "Medicamento não encontrado no catálogo. Preencha manualmente.")
             }
+        }
+    }
+
+    private var pendingPrescriptionPickerLaunch = false
+
+    fun requestPrescriptionPicker() {
+        pendingPrescriptionPickerLaunch = true
+    }
+
+    fun consumePrescriptionPickerRequest(): Boolean {
+        val launch = pendingPrescriptionPickerLaunch
+        pendingPrescriptionPickerLaunch = false
+        return launch
+    }
+
+    fun analyzePrescription(patientId: String, uri: Uri, onResult: (PrescriptionAnalysisResponseDto?) -> Unit) {
+        viewModelScope.launch {
+            if (authenticatedUserId == null) {
+                requireAuthentication()
+                onResult(null)
+                return@launch
+            }
+            _ui.update { it.copy(loading = true, message = null) }
+            val result = try {
+                medicationRepository.analyzePrescription(patientId, uri)
+            } catch (e: Exception) {
+                android.util.Log.w("CareOs", "Falha na análise de receita: ${e.message}")
+                null
+            } finally {
+                _ui.update { it.copy(loading = false) }
+            }
+            onResult(result)
         }
     }
 
