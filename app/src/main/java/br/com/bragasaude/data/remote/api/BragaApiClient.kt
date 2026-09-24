@@ -1489,6 +1489,8 @@ class BragaApiClient @Inject constructor(
             val status = jsonObj.optString("status", "success")
             val imageUrl = jsonObj.optString("prescription_image_url").takeIf { it.isNotBlank() }
             val snippet = jsonObj.optString("raw_ocr_snippet").takeIf { it.isNotBlank() }
+            val totalPages = jsonObj.optInt("total_pages_analyzed", 1)
+            val duplicatesMerged = jsonObj.optInt("duplicates_merged_count", 0)
             val medsArray = jsonObj.optJSONArray("medications")
             val medsList = mutableListOf<AnalyzedMedicationItemDto>()
             if (medsArray != null) {
@@ -1498,6 +1500,11 @@ class BragaApiClient @Inject constructor(
                     val times = mutableListOf<String>()
                     if (timesArray != null) {
                         for (t in 0 until timesArray.length()) times.add(timesArray.getString(t))
+                    }
+                    val pagesArray = m.optJSONArray("source_pages")
+                    val sourcePages = mutableListOf<Int>()
+                    if (pagesArray != null) {
+                        for (p in 0 until pagesArray.length()) sourcePages.add(pagesArray.getInt(p))
                     }
                     medsList.add(
                         AnalyzedMedicationItemDto(
@@ -1513,15 +1520,66 @@ class BragaApiClient @Inject constructor(
                             activePrinciple = m.optString("active_principle").takeIf { it.isNotBlank() },
                             confidenceScore = m.optDouble("confidence_score", 0.0),
                             requiresHumanFill = m.optBoolean("requires_human_fill", false),
-                            divergenceReason = m.optString("divergence_reason").takeIf { it.isNotBlank() }
+                            divergenceReason = m.optString("divergence_reason").takeIf { it.isNotBlank() },
+                            sourcePages = sourcePages
                         )
                     )
                 }
             }
-            PrescriptionAnalysisResponseDto(status, imageUrl, medsList, snippet)
+            PrescriptionAnalysisResponseDto(
+                status = status,
+                prescriptionImageUrl = imageUrl,
+                totalPagesAnalyzed = totalPages,
+                duplicatesMergedCount = duplicatesMerged,
+                medications = medsList,
+                rawOcrSnippet = snippet
+            )
         } catch (e: Exception) {
             Log.w(TAG, "Falha na análise de receita: ${e.message}")
             null
+        } finally {
+            runCatching { conn?.disconnect() }
+        }
+    }
+
+    suspend fun createMedicationsBatch(
+        patientId: String,
+        items: List<MedicationBatchItemCreateDto>
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (items.isEmpty()) return@withContext false
+        var conn: HttpURLConnection? = null
+        try {
+            val url = URL("$baseUrl/api/family/patients/$patientId/medications/batch")
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 15000
+                readTimeout = 20000
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("Accept", "application/json")
+                attachIdentity(url.toString())
+            }
+            val array = JSONArray()
+            for (item in items) {
+                val obj = JSONObject().apply {
+                    put("name", item.name)
+                    item.dosageMg?.let { put("dosage_mg", it) }
+                    val timesArray = JSONArray()
+                    item.scheduleTimes.forEach { timesArray.put(it) }
+                    put("schedule_times", timesArray)
+                    put("total_units", item.totalUnits)
+                    item.eanBarcode?.let { put("ean_barcode", it) }
+                    put("confirmed_with_prescription", item.confirmedWithPrescription)
+                    item.photoReferenceUrl?.let { put("photo_reference_url", it) }
+                }
+                array.put(obj)
+            }
+            val root = JSONObject().put("medications", array)
+            conn.outputStream.use { it.write(root.toString().toByteArray(Charsets.UTF_8)) }
+            conn.responseCode in 200..299
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha no cadastro em remessa de medicamentos: ${e.message}")
+            false
         } finally {
             runCatching { conn?.disconnect() }
         }

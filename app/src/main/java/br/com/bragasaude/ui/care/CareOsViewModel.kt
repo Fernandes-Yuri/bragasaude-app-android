@@ -15,6 +15,7 @@ import br.com.bragasaude.data.remote.model.ClinicalCorrelation
 import br.com.bragasaude.data.remote.model.DailyCareBulletin
 import br.com.bragasaude.data.remote.model.PrescriptionCreate
 import br.com.bragasaude.data.remote.model.PrescriptionAnalysisResponseDto
+import br.com.bragasaude.data.remote.model.MedicationBatchItemCreateDto
 import br.com.bragasaude.data.remote.repository.CareOsRepository
 import br.com.bragasaude.data.remote.repository.MedicationRepository
 import br.com.bragasaude.data.remote.repository.ProfileRepository
@@ -305,6 +306,24 @@ class CareOsViewModel @Inject constructor(
                 _ui.update { it.copy(loading = false) }
             }
             onResult(result)
+        }
+    }
+
+    fun createMedicationsBatch(
+        patientId: String,
+        items: List<MedicationBatchItemCreateDto>,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            _ui.update { it.copy(loading = true) }
+            val ok = medicationRepository.createMedicationsBatch(patientId, items)
+            _ui.update { it.copy(loading = false) }
+            if (ok) {
+                onSuccess()
+            } else {
+                onError("Não foi possível salvar a remessa de medicamentos. Tente novamente.")
+            }
         }
     }
 
