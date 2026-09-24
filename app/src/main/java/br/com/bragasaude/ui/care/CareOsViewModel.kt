@@ -38,6 +38,8 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import java.io.File
 import java.time.LocalDate
@@ -155,7 +157,7 @@ class CareOsViewModel @Inject constructor(
                 }
             }
 
-            viewModelScope.launch {
+            viewModelScope.launch(Dispatchers.IO) {
                 ui.map { it.selectedPatientId }.distinctUntilChanged().collect { selected ->
                     if (selected != null) refreshAll(selected)
                 }
@@ -169,21 +171,25 @@ class CareOsViewModel @Inject constructor(
         }
     }
 
-    private suspend fun refreshAll(id: String) {
-        medicationRepository.syncMedicationsFromServer(id)
-        medicationRepository.syncStockFromServer(id)
-        careOsRepository.syncCareWall(id)
-        careOsRepository.syncSymptomsDiary(id)
-        val bulletin = careOsRepository.getDailyBulletin(id)
-        val correlations = careOsRepository.getClinicalCorrelations(id)
-        val checkInDone = careOsRepository.hasCheckInForToday(id)
-        _ui.update {
-            it.copy(
-                dailyBulletin = bulletin,
-                correlations = correlations?.correlations.orEmpty(),
-                correlationsDisclaimer = correlations?.disclaimer,
-                checkInDoneToday = checkInDone
-            )
+    private suspend fun refreshAll(id: String) = withContext(Dispatchers.IO) {
+        try {
+            medicationRepository.syncMedicationsFromServer(id)
+            medicationRepository.syncStockFromServer(id)
+            careOsRepository.syncCareWall(id)
+            careOsRepository.syncSymptomsDiary(id)
+            val bulletin = careOsRepository.getDailyBulletin(id)
+            val correlations = careOsRepository.getClinicalCorrelations(id)
+            val checkInDone = careOsRepository.hasCheckInForToday(id)
+            _ui.update {
+                it.copy(
+                    dailyBulletin = bulletin,
+                    correlations = correlations?.correlations.orEmpty(),
+                    correlationsDisclaimer = correlations?.disclaimer,
+                    checkInDoneToday = checkInDone
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("CareOs", "refreshAll: ${e.message}")
         }
     }
 

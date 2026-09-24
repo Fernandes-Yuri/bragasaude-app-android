@@ -35,10 +35,11 @@ class RemindersViewModel @Inject constructor(
     private val userId = auth.currentUser?.uid ?: br.com.bragasaude.util.BragaConstants.GUEST_UID
 
     /**
-     * Emite um timestamp a cada virada de minuto exata do relógio,
-     * evitando drift e recomposições fora do tempo.
+     * Emite um timestamp imediatamente e a cada virada de minuto exata do relógio,
+     * evitando drift e garantindo renderização instantânea da lista.
      */
     private val minuteTicker = flow {
+        emit(System.currentTimeMillis() / 60_000L)
         while (true) {
             val now = System.currentTimeMillis()
             val delayUntilNextMinute = 60_000L - (now % 60_000L)
@@ -46,6 +47,12 @@ class RemindersViewModel @Inject constructor(
             emit(System.currentTimeMillis() / 60_000L)
         }
     }.distinctUntilChanged()
+
+    init {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            repository.syncMedicationsFromServer(userId)
+        }
+    }
 
     val medications = combine(
         repository.getMedications(userId),
@@ -109,7 +116,8 @@ class RemindersViewModel @Inject constructor(
     fun takeMedication(medId: String, time: String) {
         viewModelScope.launch {
             try {
-                if (!repository.takeMedication(userId, medId, time)) return@launch
+                val res = repository.takeDose(userId, medId, time, actorId = userId)
+                if (res is br.com.bragasaude.data.remote.api.BragaApiClient.TakeMedicationResult.Failure) return@launch
 
                 // FASE 3 — XP quando a medicação é tomada dentro da janela de tolerância (±60 min)
                 val med = medications.value.firstOrNull { it.first.id == medId }?.first
@@ -134,7 +142,7 @@ class RemindersViewModel @Inject constructor(
 
     fun deleteMedication(medId: String) {
         viewModelScope.launch {
-            repository.deleteMedication(medId, userId)
+            repository.deleteMedication(userId, medId)
         }
     }
 }
