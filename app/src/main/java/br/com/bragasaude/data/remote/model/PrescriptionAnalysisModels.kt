@@ -14,8 +14,14 @@ data class AnalyzedMedicationItemDto(
     val confidenceScore: Double = 0.0,
     val requiresHumanFill: Boolean = false,
     val divergenceReason: String? = null,
-    val sourcePages: List<Int> = emptyList() // Páginas de origem (ex: [1, 2] se veio em 1ª e 2ª via)
+    val sourcePages: List<Int> = emptyList(), // Páginas de origem (ex: [1, 2] se veio em 1ª e 2ª via)
+    val frequencyIntervalHours: Int? = null,
+    val dailyDosesCount: Int = 1,
+    val treatmentDurationDays: Int? = null,
+    val anvisaRegistrationNumber: String? = null
 )
+
+typealias AnalyzedMedicationItem = AnalyzedMedicationItemDto
 
 data class PrescriptionAnalysisResponseDto(
     val status: String,
@@ -29,11 +35,14 @@ data class PrescriptionAnalysisResponseDto(
 data class MedicationBatchItemCreateDto(
     val name: String,
     val dosageMg: Double? = null,
-    val scheduleTimes: List<String>, // ["08:00"]
+    val scheduleTimes: List<String>, // ["08:00", "20:00"]
     val totalUnits: Int = 30,
     val eanBarcode: String? = null,
     val confirmedWithPrescription: Boolean = true,
-    val photoReferenceUrl: String? = null
+    val photoReferenceUrl: String? = null,
+    val frequencyIntervalHours: Int? = null,
+    val treatmentDurationDays: Int? = null,
+    val anvisaRegistrationNumber: String? = null
 )
 
 data class MedicationBatchCreateRequest(

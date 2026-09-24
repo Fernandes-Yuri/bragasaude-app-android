@@ -1,9 +1,15 @@
 package br.com.bragasaude.ui.medication
 
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import android.provider.AlarmClock
+import android.provider.CalendarContract
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +22,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Medication
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
@@ -42,27 +49,141 @@ import com.journeyapps.barcodescanner.ScanOptions
 import java.util.UUID
 
 /**
- * Item reativo para cadastro de lote/remessa de medicamentos.
+ * Sanitiza valores de texto para blindagem anti-"null" nos inputs.
+ */
+private fun sanitizeInput(value: String?): String {
+    if (value == null) return ""
+    val trimmed = value.trim()
+    return if (trimmed.equals("null", ignoreCase = true) ||
+        trimmed.equals("none", ignoreCase = true) ||
+        trimmed.equals("undefined", ignoreCase = true)
+    ) "" else trimmed
+}
+
+/**
+ * Calcula horários das doses com base no primeiro horário e no intervalo em horas.
+ */
+fun calculateScheduleTimes(firstTime: String, intervalHours: Int): List<String> {
+    val parts = firstTime.split(":")
+    val baseHour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 8
+    val baseMinute = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
+    val dosesCount = when (intervalHours) {
+        24 -> 1
+        12 -> 2
+        8 -> 3
+        6 -> 4
+        else -> (24 / intervalHours.coerceIn(1, 24)).coerceIn(1, 6)
+    }
+    return (0 until dosesCount).map { i ->
+        val h = (baseHour + i * intervalHours) % 24
+        "%02d:%02d".format(h, baseMinute)
+    }
+}
+
+/**
+ * Dispara alarmes no Despertador nativo do sistema Android (AlarmClock).
+ */
+fun setSystemAlarms(context: Context, medName: String, times: List<String>) {
+    times.forEach { timeStr ->
+        val parts = timeStr.split(":")
+        if (parts.size == 2) {
+            val hour = parts[0].toIntOrNull() ?: 8
+            val minute = parts[1].toIntOrNull() ?: 0
+            val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
+                putExtra(AlarmClock.EXTRA_HOUR, hour)
+                putExtra(AlarmClock.EXTRA_MINUTES, minute)
+                putExtra(AlarmClock.EXTRA_MESSAGE, "Tomar $medName")
+                putExtra(AlarmClock.EXTRA_DAYS, arrayListOf(1, 2, 3, 4, 5, 6, 7)) // Todos os dias
+                putExtra(AlarmClock.EXTRA_SKIP_UI, false) // Abre para confirmação do usuário
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }
+    }
+}
+
+/**
+ * Dispara evento diário no Calendário nativo do sistema Android (CalendarContract).
+ */
+fun setSystemCalendarEvent(context: Context, medName: String, firstTime: String) {
+    val parts = firstTime.split(":")
+    val hour = parts.getOrNull(0)?.toIntOrNull() ?: 8
+    val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
+    val calendar = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.HOUR_OF_DAY, hour)
+        set(java.util.Calendar.MINUTE, minute)
+        set(java.util.Calendar.SECOND, 0)
+    }
+    val intent = Intent(Intent.ACTION_INSERT).apply {
+        data = CalendarContract.Events.CONTENT_URI
+        putExtra(CalendarContract.Events.TITLE, "Remédio: $medName")
+        putExtra(CalendarContract.Events.DESCRIPTION, "Dose programada pelo Braga Saúde")
+        putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, calendar.timeInMillis)
+        putExtra(CalendarContract.Events.RRULE, "FREQ=DAILY;INTERVAL=1")
+        putExtra(CalendarContract.Events.HAS_ALARM, 1)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    context.startActivity(intent)
+}
+
+/**
+ * Item reativo para cadastro de lote/remessa de medicamentos com posologia inteligente.
  */
 class BatchMedicationItem(
     val id: String = UUID.randomUUID().toString(),
     initialName: String = "",
     initialTotalUnits: String = "30",
-    initialScheduleTime: String = "08:00",
+    initialScheduleTimes: List<String> = listOf("08:00"),
+    initialIntervalHours: Int = 12,
     initialEan: String = "",
     initialFound: BarcodeMedication? = null,
     initialIsDivergent: Boolean = false,
     initialDivergenceReason: String? = null,
-    initialSourcePages: List<Int> = emptyList()
+    initialSourcePages: List<Int> = emptyList(),
+    initialTreatmentDurationDays: Int? = null,
+    initialAnvisaRegistrationNumber: String? = null
 ) {
-    var name by mutableStateOf(initialName)
-    var totalUnits by mutableStateOf(initialTotalUnits)
-    var scheduleTime by mutableStateOf(initialScheduleTime)
-    var ean by mutableStateOf(initialEan)
+    var name by mutableStateOf(sanitizeInput(initialName))
+    var totalUnits by mutableStateOf(sanitizeInput(initialTotalUnits).ifBlank { "30" })
+    var intervalHours by mutableStateOf(initialIntervalHours)
+    val scheduleTimes = mutableStateListOf<String>().apply {
+        if (initialScheduleTimes.isNotEmpty()) {
+            addAll(initialScheduleTimes.map { sanitizeInput(it).ifBlank { "08:00" } })
+        } else {
+            add("08:00")
+        }
+    }
+    var ean by mutableStateOf(sanitizeInput(initialEan))
     var found by mutableStateOf(initialFound)
     var isDivergent by mutableStateOf(initialIsDivergent)
     var divergenceReason by mutableStateOf(initialDivergenceReason)
     var sourcePages by mutableStateOf(initialSourcePages)
+    var treatmentDurationDays by mutableStateOf(initialTreatmentDurationDays)
+    var anvisaRegistrationNumber by mutableStateOf(sanitizeInput(initialAnvisaRegistrationNumber))
+
+    fun recalculateTimes(newIntervalHours: Int? = null) {
+        if (newIntervalHours != null) {
+            intervalHours = newIntervalHours
+        }
+        val first = scheduleTimes.firstOrNull()?.takeIf { it.matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$")) } ?: "08:00"
+        val calculated = calculateScheduleTimes(first, intervalHours)
+        scheduleTimes.clear()
+        scheduleTimes.addAll(calculated)
+    }
+
+    fun updateFirstTimeAndRecalculate(newFirstTime: String) {
+        val sanitized = sanitizeInput(newFirstTime)
+        if (scheduleTimes.isEmpty()) {
+            scheduleTimes.add(sanitized)
+        } else {
+            scheduleTimes[0] = sanitized
+        }
+        if (sanitized.matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$"))) {
+            val calculated = calculateScheduleTimes(sanitized, intervalHours)
+            scheduleTimes.clear()
+            scheduleTimes.addAll(calculated)
+        }
+    }
 }
 
 /**
@@ -73,7 +194,8 @@ class BatchMedicationItem(
  * - O app NUNCA identifica comprimido solto por foto.
  * - Desburocratizado: sem campos cartoriais desnecessários (CRM, validade, fotos soltas).
  * - Checkbox de conferência da receita mantido (requisito SaMD).
- * - Suporte a remessa com múltiplos medicamentos, deduplicação entre páginas de receita e botão [+ Adicionar outro remédio].
+ * - Suporte a remessa com múltiplos medicamentos, deduplicação entre páginas de receita,
+ *   posologia inteligente (chips 24h, 12h, 8h, 6h), integração nativa com AlarmClock e CalendarContract.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -134,30 +256,43 @@ fun BarcodeScannerScreen(
                                     (n.ifBlank { d }).trim()
                                 }
                             }
-                            val schedule = if (med.suggestedTimes.isNotEmpty() && !med.frequencyDivergent) {
-                                med.suggestedTimes.first()
+                            val interval = med.frequencyIntervalHours ?: when (med.suggestedTimes.size) {
+                                1 -> 24
+                                2 -> 12
+                                3 -> 8
+                                4 -> 6
+                                else -> 12
+                            }
+                            val times = if (med.suggestedTimes.isNotEmpty() && !med.frequencyDivergent) {
+                                med.suggestedTimes
                             } else {
-                                "08:00"
+                                calculateScheduleTimes("08:00", interval)
                             }
                             val divergenceReason = if (hasDivergence) {
                                 med.divergenceReason ?: "Caligrafia médica incerta: por favor, digite o nome e a dosagem deste remédio."
                             } else null
 
                             val item = BatchMedicationItem(
-                                initialName = resolvedName,
+                                initialName = sanitizeInput(resolvedName),
                                 initialTotalUnits = "30",
-                                initialScheduleTime = schedule,
-                                initialEan = med.eanBarcode ?: "",
+                                initialScheduleTimes = times,
+                                initialIntervalHours = interval,
+                                initialEan = sanitizeInput(med.eanBarcode),
                                 initialIsDivergent = hasDivergence,
                                 initialDivergenceReason = divergenceReason,
-                                initialSourcePages = med.sourcePages
+                                initialSourcePages = med.sourcePages,
+                                initialTreatmentDurationDays = med.treatmentDurationDays,
+                                initialAnvisaRegistrationNumber = sanitizeInput(med.anvisaRegistrationNumber)
                             )
 
                             if (!med.eanBarcode.isNullOrBlank()) {
                                 viewModel.lookupBarcode(med.eanBarcode) { anvisaMed ->
                                     item.found = anvisaMed
                                     if (!hasDivergence && item.name.isBlank() && anvisaMed != null) {
-                                        item.name = anvisaMed.name
+                                        item.name = sanitizeInput(anvisaMed.name)
+                                    }
+                                    if (item.anvisaRegistrationNumber.isBlank() && anvisaMed != null) {
+                                        item.anvisaRegistrationNumber = sanitizeInput(anvisaMed.anvisaRegistrationNumber)
                                     }
                                 }
                             }
@@ -188,11 +323,14 @@ fun BarcodeScannerScreen(
                 } else {
                     BatchMedicationItem().also { batchList.add(it) }
                 }
-                targetItem.ean = code
+                targetItem.ean = sanitizeInput(code)
                 targetItem.found = med
                 if (med != null) {
-                    targetItem.name = med.name
+                    targetItem.name = sanitizeInput(med.name)
                     if (targetItem.totalUnits.isBlank()) targetItem.totalUnits = "30"
+                    if (targetItem.anvisaRegistrationNumber.isBlank()) {
+                        targetItem.anvisaRegistrationNumber = sanitizeInput(med.anvisaRegistrationNumber)
+                    }
                 }
             }
         }
@@ -475,35 +613,119 @@ fun BarcodeScannerScreen(
 
                         OutlinedTextField(
                             value = item.name,
-                            onValueChange = { item.name = it },
+                            onValueChange = { item.name = sanitizeInput(it) },
                             label = { Text("Nome do remédio *") },
                             placeholder = { Text("Ex: Losartana 50mg") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
 
+                        OutlinedTextField(
+                            value = item.totalUnits,
+                            onValueChange = { item.totalUnits = it.filter { c -> c.isDigit() }.take(5) },
+                            label = { Text("Quantidade da caixa") },
+                            placeholder = { Text("30") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Posologia Inteligente: Seletor de Frequência Rápido
+                        Text(
+                            text = "Frequência e Posologia",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp,
+                            color = BragaTextPrimary
+                        )
+
+                        val frequencyOptions = listOf(
+                            24 to "1x ao dia (24h)",
+                            12 to "2x ao dia (12h)",
+                            8 to "3x ao dia (8h)",
+                            6 to "4x ao dia (6h)"
+                        )
+
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            OutlinedTextField(
-                                value = item.totalUnits,
-                                onValueChange = { item.totalUnits = it.filter { c -> c.isDigit() }.take(5) },
-                                label = { Text("Quantidade") },
-                                placeholder = { Text("30") },
-                                singleLine = true,
-                                modifier = Modifier.weight(1f)
-                            )
-                            OutlinedTextField(
-                                value = item.scheduleTime,
-                                onValueChange = { item.scheduleTime = it.take(5) },
-                                label = { Text("Horário (HH:mm) *") },
-                                placeholder = { Text("08:00") },
-                                singleLine = true,
-                                modifier = Modifier.weight(1f)
-                            )
+                            frequencyOptions.forEach { (hours, label) ->
+                                val selected = item.intervalHours == hours
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = { item.recalculateTimes(hours) },
+                                    label = {
+                                        Text(
+                                            text = label,
+                                            fontSize = 12.sp,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = BragaEmerald,
+                                        selectedLabelColor = Color.White,
+                                        containerColor = BragaMintSurface,
+                                        labelColor = BragaTextPrimary
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        enabled = true,
+                                        selected = selected,
+                                        borderColor = if (selected) BragaEmerald else BragaCardBorder,
+                                        selectedBorderColor = BragaEmerald
+                                    )
+                                )
+                            }
                         }
 
+                        // Campos de Horários Dinâmicos
+                        if (item.scheduleTimes.size <= 1) {
+                            OutlinedTextField(
+                                value = item.scheduleTimes.getOrElse(0) { "08:00" },
+                                onValueChange = { newTime ->
+                                    item.updateFirstTimeAndRecalculate(newTime.take(5))
+                                },
+                                label = { Text("Horário da dose (HH:mm) *") },
+                                placeholder = { Text("08:00") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            val chunkedTimes = item.scheduleTimes.chunked(2)
+                            chunkedTimes.forEachIndexed { rowIndex, pair ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    pair.forEachIndexed { colIndex, _ ->
+                                        val globalIndex = rowIndex * 2 + colIndex
+                                        val timeValue = item.scheduleTimes.getOrElse(globalIndex) { "" }
+                                        OutlinedTextField(
+                                            value = timeValue,
+                                            onValueChange = { newTime ->
+                                                val trimmed = newTime.take(5)
+                                                if (globalIndex == 0) {
+                                                    item.updateFirstTimeAndRecalculate(trimmed)
+                                                } else {
+                                                    if (globalIndex < item.scheduleTimes.size) {
+                                                        item.scheduleTimes[globalIndex] = trimmed
+                                                    }
+                                                }
+                                            },
+                                            label = { Text("Dose ${globalIndex + 1} (HH:mm) *") },
+                                            placeholder = { Text("08:00") },
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                    if (pair.size == 1) {
+                                        Spacer(Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+
+                        // Campos Opcionais / Blindados contra "null"
                         OutlinedTextField(
                             value = item.ean,
                             onValueChange = { newEan ->
@@ -511,14 +733,28 @@ fun BarcodeScannerScreen(
                                 if (item.ean.length == 13) {
                                     viewModel.lookupBarcode(item.ean) { med ->
                                         item.found = med
-                                        if (med != null && item.name.isBlank()) {
-                                            item.name = med.name
+                                        if (med != null) {
+                                            if (item.name.isBlank()) {
+                                                item.name = sanitizeInput(med.name)
+                                            }
+                                            if (item.anvisaRegistrationNumber.isBlank()) {
+                                                item.anvisaRegistrationNumber = sanitizeInput(med.anvisaRegistrationNumber)
+                                            }
                                         }
                                     }
                                 }
                             },
                             label = { Text("Código EAN-13 (opcional)") },
-                            placeholder = { Text("13 dígitos da caixa") },
+                            placeholder = { Text("Opcional / Não catalogado") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = item.anvisaRegistrationNumber,
+                            onValueChange = { item.anvisaRegistrationNumber = sanitizeInput(it) },
+                            label = { Text("Registro ANVISA (opcional)") },
+                            placeholder = { Text("Opcional / Não catalogado") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -545,6 +781,47 @@ fun BarcodeScannerScreen(
                                 }
                             }
                         }
+
+                        // Botão de Agendamento Nativo (Despertador e Calendário)
+                        OutlinedButton(
+                            onClick = {
+                                val medName = item.name.ifBlank { "Medicamento" }
+                                val times = item.scheduleTimes.toList()
+                                runCatching {
+                                    setSystemAlarms(context, medName, times)
+                                }
+                                runCatching {
+                                    setSystemCalendarEvent(context, medName, times.firstOrNull() ?: "08:00")
+                                }
+                                Toast.makeText(
+                                    context,
+                                    "Agendamento nativo disparado para $medName.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 46.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = BragaMintSurface,
+                                contentColor = BragaEmeraldDark
+                            ),
+                            border = BorderStroke(1.dp, BragaEmeraldLight)
+                        ) {
+                            Icon(
+                                Icons.Filled.NotificationsActive,
+                                contentDescription = null,
+                                tint = BragaEmerald,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Agendar no Despertador e Calendário",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
@@ -566,7 +843,11 @@ fun BarcodeScannerScreen(
 
             // Validação Reativa e SaMD (RDC 657/2022)
             val allNamesValid = batchList.isNotEmpty() && batchList.all { it.name.trim().length >= 2 }
-            val allTimesValid = batchList.isNotEmpty() && batchList.all { it.scheduleTime.trim().matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$")) }
+            val allTimesValid = batchList.isNotEmpty() && batchList.all { item ->
+                item.scheduleTimes.isNotEmpty() && item.scheduleTimes.all { t ->
+                    t.trim().matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$"))
+                }
+            }
             val canConfirm = allNamesValid && allTimesValid && !isAnalyzingPrescription
             val isConfirmed = confirmed && canConfirm
             val canSave = allNamesValid && allTimesValid && isConfirmed && ui.selectedPatient.canWriteMedication && !ui.loading && !isAnalyzingPrescription
@@ -618,10 +899,13 @@ fun BarcodeScannerScreen(
                         val units = item.totalUnits.toIntOrNull()?.takeIf { it > 0 } ?: 30
                         MedicationBatchItemCreateDto(
                             name = item.name.trim(),
-                            scheduleTimes = listOf(item.scheduleTime.trim()),
+                            scheduleTimes = item.scheduleTimes.map { it.trim() },
                             totalUnits = units,
                             eanBarcode = item.ean.takeIf { it.isNotBlank() },
-                            confirmedWithPrescription = true
+                            confirmedWithPrescription = true,
+                            frequencyIntervalHours = item.intervalHours,
+                            treatmentDurationDays = item.treatmentDurationDays,
+                            anvisaRegistrationNumber = item.anvisaRegistrationNumber.takeIf { it.isNotBlank() }
                         )
                     }
                     viewModel.createMedicationsBatch(
