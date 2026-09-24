@@ -18,6 +18,8 @@ import br.com.bragasaude.data.util.toEntity
 import br.com.bragasaude.ui.util.MedicationAlarmReceiver
 import br.com.bragasaude.ui.medication.MedicationNotificationScheduler
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import br.com.bragasaude.domain.MedicationSchedule
@@ -197,7 +199,7 @@ class MedicationRepository @Inject constructor(
      * Cancela TODOS os alarmes do usuário e reagenda baseado nos medicamentos atuais.
      * Garante consistência após inserir, atualizar ou remover medicamentos.
      */
-    suspend fun syncAlarmsWithDatabase(userId: String) {
+    suspend fun syncAlarmsWithDatabase(userId: String) = withContext(Dispatchers.IO) {
         try {
             val medications = medicationDao.getAllSync(userId)
             MedicationAlarmReceiver.cancelAllAlarms(context, medications)
@@ -212,7 +214,7 @@ class MedicationRepository @Inject constructor(
      * TASK-MED-02: cancela todos os alarmes de um usuário.
      * Usado em logout e exclusão de conta para limpeza completa.
      */
-    suspend fun cancelAllUserAlarms(userId: String) {
+    suspend fun cancelAllUserAlarms(userId: String) = withContext(Dispatchers.IO) {
         try {
             val medications = medicationDao.getAllSync(userId)
             MedicationAlarmReceiver.cancelAllAlarms(context, medications)
@@ -468,11 +470,11 @@ class MedicationRepository @Inject constructor(
      * Sincroniza todos os medicamentos do paciente do gateway para o banco local Room.
      * Garante que os registros criados na nuvem apareçam na tela de estoque e grade de horários.
      */
-    suspend fun syncMedicationsFromServer(patientId: String) {
+    suspend fun syncMedicationsFromServer(patientId: String) = withContext(Dispatchers.IO) {
         try {
             val remoteMeds = apiClient.getPatientMedications(patientId) ?: run {
                 android.util.Log.w("CareOs", "syncMedicationsFromServer: falha ao obter medicamentos do servidor para $patientId, mantendo cache local Room.")
-                return
+                return@withContext
             }
             if (remoteMeds.isNotEmpty()) {
                 medicationDao.insertAll(remoteMeds)
@@ -494,7 +496,7 @@ class MedicationRepository @Inject constructor(
      * Puxa o estoque autoritativo do servidor e alinha o espelho local.
      * Usado após um 409 (a verdade do estoque é o servidor).
      */
-    suspend fun syncStockFromServer(patientId: String) {
+    suspend fun syncStockFromServer(patientId: String) = withContext(Dispatchers.IO) {
         try {
             val items = apiClient.getMedicationStock(patientId)
             val local = medicationDao.getAllSync(patientId)
