@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import br.com.bragasaude.util.safeString
+import br.com.bragasaude.util.safeNullableString
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
@@ -966,7 +968,7 @@ class BragaApiClient @Inject constructor(
         setRequestProperty("Authorization", "Bearer $token")
     }
 
-    private fun JSONObject.nullableString(key: String): String? = if (isNull(key)) null else getString(key)
+    private fun JSONObject.nullableString(key: String): String? = safeNullableString(key)
 
     private fun parseBinding(obj: JSONObject): FamilyBindingEntity = FamilyBindingEntity(
         id = obj.getString("id"), remoteId = obj.getString("id"),
@@ -1324,16 +1326,17 @@ class BragaApiClient @Inject constructor(
             val res = getJson("$baseUrl/api/anvisa/medications/barcode/${java.net.URLEncoder.encode(ean, "UTF-8")}", strict = true)
                 ?: return@withContext null
             BarcodeMedication(
-                eanBarcode = res.optString("ean_barcode"),
-                name = res.optString("name"),
-                activePrinciple = res.nullableString("active_principle"),
-                concentration = res.nullableString("concentration"),
-                pharmaceuticalForm = res.nullableString("pharmaceutical_form"),
-                manufacturer = res.nullableString("manufacturer"),
+                eanBarcode = res.safeString("ean_barcode"),
+                name = res.safeString("name"),
+                activePrinciple = res.safeNullableString("active_principle"),
+                concentration = res.safeNullableString("concentration"),
+                pharmaceuticalForm = res.safeNullableString("pharmaceutical_form"),
+                manufacturer = res.safeNullableString("manufacturer"),
                 farmaciaPopularEligible = if (res.has("farmacia_popular_eligible") && !res.isNull("farmacia_popular_eligible")) res.getBoolean("farmacia_popular_eligible") else null,
-                sourceName = res.optString("source_name"),
-                sourceUrl = res.nullableString("source_url"),
-                sourceCheckedAt = res.nullableString("source_checked_at")
+                sourceName = res.safeString("source_name"),
+                sourceUrl = res.safeNullableString("source_url"),
+                sourceCheckedAt = res.safeNullableString("source_checked_at"),
+                anvisaRegistrationNumber = res.safeNullableString("anvisa_registration_number")
             ).takeIf { it.eanBarcode.length == 13 && it.name.isNotBlank() }
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao consultar catálogo ANVISA: ${e.message}")
@@ -1506,22 +1509,30 @@ class BragaApiClient @Inject constructor(
                     if (pagesArray != null) {
                         for (p in 0 until pagesArray.length()) sourcePages.add(pagesArray.getInt(p))
                     }
+                    val frequencyIntervalHours = if (m.has("frequency_interval_hours") && !m.isNull("frequency_interval_hours")) m.optInt("frequency_interval_hours") else null
+                    val dailyDosesCount = m.optInt("daily_doses_count", 1)
+                    val treatmentDurationDays = if (m.has("treatment_duration_days") && !m.isNull("treatment_duration_days")) m.optInt("treatment_duration_days") else null
+                    val anvisaRegistrationNumber = m.safeNullableString("anvisa_registration_number")
                     medsList.add(
                         AnalyzedMedicationItemDto(
-                            name = m.optString("name", ""),
+                            name = m.safeString("name"),
                             nameDivergent = m.optBoolean("name_divergent", false),
-                            dosage = m.optString("dosage", ""),
+                            dosage = m.safeString("dosage"),
                             dosageDivergent = m.optBoolean("dosage_divergent", false),
                             dosageMg = if (m.has("dosage_mg") && !m.isNull("dosage_mg")) m.optDouble("dosage_mg") else null,
-                            frequency = m.optString("frequency", ""),
+                            frequency = m.safeString("frequency"),
                             frequencyDivergent = m.optBoolean("frequency_divergent", false),
                             suggestedTimes = times,
-                            eanBarcode = m.optString("ean_barcode").takeIf { it.isNotBlank() },
-                            activePrinciple = m.optString("active_principle").takeIf { it.isNotBlank() },
+                            eanBarcode = m.safeNullableString("ean_barcode"),
+                            activePrinciple = m.safeNullableString("active_principle"),
                             confidenceScore = m.optDouble("confidence_score", 0.0),
                             requiresHumanFill = m.optBoolean("requires_human_fill", false),
-                            divergenceReason = m.optString("divergence_reason").takeIf { it.isNotBlank() },
-                            sourcePages = sourcePages
+                            divergenceReason = m.safeNullableString("divergence_reason"),
+                            sourcePages = sourcePages,
+                            frequencyIntervalHours = frequencyIntervalHours,
+                            dailyDosesCount = dailyDosesCount,
+                            treatmentDurationDays = treatmentDurationDays,
+                            anvisaRegistrationNumber = anvisaRegistrationNumber
                         )
                     )
                 }
@@ -1571,6 +1582,9 @@ class BragaApiClient @Inject constructor(
                     item.eanBarcode?.let { put("ean_barcode", it) }
                     put("confirmed_with_prescription", item.confirmedWithPrescription)
                     item.photoReferenceUrl?.let { put("photo_reference_url", it) }
+                    item.frequencyIntervalHours?.let { put("frequency_interval_hours", it) }
+                    item.treatmentDurationDays?.let { put("treatment_duration_days", it) }
+                    item.anvisaRegistrationNumber?.let { put("anvisa_registration_number", it) }
                 }
                 array.put(obj)
             }
