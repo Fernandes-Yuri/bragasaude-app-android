@@ -36,6 +36,7 @@ import br.com.bragasaude.ui.components.MetricInfoCatalog
 import br.com.bragasaude.ui.components.EmeraldHeaderBanner
 import br.com.bragasaude.ui.theme.BragaBackground
 import br.com.bragasaude.ui.theme.BragaEmerald
+import br.com.bragasaude.ui.theme.BragaEmeraldDark
 import br.com.bragasaude.ui.theme.BragaMint
 import br.com.bragasaude.ui.theme.BragaMintBorder
 import br.com.bragasaude.ui.theme.BragaTextPrimary
@@ -52,9 +53,14 @@ fun VitalSignsScreen(
     initialValue: String? = null, // ex: "120/80" ou "105"
     onBack: () -> Unit
 ) {
-    var bloodPressure by remember(initialValue) { 
-        mutableStateOf(if (initialType != "GLUCOSE" && initialValue != null) initialValue else "") 
-    } // Formato "120/80"
+    var systolicInput by remember(initialValue) {
+        mutableStateOf(if (initialType != "GLUCOSE" && initialValue != null) initialValue.substringBefore("/") else "")
+    }
+    var diastolicInput by remember(initialValue) {
+        mutableStateOf(if (initialType != "GLUCOSE" && initialValue != null && initialValue.contains("/")) initialValue.substringAfter("/") else "")
+    }
+    // D-VIT1: formato "120/80" derivado dos dois campos numericos separados.
+    val bloodPressure = remember(systolicInput, diastolicInput) { "$systolicInput/$diastolicInput" }
     var glucose by remember(initialValue) { 
         mutableStateOf(if (initialType == "GLUCOSE" && initialValue != null) initialValue else "") 
     }
@@ -88,6 +94,10 @@ fun VitalSignsScreen(
     val pressureHistory = remember(allVitals) {
         allVitals.mapNotNull { it.systolicPressure?.toDouble() }.reversed()
     }
+    // D-VIT1: serie diastolica para o grafico duplo de pressao arterial.
+    val diastolicHistory = remember(allVitals) {
+        allVitals.mapNotNull { it.diastolicPressure?.toDouble() }.reversed()
+    }
     val glucoseHistory = remember(allVitals) {
         allVitals.mapNotNull { it.glucoseLevel?.toDouble() }.reversed()
     }
@@ -99,10 +109,9 @@ fun VitalSignsScreen(
         }
     }
 
-    // Helper para extrair sistólica e diastólica
-    val bpPair = remember(bloodPressure) {
-        val numbers = "\\d+".toRegex().findAll(bloodPressure).map { it.value }.toList()
-        if (numbers.size >= 2) Pair(numbers[0], numbers[1]) else if (numbers.size == 1) Pair(numbers[0], "") else Pair("", "")
+    // Helper para extrair sistólica e diastólica dos dois campos numericos.
+    val bpPair = remember(systolicInput, diastolicInput) {
+        Pair(systolicInput, diastolicInput)
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -208,24 +217,39 @@ fun VitalSignsScreen(
                         MetricInfoIcon(metricInfo = MetricInfoCatalog.bloodPressure)
                     }
 
-                    OutlinedTextField(
-                        value = bloodPressure,
-                        onValueChange = { bloodPressure = it },
-                        label = { Text("Pressão arterial") },
-                        placeholder = { Text("120/80 ou 12/8") },
-                        supportingText = { Text("Confira o valor em mmHg antes de salvar.") },
-                        suffix = { Text("mmHg") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)
-                    )
+                    // D-VIT1: dois campos numericos separados (Máxima / Mínima).
+                    // Teclado estritamente numerico — o usuario nao precisa mais
+                    // cavar a barra "/" no teclado alfanumerico.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        VitalNumericField(
+                            label = "Máxima (Sistólica)",
+                            value = systolicInput,
+                            onValueChange = { systolicInput = it },
+                            unit = "mmHg",
+                            modifier = Modifier.weight(1f)
+                        )
+                        VitalNumericField(
+                            label = "Mínima (Diastólica)",
+                            value = diastolicInput,
+                            onValueChange = { diastolicInput = it },
+                            unit = "mmHg",
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                     val sys = bpPair.first.toIntOrNull()
                     val dia = bpPair.second.toIntOrNull()
                     if (sys != null && dia != null && sys > 0 && dia > 0) {
                         Spacer(Modifier.height(10.dp))
                         val normalized = BloodPressureParser.parsePressureString(bloodPressure)
                         if (normalized != null) {
-                            Text("Leitura: " + normalized.first + "/" + normalized.second + " mmHg", fontWeight = FontWeight.SemiBold)
+                            // Normalizacao brasileira: 12/8 -> 120/80 mmHg.
+                            Text(
+                                "Leitura: ${normalized.first}/${normalized.second} mmHg",
+                                fontWeight = FontWeight.SemiBold
+                            )
                             BloodPressureRiskBadge(normalized.first, normalized.second)
                         }
                     }
@@ -308,11 +332,12 @@ fun VitalSignsScreen(
                                 )
                                 br.com.bragasaude.ui.components.SimpleTrendChart(
                                     data = pressureHistory,
+                                    secondaryData = diastolicHistory,
                                     timestamps = allVitals.filter { it.systolicPressure != null }.map { it.measuredAt ?: "" }.reversed(),
-                                    referenceRange = 90.0..129.0,
                                     label = "Sistólica",
+                                    secondaryLabel = "Diastólica",
                                     color = MaterialTheme.colorScheme.primary,
-                                    targetValue = 120.0,
+                                    secondaryColor = BragaEmeraldDark,
                                     unit = "mmHg",
                                     showPeriodSelector = true
                                 )
@@ -461,7 +486,8 @@ fun VitalSignsScreen(
                             0,
                             0
                         )
-                        bloodPressure = ""
+                        systolicInput = ""
+                        diastolicInput = ""
                     } else {
                         viewModel.saveVitalSigns(
                             0,
@@ -481,6 +507,41 @@ fun VitalSignsScreen(
             }
         )
     }
+}
+
+/**
+ * D-VIT1: campo numerico isolado para entrada de pressao arterial.
+ *
+ * Teclado estritamente numerico (KeyboardType.Number) — elimina a caca à barra
+ * "/" do teclado alfanumerico. A normalizacao brasileira (12 -> 120) acontece
+ * no [BloodPressureParser], entao o usuario pode digitar 12 e 8 para registrar
+ * 120/80 mmHg.
+ */
+@Composable
+fun VitalNumericField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    unit: String,
+    modifier: Modifier = Modifier,
+    placeholder: String? = null
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        placeholder = placeholder?.let { { Text(it) } },
+        suffix = { Text(unit, style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = BragaEmerald,
+            focusedLabelColor = BragaEmerald,
+            cursorColor = BragaEmerald
+        )
+    )
 }
 
 @Composable
@@ -609,7 +670,7 @@ fun BloodPressureRiskBadge(sys: Int, dia: Int) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = badgeColor.copy(alpha = 0.08f)),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.35f))
     ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
