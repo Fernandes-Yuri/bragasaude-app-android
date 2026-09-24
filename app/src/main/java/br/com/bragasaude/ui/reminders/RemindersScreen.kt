@@ -236,13 +236,13 @@ fun MedicationCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(dose.time, style = MaterialTheme.typography.titleMedium)
+                    Text(dose.time, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     when {
                         dose.taken -> Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) {
                             Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                                 Spacer(Modifier.width(6.dp))
-                                Text("Dose registrada", style = MaterialTheme.typography.labelLarge)
+                                Text("Dose registrada", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                             }
                         }
                         dose.available -> Button(
@@ -252,7 +252,13 @@ fun MedicationCard(
                         ) {
                             Text("Registrar dose")
                         }
-                        else -> Text("Horário: " + dose.time, style = MaterialTheme.typography.bodySmall)
+                        else -> OutlinedButton(
+                            onClick = { onTakeDose(dose.time) },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Registrar agora (${dose.time})")
+                        }
                     }
                 }
             }
