@@ -183,7 +183,9 @@ class MedicationRepository @Inject constructor(
             false
         }
 
-        if (!ok) {
+        if (ok) {
+            syncMedicationsFromServer(patientId)
+        } else {
             medicationDao.insert(updatedMed.copy(pendingSync = true))
             triggerSync()
         }
@@ -449,10 +451,34 @@ class MedicationRepository @Inject constructor(
     ): Boolean {
         val ok = apiClient.createMedicationsBatch(patientId, items)
         if (ok) {
+            syncMedicationsFromServer(patientId)
             syncStockFromServer(patientId)
             triggerSync()
         }
         return ok
+    }
+
+    /**
+     * Sincroniza todos os medicamentos do paciente do gateway para o banco local Room.
+     * Garante que os registros criados na nuvem apareçam na tela de estoque e grade de horários.
+     */
+    suspend fun syncMedicationsFromServer(patientId: String) {
+        try {
+            val remoteMeds = apiClient.getPatientMedications(patientId)
+            if (remoteMeds.isNotEmpty()) {
+                medicationDao.insertAll(remoteMeds)
+                val localMeds = medicationDao.getAllSync(patientId)
+                val remoteIds = remoteMeds.map { it.id }.toSet()
+                for (local in localMeds) {
+                    if (!local.pendingSync && local.id !in remoteIds) {
+                        medicationDao.deleteById(local.id)
+                    }
+                }
+                syncAlarmsWithDatabase(patientId)
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("CareOs", "syncMedicationsFromServer: ${e.message}")
+        }
     }
 
     /**

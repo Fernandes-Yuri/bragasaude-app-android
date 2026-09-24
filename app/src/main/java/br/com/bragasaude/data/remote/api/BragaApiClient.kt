@@ -1873,6 +1873,59 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    private fun deleteJson(urlString: String): JSONObject? {
+        val ok = deleteRequest(urlString)
+        return if (ok) JSONObject().put("status", "success") else null
+    }
+
+    /**
+     * GET /api/family/patients/{patient_id}/medications
+     * Busca todos os medicamentos do paciente para espelhamento no banco local Room.
+     */
+    suspend fun getPatientMedications(patientId: String): List<MedicationEntity> = withContext(Dispatchers.IO) {
+        try {
+            val arr = getJsonArray("$baseUrl/api/family/patients/$patientId/medications") ?: return@withContext emptyList()
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                val scheduleTimesStr = when {
+                    o.optJSONArray("schedule_times") != null -> {
+                        val stArr = o.getJSONArray("schedule_times")
+                        (0 until stArr.length()).map { stArr.getString(it) }.joinToString(",")
+                    }
+                    else -> o.safeString("schedule_times")
+                }
+                val scheduleTimeStr = o.safeString("schedule_time").ifBlank {
+                    scheduleTimesStr.split(",").firstOrNull()?.trim()?.ifBlank { "08:00" } ?: "08:00"
+                }
+                MedicationEntity(
+                    id = o.safeString("id"),
+                    userId = o.safeString("user_id").ifBlank { patientId },
+                    name = o.safeString("name"),
+                    dosage = o.safeNullableString("dosage") ?: if (o.has("dosage_mg") && !o.isNull("dosage_mg")) "${o.optDouble("dosage_mg")}mg" else null,
+                    dosageMg = if (o.has("dosage_mg") && !o.isNull("dosage_mg")) o.optDouble("dosage_mg") else null,
+                    pillQuantity = if (o.has("pill_quantity") && !o.isNull("pill_quantity")) o.optInt("pill_quantity") else null,
+                    scheduleTime = scheduleTimeStr,
+                    scheduleTimes = scheduleTimesStr.ifBlank { scheduleTimeStr },
+                    notes = o.safeNullableString("notes") ?: o.safeNullableString("meal_context"),
+                    eanBarcode = o.safeNullableString("ean_barcode"),
+                    activePrinciple = o.safeNullableString("active_principle"),
+                    manufacturer = o.safeNullableString("manufacturer"),
+                    pharmaceuticalForm = o.safeNullableString("pharmaceutical_form"),
+                    totalUnits = o.optInt("total_units", 30),
+                    currentUnits = o.optInt("current_units", o.optInt("total_units", 30)),
+                    alertThresholdDays = o.optInt("alert_threshold_days", 5),
+                    photoReferenceUrl = o.safeNullableString("photo_reference_url"),
+                    confirmedWithPrescription = o.optBoolean("confirmed_with_prescription", true),
+                    lastRestockDate = BragaTime.nowMillis(),
+                    pendingSync = false
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao buscar medicamentos completos do paciente: ${e.message}")
+            emptyList()
+        }
+    }
+
     /**
      * DELETE /api/family/patients/{patient_id}/medications/{medication_id}
      * Exclusão definitiva de medicamento (LGPD Art. 18).

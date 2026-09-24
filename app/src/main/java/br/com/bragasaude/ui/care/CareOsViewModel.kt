@@ -170,6 +170,7 @@ class CareOsViewModel @Inject constructor(
     }
 
     private suspend fun refreshAll(id: String) {
+        medicationRepository.syncMedicationsFromServer(id)
         medicationRepository.syncStockFromServer(id)
         careOsRepository.syncCareWall(id)
         careOsRepository.syncSymptomsDiary(id)
