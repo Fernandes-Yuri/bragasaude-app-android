@@ -470,7 +470,10 @@ class MedicationRepository @Inject constructor(
      */
     suspend fun syncMedicationsFromServer(patientId: String) {
         try {
-            val remoteMeds = apiClient.getPatientMedications(patientId)
+            val remoteMeds = apiClient.getPatientMedications(patientId) ?: run {
+                android.util.Log.w("CareOs", "syncMedicationsFromServer: falha ao obter medicamentos do servidor para $patientId, mantendo cache local Room.")
+                return
+            }
             if (remoteMeds.isNotEmpty()) {
                 medicationDao.insertAll(remoteMeds)
             }

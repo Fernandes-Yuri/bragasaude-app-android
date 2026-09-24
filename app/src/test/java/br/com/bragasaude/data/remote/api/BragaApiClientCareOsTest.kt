@@ -437,9 +437,9 @@ class BragaApiClientCareOsTest {
         """.trimIndent()))
 
         val meds = api.getPatientMedications("p1")
-        assertEquals(2, meds.size)
+        assertEquals(2, meds?.size)
 
-        val m1 = meds[0]
+        val m1 = meds!![0]
         assertEquals("med-101", m1.id)
         assertEquals("p1", m1.userId)
         assertEquals("Losartana Potássica", m1.name)
@@ -465,6 +465,20 @@ class BragaApiClientCareOsTest {
         assertEquals("/api/family/patients/p1/medications", request.path)
         assertEquals("GET", request.method)
         assertEquals("Bearer care-os-token", request.getHeader("Authorization"))
+    }
+
+    @Test
+    fun `getPatientMedications returns null on HTTP 500 server error`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(500))
+        val meds = api.getPatientMedications("p1")
+        assertNull(meds)
+    }
+
+    @Test
+    fun `getPatientMedications returns empty list on HTTP 200 with empty array`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("[]"))
+        val meds = api.getPatientMedications("p1")
+        assertEquals(emptyList<MedicationEntity>(), meds)
     }
 }
 

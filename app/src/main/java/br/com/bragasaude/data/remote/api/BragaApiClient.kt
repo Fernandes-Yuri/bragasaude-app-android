@@ -1883,9 +1883,9 @@ class BragaApiClient @Inject constructor(
      * GET /api/family/patients/{patient_id}/medications
      * Busca todos os medicamentos do paciente para espelhamento no banco local Room.
      */
-    suspend fun getPatientMedications(patientId: String): List<MedicationEntity> = withContext(Dispatchers.IO) {
+    suspend fun getPatientMedications(patientId: String): List<MedicationEntity>? = withContext(Dispatchers.IO) {
         try {
-            val arr = getJsonArray("$baseUrl/api/family/patients/$patientId/medications") ?: return@withContext emptyList()
+            val arr = getJsonArray("$baseUrl/api/family/patients/$patientId/medications") ?: return@withContext null
             (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
                 val scheduleTimesStr = when {
@@ -1923,7 +1923,7 @@ class BragaApiClient @Inject constructor(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao buscar medicamentos completos do paciente: ${e.message}")
-            emptyList()
+            null
         }
     }
 
