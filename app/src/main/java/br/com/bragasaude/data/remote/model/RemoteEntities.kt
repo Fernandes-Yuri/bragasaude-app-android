@@ -315,7 +315,8 @@ data class BarcodeMedication(
     @SerialName("farmacia_popular_eligible") val farmaciaPopularEligible: Boolean? = null,
     @SerialName("source_name") val sourceName: String,
     @SerialName("source_url") val sourceUrl: String? = null,
-    @SerialName("source_checked_at") val sourceCheckedAt: String? = null
+    @SerialName("source_checked_at") val sourceCheckedAt: String? = null,
+    @SerialName("anvisa_registration_number") val anvisaRegistrationNumber: String? = null
 )
 
 /** Anexo de receita (RDC 657/2022) — obrigatório no cadastro. */

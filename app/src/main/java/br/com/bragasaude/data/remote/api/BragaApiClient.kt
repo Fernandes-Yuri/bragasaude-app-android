@@ -11,6 +11,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import br.com.bragasaude.util.safeString
+import br.com.bragasaude.util.safeNullableString
+import br.com.bragasaude.util.BragaTime
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
@@ -966,7 +973,7 @@ class BragaApiClient @Inject constructor(
         setRequestProperty("Authorization", "Bearer $token")
     }
 
-    private fun JSONObject.nullableString(key: String): String? = if (isNull(key)) null else getString(key)
+    private fun JSONObject.nullableString(key: String): String? = safeNullableString(key)
 
     private fun parseBinding(obj: JSONObject): FamilyBindingEntity = FamilyBindingEntity(
         id = obj.getString("id"), remoteId = obj.getString("id"),
@@ -1324,16 +1331,17 @@ class BragaApiClient @Inject constructor(
             val res = getJson("$baseUrl/api/anvisa/medications/barcode/${java.net.URLEncoder.encode(ean, "UTF-8")}", strict = true)
                 ?: return@withContext null
             BarcodeMedication(
-                eanBarcode = res.optString("ean_barcode"),
-                name = res.optString("name"),
-                activePrinciple = res.nullableString("active_principle"),
-                concentration = res.nullableString("concentration"),
-                pharmaceuticalForm = res.nullableString("pharmaceutical_form"),
-                manufacturer = res.nullableString("manufacturer"),
+                eanBarcode = res.safeString("ean_barcode"),
+                name = res.safeString("name"),
+                activePrinciple = res.safeNullableString("active_principle"),
+                concentration = res.safeNullableString("concentration"),
+                pharmaceuticalForm = res.safeNullableString("pharmaceutical_form"),
+                manufacturer = res.safeNullableString("manufacturer"),
                 farmaciaPopularEligible = if (res.has("farmacia_popular_eligible") && !res.isNull("farmacia_popular_eligible")) res.getBoolean("farmacia_popular_eligible") else null,
-                sourceName = res.optString("source_name"),
-                sourceUrl = res.nullableString("source_url"),
-                sourceCheckedAt = res.nullableString("source_checked_at")
+                sourceName = res.safeString("source_name"),
+                sourceUrl = res.safeNullableString("source_url"),
+                sourceCheckedAt = res.safeNullableString("source_checked_at"),
+                anvisaRegistrationNumber = res.safeNullableString("anvisa_registration_number")
             ).takeIf { it.eanBarcode.length == 13 && it.name.isNotBlank() }
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao consultar catálogo ANVISA: ${e.message}")
@@ -1506,22 +1514,30 @@ class BragaApiClient @Inject constructor(
                     if (pagesArray != null) {
                         for (p in 0 until pagesArray.length()) sourcePages.add(pagesArray.getInt(p))
                     }
+                    val frequencyIntervalHours = if (m.has("frequency_interval_hours") && !m.isNull("frequency_interval_hours")) m.optInt("frequency_interval_hours") else null
+                    val dailyDosesCount = m.optInt("daily_doses_count", 1)
+                    val treatmentDurationDays = if (m.has("treatment_duration_days") && !m.isNull("treatment_duration_days")) m.optInt("treatment_duration_days") else null
+                    val anvisaRegistrationNumber = m.safeNullableString("anvisa_registration_number")
                     medsList.add(
                         AnalyzedMedicationItemDto(
-                            name = m.optString("name", ""),
+                            name = m.safeString("name"),
                             nameDivergent = m.optBoolean("name_divergent", false),
-                            dosage = m.optString("dosage", ""),
+                            dosage = m.safeString("dosage"),
                             dosageDivergent = m.optBoolean("dosage_divergent", false),
                             dosageMg = if (m.has("dosage_mg") && !m.isNull("dosage_mg")) m.optDouble("dosage_mg") else null,
-                            frequency = m.optString("frequency", ""),
+                            frequency = m.safeString("frequency"),
                             frequencyDivergent = m.optBoolean("frequency_divergent", false),
                             suggestedTimes = times,
-                            eanBarcode = m.optString("ean_barcode").takeIf { it.isNotBlank() },
-                            activePrinciple = m.optString("active_principle").takeIf { it.isNotBlank() },
+                            eanBarcode = m.safeNullableString("ean_barcode"),
+                            activePrinciple = m.safeNullableString("active_principle"),
                             confidenceScore = m.optDouble("confidence_score", 0.0),
                             requiresHumanFill = m.optBoolean("requires_human_fill", false),
-                            divergenceReason = m.optString("divergence_reason").takeIf { it.isNotBlank() },
-                            sourcePages = sourcePages
+                            divergenceReason = m.safeNullableString("divergence_reason"),
+                            sourcePages = sourcePages,
+                            frequencyIntervalHours = frequencyIntervalHours,
+                            dailyDosesCount = dailyDosesCount,
+                            treatmentDurationDays = treatmentDurationDays,
+                            anvisaRegistrationNumber = anvisaRegistrationNumber
                         )
                     )
                 }
@@ -1571,6 +1587,9 @@ class BragaApiClient @Inject constructor(
                     item.eanBarcode?.let { put("ean_barcode", it) }
                     put("confirmed_with_prescription", item.confirmedWithPrescription)
                     item.photoReferenceUrl?.let { put("photo_reference_url", it) }
+                    item.frequencyIntervalHours?.let { put("frequency_interval_hours", it) }
+                    item.treatmentDurationDays?.let { put("treatment_duration_days", it) }
+                    item.anvisaRegistrationNumber?.let { put("anvisa_registration_number", it) }
                 }
                 array.put(obj)
             }
@@ -1823,6 +1842,125 @@ class BragaApiClient @Inject constructor(
             null
         } finally {
             try { conn?.disconnect() } catch (_: Exception) {}
+        }
+    }
+
+    private val okHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(CONNECT_TIMEOUT_MS.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
+            .readTimeout(READ_TIMEOUT_MS.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
+            .build()
+    }
+
+    private fun patchJson(urlString: String, json: JSONObject): Boolean {
+        val token = authService.getTokenBlocking()
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val body = json.toString().toRequestBody(mediaType)
+        val requestBuilder = Request.Builder()
+            .url(urlString)
+            .patch(body)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .header("Accept", "application/json")
+        if (token != null && !URL(urlString).path.startsWith("/api/auth/")) {
+            requestBuilder.header("Authorization", "Bearer $token")
+        }
+        return try {
+            okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
+                response.isSuccessful
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "patchJson falhou: ${e.message}")
+            false
+        }
+    }
+
+    private fun deleteJson(urlString: String): JSONObject? {
+        val ok = deleteRequest(urlString)
+        return if (ok) JSONObject().put("status", "success") else null
+    }
+
+    /**
+     * GET /api/family/patients/{patient_id}/medications
+     * Busca todos os medicamentos do paciente para espelhamento no banco local Room.
+     */
+    suspend fun getPatientMedications(patientId: String): List<MedicationEntity>? = withContext(Dispatchers.IO) {
+        try {
+            val arr = getJsonArray("$baseUrl/api/family/patients/$patientId/medications") ?: return@withContext null
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                val scheduleTimesStr = when {
+                    o.optJSONArray("schedule_times") != null -> {
+                        val stArr = o.getJSONArray("schedule_times")
+                        (0 until stArr.length()).map { stArr.getString(it) }.joinToString(",")
+                    }
+                    else -> o.safeString("schedule_times")
+                }
+                val scheduleTimeStr = o.safeString("schedule_time").ifBlank {
+                    scheduleTimesStr.split(",").firstOrNull()?.trim()?.ifBlank { "08:00" } ?: "08:00"
+                }
+                MedicationEntity(
+                    id = o.safeString("id"),
+                    userId = o.safeString("user_id").ifBlank { patientId },
+                    name = o.safeString("name"),
+                    dosage = o.safeNullableString("dosage") ?: if (o.has("dosage_mg") && !o.isNull("dosage_mg")) "${o.optDouble("dosage_mg")}mg" else null,
+                    dosageMg = if (o.has("dosage_mg") && !o.isNull("dosage_mg")) o.optDouble("dosage_mg") else null,
+                    pillQuantity = if (o.has("pill_quantity") && !o.isNull("pill_quantity")) o.optInt("pill_quantity") else null,
+                    scheduleTime = scheduleTimeStr,
+                    scheduleTimes = scheduleTimesStr.ifBlank { scheduleTimeStr },
+                    notes = o.safeNullableString("notes") ?: o.safeNullableString("meal_context"),
+                    eanBarcode = o.safeNullableString("ean_barcode"),
+                    activePrinciple = o.safeNullableString("active_principle"),
+                    manufacturer = o.safeNullableString("manufacturer"),
+                    pharmaceuticalForm = o.safeNullableString("pharmaceutical_form"),
+                    totalUnits = o.optInt("total_units", 30),
+                    currentUnits = o.optInt("current_units", o.optInt("total_units", 30)),
+                    alertThresholdDays = o.optInt("alert_threshold_days", 5),
+                    photoReferenceUrl = o.safeNullableString("photo_reference_url"),
+                    confirmedWithPrescription = o.optBoolean("confirmed_with_prescription", true),
+                    lastRestockDate = BragaTime.nowMillis(),
+                    pendingSync = false
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao buscar medicamentos completos do paciente: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * DELETE /api/family/patients/{patient_id}/medications/{medication_id}
+     * Exclusão definitiva de medicamento (LGPD Art. 18).
+     */
+    suspend fun deleteMedication(patientId: String, medicationId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            deleteRequest("$baseUrl/api/family/patients/$patientId/medications/$medicationId")
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao excluir medicamento: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * PATCH /api/family/patients/{patient_id}/medications/{medication_id}
+     * Edição de horários, posologia e contexto alimentar.
+     */
+    suspend fun updateMedicationSchedule(
+        patientId: String,
+        medicationId: String,
+        scheduleTimes: List<String>,
+        mealContext: String? = null,
+        frequencyIntervalHours: Int? = null
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                put("schedule_times", JSONArray(scheduleTimes))
+                mealContext?.let { put("meal_context", it) }
+                frequencyIntervalHours?.let { put("frequency_interval_hours", it) }
+            }
+            patchJson("$baseUrl/api/family/patients/$patientId/medications/$medicationId", json)
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao atualizar horários do medicamento: ${e.message}")
+            false
         }
     }
 }

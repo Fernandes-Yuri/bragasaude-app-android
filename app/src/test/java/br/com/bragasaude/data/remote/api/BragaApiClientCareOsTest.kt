@@ -1,5 +1,6 @@
 package br.com.bragasaude.data.remote.api
 
+import br.com.bragasaude.data.local.MedicationEntity
 import br.com.bragasaude.data.remote.auth.AuthService
 import br.com.bragasaude.data.remote.model.MedicationCreate
 import br.com.bragasaude.data.remote.model.MedicationTakeRequest
@@ -15,6 +16,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.json.JSONObject
+import br.com.bragasaude.util.safeString
+import br.com.bragasaude.util.safeNullableString
 import org.junit.Before
 import org.junit.Test
 
@@ -185,7 +189,11 @@ class BragaApiClientCareOsTest {
                   "confidence_score": 0.98,
                   "requires_human_fill": false,
                   "divergence_reason": null,
-                  "source_pages": [1, 2]
+                  "source_pages": [1, 2],
+                  "frequency_interval_hours": 24,
+                  "daily_doses_count": 1,
+                  "treatment_duration_days": 30,
+                  "anvisa_registration_number": "1023501230012"
                 },
                 {
                   "name": "",
@@ -201,7 +209,11 @@ class BragaApiClientCareOsTest {
                   "confidence_score": 0.42,
                   "requires_human_fill": true,
                   "divergence_reason": "Caligrafia médica duvidosa no item 2",
-                  "source_pages": [1]
+                  "source_pages": [1],
+                  "frequency_interval_hours": null,
+                  "daily_doses_count": 1,
+                  "treatment_duration_days": null,
+                  "anvisa_registration_number": null
                 }
               ],
               "raw_ocr_snippet": "1. Losartana 50mg 1x dia 08:00\n2. ???"
@@ -229,6 +241,10 @@ class BragaApiClientCareOsTest {
         assertEquals(false, med1?.requiresHumanFill)
         assertNull(med1?.divergenceReason)
         assertEquals(listOf(1, 2), med1?.sourcePages)
+        assertEquals(24, med1?.frequencyIntervalHours)
+        assertEquals(1, med1?.dailyDosesCount)
+        assertEquals(30, med1?.treatmentDurationDays)
+        assertEquals("1023501230012", med1?.anvisaRegistrationNumber)
 
         val med2 = result?.medications?.get(1)
         assertEquals("", med2?.name)
@@ -237,6 +253,10 @@ class BragaApiClientCareOsTest {
         assertEquals(true, med2?.requiresHumanFill)
         assertEquals("Caligrafia médica duvidosa no item 2", med2?.divergenceReason)
         assertEquals(listOf(1), med2?.sourcePages)
+        assertNull(med2?.frequencyIntervalHours)
+        assertEquals(1, med2?.dailyDosesCount)
+        assertNull(med2?.treatmentDurationDays)
+        assertNull(med2?.anvisaRegistrationNumber)
 
         val request = server.takeRequest()
         assertEquals("/api/family/patients/p1/prescriptions/analyze", request.path)
@@ -262,7 +282,10 @@ class BragaApiClientCareOsTest {
                 scheduleTimes = listOf("08:00"),
                 totalUnits = 30,
                 eanBarcode = "7896004715506",
-                confirmedWithPrescription = true
+                confirmedWithPrescription = true,
+                frequencyIntervalHours = 24,
+                treatmentDurationDays = 30,
+                anvisaRegistrationNumber = "1023501230012"
             ),
             MedicationBatchItemCreateDto(
                 name = "Metformina 850mg",
@@ -270,7 +293,10 @@ class BragaApiClientCareOsTest {
                 scheduleTimes = listOf("12:00", "20:00"),
                 totalUnits = 60,
                 eanBarcode = "7896004715507",
-                confirmedWithPrescription = true
+                confirmedWithPrescription = true,
+                frequencyIntervalHours = 12,
+                treatmentDurationDays = 60,
+                anvisaRegistrationNumber = null
             )
         )
 
@@ -287,13 +313,173 @@ class BragaApiClientCareOsTest {
         assertTrue(body.contains(""""name":"Losartana Potássica 50mg""""))
         assertTrue(body.contains(""""dosage_mg":50"""))
         assertTrue(body.contains(""""total_units":30"""))
+        assertTrue(body.contains(""""frequency_interval_hours":24"""))
+        assertTrue(body.contains(""""treatment_duration_days":30"""))
+        assertTrue(body.contains(""""anvisa_registration_number":"1023501230012""""))
         assertTrue(body.contains(""""name":"Metformina 850mg""""))
         assertTrue(body.contains(""""total_units":60"""))
         assertTrue(body.contains(""""confirmed_with_prescription":true"""))
+        assertTrue(body.contains(""""schedule_times":["12:00","20:00"]"""))
 
         // Error case: 500 response
         server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"internal"}"""))
         val failResult = api.createMedicationsBatch("p1", items)
         assertFalse(failResult)
     }
+
+    @Test
+    fun `safeString and safeNullableString properly filter null none and undefined`() {
+        val json = JSONObject("""
+            {
+              "literal_null": "null",
+              "literal_none": "none",
+              "literal_undefined": "undefined",
+              "actual_null": null,
+              "blank_str": "   ",
+              "valid_str": "Losartana 50mg"
+            }
+        """.trimIndent())
+
+        assertEquals("", json.safeString("literal_null"))
+        assertEquals("", json.safeString("literal_none"))
+        assertEquals("", json.safeString("literal_undefined"))
+        assertEquals("", json.safeString("actual_null"))
+        assertEquals("", json.safeString("missing_key"))
+        assertEquals("Losartana 50mg", json.safeString("valid_str"))
+
+        assertNull(json.safeNullableString("literal_null"))
+        assertNull(json.safeNullableString("literal_none"))
+        assertNull(json.safeNullableString("literal_undefined"))
+        assertNull(json.safeNullableString("actual_null"))
+        assertNull(json.safeNullableString("blank_str"))
+        assertNull(json.safeNullableString("missing_key"))
+        assertEquals("Losartana 50mg", json.safeNullableString("valid_str"))
+    }
+
+    @Test
+    fun `deleteMedication sends DELETE to canonical endpoint with LGPD compliance`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(204))
+
+        val result = api.deleteMedication("patient-42", "med-uuid-999")
+        assertTrue(result)
+
+        val request = server.takeRequest()
+        assertEquals("/api/family/patients/patient-42/medications/med-uuid-999", request.path)
+        assertEquals("DELETE", request.method)
+        assertEquals("Bearer care-os-token", request.getHeader("Authorization"))
+
+        // Error case: 500
+        server.enqueue(MockResponse().setResponseCode(500))
+        val failResult = api.deleteMedication("patient-42", "med-uuid-999")
+        assertFalse(failResult)
+    }
+
+    @Test
+    fun `updateMedicationSchedule sends PATCH with schedule and meal context payload`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"status":"updated"}"""))
+
+        val result = api.updateMedicationSchedule(
+            patientId = "patient-42",
+            medicationId = "med-uuid-999",
+            scheduleTimes = listOf("08:00", "20:00"),
+            mealContext = "AFTER_MEAL",
+            frequencyIntervalHours = 12
+        )
+        assertTrue(result)
+
+        val request = server.takeRequest()
+        assertEquals("/api/family/patients/patient-42/medications/med-uuid-999", request.path)
+        assertEquals("PATCH", request.method)
+        assertEquals("Bearer care-os-token", request.getHeader("Authorization"))
+        assertTrue(request.getHeader("Content-Type")?.contains("application/json") == true)
+
+        val body = JSONObject(request.body.readUtf8())
+        assertEquals(2, body.getJSONArray("schedule_times").length())
+        assertEquals("08:00", body.getJSONArray("schedule_times").getString(0))
+        assertEquals("20:00", body.getJSONArray("schedule_times").getString(1))
+        assertEquals("AFTER_MEAL", body.getString("meal_context"))
+        assertEquals(12, body.getInt("frequency_interval_hours"))
+
+        // Error case: 400
+        server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"invalid_times"}"""))
+        val failResult = api.updateMedicationSchedule(
+            patientId = "patient-42",
+            medicationId = "med-uuid-999",
+            scheduleTimes = listOf("08:00")
+        )
+        assertFalse(failResult)
+    }
+
+    @Test
+    fun `getPatientMedications parses list of medications and maps to MedicationEntity correctly`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""
+            [
+              {
+                "id": "med-101",
+                "user_id": "p1",
+                "name": "Losartana Potássica",
+                "dosage_mg": 50.0,
+                "schedule_times": ["08:00", "20:00"],
+                "total_units": 30,
+                "current_units": 28,
+                "ean_barcode": "7896004715506",
+                "meal_context": "AFTER_MEAL",
+                "photo_reference_url": "https://cdn.bragasaude.com/meds/losartana.png",
+                "confirmed_with_prescription": true
+              },
+              {
+                "id": "med-102",
+                "name": "Sinvastatina 20mg",
+                "dosage": "20mg",
+                "schedule_times": "21:00",
+                "total_units": 30
+              }
+            ]
+        """.trimIndent()))
+
+        val meds = api.getPatientMedications("p1")
+        assertEquals(2, meds?.size)
+
+        val m1 = meds!![0]
+        assertEquals("med-101", m1.id)
+        assertEquals("p1", m1.userId)
+        assertEquals("Losartana Potássica", m1.name)
+        assertEquals(50.0, m1.dosageMg)
+        assertEquals("08:00", m1.scheduleTime)
+        assertEquals("08:00,20:00", m1.scheduleTimes)
+        assertEquals(28, m1.currentUnits)
+        assertEquals(30, m1.totalUnits)
+        assertEquals("7896004715506", m1.eanBarcode)
+        assertEquals("AFTER_MEAL", m1.notes)
+        assertEquals("https://cdn.bragasaude.com/meds/losartana.png", m1.photoReferenceUrl)
+        assertTrue(m1.confirmedWithPrescription)
+
+        val m2 = meds[1]
+        assertEquals("med-102", m2.id)
+        assertEquals("p1", m2.userId)
+        assertEquals("Sinvastatina 20mg", m2.name)
+        assertEquals("20mg", m2.dosage)
+        assertEquals("21:00", m2.scheduleTime)
+        assertEquals("21:00", m2.scheduleTimes)
+
+        val request = server.takeRequest()
+        assertEquals("/api/family/patients/p1/medications", request.path)
+        assertEquals("GET", request.method)
+        assertEquals("Bearer care-os-token", request.getHeader("Authorization"))
+    }
+
+    @Test
+    fun `getPatientMedications returns null on HTTP 500 server error`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(500))
+        val meds = api.getPatientMedications("p1")
+        assertNull(meds)
+    }
+
+    @Test
+    fun `getPatientMedications returns empty list on HTTP 200 with empty array`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("[]"))
+        val meds = api.getPatientMedications("p1")
+        assertTrue(meds != null && meds.isEmpty())
+    }
 }
+
