@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 48,
-    "identityHash": "2ed85545c458fdd8870048c28f4266e6",
+    "identityHash": "3f3ff726f42b0161b35954868d8fb2d5",
     "entities": [
       {
         "tableName": "vital_signs_local",
@@ -925,7 +925,7 @@
       },
       {
         "tableName": "medication_logs_local",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `userId` TEXT NOT NULL, `medicationId` TEXT NOT NULL, `takenAt` INTEGER NOT NULL, `scheduledFor` TEXT, `actorId` TEXT, `unitsTaken` INTEGER NOT NULL, `idempotencyKey` TEXT, `pendingSync` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `userId` TEXT NOT NULL, `medicationId` TEXT NOT NULL, `takenAt` INTEGER NOT NULL, `scheduledFor` TEXT, `actorId` TEXT, `unitsTaken` INTEGER NOT NULL, `idempotencyKey` TEXT, `careOsScheduledFor` TEXT, `pendingSync` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -970,6 +970,11 @@
           {
             "fieldPath": "idempotencyKey",
             "columnName": "idempotencyKey",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "careOsScheduledFor",
+            "columnName": "careOsScheduledFor",
             "affinity": "TEXT"
           },
           {
@@ -1680,7 +1685,7 @@
       },
       {
         "tableName": "family_bindings_local",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `patientUserId` TEXT NOT NULL, `caregiverUserId` TEXT NOT NULL, `caregiverName` TEXT NOT NULL, `caregiverRelation` TEXT NOT NULL, `connectionCode` TEXT NOT NULL, `status` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `expiresAt` INTEGER NOT NULL, `remoteId` TEXT, `pendingSync` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `patientUserId` TEXT NOT NULL, `caregiverUserId` TEXT NOT NULL, `caregiverName` TEXT NOT NULL, `caregiverRelation` TEXT NOT NULL, `connectionCode` TEXT NOT NULL, `status` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `expiresAt` INTEGER NOT NULL, `remoteId` TEXT, `patientName` TEXT, `caregiverRole` TEXT NOT NULL, `permissionsJson` TEXT NOT NULL, `pendingSync` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -1740,6 +1745,23 @@
             "fieldPath": "remoteId",
             "columnName": "remoteId",
             "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "patientName",
+            "columnName": "patientName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "caregiverRole",
+            "columnName": "caregiverRole",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "permissionsJson",
+            "columnName": "permissionsJson",
+            "affinity": "TEXT",
+            "notNull": true
           },
           {
             "fieldPath": "pendingSync",
@@ -2395,7 +2417,7 @@
       },
       {
         "tableName": "ble_telemetry_receipts_local",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `patientId` TEXT NOT NULL, `deviceId` TEXT NOT NULL, `deviceType` TEXT NOT NULL, `protocol` TEXT NOT NULL, `measuredAt` INTEGER NOT NULL, `pendingSync` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `patientId` TEXT NOT NULL, `deviceId` TEXT NOT NULL, `deviceType` TEXT NOT NULL, `protocol` TEXT NOT NULL, `measuredAt` INTEGER NOT NULL, `systolicPressure` INTEGER, `diastolicPressure` INTEGER, `glucoseLevel` INTEGER, `pendingSync` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -2434,6 +2456,21 @@
             "notNull": true
           },
           {
+            "fieldPath": "systolicPressure",
+            "columnName": "systolicPressure",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "diastolicPressure",
+            "columnName": "diastolicPressure",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "glucoseLevel",
+            "columnName": "glucoseLevel",
+            "affinity": "INTEGER"
+          },
+          {
             "fieldPath": "pendingSync",
             "columnName": "pendingSync",
             "affinity": "INTEGER",
@@ -2463,7 +2500,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2ed85545c458fdd8870048c28f4266e6')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3f3ff726f42b0161b35954868d8fb2d5')"
     ]
   }
 }
