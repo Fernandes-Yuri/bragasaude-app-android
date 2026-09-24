@@ -9,13 +9,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import android.content.Intent
+import android.provider.CalendarContract
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Medication
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
@@ -310,12 +316,70 @@ fun MedicationStockScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 96.dp)
                 ) {
+                    if (ui.selectedPatient.canWriteMedication) {
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showAddChoice = true },
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                                border = BorderStroke(1.dp, BragaMintBorder)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = BragaEmerald,
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Add,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.width(14.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Cadastrar Novo Medicamento",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            color = BragaTextPrimary
+                                        )
+                                        Text(
+                                            text = "Escaneie a caixa EAN-13, anexe receita ou digite",
+                                            fontSize = 13.sp,
+                                            color = BragaTextSecondary
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                        contentDescription = null,
+                                        tint = BragaEmeraldDark,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                     items(ui.medications, key = { it.id }) { med ->
                         MedicationStockCard(
                             medication = med,
                             daysRemaining = viewModel.daysRemaining(med),
                             isCritical = viewModel.isStockCritical(med),
                             onTake = { viewModel.takeDose(med.id) },
+                            onSendReminder = {
+                                val times = MedicationSchedule.times(med.scheduleTimes, med.scheduleTime)
+                                viewModel.sendMedicationReminder(med.name, times)
+                            },
                             onRestock = { units -> viewModel.restock(med.id, units) },
                             onDelete = { viewModel.deleteMedication(med.id) },
                             onEditSchedule = { times, mealContext, intervalHours ->
@@ -517,6 +581,7 @@ private fun MedicationStockCard(
     daysRemaining: Double,
     isCritical: Boolean,
     onTake: () -> Unit,
+    onSendReminder: () -> Unit = {},
     onRestock: (Int) -> Unit,
     onDelete: () -> Unit,
     onEditSchedule: (times: List<String>, mealContext: String?, intervalHours: Int?) -> Unit,
@@ -526,10 +591,12 @@ private fun MedicationStockCard(
     canDelete: Boolean,
     loading: Boolean
 ) {
+    val context = LocalContext.current
     var showRestock by remember { mutableStateOf(false) }
     var restockQty by remember { mutableStateOf(medication.totalUnits.toString()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showEditSchedule by remember { mutableStateOf(false) }
+    var showCalendarPrompt by remember { mutableStateOf(false) }
     val currentTimes = remember(medication.scheduleTimes, medication.scheduleTime) {
         MedicationSchedule.times(medication.scheduleTimes, medication.scheduleTime)
     }
@@ -781,17 +848,32 @@ private fun MedicationStockCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Button(
-                    onClick = onTake,
-                    enabled = !loading && medication.currentUnits > 0 && canTake,
-                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 52.dp)
-                ) {
-                    Icon(Icons.Filled.CheckCircle, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Tomar dose", color = Color.White, fontSize = 16.sp)
+                if (canTake) {
+                    Button(
+                        onClick = onTake,
+                        enabled = !loading && medication.currentUnits > 0,
+                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 52.dp)
+                    ) {
+                        Icon(Icons.Filled.CheckCircle, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Tomar dose", color = Color.White, fontSize = 16.sp)
+                    }
+                } else {
+                    Button(
+                        onClick = onSendReminder,
+                        enabled = !loading,
+                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmeraldDark),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 52.dp)
+                    ) {
+                        Icon(Icons.Filled.NotificationsActive, contentDescription = null, tint = Color.White)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Enviar Lembrete", color = Color.White, fontSize = 15.sp)
+                    }
                 }
                 OutlinedButton(
                     onClick = { showRestock = !showRestock },
@@ -826,14 +908,27 @@ private fun MedicationStockCard(
                 ) { Text("Confirmar reposição", color = Color.White) }
             }
 
-            // Ações secundárias: Editar Horários e Excluir
-            if (canEdit || canDelete) {
-                HorizontalDivider(color = BragaCardBorder.copy(alpha = 0.5f), thickness = 1.dp)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+            // Ações secundárias: Agenda/Alarme, Editar Horários e Excluir
+            HorizontalDivider(color = BragaCardBorder.copy(alpha = 0.5f), thickness = 1.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(
+                    onClick = { showCalendarPrompt = true },
+                    modifier = Modifier.heightIn(min = 48.dp)
                 ) {
+                    Icon(
+                        Icons.Filled.CalendarMonth,
+                        contentDescription = null,
+                        tint = BragaEmeraldDark,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("Agenda / Alarme", color = BragaEmeraldDark, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     if (canEdit) {
                         TextButton(
                             onClick = { showEditSchedule = true },
@@ -845,12 +940,12 @@ private fun MedicationStockCard(
                                 tint = BragaEmeraldDark,
                                 modifier = Modifier.size(18.dp)
                             )
-                            Spacer(Modifier.width(6.dp))
-                            Text("Editar horários", color = BragaEmeraldDark, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Spacer(Modifier.width(4.dp))
+                            Text("Editar horários", color = BragaEmeraldDark, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                     if (canDelete) {
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(4.dp))
                         TextButton(
                             onClick = { showDeleteConfirm = true },
                             modifier = Modifier.heightIn(min = 48.dp)
@@ -861,11 +956,65 @@ private fun MedicationStockCard(
                                 tint = BragaEmergencyOrange,
                                 modifier = Modifier.size(18.dp)
                             )
-                            Spacer(Modifier.width(6.dp))
-                            Text("Excluir", color = BragaEmergencyOrange, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Spacer(Modifier.width(4.dp))
+                            Text("Excluir", color = BragaEmergencyOrange, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
+            }
+
+            if (showCalendarPrompt) {
+                AlertDialog(
+                    onDismissRequest = { showCalendarPrompt = false },
+                    icon = {
+                        Icon(
+                            Icons.Filled.CalendarMonth,
+                            contentDescription = null,
+                            tint = BragaEmerald,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    },
+                    title = {
+                        Text("Adicionar à Agenda do Celular", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    },
+                    text = {
+                        Text(
+                            "Os horários prescritos de ${medication.name} são: ${currentTimes.joinToString(", ")}.\n\nDeseja pré-preencher na agenda do seu aparelho?\n\nFique tranquilo: mesmo se não usar a agenda, o Braga Saúde avisa você 15 minutos antes e na hora exata!",
+                            fontSize = 14.sp,
+                            color = BragaTextPrimary
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showCalendarPrompt = false
+                                val intent = Intent(Intent.ACTION_INSERT).apply {
+                                    data = CalendarContract.Events.CONTENT_URI
+                                    putExtra(CalendarContract.Events.TITLE, "Tomar Remédio: ${medication.name}")
+                                    putExtra(
+                                        CalendarContract.Events.DESCRIPTION,
+                                        "Medicamento: ${medication.name}\nHorários: ${currentTimes.joinToString(", ")}\nRegistrado pelo Braga Saúde"
+                                    )
+                                    putExtra("rrule", "FREQ=DAILY;INTERVAL=1")
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                try {
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    android.util.Log.w("MedicationStock", "Falha ao abrir calendário: ${e.message}")
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
+                        ) {
+                            Text("Abrir Agenda", color = Color.White)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showCalendarPrompt = false }) {
+                            Text("Usar Apenas Lembretes do App")
+                        }
+                    }
+                )
             }
         }
     }

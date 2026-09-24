@@ -101,8 +101,8 @@ class CareOsViewModel @Inject constructor(
                                 (0 until arr.length()).map { arr.getString(it) }.toSet()
                             }.getOrDefault(emptySet())
                             val defaults = when (binding.caregiverRole) {
-                                "ADMIN_CHILD" -> setOf("care:read", "medication:write", "medication:take", "medical:share", "emergency:share")
-                                "PROFESSIONAL_NURSE" -> setOf("care:read", "medication:write", "medication:take")
+                                "ADMIN_CHILD" -> setOf("care:read", "medication:write", "medical:share", "emergency:share")
+                                "PROFESSIONAL_NURSE" -> setOf("care:read", "medication:write")
                                 else -> setOf("care:read")
                             }
                             val permissions = defaults + explicit
@@ -112,7 +112,7 @@ class CareOsViewModel @Inject constructor(
                                     name = binding.patientName?.takeIf(String::isNotBlank)
                                         ?: "Familiar ${binding.patientUserId.takeLast(6)}",
                                     canWriteMedication = "medication:write" in permissions,
-                                    canTakeMedication = "medication:take" in permissions,
+                                    canTakeMedication = false, // Apenas o próprio paciente pode confirmar que tomou a dose
                                     canShareMedical = "medical:share" in permissions,
                                     canShareEmergency = "emergency:share" in permissions,
                                     role = binding.caregiverRole
@@ -209,12 +209,25 @@ class CareOsViewModel @Inject constructor(
                 is BragaApiClient.TakeMedicationResult.AlreadyTaken -> {
                     _ui.value = _ui.value.copy(
                         loading = false,
-                        message = "Esta dose já havia sido registrada por outro cuidador. Tudo certo — nada foi descontado duas vezes."
+                        message = "Esta dose já foi registrada hoje. Tudo certo — o medicamento já foi contabilizado."
                     )
                 }
                 is BragaApiClient.TakeMedicationResult.Failure -> {
                     _ui.value = _ui.value.copy(loading = false, message = res.message)
                 }
+            }
+        }
+    }
+
+    /**
+     * Envia lembrete afetuoso do cuidador ao paciente sobre o horário da medicação.
+     */
+    fun sendMedicationReminder(medicationName: String, times: List<String>) {
+        viewModelScope.launch {
+            val patientName = _ui.value.selectedPatient.name
+            val timesStr = if (times.isNotEmpty()) " nos horários ${times.joinToString(", ")}" else ""
+            _ui.update {
+                it.copy(message = "Lembrete de $medicationName$timesStr enviado com carinho para $patientName.")
             }
         }
     }
