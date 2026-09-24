@@ -146,6 +146,12 @@ data class BottomNavItem(
  * substring.
  */
 internal fun isCurrentRoute(currentRoute: String?, screen: Screen): Boolean {
-    val name = "Screen\$${screen::class.simpleName}"
-    return currentRoute != null && (currentRoute == name || currentRoute.startsWith("$name?"))
+    if (currentRoute.isNullOrBlank()) return false
+    val simpleName = screen::class.simpleName ?: return false
+    val withoutArgs = currentRoute.substringBefore('?')
+    return withoutArgs == "Screen\$$simpleName" ||
+           withoutArgs == simpleName ||
+           withoutArgs.endsWith(".\$$simpleName") ||
+           withoutArgs.endsWith(".$simpleName") ||
+           withoutArgs.endsWith("\$$simpleName")
 }

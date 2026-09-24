@@ -31,7 +31,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.local.MedicationEntity
 import br.com.bragasaude.domain.MedicationSchedule
 import br.com.bragasaude.ui.care.CareOsViewModel
-import br.com.bragasaude.ui.care.MorningCheckInSheet
 import br.com.bragasaude.ui.care.CareAuthenticationRequired
 import br.com.bragasaude.ui.care.CarePatientSelector
 import br.com.bragasaude.ui.theme.*
@@ -56,7 +55,6 @@ fun MedicationStockScreen(
 ) {
     val ui by viewModel.ui.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    var showCheckIn by remember { mutableStateOf(false) }
     var showAddChoice by remember { mutableStateOf(false) }
     var showManualAddDialog by remember { mutableStateOf(false) }
 
@@ -67,10 +65,6 @@ fun MedicationStockScreen(
                 viewModel.consumeMessage()
             }
         }
-    }
-
-    if (showCheckIn) {
-        MorningCheckInSheet(onDismiss = { showCheckIn = false })
     }
 
     if (showAddChoice) {
@@ -291,21 +285,6 @@ fun MedicationStockScreen(
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            if (ui.isAuthenticated && ui.selectedPatient.canWriteMedication) {
-                ExtendedFloatingActionButton(
-                    onClick = { showAddChoice = true },
-                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                    text = { Text("Adicionar Medicamento", fontWeight = FontWeight.SemiBold) },
-                    containerColor = BragaEmerald,
-                    contentColor = Color.White,
-                    modifier = Modifier
-                        .navigationBarsPadding()
-                        .padding(bottom = 8.dp)
-                        .heightIn(min = 56.dp)
-                )
-            }
-        },
         containerColor = BragaBackground
     ) { padding ->
         Column(
@@ -323,9 +302,6 @@ fun MedicationStockScreen(
             if (ui.isCaregiver && ui.patients.size > 1) {
                 CarePatientSelector(ui, viewModel::selectPatient)
             }
-
-            // Ação de check-in matinal (Cena C37)
-            CheckInCard(ui.checkInDoneToday) { showCheckIn = true }
 
             if (ui.medications.isEmpty()) {
                 EmptyStockCard(ui.selectedPatient.canWriteMedication) { showAddChoice = true }
@@ -353,52 +329,6 @@ fun MedicationStockScreen(
                         )
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CheckInCard(doneToday: Boolean, onOpenCheckIn: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
-        border = BorderStroke(1.dp, BragaMintBorder)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = if (doneToday) Icons.Filled.CheckCircle else Icons.Filled.Medication,
-                contentDescription = null,
-                tint = BragaEmeraldDark,
-                modifier = Modifier.size(40.dp)
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    if (doneToday) "Check-in de hoje concluído" else "Check-in do Dia",
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 17.sp,
-                    color = BragaTextPrimary
-                )
-                Text(
-                    if (doneToday) "Você já compartilhou como está hoje."
-                    else "Como foi sua noite e como você está se sentindo?",
-                    fontSize = 14.sp,
-                    color = BragaTextSecondary
-                )
-            }
-            if (!doneToday) {
-                Button(
-                    onClick = onOpenCheckIn,
-                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) { Text("Falar", color = Color.White) }
             }
         }
     }
@@ -701,12 +631,34 @@ private fun MedicationStockCard(
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        medication.name,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = BragaTextPrimary
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            medication.name,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = BragaTextPrimary
+                        )
+                        val dosageLabel = medication.dosage?.takeIf { it.isNotBlank() }
+                            ?: medication.dosageMg?.let { if (it % 1.0 == 0.0) "${it.toLong()}mg" else "${it}mg" }
+                        if (dosageLabel != null) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = BragaMintSurface,
+                                border = BorderStroke(1.dp, BragaMintBorder)
+                            ) {
+                                Text(
+                                    text = dosageLabel,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = BragaEmeraldDark,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
                     medication.activePrinciple?.takeIf { it.isNotBlank() }?.let {
                         Text(it, fontSize = 14.sp, color = BragaTextSecondary)
                     }
