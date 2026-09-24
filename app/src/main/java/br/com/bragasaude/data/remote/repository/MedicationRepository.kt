@@ -16,6 +16,7 @@ import br.com.bragasaude.data.remote.model.RemoteMedicationLog
 import br.com.bragasaude.data.remote.sync.SyncScheduler
 import br.com.bragasaude.data.util.toEntity
 import br.com.bragasaude.ui.util.MedicationAlarmReceiver
+import br.com.bragasaude.ui.medication.MedicationNotificationScheduler
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -84,12 +85,109 @@ class MedicationRepository @Inject constructor(
         return true
     }
 
-    suspend fun deleteMedication(medId: String, userId: String) {
-        MedicationAlarmReceiver.cancelAllAlarms(context, medicationDao.getAllSync(userId).filter { it.id == medId })
-        medicationDao.deleteById(medId)
+    /**
+     * Exclui um medicamento do banco local e do gateway (LGPD Art. 18 / Direito ao Esquecimento).
+     * Cancela todos os alarmes e notificações ativas e resincroniza a grade de horários.
+     */
+    suspend fun deleteMedication(patientId: String, medicationId: String): Boolean {
+        val actualMedId: String
+        val actualPatientId: String
+        val medById = medicationDao.getById(medicationId)
+        val medByPatient = medicationDao.getById(patientId)
+        if (medById != null) {
+            actualMedId = medicationId
+            actualPatientId = patientId
+        } else if (medByPatient != null) {
+            actualMedId = patientId
+            actualPatientId = medicationId
+        } else {
+            actualMedId = medicationId
+            actualPatientId = patientId
+        }
 
-        // Re-agendar alarmes após remoção
-        syncAlarmsWithDatabase(userId)
+        // 1) Cancela alarmes e notificações
+        val oldMeds = medicationDao.getAllSync(actualPatientId).filter { it.id == actualMedId }
+        MedicationAlarmReceiver.cancelAllAlarms(context, oldMeds)
+        MedicationNotificationScheduler.cancelMedicationAlarms(context, actualMedId)
+
+        // 2) Exclui do banco local
+        medicationDao.deleteById(actualMedId)
+
+        // 3) Resincroniza alarmes do banco
+        syncAlarmsWithDatabase(actualPatientId)
+
+        // 4) Registra auditoria SaMD
+        recordAudit(actualPatientId, "MEDICATION_DELETED", "Medicamento $actualMedId excluído (LGPD Art. 18)")
+
+        // 5) Chamada de remoção no gateway Care OS
+        val remoteOk = try {
+            apiClient.deleteMedication(actualPatientId, actualMedId)
+        } catch (e: Exception) {
+            android.util.Log.w("CareOs", "deleteMedication remote: ${e.message}")
+            false
+        }
+        triggerSync()
+        return remoteOk
+    }
+
+    /**
+     * Atualiza os horários e contexto alimentar de um medicamento (Care OS SaMD).
+     * Reagenda as notificações inteligentes (15m antes + hora exata).
+     */
+    suspend fun updateMedicationSchedule(
+        patientId: String,
+        medicationId: String,
+        scheduleTimes: List<String>,
+        mealContext: String? = null,
+        frequencyIntervalHours: Int? = null
+    ): Boolean {
+        require(scheduleTimes.isNotEmpty()) { "Informe ao menos um horário." }
+        val med = medicationDao.getById(medicationId) ?: return false
+        val sortedTimes = scheduleTimes.sorted()
+
+        // 1) Cancela alarmes antigos
+        MedicationNotificationScheduler.cancelMedicationAlarms(context, medicationId)
+        MedicationAlarmReceiver.cancelAllAlarms(context, listOf(med))
+
+        // 2) Atualiza espelho local
+        val updatedMed = med.copy(
+            scheduleTimes = sortedTimes.joinToString(","),
+            scheduleTime = sortedTimes.firstOrNull(),
+            notes = mealContext ?: med.notes,
+            pendingSync = false
+        )
+        medicationDao.insert(updatedMed)
+
+        // 3) Reagenda notificações afetuosas e alarmes
+        MedicationNotificationScheduler.scheduleMedicationNotifications(context, updatedMed)
+        syncAlarmsWithDatabase(patientId)
+
+        // 4) Registra auditoria
+        recordAudit(
+            patientId,
+            "MEDICATION_SCHEDULE_UPDATED",
+            "${med.name} horários atualizados para ${sortedTimes.joinToString(", ")}${mealContext?.let { " ($it)" } ?: ""}"
+        )
+
+        // 5) Chama gateway PATCH /api/family/patients/$patientId/medications/$medicationId
+        val ok = try {
+            apiClient.updateMedicationSchedule(
+                patientId,
+                medicationId,
+                sortedTimes,
+                mealContext,
+                frequencyIntervalHours
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("CareOs", "updateMedicationSchedule remote: ${e.message}")
+            false
+        }
+
+        if (!ok) {
+            medicationDao.insert(updatedMed.copy(pendingSync = true))
+            triggerSync()
+        }
+        return ok
     }
 
     /**
@@ -102,6 +200,7 @@ class MedicationRepository @Inject constructor(
             val medications = medicationDao.getAllSync(userId)
             MedicationAlarmReceiver.cancelAllAlarms(context, medications)
             MedicationAlarmReceiver.scheduleAllAlarms(context, userId, medications)
+            MedicationNotificationScheduler.rescheduleAll(context, medications)
         } catch (e: Exception) {
             android.util.Log.e("MedAlarm", "Erro ao sincronizar alarmes: ${e.message}", e)
         }
@@ -115,6 +214,9 @@ class MedicationRepository @Inject constructor(
         try {
             val medications = medicationDao.getAllSync(userId)
             MedicationAlarmReceiver.cancelAllAlarms(context, medications)
+            for (med in medications) {
+                MedicationNotificationScheduler.cancelMedicationAlarms(context, med.id)
+            }
         } catch (e: Exception) {
             android.util.Log.e("MedAlarm", "Erro ao cancelar alarmes no logout: ${e.message}", e)
         }

@@ -13,6 +13,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import br.com.bragasaude.util.safeString
 import br.com.bragasaude.util.safeNullableString
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
@@ -1837,6 +1841,72 @@ class BragaApiClient @Inject constructor(
             null
         } finally {
             try { conn?.disconnect() } catch (_: Exception) {}
+        }
+    }
+
+    private val okHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(CONNECT_TIMEOUT_MS.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
+            .readTimeout(READ_TIMEOUT_MS.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
+            .build()
+    }
+
+    private fun patchJson(urlString: String, json: JSONObject): Boolean {
+        val token = authService.getTokenBlocking()
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val body = json.toString().toRequestBody(mediaType)
+        val requestBuilder = Request.Builder()
+            .url(urlString)
+            .patch(body)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .header("Accept", "application/json")
+        if (token != null && !URL(urlString).path.startsWith("/api/auth/")) {
+            requestBuilder.header("Authorization", "Bearer $token")
+        }
+        return try {
+            okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
+                response.isSuccessful
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "patchJson falhou: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * DELETE /api/family/patients/{patient_id}/medications/{medication_id}
+     * Exclusão definitiva de medicamento (LGPD Art. 18).
+     */
+    suspend fun deleteMedication(patientId: String, medicationId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            deleteRequest("$baseUrl/api/family/patients/$patientId/medications/$medicationId")
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao excluir medicamento: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * PATCH /api/family/patients/{patient_id}/medications/{medication_id}
+     * Edição de horários, posologia e contexto alimentar.
+     */
+    suspend fun updateMedicationSchedule(
+        patientId: String,
+        medicationId: String,
+        scheduleTimes: List<String>,
+        mealContext: String? = null,
+        frequencyIntervalHours: Int? = null
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                put("schedule_times", JSONArray(scheduleTimes))
+                mealContext?.let { put("meal_context", it) }
+                frequencyIntervalHours?.let { put("frequency_interval_hours", it) }
+            }
+            patchJson("$baseUrl/api/family/patients/$patientId/medications/$medicationId", json)
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao atualizar horários do medicamento: ${e.message}")
+            false
         }
     }
 }

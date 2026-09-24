@@ -231,6 +231,60 @@ class CareOsViewModel @Inject constructor(
         }
     }
 
+    /** Exclui o medicamento localmente e na nuvem (Direito ao Esquecimento - LGPD Art. 18). */
+    fun deleteMedication(medId: String, onComplete: ((Boolean) -> Unit)? = null) {
+        viewModelScope.launch {
+            if (authenticatedUserId == null) return@launch requireAuthentication()
+            if (!_ui.value.selectedPatient.canWriteMedication) {
+                _ui.update { it.copy(message = "Seu vínculo não permite excluir medicamentos.") }
+                onComplete?.invoke(false)
+                return@launch
+            }
+            _ui.update { it.copy(loading = true, message = null) }
+            val ok = medicationRepository.deleteMedication(patientId, medId)
+            _ui.update {
+                it.copy(
+                    loading = false,
+                    message = if (ok) "Medicamento excluído com sucesso." else "Medicamento removido localmente."
+                )
+            }
+            onComplete?.invoke(true)
+        }
+    }
+
+    /** Atualiza a grade de horários e contexto alimentar do medicamento. */
+    fun updateMedicationSchedule(
+        medId: String,
+        scheduleTimes: List<String>,
+        mealContext: String? = null,
+        frequencyIntervalHours: Int? = null,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            if (authenticatedUserId == null) return@launch requireAuthentication()
+            if (!_ui.value.selectedPatient.canWriteMedication) {
+                _ui.update { it.copy(message = "Seu vínculo não permite alterar horários.") }
+                onComplete?.invoke(false)
+                return@launch
+            }
+            _ui.update { it.copy(loading = true, message = null) }
+            val ok = medicationRepository.updateMedicationSchedule(
+                patientId = patientId,
+                medicationId = medId,
+                scheduleTimes = scheduleTimes,
+                mealContext = mealContext,
+                frequencyIntervalHours = frequencyIntervalHours
+            )
+            _ui.update {
+                it.copy(
+                    loading = false,
+                    message = if (ok) "Horários atualizados com sucesso." else "Não foi possível sincronizar os horários com o servidor."
+                )
+            }
+            onComplete?.invoke(ok)
+        }
+    }
+
     /** Dias restantes de um medicamento (nunca arredondado para cima). */
     fun daysRemaining(med: MedicationEntity): Double {
         val dosesPerDay = MedicationSchedule.times(med.scheduleTimes, med.scheduleTime)
