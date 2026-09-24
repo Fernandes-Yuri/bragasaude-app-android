@@ -1,5 +1,6 @@
 package br.com.bragasaude.data.remote.api
 
+import br.com.bragasaude.data.local.MedicationEntity
 import br.com.bragasaude.data.remote.auth.AuthService
 import br.com.bragasaude.data.remote.model.MedicationCreate
 import br.com.bragasaude.data.remote.model.MedicationTakeRequest
@@ -478,7 +479,7 @@ class BragaApiClientCareOsTest {
     fun `getPatientMedications returns empty list on HTTP 200 with empty array`() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(200).setBody("[]"))
         val meds = api.getPatientMedications("p1")
-        assertEquals(emptyList<MedicationEntity>(), meds)
+        assertTrue(meds != null && meds.isEmpty())
     }
 }
 
