@@ -236,8 +236,8 @@ fun SimpleTrendChart(
                             drawPath(fill, Brush.verticalGradient(listOf(color.copy(alpha = 0.28f), Color.Transparent)))
                         } else {
                             // 3. Série dupla: área sombreada entre as duas curvas (pressão de pulso).
-                            val secondaryPoints = samples.mapIndexed { index, sample ->
-                                Offset(xAt(index), yFor(secondaryData.getValue(index)))
+                            val secondaryPoints = samples.map { ponto ->
+                                Offset(xAt(ponto.first), yFor(secondaryData[ponto.first]))
                             }
                             val secondaryPath = smoothPath(secondaryPoints)
                             val bandPath = Path().apply {
