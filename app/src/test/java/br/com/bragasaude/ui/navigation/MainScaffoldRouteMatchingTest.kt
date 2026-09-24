@@ -34,4 +34,12 @@ class MainScaffoldRouteMatchingTest {
         // Nome parecido mas diferente (âncora de "?" evita prefixo parcial).
         assertFalse(isCurrentRoute("Screen\$HomeX", Screen.Home))
     }
+
+    @Test fun packageQualifiedRoute_matchesCorrectly() {
+        assertTrue(isCurrentRoute("br.com.bragasaude.ui.util.Screen.MedicationStock", Screen.MedicationStock))
+        assertTrue(isCurrentRoute("br.com.bragasaude.ui.util.Screen\$MedicationStock", Screen.MedicationStock))
+        assertTrue(isCurrentRoute("br.com.bragasaude.ui.util.Screen.BarcodeScanner", Screen.BarcodeScanner))
+        assertTrue(isCurrentRoute("br.com.bragasaude.ui.util.Screen.Nutrition?searchFood=feijao", Screen.Nutrition()))
+        assertFalse(isCurrentRoute("br.com.bragasaude.ui.util.Screen.ProfileEdit", Screen.Profile))
+    }
 }

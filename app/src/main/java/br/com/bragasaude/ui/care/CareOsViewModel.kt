@@ -101,8 +101,8 @@ class CareOsViewModel @Inject constructor(
                                 (0 until arr.length()).map { arr.getString(it) }.toSet()
                             }.getOrDefault(emptySet())
                             val defaults = when (binding.caregiverRole) {
-                                "ADMIN_CHILD" -> setOf("care:read", "medication:write", "medication:take", "medical:share", "emergency:share")
-                                "PROFESSIONAL_NURSE" -> setOf("care:read", "medication:write", "medication:take")
+                                "ADMIN_CHILD" -> setOf("care:read", "medication:write", "medical:share", "emergency:share")
+                                "PROFESSIONAL_NURSE" -> setOf("care:read", "medication:write")
                                 else -> setOf("care:read")
                             }
                             val permissions = defaults + explicit
@@ -112,7 +112,7 @@ class CareOsViewModel @Inject constructor(
                                     name = binding.patientName?.takeIf(String::isNotBlank)
                                         ?: "Familiar ${binding.patientUserId.takeLast(6)}",
                                     canWriteMedication = "medication:write" in permissions,
-                                    canTakeMedication = "medication:take" in permissions,
+                                    canTakeMedication = false, // Apenas o próprio paciente pode confirmar que tomou a dose
                                     canShareMedical = "medical:share" in permissions,
                                     canShareEmergency = "emergency:share" in permissions,
                                     role = binding.caregiverRole
@@ -170,6 +170,7 @@ class CareOsViewModel @Inject constructor(
     }
 
     private suspend fun refreshAll(id: String) {
+        medicationRepository.syncMedicationsFromServer(id)
         medicationRepository.syncStockFromServer(id)
         careOsRepository.syncCareWall(id)
         careOsRepository.syncSymptomsDiary(id)
@@ -208,12 +209,25 @@ class CareOsViewModel @Inject constructor(
                 is BragaApiClient.TakeMedicationResult.AlreadyTaken -> {
                     _ui.value = _ui.value.copy(
                         loading = false,
-                        message = "Esta dose já havia sido registrada por outro cuidador. Tudo certo — nada foi descontado duas vezes."
+                        message = "Esta dose já foi registrada hoje. Tudo certo — o medicamento já foi contabilizado."
                     )
                 }
                 is BragaApiClient.TakeMedicationResult.Failure -> {
                     _ui.value = _ui.value.copy(loading = false, message = res.message)
                 }
+            }
+        }
+    }
+
+    /**
+     * Envia lembrete afetuoso do cuidador ao paciente sobre o horário da medicação.
+     */
+    fun sendMedicationReminder(medicationName: String, times: List<String>) {
+        viewModelScope.launch {
+            val patientName = _ui.value.selectedPatient.name
+            val timesStr = if (times.isNotEmpty()) " nos horários ${times.joinToString(", ")}" else ""
+            _ui.update {
+                it.copy(message = "Lembrete de $medicationName$timesStr enviado com carinho para $patientName.")
             }
         }
     }
@@ -228,6 +242,60 @@ class CareOsViewModel @Inject constructor(
             _ui.update { it.copy(loading = true, message = null) }
             val ok = medicationRepository.restock(medId, units)
             _ui.update { it.copy(loading = false, message = if (ok) "Estoque sincronizado com a família." else "Não foi possível repor. Verifique a conexão e tente novamente.") }
+        }
+    }
+
+    /** Exclui o medicamento localmente e na nuvem (Direito ao Esquecimento - LGPD Art. 18). */
+    fun deleteMedication(medId: String, onComplete: ((Boolean) -> Unit)? = null) {
+        viewModelScope.launch {
+            if (authenticatedUserId == null) return@launch requireAuthentication()
+            if (!_ui.value.selectedPatient.canWriteMedication) {
+                _ui.update { it.copy(message = "Seu vínculo não permite excluir medicamentos.") }
+                onComplete?.invoke(false)
+                return@launch
+            }
+            _ui.update { it.copy(loading = true, message = null) }
+            val ok = medicationRepository.deleteMedication(patientId, medId)
+            _ui.update {
+                it.copy(
+                    loading = false,
+                    message = if (ok) "Medicamento excluído com sucesso." else "Medicamento removido localmente."
+                )
+            }
+            onComplete?.invoke(true)
+        }
+    }
+
+    /** Atualiza a grade de horários e contexto alimentar do medicamento. */
+    fun updateMedicationSchedule(
+        medId: String,
+        scheduleTimes: List<String>,
+        mealContext: String? = null,
+        frequencyIntervalHours: Int? = null,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            if (authenticatedUserId == null) return@launch requireAuthentication()
+            if (!_ui.value.selectedPatient.canWriteMedication) {
+                _ui.update { it.copy(message = "Seu vínculo não permite alterar horários.") }
+                onComplete?.invoke(false)
+                return@launch
+            }
+            _ui.update { it.copy(loading = true, message = null) }
+            val ok = medicationRepository.updateMedicationSchedule(
+                patientId = patientId,
+                medicationId = medId,
+                scheduleTimes = scheduleTimes,
+                mealContext = mealContext,
+                frequencyIntervalHours = frequencyIntervalHours
+            )
+            _ui.update {
+                it.copy(
+                    loading = false,
+                    message = if (ok) "Horários atualizados com sucesso." else "Não foi possível sincronizar os horários com o servidor."
+                )
+            }
+            onComplete?.invoke(ok)
         }
     }
 

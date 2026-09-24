@@ -34,9 +34,11 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_MED_REMINDER = "br.com.bragasaude.MED_REMINDER"
+        const val ACTION_MED_PRE_REMINDER = "br.com.bragasaude.MED_PRE_REMINDER"
         const val ACTION_TAKEN = "br.com.bragasaude.MED_TAKEN"
         const val ACTION_SNOOZE = "br.com.bragasaude.MED_SNOOZE"
-        const val CHANNEL_ID = "medication_channel"
+        const val CHANNEL_ID = "channel_medications"
+        const val LEGACY_CHANNEL_ID = "medication_channel"
         const val EXTRA_MED_ID = "med_id"
         const val EXTRA_MED_NAME = "med_name"
         const val EXTRA_DOSAGE = "med_dosage"
@@ -203,16 +205,26 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
 
         fun createChannel(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val manager = context.getSystemService(NotificationManager::class.java) ?: return
                 val channel = NotificationChannel(
                     CHANNEL_ID,
+                    "Lembretes de Medicamentos",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Avisos prévios e alarmes na hora certa para medicação"
+                    enableVibration(true)
+                }
+                manager.createNotificationChannel(channel)
+
+                val legacyChannel = NotificationChannel(
+                    LEGACY_CHANNEL_ID,
                     "Lembretes de Medicação",
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
                     description = "Lembretes precisos de horários de remédio"
                     enableVibration(true)
                 }
-                val manager = context.getSystemService(NotificationManager::class.java)
-                manager.createNotificationChannel(channel)
+                manager.createNotificationChannel(legacyChannel)
             }
         }
     }
@@ -220,11 +232,24 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
         when {
+            action == ACTION_MED_PRE_REMINDER -> handlePreReminder(context, intent)
             action == ACTION_MED_REMINDER || action?.startsWith(MEDICATION_ALARM_ACTION_PREFIX) == true ->
                 showMedicationNotification(context, intent)
             action == ACTION_TAKEN -> handleDoseTaken(context, intent)
             action == ACTION_SNOOZE -> handleSnooze(context, intent)
         }
+    }
+
+    private fun handlePreReminder(context: Context, intent: Intent) {
+        val medName = intent.getStringExtra(EXTRA_MED_NAME) ?: "Medicamento"
+        val medId = intent.getStringExtra(EXTRA_MED_ID) ?: ""
+        val time = intent.getStringExtra("schedule_time") ?: ""
+        br.com.bragasaude.ui.medication.MedicationNotificationScheduler.showPreDoseNotification(
+            context = context,
+            medId = medId,
+            medName = medName,
+            time = time
+        )
     }
 
     private fun showMedicationNotification(context: Context, intent: Intent) {
@@ -235,47 +260,18 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
 
         val doseKey = intent.getStringExtra("scheduled_for") ?: return
         val time = intent.getStringExtra("schedule_time") ?: return
-        val notificationId = "$medId:$doseKey".hashCode()
         val parts = time.split(":")
         if (parts.size == 2) scheduleAlarm(context, medId, medName, dosage, userId, parts[0].toInt(), parts[1].toInt())
-        createChannel(context)
 
-        // Intent para "Tomar agora"
-        val takenIntent = Intent(context, MedicationAlarmReceiver::class.java).apply {
-            action = ACTION_TAKEN
-            data = android.net.Uri.parse("bragasaude://dose/$medId/$doseKey")
-            putExtra("scheduled_for", doseKey)
-            putExtra("schedule_time", time)
-            putExtra(EXTRA_MED_ID, medId)
-            putExtra(EXTRA_MED_NAME, medName)
-            putExtra(EXTRA_USER_ID, userId)
-        }
-        val takenPending = PendingIntent.getBroadcast(
-            context, notificationId, takenIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        br.com.bragasaude.ui.medication.MedicationNotificationScheduler.showExactDoseNotification(
+            context = context,
+            medId = medId,
+            medName = medName,
+            dosage = dosage,
+            userId = userId,
+            time = time,
+            doseKey = doseKey
         )
-
-        // Intent para abrir o app
-        val openIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        val openPending = PendingIntent.getActivity(
-            context, 0, openIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("Hora do remédio: $medName")
-            .setContentText(if (dosage.isNotBlank()) "Dose: $dosage" else "Toque para registrar")
-            .setSmallIcon(android.R.drawable.ic_menu_my_calendar)
-            .setContentIntent(openPending)
-            .addAction(android.R.drawable.ic_menu_send, "Tomar agora", takenPending)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .build()
-
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(notificationId, notification)
     }
 
     /**
@@ -341,8 +337,12 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.cancel(medId.hashCode())
+        val time = intent.getStringExtra("schedule_time") ?: ""
+        if (time.isNotBlank()) {
+            manager.cancel("$medId:exact:$time".hashCode())
+        }
 
-        // Re-agendar daqui a 15 minutos
+        // Re-agendar daqui a 10 minutos (conforme especificação SaMD)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val snoozeIntent = Intent(context, MedicationAlarmReceiver::class.java).apply {
             action = getUniqueAction(medId)
@@ -350,12 +350,14 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
             putExtra(EXTRA_MED_NAME, medName)
             putExtra(EXTRA_DOSAGE, dosage)
             putExtra(EXTRA_USER_ID, userId)
+            putExtra("schedule_time", time)
+            intent.getStringExtra("scheduled_for")?.let { putExtra("scheduled_for", it) }
         }
         val pendingIntent = PendingIntent.getBroadcast(
             context, medId.hashCode(), snoozeIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val snoozeTime = System.currentTimeMillis() + (15 * 60 * 1000)
+        val snoozeTime = System.currentTimeMillis() + (10 * 60 * 1000)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, snoozeTime, pendingIntent)

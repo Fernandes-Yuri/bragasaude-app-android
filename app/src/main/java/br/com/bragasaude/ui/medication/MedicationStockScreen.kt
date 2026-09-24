@@ -9,12 +9,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import android.content.Intent
+import android.provider.CalendarContract
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Medication
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
@@ -28,8 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.local.MedicationEntity
+import br.com.bragasaude.domain.MedicationSchedule
 import br.com.bragasaude.ui.care.CareOsViewModel
-import br.com.bragasaude.ui.care.MorningCheckInSheet
 import br.com.bragasaude.ui.care.CareAuthenticationRequired
 import br.com.bragasaude.ui.care.CarePatientSelector
 import br.com.bragasaude.ui.theme.*
@@ -54,7 +61,6 @@ fun MedicationStockScreen(
 ) {
     val ui by viewModel.ui.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    var showCheckIn by remember { mutableStateOf(false) }
     var showAddChoice by remember { mutableStateOf(false) }
     var showManualAddDialog by remember { mutableStateOf(false) }
 
@@ -65,10 +71,6 @@ fun MedicationStockScreen(
                 viewModel.consumeMessage()
             }
         }
-    }
-
-    if (showCheckIn) {
-        MorningCheckInSheet(onDismiss = { showCheckIn = false })
     }
 
     if (showAddChoice) {
@@ -289,21 +291,6 @@ fun MedicationStockScreen(
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            if (ui.isAuthenticated && ui.selectedPatient.canWriteMedication) {
-                ExtendedFloatingActionButton(
-                    onClick = { showAddChoice = true },
-                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                    text = { Text("Adicionar Medicamento", fontWeight = FontWeight.SemiBold) },
-                    containerColor = BragaEmerald,
-                    contentColor = Color.White,
-                    modifier = Modifier
-                        .navigationBarsPadding()
-                        .padding(bottom = 8.dp)
-                        .heightIn(min = 56.dp)
-                )
-            }
-        },
         containerColor = BragaBackground
     ) { padding ->
         Column(
@@ -322,9 +309,6 @@ fun MedicationStockScreen(
                 CarePatientSelector(ui, viewModel::selectPatient)
             }
 
-            // Ação de check-in matinal (Cena C37)
-            CheckInCard(ui.checkInDoneToday) { showCheckIn = true }
-
             if (ui.medications.isEmpty()) {
                 EmptyStockCard(ui.selectedPatient.canWriteMedication) { showAddChoice = true }
             } else {
@@ -332,65 +316,83 @@ fun MedicationStockScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 96.dp)
                 ) {
+                    if (ui.selectedPatient.canWriteMedication) {
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showAddChoice = true },
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                                border = BorderStroke(1.dp, BragaMintBorder)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = BragaEmerald,
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Add,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.width(14.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Cadastrar Novo Medicamento",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            color = BragaTextPrimary
+                                        )
+                                        Text(
+                                            text = "Escaneie a caixa EAN-13, anexe receita ou digite",
+                                            fontSize = 13.sp,
+                                            color = BragaTextSecondary
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                        contentDescription = null,
+                                        tint = BragaEmeraldDark,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                     items(ui.medications, key = { it.id }) { med ->
                         MedicationStockCard(
                             medication = med,
                             daysRemaining = viewModel.daysRemaining(med),
                             isCritical = viewModel.isStockCritical(med),
                             onTake = { viewModel.takeDose(med.id) },
+                            onSendReminder = {
+                                val times = MedicationSchedule.times(med.scheduleTimes, med.scheduleTime)
+                                viewModel.sendMedicationReminder(med.name, times)
+                            },
                             onRestock = { units -> viewModel.restock(med.id, units) },
+                            onDelete = { viewModel.deleteMedication(med.id) },
+                            onEditSchedule = { times, mealContext, intervalHours ->
+                                viewModel.updateMedicationSchedule(med.id, times, mealContext, intervalHours)
+                            },
                             canTake = ui.selectedPatient.canTakeMedication,
                             canRestock = ui.selectedPatient.canWriteMedication,
+                            canEdit = ui.selectedPatient.canWriteMedication,
+                            canDelete = ui.selectedPatient.canWriteMedication,
                             loading = ui.loading
                         )
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CheckInCard(doneToday: Boolean, onOpenCheckIn: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
-        border = BorderStroke(1.dp, BragaMintBorder)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = if (doneToday) Icons.Filled.CheckCircle else Icons.Filled.Medication,
-                contentDescription = null,
-                tint = BragaEmeraldDark,
-                modifier = Modifier.size(40.dp)
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    if (doneToday) "Check-in de hoje concluído" else "Check-in do Dia",
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 17.sp,
-                    color = BragaTextPrimary
-                )
-                Text(
-                    if (doneToday) "Você já compartilhou como está hoje."
-                    else "Como foi sua noite e como você está se sentindo?",
-                    fontSize = 14.sp,
-                    color = BragaTextSecondary
-                )
-            }
-            if (!doneToday) {
-                Button(
-                    onClick = onOpenCheckIn,
-                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) { Text("Falar", color = Color.White) }
             }
         }
     }
@@ -579,13 +581,96 @@ private fun MedicationStockCard(
     daysRemaining: Double,
     isCritical: Boolean,
     onTake: () -> Unit,
+    onSendReminder: () -> Unit = {},
     onRestock: (Int) -> Unit,
+    onDelete: () -> Unit,
+    onEditSchedule: (times: List<String>, mealContext: String?, intervalHours: Int?) -> Unit,
     canTake: Boolean,
     canRestock: Boolean,
+    canEdit: Boolean,
+    canDelete: Boolean,
     loading: Boolean
 ) {
+    val context = LocalContext.current
     var showRestock by remember { mutableStateOf(false) }
     var restockQty by remember { mutableStateOf(medication.totalUnits.toString()) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showEditSchedule by remember { mutableStateOf(false) }
+    var showCalendarPrompt by remember { mutableStateOf(false) }
+    val currentTimes = remember(medication.scheduleTimes, medication.scheduleTime) {
+        MedicationSchedule.times(medication.scheduleTimes, medication.scheduleTime)
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            icon = {
+                Icon(
+                    Icons.Filled.Delete,
+                    contentDescription = null,
+                    tint = BragaEmergencyOrange,
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text(
+                    "Excluir Medicamento",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    color = BragaTextPrimary
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Deseja excluir este medicamento do seu tratamento? Esta ação removerá o remédio e seus registros de rotina.",
+                        fontSize = 15.sp,
+                        color = BragaTextPrimary
+                    )
+                    Text(
+                        "A exclusão é definitiva em conformidade com o Direito ao Esquecimento (LGPD Art. 18).",
+                        fontSize = 13.sp,
+                        color = BragaTextSecondary,
+                        lineHeight = 18.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmergencyOrange),
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Text("Excluir Definitivamente", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteConfirm = false },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Text("Cancelar", color = BragaTextSecondary)
+                }
+            },
+            containerColor = BragaCardSurface,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    if (showEditSchedule) {
+        EditScheduleSheet(
+            medicationName = medication.name,
+            initialTimes = currentTimes,
+            initialMealContext = medication.notes,
+            onDismiss = { showEditSchedule = false },
+            onSave = { newTimes, mealContext, intervalHours ->
+                onEditSchedule(newTimes, mealContext, intervalHours)
+            }
+        )
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -613,12 +698,34 @@ private fun MedicationStockCard(
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        medication.name,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = BragaTextPrimary
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            medication.name,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = BragaTextPrimary
+                        )
+                        val dosageLabel = medication.dosage?.takeIf { it.isNotBlank() }
+                            ?: medication.dosageMg?.let { if (it % 1.0 == 0.0) "${it.toLong()}mg" else "${it}mg" }
+                        if (dosageLabel != null) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = BragaMintSurface,
+                                border = BorderStroke(1.dp, BragaMintBorder)
+                            ) {
+                                Text(
+                                    text = dosageLabel,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = BragaEmeraldDark,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
                     medication.activePrinciple?.takeIf { it.isNotBlank() }?.let {
                         Text(it, fontSize = 14.sp, color = BragaTextSecondary)
                     }
@@ -639,6 +746,58 @@ private fun MedicationStockCard(
                         fontSize = 12.sp,
                         color = BragaTextSecondary
                     )
+                }
+            }
+
+            // Horários e contexto alimentar
+            if (currentTimes.isNotEmpty() || !medication.notes.isNullOrBlank()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Horários:",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = BragaTextSecondary
+                    )
+                    currentTimes.forEach { t ->
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = BragaMintSurface,
+                            border = BorderStroke(1.dp, BragaMintBorder)
+                        ) {
+                            Text(
+                                text = t,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = BragaEmeraldDark,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    medication.notes?.takeIf { it.isNotBlank() }?.let { notes ->
+                        val label = when (notes) {
+                            "FASTING" -> "Em Jejum"
+                            "AFTER_MEAL" -> "Após Refeição"
+                            "BEFORE_MEAL" -> "Antes da Refeição"
+                            "AT_BEDTIME" -> "Ao Deitar"
+                            else -> notes
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = BragaCardSurface,
+                            border = BorderStroke(1.dp, BragaCardBorder)
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 11.sp,
+                                color = BragaTextSecondary,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -689,17 +848,32 @@ private fun MedicationStockCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Button(
-                    onClick = onTake,
-                    enabled = !loading && medication.currentUnits > 0 && canTake,
-                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 52.dp)
-                ) {
-                    Icon(Icons.Filled.CheckCircle, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Tomar dose", color = Color.White, fontSize = 16.sp)
+                if (canTake) {
+                    Button(
+                        onClick = onTake,
+                        enabled = !loading && medication.currentUnits > 0,
+                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 52.dp)
+                    ) {
+                        Icon(Icons.Filled.CheckCircle, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Tomar dose", color = Color.White, fontSize = 16.sp)
+                    }
+                } else {
+                    Button(
+                        onClick = onSendReminder,
+                        enabled = !loading,
+                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmeraldDark),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 52.dp)
+                    ) {
+                        Icon(Icons.Filled.NotificationsActive, contentDescription = null, tint = Color.White)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Enviar Lembrete", color = Color.White, fontSize = 15.sp)
+                    }
                 }
                 OutlinedButton(
                     onClick = { showRestock = !showRestock },
@@ -733,6 +907,380 @@ private fun MedicationStockCard(
                         .heightIn(min = 48.dp)
                 ) { Text("Confirmar reposição", color = Color.White) }
             }
+
+            // Ações secundárias: Agenda/Alarme, Editar Horários e Excluir
+            HorizontalDivider(color = BragaCardBorder.copy(alpha = 0.5f), thickness = 1.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(
+                    onClick = { showCalendarPrompt = true },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.CalendarMonth,
+                        contentDescription = null,
+                        tint = BragaEmeraldDark,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("Agenda / Alarme", color = BragaEmeraldDark, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (canEdit) {
+                        TextButton(
+                            onClick = { showEditSchedule = true },
+                            modifier = Modifier.heightIn(min = 48.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Edit,
+                                contentDescription = null,
+                                tint = BragaEmeraldDark,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("Editar horários", color = BragaEmeraldDark, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                    if (canDelete) {
+                        Spacer(Modifier.width(4.dp))
+                        TextButton(
+                            onClick = { showDeleteConfirm = true },
+                            modifier = Modifier.heightIn(min = 48.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = null,
+                                tint = BragaEmergencyOrange,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("Excluir", color = BragaEmergencyOrange, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+            }
+
+            if (showCalendarPrompt) {
+                AlertDialog(
+                    onDismissRequest = { showCalendarPrompt = false },
+                    icon = {
+                        Icon(
+                            Icons.Filled.CalendarMonth,
+                            contentDescription = null,
+                            tint = BragaEmerald,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    },
+                    title = {
+                        Text("Adicionar à Agenda do Celular", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    },
+                    text = {
+                        Text(
+                            "Os horários prescritos de ${medication.name} são: ${currentTimes.joinToString(", ")}.\n\nDeseja pré-preencher na agenda do seu aparelho?\n\nFique tranquilo: mesmo se não usar a agenda, o Braga Saúde avisa você 15 minutos antes e na hora exata!",
+                            fontSize = 14.sp,
+                            color = BragaTextPrimary
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showCalendarPrompt = false
+                                val intent = Intent(Intent.ACTION_INSERT).apply {
+                                    data = CalendarContract.Events.CONTENT_URI
+                                    putExtra(CalendarContract.Events.TITLE, "Tomar Remédio: ${medication.name}")
+                                    putExtra(
+                                        CalendarContract.Events.DESCRIPTION,
+                                        "Medicamento: ${medication.name}\nHorários: ${currentTimes.joinToString(", ")}\nRegistrado pelo Braga Saúde"
+                                    )
+                                    putExtra("rrule", "FREQ=DAILY;INTERVAL=1")
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                try {
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    android.util.Log.w("MedicationStock", "Falha ao abrir calendário: ${e.message}")
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
+                        ) {
+                            Text("Abrir Agenda", color = Color.White)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showCalendarPrompt = false }) {
+                            Text("Usar Apenas Lembretes do App")
+                        }
+                    }
+                )
+            }
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditScheduleSheet(
+    medicationName: String,
+    initialTimes: List<String>,
+    initialMealContext: String?,
+    onDismiss: () -> Unit,
+    onSave: (times: List<String>, mealContext: String?, intervalHours: Int?) -> Unit
+) {
+    var times by remember {
+        mutableStateOf(if (initialTimes.isNotEmpty()) initialTimes else listOf("08:00"))
+    }
+    var selectedMealContext by remember { mutableStateOf(initialMealContext ?: "") }
+    var selectedIntervalHours by remember { mutableStateOf<Int?>(null) }
+    var newTimeText by remember { mutableStateOf("") }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = BragaCardSurface,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                "Editar Horários e Posologia",
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                color = BragaTextPrimary
+            )
+            Text(
+                medicationName,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = BragaEmeraldDark
+            )
+
+            // 1) Chips rápidos de frequência/intervalo
+            Text(
+                "Intervalos sugeridos:",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = BragaTextSecondary
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(
+                    "8h/8h" to Pair(8, listOf("08:00", "16:00", "00:00")),
+                    "12h/12h" to Pair(12, listOf("08:00", "20:00")),
+                    "24h (1x/dia)" to Pair(24, listOf("08:00"))
+                ).forEach { (label, data) ->
+                    val isSelected = selectedIntervalHours == data.first
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) BragaEmerald else BragaMintSurface,
+                        border = BorderStroke(1.dp, if (isSelected) BragaEmerald else BragaMintBorder),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                selectedIntervalHours = data.first
+                                times = data.second
+                            }
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isSelected) Color.White else BragaEmeraldDark,
+                            modifier = Modifier
+                                .padding(vertical = 8.dp)
+                                .wrapContentWidth(Alignment.CenterHorizontally)
+                        )
+                    }
+                }
+            }
+
+            // 2) Chips rápidos de contexto alimentar
+            Text(
+                "Contexto alimentar:",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = BragaTextSecondary
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "FASTING" to "Em Jejum",
+                        "AFTER_MEAL" to "Após Refeição"
+                    ).forEach { (key, label) ->
+                        val isSelected = selectedMealContext == key
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) BragaEmerald else BragaCardSurface,
+                            border = BorderStroke(1.dp, if (isSelected) BragaEmerald else BragaCardBorder),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    selectedMealContext = if (isSelected) "" else key
+                                }
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (isSelected) Color.White else BragaTextPrimary,
+                                modifier = Modifier
+                                    .padding(vertical = 8.dp)
+                                    .wrapContentWidth(Alignment.CenterHorizontally)
+                            )
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "BEFORE_MEAL" to "Antes da Refeição",
+                        "AT_BEDTIME" to "Ao Deitar"
+                    ).forEach { (key, label) ->
+                        val isSelected = selectedMealContext == key
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) BragaEmerald else BragaCardSurface,
+                            border = BorderStroke(1.dp, if (isSelected) BragaEmerald else BragaCardBorder),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    selectedMealContext = if (isSelected) "" else key
+                                }
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (isSelected) Color.White else BragaTextPrimary,
+                                modifier = Modifier
+                                    .padding(vertical = 8.dp)
+                                    .wrapContentWidth(Alignment.CenterHorizontally)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 3) Lista de horários configurados
+            Text(
+                "Horários configurados (${times.size}):",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = BragaTextSecondary
+            )
+            times.forEachIndexed { index, timeStr ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = BragaMintSurface,
+                        border = BorderStroke(1.dp, BragaMintBorder)
+                    ) {
+                        Text(
+                            text = timeStr,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = BragaEmeraldDark,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                    if (times.size > 1) {
+                        IconButton(
+                            onClick = {
+                                times = times.filterIndexed { i, _ -> i != index }
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = "Remover horário",
+                                tint = BragaEmergencyOrange,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 4) Adicionar novo horário
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = newTimeText,
+                    onValueChange = {
+                        val filtered = it.filter { c -> c.isDigit() || c == ':' }.take(5)
+                        newTimeText = filtered
+                    },
+                    label = { Text("Novo horário (HH:mm)") },
+                    placeholder = { Text("14:00") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = {
+                        val trimmed = newTimeText.trim()
+                        if (trimmed.matches(Regex("^([01]\\d|2[0-3]):[0-5]\\d$")) && trimmed !in times) {
+                            times = (times + trimmed).sorted()
+                            newTimeText = ""
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Text("Adicionar", color = Color.White)
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // 5) Botões de Ação
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                ) {
+                    Text("Cancelar", color = BragaTextSecondary)
+                }
+                Button(
+                    onClick = {
+                        onSave(times.sorted(), selectedMealContext.takeIf { it.isNotBlank() }, selectedIntervalHours)
+                        onDismiss()
+                    },
+                    enabled = times.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                ) {
+                    Text("Salvar Horários", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+

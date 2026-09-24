@@ -15,4 +15,6 @@ keystore.properties
 
 # Arquivos temporarios de mensagem de commit ( nunca devem ser versionados )
 _commit*.txt
+logcat*.txt
+*.log
 
