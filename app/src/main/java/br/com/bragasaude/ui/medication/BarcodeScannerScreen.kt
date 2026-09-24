@@ -10,8 +10,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.UploadFile
@@ -28,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.remote.model.BarcodeMedication
+import br.com.bragasaude.data.remote.model.MedicationBatchItemCreateDto
 import br.com.bragasaude.ui.care.CareAuthenticationRequired
 import br.com.bragasaude.ui.care.CareOsViewModel
 import br.com.bragasaude.ui.care.CarePatientSelector
@@ -35,16 +39,41 @@ import br.com.bragasaude.ui.theme.*
 import br.com.bragasaude.util.BragaConstants
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import java.util.UUID
 
 /**
- * Scanner e Cadastro Limpo de Medicamento (Care OS — D62 / Fase B).
+ * Item reativo para cadastro de lote/remessa de medicamentos.
+ */
+class BatchMedicationItem(
+    val id: String = UUID.randomUUID().toString(),
+    initialName: String = "",
+    initialTotalUnits: String = "30",
+    initialScheduleTime: String = "08:00",
+    initialEan: String = "",
+    initialFound: BarcodeMedication? = null,
+    initialIsDivergent: Boolean = false,
+    initialDivergenceReason: String? = null,
+    initialSourcePages: List<Int> = emptyList()
+) {
+    var name by mutableStateOf(initialName)
+    var totalUnits by mutableStateOf(initialTotalUnits)
+    var scheduleTime by mutableStateOf(initialScheduleTime)
+    var ean by mutableStateOf(initialEan)
+    var found by mutableStateOf(initialFound)
+    var isDivergent by mutableStateOf(initialIsDivergent)
+    var divergenceReason by mutableStateOf(initialDivergenceReason)
+    var sourcePages by mutableStateOf(initialSourcePages)
+}
+
+/**
+ * Scanner e Cadastro de Medicamentos com Suporte a Remessa Multi-Medicamentos (Care OS — D62 / Fase B).
  *
  * TRAVA REGULATÓRIA (RDC 657/2022 & CDC Art. 14):
  * - O leitor lê exclusivamente o código de barras EAN-13 da caixa/embalagem (ANVISA).
  * - O app NUNCA identifica comprimido solto por foto.
  * - Desburocratizado: sem campos cartoriais desnecessários (CRM, validade, fotos soltas).
  * - Checkbox de conferência da receita mantido (requisito SaMD).
- * - Suporte opcional moderno para anexar receita (PDF ou imagem) com dupla checagem de IA.
+ * - Suporte a remessa com múltiplos medicamentos, deduplicação entre páginas de receita e botão [+ Adicionar outro remédio].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,17 +85,16 @@ fun BarcodeScannerScreen(
     val ui by viewModel.ui.collectAsState()
     val context = LocalContext.current
 
-    var ean by remember { mutableStateOf("") }
-    var found by remember { mutableStateOf<BarcodeMedication?>(null) }
-    var name by remember { mutableStateOf("") }
-    var totalUnits by remember { mutableStateOf("30") }
-    var scheduleTime by remember { mutableStateOf("08:00") }
+    val batchList = remember {
+        mutableStateListOf<BatchMedicationItem>().apply {
+            add(BatchMedicationItem())
+        }
+    }
     var confirmed by remember { mutableStateOf(false) }
-    var lookupError by remember { mutableStateOf<String?>(null) }
     var prescriptionDocumentUri by remember { mutableStateOf<Uri?>(null) }
     var prescriptionFileName by remember { mutableStateOf<String?>(null) }
     var isAnalyzingPrescription by remember { mutableStateOf(false) }
-    var prescriptionDivergenceReason by remember { mutableStateOf<String?>(null) }
+    var batchInfoNotice by remember { mutableStateOf<String?>(null) }
 
     val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         prescriptionDocumentUri = uri
@@ -84,51 +112,62 @@ fun BarcodeScannerScreen(
         }
         if (uri != null) {
             isAnalyzingPrescription = true
-            prescriptionDivergenceReason = null
-            val patientId = ui.selectedPatientId ?: BragaConstants.GUEST_UID
+            batchInfoNotice = null
+            val patientId = ui.selectedPatientId ?: ui.selectedPatient.id.takeIf { it.isNotBlank() } ?: BragaConstants.GUEST_UID
             viewModel.analyzePrescription(patientId, uri) { response ->
                 isAnalyzingPrescription = false
-                val med = response?.medications?.firstOrNull()
-                if (med != null) {
-                    val hasDivergence = med.nameDivergent || med.dosageDivergent
-
-                    if (!hasDivergence) {
-                        var resolvedName = ""
-                        if (!med.nameDivergent && med.name.isNotBlank()) {
-                            resolvedName = med.name
-                        }
-                        if (!med.dosageDivergent && med.dosage.isNotBlank()) {
-                            resolvedName = if (resolvedName.isNotBlank()) {
-                                "$resolvedName ${med.dosage}".trim()
-                            } else {
-                                med.dosage.trim()
+                if (response != null) {
+                    if (response.duplicatesMergedCount > 0) {
+                        batchInfoNotice = "Foram mesclados ${response.duplicatesMergedCount} medicamentos duplicados entre as páginas da receita."
+                    }
+                    if (response.medications.isNotEmpty()) {
+                        batchList.clear()
+                        response.medications.forEach { med ->
+                            val hasDivergence = med.nameDivergent || med.dosageDivergent
+                            var resolvedName = ""
+                            if (!hasDivergence) {
+                                val n = if (!med.nameDivergent && med.name.isNotBlank()) med.name else ""
+                                val d = if (!med.dosageDivergent && med.dosage.isNotBlank()) med.dosage else ""
+                                resolvedName = if (n.isNotBlank() && d.isNotBlank()) {
+                                    "$n $d".trim()
+                                } else {
+                                    (n.ifBlank { d }).trim()
+                                }
                             }
-                        }
-                        if (resolvedName.isNotBlank()) {
-                            name = resolvedName
+                            val schedule = if (med.suggestedTimes.isNotEmpty() && !med.frequencyDivergent) {
+                                med.suggestedTimes.first()
+                            } else {
+                                "08:00"
+                            }
+                            val divergenceReason = if (hasDivergence) {
+                                med.divergenceReason ?: "Caligrafia médica incerta: por favor, digite o nome e a dosagem deste remédio."
+                            } else null
+
+                            val item = BatchMedicationItem(
+                                initialName = resolvedName,
+                                initialTotalUnits = "30",
+                                initialScheduleTime = schedule,
+                                initialEan = med.eanBarcode ?: "",
+                                initialIsDivergent = hasDivergence,
+                                initialDivergenceReason = divergenceReason,
+                                initialSourcePages = med.sourcePages
+                            )
+
+                            if (!med.eanBarcode.isNullOrBlank()) {
+                                viewModel.lookupBarcode(med.eanBarcode) { anvisaMed ->
+                                    item.found = anvisaMed
+                                    if (!hasDivergence && item.name.isBlank() && anvisaMed != null) {
+                                        item.name = anvisaMed.name
+                                    }
+                                }
+                            }
+                            batchList.add(item)
                         }
                     } else {
-                        // SaMD: Divergência detectada — campo de medicamento permanece estritamente VAZIO
-                        name = ""
-                        prescriptionDivergenceReason = med.divergenceReason
-                            ?: "Por segurança, digite os dados da sua receita médica."
+                        batchInfoNotice = "Não foi possível identificar medicamentos legíveis na receita. Você pode preencher manualmente."
                     }
-
-                    if (med.suggestedTimes.isNotEmpty() && !med.frequencyDivergent) {
-                        scheduleTime = med.suggestedTimes.first()
-                    }
-
-                    if (!med.eanBarcode.isNullOrBlank()) {
-                        ean = med.eanBarcode
-                        viewModel.lookupBarcode(med.eanBarcode) { anvisaMed ->
-                            found = anvisaMed
-                            if (!hasDivergence && name.isBlank() && anvisaMed != null) {
-                                name = anvisaMed.name
-                            }
-                        }
-                    }
-                } else if (response != null && response.medications.isEmpty()) {
-                    prescriptionDivergenceReason = "Não foi possível identificar medicamentos legíveis na receita. Por favor, digite os dados manualmente."
+                } else {
+                    batchInfoNotice = "Não foi possível analisar a receita no momento. Você pode preencher manualmente."
                 }
             }
         }
@@ -143,15 +182,17 @@ fun BarcodeScannerScreen(
     val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
         val code = result.contents?.trim()
         if (!code.isNullOrEmpty()) {
-            ean = code
-            lookupError = null
             viewModel.lookupBarcode(code) { med ->
-                found = med
-                if (med != null) {
-                    name = med.name
-                    if (totalUnits.isBlank()) totalUnits = "30"
+                val targetItem = if (batchList.size == 1 && batchList[0].name.isBlank() && batchList[0].ean.isBlank()) {
+                    batchList[0]
                 } else {
-                    lookupError = "Não encontrei este código no catálogo da ANVISA. Preencha manualmente."
+                    BatchMedicationItem().also { batchList.add(it) }
+                }
+                targetItem.ean = code
+                targetItem.found = med
+                if (med != null) {
+                    targetItem.name = med.name
+                    if (targetItem.totalUnits.isBlank()) targetItem.totalUnits = "30"
                 }
             }
         }
@@ -170,7 +211,7 @@ fun BarcodeScannerScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Cadastrar Remédio", fontWeight = FontWeight.SemiBold) },
+                title = { Text("Cadastrar Remédios", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
@@ -217,8 +258,8 @@ fun BarcodeScannerScreen(
                     )
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        "Aponte a câmera para o código de barras da CAIXA. " +
-                            "Identificamos só a embalagem — nunca o comprimido solto.",
+                        "Aponte a câmera para o código de barras da CAIXA ou anexe a receita médica. " +
+                            "Identificamos só a embalagem e o documento — nunca o comprimido solto.",
                         fontSize = 14.sp, color = BragaTextPrimary
                     )
                 }
@@ -233,97 +274,56 @@ fun BarcodeScannerScreen(
             ) {
                 Icon(Icons.Filled.QrCodeScanner, contentDescription = null)
                 Spacer(Modifier.width(10.dp))
-                Text("Escanear código de barras", color = Color.White, fontSize = 17.sp)
+                Text("Escanear código de barras da caixa", color = Color.White, fontSize = 17.sp)
             }
 
-            OutlinedButton(
-                onClick = { documentPicker.launch(arrayOf("image/*", "application/pdf")) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 52.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = BragaEmeraldDark),
-                border = BorderStroke(1.dp, BragaEmeraldLight)
-            ) {
-                Icon(Icons.Filled.UploadFile, contentDescription = null, tint = BragaEmerald)
-                Spacer(Modifier.width(8.dp))
-                Text("Escanear ou Anexar Receita (Dupla Checagem com IA)", fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            }
-
-            OutlinedTextField(
-                value = ean,
-                onValueChange = {
-                    ean = it.filter { c -> c.isDigit() }.take(13)
-                    found = null
-                },
-                label = { Text("Código EAN-13 (opcional)") },
-                placeholder = { Text("13 dígitos da caixa") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            lookupError?.let {
-                Text(it, color = BragaEmergencyOrange, fontSize = 14.sp)
-            }
-
-            found?.let { med ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = BragaMint),
+            // Campo para anexar receita (PDF ou Imagem)
+            if (prescriptionDocumentUri == null) {
+                OutlinedButton(
+                    onClick = { documentPicker.launch(arrayOf("image/*", "application/pdf")) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = BragaEmeraldDark),
                     border = BorderStroke(1.dp, BragaEmeraldLight)
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Text("Encontrado na ANVISA:", fontSize = 13.sp, color = BragaTextSecondary)
-                        Spacer(Modifier.height(4.dp))
-                        Text(med.name, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = BragaTextPrimary)
-                        med.activePrinciple?.takeIf { it.isNotBlank() }?.let {
-                            Text("Princípio ativo: $it", fontSize = 14.sp)
+                    Icon(Icons.Filled.UploadFile, contentDescription = null, tint = BragaEmerald)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Escanear ou Anexar Receita (Dupla Checagem com IA)", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                }
+            } else {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                    border = BorderStroke(1.dp, BragaMintBorder)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = BragaEmerald, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Receita anexada", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = BragaTextPrimary)
+                            Text(prescriptionFileName ?: "Documento selecionado", fontSize = 12.sp, color = BragaTextSecondary, maxLines = 1)
                         }
-                        med.concentration?.takeIf { it.isNotBlank() }?.let {
-                            Text("Concentração: $it", fontSize = 14.sp)
-                        }
-                        med.manufacturer?.takeIf { it.isNotBlank() }?.let {
-                            Text("Laboratório: $it", fontSize = 14.sp)
-                        }
-                        med.farmaciaPopularEligible?.let { eligible ->
-                            Text(
-                                if (eligible) "Possivelmente elegível no Farmácia Popular" else "Não elegível no Farmácia Popular",
-                                fontSize = 13.sp, color = BragaTextSecondary
-                            )
+                        IconButton(
+                            onClick = {
+                                prescriptionDocumentUri = null
+                                prescriptionFileName = null
+                                batchInfoNotice = null
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(Icons.Filled.Close, contentDescription = "Remover receita", tint = BragaTextSecondary)
                         }
                     }
                 }
             }
-
-            HorizontalDivider()
-
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Nome do remédio *") },
-                placeholder = { Text("Ex: Losartana 50mg") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            OutlinedTextField(
-                value = totalUnits,
-                onValueChange = { totalUnits = it.filter { c -> c.isDigit() }.take(5) },
-                label = { Text("Quantidade da caixa (ex: 30 comprimidos)") },
-                placeholder = { Text("30") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            OutlinedTextField(
-                value = scheduleTime,
-                onValueChange = { scheduleTime = it.take(5) },
-                label = { Text("Horário da dose (HH:mm) *") },
-                placeholder = { Text("08:00") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
 
             // Indicador de progresso acolhedor da análise da receita
             if (isAnalyzingPrescription) {
@@ -353,58 +353,8 @@ fun BarcodeScannerScreen(
                 }
             }
 
-            // Tratamento Obrigatório de Divergências (Alerta Âmbar — AUD-AN02 compliance via ícone)
-            if (prescriptionDivergenceReason != null) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB)),
-                    border = BorderStroke(1.dp, Color(0xFFF59E0B))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Icon(
-                            Icons.Filled.Warning,
-                            contentDescription = "Alerta de divergência",
-                            tint = Color(0xFFD97706),
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                "Divergência na caligrafia da receita:",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                color = Color(0xFFB45309)
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                prescriptionDivergenceReason ?: "Por segurança, digite os dados da sua receita médica.",
-                                fontSize = 13.sp,
-                                color = Color(0xFF92400E)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Campo opcional moderno: Anexar Receita (PDF ou Imagem)
-            if (prescriptionDocumentUri == null) {
-                OutlinedButton(
-                    onClick = { documentPicker.launch(arrayOf("image/*", "application/pdf")) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 52.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = BragaEmeraldDark)
-                ) {
-                    Icon(Icons.Filled.UploadFile, contentDescription = null, tint = BragaEmerald)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Anexar Receita (PDF ou Imagem)", fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                }
-            } else {
+            // Notificação informativa do lote / deduplicação (se houver)
+            batchInfoNotice?.let { notice ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -412,37 +362,214 @@ fun BarcodeScannerScreen(
                     border = BorderStroke(1.dp, BragaMintBorder)
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = BragaEmerald, modifier = Modifier.size(24.dp))
+                        Icon(
+                            Icons.Filled.Info,
+                            contentDescription = null,
+                            tint = BragaEmerald,
+                            modifier = Modifier.size(24.dp)
+                        )
                         Spacer(Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Receita anexada", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = BragaTextPrimary)
-                            Text(prescriptionFileName ?: "Documento selecionado", fontSize = 12.sp, color = BragaTextSecondary, maxLines = 1)
-                        }
-                        IconButton(
-                            onClick = {
-                                prescriptionDocumentUri = null
-                                prescriptionFileName = null
-                                prescriptionDivergenceReason = null
-                            },
-                            modifier = Modifier.size(36.dp)
+                        Text(
+                            text = notice,
+                            fontSize = 14.sp,
+                            color = BragaTextPrimary
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider()
+
+            // Lista de cartões de medicamentos da remessa
+            batchList.forEachIndexed { index, item ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, BragaCardBorder)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Filled.Close, contentDescription = "Remover receita", tint = BragaTextSecondary)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Filled.Medication,
+                                    contentDescription = null,
+                                    tint = BragaEmerald,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "Medicamento ${index + 1}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = BragaTextPrimary
+                                )
+                            }
+                            if (batchList.size > 1) {
+                                IconButton(
+                                    onClick = { batchList.removeAt(index) },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Delete,
+                                        contentDescription = "Remover medicamento",
+                                        tint = BragaEmergencyOrange
+                                    )
+                                }
+                            }
+                        }
+
+                        if (item.sourcePages.isNotEmpty()) {
+                            Text(
+                                text = "Identificado na(s) página(s): ${item.sourcePages.joinToString(", ")}",
+                                fontSize = 12.sp,
+                                color = BragaTextSecondary
+                            )
+                        }
+
+                        if (item.isDivergent) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB)),
+                                border = BorderStroke(1.dp, Color(0xFFF59E0B))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Warning,
+                                        contentDescription = "Alerta de divergência",
+                                        tint = Color(0xFFD97706),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            "Caligrafia médica incerta:",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = Color(0xFFB45309)
+                                        )
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(
+                                            item.divergenceReason ?: "Por segurança, digite o nome e a dosagem deste remédio.",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF92400E)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = item.name,
+                            onValueChange = { item.name = it },
+                            label = { Text("Nome do remédio *") },
+                            placeholder = { Text("Ex: Losartana 50mg") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = item.totalUnits,
+                                onValueChange = { item.totalUnits = it.filter { c -> c.isDigit() }.take(5) },
+                                label = { Text("Quantidade") },
+                                placeholder = { Text("30") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = item.scheduleTime,
+                                onValueChange = { item.scheduleTime = it.take(5) },
+                                label = { Text("Horário (HH:mm) *") },
+                                placeholder = { Text("08:00") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = item.ean,
+                            onValueChange = { newEan ->
+                                item.ean = newEan.filter { c -> c.isDigit() }.take(13)
+                                if (item.ean.length == 13) {
+                                    viewModel.lookupBarcode(item.ean) { med ->
+                                        item.found = med
+                                        if (med != null && item.name.isBlank()) {
+                                            item.name = med.name
+                                        }
+                                    }
+                                }
+                            },
+                            label = { Text("Código EAN-13 (opcional)") },
+                            placeholder = { Text("13 dígitos da caixa") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        item.found?.let { med ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(containerColor = BragaMint),
+                                border = BorderStroke(1.dp, BragaEmeraldLight)
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text("Encontrado na ANVISA:", fontSize = 12.sp, color = BragaTextSecondary)
+                                    Text(med.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = BragaTextPrimary)
+                                    med.activePrinciple?.takeIf { it.isNotBlank() }?.let {
+                                        Text("Princípio ativo: $it", fontSize = 13.sp)
+                                    }
+                                    med.concentration?.takeIf { it.isNotBlank() }?.let {
+                                        Text("Concentração: $it", fontSize = 13.sp)
+                                    }
+                                    med.manufacturer?.takeIf { it.isNotBlank() }?.let {
+                                        Text("Laboratório: $it", fontSize = 13.sp)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
 
+            // Botão [+ Adicionar outro medicamento à remessa]
+            OutlinedButton(
+                onClick = { batchList.add(BatchMedicationItem()) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 52.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = BragaEmeraldDark),
+                border = BorderStroke(1.dp, BragaEmerald)
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null, tint = BragaEmerald)
+                Spacer(Modifier.width(8.dp))
+                Text("Adicionar outro medicamento à remessa", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            }
+
             // Validação Reativa e SaMD (RDC 657/2022)
-            val isNameValid = name.trim().length >= 2
-            val isTimeValid = scheduleTime.trim().matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$"))
-            val canConfirm = isNameValid && isTimeValid && !isAnalyzingPrescription
+            val allNamesValid = batchList.isNotEmpty() && batchList.all { it.name.trim().length >= 2 }
+            val allTimesValid = batchList.isNotEmpty() && batchList.all { it.scheduleTime.trim().matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$")) }
+            val canConfirm = allNamesValid && allTimesValid && !isAnalyzingPrescription
             val isConfirmed = confirmed && canConfirm
-            val canSave = isNameValid && isTimeValid && isConfirmed && ui.selectedPatient.canWriteMedication && !ui.loading && !isAnalyzingPrescription
+            val canSave = allNamesValid && allTimesValid && isConfirmed && ui.selectedPatient.canWriteMedication && !ui.loading && !isAnalyzingPrescription
 
             // Checkbox OBRIGATÓRIO (SaMD RDC 657/2022 mantido)
             Row(
@@ -470,25 +597,39 @@ fun BarcodeScannerScreen(
             }
 
             val missingList = buildList {
-                if (!isNameValid) add("o nome do remédio")
-                if (!isTimeValid) add("o horário da dose (HH:mm)")
+                if (!allNamesValid) add("o nome de todos os remédios")
+                if (!allTimesValid) add("o horário válido (HH:mm) de todos os remédios")
                 if (!isConfirmed) add("a conferência com a receita médica")
             }
             val helperText = if (missingList.isNotEmpty()) {
                 "Para cadastrar: preencha ${missingList.joinToString(" e ")}."
             } else null
 
+            val submitButtonText = if (batchList.size > 1) {
+                "Cadastrar remessa (${batchList.size} remédios)"
+            } else {
+                "Cadastrar remédio"
+            }
+
             Button(
                 onClick = {
-                    val units = totalUnits.toIntOrNull()?.takeIf { it > 0 } ?: 30
-                    viewModel.createMedication(
-                        name = name.trim(),
-                        totalUnits = units,
-                        scheduleTimes = listOf(scheduleTime.trim()),
-                        confirmedWithPrescription = confirmed,
-                        barcode = found,
-                        prescriptionImageUri = prescriptionDocumentUri
-                    ) { ok -> if (ok) onSaved() }
+                    val patientId = ui.selectedPatientId ?: ui.selectedPatient.id.takeIf { it.isNotBlank() } ?: BragaConstants.GUEST_UID
+                    val dtos = batchList.map { item ->
+                        val units = item.totalUnits.toIntOrNull()?.takeIf { it > 0 } ?: 30
+                        MedicationBatchItemCreateDto(
+                            name = item.name.trim(),
+                            scheduleTimes = listOf(item.scheduleTime.trim()),
+                            totalUnits = units,
+                            eanBarcode = item.ean.takeIf { it.isNotBlank() },
+                            confirmedWithPrescription = true
+                        )
+                    }
+                    viewModel.createMedicationsBatch(
+                        patientId = patientId,
+                        items = dtos,
+                        onSuccess = { onSaved() },
+                        onError = { /* exibido via feedback */ }
+                    )
                 },
                 enabled = canSave,
                 colors = ButtonDefaults.buttonColors(
@@ -502,7 +643,7 @@ fun BarcodeScannerScreen(
             ) {
                 Icon(Icons.Filled.CheckCircle, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Cadastrar remédio", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text(submitButtonText, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             }
 
             helperText?.let {
