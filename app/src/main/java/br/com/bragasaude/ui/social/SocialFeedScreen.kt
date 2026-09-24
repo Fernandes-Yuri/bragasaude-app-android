@@ -1,52 +1,63 @@
 package br.com.bragasaude.ui.social
 
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
-import androidx.compose.material.icons.filled.WaterDrop
-import androidx.compose.material.icons.filled.Medication
-import androidx.compose.material.icons.filled.VolunteerActivism
-import androidx.compose.material.icons.filled.ThumbUp
-import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Diversity3
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.VolunteerActivism
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import br.com.bragasaude.data.local.PostReactionEntity
 import br.com.bragasaude.data.local.SocialPostEntity
+import br.com.bragasaude.ui.theme.BragaCardSurface
+import br.com.bragasaude.ui.theme.BragaEmerald
+import br.com.bragasaude.ui.theme.BragaEmeraldDark
+import br.com.bragasaude.ui.theme.BragaMint
+import br.com.bragasaude.ui.theme.BragaMintBorder
+import br.com.bragasaude.ui.theme.BragaMintSurface
+import br.com.bragasaude.ui.theme.BragaTextPrimary
+import br.com.bragasaude.ui.theme.BragaTextSecondary
 import br.com.bragasaude.ui.theme.Success
 import java.text.SimpleDateFormat
 import java.util.*
@@ -63,13 +74,13 @@ fun SocialFeedScreen(
     val feedError by viewModel.feedError.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var searchQuery by remember { mutableStateOf("") }
-    var showCreateDialog by remember { mutableStateOf(false) }
+    var showCreateSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(publishState) {
         when (val state = publishState) {
             SocialFeedViewModel.PublishState.Success -> {
-                showCreateDialog = false
-                snackbarHostState.showSnackbar("Conquista publicada!")
+                showCreateSheet = false
+                snackbarHostState.showSnackbar("Conquista publicada com sucesso!")
                 viewModel.clearPublishState()
             }
             is SocialFeedViewModel.PublishState.Error -> {
@@ -105,9 +116,10 @@ fun SocialFeedScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Mural da Comunidade",
+                        text = "Mural da Comunidade",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = BragaTextPrimary
                     )
                 },
                 navigationIcon = {
@@ -116,21 +128,24 @@ fun SocialFeedScreen(
                         modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Voltar"
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Voltar",
+                            tint = BragaTextPrimary
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { showCreateSheet = true },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Publicar Conquista",
+                            tint = BragaEmeraldDark
                         )
                     }
                 }
-            )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showCreateDialog = true },
-                icon = { Icon(Icons.Default.EmojiEvents, contentDescription = null) },
-                text = { Text("Publicar Conquista", fontWeight = FontWeight.Bold) },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(16.dp)
             )
         }
     ) { innerPadding ->
@@ -139,21 +154,44 @@ fun SocialFeedScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Barra de busca
+            // Barra de busca acessível
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Buscar por nome ou conquista...", fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Buscar", tint = MaterialTheme.colorScheme.primary) },
+                placeholder = {
+                    Text(
+                        text = "Buscar por nome ou conquista...",
+                        fontSize = 14.sp,
+                        color = BragaTextSecondary
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Buscar",
+                        tint = BragaEmeraldDark
+                    )
+                },
                 trailingIcon = {
                     if (searchQuery.isNotBlank()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Limpar")
+                        IconButton(
+                            onClick = { searchQuery = "" },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Limpar busca",
+                                tint = BragaTextSecondary
+                            )
                         }
                     }
                 },
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = BragaEmerald,
+                    unfocusedBorderColor = BragaMintBorder
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -165,25 +203,40 @@ fun SocialFeedScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 if (filteredPosts.isEmpty()) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                if (searchQuery.isNotBlank()) "Nenhuma publicação encontrada." else "O mural está calmo hoje.",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                if (searchQuery.isNotBlank()) "Tente buscar por outro termo ou nome." else "Conquistas e metas dos seus colegas de saúde aparecerão aqui para inspirar o seu dia!",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
+                        if (searchQuery.isBlank()) {
+                            CommunityWelcomeBanner(onPublishClick = { showCreateSheet = true })
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = if (searchQuery.isNotBlank()) "Nenhuma publicação encontrada." else "O mural está calmo hoje.",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 17.sp,
+                                    color = BragaTextPrimary
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = if (searchQuery.isNotBlank()) "Tente buscar por outro termo ou nome." else "Conquistas e metas dos seus colegas de saúde aparecerão aqui para inspirar o seu dia!",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontSize = 16.sp,
+                                    color = BragaTextSecondary,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
                 } else {
@@ -194,14 +247,23 @@ fun SocialFeedScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
                     ) {
+                        if (searchQuery.isBlank()) {
+                            item(key = "welcome_banner") {
+                                CommunityWelcomeBanner(onPublishClick = { showCreateSheet = true })
+                            }
+                        }
+
                         items(filteredPosts, key = { it.id }) { post ->
                             val reactions by remember(post.id) { viewModel.reactionsForPost(post.id) }.collectAsState(initial = emptyList())
-                            val reaction = reactions.firstOrNull { it.userId == viewModel.currentUserId }?.reactionType
+                            val selectedReaction = reactions.firstOrNull { it.userId == viewModel.currentUserId }?.reactionType
                                 ?: if (post.hasUserReacted) "apoio" else null
                             SocialPostCard(
                                 post = post,
-                                selectedReaction = reaction,
-                                onReact = { viewModel.react(post, it) }
+                                reactions = reactions,
+                                selectedReaction = selectedReaction,
+                                onReact = { reactionType ->
+                                    viewModel.toggleReaction(post, reactionType, selectedReaction)
+                                }
                             )
                         }
                     }
@@ -210,131 +272,178 @@ fun SocialFeedScreen(
         }
     }
 
-    if (showCreateDialog) {
-        var selectedAchievement by remember { mutableStateOf("Meta de Passos Concluída!") }
-        var descriptionText by remember { mutableStateOf("Hoje alcancei minha meta diária de passos!") }
-        var isPublic by remember { mutableStateOf(true) }
-
-        val achievementOptions = listOf(
-            "Meta de Passos Concluída!",
-            "Hidratação do Dia Completa!",
-            "Consistência de Saúde!",
-            "Pressão Arterial Monitorada!",
-            "Rotina de Remédios em Dia!"
-        )
-
-        ModalBottomSheet(onDismissRequest = {
-            if (publishState != SocialFeedViewModel.PublishState.Loading) {
-                showCreateDialog = false
-                viewModel.clearPublishState()
+    if (showCreateSheet) {
+        CreateAchievementBottomSheet(
+            templates = viewModel.achievementTemplates,
+            publishState = publishState,
+            onDismiss = {
+                if (publishState != SocialFeedViewModel.PublishState.Loading) {
+                    showCreateSheet = false
+                    viewModel.clearPublishState()
+                }
+            },
+            onPublish = { title, description, postType, isPublic ->
+                viewModel.createAchievementPost(
+                    title = title,
+                    description = description,
+                    postType = postType,
+                    visibility = if (isPublic) "PUBLIC" else "FAMILY"
+                )
             }
-        }) {
-            Column(
-                Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text("Compartilhar conquista", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                achievementOptions.chunked(2).forEach { options ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        options.forEach { option ->
-                            FilterChip(
-                                selected = selectedAchievement == option,
-                                onClick = { selectedAchievement = option },
-                                leadingIcon = { Icon(achievementIcon(option), contentDescription = null) },
-                                label = { Text(option, style = MaterialTheme.typography.labelLarge) },
-                                modifier = Modifier.weight(1f).heightIn(min = 64.dp)
-                            )
-                        }
-                    }
-                }
-                OutlinedTextField(value = descriptionText, onValueChange = { descriptionText = it.take(500) },
-                    label = { Text("Sua mensagem") }, modifier = Modifier.fillMaxWidth(), maxLines = 4,
-                    shape = RoundedCornerShape(16.dp))
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (isPublic) "Público: comunidade" else "Público: família", modifier = Modifier.weight(1f))
-                    Switch(checked = isPublic, onCheckedChange = { isPublic = it })
-                }
-                Text("Prévia", style = MaterialTheme.typography.labelLarge)
-                Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-                    Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(achievementIcon(selectedAchievement), contentDescription = null)
-                        Text(selectedAchievement, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                        if (descriptionText.isNotBlank()) Text(descriptionText)
-                    }
-                }
-                Button(
-                    onClick = {
-                        viewModel.createAchievementPost(selectedAchievement, descriptionText, "MILESTONE", if (isPublic) "PUBLIC" else "FAMILY")
-                    },
-                    enabled = publishState != SocialFeedViewModel.PublishState.Loading,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    if (publishState == SocialFeedViewModel.PublishState.Loading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
+        )
+    }
+}
+
+/**
+ * Banner acolhedor de destaque no topo da lista.
+ * Canto inferior direito 100% livre para a Orbe de IA.
+ */
+@Composable
+private fun CommunityWelcomeBanner(
+    onPublishClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = BragaCardSurface
+        ),
+        border = BorderStroke(1.dp, BragaMintBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            BragaMintSurface,
+                            BragaMint.copy(alpha = 0.45f),
+                            BragaCardSurface
                         )
-                        Spacer(Modifier.width(10.dp))
-                        Text("Publicando…")
-                    } else {
-                        Text("Publicar conquista")
-                    }
+                    )
+                )
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(BragaMint),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.EmojiEvents,
+                        contentDescription = null,
+                        tint = BragaEmeraldDark,
+                        modifier = Modifier.size(26.dp)
+                    )
                 }
-                Spacer(Modifier.height(24.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Compartilhe uma vitória hoje com a comunidade",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp,
+                        color = BragaTextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Celebre pequenas conquistas, inspire outros colegas e fortaleça sua rotina.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontSize = 14.sp,
+                        color = BragaTextSecondary
+                    )
+                }
+            }
+
+            Button(
+                onClick = onPublishClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BragaEmerald,
+                    contentColor = Color.White
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Publicar Conquista",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
 }
 
+/**
+ * Card contemporâneo do feed com cantos de 24.dp, borda sutil BragaMintBorder
+ * e barra de 3 reações expressivas com contadores e feedback tátil.
+ */
 @Composable
 private fun SocialPostCard(
     post: SocialPostEntity,
+    reactions: List<PostReactionEntity>,
     selectedReaction: String?,
     onReact: (String) -> Unit
 ) {
     val (typeIcon, typeColor, typeLabel) = getPostTypeBadge(post.postType)
+    val haptics = LocalHapticFeedback.current
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = BragaCardSurface
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = BorderStroke(1.dp, BragaMintBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f), MaterialTheme.colorScheme.surface)))
                 .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Header do Post: Avatar/Nome + Tipo de Conquista
+            // Header do Post: Avatar/Nome + Selo da Conquista
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Avatar Inicial
                     Box(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
+                            .background(BragaMint),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = (post.userName ?: "C").take(1).uppercase(),
+                            text = (post.userName ?: "C").take(1).uppercase(Locale.ROOT),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            fontSize = 17.sp,
+                            color = BragaEmeraldDark
                         )
                     }
 
@@ -344,38 +453,42 @@ private fun SocialPostCard(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
+                            color = BragaTextPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Nível ${post.userLevel} • ${formatRelativeTime(post.createdAt)}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            fontSize = 14.sp,
+                            color = BragaTextSecondary
                         )
                     }
                 }
 
-                // Tag do Tipo de Conquista
+                // Selo ilustrado da conquista
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = typeColor.copy(alpha = 0.15f)
+                    color = typeColor.copy(alpha = 0.14f)
                 ) {
                     Row(
-                        modifier = Modifier.padding(
-                            horizontal = if (typeLabel.isNotBlank()) 8.dp else 6.dp,
-                            vertical = 4.dp
-                        ),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(
-                            typeIcon,
-                            contentDescription = null,
+                            imageVector = typeIcon,
+                            contentDescription = typeLabel,
                             tint = typeColor,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                         if (typeLabel.isNotBlank()) {
-                            // Removido conforme Tarefa 4: Manter apenas a estrela/ícone no Mural
+                            Text(
+                                text = typeLabel,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = typeColor
+                            )
                         }
                     }
                 }
@@ -390,13 +503,13 @@ private fun SocialPostCard(
             }
 
             // Conteúdo do Post
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = post.title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = BragaTextPrimary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -405,32 +518,416 @@ private fun SocialPostCard(
                         text = post.description,
                         style = MaterialTheme.typography.bodyLarge,
                         fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 3,
+                        color = BragaTextSecondary,
+                        maxLines = 4,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
             HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                color = BragaMintBorder.copy(alpha = 0.5f)
             )
 
-            val haptics = LocalHapticFeedback.current
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(Triple("apoio", "Cuidado", Icons.Default.VolunteerActivism),
-                    Triple("palmas", "Palmas", Icons.Default.ThumbUp),
-                    Triple("forca", "Força", Icons.Default.FitnessCenter)).forEach { (type, label, icon) ->
-                    val selected = selectedReaction == type
-                    val reactionScale by animateFloatAsState(if (selected) 1.05f else 1f, label = "Reação")
-                    FilterChip(selected = selected, onClick = {
-                        if (!selected) { haptics.performHapticFeedback(HapticFeedbackType.LongPress); onReact(type) }
-                    }, label = { Text(label) }, leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        modifier = Modifier.heightIn(min = 48.dp).scale(reactionScale), shape = RoundedCornerShape(50))
+            // Barra de 3 Reações Expressivas: Cuidado, Palmas e Força
+            val reactionOptions = listOf(
+                Triple("apoio", "Cuidado", Icons.Default.VolunteerActivism),
+                Triple("palmas", "Palmas", Icons.Default.ThumbUp),
+                Triple("forca", "Força", Icons.Default.FitnessCenter)
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                reactionOptions.forEach { (type, label, icon) ->
+                    val isSelected = selectedReaction == type
+                    val count = reactions.count { it.reactionType == type }
+                    val reactionScale by animateFloatAsState(
+                        targetValue = if (isSelected) 1.05f else 1f,
+                        label = "ReactionScale"
+                    )
+
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onReact(type)
+                        },
+                        label = {
+                            Text(
+                                text = if (count > 0) "$label $count" else label,
+                                fontSize = 14.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .scale(reactionScale),
+                        shape = RoundedCornerShape(50),
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = BragaMintSurface,
+                            labelColor = BragaTextPrimary,
+                            iconColor = BragaTextSecondary,
+                            selectedContainerColor = BragaMint,
+                            selectedLabelColor = BragaEmeraldDark,
+                            selectedLeadingIconColor = BragaEmeraldDark
+                        ),
+                        border = BorderStroke(
+                            width = if (isSelected) 1.5.dp else 1.dp,
+                            color = if (isSelected) BragaEmerald else BragaMintBorder
+                        )
+                    )
                 }
             }
-            if (post.reactionCount > 0) Text(post.reactionCount.toString() + " apoios", style = MaterialTheme.typography.labelLarge)
 
+            val totalReactions = maxOf(post.reactionCount, reactions.size)
+            if (totalReactions > 0) {
+                Text(
+                    text = if (totalReactions == 1) "1 apoio da comunidade" else "$totalReactions apoios da comunidade",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = BragaTextSecondary
+                )
+            }
+        }
+    }
+}
+
+/**
+ * ModalBottomSheet moderno para criação de novas postagens de conquistas.
+ * Inclui seleção de template com chips, mensagem personalizada, visibilidade e live preview.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CreateAchievementBottomSheet(
+    templates: List<AchievementTemplate>,
+    publishState: SocialFeedViewModel.PublishState,
+    onDismiss: () -> Unit,
+    onPublish: (title: String, description: String, postType: String, isPublic: Boolean) -> Unit
+) {
+    var selectedTemplate by remember { mutableStateOf(templates.first()) }
+    var descriptionText by remember { mutableStateOf(templates.first().defaultDescription) }
+    var isPublic by remember { mutableStateOf(true) }
+
+    ModalBottomSheet(
+        onDismissRequest = {
+            if (publishState != SocialFeedViewModel.PublishState.Loading) {
+                onDismiss()
+            }
+        },
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        containerColor = BragaCardSurface,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Compartilhar Conquista",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    color = BragaTextPrimary
+                )
+                Text(
+                    text = "Selecione o tipo de conquista para celebrar com a comunidade.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontSize = 14.sp,
+                    color = BragaTextSecondary
+                )
+            }
+
+            // Chips com as 4 categorias harmonizadas
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Tipo de conquista",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = BragaTextPrimary
+                )
+
+                templates.chunked(2).forEach { rowTemplates ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowTemplates.forEach { template ->
+                            val isSelected = selectedTemplate.id == template.id
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    if (descriptionText.isBlank() || descriptionText == selectedTemplate.defaultDescription) {
+                                        descriptionText = template.defaultDescription
+                                    }
+                                    selectedTemplate = template
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = achievementIcon(template.category),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = template.category,
+                                        fontSize = 14.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 48.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = BragaMintSurface,
+                                    labelColor = BragaTextPrimary,
+                                    iconColor = BragaTextSecondary,
+                                    selectedContainerColor = BragaMint,
+                                    selectedLabelColor = BragaEmeraldDark,
+                                    selectedLeadingIconColor = BragaEmeraldDark
+                                ),
+                                border = BorderStroke(
+                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                    color = if (isSelected) BragaEmerald else BragaMintBorder
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Campo para mensagem personalizada opcional
+            OutlinedTextField(
+                value = descriptionText,
+                onValueChange = { descriptionText = it.take(500) },
+                label = { Text("Mensagem da conquista", fontSize = 14.sp) },
+                placeholder = { Text("Descreva como foi alcançar essa meta...", fontSize = 14.sp) },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2,
+                maxLines = 4,
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = BragaEmerald,
+                    focusedLabelColor = BragaEmeraldDark,
+                    cursorColor = BragaEmerald
+                )
+            )
+
+            // Seletor de Visibilidade
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = BragaMintSurface,
+                border = BorderStroke(1.dp, BragaMintBorder)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isPublic) Icons.Default.Groups else Icons.Default.Diversity3,
+                            contentDescription = null,
+                            tint = BragaEmeraldDark,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Column {
+                            Text(
+                                text = if (isPublic) "Público: Comunidade" else "Privado: Apenas Família",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = BragaTextPrimary
+                            )
+                            Text(
+                                text = if (isPublic) "Visível para todos os colegas" else "Visível para cuidadores e familiares",
+                                fontSize = 14.sp,
+                                color = BragaTextSecondary
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = isPublic,
+                        onCheckedChange = { isPublic = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = BragaEmerald
+                        )
+                    )
+                }
+            }
+
+            // Card de Live Preview
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Pré-visualização ao vivo",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = BragaTextSecondary
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = BragaMintSurface
+                    ),
+                    border = BorderStroke(1.dp, BragaMintBorder)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(BragaMint),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "V",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        color = BragaEmeraldDark
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = "Você",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        color = BragaTextPrimary
+                                    )
+                                    Text(
+                                        text = "Nível 1 • Agora mesmo",
+                                        fontSize = 14.sp,
+                                        color = BragaTextSecondary
+                                    )
+                                }
+                            }
+
+                            val (badgeIcon, badgeColor, badgeLabel) = getPostTypeBadge(selectedTemplate.postType)
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = badgeColor.copy(alpha = 0.14f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = badgeIcon,
+                                        contentDescription = badgeLabel,
+                                        tint = badgeColor,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = badgeLabel,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = badgeColor
+                                    )
+                                }
+                            }
+                        }
+
+                        Text(
+                            text = selectedTemplate.title,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp,
+                            color = BragaTextPrimary
+                        )
+
+                        Text(
+                            text = descriptionText.ifBlank { selectedTemplate.defaultDescription },
+                            fontSize = 16.sp,
+                            color = BragaTextSecondary
+                        )
+                    }
+                }
+            }
+
+            // Botão [ Publicar Conquista ]
+            Button(
+                onClick = {
+                    onPublish(
+                        selectedTemplate.title,
+                        descriptionText.ifBlank { selectedTemplate.defaultDescription },
+                        selectedTemplate.postType,
+                        isPublic
+                    )
+                },
+                enabled = publishState != SocialFeedViewModel.PublishState.Loading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 52.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BragaEmerald,
+                    contentColor = Color.White
+                )
+            ) {
+                if (publishState == SocialFeedViewModel.PublishState.Loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "Publicando...",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
+                    Text(
+                        text = "Publicar Conquista",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
@@ -442,13 +939,13 @@ private data class PostBadgeInfo(
 )
 
 private fun getPostTypeBadge(postType: String): PostBadgeInfo {
-    return when (postType) {
+    return when (postType.lowercase(Locale.ROOT)) {
         "milestone" -> PostBadgeInfo(Icons.Default.EmojiEvents, Color(0xFFE5A800), "Conquista")
         "streak" -> PostBadgeInfo(Icons.Default.LocalFireDepartment, Color(0xFFE65100), "Sequência")
         "level_up" -> PostBadgeInfo(Icons.Default.Star, Success, "Subiu de Nível")
         "goal_hit" -> PostBadgeInfo(Icons.Default.TrendingUp, Color(0xFF1976D2), "Meta Batida")
         "weekly_recap" -> PostBadgeInfo(Icons.Default.MilitaryTech, Color(0xFF7B1FA2), "Semanal")
-        else -> PostBadgeInfo(Icons.Default.Star, Color(0xFF1976D2), "")
+        else -> PostBadgeInfo(Icons.Default.Star, BragaEmerald, "Conquista")
     }
 }
 
@@ -492,7 +989,7 @@ private fun FamilyPostBanner(caregiverName: String?, patientName: String?) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Icon(
-            Icons.Default.Diversity3,
+            imageVector = Icons.Default.Diversity3,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.tertiary,
             modifier = Modifier.size(20.dp)
@@ -501,17 +998,19 @@ private fun FamilyPostBanner(caregiverName: String?, patientName: String?) {
             text = label,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 14.sp,
+            color = BragaTextSecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
     }
 }
 
-private fun achievementIcon(title: String): ImageVector = when {
-    title.contains("Passos") -> androidx.compose.material.icons.Icons.AutoMirrored.Filled.DirectionsWalk
-    title.contains("Hidratação") -> androidx.compose.material.icons.Icons.Default.WaterDrop
-    title.contains("Remédios") -> androidx.compose.material.icons.Icons.Default.Medication
-    title.contains("Pressão") -> androidx.compose.material.icons.Icons.Default.Favorite
-    else -> androidx.compose.material.icons.Icons.Default.LocalFireDepartment
+private fun achievementIcon(categoryOrTitle: String): ImageVector = when {
+    categoryOrTitle.contains("Passos", ignoreCase = true) -> Icons.AutoMirrored.Filled.DirectionsWalk
+    categoryOrTitle.contains("Hidratação", ignoreCase = true) || categoryOrTitle.contains("Agua", ignoreCase = true) -> Icons.Default.WaterDrop
+    categoryOrTitle.contains("Medicamentos", ignoreCase = true) || categoryOrTitle.contains("Remédios", ignoreCase = true) -> Icons.Default.Medication
+    categoryOrTitle.contains("Constância", ignoreCase = true) || categoryOrTitle.contains("Disciplina", ignoreCase = true) -> Icons.Default.LocalFireDepartment
+    categoryOrTitle.contains("Pressão", ignoreCase = true) -> Icons.Default.Favorite
+    else -> Icons.Default.EmojiEvents
 }
