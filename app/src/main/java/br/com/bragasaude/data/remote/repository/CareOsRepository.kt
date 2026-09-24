@@ -18,6 +18,8 @@ import br.com.bragasaude.data.remote.model.SymptomCheckInCreate
 import br.com.bragasaude.data.remote.sync.SyncScheduler
 import br.com.bragasaude.util.BragaTime
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.io.File
@@ -86,36 +88,42 @@ class CareOsRepository @Inject constructor(
     }
 
     /** Já fez check-in hoje? (controla a primeira abertura matinal). */
-    suspend fun hasCheckInForToday(patientId: String): Boolean =
+    suspend fun hasCheckInForToday(patientId: String): Boolean = withContext(Dispatchers.IO) {
         symptomsDiaryDao.getForDay(patientId, BragaTime.startOfTodayMillis()) != null
+    }
 
     fun getCheckInHistory(patientId: String): Flow<List<SymptomsDiaryEntity>> =
         symptomsDiaryDao.getAll(patientId)
 
     /** Sincroniza entradas recentes do diário de sintomas com a nuvem e persiste no Room local. */
-    suspend fun syncSymptomsDiary(patientId: String) {
-        val remote = apiClient.getSymptomsDiary(patientId, limit = 30)
-        if (remote.isEmpty()) return
-        val entities = remote.map {
-            val reportedTime = it.reportedAt?.let { raw -> parseOccurredAt(raw) } ?: Date()
-            SymptomsDiaryEntity(
-                id = it.id ?: UUID.nameUUIDFromBytes(
-                    "${it.patientId}|$reportedTime|${it.symptomsText}".toByteArray()
-                ).toString(),
-                patientId = patientId,
-                reportedBy = it.reportedBy ?: patientId,
-                reportedAt = reportedTime,
-                symptomsText = it.symptomsText,
-                sleepQuality = it.sleepQuality,
-                disposition = it.disposition,
-                inputMethod = it.inputMethod ?: "VOICE",
-                pendingSync = false
-            )
+    suspend fun syncSymptomsDiary(patientId: String) = withContext(Dispatchers.IO) {
+        try {
+            val remote = apiClient.getSymptomsDiary(patientId, limit = 30)
+            if (remote.isNotEmpty()) {
+                val entities = remote.map {
+                    val reportedTime = it.reportedAt?.let { raw -> parseOccurredAt(raw) } ?: Date()
+                    SymptomsDiaryEntity(
+                        id = it.id ?: UUID.nameUUIDFromBytes(
+                            "${it.patientId}|$reportedTime|${it.symptomsText}".toByteArray()
+                        ).toString(),
+                        patientId = patientId,
+                        reportedBy = it.reportedBy ?: patientId,
+                        reportedAt = reportedTime,
+                        symptomsText = it.symptomsText,
+                        sleepQuality = it.sleepQuality,
+                        disposition = it.disposition,
+                        inputMethod = it.inputMethod ?: "VOICE",
+                        pendingSync = false
+                    )
+                }
+                entities.forEach { entity -> symptomsDiaryDao.insert(entity) }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("CareOs", "syncSymptomsDiary: ${e.message}")
         }
-        entities.forEach { symptomsDiaryDao.insert(it) }
     }
 
-    suspend fun refreshAll(patientId: String) {
+    suspend fun refreshAll(patientId: String) = withContext(Dispatchers.IO) {
         syncCareWall(patientId)
         syncSymptomsDiary(patientId)
     }
@@ -127,30 +135,47 @@ class CareOsRepository @Inject constructor(
         careAuditDao.getRecent(patientId, 50)
 
     /** Sincroniza o mural com o servidor, mesclando por id remoto. */
-    suspend fun syncCareWall(patientId: String) {
-        val remote = apiClient.getActivityFeed(patientId, limit = 50)
-        if (remote.isEmpty()) return
-        val entities = remote.map {
-            CareAuditEntity(
-                id = it.id ?: UUID.nameUUIDFromBytes(
-                    "${it.actorName}|${it.actionType}|${it.occurredAt}".toByteArray()
-                ).toString(),
-                patientId = patientId,
-                actorId = it.actorId ?: patientId,
-                actorName = it.actorName,
-                actionType = it.actionType,
-                detailsJson = it.details ?: "{}",
-                occurredAt = parseOccurredAt(it.occurredAt)
-            )
+    suspend fun syncCareWall(patientId: String) = withContext(Dispatchers.IO) {
+        try {
+            val remote = apiClient.getActivityFeed(patientId, limit = 50)
+            if (remote.isNotEmpty()) {
+                val entities = remote.map {
+                    CareAuditEntity(
+                        id = it.id ?: UUID.nameUUIDFromBytes(
+                            "${it.actorName}|${it.actionType}|${it.occurredAt}".toByteArray()
+                        ).toString(),
+                        patientId = patientId,
+                        actorId = it.actorId ?: patientId,
+                        actorName = it.actorName,
+                        actionType = it.actionType,
+                        detailsJson = it.details ?: "{}",
+                        occurredAt = parseOccurredAt(it.occurredAt)
+                    )
+                }
+                careAuditDao.insertAll(entities)
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("CareOs", "syncCareWall: ${e.message}")
         }
-        careAuditDao.insertAll(entities)
     }
 
-    suspend fun getDailyBulletin(patientId: String): DailyCareBulletin? =
-        apiClient.getDailyBulletin(patientId)
+    suspend fun getDailyBulletin(patientId: String): DailyCareBulletin? = withContext(Dispatchers.IO) {
+        try {
+            apiClient.getDailyBulletin(patientId)
+        } catch (e: Exception) {
+            android.util.Log.w("CareOs", "getDailyBulletin: ${e.message}")
+            null
+        }
+    }
 
-    suspend fun getClinicalCorrelations(patientId: String): ClinicalCorrelationsResult? =
-        apiClient.getClinicalCorrelations(patientId)
+    suspend fun getClinicalCorrelations(patientId: String): ClinicalCorrelationsResult? = withContext(Dispatchers.IO) {
+        try {
+            apiClient.getClinicalCorrelations(patientId)
+        } catch (e: Exception) {
+            android.util.Log.w("CareOs", "getClinicalCorrelations: ${e.message}")
+            null
+        }
+    }
 
     private fun parseOccurredAt(raw: String): Date {
         return try {
