@@ -28,6 +28,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.bragasaude.data.local.GroceryListItemEntity
 import java.util.Locale
+import br.com.bragasaude.ui.theme.BragaCardBorder
+import br.com.bragasaude.ui.theme.BragaCardSurface
+import br.com.bragasaude.ui.theme.BragaEmerald
+import br.com.bragasaude.ui.theme.BragaEmeraldDark
+import br.com.bragasaude.ui.theme.BragaMint
+import br.com.bragasaude.ui.theme.BragaMintBorder
+import br.com.bragasaude.ui.theme.BragaMintSurface
+import br.com.bragasaude.ui.theme.BragaTextPrimary
+import br.com.bragasaude.ui.theme.BragaTextSecondary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,7 +58,7 @@ fun GroceryListBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = BragaCardSurface,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
         Column(
@@ -69,13 +78,13 @@ fun GroceryListBottomSheet(
                             "Lista Semanal de Compras",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = BragaTextPrimary
                         )
                     }
                     Text(
                         "Itens checados vão para a despensa",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
+                        color = BragaTextSecondary
                     )
                 }
                 IconButton(onClick = onDismiss) {
@@ -90,21 +99,22 @@ fun GroceryListBottomSheet(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F1)),
-                    border = BorderStroke(1.dp, Color(0xFF80CBC4))
+                    colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                    border = BorderStroke(1.dp, BragaMintBorder)
                 ) {
                     Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
                         Text(
                             "Sugestão do Braga: ${suggestedItems.joinToString(", ")}",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF00695C)
+                            color = BragaEmeraldDark
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(
                             onClick = { onAddSuggested(suggestedItems) },
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00897B))
+                            modifier = Modifier.heightIn(min = 48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
@@ -118,9 +128,9 @@ fun GroceryListBottomSheet(
             // Card Resumo de Preço e Despensa
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                border = BorderStroke(1.dp, Color(0xFFC8E6C9))
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                border = BorderStroke(1.dp, BragaMintBorder)
             ) {
                 Row(
                     modifier = Modifier
@@ -133,40 +143,40 @@ fun GroceryListBottomSheet(
                         Text(
                             "Estimativa da Semana",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = BragaEmeraldDark,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             String.format(Locale.getDefault(), "R$ %.2f", totalCost),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
+                            color = BragaTextPrimary
                         )
                         Text(
                             String.format(Locale.getDefault(), "Média: ~R$ %.2f / dia", dailyAvg),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
+                            color = BragaTextSecondary
                         )
                     }
 
                     Column(horizontalAlignment = Alignment.End) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = if (checkedCount > 0) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.2f)
+                            color = if (checkedCount > 0) BragaEmerald else BragaMint
                         ) {
                             Text(
                                 "$checkedCount de ${groceryList.size} comprados",
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = if (checkedCount > 0) Color.White else Color.DarkGray
+                                color = if (checkedCount > 0) Color.White else BragaTextSecondary
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             "Na Despensa",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
+                            color = BragaEmeraldDark
                         )
                     }
                 }
@@ -181,9 +191,9 @@ fun GroceryListBottomSheet(
             ) {
                 Button(
                     onClick = onExportPdf,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
                 ) {
                     Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
@@ -192,7 +202,9 @@ fun GroceryListBottomSheet(
 
                 OutlinedButton(
                     onClick = onGenerateList,
-                    shape = RoundedCornerShape(10.dp)
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, BragaMintBorder)
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
@@ -243,7 +255,7 @@ fun GroceryListBottomSheet(
                                 text = corridor,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = BragaEmeraldDark,
                                 modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
                             )
                         }
@@ -274,14 +286,11 @@ fun GroceryItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onToggle(!item.isCheckedInPantry) },
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (item.isCheckedInPantry) Color(0xFFF1F8E9) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+            containerColor = if (item.isCheckedInPantry) BragaMintSurface else BragaCardSurface
         ),
-        border = BorderStroke(
-            0.8.dp,
-            if (item.isCheckedInPantry) Color(0xFF81C784) else Color.LightGray.copy(alpha = 0.3f)
-        )
+        border = if (item.isCheckedInPantry) BorderStroke(1.dp, BragaMintBorder) else BorderStroke(1.dp, BragaCardBorder)
     ) {
         Row(
             modifier = Modifier
@@ -293,8 +302,8 @@ fun GroceryItemRow(
                 checked = item.isCheckedInPantry,
                 onCheckedChange = onToggle,
                 colors = CheckboxDefaults.colors(
-                    checkedColor = MaterialTheme.colorScheme.primary,
-                    uncheckedColor = Color.Gray
+                    checkedColor = BragaEmerald,
+                    uncheckedColor = BragaCardBorder
                 )
             )
 
@@ -306,12 +315,12 @@ fun GroceryItemRow(
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
                     textDecoration = if (item.isCheckedInPantry) TextDecoration.LineThrough else TextDecoration.None,
-                    color = if (item.isCheckedInPantry) Color.Gray else MaterialTheme.colorScheme.onSurface
+                    color = if (item.isCheckedInPantry) BragaTextSecondary else BragaTextPrimary
                 )
                 Text(
                     text = "Comprar: ${item.purchaseUnitText}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (item.isCheckedInPantry) Color.Gray else MaterialTheme.colorScheme.outline
+                    color = if (item.isCheckedInPantry) BragaTextSecondary else BragaTextSecondary
                 )
             }
 
@@ -319,7 +328,7 @@ fun GroceryItemRow(
                 text = String.format(Locale.getDefault(), "R$ %.2f", item.estimatedPriceBrl),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (item.isCheckedInPantry) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary
+                color = if (item.isCheckedInPantry) BragaEmerald else BragaTextPrimary
             )
         }
     }

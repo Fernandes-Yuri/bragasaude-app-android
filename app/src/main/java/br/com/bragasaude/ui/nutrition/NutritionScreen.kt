@@ -40,14 +40,13 @@ import br.com.bragasaude.ui.theme.BragaBackground
 import br.com.bragasaude.ui.theme.BragaCardBorder
 import br.com.bragasaude.ui.theme.BragaCardSurface
 import br.com.bragasaude.ui.theme.BragaEmerald
+import br.com.bragasaude.ui.theme.BragaEmeraldDark
 import br.com.bragasaude.ui.theme.BragaMint
 import br.com.bragasaude.ui.theme.BragaMintBorder
+import br.com.bragasaude.ui.theme.BragaMintSurface
 import br.com.bragasaude.ui.theme.BragaTextPrimary
 import br.com.bragasaude.ui.theme.BragaTextSecondary
 import br.com.bragasaude.ui.theme.Success
-import br.com.bragasaude.ui.theme.TealLight
-import br.com.bragasaude.ui.theme.TealPrimary
-import br.com.bragasaude.ui.theme.TealSurface
 import br.com.bragasaude.ui.theme.Warning
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -134,9 +133,9 @@ fun NutritionScreen(
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(0.5.dp, Color.LightGray.copy(alpha = 0.3f))
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                        border = BorderStroke(1.dp, BragaMintBorder)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(
@@ -145,12 +144,12 @@ fun NutritionScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("Consumo de Hoje", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
+                                    Text("Consumo de Hoje", style = MaterialTheme.typography.labelMedium, color = BragaTextSecondary)
                                     Text(
                                         "${consumedCal.toInt()} / ${dailyCal.toInt()} kcal",
                                         style = MaterialTheme.typography.headlineMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface,
+                                        color = BragaTextPrimary,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -159,8 +158,9 @@ fun NutritionScreen(
                                 CircularProgressIndicator(
                                     progress = { progress },
                                     modifier = Modifier.size(54.dp),
-                                    color = if (consumedCal > dailyCal) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                    strokeWidth = 6.dp
+                                    color = if (consumedCal > dailyCal) MaterialTheme.colorScheme.error else BragaEmerald,
+                                    trackColor = BragaMint,
+                                    strokeWidth = 7.dp
                                 )
                             }
                         }
@@ -197,9 +197,9 @@ fun NutritionScreen(
                                 }
                                 showGroceryBottomSheet = true
                             },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primaryContainer)
+                        shape = RoundedCornerShape(22.dp),
+                        colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                        border = BorderStroke(1.dp, BragaMintBorder)
                     ) {
                         Row(
                             modifier = Modifier
@@ -214,14 +214,14 @@ fun NutritionScreen(
                             ) {
                                 Surface(
                                     shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = BragaMint,
                                     modifier = Modifier.size(44.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
                                             Icons.Default.ShoppingCart,
                                             contentDescription = null,
-                                            tint = Color.White,
+                                            tint = BragaEmerald,
                                             modifier = Modifier.size(22.dp)
                                         )
                                     }
@@ -232,20 +232,20 @@ fun NutritionScreen(
                                         "Lista Semanal de Compras",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
+                                        color = BragaEmeraldDark
                                     )
                                     Text(
                                         if (groceryList.isEmpty()) "Toque para gerar a lista"
                                         else "R$ ${String.format(java.util.Locale.getDefault(), "%.2f", totalEstimated)} • $checkedPantry/${groceryList.size} na despensa",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.primary
+                                        color = BragaTextSecondary
                                     )
                                 }
                             }
                             Icon(
                                 Icons.Default.ChevronRight,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = BragaEmerald
                             )
                         }
                     }
@@ -259,7 +259,7 @@ fun NutritionScreen(
                                 Icon(
                                     Icons.Default.Tune,
                                     contentDescription = null,
-                                    tint = TealPrimary,
+                                    tint = BragaEmerald,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(Modifier.width(6.dp))
@@ -277,13 +277,13 @@ fun NutritionScreen(
                                     items(activeAdjustments) { adjustment ->
                                         Surface(
                                             shape = RoundedCornerShape(20.dp),
-                                            color = TealLight
+                                            color = BragaMint
                                         ) {
                                             Text(
                                                 "Ajustado para: $adjustment",
                                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                                 style = MaterialTheme.typography.labelMedium,
-                                                color = TealPrimary,
+                                                color = BragaEmerald,
                                                 fontWeight = FontWeight.Bold
                                             )
                                         }
@@ -296,11 +296,28 @@ fun NutritionScreen(
 
                 // Seletor de Refeições (Tabs)
                 item {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         items(mealTabs) { tab ->
-                            FilterChip(selected = selectedMealTab == tab, onClick = { viewModel.selectMealTab(tab) },
-                                label = { Text(tab, style = MaterialTheme.typography.bodyMedium) },
-                                shape = RoundedCornerShape(50), modifier = Modifier.heightIn(min = 48.dp))
+                            val isSelected = selectedMealTab == tab
+                            Surface(
+                                onClick = { viewModel.selectMealTab(tab) },
+                                shape = RoundedCornerShape(50),
+                                color = if (isSelected) BragaEmerald else BragaCardSurface,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) BragaEmerald else BragaCardBorder
+                                ),
+                                shadowElevation = if (isSelected) 2.dp else 0.dp,
+                                modifier = Modifier.heightIn(min = 48.dp)
+                            ) {
+                                Text(
+                                    text = tab,
+                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) Color.White else BragaTextSecondary
+                                )
+                            }
                         }
                     }
                 }
@@ -312,8 +329,9 @@ fun NutritionScreen(
 
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
-                        shape = RoundedCornerShape(20.dp)
+                        colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                        shape = RoundedCornerShape(22.dp),
+                        border = BorderStroke(1.dp, BragaMintBorder)
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(
@@ -324,13 +342,14 @@ fun NutritionScreen(
                                 Text(
                                     selectedMealTab,
                                     style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    color = BragaTextPrimary
                                 )
                                 Text(
                                     "${totalTabKcal.toInt()} kcal",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = BragaEmerald
                                 )
                             }
 
@@ -338,7 +357,7 @@ fun NutritionScreen(
                                 Text(
                                     "Nenhum alimento registrado para esta refeição.",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.outline
+                                    color = BragaTextSecondary
                                 )
                             } else {
                                 mealsForTab.forEach { meal ->
@@ -348,8 +367,8 @@ fun NutritionScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(meal.foodName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                            Text("${meal.portionGrams}g • ${meal.kcal.toInt()} kcal", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                                            Text(meal.foodName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium, color = BragaTextPrimary)
+                                            Text("${meal.portionGrams}g • ${meal.kcal.toInt()} kcal", style = MaterialTheme.typography.labelSmall, color = BragaTextSecondary)
                                         }
                                         IconButton(onClick = { viewModel.removeLoggedMeal(meal.id) }) {
                                             Icon(Icons.Default.Delete, contentDescription = "Remover", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
@@ -364,8 +383,9 @@ fun NutritionScreen(
                             ) {
                                 Button(
                                     onClick = { showFoodSelectorDialog = true },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp)
+                                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(6.dp))
@@ -374,7 +394,9 @@ fun NutritionScreen(
 
                                 OutlinedButton(
                                     onClick = { showCustomFoodDialog = true },
-                                    shape = RoundedCornerShape(12.dp)
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.heightIn(min = 48.dp),
+                                    border = BorderStroke(1.dp, BragaMintBorder)
                                 ) {
                                     Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(4.dp))
@@ -388,7 +410,7 @@ fun NutritionScreen(
                 // Banner de Transparência e Disclaimer de Autocuidado
                 item {
                     Surface(
-                        color = TealSurface,
+                        color = BragaMintSurface,
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -401,7 +423,7 @@ fun NutritionScreen(
                             Icon(
                                 Icons.Default.Info,
                                 contentDescription = null,
-                                tint = TealPrimary,
+                                tint = BragaEmerald,
                                 modifier = Modifier.size(22.dp)
                             )
                             Spacer(Modifier.width(10.dp))
@@ -423,7 +445,7 @@ fun NutritionScreen(
                                 Icon(
                                     Icons.Default.AutoAwesome,
                                     contentDescription = null,
-                                    tint = TealPrimary,
+                                    tint = BragaEmerald,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(Modifier.width(8.dp))
@@ -550,7 +572,7 @@ fun NutritionScreen(
                                     }
                                     Text("${(food.kcal ?: 0.0).toInt()} kcal/100g", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                                 }
-                                HorizontalDivider(color = Color.LightGray.copy(alpha = 0.2f))
+                                HorizontalDivider(color = BragaCardBorder)
                             }
                         }
                     }
@@ -689,10 +711,10 @@ fun MealCard(mealName: String, recommendation: HealthCalculators.MealRecommendat
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = BragaCardSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, Color.LightGray.copy(alpha = 0.3f))
+        border = BorderStroke(1.dp, BragaCardBorder)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -703,25 +725,25 @@ fun MealCard(mealName: String, recommendation: HealthCalculators.MealRecommendat
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        color = BragaMint,
                         modifier = Modifier.size(40.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Default.Restaurant,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = BragaEmerald,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                     Spacer(Modifier.width(12.dp))
                     Column {
-                        Text(mealName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(mealName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = BragaTextPrimary)
                         Text(
                             "${recommendation.calories.avg.toInt()} kcal recomendadas",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
+                            color = BragaTextSecondary
                         )
                     }
                 }
@@ -768,7 +790,7 @@ fun FunctionalSuggestionGroupCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.25f)),
+        border = BorderStroke(1.dp, BragaMintBorder),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -787,7 +809,7 @@ fun FunctionalSuggestionGroupCard(
                     Text(
                         group.subtitle,
                         style = MaterialTheme.typography.labelMedium,
-                        color = TealPrimary,
+                        color = BragaEmerald,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
