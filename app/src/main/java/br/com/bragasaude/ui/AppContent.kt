@@ -148,11 +148,7 @@ fun AppContent(activity: MainActivity) {
                     mutableStateOf(prefs.getBoolean("terms_accepted_before_auth", false))
                 }
 
-                var showSplash by remember { mutableStateOf(true) }
-                if (showSplash) {
-                    br.com.bragasaude.ui.SplashScreen(onTimeout = { showSplash = false })
-                } else {
-                    when (val status = sessionStatus) {
+                when (val status = sessionStatus) {
                         is AppSessionStatus.Authenticated -> {
                             when {
                                 profileError != null -> ProfileErrorState(
