@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude
+package br.com.bragasaude
 
 import android.Manifest
 import android.content.Intent
@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
     }
 
     internal fun startTrackingService() {
+        if (br.com.bragasaude.ui.util.StepTrackingService.isRunning) return
         val intent = Intent(this, StepTrackingService::class.java)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             startForegroundService(intent)

@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.util
+package br.com.bragasaude.ui.util
 
 import android.app.*
 import android.content.Context
@@ -34,8 +34,14 @@ class StepTrackingService : Service() {
     @Inject
     lateinit var auth: FirebaseAuth
 
-    private val CHANNEL_ID = "step_tracking_channel"
-    private val NOTIFICATION_ID = 1001
+    companion object {
+        private const val CHANNEL_ID = "step_tracking_channel"
+        private const val NOTIFICATION_ID = 1001
+
+        @Volatile
+        var isRunning: Boolean = false
+            private set
+    }
     
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var wakeLock: PowerManager.WakeLock? = null
@@ -43,6 +49,7 @@ class StepTrackingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         createNotificationChannel()
         acquireWakeLock()
     }
@@ -112,6 +119,7 @@ class StepTrackingService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isRunning = false
         serviceScope.cancel()
         wakeLock?.let {
             if (it.isHeld) it.release()
@@ -121,8 +129,9 @@ class StepTrackingService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     /**
-     * Notificação silenciosa exigida pelo Android para Foreground Services.
-     * ongoing = false e PRIORITY_MIN garantem que não polua a gaveta ou a barra de status.
+     * Notificação estritamente silenciosa e ancorada para Foreground Services.
+     * ongoing = true evita que o usuário a descarte e o sistema a re-emita.
+     * FOREGROUND_SERVICE_DEFERRED e PRIORITY_MIN garantem que nunca emita alerta, som ou pop-up ao abrir o app.
      */
     private fun createNotification(): Notification {
         val notificationIntent = Intent(this, MainActivity::class.java).apply {
@@ -133,16 +142,22 @@ class StepTrackingService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Braga Saúde")
             .setContentText("Monitoramento de atividade em segundo plano")
             .setSmallIcon(android.R.drawable.ic_menu_directions)
             .setContentIntent(pendingIntent)
-            .setOngoing(false)
+            .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setVisibility(NotificationCompat.VISIBILITY_SECRET)
-            .build()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_DEFERRED)
+        }
+
+        return builder.build()
     }
 
     private fun createNotificationChannel() {

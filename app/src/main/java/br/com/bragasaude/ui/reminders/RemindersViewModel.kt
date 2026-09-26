@@ -66,9 +66,13 @@ class RemindersViewModel @Inject constructor(
             val doses = times.map { time ->
                 val key = MedicationSchedule.key(today, time)
                 val taken = logs.any { log ->
-                    log.medicationId == entity.id && (log.scheduledFor == key ||
+                    log.medicationId == entity.id && (
+                        log.scheduledFor == key ||
+                        (log.scheduledFor != null && log.scheduledFor.startsWith(key)) ||
+                        (log.careOsScheduledFor != null && log.careOsScheduledFor.startsWith(key)) ||
                         (log.scheduledFor == null && time == times.firstOrNull() &&
-                        log.takenAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate() == today))
+                            log.takenAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate() == today)
+                    )
                 }
                 MedicationDoseState(time, taken, !taken && MedicationSchedule.available(today, time, now))
             }
