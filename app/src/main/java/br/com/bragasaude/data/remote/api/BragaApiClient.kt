@@ -787,6 +787,31 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    suspend fun getMedicationLogs(patientId: String, days: Int = 7): List<RemoteMedicationLog>? = withContext(Dispatchers.IO) {
+        try {
+            val arr = getJsonArray("$baseUrl/api/family/patients/$patientId/medications/logs?days=$days")
+                ?: getJsonArray("$baseUrl/api/medications/$patientId/logs?days=$days")
+                ?: return@withContext null
+            val list = mutableListOf<RemoteMedicationLog>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    RemoteMedicationLog(
+                        id = obj.optString("id", null),
+                        userId = obj.getString("user_id"),
+                        medicationId = obj.getString("medication_id"),
+                        takenAt = obj.getString("taken_at"),
+                        scheduledFor = obj.optString("scheduled_for", null)
+                    )
+                )
+            }
+            return@withContext list
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao buscar logs de medicamentos do servidor: ${e.message}")
+            return@withContext null
+        }
+    }
+
     // ==================== LIGA SAUDÁVEL ====================
 
     suspend fun syncLeagueMembership(m: LeagueMembershipEntity): String? = withContext(Dispatchers.IO) {

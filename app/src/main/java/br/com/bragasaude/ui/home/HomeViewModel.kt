@@ -207,6 +207,7 @@ class HomeViewModel @Inject constructor(
         }
         
         viewModelScope.launch {
+            medicationRepository.syncMedicationsFromServer(userId)
             syncManager.syncUserData(userId, force = false)
             if (healthConnectManager.isAvailable() && healthConnectManager.checkHasPermissions()) {
                 healthConnectManager.syncHealthConnectData()
@@ -219,6 +220,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
+                medicationRepository.syncMedicationsFromServer(userId)
                 syncManager.syncUserData(userId, force = true)
                 if (healthConnectManager.isAvailable() && healthConnectManager.checkHasPermissions()) {
                     healthConnectManager.syncHealthConnectData()
