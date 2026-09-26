@@ -1,6 +1,5 @@
 package br.com.bragasaude.data.util
 
-import android.util.Base64
 import java.security.SecureRandom
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
@@ -22,15 +21,34 @@ object WhatsAppLinkTotp {
     private const val SECRET_BYTES = 20
     private const val DIGITS = 6
     const val STEP_SECONDS = 180L
+    private const val BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 
     /** Gera um segredo TOTP aleatório em base32 (o app manda isso na sincronização). */
     fun generateSecret(): String {
         val raw = ByteArray(SECRET_BYTES)
         SecureRandom().nextBytes(raw)
-        return Base64.encodeToString(raw, Base64.NO_WRAP)
-            .trimEnd('=')
-            .replace('+', 'A') // mantém só o alfabeto base32 canônico
-            .uppercase()
+        return base32Encode(raw)
+    }
+
+    /** Codifica ByteArray em Base32 canônico RFC 4648 (chunks de 5 bits). */
+    fun base32Encode(data: ByteArray): String {
+        val sb = StringBuilder((data.size * 8 + 4) / 5)
+        var buffer = 0
+        var bitsLeft = 0
+        for (b in data) {
+            buffer = (buffer shl 8) or (b.toInt() and 0xFF)
+            bitsLeft += 8
+            while (bitsLeft >= 5) {
+                bitsLeft -= 5
+                val index = (buffer shr bitsLeft) and 0x1F
+                sb.append(BASE32_ALPHABET[index])
+            }
+        }
+        if (bitsLeft > 0) {
+            val index = (buffer shl (5 - bitsLeft)) and 0x1F
+            sb.append(BASE32_ALPHABET[index])
+        }
+        return sb.toString()
     }
 
     /** Código TOTP atual para o segredo (deve concordar com o gateway). */
@@ -65,14 +83,13 @@ object WhatsAppLinkTotp {
         return codeInt.toString().padStart(DIGITS, '0')
     }
 
-    private fun base32Decode(s: String): ByteArray {
+    fun base32Decode(s: String): ByteArray {
         val cleaned = s.trim().uppercase().replace("=", "")
-        val lookup = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
         val out = ArrayList<Byte>()
         var buffer = 0
         var bitsLeft = 0
         for (ch in cleaned) {
-            val v = lookup.indexOf(ch)
+            val v = BASE32_ALPHABET.indexOf(ch)
             if (v < 0) continue
             buffer = (buffer shl 5) or v
             bitsLeft += 5
