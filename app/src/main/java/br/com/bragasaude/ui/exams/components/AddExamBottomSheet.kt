@@ -181,37 +181,27 @@ private fun ExamEntryOptionCard(
             Spacer(Modifier.width(16.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = BragaTextPrimary
+                )
+                Spacer(Modifier.height(4.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = tagColor.copy(alpha = 0.12f)
                 ) {
                     Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = BragaTextPrimary,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = tag,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = tagColor,
+                        fontSize = 11.sp
                     )
-
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = tagColor.copy(alpha = 0.12f)
-                    ) {
-                        Text(
-                            text = tag,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = tagColor,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
                 }
-
                 Spacer(Modifier.height(4.dp))
 
                 Text(

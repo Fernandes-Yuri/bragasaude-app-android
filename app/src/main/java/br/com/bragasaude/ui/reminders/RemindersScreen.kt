@@ -2,6 +2,7 @@ package br.com.bragasaude.ui.reminders
 
 import android.content.Intent
 import android.provider.CalendarContract
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,6 +25,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.remote.model.RemoteMedication
 import br.com.bragasaude.domain.MedicationSchedule
+import br.com.bragasaude.ui.theme.BragaCardBorder
+import br.com.bragasaude.ui.theme.BragaCardSurface
+import br.com.bragasaude.ui.theme.BragaMintBorder
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -173,11 +177,9 @@ fun MedicationCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isTaken) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f) 
-                            else MaterialTheme.colorScheme.surface 
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isTaken) 0.dp else 1.dp),
+        colors = CardDefaults.cardColors(containerColor = BragaCardSurface),
+        border = BorderStroke(1.dp, if (isTaken) BragaMintBorder else BragaCardBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         shape = RoundedCornerShape(24.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

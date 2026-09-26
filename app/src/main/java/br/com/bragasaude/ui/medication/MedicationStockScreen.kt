@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -269,20 +270,7 @@ fun MedicationStockScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
                 },
-                actions = {
-                    if (ui.isAuthenticated && ui.selectedPatient.canWriteMedication) {
-                        IconButton(
-                            onClick = { showAddChoice = true },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                Icons.Filled.Add,
-                                contentDescription = "Adicionar Medicamento",
-                                tint = Color.White
-                            )
-                        }
-                    }
-                },
+                actions = {},
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BragaEmerald,
                     titleContentColor = Color.White,
@@ -941,23 +929,20 @@ private fun MedicationStockCard(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(Modifier.width(4.dp))
-                            Text("Editar horários", color = BragaEmeraldDark, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text("Editar", color = BragaEmeraldDark, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                     if (canDelete) {
-                        Spacer(Modifier.width(4.dp))
-                        TextButton(
+                        IconButton(
                             onClick = { showDeleteConfirm = true },
-                            modifier = Modifier.heightIn(min = 48.dp)
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
-                                Icons.Filled.Delete,
-                                contentDescription = null,
+                                imageVector = Icons.Filled.DeleteOutline,
+                                contentDescription = "Excluir medicamento",
                                 tint = BragaEmergencyOrange,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(24.dp)
                             )
-                            Spacer(Modifier.width(4.dp))
-                            Text("Excluir", color = BragaEmergencyOrange, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
