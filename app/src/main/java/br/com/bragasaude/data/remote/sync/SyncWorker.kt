@@ -75,9 +75,10 @@ class SyncWorker @AssistedInject constructor(
     private suspend fun syncProfiles() {
         val pending = profileDao.getPendingSync()
         for (p in pending) {
-            val ok = apiClient.syncProfile(p)
-            if (ok) {
-                if (profileDao.getProfileOneShot(p.userId) == p) profileDao.insert(p.copy(pendingSync = false))
+            val result = apiClient.syncProfile(p)
+            if (result.success) {
+                val mergedSecret = result.returnedSecret ?: p.whatsappTotpSecret
+                if (profileDao.getProfileOneShot(p.userId) == p) profileDao.insert(p.copy(whatsappTotpSecret = mergedSecret, pendingSync = false))
             } else throw java.io.IOException("Perfil aguardando sincronização")
         }
     }

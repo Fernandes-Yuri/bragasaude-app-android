@@ -29,6 +29,11 @@ import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class SyncProfileResult(
+    val success: Boolean,
+    val returnedSecret: String? = null
+)
+
 /**
  * Cliente HTTP REST para sincronização de dados com o PostgreSQL no Lenovo G460.
  *
@@ -77,7 +82,7 @@ class BragaApiClient @Inject constructor(
 
     // ==================== PERFIL ====================
 
-    suspend fun syncProfile(p: ProfileEntity): Boolean = withContext(Dispatchers.IO) {
+    suspend fun syncProfile(p: ProfileEntity): SyncProfileResult = withContext(Dispatchers.IO) {
         try {
             val json = JSONObject().apply {
                 put("id", p.userId)
@@ -127,10 +132,15 @@ class BragaApiClient @Inject constructor(
                 }
             }
             val res = postJson("$baseUrl/api/sync/profile", json)
-            return@withContext res?.optString("status") == "success"
+            if (res?.optString("status") == "success") {
+                val returnedSecret = res.optString("totpSecret").takeIf { it.isNotBlank() }
+                    ?: res.optString("totp_secret").takeIf { it.isNotBlank() }
+                return@withContext SyncProfileResult(success = true, returnedSecret = returnedSecret)
+            }
+            return@withContext SyncProfileResult(success = false)
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao sincronizar perfil: ${e.message}")
-            return@withContext false
+            return@withContext SyncProfileResult(success = false)
         }
     }
 
