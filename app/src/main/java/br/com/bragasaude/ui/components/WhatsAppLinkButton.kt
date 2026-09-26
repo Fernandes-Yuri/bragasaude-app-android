@@ -88,7 +88,7 @@ fun WhatsAppLinkButton(
             onClick = {
                 if (totpSecret.isNullOrBlank()) return@Button
                 val code = WhatsAppLinkTotp.currentCode(totpSecret)
-                val text = Uri.encode("Vincular Braga Saúde $code")
+                val text = Uri.encode("Olá Braga, eu desejo vincular meu número a minha conta. Esta é minha credencial: $code")
                 val uri = Uri.parse("https://wa.me/$businessPhone?text=$text")
                 val intent = Intent(Intent.ACTION_VIEW, uri).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
