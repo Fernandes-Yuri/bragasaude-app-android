@@ -288,7 +288,7 @@ fun AppContent(activity: MainActivity) {
                                     val openHydration = activity.intent.getBooleanExtra("OPEN_HYDRATION", false)
                                     val openFamilyMessages = activity.intent.getBooleanExtra("OPEN_FAMILY_MESSAGES", false)
                                     val initialScreen: Screen = when {
-                                        openFamilyMessages -> Screen.FamilyChat
+                                        openFamilyMessages -> Screen.FamilyInbox
                                         openHydration -> Screen.Hydration()
                                         else -> Screen.Home
                                     }
