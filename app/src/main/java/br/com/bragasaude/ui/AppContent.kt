@@ -280,7 +280,9 @@ fun AppContent(activity: MainActivity) {
                                         val hasActivity = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                                             ContextCompat.checkSelfPermission(activity, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
                                         } else true
-                                        if (hasLocation && hasActivity) activity.startTrackingService()
+                                        if (hasLocation && hasActivity && !br.com.bragasaude.ui.util.StepTrackingService.isRunning) {
+                                            activity.startTrackingService()
+                                        }
                                     }
 
                                     val openHydration = activity.intent.getBooleanExtra("OPEN_HYDRATION", false)
