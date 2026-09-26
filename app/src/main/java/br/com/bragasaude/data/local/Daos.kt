@@ -580,6 +580,10 @@ interface FamilyDao {
     @Query("SELECT * FROM family_messages_local WHERE patientUserId = :patientUserId AND deletedAt IS NULL AND expiresAt > :now ORDER BY sentAt DESC LIMIT :limit")
     fun getRecentMessagesForPatient(patientUserId: String, limit: Int, now: Long = System.currentTimeMillis()): Flow<List<FamilyMessageEntity>>
 
+    /** Todas as mensagens familiares vigentes para construcao do inbox multi-conversas. */
+    @Query("SELECT * FROM family_messages_local WHERE deletedAt IS NULL AND expiresAt > :now ORDER BY sentAt DESC")
+    fun getAllActiveMessages(now: Long = System.currentTimeMillis()): Flow<List<FamilyMessageEntity>>
+
     /** Ativar um vinculo pendente. */
     @Query("UPDATE family_bindings_local SET status = 'ACTIVE' WHERE id = :bindingId")
     suspend fun activateBinding(bindingId: String)

@@ -30,6 +30,7 @@ import br.com.bragasaude.ui.reminders.RemindersScreen
 import br.com.bragasaude.ui.family.CaregiverDashboardScreen
 import br.com.bragasaude.ui.family.FamilyChatScreen
 import br.com.bragasaude.ui.family.FamilyConnectScreen
+import br.com.bragasaude.ui.family.FamilyInboxScreen
 import br.com.bragasaude.ui.report.MedicalReportScreen
 import br.com.bragasaude.ui.milestones.MilestonesScreen
 import br.com.bragasaude.ui.modules.CareModulesScreen
@@ -213,17 +214,34 @@ fun AppNavHost(
         composable<Screen.FamilyConnect> {
             FamilyConnectScreen(onClose = navigateBack)
         }
-        composable<Screen.FamilyChat> {
+        composable<Screen.FamilyInbox> {
+            FamilyInboxScreen(
+                onBack = navigateBack,
+                onOpenConversation = { patientId ->
+                    navController.navigate(Screen.FamilyChat(patientId))
+                },
+                onNavigateToConnect = { navController.navigate(Screen.FamilyConnect) },
+                onOpenCaregiverDashboard = {
+                    navController.navigate(Screen.CaregiverDashboard)
+                }
+            )
+        }
+        composable<Screen.FamilyChat> { entry ->
+            val chatRoute: Screen.FamilyChat = entry.toRoute()
             FamilyChatScreen(
                 onBack = navigateBack,
-                onNavigateToConnect = { navController.navigate(Screen.FamilyConnect) }
+                onNavigateToConnect = { navController.navigate(Screen.FamilyConnect) },
+                initialPatientId = chatRoute.patientId,
+                onOpenCaregiverDashboard = {
+                    navController.navigate(Screen.CaregiverDashboard)
+                }
             )
         }
         composable<Screen.CaregiverDashboard> {
             CaregiverDashboardScreen(
                 onBack = navigateBack,
                 onConnectFamily = { navController.navigate(Screen.CaregiverRegistration) },
-                onOpenChat = { navController.navigate(Screen.FamilyChat) }
+                onOpenChat = { navController.navigate(Screen.FamilyInbox) }
             )
         }
         composable<Screen.PantryRecipes> {
