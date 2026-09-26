@@ -234,8 +234,10 @@ fun RemoteMedicationLog.toEntity() = MedicationLogEntity(
     id = id ?: java.util.UUID.randomUUID().toString(),
     userId = userId,
     medicationId = medicationId,
-    scheduledFor = scheduledFor,
-    takenAt = parseDate(takenAt) ?: Date()
+    scheduledFor = scheduledFor?.take(16) ?: scheduledFor,
+    takenAt = parseDate(takenAt) ?: Date(),
+    careOsScheduledFor = scheduledFor,
+    pendingSync = false
 )
 
 fun MedicationLogEntity.toRemote() = RemoteMedicationLog(
