@@ -859,7 +859,7 @@ private fun SuggestedOptionCard(
     onDismiss: () -> Unit
 ) {
     Card(
-        modifier = Modifier.width(220.dp).height(240.dp),
+        modifier = Modifier.width(220.dp).height(265.dp),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
@@ -916,14 +916,22 @@ private fun SuggestedOptionCard(
             
             Button(
                 onClick = onAdd,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                contentPadding = PaddingValues(horizontal = 8.dp)
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
-                Text(option.servingUnit, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = option.servingUnit,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    lineHeight = 14.sp,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
             }
         }
     }
