@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Bragasaude.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">#00A884</item>
-        <item name="windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="windowSplashScreenBackground">@color/teal_light</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_logo_braga_animated</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/teal_primary</item>
+        <item name="windowSplashScreenAnimationDuration">400</item>
         <item name="postSplashScreenTheme">@style/Theme.Bragasaude</item>
     </style>
 

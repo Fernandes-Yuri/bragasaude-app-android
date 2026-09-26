@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Logo Braga Saúde para splash screen com caminho ECG nomeado para animação -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Squircle esmeralda translúcido (fundo) -->
+    <path
+        android:fillColor="#00A884"
+        android:pathData="M20,5 Q5,5 5,20 L5,80 Q5,95 20,95 L80,95 Q95,95 95,80 L95,20 Q95,5 80,5 Z" />
+
+    <!-- Linha de ECG branca (pulso cardíaco) — nomeado para animação trimPath -->
+    <path
+        android:name="ecg_path"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M14,50 L30,50 L37,30 L46,70 L53,38 L59,57 L65,50 L86,50" />
+
+</vector>

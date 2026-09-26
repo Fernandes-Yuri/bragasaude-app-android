@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Animação de desenho do traçado ECG via trimPathEnd -->
+<objectAnimator xmlns:android="http://schemas.android.com/apk/res/android"
+    android:propertyName="trimPathEnd"
+    android:duration="500"
+    android:valueFrom="0"
+    android:valueTo="1"
+    android:valueType="floatType"
+    android:interpolator="@android:anim/accelerate_interpolator" />

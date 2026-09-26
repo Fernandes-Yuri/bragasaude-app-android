@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Bragasaude.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/teal_light</item>
+        <!-- Fundo escuro para dark mode — harmonize com o tema noturno do app -->
+        <item name="windowSplashScreenBackground">@color/blue_dark</item>
+        <!-- Mesmo ícone animado (o branco do ECG contrasta bem no escuro) -->
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_logo_braga_animated</item>
         <item name="windowSplashScreenIconBackgroundColor">@color/teal_primary</item>
         <item name="windowSplashScreenAnimationDuration">400</item>
