@@ -338,9 +338,6 @@ fun AppContent(activity: MainActivity) {
                         onDismiss = { mainViewModel.dismissRisk() }
                     )
                 }
-
-
-            }
         }
     }
 }
