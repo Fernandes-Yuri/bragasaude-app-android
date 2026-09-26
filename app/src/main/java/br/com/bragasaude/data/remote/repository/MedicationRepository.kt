@@ -487,8 +487,25 @@ class MedicationRepository @Inject constructor(
                 }
             }
             syncAlarmsWithDatabase(patientId)
+            syncMedicationLogsFromServer(patientId)
         } catch (e: Exception) {
             android.util.Log.w("CareOs", "syncMedicationsFromServer: ${e.message}")
+        }
+    }
+
+    /**
+     * Puxa os logs de doses tomadas gravadas no servidor/RDS e popula o Room.
+     * Evita perda de estado de doses tomadas ao reinstalar o app ou limpar dados.
+     */
+    suspend fun syncMedicationLogsFromServer(patientId: String) = withContext(Dispatchers.IO) {
+        try {
+            val remoteLogs = apiClient.getMedicationLogs(patientId, days = 7) ?: return@withContext
+            for (remote in remoteLogs) {
+                val entity = remote.toEntity()
+                medicationLogDao.insertOnce(entity)
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("CareOs", "syncMedicationLogsFromServer: ${e.message}")
         }
     }
 

@@ -401,7 +401,8 @@ fun HomeScreen(
                     }
                 }
 
-                item {
+                val hasCardioReadings = heartReadings.isNotEmpty() || oxygenReadings.isNotEmpty()
+                val cardioVitalsItem: @Composable () -> Unit = {
                     Row(
                         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -422,6 +423,13 @@ fun HomeScreen(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.HealthReadings("OXYGEN_SATURATION")) }
                         )
+                    }
+                }
+
+                // Prioriza Batimentos e Oxigenação no topo se o usuário tiver medições ativas
+                if (hasCardioReadings) {
+                    item {
+                        cardioVitalsItem()
                     }
                 }
 
@@ -515,6 +523,13 @@ fun HomeScreen(
                                 onClick = { showScoreDetails = true }
                             )
                         }
+                    }
+                }
+
+                // Se Batimentos e Oxigenação não tiverem medições (- / vazio), vão para o final da grade de métricas
+                if (!hasCardioReadings) {
+                    item {
+                        cardioVitalsItem()
                     }
                 }
 
