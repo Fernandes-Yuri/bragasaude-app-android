@@ -1,6 +1,7 @@
 package br.com.bragasaude.ui.family
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
@@ -47,6 +48,8 @@ import java.util.*
 fun FamilyChatScreen(
     onBack: () -> Unit,
     onNavigateToConnect: () -> Unit,
+    initialPatientId: String? = null,
+    onOpenCaregiverDashboard: ((String) -> Unit)? = null,
     viewModel: FamilyViewModel = hiltViewModel()
 ) {
     val currentUserId by remember { derivedStateOf { viewModel.currentUserId } }
@@ -54,9 +57,17 @@ fun FamilyChatScreen(
     val patientId by viewModel.chatPatientId.collectAsState()
     val messages = allMessages.filter { it.patientUserId == patientId }
     val binding by viewModel.activeBindingsForCurrentUser.collectAsState()
+    val conversations by viewModel.conversations.collectAsState()
+    val currentConversation = conversations.firstOrNull { it.patientId == patientId }
     val chatSyncState by viewModel.chatSyncState.collectAsState()
     val context = LocalContext.current
     val exportScope = androidx.compose.runtime.rememberCoroutineScope()
+
+    LaunchedEffect(initialPatientId) {
+        if (!initialPatientId.isNullOrBlank()) {
+            viewModel.selectChatGroup(initialPatientId)
+        }
+    }
 
     // Gate do polling: só sincroniza com a tela em primeiro plano. Em
     // background o loop pausa e o gateway deixa de receber os hits de 15s.
@@ -77,6 +88,9 @@ fun FamilyChatScreen(
     var isSending by remember { mutableStateOf(false) }
     // D47: mensagem aguardando confirmação de exclusão (toque longo)
     var messagePendingDelete by remember { mutableStateOf<FamilyMessageEntity?>(null) }
+    var showProfileBottomSheet by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    var showRevokeConfirmFromChat by remember { mutableStateOf(false) }
     
     // Marcar mensagens como lidas quando os vínculos estiverem carregados
     LaunchedEffect(patientId, messages.size) {
@@ -107,24 +121,46 @@ fun FamilyChatScreen(
                     }
                 },
                 title = {
-                    val titleText = "Grupo da família"
-                    val subtitleText = if (patientId == null) "Selecione o grupo abaixo"
-                        else "Titular e cuidadores • mensagens por 24h"
-                    Column {
-                        Text(
-                            text = titleText,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = subtitleText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                    val titleText = currentConversation?.title ?: "Grupo da família"
+                    val subtitleText = "Toque para ver o perfil • mensagens por 24h"
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { showProfileBottomSheet = true }
+                            .padding(vertical = 4.dp, horizontal = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = BragaMint,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = currentConversation?.avatarLetter ?: "F",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BragaEmerald
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = titleText,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = subtitleText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 },
                 actions = {
@@ -137,8 +173,49 @@ fun FamilyChatScreen(
                     ) {
                         Icon(Icons.Default.Share, contentDescription = "Exportar conversa em PDF")
                     }
-                    IconButton(onClick = onNavigateToConnect) {
-                        Icon(Icons.Default.Groups, contentDescription = "Gerenciar Círculo Familiar")
+                    IconButton(onClick = { showProfileBottomSheet = true }) {
+                        Icon(Icons.Default.Info, contentDescription = "Ver perfil do familiar")
+                    }
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Mais opções")
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Ver perfil do familiar") },
+                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                                onClick = {
+                                    showMenu = false
+                                    showProfileBottomSheet = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Gerenciar círculo familiar") },
+                                leadingIcon = { Icon(Icons.Default.Groups, contentDescription = null) },
+                                onClick = {
+                                    showMenu = false
+                                    onNavigateToConnect()
+                                }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("Excluir vínculo", color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.DeleteOutline,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    showRevokeConfirmFromChat = true
+                                }
+                            )
+                        }
                     }
                 }
             )
@@ -150,22 +227,7 @@ fun FamilyChatScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            val groups = familyChatGroups(binding, currentUserId)
-            if (groups.size > 1) {
-                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(groups) { groupId ->
-                        val groupName by remember(groupId) { viewModel.groupName(groupId) }
-                            .collectAsState(initial = "Carregando família...")
-                        FilterChip(
-                            selected = groupId == patientId,
-                            enabled = !isSending,
-                            onClick = { messageText = ""; viewModel.selectChatGroup(groupId) },
-                            label = { Text(groupName) },
-                            modifier = Modifier.heightIn(min = 48.dp)
-                        )
-                    }
-                }
-            }
+
             // D47: aviso permanente de retenção — as mensagens vivem por 24 horas
             FamilyRetentionNotice(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -301,6 +363,67 @@ fun FamilyChatScreen(
             },
             dismissButton = {
                 TextButton(onClick = { messagePendingDelete = null }) {
+                    Text("Cancelar", fontSize = 16.sp)
+                }
+            }
+        )
+    }
+
+    if (showProfileBottomSheet && currentConversation != null) {
+        FamilyMemberProfileBottomSheet(
+            conversation = currentConversation,
+            onDismissRequest = { showProfileBottomSheet = false },
+            onNavigateToConnect = onNavigateToConnect,
+            onOpenCaregiverDashboard = onOpenCaregiverDashboard,
+            onRevokeBinding = {
+                val targetPid = patientId
+                if (!targetPid.isNullOrBlank()) {
+                    viewModel.revokeConversationBindings(targetPid) {
+                        onBack()
+                    }
+                }
+            }
+        )
+    }
+
+    if (showRevokeConfirmFromChat) {
+        AlertDialog(
+            onDismissRequest = { showRevokeConfirmFromChat = false },
+            title = {
+                Text(
+                    text = "Excluir vínculo familiar?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Esta ação desconectará o familiar deste círculo de cuidado. O acesso compartilhado de saúde e as mensagens do chat serão encerrados imediatamente.",
+                    fontSize = 15.sp,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRevokeConfirmFromChat = false
+                        val targetPid = patientId
+                        if (!targetPid.isNullOrBlank()) {
+                            viewModel.revokeConversationBindings(targetPid) {
+                                onBack()
+                            }
+                        }
+                    }
+                ) {
+                    Text(
+                        text = "Excluir vínculo",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRevokeConfirmFromChat = false }) {
                     Text("Cancelar", fontSize = 16.sp)
                 }
             }

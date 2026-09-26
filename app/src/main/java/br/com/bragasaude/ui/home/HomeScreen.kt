@@ -536,8 +536,8 @@ fun HomeScreen(
                 // 5. Recados da Família — Ponte Familiar & Modo Cuidador (card acolhedor e interativo)
                 item {
                     FamilyNotesCard(
-                        onSeeAll = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.FamilyChat) },
-                        onOpenChat = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.FamilyChat) },
+                        onSeeAll = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.FamilyInbox) },
+                        onOpenChat = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.FamilyInbox) },
                         onManageFamily = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.FamilyConnect) }
                     )
                 }

@@ -798,7 +798,7 @@ fun WeeklyStepsModal(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(140.dp),
+                                .height(160.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.Bottom
                         ) {
@@ -824,38 +824,43 @@ fun WeeklyStepsModal(
                                     if (day.steps > 0) {
                                         Text(
                                             text = if (day.steps >= 1000) "%.1fk".format(day.steps / 1000f) else "${day.steps}",
-                                            fontSize = 14.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray,
+                                            maxLines = 1
                                         )
                                         Spacer(Modifier.height(2.dp))
                                     }
 
-                                val maxBarHeight = 75.dp
-                                val barHeight = (maxBarHeight * barFraction).coerceAtLeast(6.dp)
+                                    val maxBarHeight = 68.dp
+                                    val barHeight = (maxBarHeight * barFraction).coerceAtLeast(6.dp)
 
-                                Box(
-                                    modifier = Modifier
-                                        .width(if (isSelected) 18.dp else 14.dp)
-                                        .height(barHeight)
-                                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                                        .background(barColor)
-                                        .then(
-                                            if (isSelected) Modifier.border(1.5.dp, MaterialTheme.colorScheme.onSurface, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                                            else Modifier
-                                        )
-                                )
+                                    Box(
+                                        modifier = Modifier
+                                            .width(if (isSelected) 18.dp else 14.dp)
+                                            .height(barHeight)
+                                            .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                            .background(barColor)
+                                            .then(
+                                                if (isSelected) Modifier.border(1.5.dp, MaterialTheme.colorScheme.onSurface, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                                else Modifier
+                                            )
+                                    )
                                     Spacer(Modifier.height(6.dp))
                                     Text(
                                         text = day.dayLabel,
-                                        fontSize = 14.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected || day.isToday) MaterialTheme.colorScheme.primary else Color.Gray
+                                        color = if (isSelected || day.isToday) MaterialTheme.colorScheme.primary else Color.Gray,
+                                        maxLines = 1
                                     )
+                                    Spacer(Modifier.height(2.dp))
                                     Text(
                                         text = day.dateFormatted,
-                                        fontSize = 14.sp,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray
+                                        fontSize = 10.sp,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -1266,7 +1271,7 @@ fun WeeklyCardioModal(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(140.dp),
+                                .height(160.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.Bottom
                         ) {
@@ -1292,14 +1297,15 @@ fun WeeklyCardioModal(
                                     if (day.points > 0) {
                                         Text(
                                             text = "${day.points}",
-                                            fontSize = 14.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) TealPrimary else Color.Gray
+                                            color = if (isSelected) TealPrimary else Color.Gray,
+                                            maxLines = 1
                                         )
                                         Spacer(Modifier.height(2.dp))
                                     }
 
-                                    val maxBarHeight = 75.dp
+                                    val maxBarHeight = 68.dp
                                     val barHeight = (maxBarHeight * barFraction).coerceAtLeast(6.dp)
 
                                     Box(
@@ -1316,14 +1322,18 @@ fun WeeklyCardioModal(
                                     Spacer(Modifier.height(6.dp))
                                     Text(
                                         text = day.dayLabel,
-                                        fontSize = 14.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected || day.isToday) TealPrimary else Color.Gray
+                                        color = if (isSelected || day.isToday) TealPrimary else Color.Gray,
+                                        maxLines = 1
                                     )
+                                    Spacer(Modifier.height(2.dp))
                                     Text(
                                         text = day.dateFormatted,
-                                        fontSize = 14.sp,
-                                        color = if (isSelected) TealPrimary else Color.Gray
+                                        fontSize = 10.sp,
+                                        color = if (isSelected) TealPrimary else Color.Gray,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
