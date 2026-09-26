@@ -494,6 +494,25 @@ class FamilyViewModel @Inject constructor(
         }
     }
 
+    /** Exclui/revoga os vínculos associados a uma conversa específica diretamente pelo chat */
+    fun revokeConversationBindings(patientId: String, onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                val bindingsToRevoke = activeBindingsForCurrentUser.value.filter {
+                    it.patientUserId == patientId || (it.caregiverUserId == currentUserId && it.patientUserId == patientId)
+                }
+                for (b in bindingsToRevoke) {
+                    familyRepository.revokeBinding(b.id)
+                }
+                _uiEvents.emit(FamilyUiEvent.Notice("Vínculo familiar excluído com sucesso."))
+            } catch (e: Exception) {
+                _uiEvents.emit(FamilyUiEvent.Error("Erro ao excluir vínculo: ${e.message}"))
+            } finally {
+                onComplete()
+            }
+        }
+    }
+
     fun markMessageAsRead(messageId: String) {
         viewModelScope.launch {
             try {
