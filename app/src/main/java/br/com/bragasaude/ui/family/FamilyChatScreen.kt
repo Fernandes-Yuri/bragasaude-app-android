@@ -89,6 +89,8 @@ fun FamilyChatScreen(
     // D47: mensagem aguardando confirmação de exclusão (toque longo)
     var messagePendingDelete by remember { mutableStateOf<FamilyMessageEntity?>(null) }
     var showProfileBottomSheet by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    var showRevokeConfirmFromChat by remember { mutableStateOf(false) }
     
     // Marcar mensagens como lidas quando os vínculos estiverem carregados
     LaunchedEffect(patientId, messages.size) {
@@ -173,6 +175,47 @@ fun FamilyChatScreen(
                     }
                     IconButton(onClick = { showProfileBottomSheet = true }) {
                         Icon(Icons.Default.Info, contentDescription = "Ver perfil do familiar")
+                    }
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Mais opções")
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Ver perfil do familiar") },
+                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                                onClick = {
+                                    showMenu = false
+                                    showProfileBottomSheet = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Gerenciar círculo familiar") },
+                                leadingIcon = { Icon(Icons.Default.Groups, contentDescription = null) },
+                                onClick = {
+                                    showMenu = false
+                                    onNavigateToConnect()
+                                }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("Excluir vínculo", color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.DeleteOutline,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    showRevokeConfirmFromChat = true
+                                }
+                            )
+                        }
                     }
                 }
             )
@@ -331,7 +374,57 @@ fun FamilyChatScreen(
             conversation = currentConversation,
             onDismissRequest = { showProfileBottomSheet = false },
             onNavigateToConnect = onNavigateToConnect,
-            onOpenCaregiverDashboard = onOpenCaregiverDashboard
+            onOpenCaregiverDashboard = onOpenCaregiverDashboard,
+            onRevokeBinding = {
+                if (!patientId.isNullOrBlank()) {
+                    viewModel.revokeConversationBindings(patientId) {
+                        onBack()
+                    }
+                }
+            }
+        )
+    }
+
+    if (showRevokeConfirmFromChat) {
+        AlertDialog(
+            onDismissRequest = { showRevokeConfirmFromChat = false },
+            title = {
+                Text(
+                    text = "Excluir vínculo familiar?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Esta ação desconectará o familiar deste círculo de cuidado. O acesso compartilhado de saúde e as mensagens do chat serão encerrados imediatamente.",
+                    fontSize = 15.sp,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRevokeConfirmFromChat = false
+                        if (!patientId.isNullOrBlank()) {
+                            viewModel.revokeConversationBindings(patientId) {
+                                onBack()
+                            }
+                        }
+                    }
+                ) {
+                    Text(
+                        text = "Excluir vínculo",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRevokeConfirmFromChat = false }) {
+                    Text("Cancelar", fontSize = 16.sp)
+                }
+            }
         )
     }
 }

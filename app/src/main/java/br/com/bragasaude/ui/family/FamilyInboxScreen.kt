@@ -222,7 +222,10 @@ fun FamilyInboxScreen(
             conversation = conversation,
             onDismissRequest = { selectedProfileConversation = null },
             onNavigateToConnect = onNavigateToConnect,
-            onOpenCaregiverDashboard = onOpenCaregiverDashboard
+            onOpenCaregiverDashboard = onOpenCaregiverDashboard,
+            onRevokeBinding = {
+                viewModel.revokeConversationBindings(conversation.patientId)
+            }
         )
     }
 }
