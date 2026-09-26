@@ -393,6 +393,11 @@ class FamilyBridgeRepository @Inject constructor(
         return liveMessages(familyDao.getRecentMessagesForPatient(patientUserId, limit))
     }
 
+    /** Todas as mensagens familiares ativas ordenadas por data para o inbox multi-conversas (D47). */
+    fun getAllActiveMessages(): Flow<List<FamilyMessageEntity>> {
+        return liveMessages(familyDao.getAllActiveMessages())
+    }
+
     suspend fun countUnreadMessages(patientUserId: String): Int {
         return liveMessages(familyDao.getUnreadMessagesForPatient(patientUserId)).first().size
     }

@@ -107,6 +107,102 @@ class FamilyViewModel @Inject constructor(
         }
     }
 
+    private val _cachedProfileNames = MutableStateFlow<Map<String, String>>(emptyMap())
+
+    /** Lista unificada de conversas ativas no Inbox (WhatsApp-style), isolando múltiplos círculos e o modo híbrido */
+    val conversations: StateFlow<List<FamilyConversationUi>> = combine(
+        activeBindingsForCurrentUser,
+        familyRepository.getAllActiveMessages(),
+        _cachedProfileNames
+    ) { bindings, messages, profileNames ->
+        buildConversations(bindings, messages, profileNames, currentUserId)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun getConversation(patientId: String): FamilyConversationUi? {
+        return conversations.value.firstOrNull { it.patientId == patientId }
+    }
+
+    private fun buildConversations(
+        bindings: List<FamilyBindingEntity>,
+        messages: List<FamilyMessageEntity>,
+        cachedProfiles: Map<String, String>,
+        userId: String
+    ): List<FamilyConversationUi> {
+        val activeBindings = bindings.filter { it.status == "ACTIVE" }
+        val groupPatientIds = familyChatGroups(activeBindings, userId)
+
+        return groupPatientIds.mapNotNull { patientId ->
+            val groupBindings = activeBindings.filter { it.patientUserId == patientId }
+            val isCaredByMe = patientId != userId
+
+            val title: String
+            val relationLabel: String
+            val subtitle: String
+            val otherUserId: String?
+
+            if (isCaredByMe) {
+                // Eu sou cuidador desta pessoa
+                val patientName = cachedProfiles[patientId]
+                    ?: groupBindings.firstNotNullOfOrNull { it.patientName?.takeIf(String::isNotBlank) }
+                val rel = groupBindings.firstOrNull()?.caregiverRelation?.takeIf(String::isNotBlank) ?: "Familiar"
+                relationLabel = rel
+                title = if (!patientName.isNullOrBlank()) {
+                    "$patientName ($rel)"
+                } else {
+                    rel
+                }
+                subtitle = "Você acompanha a saúde"
+                otherUserId = patientId
+            } else {
+                // Eu sou o paciente acompanhado
+                if (groupBindings.size == 1) {
+                    val b = groupBindings.first()
+                    val caregiverName = b.caregiverName.takeIf(String::isNotBlank) ?: "Familiar"
+                    val rel = b.caregiverRelation.takeIf(String::isNotBlank) ?: "Cuidador(a)"
+                    relationLabel = rel
+                    title = "$caregiverName ($rel)"
+                    subtitle = "Acompanha seus dados"
+                    otherUserId = b.caregiverUserId.takeIf(String::isNotBlank)
+                } else if (groupBindings.size > 1) {
+                    val names = groupBindings.map { it.caregiverName.takeIf(String::isNotBlank) ?: "Familiar" }.joinToString(", ")
+                    relationLabel = "Família (${groupBindings.size})"
+                    title = "Minha Família"
+                    subtitle = names
+                    otherUserId = groupBindings.firstOrNull()?.caregiverUserId
+                } else {
+                    relationLabel = "Família"
+                    title = "Minha Família"
+                    subtitle = "Círculo de cuidado"
+                    otherUserId = null
+                }
+            }
+
+            val groupMessages = messages.filter { it.patientUserId == patientId }
+            val lastMessage = groupMessages.firstOrNull()
+            val unreadCount = groupMessages.count { !it.isRead && it.senderUserId != userId }
+
+            val letter = title.firstOrNull { it.isLetter() }?.uppercase() ?: "F"
+
+            FamilyConversationUi(
+                patientId = patientId,
+                title = title,
+                subtitle = subtitle,
+                relationLabel = relationLabel,
+                isCaredByMe = isCaredByMe,
+                otherUserId = otherUserId,
+                avatarLetter = letter,
+                lastMessageText = lastMessage?.messageText,
+                lastMessageSender = if (lastMessage?.senderUserId == userId) "Você" else lastMessage?.senderName,
+                lastMessageTimeMs = lastMessage?.sentAt,
+                unreadCount = unreadCount,
+                activeBindings = groupBindings
+            )
+        }.sortedWith(
+            compareByDescending<FamilyConversationUi> { it.lastMessageTimeMs ?: 0L }
+                .thenByDescending { conv -> conv.activeBindings.maxOfOrNull { it.createdAt } ?: 0L }
+        )
+    }
+
     fun groupName(patientId: String): Flow<String> = profileDao.getProfile(patientId).map {
         if (patientId == currentUserId) "Minha família"
         else it?.fullName?.takeIf(String::isNotBlank) ?: "Familiar ${patientId.takeLast(6)}"
@@ -319,6 +415,17 @@ class FamilyViewModel @Inject constructor(
                         selectPatient(bindings.first(), selectChat = false)
                     } else if (bindings.isEmpty()) {
                         _dashboard.value = CaregiverDashboardState()
+                    }
+                    val missing = bindings.map { it.patientUserId }.filter { it.isNotBlank() && it !in _cachedProfileNames.value }
+                    if (missing.isNotEmpty()) {
+                        val copy = _cachedProfileNames.value.toMutableMap()
+                        for (pid in missing) {
+                            val p = profileDao.getProfileOneShot(pid)
+                            if (p?.fullName?.isNotBlank() == true) {
+                                copy[pid] = p.fullName
+                            }
+                        }
+                        _cachedProfileNames.value = copy
                     }
                 }
             }
