@@ -376,8 +376,9 @@ fun FamilyChatScreen(
             onNavigateToConnect = onNavigateToConnect,
             onOpenCaregiverDashboard = onOpenCaregiverDashboard,
             onRevokeBinding = {
-                if (!patientId.isNullOrBlank()) {
-                    viewModel.revokeConversationBindings(patientId) {
+                val targetPid = patientId
+                if (!targetPid.isNullOrBlank()) {
+                    viewModel.revokeConversationBindings(targetPid) {
                         onBack()
                     }
                 }
@@ -405,8 +406,9 @@ fun FamilyChatScreen(
                 TextButton(
                     onClick = {
                         showRevokeConfirmFromChat = false
-                        if (!patientId.isNullOrBlank()) {
-                            viewModel.revokeConversationBindings(patientId) {
+                        val targetPid = patientId
+                        if (!targetPid.isNullOrBlank()) {
+                            viewModel.revokeConversationBindings(targetPid) {
                                 onBack()
                             }
                         }
