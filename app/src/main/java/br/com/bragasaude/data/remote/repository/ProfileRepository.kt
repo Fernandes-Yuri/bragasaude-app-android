@@ -75,10 +75,19 @@ class ProfileRepository @Inject constructor(
         lastProfileSyncAttemptTime = now
 
         try {
-            val success = apiClient.syncProfile(entity)
-            if (success) {
-                if (profileDao.getProfileOneShot(profile.id) == entity) {
-                    profileDao.insert(entity.copy(pendingSync = false))
+            val syncResult = apiClient.syncProfile(entity)
+            if (syncResult.success) {
+                val current = profileDao.getProfileOneShot(profile.id)
+                val returnedSecret = syncResult.returnedSecret
+                val mergedSecret = if (!returnedSecret.isNullOrBlank() && returnedSecret != entity.whatsappTotpSecret) {
+                    returnedSecret
+                } else {
+                    entity.whatsappTotpSecret
+                }
+                if (current == entity) {
+                    profileDao.insert(entity.copy(whatsappTotpSecret = mergedSecret, pendingSync = false))
+                } else if (!returnedSecret.isNullOrBlank() && current != null && current.whatsappTotpSecret != returnedSecret) {
+                    profileDao.insert(current.copy(whatsappTotpSecret = returnedSecret))
                 }
             } else {
                 triggerSync()
