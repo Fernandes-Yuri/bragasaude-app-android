@@ -545,7 +545,8 @@ fun ProfileDetailScreen(
                     if (avatarUploading) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
-                    if (!customPhotoUri.isNullOrBlank() && customPhotoUri.startsWith("http")) {
+                    val serverPhotoUrl = customPhotoUri
+                    if (!serverPhotoUrl.isNullOrBlank() && serverPhotoUrl.startsWith("http")) {
                         OutlinedButton(
                             onClick = {
                                 profileViewModel.removeAvatarPhoto()
