@@ -338,6 +338,7 @@ class BragaApiClient @Inject constructor(
                 put("title", p.title)
                 if (p.description != null) put("description", p.description)
                 if (p.relatedMilestoneId != null) put("relatedMilestoneId", p.relatedMilestoneId)
+                put("visibility", p.visibility)
                 put("createdAt", isoFormat.format(p.createdAt))
             }
             val res = postJson("$baseUrl/api/sync/social-post", json)
@@ -368,6 +369,7 @@ class BragaApiClient @Inject constructor(
                         relatedMilestoneId = null,
                         createdAt = cAt,
                         isVisible = true,
+                        visibility = obj.optString("visibility", "PUBLIC"),
                         reactionCount = obj.optInt("reaction_count", 0),
                         hasUserReacted = false,
                         pendingSync = false
