@@ -1,5 +1,8 @@
 package br.com.bragasaude.ui.profile
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -46,6 +49,13 @@ class ProfileViewModel @Inject constructor(
     // Foto customizada escolhida da galeria (persistida localmente pelo DAO)
     private val _customPhotoUri = MutableStateFlow<String?>(null)
     val customPhotoUri = _customPhotoUri.asStateFlow()
+
+    // Upload de avatar via gateway (com moderação server-side, igual ao PWA)
+    private val _avatarUploading = MutableStateFlow(false)
+    val avatarUploading = _avatarUploading.asStateFlow()
+    private val _avatarMessage = MutableStateFlow<String?>(null)
+    val avatarMessage = _avatarMessage.asStateFlow()
+    fun consumeAvatarMessage() { _avatarMessage.value = null }
 
     init {
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
@@ -281,6 +291,104 @@ class ProfileViewModel @Inject constructor(
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    // Redimensiona para máx. 512px em JPEG 85 — espelha resizeAvatarFile do PWA.
+    private fun resizeAvatar(context: Context, uri: Uri): Pair<ByteArray?, String> {
+        val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
+        if (mime != "image/jpeg" && mime != "image/png" && mime != "image/webp") {
+            return null to mime
+        }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        val maxDim = maxOf(bounds.outWidth, bounds.outHeight).coerceAtLeast(1)
+        var sample = 1
+        while (maxDim / sample > 512) sample *= 2
+        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+        val bmp = context.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, opts)
+        } ?: return null to mime
+        val scale = minOf(1f, 512f / maxOf(bmp.width, bmp.height).coerceAtLeast(1))
+        val resized = if (scale < 1f) {
+            Bitmap.createScaledBitmap(
+                bmp,
+                (bmp.width * scale).toInt().coerceAtLeast(1),
+                (bmp.height * scale).toInt().coerceAtLeast(1),
+                true
+            )
+        } else bmp
+        val out = java.io.ByteArrayOutputStream()
+        resized.compress(Bitmap.CompressFormat.JPEG, 85, out)
+        if (resized !== bmp) bmp.recycle()
+        return out.toByteArray() to "image/jpeg"
+    }
+
+    fun uploadAvatarPhoto(context: Context, uri: Uri) {
+        val userId = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            _avatarUploading.value = true
+            try {
+                val (bytes, mime) = withContext(Dispatchers.IO) { resizeAvatar(context, uri) }
+                if (bytes == null) {
+                    _avatarMessage.value = "Formato não suportado — use JPEG, PNG ou WebP."
+                    return@launch
+                }
+                val result = withContext(Dispatchers.IO) {
+                    repository.uploadAvatarPhoto(userId, "avatar.jpg", mime, bytes)
+                }
+                val url = result.photoUrl
+                if (!url.isNullOrBlank()) {
+                    repository.persistServerAvatar(userId, url)
+                    _profile.value = _profile.value?.copy(avatarIdentifier = null)
+                    _customPhotoUri.value = url
+                    _avatarMessage.value = "Foto de perfil atualizada."
+                } else {
+                    _avatarMessage.value = when (result.code) {
+                        422 -> result.detail ?: "Foto não aprovada. Escolha outra imagem."
+                        503 -> "Não foi possível verificar a foto agora. Tente novamente em instantes."
+                        413 -> "A foto excede o limite de 5 MB."
+                        415 -> "Formato não suportado — use JPEG, PNG ou WebP."
+                        0 -> "Sem conexão. Tente novamente."
+                        else -> result.detail ?: "Não foi possível enviar a foto de perfil."
+                    }
+                }
+            } catch (e: Exception) {
+                _avatarMessage.value = "Não foi possível enviar a foto de perfil."
+            } finally {
+                _avatarUploading.value = false
+            }
+        }
+    }
+
+    fun removeAvatarPhoto() {
+        val userId = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            _avatarUploading.value = true
+            try {
+                if (withContext(Dispatchers.IO) { repository.removeAvatarPhoto(userId) }) {
+                    _customPhotoUri.value = null
+                    _avatarMessage.value = "Foto removida."
+                } else {
+                    _avatarMessage.value = "Não foi possível remover a foto."
+                }
+            } catch (e: Exception) {
+                _avatarMessage.value = "Não foi possível remover a foto."
+            } finally {
+                _avatarUploading.value = false
+            }
+        }
+    }
+
+    fun refreshServerPhoto() {
+        val userId = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            try {
+                val remote = withContext(Dispatchers.IO) { repository.refreshPhotoFromServer(userId) }
+                if (!remote.isNullOrBlank() && _customPhotoUri.value.isNullOrBlank()) {
+                    _customPhotoUri.value = remote
+                }
+            } catch (_: Exception) { }
         }
     }
 
