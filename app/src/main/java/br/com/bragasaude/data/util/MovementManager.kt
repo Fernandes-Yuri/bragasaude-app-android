@@ -119,6 +119,8 @@ class MovementManager @Inject constructor(
     // Acumuladores do Dia
     private var accumulatedActiveSecondsToday = 0L
     private var baseDailySteps = 0
+    // Caminhada leve contínua ("Move Minutes"): segundos seguidos em LIGHT com passo recente
+    private var lightStreakSeconds = 0L
 
     // Controle de Coerência Biomecânica & Anti-Fraude
     private var lastAcceptedStepTimestamp = 0L
@@ -134,6 +136,8 @@ class MovementManager @Inject constructor(
     // Limiares e Constantes Biomecânicas
     private val MIN_STEP_INTERVAL_MS = 260L // Máx ~230 passos/min (rejeita agitação frenética de mão)
     private val WINDOW_STEPS_THRESHOLD = 70 // Janela de 70 passos para correlação com GPS
+    // Caminhada leve só vira minuto ativo após 10 min contínuos em movimento
+    private val LIGHT_SUSTAINED_SECONDS = 600L
     private val MIN_DISPLACEMENT_PER_STEP_METERS = 0.28f // 70 passos necessitam de >= 19.6m com GPS confiável
     private val MAX_HUMAN_SPEED_KMH = 18.0f // Acima de 18 km/h é veículo
 
@@ -236,6 +240,7 @@ class MovementManager @Inject constructor(
         if (isNewDay) {
             baseDailySteps = 0
             accumulatedActiveSecondsToday = 0L
+            lightStreakSeconds = 0L
             _currentSteps.value = 0
             _currentDistance.value = 0f
             _currentActiveMinutes.value = 0
@@ -278,6 +283,7 @@ class MovementManager @Inject constructor(
             // 2. Reseta acumuladores do dia em memória
             baseDailySteps = 0
             accumulatedActiveSecondsToday = 0L
+            lightStreakSeconds = 0L
             _currentSteps.value = 0
             _currentDistance.value = 0f
             _currentActiveMinutes.value = 0
@@ -471,14 +477,25 @@ class MovementManager @Inject constructor(
                     else -> ActivityState.LIGHT
                 }
 
-                // Diretrizes OMS: apenas atividade moderada ou vigorosa conta como minutos ativos cardiorrespiratórios
-                if (_activityState.value == ActivityState.MODERATE || _activityState.value == ActivityState.VIGOROUS) {
-                    if (isOutsideBothZones.value) {
+                // Diretrizes OMS: atividade moderada ou vigorosa conta como minuto
+                // cardiorrespiratório em qualquer lugar — inclusive em casa. A zona
+                // residencial/trabalho segue só como sinal anti-fraude/display, não
+                // como gate de minutos (antes, esteira em casa zerava por definição).
+                // Caminhada leve ("Move Minutes") soma após 10 min contínuos em movimento.
+                val state = _activityState.value
+                if (state == ActivityState.MODERATE || state == ActivityState.VIGOROUS) {
+                    accumulatedActiveSecondsToday += 1L
+                    lightStreakSeconds = 0L
+                } else if (state == ActivityState.LIGHT && recentCount > 0) {
+                    lightStreakSeconds += 1L
+                    if (lightStreakSeconds >= LIGHT_SUSTAINED_SECONDS) {
                         accumulatedActiveSecondsToday += 1L
                     }
-                    val currentMins = (accumulatedActiveSecondsToday / 60).toInt()
-                    _currentActiveMinutes.value = currentMins
+                } else {
+                    lightStreakSeconds = 0L
                 }
+                val currentMins = (accumulatedActiveSecondsToday / 60).toInt()
+                _currentActiveMinutes.value = currentMins
             }
         }
     }
@@ -486,6 +503,7 @@ class MovementManager @Inject constructor(
     private fun onTransitionToResting() {
         _activityState.value = ActivityState.RESTING
         smoothedCadence = 0.0
+        lightStreakSeconds = 0L
         synchronized(recentStepsQueue) {
             recentStepsQueue.clear()
         }
