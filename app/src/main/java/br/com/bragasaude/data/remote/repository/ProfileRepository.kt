@@ -110,6 +110,37 @@ class ProfileRepository @Inject constructor(
         }
     }
 
+    // ---- Foto de perfil via gateway (com moderação server-side) ----
+    // A photo_url do servidor vive em customPhotoUri local e fica FORA do
+    // upsert de perfil — o sync existente nunca apaga a foto (mesmo desenho do PWA).
+
+    suspend fun uploadAvatarPhoto(userId: String, fileName: String, mimeType: String, bytes: ByteArray) =
+        apiClient.uploadProfileAvatar(userId, fileName, mimeType, bytes)
+
+    suspend fun persistServerAvatar(userId: String, photoUrl: String) {
+        profileDao.updateAvatar(userId, null, photoUrl)
+    }
+
+    suspend fun removeAvatarPhoto(userId: String): Boolean {
+        val ok = apiClient.deleteProfileAvatar(userId)
+        if (ok) profileDao.updateAvatar(userId, null, null)
+        return ok
+    }
+
+    suspend fun refreshPhotoFromServer(userId: String): String? {
+        if (userId == guestId) return null
+        return try {
+            val local = profileDao.getProfileOneShot(userId)
+            if (!local?.customPhotoUri.isNullOrBlank()) return local?.customPhotoUri
+            val remote = apiClient.fetchProfilePhotoUrl(userId)
+            if (!remote.isNullOrBlank()) profileDao.updateAvatar(userId, null, remote)
+            remote
+        } catch (e: Exception) {
+            android.util.Log.w("ProfileRepository", "Falha ao atualizar foto do servidor: ${e.message}")
+            null
+        }
+    }
+
     suspend fun updateStepGoal(userId: String, goal: Int) {
         val sanitized = goal.coerceIn(500, 50000)
         val localProfile = profileDao.getProfileOneShot(userId)

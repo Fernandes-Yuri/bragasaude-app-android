@@ -72,6 +72,7 @@ fun ProfileDetailScreen(
     authViewModel: AuthViewModel = hiltViewModel()
 ) {
     val profile by profileViewModel.profile.collectAsState()
+    val customPhotoUri by profileViewModel.customPhotoUri.collectAsState()
     val userFeedbacks by profileViewModel.userFeedbacks.collectAsState()
     val sessionStatus by authViewModel.sessionStatus.collectAsState()
     val scope = rememberCoroutineScope()
@@ -102,12 +103,22 @@ fun ProfileDetailScreen(
         }
     }
     
-    // Launcher para escolher foto da galeria
+    // Launcher para escolher foto da galeria — sobe ao gateway (moderação igual ao PWA)
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let { imageUri ->
-            profileViewModel.updateAvatar(null, imageUri.toString())
+            showAvatarDialog = false
+            profileViewModel.uploadAvatarPhoto(context, imageUri)
+        }
+    }
+
+    // Toast do resultado do upload/remoção (motivo da moderação vem do servidor)
+    val avatarMessage by profileViewModel.avatarMessage.collectAsState()
+    LaunchedEffect(avatarMessage) {
+        avatarMessage?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            profileViewModel.consumeAvatarMessage()
         }
     }
     
@@ -121,6 +132,7 @@ fun ProfileDetailScreen(
 
     LaunchedEffect(Unit) {
         profileViewModel.loadProfile()
+        profileViewModel.refreshServerPhoto()
     }
 
     val resolvedFeedbacks = remember(userFeedbacks) {
@@ -153,7 +165,8 @@ fun ProfileDetailScreen(
             item {
                 Spacer(Modifier.height(8.dp))
                 // Foto de Perfil Reativa com botão de edição
-                val customPhotoUri by profileViewModel.customPhotoUri.collectAsState()
+                // Se a foto do servidor falhar (ex.: disco da EC2 trocado), cai no próximo fallback — igual ao PWA.
+                var photoLoadFailed by remember(customPhotoUri) { mutableStateOf(false) }
                 val avatarIcon = when (profile?.avatarIdentifier) {
                     "Person" -> Icons.Default.Person
                     "Favorite" -> Icons.Default.Favorite
@@ -176,11 +189,12 @@ fun ProfileDetailScreen(
                             modifier = Modifier.size(64.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
-                        !customPhotoUri.isNullOrBlank() -> AsyncImage(
+                        !customPhotoUri.isNullOrBlank() && !photoLoadFailed -> AsyncImage(
                             model = customPhotoUri,
                             contentDescription = "Foto de perfil",
                             modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
+                            contentScale = ContentScale.Crop,
+                            onError = { photoLoadFailed = true }
                         )
                         !googleAvatarUrl.isNullOrBlank() -> AsyncImage(
                             model = googleAvatarUrl,
@@ -517,14 +531,32 @@ fun ProfileDetailScreen(
             title = { Text("Personalizar Foto de Perfil", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val avatarUploading by profileViewModel.avatarUploading.collectAsState()
                     Button(
                         onClick = {
                             // Abrir galeria para escolher foto
                             galleryLauncher.launch("image/*")
                         },
+                        enabled = !avatarUploading,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Escolher da Galeria")
+                        Text(if (avatarUploading) "Enviando..." else "Escolher da Galeria")
+                    }
+                    if (avatarUploading) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    val serverPhotoUrl = customPhotoUri
+                    if (!serverPhotoUrl.isNullOrBlank() && serverPhotoUrl.startsWith("http")) {
+                        OutlinedButton(
+                            onClick = {
+                                profileViewModel.removeAvatarPhoto()
+                                showAvatarDialog = false
+                            },
+                            enabled = !avatarUploading,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Remover foto")
+                        }
                     }
                     
                     Text("Ou escolha um avatar:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
