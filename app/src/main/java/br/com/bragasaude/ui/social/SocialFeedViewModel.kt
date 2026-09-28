@@ -140,6 +140,7 @@ class SocialFeedViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 android.util.Log.w("SocialFeedVM", "Reaction toggle failed: ${e.message}")
+                _feedError.value = "Não foi possível registrar sua reação. Tente novamente."
             } finally {
                 reacting.remove(post.id)
             }

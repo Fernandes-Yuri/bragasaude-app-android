@@ -81,6 +81,36 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
         // IDs próprios do FCM (o FamilyNotificationService usa a faixa 1001-1005).
         private const val ID_FAMILY_MESSAGE = 2001
         private const val ID_CONSULTATION = 2010
+
+        const val DEFAULT_DOWNLOAD_URL = "https://api.bragasaude.online/api/app/download"
+
+        /**
+         * SEG-12 (T-17): Defesa em profundidade contra phishing via FCM.
+         * Valida se a URL de download pertence exclusivamente aos dominios oficiais
+         * do ecossistema Braga Saude com esquema seguro HTTPS.
+         */
+        fun sanitizeDownloadUrl(urlStr: String?): String {
+            if (urlStr.isNullOrBlank()) return DEFAULT_DOWNLOAD_URL
+            return try {
+                val uri = java.net.URI(urlStr.trim())
+                val scheme = uri.scheme?.lowercase()
+                val host = uri.host?.lowercase()
+                val isAllowedHost = host != null && (
+                    host == "api.bragasaude.online" ||
+                    host == "bragasaude.online" ||
+                    host == "braga-saude.web.app" ||
+                    host == "github.com" ||
+                    host.endsWith(".bragasaude.online")
+                )
+                if (scheme == "https" && isAllowedHost) {
+                    urlStr.trim()
+                } else {
+                    DEFAULT_DOWNLOAD_URL
+                }
+            } catch (_: Exception) {
+                DEFAULT_DOWNLOAD_URL
+            }
+        }
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
@@ -99,7 +129,8 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
                 "CONSULTATION_CANCELLED", "CONSULTATION_COMPLETED" ->
                     showConsultationNotification(title, message)
                 "APP_UPDATE" -> {
-                    val downloadUrl = remoteMessage.data["download_url"] ?: "https://api.bragasaude.online/api/app/download"
+                    val rawUrl = remoteMessage.data["download_url"]
+                    val downloadUrl = sanitizeDownloadUrl(rawUrl)
                     showUpdateNotification(title, message, downloadUrl)
                 }
                 else -> showClinicNotification(title, message, isCritical = false)
@@ -309,7 +340,8 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
         // de foreground service pode fazer o sistema ENCERRAR o StepTrackingService.
         // Faixa dedicada e alta para updates de app.
         val notifyId = 7777
-        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(downloadUrl)).apply {
+        val safeUrl = sanitizeDownloadUrl(downloadUrl)
+        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(safeUrl)).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pendingIntent = PendingIntent.getActivity(
