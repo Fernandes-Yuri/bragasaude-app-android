@@ -105,6 +105,10 @@ fun HomeScreen(
     var showEmergencyDialog by remember { mutableStateOf(false) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    // C37: leitura fresca a cada recomposição — sem remember para o toggle
+    // das Configurações valer na hora (remember antigo deixava o botão ilustrativo).
+    val autoMorningCheckinEnabled =
+        br.com.bragasaude.util.AppPreferences.isAutoMorningCheckinEnabled(context)
     val useGooglePhoto = remember { br.com.bragasaude.util.AppPreferences.isUseGooglePhotoEnabled(context) }
     val avatarPhotoUrl = if (useGooglePhoto) com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.photoUrl?.toString() else null
 
@@ -257,10 +261,10 @@ fun HomeScreen(
                     }
                 }
 
-                // Card Acolhedor de Check-in Matinal do Dia (C37)
+                // Card Acolhedor de Check-in Matinal do Dia (C37) — só exibe com opt-in.
                 item {
                     val checkInDone = careUi.checkInDoneToday
-                    if (!checkInDone) {
+                    if (autoMorningCheckinEnabled && !checkInDone) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(20.dp),

@@ -298,10 +298,11 @@ fun AppNavHost(
     }
 
     // C37: Abertura automática no startup configurável pelo usuário (default = false).
+    // Leitura fresca a cada recomposição — sem remember para o toggle das
+    // Configurações valer na hora (remember antigo deixava o botão ilustrativo).
     val navContext = androidx.compose.ui.platform.LocalContext.current
-    val autoMorningCheckinEnabled = remember {
+    val autoMorningCheckinEnabled =
         br.com.bragasaude.util.AppPreferences.isAutoMorningCheckinEnabled(navContext)
-    }
     val selfCareEnabled = userRole == "PATIENT" || (userRole == "CAREGIVER" && caregiverMode == "HYBRID")
     val selected = careState.selectedPatientId
     if (autoMorningCheckinEnabled && selfCareEnabled && careState.isAuthenticated && careState.patients.isNotEmpty() &&
