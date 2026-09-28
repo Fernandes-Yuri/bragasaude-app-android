@@ -338,6 +338,7 @@ class BragaApiClient @Inject constructor(
                 put("title", p.title)
                 if (p.description != null) put("description", p.description)
                 if (p.relatedMilestoneId != null) put("relatedMilestoneId", p.relatedMilestoneId)
+                put("visibility", p.visibility)
                 put("createdAt", isoFormat.format(p.createdAt))
             }
             val res = postJson("$baseUrl/api/sync/social-post", json)
@@ -368,6 +369,7 @@ class BragaApiClient @Inject constructor(
                         relatedMilestoneId = null,
                         createdAt = cAt,
                         isVisible = true,
+                        visibility = obj.optString("visibility", "PUBLIC"),
                         reactionCount = obj.optInt("reaction_count", 0),
                         hasUserReacted = false,
                         pendingSync = false
@@ -1494,6 +1496,96 @@ class BragaApiClient @Inject constructor(
             null
         } finally {
             runCatching { conn?.disconnect() }
+        }
+    }
+
+    // ==================== FOTO DE PERFIL (avatar com moderação server-side) ====================
+    // Espelha o PWA (services/api.ts): resize local 512px/JPEG no cliente e upload
+    // em POST /api/profile/{id}/avatar. A moderação (Gemini/Groq, fail-closed) roda
+    // no gateway ANTES de gravar: reprovada = 422 com motivo; indisponível = 503.
+
+    data class AvatarUploadResult(val photoUrl: String?, val code: Int, val detail: String?)
+
+    suspend fun uploadProfileAvatar(
+        userId: String,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray
+    ): AvatarUploadResult = withContext(Dispatchers.IO) {
+        if (bytes.isEmpty() || bytes.size > 5 * 1024 * 1024) {
+            return@withContext AvatarUploadResult(null, 413, "A foto excede o limite de 5 MB.")
+        }
+        val boundary = "Boundary-${System.currentTimeMillis()}"
+        var conn: HttpURLConnection? = null
+        try {
+            val url = URL("$baseUrl/api/profile/$userId/avatar")
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = 45000
+                doOutput = true
+                setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                setRequestProperty("Accept", "application/json")
+                attachIdentity(url.toString())
+            }
+            conn.outputStream.use { output ->
+                output.write("--$boundary\r\n".toByteArray())
+                output.write(
+                    "Content-Disposition: form-data; name=\"file\"; filename=\"${fileName.replace("\"", "")}\"\r\n".toByteArray()
+                )
+                output.write("Content-Type: $mimeType\r\n\r\n".toByteArray())
+                output.write(bytes)
+                output.write("\r\n--$boundary--\r\n".toByteArray())
+            }
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            val json = runCatching { JSONObject(text) }.getOrNull()
+            if (code in 200..299) {
+                val photoUrl = json?.optString("photo_url")?.takeIf(String::isNotBlank)
+                return@withContext AvatarUploadResult(photoUrl, code, null)
+            }
+            return@withContext AvatarUploadResult(
+                null, code,
+                json?.optString("detail")?.takeIf(String::isNotBlank)
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha no upload do avatar: ${e.message}")
+            AvatarUploadResult(null, 0, null)
+        } finally {
+            runCatching { conn?.disconnect() }
+        }
+    }
+
+    suspend fun deleteProfileAvatar(userId: String): Boolean = withContext(Dispatchers.IO) {
+        var conn: HttpURLConnection? = null
+        try {
+            val url = URL("$baseUrl/api/profile/$userId/avatar")
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "DELETE"
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                setRequestProperty("Accept", "application/json")
+                attachIdentity(url.toString())
+            }
+            conn.responseCode in 200..299
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao remover avatar: ${e.message}")
+            false
+        } finally {
+            runCatching { conn?.disconnect() }
+        }
+    }
+
+    /** Lê a photo_url do perfil (qualquer familiar pode ler; falha → null). Espelha o PWA. */
+    suspend fun fetchProfilePhotoUrl(userId: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val res = getJson("$baseUrl/api/profile/$userId", strict = true) ?: return@withContext null
+            res.optString("photo_url", null)?.takeIf(String::isNotBlank)
+                ?: res.optString("photoUrl", null)?.takeIf(String::isNotBlank)
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao ler foto do perfil: ${e.message}")
+            null
         }
     }
 
