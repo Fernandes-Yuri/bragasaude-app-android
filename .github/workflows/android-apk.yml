@@ -24,9 +24,9 @@
 name: Build APK
 
 on:
-  # Toda vez que chega código novo no master: só build de teste (nunca release).
+  # Push no master ou em branches de trabalho: só build de teste (nunca release).
   push:
-    branches: [ master ]
+    branches: [ master, 'fix/**', 'feat/**', 'fase-**' ]
     paths-ignore:
       - '*.md'
       - 'docs/**'
