@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.home
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -120,7 +122,7 @@ fun HomeScreen(
     }
 
     if (showCompletedCheckInDialog) {
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { showCompletedCheckInDialog = false },
             icon = {
                 Icon(
@@ -153,9 +155,7 @@ fun HomeScreen(
                     Text("Entendido", color = BragaEmerald, fontWeight = FontWeight.Bold)
                 }
             },
-            shape = RoundedCornerShape(20.dp),
-            containerColor = BragaCardSurface
-        )
+            )
     }
 
     Scaffold(
@@ -617,7 +617,7 @@ fun ScoreDetailsDialog(
     breakdown: br.com.bragasaude.domain.ScoreBreakdown,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    BragaAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Por que minha nota é ${breakdown.finalScore}?", fontWeight = FontWeight.Bold) },
         text = {

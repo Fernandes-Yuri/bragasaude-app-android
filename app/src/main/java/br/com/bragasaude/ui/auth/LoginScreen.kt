@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.auth
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+
 import android.widget.Toast
 import br.com.bragasaude.data.util.HealthFormatter
 import androidx.compose.foundation.BorderStroke
@@ -628,7 +630,7 @@ fun LoginScreen(
 
         // Diálogo de Conta Google Já Existente (Bifurcação de segurança)
         if (googleAccountConflictMessage != null) {
-            AlertDialog(
+            BragaAlertDialog(
                 onDismissRequest = { googleAccountConflictMessage = null },
                 title = {
                     Text("Conta Vinculada ao Google", fontWeight = FontWeight.Bold)

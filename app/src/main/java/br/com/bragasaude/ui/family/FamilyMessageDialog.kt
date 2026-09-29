@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.family
 
+import br.com.bragasaude.ui.components.BragaFormSheet
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,10 +50,10 @@ fun FamilyMessageDialog(
     var freeMessageText by remember { mutableStateOf("") }
     val maxChars = 200
 
-    AlertDialog(
+    BragaFormSheet(
         onDismissRequest = onDismiss,
         modifier = Modifier.padding(16.dp),
-        shape = RoundedCornerShape(20.dp),
+
         title = {
             Column {
                 Text("Recados para $patientName", fontWeight = FontWeight.Bold)

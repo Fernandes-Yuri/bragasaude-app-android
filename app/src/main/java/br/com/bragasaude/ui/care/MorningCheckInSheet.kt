@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.care
 
+import br.com.bragasaude.ui.components.BragaBottomSheet
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,11 +47,9 @@ fun MorningCheckInSheet(
         spokenText = transcript
     }
 
-    ModalBottomSheet(
+    BragaBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = BragaCardSurface,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-    ) {
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

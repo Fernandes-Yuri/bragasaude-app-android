@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.exams.components
 
+import br.com.bragasaude.ui.components.BragaContentSheet
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,7 +23,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
 /**
@@ -41,18 +42,10 @@ fun CloudConsentDialog(
 ) {
     var selectedOption by remember { mutableStateOf<Boolean?>(true) } // true = Nuvem, false = Local
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    BragaContentSheet(
+        onDismissRequest = onDismiss
     ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .wrapContentHeight()
-                .clip(RoundedCornerShape(24.dp)),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-        ) {
+
             Column(
                 modifier = Modifier
                     .padding(24.dp)
@@ -171,7 +164,7 @@ fun CloudConsentDialog(
                     }
                 }
             }
-        }
+
     }
 }
 

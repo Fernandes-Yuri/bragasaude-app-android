@@ -1,5 +1,8 @@
 package br.com.bragasaude.ui.chat
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+import br.com.bragasaude.ui.components.BragaFormSheet
+
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -189,7 +192,7 @@ fun OrbChatContent(
     }
 
     if (showClearCurrentDialog) {
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { showClearCurrentDialog = false },
             title = { Text("Limpar conversa atual?", fontWeight = FontWeight.Bold) },
             text = { Text("Todas as mensagens desta conversa serão apagadas.") },
@@ -209,7 +212,7 @@ fun OrbChatContent(
     }
 
     if (showDeleteAllDialog) {
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { showDeleteAllDialog = false },
             title = { Text("Excluir todo o histórico?", fontWeight = FontWeight.Bold) },
             text = { Text("Todas as conversas anteriores salvas no seu dispositivo serão removidas permanentemente.") },
@@ -229,7 +232,7 @@ fun OrbChatContent(
     }
 
     conversationToDelete?.let { conv ->
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { conversationToDelete = null },
             title = { Text("Excluir esta conversa?", fontWeight = FontWeight.Bold) },
             text = { Text("Deseja apagar permanentemente a conversa \"${conv.title}\"?") },
@@ -658,7 +661,8 @@ fun ChatTextSizeDialog(
         1.50f to "Muito Grande (150%)"
     )
 
-    AlertDialog(
+    BragaFormSheet(
+        scrollContent = false,
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {

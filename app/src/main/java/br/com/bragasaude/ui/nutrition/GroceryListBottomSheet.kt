@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.nutrition
 
+import br.com.bragasaude.ui.components.BragaBottomSheet
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -55,12 +57,10 @@ fun GroceryListBottomSheet(
     val dailyAvg = if (totalCost > 0.0) totalCost / 7.0 else 0.0
     val checkedCount = groceryList.count { it.isCheckedInPantry }
 
-    ModalBottomSheet(
+    BragaBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = BragaCardSurface,
-        dragHandle = { BottomSheetDefaults.DragHandle() }
-    ) {
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

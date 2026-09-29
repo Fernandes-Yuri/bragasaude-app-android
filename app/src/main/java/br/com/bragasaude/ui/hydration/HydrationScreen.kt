@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.hydration
 
+import br.com.bragasaude.ui.components.BragaContentSheet
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -42,7 +44,6 @@ import br.com.bragasaude.ui.components.MetricInfoBottomSheet
 import br.com.bragasaude.ui.components.MetricInfoCatalog
 import br.com.bragasaude.ui.theme.Success
 import kotlinx.coroutines.flow.collectLatest
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -417,19 +418,10 @@ fun HydrationScreen(
     }
 
     if (showCustomDialog) {
-        Dialog(
-            onDismissRequest = { showCustomDialog = false; customMlText = "" },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth(0.88f)
-                    .wrapContentHeight(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFF3F4F6)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
+        BragaContentSheet(
+            onDismissRequest = { showCustomDialog = false; customMlText = "" }
+        , scrollContent = true) {
+
                 Column(modifier = Modifier.padding(24.dp)) {
                     // Header
                     Row(
@@ -494,24 +486,15 @@ fun HydrationScreen(
                         }
                     }
                 }
-            }
+
         }
     }
 
     if (showEditTargetDialog) {
-        Dialog(
-            onDismissRequest = { showEditTargetDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+        BragaContentSheet(
+            onDismissRequest = { showEditTargetDialog = false }
         ) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .wrapContentHeight(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-            ) {
+
                 Column(
                     modifier = Modifier
                         .padding(24.dp)
@@ -674,7 +657,7 @@ fun HydrationScreen(
                         }
                     }
                 }
-            }
+
         }
     }
 }

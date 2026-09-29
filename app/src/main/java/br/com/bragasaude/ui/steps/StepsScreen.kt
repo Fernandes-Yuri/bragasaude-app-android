@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.steps
 
+import br.com.bragasaude.ui.components.BragaContentSheet
+
 import android.Manifest
 import android.content.Context
 import android.widget.Toast
@@ -39,7 +41,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.local.DailyMetricsEntity
@@ -403,19 +404,10 @@ fun MetricDetailModal(
 ) {
     val scrollState = androidx.compose.foundation.rememberScrollState()
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    BragaContentSheet(
+        onDismissRequest = onDismiss
     ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .wrapContentHeight(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-        ) {
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -565,7 +557,7 @@ fun MetricDetailModal(
                     showPeriodSelector = true
                 )
             }
-        }
+
     }
 }
 
@@ -671,19 +663,10 @@ fun WeeklyStepsModal(
         )
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    BragaContentSheet(
+        onDismissRequest = onDismiss
     ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .wrapContentHeight(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-        ) {
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -940,7 +923,7 @@ fun WeeklyStepsModal(
                     }
                 }
             }
-        }
+
     }
 }
 
@@ -1144,19 +1127,10 @@ fun WeeklyCardioModal(
         )
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    BragaContentSheet(
+        onDismissRequest = onDismiss
     ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .wrapContentHeight(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-        ) {
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1413,6 +1387,6 @@ fun WeeklyCardioModal(
                     }
                 }
             }
-        }
+
     }
 }
