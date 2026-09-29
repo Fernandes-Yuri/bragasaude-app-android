@@ -33,6 +33,10 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -435,13 +439,31 @@ private fun SocialPostCard(
                             .background(BragaMint),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = (post.userName ?: "C").take(1).uppercase(Locale.ROOT),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp,
-                            color = BragaEmeraldDark
-                        )
+                        var photoFailed by remember(post.userAvatarUrl) { mutableStateOf(false) }
+                        val avatarIcon = when (post.userAvatarIdentifier) {
+                            "Person" -> Icons.Default.Person
+                            "Favorite" -> Icons.Default.Favorite
+                            "Accessibility" -> Icons.Default.AccessibilityNew
+                            "Star" -> Icons.Default.Star
+                            else -> null
+                        }
+                        when {
+                            avatarIcon != null -> Icon(avatarIcon, contentDescription = null, tint = BragaEmeraldDark)
+                            !post.userAvatarUrl.isNullOrBlank() && !photoFailed -> AsyncImage(
+                                model = post.userAvatarUrl,
+                                contentDescription = "Foto de perfil",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                                onError = { photoFailed = true }
+                            )
+                            else -> Text(
+                                text = post.userName?.trim()?.takeIf { it.isNotEmpty() }?.take(1)?.uppercase(Locale.ROOT) ?: "C",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                                color = BragaEmeraldDark
+                            )
+                        }
                     }
 
                     Column {
