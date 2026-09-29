@@ -100,14 +100,9 @@ class ProfileRepository @Inject constructor(
     suspend fun updateAvatar(userId: String, avatarId: String?, photoUri: String? = null) {
         profileDao.updateAvatar(userId, avatarId, photoUri)
         if (userId == guestId) return
-        try {
-            val local = profileDao.getProfileOneShot(userId)
-            if (local != null) {
-                apiClient.syncProfile(local.copy(avatarIdentifier = avatarId))
-            }
-        } catch (e: Exception) {
-            android.util.Log.w("ProfileRepository", "Falha ao sincronizar avatar: ${e.message}")
-        }
+        val local = profileDao.getProfileOneShot(userId) ?: return
+        // Mantém pendingSync e o agendamento de recuperação quando a rede falha.
+        saveProfile(local.toRemote())
     }
 
     // ---- Foto de perfil via gateway (com moderação server-side) ----
