@@ -6,7 +6,10 @@ import br.com.bragasaude.data.remote.model.RemoteVitalSign
 import br.com.bragasaude.data.remote.model.RemoteProfile
 import br.com.bragasaude.data.remote.repository.ProfileRepository
 import br.com.bragasaude.data.remote.repository.VitalsRepository
+import br.com.bragasaude.domain.GamificationActionType
+import br.com.bragasaude.domain.GamificationEngine
 import br.com.bragasaude.domain.HealthEngine
+import br.com.bragasaude.domain.XpGrantService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -33,6 +36,7 @@ class VitalSignsViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
     private val syncManager: SyncManager,
     private val healthEngine: HealthEngine,
+    private val xpGrantService: XpGrantService,
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
@@ -107,7 +111,25 @@ class VitalSignsViewModel @Inject constructor(
                 // Processa Marcos (Recompensas)
                 analysis.newMilestones.firstOrNull()?.let { 
                     _milestoneAlert.emit("${it.title}\n${it.description}")
+                    // FASE 3 — XP de marco conquistado (anti-farming limita a 1 por dia)
+                    xpGrantService.grantXp(
+                        userId = userId,
+                        action = GamificationActionType.MILESTONE_ACHIEVED,
+                        isActionValid = true,
+                        invalidReason = ""
+                    )
                 }
+
+                // Reward the act of recording, never the clinical result.
+                val recorded = GamificationEngine.isVitalsRecordEligible(
+                    vital.systolicPressure, vital.diastolicPressure, vital.glucoseLevel
+                )
+                xpGrantService.grantXp(
+                    userId = userId,
+                    action = GamificationActionType.VITALS_RECORDED,
+                    isActionValid = recorded,
+                    invalidReason = "Registre uma medição para pontuar"
+                )
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
