@@ -445,6 +445,13 @@ object Migrations {
         }
     }
 
+    val MIGRATION_48_49 = object : Migration(48, 49) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE social_posts_local ADD COLUMN userAvatarUrl TEXT")
+            db.execSQL("ALTER TABLE social_posts_local ADD COLUMN userAvatarIdentifier TEXT")
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -468,6 +475,7 @@ object Migrations {
         MIGRATION_44_45,
         MIGRATION_45_46,
         MIGRATION_46_47,
-        MIGRATION_47_48
+        MIGRATION_47_48,
+        MIGRATION_48_49
     )
 }

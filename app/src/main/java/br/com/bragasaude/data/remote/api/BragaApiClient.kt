@@ -376,6 +376,8 @@ class BragaApiClient @Inject constructor(
                         userName = br.com.bragasaude.domain.communityDisplayName(
                             obj.optString("user_name", ""), obj.optString("user_nickname", "")
                         ),
+                        userAvatarUrl = obj.optString("photo_url", "").takeIf { it.isNotBlank() && it != "null" },
+                        userAvatarIdentifier = obj.optString("avatar_identifier", "").takeIf { it.isNotBlank() && it != "null" },
                         userLevel = 1,
                         postType = obj.getString("post_type"),
                         title = obj.getString("title"),
