@@ -274,6 +274,8 @@ data class RemoteLeagueMembership(
 
 @Serializable
 data class RemoteSocialPost(
+    @SerialName("photo_url") val userAvatarUrl: String? = null,
+    @SerialName("avatar_identifier") val userAvatarIdentifier: String? = null,
     val id: String,
     @SerialName("user_id") val userId: String,
     @SerialName("user_name") val userName: String? = null,
