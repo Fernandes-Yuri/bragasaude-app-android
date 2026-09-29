@@ -145,6 +145,10 @@ fun ProfileDetailScreen(
         userFeedbacks.filter { it.status == "resolved" || it.status == "resolvido_v1.2" || it.status == "implementado" }
     }
 
+    LaunchedEffect(communityError) {
+        if (!showCommunityDialog) communityError?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+    }
+
     if (showCommunityDialog) {
         AlertDialog(
             onDismissRequest = { if (!communitySaving) showCommunityDialog = false },
@@ -452,9 +456,14 @@ fun ProfileDetailScreen(
             item {
                 BragaActionCard(
                     title = "Nome na comunidade",
-                    description = br.com.bragasaude.domain.communityDisplayName(profile?.fullName, communityNickname),
+                    description = if (communitySaving) "Carregando..." else br.com.bragasaude.domain.communityDisplayName(profile?.fullName, communityNickname),
                     icon = Icons.Default.Person,
-                    onClick = { nicknameDraft = communityNickname; showCommunityDialog = true }
+                    onClick = {
+                        profileViewModel.loadCommunityNickname { loaded ->
+                            nicknameDraft = loaded
+                            showCommunityDialog = true
+                        }
+                    }
                 )
             }
 
