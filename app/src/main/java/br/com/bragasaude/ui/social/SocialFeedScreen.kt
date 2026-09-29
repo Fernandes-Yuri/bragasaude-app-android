@@ -32,6 +32,9 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.Modifier
 import coil3.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
@@ -564,42 +567,38 @@ private fun SocialPostCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 reactionOptions.forEach { (type, label, icon) ->
                     val isSelected = selectedReaction == type
                     val count = reactions.count { it.reactionType == type }
-                    Surface(
-                        selected = isSelected,
+                    TextButton(
                         onClick = {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             onReact(type)
                         },
-                        modifier = Modifier.weight(1f).heightIn(min = 64.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        color = if (isSelected) BragaMint else BragaMintSurface,
-                        contentColor = if (isSelected) BragaEmeraldDark else BragaTextPrimary,
-                        border = BorderStroke(
-                            width = if (isSelected) 1.5.dp else 1.dp,
-                            color = if (isSelected) BragaEmerald else BragaMintBorder
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics {
+                            selected = isSelected
+                            stateDescription = if (count == 1) "1 reação" else "$count reações"
+                        },
+                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = if (isSelected) BragaEmeraldDark else BragaTextSecondary
                         )
                     ) {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Text(
-                                text = label,
-                                fontSize = 14.sp,
-                                textAlign = TextAlign.Center,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                            )
-                            if (count > 0) {
-                                Text(text = count.toString(), fontSize = 12.sp, textAlign = TextAlign.Center)
-                            }
-                        }
+                        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = label + when {
+                                count > 99 -> " 99+"
+                                count > 0 -> " $count"
+                                else -> ""
+                            },
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                        )
                     }
                 }
             }
