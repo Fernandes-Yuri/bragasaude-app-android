@@ -279,6 +279,33 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    fun updateMeasurement(isWeight: Boolean, value: Double, onSaved: () -> Unit) {
+        if (_isLoading.value) return
+        val userId = auth.currentUser?.uid ?: return
+        _isLoading.value = true
+        _saveError.value = null
+        viewModelScope.launch {
+            try {
+                require(value.isFinite() && value in (if (isWeight) 20.0..350.0 else 50.0..250.0)) {
+                    if (isWeight) "Informe um peso entre 20 e 350 kg." else "Informe uma altura entre 50 e 250 cm."
+                }
+                val base = repository.getProfileOneShotLocal(userId)?.toRemote()
+                    ?: error("Aguarde o carregamento do perfil.")
+                val updated = if (isWeight) base.copy(weight = value) else base.copy(height = value)
+                repository.saveProfile(updated)
+                onSaved()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _saveError.value = e.message ?: "Não foi possível salvar. Tente novamente."
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun clearSaveError() { _saveError.value = null }
+
     fun updateAvatar(avatarId: String?, photoUri: String? = null) {
         val userId = auth.currentUser?.uid ?: return
         viewModelScope.launch {
