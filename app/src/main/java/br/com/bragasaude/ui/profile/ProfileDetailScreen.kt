@@ -78,6 +78,11 @@ fun ProfileDetailScreen(
     val scope = rememberCoroutineScope()
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showAvatarDialog by remember { mutableStateOf(false) }
+    val communityNickname by profileViewModel.communityNickname.collectAsState()
+    val communitySaving by profileViewModel.communitySaving.collectAsState()
+    val communityError by profileViewModel.communityError.collectAsState()
+    var showCommunityDialog by remember { mutableStateOf(false) }
+    var nicknameDraft by remember { mutableStateOf("") }
     val context = LocalContext.current
 
     // Quando o ViewModel monta o link do WhatsApp (TOTP atual), abre e consome.
@@ -132,11 +137,45 @@ fun ProfileDetailScreen(
 
     LaunchedEffect(Unit) {
         profileViewModel.loadProfile()
+        profileViewModel.loadCommunityNickname()
         profileViewModel.refreshServerPhoto()
     }
 
     val resolvedFeedbacks = remember(userFeedbacks) {
         userFeedbacks.filter { it.status == "resolved" || it.status == "resolvido_v1.2" || it.status == "implementado" }
+    }
+
+    LaunchedEffect(communityError) {
+        if (!showCommunityDialog) communityError?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+    }
+
+    if (showCommunityDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!communitySaving) showCommunityDialog = false },
+            title = { Text("Nome na comunidade") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Este nome será público no mural. Deixe em branco para usar seu primeiro nome e a inicial do sobrenome.")
+                    OutlinedTextField(
+                        value = nicknameDraft,
+                        onValueChange = { if (it.length <= 24) nicknameDraft = it },
+                        label = { Text("Nome comunitário") },
+                        supportingText = { Text("${nicknameDraft.length}/24 caracteres") },
+                        singleLine = true,
+                        enabled = !communitySaving
+                    )
+                    communityError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !communitySaving, onClick = {
+                    profileViewModel.saveCommunityNickname(nicknameDraft) { showCommunityDialog = false }
+                }) { Text(if (communitySaving) "Salvando..." else "Salvar") }
+            },
+            dismissButton = {
+                TextButton(enabled = !communitySaving, onClick = { showCommunityDialog = false }) { Text("Cancelar") }
+            }
+        )
     }
 
     Scaffold(
@@ -412,6 +451,20 @@ fun ProfileDetailScreen(
                         }
                     }
                 }
+            }
+
+            item {
+                BragaActionCard(
+                    title = "Nome na comunidade",
+                    description = if (communitySaving) "Carregando..." else br.com.bragasaude.domain.communityDisplayName(profile?.fullName, communityNickname),
+                    icon = Icons.Default.Person,
+                    onClick = {
+                        profileViewModel.loadCommunityNickname { loaded ->
+                            nicknameDraft = loaded
+                            showCommunityDialog = true
+                        }
+                    }
+                )
             }
 
             item {

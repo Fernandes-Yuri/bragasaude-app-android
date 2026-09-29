@@ -330,6 +330,18 @@ class BragaApiClient @Inject constructor(
 
     // ==================== FEED SOCIAL ====================
 
+    suspend fun getCommunityNickname(): String = withContext(Dispatchers.IO) {
+        val result = getJson("$baseUrl/api/community/profile", strict = true)
+            ?: throw java.io.IOException("Não foi possível carregar o nome comunitário.")
+        result.optString("nickname", "").takeUnless { it == "null" }.orEmpty()
+    }
+
+    suspend fun saveCommunityNickname(nickname: String): String = withContext(Dispatchers.IO) {
+        val result = postJson("$baseUrl/api/community/profile", JSONObject().put("nickname", nickname))
+            ?: throw java.io.IOException("Não foi possível salvar o nome comunitário. Verifique sua conexão e tente novamente.")
+        result.optString("nickname", "").takeUnless { it == "null" }.orEmpty()
+    }
+
     suspend fun syncSocialPost(p: SocialPostEntity): String? = withContext(Dispatchers.IO) {
         try {
             val json = JSONObject().apply {
@@ -361,7 +373,9 @@ class BragaApiClient @Inject constructor(
                     SocialPostEntity(
                         id = obj.getString("id"),
                         userId = obj.getString("user_id"),
-                        userName = obj.optString("user_name", "Usuário"),
+                        userName = br.com.bragasaude.domain.communityDisplayName(
+                            obj.optString("user_name", ""), obj.optString("user_nickname", "")
+                        ),
                         userAvatarUrl = obj.optString("photo_url", "").takeIf { it.isNotBlank() && it != "null" },
                         userAvatarIdentifier = obj.optString("avatar_identifier", "").takeIf { it.isNotBlank() && it != "null" },
                         userLevel = 1,
