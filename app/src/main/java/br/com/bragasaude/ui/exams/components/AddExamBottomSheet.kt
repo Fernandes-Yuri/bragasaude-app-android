@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.exams.components
 
+import br.com.bragasaude.ui.components.BragaBottomSheet
+
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -46,7 +48,6 @@ fun AddExamBottomSheet(
     BragaBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-
         ) {
         Column(
             modifier = Modifier

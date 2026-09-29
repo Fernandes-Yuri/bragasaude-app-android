@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.exams.components
 
+import br.com.bragasaude.ui.components.BragaContentSheet
+
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

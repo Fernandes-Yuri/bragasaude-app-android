@@ -418,8 +418,9 @@ fun HydrationScreen(
 
     if (showCustomDialog) {
         BragaContentSheet(
-            onDismissRequest = { showCustomDialog = false; customMlText = "" }
-        , scrollContent = true) {
+            onDismissRequest = { showCustomDialog = false; customMlText = "" },
+            scrollContent = true
+        ) {
 
             Column(modifier = Modifier.padding(24.dp)) {
                 // Header
