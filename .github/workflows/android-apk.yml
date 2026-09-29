@@ -252,7 +252,7 @@ jobs:
   # ---------------------------------------------------------------------------
   release:
     name: Publicar GitHub Release
-    needs: build
+    needs: [build, unit-tests]
     if: github.event_name == 'workflow_dispatch' && inputs.destino == 'lancar-release'
     runs-on: ubuntu-latest
     steps:
