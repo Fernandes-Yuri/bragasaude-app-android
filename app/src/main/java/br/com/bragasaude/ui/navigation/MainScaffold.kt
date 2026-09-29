@@ -13,9 +13,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import br.com.bragasaude.domain.XpGrantService
 import br.com.bragasaude.ui.components.DraggableAiAssistantFab
-import br.com.bragasaude.ui.components.XpToastHost
 import br.com.bragasaude.ui.util.Screen
 import br.com.bragasaude.util.AppPreferences
 
@@ -29,8 +27,7 @@ fun MainScaffold(
     navController: NavHostController,
     startDestination: Screen,
     userRole: String?,
-    caregiverMode: String?,
-    xpGrantService: XpGrantService
+    caregiverMode: String?
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -67,7 +64,6 @@ fun MainScaffold(
     // ==================== Scaffold ====================
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
-            snackbarHost = { XpToastHost(xpGrantService = xpGrantService) },
             modifier = Modifier.fillMaxSize(),
             bottomBar = {
                 NavigationBar(
