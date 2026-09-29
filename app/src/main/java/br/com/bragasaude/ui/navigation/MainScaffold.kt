@@ -117,6 +117,7 @@ fun MainScaffold(
         if (!isCurrentRoute(currentRoute, Screen.OrbChat) &&
             !isCurrentRoute(currentRoute, Screen.BarcodeScanner) &&
             !isCurrentRoute(currentRoute, Screen.MedicationStock) &&
+            !isCurrentRoute(currentRoute, Screen.SocialFeed) &&
             AppPreferences.isVoiceAssistantEnabled(appContext)
         ) {
             DraggableAiAssistantFab(
