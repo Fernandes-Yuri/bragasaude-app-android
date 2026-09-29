@@ -24,6 +24,14 @@ private val LightColorScheme = lightColorScheme(
     background = Background,
     onBackground = OnBackground,
     surface = Surface,
+    surfaceTint = Color.Transparent,
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = BragaMintSurface,
+    surfaceContainer = Color.White,
+    surfaceContainerHigh = Color.White,
+    surfaceContainerHighest = BragaMint,
+    outline = BragaTextSecondary,
+    outlineVariant = BragaCardBorder,
     onSurface = OnSurface,
     surfaceVariant = SurfaceVariant,
     onSurfaceVariant = OnSurfaceVariant,
@@ -44,6 +52,14 @@ private val DarkColorScheme = darkColorScheme(
     onSecondaryContainer = Color(0xFFE0F2F1),
     background = Color(0xFF0F1A16),          // Fundo escuro suave com sutil matiz esmeralda
     onBackground = Color(0xFFF1F8F5),        // Alto contraste e leitura confortável
+    surfaceTint = Color.Transparent,
+    surfaceContainerLowest = Color(0xFF0F1A16),
+    surfaceContainerLow = Color(0xFF182822),
+    surfaceContainer = Color(0xFF182822),
+    surfaceContainerHigh = Color(0xFF22362F),
+    surfaceContainerHighest = Color(0xFF2C4239),
+    outline = Color(0xFF809A90),
+    outlineVariant = Color(0xFF365047),
     surface = Color(0xFF182822),             // Superfície elevada elegante
     onSurface = Color(0xFFF1F8F5),
     surfaceVariant = Color(0xFF22362F),      // Cards de apoio e seleções sutis
@@ -79,6 +95,6 @@ fun BragasaudeTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
-        content = content
+        content = { br.com.bragasaude.ui.components.BragaModalHost(content) }
     )
 }

@@ -1,5 +1,6 @@
 package br.com.bragasaude.ui.components
 
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.*
@@ -35,10 +36,9 @@ fun RiskNotificationDialog(
     val contactPhone = profileState?.emergencyContactPhone
     val contactName = profileState?.emergencyContactName ?: "Contato de Emergência"
 
-    AlertDialog(
+    BragaAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(24.dp),
+
         title = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,

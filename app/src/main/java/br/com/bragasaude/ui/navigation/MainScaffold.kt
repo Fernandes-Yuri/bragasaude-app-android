@@ -114,7 +114,8 @@ fun MainScaffold(
         }
 
         // FAB Metamórfico de Voz flutuante — oculto no OrbChat e nas telas de cadastro/estoque de remédios (Fase B)
-        if (!isCurrentRoute(currentRoute, Screen.OrbChat) &&
+        if (!br.com.bragasaude.ui.components.LocalBragaModalState.current.isOpen &&
+            !isCurrentRoute(currentRoute, Screen.OrbChat) &&
             !isCurrentRoute(currentRoute, Screen.BarcodeScanner) &&
             !isCurrentRoute(currentRoute, Screen.MedicationStock) &&
             !isCurrentRoute(currentRoute, Screen.SocialFeed) &&

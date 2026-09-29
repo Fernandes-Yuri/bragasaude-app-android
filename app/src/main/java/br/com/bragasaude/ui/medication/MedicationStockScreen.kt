@@ -1,5 +1,9 @@
 package br.com.bragasaude.ui.medication
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+import br.com.bragasaude.ui.components.BragaBottomSheet
+import br.com.bragasaude.ui.components.BragaFormSheet
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -75,11 +79,9 @@ fun MedicationStockScreen(
     }
 
     if (showAddChoice) {
-        ModalBottomSheet(
+        BragaBottomSheet(
             onDismissRequest = { showAddChoice = false },
-            containerColor = BragaCardSurface,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-        ) {
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -453,7 +455,9 @@ private fun ManualMedicationDialog(
         confirmedWithPrescription &&
         !isLoading
 
-    AlertDialog(
+    BragaFormSheet(
+        scrollContent = false,
+        dismissEnabled = !isLoading,
         onDismissRequest = { if (!isLoading) onDismiss() },
         title = {
             Text(
@@ -590,7 +594,7 @@ private fun MedicationStockCard(
     }
 
     if (showDeleteConfirm) {
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             icon = {
                 Icon(
@@ -643,9 +647,7 @@ private fun MedicationStockCard(
                     Text("Cancelar", color = BragaTextSecondary)
                 }
             },
-            containerColor = BragaCardSurface,
-            shape = RoundedCornerShape(20.dp)
-        )
+            )
     }
 
     if (showEditSchedule) {
@@ -949,7 +951,7 @@ private fun MedicationStockCard(
             }
 
             if (showCalendarPrompt) {
-                AlertDialog(
+                BragaFormSheet(
                     onDismissRequest = { showCalendarPrompt = false },
                     icon = {
                         Icon(
@@ -1021,11 +1023,9 @@ private fun EditScheduleSheet(
     var selectedIntervalHours by remember { mutableStateOf<Int?>(null) }
     var newTimeText by remember { mutableStateOf("") }
 
-    ModalBottomSheet(
+    BragaBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = BragaCardSurface,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-    ) {
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

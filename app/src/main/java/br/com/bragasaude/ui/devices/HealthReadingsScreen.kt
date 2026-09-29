@@ -1,5 +1,7 @@
 ﻿package br.com.bragasaude.ui.devices
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,11 +42,11 @@ fun HealthReadingsScreen(metric: String, initialValue: String?, onBack: () -> Un
     val context = LocalContext.current
     val leave = { if (value.isNotBlank()) showLeave = true else onBack() }
     androidx.activity.compose.BackHandler { leave() }
-    if (showLeave) AlertDialog(onDismissRequest = { showLeave = false }, title = { Text("Descartar este valor?") },
+    if (showLeave) BragaAlertDialog(onDismissRequest = { showLeave = false }, title = { Text("Descartar este valor?") },
         text = { Text("A leitura digitada ainda não foi salva.") },
         confirmButton = { TextButton(onClick = onBack, enabled = !saving) { Text("Descartar e voltar") } },
         dismissButton = { TextButton(onClick = { showLeave = false }) { Text("Continuar") } })
-    if (confirm) AlertDialog(onDismissRequest = { if (!saving) confirm = false },
+    if (confirm) BragaAlertDialog(onDismissRequest = { if (!saving) confirm = false },
         title = { Text("Confirmar leitura") },
         text = { Column {
             Text(title + ": " + value + " " + unit + "\nRegistro com a data e hora de agora.")

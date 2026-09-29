@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.social
 
+import br.com.bragasaude.ui.components.BragaBottomSheet
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -633,16 +635,14 @@ private fun CreateAchievementBottomSheet(
     var descriptionText by remember { mutableStateOf(templates.first().defaultDescription) }
     var isPublic by remember { mutableStateOf(true) }
 
-    ModalBottomSheet(
+    BragaBottomSheet(
         onDismissRequest = {
             if (publishState != SocialFeedViewModel.PublishState.Loading) {
                 onDismiss()
             }
         },
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        containerColor = BragaCardSurface,
-        dragHandle = { BottomSheetDefaults.DragHandle() }
-    ) {
+
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

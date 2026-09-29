@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.exams
 
+import br.com.bragasaude.ui.components.BragaFormSheet
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -533,7 +535,7 @@ private fun AddNewParamDialog(
     var value by remember { mutableStateOf("") }
     var unit by remember { mutableStateOf("mg/dL") }
 
-    AlertDialog(
+    BragaFormSheet(
         onDismissRequest = onDismiss,
         title = { Text("Adicionar Parâmetro Clínico", fontWeight = FontWeight.Bold) },
         text = {

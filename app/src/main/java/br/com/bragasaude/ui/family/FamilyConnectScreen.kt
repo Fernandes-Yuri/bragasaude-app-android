@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.family
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import androidx.compose.foundation.BorderStroke
@@ -280,7 +282,7 @@ fun FamilyConnectScreen(
 
             // Diálogo de confirmação para gerar novo código (invalida o código atual)
             if (showRegenerateConfirm) {
-                AlertDialog(
+                BragaAlertDialog(
                     onDismissRequest = { showRegenerateConfirm = false },
                     title = { Text("Gerar novo código?", fontWeight = FontWeight.Bold) },
                     text = { Text("O código atual será invalidado e não poderá mais ser usado por familiares.") },
@@ -410,9 +412,8 @@ fun FamilyConnectScreen(
 
             // Confirmação de revogação
             showRevokeConfirm?.let { (bindingId, name) ->
-                AlertDialog(
+                BragaAlertDialog(
                     onDismissRequest = { showRevokeConfirm = null },
-                    shape = RoundedCornerShape(16.dp),
                     icon = {
                         Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                     },
@@ -535,9 +536,8 @@ private fun CaregiverListItem(
 private fun ShareViaWhatsAppDialog(code: String, onDismiss: () -> Unit) {
     val context = LocalContext.current
 
-    AlertDialog(
+    BragaAlertDialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(16.dp),
         title = { Text("Compartilhar via WhatsApp") },
         text = {
             Column {

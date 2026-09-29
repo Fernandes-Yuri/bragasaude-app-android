@@ -1,5 +1,8 @@
 package br.com.bragasaude.ui.profile
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+import br.com.bragasaude.ui.components.BragaFormSheet
+
 import br.com.bragasaude.data.util.HealthFormatter
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -351,7 +354,7 @@ fun SettingsScreen(
 
     if (showDeleteAccountDialog) {
         val isConfirmed = deleteConfirmationText.trim().equals("deletar meu perfil", ignoreCase = true)
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { showDeleteAccountDialog = false },
             icon = {
                 Icon(
@@ -530,7 +533,7 @@ fun EmergencyContactDialog(
     var relation by remember { mutableStateOf(initialRelation) }
     var phone by remember { mutableStateOf(initialPhone) }
 
-    AlertDialog(
+    BragaFormSheet(
         onDismissRequest = onDismiss,
         title = { Text("Contato de Emergência") },
         text = {
@@ -569,7 +572,7 @@ fun StepGoalDialog(
 
     val presets = listOf(3000, 5000, 8000, 10000, 12000)
 
-    AlertDialog(
+    BragaFormSheet(
         onDismissRequest = onDismiss,
         icon = {
             Icon(

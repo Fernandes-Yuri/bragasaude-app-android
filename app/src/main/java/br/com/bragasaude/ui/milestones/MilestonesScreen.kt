@@ -1,5 +1,7 @@
 ﻿package br.com.bragasaude.ui.milestones
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -128,7 +130,7 @@ fun MilestoneItem(milestone: br.com.bragasaude.data.remote.model.RemoteMilestone
         }
     }
     if (showDetails) {
-        AlertDialog(onDismissRequest = { showDetails = false },
+        BragaAlertDialog(onDismissRequest = { showDetails = false },
             icon = { Icon(icon, contentDescription = null) },
             title = { Text(milestone.title) },
             text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

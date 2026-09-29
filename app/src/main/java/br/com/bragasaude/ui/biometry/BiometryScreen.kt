@@ -1,5 +1,7 @@
 ﻿package br.com.bragasaude.ui.biometry
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -177,9 +179,8 @@ fun BiometryScreen(
     }
 
     if (alertMessage != null) {
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { alertMessage = null },
-            containerColor = Color.White,
             title = {
                 Text(
                     "Alerta Sentinela",

@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.family
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -38,7 +40,6 @@ import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.WaterDrop
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -791,7 +792,7 @@ fun FamilyMessagesScreen(
 
     // D47: confirmação clara antes de apagar (padrão geriátrico)
     messagePendingDelete?.let { target ->
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { messagePendingDelete = null },
             title = {
                 Text("Apagar mensagem?", fontWeight = FontWeight.Bold)
