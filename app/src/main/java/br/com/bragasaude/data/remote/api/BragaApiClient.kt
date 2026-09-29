@@ -2085,6 +2085,12 @@ class BragaApiClient @Inject constructor(
                 frequencyIntervalHours?.let { put("frequency_interval_hours", it) }
             }
             patchJson("$baseUrl/api/family/patients/$patientId/medications/$medicationId", json)
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao atualizar horários do medicamento: ${e.message}")
+            false
+        }
+    }
+
     /**
      * GET /api/catalog/grocery-prices — busca tabela de preços médios atualizados via Mercado Livre.
      */
