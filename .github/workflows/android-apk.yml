@@ -17,8 +17,11 @@
 #   KEYSTORE_STORE_PASSWORD     senha do keystore
 #   KEYSTORE_KEY_ALIAS          alias da chave  (padrão: bragasaude_key)
 #   KEYSTORE_KEY_PASSWORD       senha da chave
-# Segredo opcional (libera a entrega no gateway — seção 8 do doc 03):
-#   GATEWAY_SSH_KEY             chave deploy-braga-ec2 (já existe na pasta de credenciais)
+# Entrega no gateway via AWS SSM (a porta 22 está fechada para a rede;
+# scp/ssh davam i/o timeout — run 36630084026):
+#   AWS_ACCESS_KEY_ID           IAM gha-bragasaude-android-ssm (mínimo SSM)
+#   AWS_SECRET_ACCESS_KEY       secret da mesma chave
+#   RDS_DATABASE_URL            DATABASE_URL do gateway (promoção no RDS)
 # =============================================================================
 
 name: Build APK
@@ -290,96 +293,145 @@ jobs:
 
       # Entrega no gateway (libera o download em https://api.bragasaude.online).
       #
-      # host DEVE ser o DNS publico direto da EC2, NAO api.bragasaude.online:
-      # este dominio passa pelo Cloudflare Tunnel, que so faz proxy de 80/443.
-      # A porta 22 (SSH) nao chega na instancia por ele (doc 02, linha 177).
+      # A porta 22 (SSH/SCP) esta FECHADA para a rede: o appleboy/scp antigo
+      # morria com "dial tcp 18.220.67.189:22: i/o timeout" (run 36630084026).
+      # A entrega agora usa AWS SSM Run Command, mesmo padrao do deploy.yml do
+      # gateway-api. O APK e baixado na propria EC2 a partir da release publica
+      # no GitHub (repo publico) - sem transferencia por SSH.
       #
-      # Segredo GATEWAY_SSH_KEY: chave privada deploy-braga-ec2 (mesma do
-      # deploy.yml do gateway-api). Cadastro uma unica vez (doc 03, secao 8).
-      - name: Publicar APK no gateway (EC2)
-        uses: appleboy/scp-action@v0.1.7
+      # Credencial: IAM gha-bragasaude-android-ssm (permissao minima SSM).
+      - name: Credenciais AWS (entrega via SSM)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.GATEWAY_SSH_KEY }}
-          source: app-release.apk
-          target: /home/ec2-user/braga-gateway/releases/
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
 
-      - name: Promover release no gateway (disco + RDS)
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Entregar release no gateway (SSM Run Command)
         env:
           DB_URL: ${{ secrets.RDS_DATABASE_URL }}
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.GATEWAY_SSH_KEY }}
-          envs: DB_URL
-          script: |
-            set -e
-            cd /home/ec2-user/braga-gateway
-            # DATABASE_URL chega pela env DB_URL (secret RDS_DATABASE_URL),
-            # nao do .env: ler .env por SSH executa senhas sem aspas como
-            # comando (linha 6 do .env, senha de app do Gmail).
-            export DATABASE_URL="$DB_URL"
-            if [ -z "$DATABASE_URL" ]; then
-              echo "ERRO: DATABASE_URL ausente (secret RDS_DATABASE_URL)" >&2
-              exit 1
-            fi
-            V='${{ steps.versao.outputs.name }}'
-            C='${{ steps.versao.outputs.code }}'
-            REL_DIR="/home/ec2-user/braga-gateway/releases"
-            SRC="$REL_DIR/app-release.apk"
-            VERSIONED="$REL_DIR/BragaSaude-v$V-build$C-release.apk"
-            SERVED="$REL_DIR/BragaSaude.apk"
-            cp -f "$SRC" "$VERSIONED"
-            cp -f "$SRC" "$SERVED"
-            SHA=$(sha256sum "$VERSIONED" | awk '{print toupper($1)}')
-            SIZE=$(stat -c%s "$VERSIONED")
-            echo "Release v$V-build$C: $SIZE bytes, sha256=$SHA"
-            if [ -z "$DATABASE_URL" ]; then
-              echo "ERRO: DATABASE_URL ausente apos carregar .env" >&2
-              exit 1
-            fi
-            # Registra no RDS (is_active=true) e desativa as anteriores.
-            venv/bin/python - "$V" "$C" "$SIZE" "$SHA" <<'PYEOF'
-            import asyncio, os, sys
-            version_name, code, size, sha = sys.argv[1:5]
-            async def main():
-                import asyncpg
-                p = await asyncpg.connect(os.environ['DATABASE_URL'], ssl='require')
-                await p.execute('UPDATE app_releases SET is_active = FALSE')
-                changelog = 'Release v' + version_name + ' (build ' + code + ') entregue pelo CI.'
-                await p.execute(
-                    "INSERT INTO app_releases (version_name, version_code, release_type,"
-                    " filename, file_size_bytes, sha256_hash, changelog, min_android_sdk, is_active)"
-                    " VALUES ($1, $2, 'release', 'BragaSaude.apk', $3, $4, $5, 26, TRUE)"
-                    " ON CONFLICT (version_code) DO UPDATE SET is_active = TRUE,"
-                    " file_size_bytes = EXCLUDED.file_size_bytes, sha256_hash = EXCLUDED.sha256_hash,"
-                    " changelog = EXCLUDED.changelog",
-                    'v' + version_name, int(code), int(size), sha, changelog)
-                await p.close()
-            asyncio.run(main())
-            PYEOF
-            echo "RELEASE REGISTRADA NO RDS"
-            # Retencao D52 imediata: mantem so os 3 APKs mais recentes.
-            venv/bin/python - <<'PYEOF'
-            import asyncio, os, sys
-            sys.path.insert(0, '/home/ec2-user/braga-gateway/scripts/server')
-            async def main():
-                import asyncpg
-                from release_retention import purge_old_releases
-                pool = await asyncpg.create_pool(os.environ['DATABASE_URL'], min_size=1, max_size=2)
-                res = await purge_old_releases(pool, '/home/ec2-user/braga-gateway/releases', keep=3)
-                print('[RETENTION]', res)
-                await pool.close()
-            asyncio.run(main())
-            PYEOF
-            # doc 10 §1B: dispara o push de "nova versão" para todos os aparelhos
-            # registrados. Roda no próprio host da EC2 (127.0.0.1), então o endpoint
-            # aceita a chamada sem token. Falha AQUI não pode falhar a release — o
-            # APK já está servido e registrado.
-            NOTIFY_RESP=$(curl -sS -m 20 -X POST http://127.0.0.1:8080/api/app/notify-update \
-              -H "Content-Type: application/json" \
-              -d "{\"version_name\":\"v$V\",\"version_code\":$C,\"download_url\":\"https://api.bragasaude.online/api/app/download\"}" 2>&1) || true
-            echo "NOTIFY UPDATE: $NOTIFY_RESP"
-            echo "DEPLOY OTA CONCLUIDO"
+          VERSAO: ${{ steps.versao.outputs.name }}
+          BUILD: ${{ steps.versao.outputs.code }}
+        run: |
+          set -euo pipefail
+
+          # 1) Script que roda NA EC2 como ec2-user (mesma logica do fluxo ssh
+          #    antigo: baixa a release, copia, registra no RDS, retencao, OTA).
+          cat > /tmp/inner.sh << 'SSMEOF'
+          set -euo pipefail
+          cd /home/ec2-user/braga-gateway
+          export DATABASE_URL='__DB_URL__'
+          if [ -z "$DATABASE_URL" ]; then
+            echo "ERRO: DATABASE_URL ausente (secret RDS_DATABASE_URL)" >&2
+            exit 1
+          fi
+          V='__VERSAO__'
+          C='__BUILD__'
+          TAG="v${V}-build${C}"
+          REL_DIR="/home/ec2-user/braga-gateway/releases"
+          SRC="$REL_DIR/app-release.apk"
+          VERSIONED="$REL_DIR/BragaSaude-${TAG}-release.apk"
+          SERVED="$REL_DIR/BragaSaude.apk"
+
+          echo "== Baixando APK da release publica ${TAG} =="
+          curl -fsSL --retry 3 --retry-delay 2 -o "$SRC" \
+            "https://github.com/Fernandes-Yuri/bragasaude-app-android/releases/download/${TAG}/app-release.apk"
+          cp -f "$SRC" "$VERSIONED"
+          cp -f "$SRC" "$SERVED"
+          SHA=$(sha256sum "$VERSIONED" | awk '{print toupper($1)}')
+          SIZE=$(stat -c%s "$VERSIONED")
+          echo "Release ${TAG}: ${SIZE} bytes, sha256=${SHA}"
+
+          # Registra no RDS (is_active=true) e desativa as anteriores.
+          venv/bin/python - "$V" "$C" "$SIZE" "$SHA" <<'PYEOF'
+          import asyncio, os, sys
+          version_name, code, size, sha = sys.argv[1:5]
+          async def main():
+              import asyncpg
+              p = await asyncpg.connect(os.environ['DATABASE_URL'], ssl='require')
+              await p.execute('UPDATE app_releases SET is_active = FALSE')
+              changelog = 'Release v' + version_name + ' (build ' + code + ') entregue pelo CI.'
+              await p.execute(
+                  "INSERT INTO app_releases (version_name, version_code, release_type,"
+                  " filename, file_size_bytes, sha256_hash, changelog, min_android_sdk, is_active)"
+                  " VALUES ($1, $2, 'release', 'BragaSaude.apk', $3, $4, $5, 26, TRUE)"
+                  " ON CONFLICT (version_code) DO UPDATE SET is_active = TRUE,"
+                  " file_size_bytes = EXCLUDED.file_size_bytes, sha256_hash = EXCLUDED.sha256_hash,"
+                  " changelog = EXCLUDED.changelog",
+                  'v' + version_name, int(code), int(size), sha, changelog)
+              await p.close()
+          asyncio.run(main())
+          PYEOF
+          echo "RELEASE REGISTRADA NO RDS"
+
+          # Retencao D52: mantem so os 3 APKs mais recentes.
+          venv/bin/python - <<'PYEOF'
+          import asyncio, os, sys
+          sys.path.insert(0, '/home/ec2-user/braga-gateway/scripts/server')
+          async def main():
+              import asyncpg
+              from release_retention import purge_old_releases
+              pool = await asyncpg.create_pool(os.environ['DATABASE_URL'], min_size=1, max_size=2)
+              res = await purge_old_releases(pool, '/home/ec2-user/braga-gateway/releases', keep=3)
+              print('[RETENTION]', res)
+              await pool.close()
+          asyncio.run(main())
+          PYEOF
+
+          # Push de "nova versao" para os aparelhos (doc 10 1B). Falha aqui
+          # nao derruba a release: o APK ja esta servido e registrado.
+          NOTIFY_RESP=$(curl -sS -m 20 -X POST http://127.0.0.1:8080/api/app/notify-update \
+            -H "Content-Type: application/json" \
+            -d "{\"version_name\":\"v$V\",\"version_code\":$C,\"download_url\":\"https://api.bragasaude.online/api/app/download\"}" 2>&1) || true
+          echo "NOTIFY UPDATE: $NOTIFY_RESP"
+          echo "DEPLOY OTA CONCLUIDO"
+          SSMEOF
+
+          # 2) Injeta versao/URL sem ecoar valores no log.
+          python3 - << 'PY'
+          import os
+          p = '/tmp/inner.sh'
+          s = open(p).read()
+          s = s.replace('__VERSAO__', os.environ['VERSAO'])
+          s = s.replace('__BUILD__', os.environ['BUILD'])
+          s = s.replace('__DB_URL__', os.environ.get('DB_URL', ''))
+          open(p, 'w').write(s)
+          PY
+
+          # 3) Empacota como comando SSM: wrapper cria o script e delega ao ec2-user.
+          {
+            echo "cat > /tmp/promote-inner.sh <<'INNER'"
+            cat /tmp/inner.sh
+            echo "INNER"
+            echo "chown ec2-user:ec2-user /tmp/promote-inner.sh"
+            echo "runuser -u ec2-user -- bash /tmp/promote-inner.sh"
+            echo "rc=\$?"
+            echo "rm -f /tmp/promote-inner.sh"
+            echo "exit \$rc"
+          } > /tmp/cmd.sh
+          jq -n --arg cmd "$(cat /tmp/cmd.sh)" '{commands: [$cmd]}' > /tmp/ssm_params.json
+          rm -f /tmp/inner.sh /tmp/cmd.sh
+
+          # 4) Dispara e acompanha (mesmo fluxo do deploy.yml do gateway-api).
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "i-04728dd8094ed0e78" \
+            --document-name "AWS-RunShellScript" \
+            --parameters file:///tmp/ssm_params.json \
+            --query Command.CommandId \
+            --output text)
+          rm -f /tmp/ssm_params.json
+          echo "Comando SSM disparado com ID: $COMMAND_ID"
+
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "i-04728dd8094ed0e78" || true
+
+          STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "i-04728dd8094ed0e78" --query "Status" --output text)
+          echo "Status final: $STATUS"
+
+          echo "=== SAIDA PADRAO (STDOUT) ==="
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "i-04728dd8094ed0e78" --query "StandardOutputContent" --output text
+
+          if [ "$STATUS" != "Success" ]; then
+            echo "=== ERRO (STDERR) ==="
+            aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "i-04728dd8094ed0e78" --query "StandardErrorContent" --output text
+            exit 1
+          fi
