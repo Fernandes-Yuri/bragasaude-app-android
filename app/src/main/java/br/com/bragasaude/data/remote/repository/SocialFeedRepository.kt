@@ -6,6 +6,8 @@ import br.com.bragasaude.data.local.SocialFeedDao
 import br.com.bragasaude.data.local.SocialPostEntity
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.sync.SyncScheduler
+import br.com.bragasaude.data.util.withProfileAvatar
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
 import java.util.Date
 import java.util.UUID
@@ -23,7 +25,15 @@ class SocialFeedRepository @Inject constructor(
 ) {
     private val guestId = BragaConstants.GUEST_UID
 
-    fun getGlobalFeed(): Flow<List<SocialPostEntity>> = socialFeedDao.getGlobalFeed()
+    fun getGlobalFeed(currentUserId: String? = null, googlePhotoUrl: String? = null): Flow<List<SocialPostEntity>> {
+        val posts = socialFeedDao.getGlobalFeed()
+        if (currentUserId == null || currentUserId == guestId) return posts
+        return combine(posts, profileDao.getProfile(currentUserId)) { feed, profile ->
+            feed.map { post ->
+                if (post.userId == currentUserId) post.withProfileAvatar(profile, googlePhotoUrl) else post
+            }
+        }
+    }
 
     suspend fun fetchGlobalFeed(limit: Int = 20, offset: Int = 0, currentUserId: String): Int {
         val posts = apiClient.getSocialFeed(currentUserId, limit)

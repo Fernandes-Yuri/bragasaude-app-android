@@ -37,7 +37,7 @@ class FeedViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            repository.getGlobalFeed()
+            repository.getGlobalFeed(currentUserId, auth.currentUser?.photoUrl?.toString())
                 .catch { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message) }
                 }
