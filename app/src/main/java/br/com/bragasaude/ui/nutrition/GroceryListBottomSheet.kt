@@ -51,8 +51,8 @@ fun GroceryListBottomSheet(
     onAddSuggested: (List<String>) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val totalCost = groceryList.sumOf { it.estimatedPriceBrl }
-    val dailyAvg = if (totalCost > 0) totalCost / 7.0 else 0.0
+    val totalCost = groceryList.filter { it.estimatedPriceBrl > 0.0 }.sumOf { it.estimatedPriceBrl }
+    val dailyAvg = if (totalCost > 0.0) totalCost / 7.0 else 0.0
     val checkedCount = groceryList.count { it.isCheckedInPantry }
 
     ModalBottomSheet(
@@ -325,7 +325,11 @@ fun GroceryItemRow(
             }
 
             Text(
-                text = String.format(Locale.getDefault(), "R$ %.2f", item.estimatedPriceBrl),
+                text = if (item.estimatedPriceBrl > 0.0) {
+                    String.format(Locale.getDefault(), "R$ %.2f", item.estimatedPriceBrl)
+                } else {
+                    "—"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
                 color = if (item.isCheckedInPantry) BragaEmerald else BragaTextPrimary
