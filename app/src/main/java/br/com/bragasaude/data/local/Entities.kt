@@ -343,6 +343,8 @@ data class LeagueMembershipEntity(
 
 @Entity(tableName = "social_posts_local")
 data class SocialPostEntity(
+    val userAvatarUrl: String? = null,
+    val userAvatarIdentifier: String? = null,
     @PrimaryKey val id: String, // UUID
     val userId: String,
     val userName: String? = null,

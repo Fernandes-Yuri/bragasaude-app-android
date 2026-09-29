@@ -107,6 +107,8 @@ class SocialFeedRepository @Inject constructor(
             id = UUID.randomUUID().toString(),
             userId = userId,
             userName = name,
+            userAvatarUrl = userProfile?.customPhotoUri,
+            userAvatarIdentifier = userProfile?.avatarIdentifier,
             userLevel = level,
             postType = postType,
             title = title,

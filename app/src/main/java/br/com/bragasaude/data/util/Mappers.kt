@@ -348,6 +348,8 @@ fun LeagueMembershipEntity.toRemote() = RemoteLeagueMembership(
 )
 
 fun RemoteSocialPost.toEntity() = SocialPostEntity(
+    userAvatarUrl = userAvatarUrl,
+    userAvatarIdentifier = userAvatarIdentifier,
     id = id,
     userId = userId,
     userName = userName,
@@ -363,6 +365,8 @@ fun RemoteSocialPost.toEntity() = SocialPostEntity(
 )
 
 fun SocialPostEntity.toRemote() = RemoteSocialPost(
+    userAvatarUrl = userAvatarUrl,
+    userAvatarIdentifier = userAvatarIdentifier,
     id = id,
     userId = userId,
     userName = userName,
