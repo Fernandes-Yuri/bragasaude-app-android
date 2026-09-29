@@ -2090,6 +2090,31 @@ class BragaApiClient @Inject constructor(
             false
         }
     }
+
+    /**
+     * GET /api/catalog/grocery-prices — busca tabela de preços médios atualizados via Mercado Livre.
+     */
+    suspend fun getGroceryPrices(): Map<String, Double> = withContext(Dispatchers.IO) {
+        try {
+            val o = getJson("$baseUrl/api/catalog/grocery-prices") ?: return@withContext emptyMap()
+            val arr = o.optJSONArray("prices") ?: return@withContext emptyMap()
+            val map = mutableMapOf<String, Double>()
+            for (i in 0 until arr.length()) {
+                val item = arr.getJSONObject(i)
+                val name = item.optString("food_name").trim().lowercase()
+                if (item.has("price_avg") && !item.isNull("price_avg")) {
+                    val price = item.optDouble("price_avg", 0.0)
+                    if (price > 0.0) {
+                        map[name] = price
+                    }
+                }
+            }
+            map
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao consultar precos do catalogo de compras: ${e.message}")
+            emptyMap()
+        }
+    }
 }
 
 data class RemoteExamUploadResponse(
