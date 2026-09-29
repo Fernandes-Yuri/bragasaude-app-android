@@ -310,6 +310,7 @@ jobs:
       - name: Entregar release no gateway (SSM Run Command)
         env:
           DB_URL: ${{ secrets.RDS_DATABASE_URL }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_API_TOKEN }}
           VERSAO: ${{ steps.versao.outputs.name }}
           BUILD: ${{ steps.versao.outputs.code }}
         run: |
@@ -386,12 +387,20 @@ jobs:
           asyncio.run(main())
           PYEOF
 
-          # Push de "nova versao" para os aparelhos (doc 10 1B). Falha aqui
-          # nao derruba a release: o APK ja esta servido e registrado.
-          NOTIFY_RESP=$(curl -sS -m 20 -X POST http://127.0.0.1:8080/api/app/notify-update \
-            -H "Content-Type: application/json" \
-            -d "{\"version_name\":\"v$V\",\"version_code\":$C,\"download_url\":\"https://api.bragasaude.online/api/app/download\"}" 2>&1) || true
-          echo "NOTIFY UPDATE: $NOTIFY_RESP"
+          # Push de "nova versao" para os aparelhos (doc 10 1B). Exige o
+          # header administrativo (AUD-G01: vindo do tunel, todo peer parece
+          # 127.0.0.1 — localhost nao autentica). Falha aqui nao derruba a
+          # release: o APK ja esta servido e registrado.
+          ADMIN_TOKEN='__ADMIN_TOKEN__'
+          if [ -z "$ADMIN_TOKEN" ]; then
+            echo "NOTIFY UPDATE: pulado — secret ADMIN_API_TOKEN ausente"
+          else
+            NOTIFY_RESP=$(curl -sS -m 20 -X POST http://127.0.0.1:8080/api/app/notify-update \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $ADMIN_TOKEN" \
+              -d "{\"version_name\":\"v$V\",\"version_code\":$C,\"title\":\"Nova Atualizacao do Braga Saude Disponivel!\",\"message\":\"Versao $V disponivel no Braga Saude. Toque para atualizar!\",\"download_url\":\"https://api.bragasaude.online/api/app/download\"}" 2>&1) || true
+            echo "NOTIFY UPDATE: $NOTIFY_RESP"
+          fi
           echo "DEPLOY OTA CONCLUIDO"
           SSMEOF
 
@@ -403,6 +412,7 @@ jobs:
           s = s.replace('__VERSAO__', os.environ['VERSAO'])
           s = s.replace('__BUILD__', os.environ['BUILD'])
           s = s.replace('__DB_URL__', os.environ.get('DB_URL', ''))
+          s = s.replace('__ADMIN_TOKEN__', os.environ.get('ADMIN_TOKEN', ''))
           open(p, 'w').write(s)
           PY
 
