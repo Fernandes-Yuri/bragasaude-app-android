@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.local.ExamItemEntity
 import br.com.bragasaude.data.local.FoodEntity
@@ -23,7 +23,8 @@ object WeeklyGroceryEngine {
         vitals: List<VitalSignEntity>,
         profile: RemoteProfile?,
         catalog: List<FoodEntity>,
-        dislikedFoodNames: Set<String> = emptySet()
+        dislikedFoodNames: Set<String> = emptySet(),
+        priceMap: Map<String, Double> = emptyMap()
     ): List<GroceryListItemEntity> {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val weekStartDate = dateFormat.format(Date())
@@ -76,7 +77,7 @@ object WeeklyGroceryEngine {
         val hortifrutiFoods = frutasEscolhidas + folhasEscolhidas + legumesEscolhidos + temperoFresco
 
         hortifrutiFoods.forEach { food ->
-            selectedItems.add(createGroceryItem(userId, weekStartDate, food, CORRIDOR_HORTIFRUTI))
+            selectedItems.add(createGroceryItem(userId, weekStartDate, food, CORRIDOR_HORTIFRUTI, priceMap))
         }
 
         // 2. CORREDOR CEREAIS & GRAOS (3 a 4 itens)
@@ -87,7 +88,7 @@ object WeeklyGroceryEngine {
 
         val graosFoods = (aveiaOrCereal + sementes + leguminosa + graoOuRaiz).distinctBy { it.remoteId }
         graosFoods.forEach { food ->
-            selectedItems.add(createGroceryItem(userId, weekStartDate, food, CORRIDOR_GRAOS))
+            selectedItems.add(createGroceryItem(userId, weekStartDate, food, CORRIDOR_GRAOS, priceMap))
         }
 
         // 3. CORREDOR PROTEINAS, OVOS & LATICINIOS (3 a 4 itens)
@@ -97,7 +98,7 @@ object WeeklyGroceryEngine {
 
         val proteinasFoods = (ovos + carnesPeixes + laticinios).distinctBy { it.remoteId }
         proteinasFoods.forEach { food ->
-            selectedItems.add(createGroceryItem(userId, weekStartDate, food, CORRIDOR_PROTEINAS))
+            selectedItems.add(createGroceryItem(userId, weekStartDate, food, CORRIDOR_PROTEINAS, priceMap))
         }
 
         // 4. CORREDOR MERCEARIA, TEMPEROS & CHAS (2 a 3 itens)
@@ -107,7 +108,7 @@ object WeeklyGroceryEngine {
 
         val merceariaFoods = (azeite + especiaria + chas).distinctBy { it.remoteId }
         merceariaFoods.forEach { food ->
-            selectedItems.add(createGroceryItem(userId, weekStartDate, food, CORRIDOR_MERCEARIA))
+            selectedItems.add(createGroceryItem(userId, weekStartDate, food, CORRIDOR_MERCEARIA, priceMap))
         }
 
         return selectedItems
@@ -117,7 +118,8 @@ object WeeklyGroceryEngine {
         userId: String,
         weekStartDate: String,
         food: FoodEntity,
-        corridor: String
+        corridor: String,
+        priceMap: Map<String, Double>
     ): GroceryListItemEntity {
         val dailyGrams = if (food.servingSizeGrams > 0) food.servingSizeGrams else 50
         val daysPerWeek = when (corridor) {
@@ -130,7 +132,11 @@ object WeeklyGroceryEngine {
         // Aplica Margem de Seguranca de +20%
         val purchaseGrams = (weeklyBaseGrams * 1.20).toInt().coerceAtLeast(50)
 
-        val (unitText, price) = calculatePackagingAndPrice(food, purchaseGrams)
+        val unitText = calculatePackaging(food, purchaseGrams)
+        val foodKey = food.name.trim().lowercase()
+        val price = priceMap[foodKey] ?: priceMap.entries.firstOrNull {
+            foodKey.contains(it.key) || it.key.contains(foodKey)
+        }?.value ?: 0.0
 
         return GroceryListItemEntity(
             remoteId = UUID.randomUUID().toString(),
@@ -147,34 +153,34 @@ object WeeklyGroceryEngine {
         )
     }
 
-    private fun calculatePackagingAndPrice(food: FoodEntity, grams: Int): Pair<String, Double> {
+    private fun calculatePackaging(food: FoodEntity, grams: Int): String {
         val name = food.name.lowercase()
 
         return when {
-            name.contains("ovo") -> Pair("1 duzia (12 unidades)", 13.50)
-            name.contains("banana") -> Pair("1 palma / penca (~850g a 1kg)", 7.20)
-            name.contains("maca") || name.contains("pera") -> Pair("5 a 6 unidades (~700g)", 8.50)
-            name.contains("mamao") -> Pair("1 unidade media (~600g)", 6.00)
-            name.contains("melao") || name.contains("melancia") -> Pair("1 unidade / fatia grande (~1,5kg)", 9.00)
-            name.contains("couve") || name.contains("alface") || name.contains("rucula") || name.contains("agriao") -> Pair("2 maos frescos", 6.50)
-            name.contains("brocolis") || name.contains("couve-flor") -> Pair("1 mao grande (~500g)", 7.80)
-            name.contains("beterraba") || name.contains("cenoura") -> Pair("3 unidades medias (~450g)", 4.80)
-            name.contains("tomate") -> Pair("4 a 5 unidades (~500g)", 5.50)
-            name.contains("limao") -> Pair("4 unidades (~300g)", 3.50)
-            name.contains("alho") -> Pair("1 cabeca media (~50g)", 2.50)
-            name.contains("aveia") -> Pair("1 pacote (200g a 250g)", 5.90)
-            name.contains("chia") || name.contains("linhaca") || name.contains("psyllium") -> Pair("1 pacote (150g)", 7.50)
-            name.contains("castanha") || name.contains("nozes") || name.contains("amendoa") -> Pair("100g a granel (~10 un)", 11.00)
-            name.contains("feijao") || name.contains("arroz") -> Pair("1 pacote (1kg)", 8.50)
-            name.contains("lentilha") || name.contains("grao-de-bico") -> Pair("1 pacote (500g)", 9.20)
-            name.contains("frango") || name.contains("patinho") -> Pair("Bandeja de 500g a 600g", 16.50)
-            name.contains("sardinha") || name.contains("tilapia") || name.contains("pescada") -> Pair("Bandeja de 500g de files", 18.90)
-            name.contains("ricota") || name.contains("minas") || name.contains("iogurte") -> Pair("1 embalagem (250g a 500g)", 8.90)
-            name.contains("azeite") -> Pair("1 garrafa (500ml)", 36.00)
-            name.contains("canela") || name.contains("curcuma") || name.contains("gengibre") || name.contains("paprica") -> Pair("1 pacote / frasco (50g)", 4.50)
-            name.contains("cha") -> Pair("1 caixa (10 a 15 saches) ou 50g erva", 6.20)
-            grams >= 1000 -> Pair("${String.format(Locale.getDefault(), "%.1f", grams / 1000.0)}kg", 12.00)
-            else -> Pair("${grams}g (~porcao semanal)", 6.00)
+            name.contains("ovo") -> "1 duzia (12 unidades)"
+            name.contains("banana") -> "1 palma / penca (~850g a 1kg)"
+            name.contains("maca") || name.contains("pera") -> "5 a 6 unidades (~700g)"
+            name.contains("mamao") -> "1 unidade media (~600g)"
+            name.contains("melao") || name.contains("melancia") -> "1 unidade / fatia grande (~1,5kg)"
+            name.contains("couve") || name.contains("alface") || name.contains("rucula") || name.contains("agriao") -> "2 maos frescos"
+            name.contains("brocolis") || name.contains("couve-flor") -> "1 mao grande (~500g)"
+            name.contains("beterraba") || name.contains("cenoura") -> "3 unidades medias (~450g)"
+            name.contains("tomate") -> "4 a 5 unidades (~500g)"
+            name.contains("limao") -> "4 unidades (~300g)"
+            name.contains("alho") -> "1 cabeca media (~50g)"
+            name.contains("aveia") -> "1 pacote (200g a 250g)"
+            name.contains("chia") || name.contains("linhaca") || name.contains("psyllium") -> "1 pacote (150g)"
+            name.contains("castanha") || name.contains("nozes") || name.contains("amendoa") -> "100g a granel (~10 un)"
+            name.contains("feijao") || name.contains("arroz") -> "1 pacote (1kg)"
+            name.contains("lentilha") || name.contains("grao-de-bico") -> "1 pacote (500g)"
+            name.contains("frango") || name.contains("patinho") -> "Bandeja de 500g a 600g"
+            name.contains("sardinha") || name.contains("tilapia") || name.contains("pescada") -> "Bandeja de 500g de files"
+            name.contains("ricota") || name.contains("minas") || name.contains("iogurte") -> "1 embalagem (250g a 500g)"
+            name.contains("azeite") -> "1 garrafa (500ml)"
+            name.contains("canela") || name.contains("curcuma") || name.contains("gengibre") || name.contains("paprica") -> "1 pacote / frasco (50g)"
+            name.contains("cha") -> "1 caixa (10 a 15 saches) ou 50g erva"
+            grams >= 1000 -> "${String.format(Locale.getDefault(), "%.1f", grams / 1000.0)}kg"
+            else -> "${grams}g (~porcao semanal)"
         }
     }
 }
