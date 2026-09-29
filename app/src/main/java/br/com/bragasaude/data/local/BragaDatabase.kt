@@ -37,7 +37,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 48, // D62: Care OS — colunas de estoque, idempotência e mural/telemetria
+    version = 49, // T17: foto e avatar no mural
     exportSchema = true
 )
 @TypeConverters(Converters::class)

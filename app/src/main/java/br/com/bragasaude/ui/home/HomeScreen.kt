@@ -331,7 +331,7 @@ fun HomeScreen(
                                 }
                             }
                         }
-                    } else {
+                    } else if (checkInDone) {
                         // Estado concluído acolhedor (não reabre formulário de preenchimento)
                         Card(
                             modifier = Modifier
