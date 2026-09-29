@@ -286,12 +286,18 @@ class ProfileViewModel @Inject constructor(
     private val _communityError = MutableStateFlow<String?>(null)
     val communityError = _communityError.asStateFlow()
 
-    fun loadCommunityNickname() {
+    fun loadCommunityNickname(onLoaded: (String) -> Unit = {}) {
+        if (_communitySaving.value) return
+        _communitySaving.value = true
+        _communityError.value = null
         viewModelScope.launch {
             try {
-                _communityNickname.value = apiClient.getCommunityNickname()
+                val nickname = apiClient.getCommunityNickname()
+                _communityNickname.value = nickname
+                onLoaded(nickname)
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (_: Exception) { _communityError.value = "Não foi possível carregar o nome comunitário. Tente novamente." }
+            finally { _communitySaving.value = false }
         }
     }
 
