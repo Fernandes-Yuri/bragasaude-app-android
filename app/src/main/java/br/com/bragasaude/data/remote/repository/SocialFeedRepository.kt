@@ -100,9 +100,8 @@ class SocialFeedRepository @Inject constructor(
         relatedMilestoneId: String? = null
     ): SocialPostEntity {
         val userProfile = profileDao.getProfileOneShot(userId)
-        val name = userName?.takeIf { it.isNotBlank() }
-            ?: userProfile?.fullName?.takeIf { it.isNotBlank() }
-            ?: "Você"
+        val nickname = apiClient.getCommunityNickname()
+        val name = br.com.bragasaude.domain.communityDisplayName(userName ?: userProfile?.fullName, nickname)
         val level = userProfile?.currentLevel ?: 1
         val post = SocialPostEntity(
             id = UUID.randomUUID().toString(),

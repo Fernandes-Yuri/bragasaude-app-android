@@ -279,6 +279,41 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    private val _communityNickname = MutableStateFlow("")
+    val communityNickname = _communityNickname.asStateFlow()
+    private val _communitySaving = MutableStateFlow(false)
+    val communitySaving = _communitySaving.asStateFlow()
+    private val _communityError = MutableStateFlow<String?>(null)
+    val communityError = _communityError.asStateFlow()
+
+    fun loadCommunityNickname() {
+        viewModelScope.launch {
+            try {
+                _communityNickname.value = apiClient.getCommunityNickname()
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { _communityError.value = "Não foi possível carregar o nome comunitário. Tente novamente." }
+        }
+    }
+
+    fun saveCommunityNickname(nickname: String, onSaved: () -> Unit) {
+        if (_communitySaving.value) return
+        _communitySaving.value = true
+        _communityError.value = null
+        viewModelScope.launch {
+            try {
+                val name = nickname.trim()
+                require(name.isEmpty() || (name.length in 2..24 && name.any { it.isLetterOrDigit() }
+                    && name.all { it.isLetterOrDigit() || it in " .'-" })) {
+                    "Use de 2 a 24 caracteres: letras, números, espaços, ponto, apóstrofo ou hífen."
+                }
+                _communityNickname.value = apiClient.saveCommunityNickname(name)
+                onSaved()
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { _communityError.value = e.message ?: "Não foi possível salvar." }
+            finally { _communitySaving.value = false }
+        }
+    }
+
     fun updateAvatar(avatarId: String?, photoUri: String? = null) {
         val userId = auth.currentUser?.uid ?: return
         viewModelScope.launch {
