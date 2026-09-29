@@ -233,6 +233,93 @@ fun ProfileDetailScreen(
         )
     }
 
+    // Diálogo de escolha de avatar/foto de perfil
+    if (showAvatarDialog) {
+        AlertDialog(
+            onDismissRequest = { showAvatarDialog = false },
+            title = { Text("Personalizar Foto de Perfil", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val avatarUploading by profileViewModel.avatarUploading.collectAsState()
+                    Button(
+                        onClick = {
+                            // Abrir galeria para escolher foto
+                            galleryLauncher.launch("image/*")
+                        },
+                        enabled = !avatarUploading,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (avatarUploading) "Enviando..." else "Escolher da Galeria")
+                    }
+                    if (avatarUploading) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    val serverPhotoUrl = customPhotoUri
+                    if (!serverPhotoUrl.isNullOrBlank() && serverPhotoUrl.startsWith("http")) {
+                        OutlinedButton(
+                            onClick = {
+                                profileViewModel.removeAvatarPhoto()
+                                showAvatarDialog = false
+                            },
+                            enabled = !avatarUploading,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Remover foto")
+                        }
+                    }
+
+                    Text("Ou escolha um avatar:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+
+                    // Grade com 4 avatares predefinidos
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(listOf(
+                            "Person" to Icons.Default.Person,
+                            "Favorite" to Icons.Default.Favorite,
+                            "Accessibility" to Icons.Default.AccessibilityNew,
+                            "Star" to Icons.Default.Star
+                        )) { (description, icon) ->
+                            Surface(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clickable {
+                                        profileViewModel.updateAvatar(description)
+                                        showAvatarDialog = false
+                                    },
+                                shape = CircleShape,
+                                border = BorderStroke(
+                                    2.dp,
+                                    if (profile?.avatarIdentifier == description) MaterialTheme.colorScheme.primary
+                                    else Color.Transparent
+                                ),
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        icon,
+                                        contentDescription = description,
+                                        modifier = Modifier.size(32.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAvatarDialog = false }) {
+                    Text("Fechar")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -640,96 +727,9 @@ fun ProfileDetailScreen(
                                                 style = MaterialTheme.typography.labelMedium,
                                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                             )
-        }
-    }
-    
-    // Diálogo de escolha de avatar/foto de perfil
-    if (showAvatarDialog) {
-        AlertDialog(
-            onDismissRequest = { showAvatarDialog = false },
-            title = { Text("Personalizar Foto de Perfil", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val avatarUploading by profileViewModel.avatarUploading.collectAsState()
-                    Button(
-                        onClick = {
-                            // Abrir galeria para escolher foto
-                            galleryLauncher.launch("image/*")
-                        },
-                        enabled = !avatarUploading,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(if (avatarUploading) "Enviando..." else "Escolher da Galeria")
-                    }
-                    if (avatarUploading) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
-                    val serverPhotoUrl = customPhotoUri
-                    if (!serverPhotoUrl.isNullOrBlank() && serverPhotoUrl.startsWith("http")) {
-                        OutlinedButton(
-                            onClick = {
-                                profileViewModel.removeAvatarPhoto()
-                                showAvatarDialog = false
-                            },
-                            enabled = !avatarUploading,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Remover foto")
-                        }
-                    }
-                    
-                    Text("Ou escolha um avatar:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
-                    
-                    // Grade com 4 avatares predefinidos
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(listOf(
-                            "Person" to Icons.Default.Person,
-                            "Favorite" to Icons.Default.Favorite,
-                            "Accessibility" to Icons.Default.AccessibilityNew,
-                            "Star" to Icons.Default.Star
-                        )) { (description, icon) ->
-                            Surface(
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .clickable {
-                                        profileViewModel.updateAvatar(description)
-                                        showAvatarDialog = false
-                                    },
-                                shape = CircleShape,
-                                border = BorderStroke(
-                                    2.dp,
-                                    if (profile?.avatarIdentifier == description) MaterialTheme.colorScheme.primary
-                                    else Color.Transparent
-                                ),
-                                color = MaterialTheme.colorScheme.surfaceVariant
-                            ) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        icon,
-                                        contentDescription = description,
-                                        modifier = Modifier.size(32.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
+                                        }
+                                    }
                                 }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showAvatarDialog = false }) {
-                    Text("Fechar")
-                }
-            }
-        )
-    }
-}
                             }
                             
                             if (!p?.emergencyContactName.isNullOrBlank()) {
