@@ -78,6 +78,10 @@ fun ProfileDetailScreen(
     val scope = rememberCoroutineScope()
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showAvatarDialog by remember { mutableStateOf(false) }
+    var editingWeight by remember { mutableStateOf<Boolean?>(null) }
+    var measurementText by remember { mutableStateOf("") }
+    val savingMeasurement by profileViewModel.isLoading.collectAsState()
+    val measurementError by profileViewModel.saveError.collectAsState()
     val context = LocalContext.current
 
     // Quando o ViewModel monta o link do WhatsApp (TOTP atual), abre e consome.
@@ -137,6 +141,57 @@ fun ProfileDetailScreen(
 
     val resolvedFeedbacks = remember(userFeedbacks) {
         userFeedbacks.filter { it.status == "resolved" || it.status == "resolvido_v1.2" || it.status == "implementado" }
+    }
+
+    editingWeight?.let { isWeight ->
+        val value = measurementText.replace(',', '.').toDoubleOrNull()
+        val range = if (isWeight) 20.0..350.0 else 50.0..250.0
+        val valid = value != null && value.isFinite() && value in range
+        AlertDialog(
+            onDismissRequest = { if (!savingMeasurement) editingWeight = null },
+            title = { Text(if (isWeight) "Atualizar peso" else "Atualizar altura") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Atualize sua medida. O IMC será recalculado automaticamente.")
+                    OutlinedTextField(
+                        value = measurementText,
+                        onValueChange = { measurementText = it; profileViewModel.clearSaveError() },
+                        enabled = !savingMeasurement,
+                        label = { Text(if (isWeight) "Peso (kg)" else "Altura (cm)") },
+                        singleLine = true,
+                        isError = !valid,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
+                        ),
+                        supportingText = {
+                            Text(if (isWeight) "Entre 20 e 350 kg" else "Entre 50 e 250 cm")
+                        }
+                    )
+                    if (isWeight) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = { measurementText = String.format(java.util.Locale.US, "%.1f", value!! - 0.5) },
+                                enabled = !savingMeasurement && valid && value!! - 0.5 in range
+                            ) { Text("- 0,5 kg") }
+                            OutlinedButton(
+                                onClick = { measurementText = String.format(java.util.Locale.US, "%.1f", value!! + 0.5) },
+                                enabled = !savingMeasurement && valid && value!! + 0.5 in range
+                            ) { Text("+ 0,5 kg") }
+                        }
+                    }
+                    measurementError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = valid && !savingMeasurement,
+                    onClick = { profileViewModel.updateMeasurement(isWeight, value!!) { editingWeight = null } }
+                ) { Text(if (savingMeasurement) "Salvando..." else "Salvar") }
+            },
+            dismissButton = {
+                TextButton(enabled = !savingMeasurement, onClick = { editingWeight = null }) { Text("Cancelar") }
+            }
+        )
     }
 
     Scaffold(
@@ -356,7 +411,12 @@ fun ProfileDetailScreen(
                         ) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+                                    .clickable(enabled = profile != null && !savingMeasurement, onClickLabel = "Editar peso") {
+                                        profileViewModel.clearSaveError()
+                                        measurementText = profile?.weight?.toString().orEmpty()
+                                        editingWeight = true
+                                    }
                             ) {
                                 Text(
                                     text = "${profile?.weight?.let { String.format(java.util.Locale.US, "%.1f", it) } ?: "--"} kg",
@@ -372,7 +432,12 @@ fun ProfileDetailScreen(
                             Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color.LightGray.copy(alpha = 0.3f)))
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+                                    .clickable(enabled = profile != null && !savingMeasurement, onClickLabel = "Editar altura") {
+                                        profileViewModel.clearSaveError()
+                                        measurementText = profile?.height?.toString().orEmpty()
+                                        editingWeight = false
+                                    }
                             ) {
                                 Text(
                                     text = "${profile?.height?.toInt() ?: "--"} cm",
