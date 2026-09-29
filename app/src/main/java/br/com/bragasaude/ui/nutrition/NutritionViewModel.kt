@@ -139,7 +139,7 @@ class NutritionViewModel @Inject constructor(
     val activeAdjustments = _activeAdjustments.asStateFlow()
 
     val nutritionDisclaimer = MutableStateFlow(
-        "Sugestões de autocuidado alimentar baseadas no seu perfil e últimos exames registrados. Não constituem prescrição médica nem substituem nutricionista."
+        "Sugestões de autocuidado alimentar baseadas no seu perfil e nas suas escolhas. Não constituem prescrição médica nem substituem nutricionista."
     ).asStateFlow()
 
     fun dismissOrSwapSuggestion(foodName: String) {
