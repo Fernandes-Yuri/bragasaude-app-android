@@ -1,7 +1,8 @@
-﻿package br.com.bragasaude.data.remote.repository
+package br.com.bragasaude.data.remote.repository
 
 import android.content.Context
 import br.com.bragasaude.data.local.*
+import br.com.bragasaude.data.remote.api.BragaApiClient
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -14,8 +15,17 @@ class CatalogRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val foodDao: FoodDao,
     private val mealRuleDao: MealRuleDao,
-    private val clinicalReferenceSeeder: ClinicalReferenceSeeder
+    private val clinicalReferenceSeeder: ClinicalReferenceSeeder,
+    private val apiClient: BragaApiClient
 ) {
+    suspend fun fetchGroceryPrices(): Map<String, Double> {
+        return try {
+            apiClient.getGroceryPrices()
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
     suspend fun seedDatabaseIfNeeded() {
         try {
             clinicalReferenceSeeder.seedIfNeeded()

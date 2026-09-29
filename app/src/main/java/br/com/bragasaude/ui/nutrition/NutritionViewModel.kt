@@ -361,13 +361,16 @@ class NutritionViewModel @Inject constructor(
                 val catalog = catalogRepository.getFoodCatalog().first()
                 val dislikes = _dislikedFoodNames.value
 
+                val prices = catalogRepository.fetchGroceryPrices()
+
                 val newList = WeeklyGroceryEngine.generateWeeklyList(
                     userId = userId,
                     exams = exams,
                     vitals = vitals,
                     profile = profileEntity?.toRemote(),
                     catalog = catalog,
-                    dislikedFoodNames = dislikes
+                    dislikedFoodNames = dislikes,
+                    priceMap = prices
                 )
                 groceryRepository.clearGroceryList(userId)
                 groceryRepository.saveGroceryList(newList)
