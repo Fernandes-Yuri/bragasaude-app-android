@@ -3,6 +3,10 @@ package br.com.bragasaude
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import br.com.bragasaude.data.remote.auth.AuthService
+import br.com.bragasaude.data.remote.network.AvatarAuthInterceptor
+import okhttp3.OkHttpClient
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
@@ -21,6 +25,7 @@ import javax.inject.Inject
 @HiltAndroidApp
 class BragaApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory {
     
+    @Inject lateinit var authService: AuthService
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var syncManager: SyncManager
     @Inject lateinit var syncScheduler: SyncScheduler
@@ -63,7 +68,13 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
     override fun newImageLoader(context: coil3.PlatformContext): ImageLoader {
         return ImageLoader.Builder(context)
             .components {
-                add(OkHttpNetworkFetcherFactory())
+                add(OkHttpNetworkFetcherFactory(callFactory = {
+                    OkHttpClient.Builder()
+                        .addInterceptor(AvatarAuthInterceptor(BuildConfig.BASE_URL.toHttpUrl()) { forceRefresh ->
+                            authService.getTokenBlocking(forceRefresh = forceRefresh)
+                        })
+                        .build()
+                }))
             }
             .build()
     }
