@@ -152,9 +152,9 @@ fun BragaContentSheet(
     content: @Composable () -> Unit
 ) {
     BragaBottomSheet(onDismissRequest = onDismissRequest) {
-        Box(Modifier.fillMaxWidth().imePadding().then(
-            if (scrollContent) Modifier.verticalScroll(rememberScrollState()) else Modifier
-        )) { content() }
+    Box(Modifier.fillMaxWidth().imePadding().then(
+        if (scrollContent) Modifier.verticalScroll(rememberScrollState()) else Modifier
+    )) { content() }
     }
 }
 

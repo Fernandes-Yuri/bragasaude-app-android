@@ -1,6 +1,5 @@
 package br.com.bragasaude.ui.components
 
-import br.com.bragasaude.ui.components.BragaAlertDialog
 
 import android.content.Intent
 import android.net.Uri

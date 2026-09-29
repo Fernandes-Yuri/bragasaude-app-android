@@ -1,6 +1,5 @@
 package br.com.bragasaude.ui.components
 
-import br.com.bragasaude.ui.components.BragaBottomSheet
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

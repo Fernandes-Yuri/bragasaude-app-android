@@ -1,6 +1,7 @@
 package br.com.bragasaude.ui.profile
 
 import br.com.bragasaude.ui.components.BragaAlertDialog
+import br.com.bragasaude.ui.components.BragaFormSheet
 import br.com.bragasaude.ui.components.BragaDatePickerDialog
 
 import androidx.compose.foundation.layout.*
@@ -171,10 +172,10 @@ fun ProfileScreen(
             initialMinute = parsedMinute.coerceIn(0, 59),
             is24Hour = true
         )
-        BragaAlertDialog(
+        BragaFormSheet(
             onDismissRequest = { showSleepStartTimePicker = false },
             confirmButton = {
-                TextButton(onClick = {
+                Button(onClick = {
                     sleepStart = "%02d:%02d".format(timePickerState.hour, timePickerState.minute)
                     showSleepStartTimePicker = false
                 }) { Text("Confirmar") }
@@ -199,10 +200,10 @@ fun ProfileScreen(
             initialMinute = parsedMinute.coerceIn(0, 59),
             is24Hour = true
         )
-        BragaAlertDialog(
+        BragaFormSheet(
             onDismissRequest = { showSleepEndTimePicker = false },
             confirmButton = {
-                TextButton(onClick = {
+                Button(onClick = {
                     sleepEnd = "%02d:%02d".format(timePickerState.hour, timePickerState.minute)
                     showSleepEndTimePicker = false
                 }) { Text("Confirmar") }

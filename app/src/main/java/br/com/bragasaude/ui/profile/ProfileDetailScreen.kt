@@ -165,6 +165,7 @@ fun ProfileDetailScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Escolha como aparecer no mural. Sem apelido, usamos seu primeiro nome e a inicial do sobrenome.")
                     OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
                         value = nicknameDraft,
                         onValueChange = { if (it.length <= 24) nicknameDraft = it },
                         label = { Text("Nome comunitário") },
@@ -198,6 +199,7 @@ fun ProfileDetailScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Atualize sua medida. O IMC será recalculado automaticamente.")
                     OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
                         value = measurementText,
                         onValueChange = { measurementText = it; profileViewModel.clearSaveError() },
                         enabled = !savingMeasurement,

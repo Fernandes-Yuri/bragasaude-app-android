@@ -44,7 +44,6 @@ import br.com.bragasaude.ui.components.MetricInfoBottomSheet
 import br.com.bragasaude.ui.components.MetricInfoCatalog
 import br.com.bragasaude.ui.theme.Success
 import kotlinx.coroutines.flow.collectLatest
-import androidx.compose.ui.window.DialogProperties
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -422,70 +421,70 @@ fun HydrationScreen(
             onDismissRequest = { showCustomDialog = false; customMlText = "" }
         , scrollContent = true) {
 
-                Column(modifier = Modifier.padding(24.dp)) {
-                    // Header
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "Adicionar Quantidade",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        IconButton(
-                            onClick = { showCustomDialog = false; customMlText = "" },
-                            modifier = Modifier
-                                .size(32.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), CircleShape)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Fechar", modifier = Modifier.size(16.dp))
-                        }
-                    }
-
-                    Spacer(Modifier.height(20.dp))
-
-                    OutlinedTextField(
-                        value = customMlText,
-                        onValueChange = { customMlText = it.filter { ch -> ch.isDigit() } },
-                        label = { Text("Quantidade em ml") },
-                        placeholder = { Text("Ex: 350") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+            Column(modifier = Modifier.padding(24.dp)) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Adicionar Quantidade",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
                     )
-
-                    Spacer(Modifier.height(20.dp))
-
-                    // Botões lado a lado
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    IconButton(
+                        onClick = { showCustomDialog = false; customMlText = "" },
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), CircleShape)
                     ) {
-                        OutlinedButton(
-                            onClick = { showCustomDialog = false; customMlText = "" },
-                            modifier = Modifier.weight(1f).height(50.dp),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Text("Cancelar")
-                        }
-                        Button(
-                            onClick = {
-                                val ml = customMlText.toIntOrNull()
-                                if (ml != null && ml > 0) viewModel.addWater(ml)
-                                customMlText = ""
-                                showCustomDialog = false
-                            },
-                            enabled = customMlText.isNotBlank() && (customMlText.toIntOrNull() ?: 0) > 0,
-                            modifier = Modifier.weight(1f).height(50.dp),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Text("Adicionar", fontWeight = FontWeight.Bold)
-                        }
+                        Icon(Icons.Default.Close, contentDescription = "Fechar", modifier = Modifier.size(16.dp))
                     }
                 }
+
+                Spacer(Modifier.height(20.dp))
+
+                OutlinedTextField(
+                    value = customMlText,
+                    onValueChange = { customMlText = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("Quantidade em ml") },
+                    placeholder = { Text("Ex: 350") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(20.dp))
+
+                // Botões lado a lado
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showCustomDialog = false; customMlText = "" },
+                        modifier = Modifier.weight(1f).height(50.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("Cancelar")
+                    }
+                    Button(
+                        onClick = {
+                            val ml = customMlText.toIntOrNull()
+                            if (ml != null && ml > 0) viewModel.addWater(ml)
+                            customMlText = ""
+                            showCustomDialog = false
+                        },
+                        enabled = customMlText.isNotBlank() && (customMlText.toIntOrNull() ?: 0) > 0,
+                        modifier = Modifier.weight(1f).height(50.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("Adicionar", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
 
         }
     }
@@ -495,168 +494,168 @@ fun HydrationScreen(
             onDismissRequest = { showEditTargetDialog = false }
         ) {
 
-                Column(
-                    modifier = Modifier
-                        .padding(24.dp)
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Header
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Default.WaterDrop,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                "Meta de Hidratação",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        IconButton(
-                            onClick = { showEditTargetDialog = false },
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
                             modifier = Modifier
-                                .size(32.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), CircleShape)
+                                .size(40.dp)
+                                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Fechar", modifier = Modifier.size(16.dp))
-                        }
-                    }
-
-                    Spacer(Modifier.height(18.dp))
-
-                    // Explicação da Regra dos 35 ml/kg
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    "Cálculo Automático: 35 ml/kg",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            // AUD-AN12: `!!` redundante apos a checagem de null — o `!= null`
-                            // ja garante; o `!!` so adiciona uma falha possivel. Como
-                            // userWeight e delegated property (State), o Kotlin nao faz
-                            // smart cast — captura em local para o compilador aceitar.
-                            val weight = userWeight
-                            Text(
-                                if (weight != null && weight > 0) {
-                                    "Com base no seu peso cadastrado (${weight} kg), sua meta calculada é de ${autoRecommendedTarget} ml por dia."
-                                } else {
-                                    "Calculamos 35 ml por cada quilo corporal. Como seu peso ainda não foi cadastrado no perfil, a meta padrão sugerida é de ${autoRecommendedTarget} ml."
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            Icon(
+                                Icons.Default.WaterDrop,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
                             )
                         }
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-
-                    // Campo para digitação de meta personalizada
-                    Text(
-                        "Sua meta diária (ml):",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = editTargetText,
-                        onValueChange = { editTargetText = it.filter { ch -> ch.isDigit() } },
-                        label = { Text("Quantidade em ml") },
-                        placeholder = { Text("Ex: $autoRecommendedTarget") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(Modifier.height(12.dp))
-
-                    // Botão para restaurar a meta automática caso o usuário queira
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.resetToAutoTarget()
-                            showEditTargetDialog = false
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
-                    ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(12.dp))
                         Text(
-                            "Usar cálculo automático (${autoRecommendedTarget} ml)",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
+                            "Meta de Hidratação",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
                         )
                     }
-
-                    Spacer(Modifier.height(20.dp))
-
-                    // Botões de ação
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    IconButton(
+                        onClick = { showEditTargetDialog = false },
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), CircleShape)
                     ) {
-                        OutlinedButton(
-                            onClick = { showEditTargetDialog = false },
-                            modifier = Modifier.weight(1f).height(48.dp),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Text("Cancelar")
-                        }
-                        Button(
-                            onClick = {
-                                val newTarget = editTargetText.toIntOrNull()
-                                if (newTarget != null && newTarget > 0) {
-                                    viewModel.setCustomTarget(newTarget)
-                                }
-                                showEditTargetDialog = false
-                            },
-                            enabled = editTargetText.isNotBlank() && (editTargetText.toIntOrNull() ?: 0) > 0,
-                            modifier = Modifier.weight(1f).height(48.dp),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Text("Salvar Meta", fontWeight = FontWeight.Bold)
-                        }
+                        Icon(Icons.Default.Close, contentDescription = "Fechar", modifier = Modifier.size(16.dp))
                     }
                 }
+
+                Spacer(Modifier.height(18.dp))
+
+                // Explicação da Regra dos 35 ml/kg
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Cálculo Automático: 35 ml/kg",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        // AUD-AN12: `!!` redundante apos a checagem de null — o `!= null`
+                        // ja garante; o `!!` so adiciona uma falha possivel. Como
+                        // userWeight e delegated property (State), o Kotlin nao faz
+                        // smart cast — captura em local para o compilador aceitar.
+                        val weight = userWeight
+                        Text(
+                            if (weight != null && weight > 0) {
+                                "Com base no seu peso cadastrado (${weight} kg), sua meta calculada é de ${autoRecommendedTarget} ml por dia."
+                            } else {
+                                "Calculamos 35 ml por cada quilo corporal. Como seu peso ainda não foi cadastrado no perfil, a meta padrão sugerida é de ${autoRecommendedTarget} ml."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // Campo para digitação de meta personalizada
+                Text(
+                    "Sua meta diária (ml):",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = editTargetText,
+                    onValueChange = { editTargetText = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("Quantidade em ml") },
+                    placeholder = { Text("Ex: $autoRecommendedTarget") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                // Botão para restaurar a meta automática caso o usuário queira
+                OutlinedButton(
+                    onClick = {
+                        viewModel.resetToAutoTarget()
+                        showEditTargetDialog = false
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                ) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Usar cálculo automático (${autoRecommendedTarget} ml)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // Botões de ação
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showEditTargetDialog = false },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("Cancelar")
+                    }
+                    Button(
+                        onClick = {
+                            val newTarget = editTargetText.toIntOrNull()
+                            if (newTarget != null && newTarget > 0) {
+                                viewModel.setCustomTarget(newTarget)
+                            }
+                            showEditTargetDialog = false
+                        },
+                        enabled = editTargetText.isNotBlank() && (editTargetText.toIntOrNull() ?: 0) > 0,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("Salvar Meta", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
 
         }
     }
