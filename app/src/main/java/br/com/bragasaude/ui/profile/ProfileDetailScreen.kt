@@ -179,7 +179,8 @@ fun ProfileDetailScreen(
                         .size(120.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                        .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                        .clickable(onClickLabel = "Editar foto de perfil") { showAvatarDialog = true },
                     contentAlignment = Alignment.Center
                 ) {
                     when {
