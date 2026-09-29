@@ -264,7 +264,7 @@ fun NutritionScreen(
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Text(
-                                    "Ajustes baseados no seu perfil e últimos exames:",
+                                    "Ajustes baseados no seu perfil:",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

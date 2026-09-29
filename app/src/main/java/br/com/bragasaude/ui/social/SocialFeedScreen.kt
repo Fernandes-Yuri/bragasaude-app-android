@@ -1,9 +1,7 @@
 package br.com.bragasaude.ui.social
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,8 +33,11 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -438,13 +439,31 @@ private fun SocialPostCard(
                             .background(BragaMint),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = (post.userName ?: "C").take(1).uppercase(Locale.ROOT),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp,
-                            color = BragaEmeraldDark
-                        )
+                        var photoFailed by remember(post.userAvatarUrl) { mutableStateOf(false) }
+                        val avatarIcon = when (post.userAvatarIdentifier) {
+                            "Person" -> Icons.Default.Person
+                            "Favorite" -> Icons.Default.Favorite
+                            "Accessibility" -> Icons.Default.AccessibilityNew
+                            "Star" -> Icons.Default.Star
+                            else -> null
+                        }
+                        when {
+                            avatarIcon != null -> Icon(avatarIcon, contentDescription = null, tint = BragaEmeraldDark)
+                            !post.userAvatarUrl.isNullOrBlank() && !photoFailed -> AsyncImage(
+                                model = post.userAvatarUrl,
+                                contentDescription = "Foto de perfil",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                                onError = { photoFailed = true }
+                            )
+                            else -> Text(
+                                text = post.userName?.trim()?.takeIf { it.isNotEmpty() }?.take(1)?.uppercase(Locale.ROOT) ?: "C",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                                color = BragaEmeraldDark
+                            )
+                        }
                     }
 
                     Column {
@@ -538,55 +557,44 @@ private fun SocialPostCard(
 
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
+                    .fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 reactionOptions.forEach { (type, label, icon) ->
                     val isSelected = selectedReaction == type
                     val count = reactions.count { it.reactionType == type }
-                    val reactionScale by animateFloatAsState(
-                        targetValue = if (isSelected) 1.05f else 1f,
-                        label = "ReactionScale"
-                    )
-
-                    FilterChip(
+                    Surface(
                         selected = isSelected,
                         onClick = {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             onReact(type)
                         },
-                        label = {
-                            Text(
-                                text = if (count > 0) "$label $count" else label,
-                                fontSize = 14.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        },
-                        modifier = Modifier
-                            .heightIn(min = 48.dp)
-                            .scale(reactionScale),
-                        shape = RoundedCornerShape(50),
-                        colors = FilterChipDefaults.filterChipColors(
-                            containerColor = BragaMintSurface,
-                            labelColor = BragaTextPrimary,
-                            iconColor = BragaTextSecondary,
-                            selectedContainerColor = BragaMint,
-                            selectedLabelColor = BragaEmeraldDark,
-                            selectedLeadingIconColor = BragaEmeraldDark
-                        ),
+                        modifier = Modifier.weight(1f).heightIn(min = 64.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isSelected) BragaMint else BragaMintSurface,
+                        contentColor = if (isSelected) BragaEmeraldDark else BragaTextPrimary,
                         border = BorderStroke(
                             width = if (isSelected) 1.5.dp else 1.dp,
                             color = if (isSelected) BragaEmerald else BragaMintBorder
                         )
-                    )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Text(
+                                text = label,
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                            if (count > 0) {
+                                Text(text = count.toString(), fontSize = 12.sp, textAlign = TextAlign.Center)
+                            }
+                        }
+                    }
                 }
             }
 
