@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.family
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -334,7 +336,7 @@ fun FamilyChatScreen(
 
     // D47: confirmação clara antes de apagar (padrão geriátrico)
     messagePendingDelete?.let { target ->
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { messagePendingDelete = null },
             title = {
                 Text("Apagar mensagem?", fontWeight = FontWeight.Bold)
@@ -387,7 +389,7 @@ fun FamilyChatScreen(
     }
 
     if (showRevokeConfirmFromChat) {
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { showRevokeConfirmFromChat = false },
             title = {
                 Text(

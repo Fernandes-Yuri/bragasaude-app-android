@@ -1,5 +1,9 @@
 package br.com.bragasaude.ui.profile
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+import br.com.bragasaude.ui.components.BragaFormSheet
+import br.com.bragasaude.ui.components.BragaDatePickerDialog
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.*
@@ -41,7 +45,7 @@ fun ProfileScreen(
         showLeaveDialog = true
     }
     if (showLeaveDialog) {
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { showLeaveDialog = false },
             title = { Text("Sair da edição?") },
             text = { Text("As alterações ainda não salvas serão descartadas. Seus dados já salvos serão mantidos.") },
@@ -137,7 +141,7 @@ fun ProfileScreen(
     }
 
     if (showDatePicker) {
-        DatePickerDialog(
+        BragaDatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
@@ -168,10 +172,10 @@ fun ProfileScreen(
             initialMinute = parsedMinute.coerceIn(0, 59),
             is24Hour = true
         )
-        AlertDialog(
+        BragaFormSheet(
             onDismissRequest = { showSleepStartTimePicker = false },
             confirmButton = {
-                TextButton(onClick = {
+                Button(onClick = {
                     sleepStart = "%02d:%02d".format(timePickerState.hour, timePickerState.minute)
                     showSleepStartTimePicker = false
                 }) { Text("Confirmar") }
@@ -196,10 +200,10 @@ fun ProfileScreen(
             initialMinute = parsedMinute.coerceIn(0, 59),
             is24Hour = true
         )
-        AlertDialog(
+        BragaFormSheet(
             onDismissRequest = { showSleepEndTimePicker = false },
             confirmButton = {
-                TextButton(onClick = {
+                Button(onClick = {
                     sleepEnd = "%02d:%02d".format(timePickerState.hour, timePickerState.minute)
                     showSleepEndTimePicker = false
                 }) { Text("Confirmar") }

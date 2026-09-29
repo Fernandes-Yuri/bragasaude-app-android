@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.*
@@ -120,7 +122,7 @@ fun AppContent(activity: MainActivity) {
                     }
                 }
                 updateDownloadUrl?.let { url ->
-                    AlertDialog(
+                    BragaAlertDialog(
                         onDismissRequest = { updateDownloadUrl = null },
                         title = { Text("Atualização disponível") },
                         text = { Text("Há uma nova versão do Braga Saúde, com melhorias e mais estabilidade. Recomendamos atualizar agora.") },

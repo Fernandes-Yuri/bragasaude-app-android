@@ -1,5 +1,7 @@
 ﻿package br.com.bragasaude.ui.league
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -191,7 +193,7 @@ fun LeagueScreen(
 
     // Fase 3 — Diálogo de encerramento de ciclo (tom positivo da UX geriátrica)
     if (cycleOutcomeMessage != null) {
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { cycleOutcomeMessage = null },
             title = {
                 Text(

@@ -1,4 +1,6 @@
 package br.com.bragasaude.ui.family
+
+import br.com.bragasaude.ui.components.BragaFormSheet
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Forum
 
@@ -42,7 +44,6 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.WaterDrop
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -1204,9 +1205,9 @@ private fun AppointmentDialog(
     var parsedHour by remember { mutableIntStateOf(8) }
     var parsedMinute by remember { mutableIntStateOf(0) }
 
-    AlertDialog(
+    BragaFormSheet(
+        scrollContent = false,
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(20.dp),
         title = {
             Text("Agendar Consulta", fontWeight = FontWeight.Bold)
         },
@@ -1321,9 +1322,8 @@ private fun SingleFieldDialog(
 ) {
     var text by remember { mutableStateOf("") }
 
-    AlertDialog(
+    BragaFormSheet(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(20.dp),
         title = { Text(title, fontWeight = FontWeight.Bold) },
         text = {
             Column {
@@ -1373,9 +1373,9 @@ private fun CareNoteDialog(
         "CUSTOM" to Icons.Default.Star
     )
 
-    AlertDialog(
+    BragaFormSheet(
+        scrollContent = false,
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(20.dp),
         title = { Text("Mensagem personalizada", fontWeight = FontWeight.Bold) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -1447,9 +1447,9 @@ private fun FamilyPridePostDialog(
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
 
-    AlertDialog(
+    BragaFormSheet(
+        scrollContent = false,
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(20.dp),
         title = {
             Column {
                 Text("Orgulho familiar", fontWeight = FontWeight.Bold)

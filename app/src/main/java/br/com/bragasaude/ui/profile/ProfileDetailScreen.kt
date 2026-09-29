@@ -1,5 +1,8 @@
 package br.com.bragasaude.ui.profile
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+import br.com.bragasaude.ui.components.BragaFormSheet
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -154,13 +157,15 @@ fun ProfileDetailScreen(
     }
 
     if (showCommunityDialog) {
-        AlertDialog(
+        BragaFormSheet(
+            dismissEnabled = !communitySaving,
             onDismissRequest = { if (!communitySaving) showCommunityDialog = false },
             title = { Text("Nome na comunidade") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Este nome será público no mural. Deixe em branco para usar seu primeiro nome e a inicial do sobrenome.")
+                    Text("Escolha como aparecer no mural. Sem apelido, usamos seu primeiro nome e a inicial do sobrenome.")
                     OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
                         value = nicknameDraft,
                         onValueChange = { if (it.length <= 24) nicknameDraft = it },
                         label = { Text("Nome comunitário") },
@@ -172,7 +177,7 @@ fun ProfileDetailScreen(
                 }
             },
             confirmButton = {
-                TextButton(enabled = !communitySaving, onClick = {
+                Button(enabled = !communitySaving, onClick = {
                     profileViewModel.saveCommunityNickname(nicknameDraft) { showCommunityDialog = false }
                 }) { Text(if (communitySaving) "Salvando..." else "Salvar") }
             },
@@ -186,13 +191,15 @@ fun ProfileDetailScreen(
         val value = measurementText.replace(',', '.').toDoubleOrNull()
         val range = if (isWeight) 20.0..350.0 else 50.0..250.0
         val valid = value != null && value.isFinite() && value in range
-        AlertDialog(
+        BragaFormSheet(
+            dismissEnabled = !savingMeasurement,
             onDismissRequest = { if (!savingMeasurement) editingWeight = null },
             title = { Text(if (isWeight) "Atualizar peso" else "Atualizar altura") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Atualize sua medida. O IMC será recalculado automaticamente.")
                     OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
                         value = measurementText,
                         onValueChange = { measurementText = it; profileViewModel.clearSaveError() },
                         enabled = !savingMeasurement,
@@ -222,7 +229,7 @@ fun ProfileDetailScreen(
                 }
             },
             confirmButton = {
-                TextButton(
+                Button(
                     enabled = valid && !savingMeasurement,
                     onClick = { profileViewModel.updateMeasurement(isWeight, value!!) { editingWeight = null } }
                 ) { Text(if (savingMeasurement) "Salvando..." else "Salvar") }
@@ -235,9 +242,9 @@ fun ProfileDetailScreen(
 
     // Diálogo de escolha de avatar/foto de perfil
     if (showAvatarDialog) {
-        AlertDialog(
+        BragaFormSheet(
             onDismissRequest = { showAvatarDialog = false },
-            title = { Text("Personalizar Foto de Perfil", fontWeight = FontWeight.Bold) },
+            title = { Text("Foto de perfil", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val avatarUploading by profileViewModel.avatarUploading.collectAsState()
@@ -313,7 +320,7 @@ fun ProfileDetailScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showAvatarDialog = false }) {
+                Button(onClick = { showAvatarDialog = false }) {
                     Text("Fechar")
                 }
             }
@@ -890,7 +897,7 @@ fun ProfileDetailScreen(
         }
 
         if (showDeleteDialog) {
-            AlertDialog(
+            BragaAlertDialog(
                 onDismissRequest = { showDeleteDialog = false },
                 icon = {
                     Icon(

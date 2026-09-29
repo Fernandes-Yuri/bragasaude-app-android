@@ -220,6 +220,9 @@ jobs:
       - name: Gate AUD-AN02 (emojis em strings de UI)
         run: python3 tools/check_emojis_ui.py
 
+      - name: Validar padrão compartilhado de janelas
+        run: python3 tools/check_modal_consistency.py
+
       - name: Rodar testes unitários
         run: |
           JDK_PATHS=$(ls -d "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}/Java_Temurin_jdk"/*/x64 2>/dev/null | paste -sd, -)

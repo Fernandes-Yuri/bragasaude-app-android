@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.exams
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -356,7 +358,7 @@ fun ExamsScreen(
     }
 
     if (showGlucosePrompt) {
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { viewModel.dismissGlucosePrompt() },
             title = { Text("Monitoramento de Glicose", fontWeight = FontWeight.Bold) },
             text = {
@@ -380,7 +382,7 @@ fun ExamsScreen(
 
     // Progress Overlay
     uploadProgress?.takeIf { showUploadProgress }?.let { progress ->
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { showUploadProgress = false },
             confirmButton = { TextButton(onClick = { showUploadProgress = false }) { Text("Fechar aviso") } },
             title = { Text("Processando Exame...") },
@@ -398,7 +400,7 @@ fun ExamsScreen(
     }
     // Diálogo de Exclusão Definitiva (LGPD Art. 18)
     if (examToDelete != null) {
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { examToDelete = null },
             icon = {
                 Icon(

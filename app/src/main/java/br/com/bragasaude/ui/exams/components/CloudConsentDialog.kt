@@ -1,5 +1,8 @@
 package br.com.bragasaude.ui.exams.components
 
+import br.com.bragasaude.ui.components.BragaContentSheet
+
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,8 +24,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 
 /**
  * Diálogo de Escolha de Armazenamento e Consentimento LGPD.
@@ -41,137 +42,129 @@ fun CloudConsentDialog(
 ) {
     var selectedOption by remember { mutableStateOf<Boolean?>(true) } // true = Nuvem, false = Local
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    BragaContentSheet(
+        onDismissRequest = onDismiss
     ) {
-        Card(
+
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .wrapContentHeight()
-                .clip(RoundedCornerShape(24.dp)),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState())
         ) {
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                // Cabeçalho
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Security,
-                        contentDescription = null,
-                        tint = Color(0xFF00897B),
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "Armazenamento & Privacidade",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B),
-                            fontSize = 18.sp
-                        ),
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
+            // Cabeçalho
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Security,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Você tem total soberania sobre onde deseja guardar seus laudos médicos. Escolha como prefere armazenar este exame:",
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        color = Color(0xFF64748B),
-                        fontSize = 13.5.sp,
-                        lineHeight = 19.sp
-                    )
+                    text = "Armazenamento & Privacidade",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 22.sp
+                    ),
+                    modifier = Modifier.weight(1f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
+            }
 
-                Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-                // Opção 1: Nuvem Segura Braga Saúde
-                StorageOptionCard(
-                    title = "Nuvem Segura Braga Saúde",
-                    subtitle = "Sincronização entre seus aparelhos e backup criptografado nos servidores dedicados.",
-                    badge = "Recomendado",
-                    icon = Icons.Default.CloudDone,
-                    isSelected = selectedOption == true,
-                    onClick = { selectedOption = true }
+            Text(
+                text = "Você tem total soberania sobre onde deseja guardar seus laudos médicos. Escolha como prefere armazenar este exame:",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp
                 )
+            )
 
-                if (selectedOption == true) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    // Termo Legal LGPD com Isenção Art. 43, III
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFFF1F5F9), RoundedCornerShape(12.dp))
-                            .padding(12.dp)
-                    ) {
-                        Text(
-                            text = "Termo LGPD (Art. 43, III): A Braga Saúde emprega criptografia de ponta a ponta e rígidas salvaguardas técnicas, ficando isenta de responsabilidade civil por acessos não autorizados provocados por ataques cibernéticos fortuitos ou ações ilícitas de terceiros externos.",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color(0xFF475569),
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp
-                            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Opção 1: Nuvem Segura Braga Saúde
+            StorageOptionCard(
+                title = "Nuvem Segura Braga Saúde",
+                subtitle = "Sincronização entre seus aparelhos e backup criptografado nos servidores dedicados.",
+                badge = "Recomendado",
+                icon = Icons.Default.CloudDone,
+                isSelected = selectedOption == true,
+                onClick = { selectedOption = true }
+            )
+
+            if (selectedOption == true) {
+                Spacer(modifier = Modifier.height(10.dp))
+                // Termo Legal LGPD com Isenção Art. 43, III
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = "Termo LGPD (Art. 43, III): A Braga Saúde emprega criptografia de ponta a ponta e rígidas salvaguardas técnicas, ficando isenta de responsabilidade civil por acessos não autorizados provocados por ataques cibernéticos fortuitos ou ações ilícitas de terceiros externos.",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
                         )
-                    }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Opção 2: Apenas Neste Aparelho
+            StorageOptionCard(
+                title = "Apenas Neste Aparelho (Local)",
+                subtitle = "O arquivo original permanece exclusivamente na memória deste celular e nunca é transmitido para os nossos servidores.",
+                badge = "Soberania Total",
+                icon = Icons.Default.PhoneAndroid,
+                isSelected = selectedOption == false,
+                onClick = { selectedOption = false }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Ações
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                ) {
+                    Text("Cancelar", fontWeight = FontWeight.SemiBold)
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Opção 2: Apenas Neste Aparelho
-                StorageOptionCard(
-                    title = "Apenas Neste Aparelho (Local)",
-                    subtitle = "O arquivo original permanece exclusivamente na memória deste celular e nunca é transmitido para os nossos servidores.",
-                    badge = "Soberania Total",
-                    icon = Icons.Default.PhoneAndroid,
-                    isSelected = selectedOption == false,
-                    onClick = { selectedOption = false }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Ações
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                Button(
+                    onClick = {
+                        selectedOption?.let { onConfirm(it) }
+                    },
+                    enabled = selectedOption != null,
+                    modifier = Modifier
+                        .weight(1.3f)
+                        .height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White
+                    )
                 ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF64748B))
-                    ) {
-                        Text("Cancelar", fontWeight = FontWeight.SemiBold)
-                    }
-
-                    Button(
-                        onClick = {
-                            selectedOption?.let { onConfirm(it) }
-                        },
-                        enabled = selectedOption != null,
-                        modifier = Modifier
-                            .weight(1.3f)
-                            .height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF00897B),
-                            contentColor = Color.White
-                        )
-                    ) {
-                        Text("Confirmar", fontWeight = FontWeight.Bold)
-                    }
+                    Text("Confirmar", fontWeight = FontWeight.Bold)
                 }
             }
         }
+
     }
 }
 
@@ -184,7 +177,7 @@ private fun StorageOptionCard(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val borderColor = if (isSelected) Color(0xFF00897B) else Color(0xFFE2E8F0)
+    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFFE2E8F0)
     val bgColor = if (isSelected) Color(0xFFE0F2F1).copy(alpha = 0.4f) else Color.White
 
     Box(
@@ -203,7 +196,7 @@ private fun StorageOptionCard(
             RadioButton(
                 selected = isSelected,
                 onClick = onClick,
-                colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF00897B))
+                colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -216,26 +209,26 @@ private fun StorageOptionCard(
                         text = title,
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B),
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 14.5.sp
                         ),
                         modifier = Modifier.weight(1f),
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                     Surface(
-                        color = if (isSelected) Color(0xFF00897B) else Color(0xFFF1F5F9),
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text(
                             text = badge,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelSmall.copy(
-                                color = if (isSelected) Color.White else Color(0xFF64748B),
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             ),
-                            maxLines = 1,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -244,7 +237,7 @@ private fun StorageOptionCard(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = Color(0xFF64748B),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
                         lineHeight = 16.sp
                     )

@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.feedback
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -433,7 +435,7 @@ fun FeedbackScreen(
 
     // Diálogo de Confirmação de Sucesso
     if (isSuccess) {
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = {
                 viewModel.dismissSuccess()
                 onBack()

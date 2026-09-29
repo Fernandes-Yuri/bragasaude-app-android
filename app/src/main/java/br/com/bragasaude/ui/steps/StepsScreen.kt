@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.steps
 
+import br.com.bragasaude.ui.components.BragaContentSheet
+
 import android.Manifest
 import android.content.Context
 import android.widget.Toast
@@ -39,8 +41,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.local.DailyMetricsEntity
 import br.com.bragasaude.data.util.ActivityState
@@ -403,169 +403,160 @@ fun MetricDetailModal(
 ) {
     val scrollState = androidx.compose.foundation.rememberScrollState()
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    BragaContentSheet(
+        onDismissRequest = onDismiss
     ) {
-        Card(
+
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .wrapContentHeight(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                .fillMaxWidth()
+                .verticalScroll(scrollState)
+                .padding(20.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(scrollState)
-                    .padding(20.dp)
+            // Top Bar com Título, Ícone e Botão Fechar com área de toque de 48dp
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Top Bar com Título, Ícone e Botão Fechar com área de toque de 48dp
+                val icon = when (metric) {
+                    ActivityMetricType.STEPS -> Icons.AutoMirrored.Filled.DirectionsWalk
+                    ActivityMetricType.HEART_POINTS -> Icons.Default.Favorite
+                    ActivityMetricType.CALORIES -> Icons.Default.LocalFireDepartment
+                    ActivityMetricType.DISTANCE -> Icons.Default.LocationOn
+                    ActivityMetricType.ACTIVE_MINUTES -> Icons.Default.Timer
+                }
+                val tint = when (metric) {
+                    ActivityMetricType.STEPS -> MaterialTheme.colorScheme.primary
+                    ActivityMetricType.HEART_POINTS -> TealPrimary
+                    ActivityMetricType.CALORIES -> Warning
+                    ActivityMetricType.DISTANCE -> Info
+                    ActivityMetricType.ACTIVE_MINUTES -> Success
+                }
+
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = tint.copy(alpha = 0.15f),
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        metric.label,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .padding(4.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), CircleShape)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Fechar", modifier = Modifier.size(20.dp))
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Destaque do Valor Atual ("Hoje")
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val icon = when (metric) {
-                        ActivityMetricType.STEPS -> Icons.AutoMirrored.Filled.DirectionsWalk
-                        ActivityMetricType.HEART_POINTS -> Icons.Default.Favorite
-                        ActivityMetricType.CALORIES -> Icons.Default.LocalFireDepartment
-                        ActivityMetricType.DISTANCE -> Icons.Default.LocationOn
-                        ActivityMetricType.ACTIVE_MINUTES -> Icons.Default.Timer
-                    }
-                    val tint = when (metric) {
-                        ActivityMetricType.STEPS -> MaterialTheme.colorScheme.primary
-                        ActivityMetricType.HEART_POINTS -> TealPrimary
-                        ActivityMetricType.CALORIES -> Warning
-                        ActivityMetricType.DISTANCE -> Info
-                        ActivityMetricType.ACTIVE_MINUTES -> Success
+                    Column {
+                        Text("Total de Hoje", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val displayVal = when (metric) {
+                            ActivityMetricType.STEPS -> "%,d".format(currentSteps)
+                            ActivityMetricType.HEART_POINTS -> "$currentMinutes"
+                            ActivityMetricType.CALORIES -> "%.0f".format(currentCalories)
+                            ActivityMetricType.DISTANCE -> "%.2f".format(currentDistance / 1000f)
+                            ActivityMetricType.ACTIVE_MINUTES -> "$currentMinutes"
+                        }
+                        Text("$displayVal ${metric.unit}", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f, fill = false)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = tint.copy(alpha = 0.15f),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
-                            }
-                        }
-                        Spacer(Modifier.width(12.dp))
+                    if (metric == ActivityMetricType.STEPS) {
                         Text(
-                            metric.label,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            "Meta: %,d".format(targetSteps),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else if (metric == ActivityMetricType.HEART_POINTS) {
+                        Text(
+                            "Meta OMS: 150 pts/sem",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TealPrimary,
+                            fontWeight = FontWeight.Bold
                         )
                     }
-
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .padding(4.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Fechar", modifier = Modifier.size(20.dp))
-                    }
                 }
+            }
 
-                Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-                // Destaque do Valor Atual ("Hoje")
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Total de Hoje", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            val displayVal = when (metric) {
-                                ActivityMetricType.STEPS -> "%,d".format(currentSteps)
-                                ActivityMetricType.HEART_POINTS -> "$currentMinutes"
-                                ActivityMetricType.CALORIES -> "%.0f".format(currentCalories)
-                                ActivityMetricType.DISTANCE -> "%.2f".format(currentDistance / 1000f)
-                                ActivityMetricType.ACTIVE_MINUTES -> "$currentMinutes"
-                            }
-                            Text("$displayVal ${metric.unit}", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-                        }
-
-                        if (metric == ActivityMetricType.STEPS) {
-                            Text(
-                                "Meta: %,d".format(targetSteps),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        } else if (metric == ActivityMetricType.HEART_POINTS) {
-                            Text(
-                                "Meta OMS: 150 pts/sem",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TealPrimary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                // Gráfico com períodos (7D, 15D, 30D)
-                val (chartData, chartUnit, targetVal, chartColor) = when (metric) {
-                    ActivityMetricType.STEPS -> Quadruple(
-                        monthlyTrend.map { it.steps.toDouble() },
-                        "passos",
-                        targetSteps.toDouble(),
-                        MaterialTheme.colorScheme.primary
-                    )
-                    ActivityMetricType.HEART_POINTS -> Quadruple(
-                        monthlyTrend.map { it.activeMinutes.toDouble() },
-                        "pts",
-                        22.0, // Meta diária proporcional para 150/sem
-                        TealPrimary
-                    )
-                    ActivityMetricType.CALORIES -> Quadruple(
-                        monthlyTrend.map { it.caloriesBurned.toDouble() },
-                        "kcal",
-                        null,
-                        Warning
-                    )
-                    ActivityMetricType.DISTANCE -> Quadruple(
-                        monthlyTrend.map { (it.distanceMeters / 1000.0) },
-                        "km",
-                        null,
-                        Info
-                    )
-                    ActivityMetricType.ACTIVE_MINUTES -> Quadruple(
-                        monthlyTrend.map { it.activeMinutes.toDouble() },
-                        "min",
-                        null,
-                        Success
-                    )
-                }
-
-                SimpleTrendChart(
-                    data = chartData,
-                    label = "Histórico (${chartUnit})",
-                    unit = chartUnit,
-                    targetValue = targetVal,
-                    color = chartColor,
-                    showPeriodSelector = true
+            // Gráfico com períodos (7D, 15D, 30D)
+            val (chartData, chartUnit, targetVal, chartColor) = when (metric) {
+                ActivityMetricType.STEPS -> Quadruple(
+                    monthlyTrend.map { it.steps.toDouble() },
+                    "passos",
+                    targetSteps.toDouble(),
+                    MaterialTheme.colorScheme.primary
+                )
+                ActivityMetricType.HEART_POINTS -> Quadruple(
+                    monthlyTrend.map { it.activeMinutes.toDouble() },
+                    "pts",
+                    22.0, // Meta diária proporcional para 150/sem
+                    TealPrimary
+                )
+                ActivityMetricType.CALORIES -> Quadruple(
+                    monthlyTrend.map { it.caloriesBurned.toDouble() },
+                    "kcal",
+                    null,
+                    Warning
+                )
+                ActivityMetricType.DISTANCE -> Quadruple(
+                    monthlyTrend.map { (it.distanceMeters / 1000.0) },
+                    "km",
+                    null,
+                    Info
+                )
+                ActivityMetricType.ACTIVE_MINUTES -> Quadruple(
+                    monthlyTrend.map { it.activeMinutes.toDouble() },
+                    "min",
+                    null,
+                    Success
                 )
             }
+
+            SimpleTrendChart(
+                data = chartData,
+                label = "Histórico (${chartUnit})",
+                unit = chartUnit,
+                targetValue = targetVal,
+                color = chartColor,
+                showPeriodSelector = true
+            )
         }
+
     }
 }
 
@@ -671,269 +662,259 @@ fun WeeklyStepsModal(
         )
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    BragaContentSheet(
+        onDismissRequest = onDismiss
     ) {
-        Card(
+
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .wrapContentHeight(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                .fillMaxWidth()
+                .verticalScroll(scrollState)
+                .padding(20.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(scrollState)
-                    .padding(20.dp)
+            // Top Bar
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Top Bar
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.DirectionsWalk,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            "Evolução Semanal",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        val firstDay = weeklyHistory.firstOrNull()?.dateFormatted ?: ""
+                        val lastDay = weeklyHistory.lastOrNull()?.dateFormatted ?: ""
+                        Text(
+                            "Segunda ($firstDay) a Domingo ($lastDay)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), CircleShape)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Fechar", modifier = Modifier.size(20.dp))
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Resumo Semanal Card
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.DirectionsWalk,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                "Evolução Semanal",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            val firstDay = weeklyHistory.firstOrNull()?.dateFormatted ?: ""
-                            val lastDay = weeklyHistory.lastOrNull()?.dateFormatted ?: ""
-                            Text(
-                                "Segunda ($firstDay) a Domingo ($lastDay)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    Column {
+                        Text("Média da Semana", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "%,d".format(avgSteps),
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text("passos / dia", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
 
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Fechar", modifier = Modifier.size(20.dp))
+                    Column(horizontalAlignment = Alignment.End) {
+                        val totalSteps = weeklyHistory.filter { !it.isFuture }.sumOf { it.steps }
+                        Text("Total da Semana", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "%,d".format(totalSteps),
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text("Meta diária: %,d".format(targetSteps), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     }
                 }
+            }
 
-                Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
 
-                // Resumo Semanal Card
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+            // Gráfico de 7 Barras da Semana (Seg a Dom)
+            Text(
+                "Toque em um dia para ver detalhes e variação:",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+
+            val maxSteps = maxOf(targetSteps, weeklyHistory.maxOfOrNull { it.steps } ?: targetSteps)
+
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Row(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(160.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Bottom
                     ) {
-                        Column {
-                            Text("Média da Semana", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(
-                                "%,d".format(avgSteps),
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text("passos / dia", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        weeklyHistory.forEachIndexed { index, day ->
+                            val isSelected = selectedIndex == index
+                            val barFraction = if (maxSteps > 0) (day.steps.toFloat() / maxSteps).coerceIn(0.04f, 1f) else 0.04f
+                            val barColor = when {
+                                isSelected -> MaterialTheme.colorScheme.primary
+                                day.isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                                day.isGoalMet -> Color(0xFF10B981)
+                                day.steps > 0 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                else -> Color.LightGray.copy(alpha = 0.3f)
+                            }
 
-                        Column(horizontalAlignment = Alignment.End) {
-                            val totalSteps = weeklyHistory.filter { !it.isFuture }.sumOf { it.steps }
-                            Text("Total da Semana", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(
-                                "%,d".format(totalSteps),
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text("Meta diária: %,d".format(targetSteps), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(20.dp))
-
-                // Gráfico de 7 Barras da Semana (Seg a Dom)
-                Text(
-                    "Toque em um dia para ver detalhes e variação:",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(12.dp))
-
-                val maxSteps = maxOf(targetSteps, weeklyHistory.maxOfOrNull { it.steps } ?: targetSteps)
-
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Bottom
-                        ) {
-                            weeklyHistory.forEachIndexed { index, day ->
-                                val isSelected = selectedIndex == index
-                                val barFraction = if (maxSteps > 0) (day.steps.toFloat() / maxSteps).coerceIn(0.04f, 1f) else 0.04f
-                                val barColor = when {
-                                    isSelected -> MaterialTheme.colorScheme.primary
-                                    day.isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
-                                    day.isGoalMet -> Color(0xFF10B981)
-                                    day.steps > 0 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                    else -> Color.LightGray.copy(alpha = 0.3f)
-                                }
-
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Bottom,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable { selectedIndex = index }
-                                        .padding(horizontal = 2.dp)
-                                ) {
-                                    if (day.steps > 0) {
-                                        Text(
-                                            text = if (day.steps >= 1000) "%.1fk".format(day.steps / 1000f) else "${day.steps}",
-                                            fontSize = 11.sp,
-                                            fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray,
-                                            maxLines = 1
-                                        )
-                                        Spacer(Modifier.height(2.dp))
-                                    }
-
-                                    val maxBarHeight = 68.dp
-                                    val barHeight = (maxBarHeight * barFraction).coerceAtLeast(6.dp)
-
-                                    Box(
-                                        modifier = Modifier
-                                            .width(if (isSelected) 18.dp else 14.dp)
-                                            .height(barHeight)
-                                            .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                                            .background(barColor)
-                                            .then(
-                                                if (isSelected) Modifier.border(1.5.dp, MaterialTheme.colorScheme.onSurface, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                                                else Modifier
-                                            )
-                                    )
-                                    Spacer(Modifier.height(6.dp))
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Bottom,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { selectedIndex = index }
+                                    .padding(horizontal = 2.dp)
+                            ) {
+                                if (day.steps > 0) {
                                     Text(
-                                        text = day.dayLabel,
-                                        fontSize = 12.sp,
-                                        fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected || day.isToday) MaterialTheme.colorScheme.primary else Color.Gray,
+                                        text = if (day.steps >= 1000) "%.1fk".format(day.steps / 1000f) else "${day.steps}",
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray,
                                         maxLines = 1
                                     )
                                     Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        text = day.dateFormatted,
-                                        fontSize = 10.sp,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
                                 }
+
+                                val maxBarHeight = 68.dp
+                                val barHeight = (maxBarHeight * barFraction).coerceAtLeast(6.dp)
+
+                                Box(
+                                    modifier = Modifier
+                                        .width(if (isSelected) 18.dp else 14.dp)
+                                        .height(barHeight)
+                                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                        .background(barColor)
+                                        .then(
+                                            if (isSelected) Modifier.border(1.5.dp, MaterialTheme.colorScheme.onSurface, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                            else Modifier
+                                        )
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = day.dayLabel,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected || day.isToday) MaterialTheme.colorScheme.primary else Color.Gray,
+                                    maxLines = 1
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = day.dateFormatted,
+                                    fontSize = 10.sp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
                         }
                     }
                 }
+            }
 
-                Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-                // Detalhes Minimalistas do Dia Selecionado
-                selectedIndex?.let { idx ->
-                    if (idx in weeklyHistory.indices) {
-                        val day = weeklyHistory[idx]
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "${day.fullDayName} (${day.dateFormatted})",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "%,d passos".format(day.steps),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-
-                                val pctOfGoal = if (targetSteps > 0) ((day.steps.toFloat() / targetSteps) * 100).toInt() else 0
-                                val targetFormatted = "%,d".format(targetSteps)
+            // Detalhes Minimalistas do Dia Selecionado
+            selectedIndex?.let { idx ->
+                if (idx in weeklyHistory.indices) {
+                    val day = weeklyHistory[idx]
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    text = if (day.isFuture) "Dia ainda não iniciado" else "$pctOfGoal% da meta diária de $targetFormatted passos",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (day.isGoalMet) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = "${day.fullDayName} (${day.dateFormatted})",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
                                 )
+                                Text(
+                                    text = "%,d passos".format(day.steps),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
 
-                                // Variação em relação ao dia anterior
-                                if (!day.isFuture) {
-                                    day.diffFromPreviousDay?.let { diff ->
-                                        val isPositive = diff >= 0
-                                        val diffFormatted = "%,d".format(diff)
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                if (isPositive) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
-                                                contentDescription = null,
-                                                tint = if (isPositive) Color(0xFF10B981) else Color(0xFFEF4444),
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(Modifier.width(4.dp))
-                                            Text(
-                                                text = if (isPositive) "+$diffFormatted passos em relação ao dia anterior" else "$diffFormatted passos em relação ao dia anterior",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = FontWeight.Medium,
-                                                color = if (isPositive) Color(0xFF10B981) else Color(0xFFEF4444)
-                                            )
-                                        }
-                                    } ?: run {
+                            val pctOfGoal = if (targetSteps > 0) ((day.steps.toFloat() / targetSteps) * 100).toInt() else 0
+                            val targetFormatted = "%,d".format(targetSteps)
+                            Text(
+                                text = if (day.isFuture) "Dia ainda não iniciado" else "$pctOfGoal% da meta diária de $targetFormatted passos",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (day.isGoalMet) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            // Variação em relação ao dia anterior
+                            if (!day.isFuture) {
+                                day.diffFromPreviousDay?.let { diff ->
+                                    val isPositive = diff >= 0
+                                    val diffFormatted = "%,d".format(diff)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            if (isPositive) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                                            contentDescription = null,
+                                            tint = if (isPositive) Color(0xFF10B981) else Color(0xFFEF4444),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(Modifier.width(4.dp))
                                         Text(
-                                            text = "Primeiro dia da semana (Segunda-feira)",
+                                            text = if (isPositive) "+$diffFormatted passos em relação ao dia anterior" else "$diffFormatted passos em relação ao dia anterior",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            fontWeight = FontWeight.Medium,
+                                            color = if (isPositive) Color(0xFF10B981) else Color(0xFFEF4444)
                                         )
                                     }
+                                } ?: run {
+                                    Text(
+                                        text = "Primeiro dia da semana (Segunda-feira)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         }
@@ -941,6 +922,7 @@ fun WeeklyStepsModal(
                 }
             }
         }
+
     }
 }
 
@@ -1144,275 +1126,266 @@ fun WeeklyCardioModal(
         )
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    BragaContentSheet(
+        onDismissRequest = onDismiss
     ) {
-        Card(
+
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .wrapContentHeight(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                .fillMaxWidth()
+                .verticalScroll(scrollState)
+                .padding(20.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(scrollState)
-                    .padding(20.dp)
+            // Top Bar
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Top Bar
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = TealPrimary.copy(alpha = 0.15f),
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Favorite,
+                                contentDescription = null,
+                                tint = TealPrimary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            "Evolução de Cardio",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        val firstDay = weeklyHistory.firstOrNull()?.dateFormatted ?: ""
+                        val lastDay = weeklyHistory.lastOrNull()?.dateFormatted ?: ""
+                        Text(
+                            "Segunda ($firstDay) a Domingo ($lastDay)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), CircleShape)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Fechar", modifier = Modifier.size(20.dp))
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Resumo Semanal Card
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = CircleShape,
-                            color = TealPrimary.copy(alpha = 0.15f),
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Default.Favorite,
-                                    contentDescription = null,
-                                    tint = TealPrimary,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                "Evolução de Cardio",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            val firstDay = weeklyHistory.firstOrNull()?.dateFormatted ?: ""
-                            val lastDay = weeklyHistory.lastOrNull()?.dateFormatted ?: ""
-                            Text(
-                                "Segunda ($firstDay) a Domingo ($lastDay)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    Column {
+                        Text("Total da Semana", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "$weeklyPoints",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = TealPrimary
+                        )
+                        Text("pontos acumulados", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
 
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Fechar", modifier = Modifier.size(20.dp))
+                    Column(horizontalAlignment = Alignment.End) {
+                        val percent = ((weeklyPoints.toFloat() / targetWeekly) * 100).toInt()
+                        Text(
+                            "$percent% da meta OMS",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (weeklyPoints >= targetWeekly) Color(0xFF10B981) else TealPrimary
+                        )
+                        Text("Meta: 150 pts (~22 pts/dia)", style = MaterialTheme.typography.labelSmall, color = TealPrimary)
                     }
                 }
+            }
 
-                Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
 
-                // Resumo Semanal Card
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+            // Gráfico de 7 Barras da Semana (Seg a Dom)
+            Text(
+                "Toque em um dia para ver detalhes e variação:",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+
+            val maxDayPoints = maxOf(30, weeklyHistory.maxOfOrNull { it.points } ?: 30)
+
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Row(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(160.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Bottom
                     ) {
-                        Column {
-                            Text("Total da Semana", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(
-                                "$weeklyPoints",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = TealPrimary
-                            )
-                            Text("pontos acumulados", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        weeklyHistory.forEachIndexed { index, day ->
+                            val isSelected = selectedIndex == index
+                            val barFraction = (day.points.toFloat() / maxDayPoints).coerceIn(0.04f, 1f)
+                            val barColor = when {
+                                isSelected -> TealPrimary
+                                day.isToday -> TealPrimary.copy(alpha = 0.85f)
+                                day.isGoalMet -> Color(0xFF10B981)
+                                day.points > 0 -> TealPrimary.copy(alpha = 0.5f)
+                                else -> Color.LightGray.copy(alpha = 0.3f)
+                            }
 
-                        Column(horizontalAlignment = Alignment.End) {
-                            val percent = ((weeklyPoints.toFloat() / targetWeekly) * 100).toInt()
-                            Text(
-                                "$percent% da meta OMS",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = if (weeklyPoints >= targetWeekly) Color(0xFF10B981) else TealPrimary
-                            )
-                            Text("Meta: 150 pts (~22 pts/dia)", style = MaterialTheme.typography.labelSmall, color = TealPrimary)
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(20.dp))
-
-                // Gráfico de 7 Barras da Semana (Seg a Dom)
-                Text(
-                    "Toque em um dia para ver detalhes e variação:",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(12.dp))
-
-                val maxDayPoints = maxOf(30, weeklyHistory.maxOfOrNull { it.points } ?: 30)
-
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Bottom
-                        ) {
-                            weeklyHistory.forEachIndexed { index, day ->
-                                val isSelected = selectedIndex == index
-                                val barFraction = (day.points.toFloat() / maxDayPoints).coerceIn(0.04f, 1f)
-                                val barColor = when {
-                                    isSelected -> TealPrimary
-                                    day.isToday -> TealPrimary.copy(alpha = 0.85f)
-                                    day.isGoalMet -> Color(0xFF10B981)
-                                    day.points > 0 -> TealPrimary.copy(alpha = 0.5f)
-                                    else -> Color.LightGray.copy(alpha = 0.3f)
-                                }
-
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Bottom,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable { selectedIndex = index }
-                                        .padding(horizontal = 2.dp)
-                                ) {
-                                    if (day.points > 0) {
-                                        Text(
-                                            text = "${day.points}",
-                                            fontSize = 11.sp,
-                                            fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) TealPrimary else Color.Gray,
-                                            maxLines = 1
-                                        )
-                                        Spacer(Modifier.height(2.dp))
-                                    }
-
-                                    val maxBarHeight = 68.dp
-                                    val barHeight = (maxBarHeight * barFraction).coerceAtLeast(6.dp)
-
-                                    Box(
-                                        modifier = Modifier
-                                            .width(if (isSelected) 18.dp else 14.dp)
-                                            .height(barHeight)
-                                            .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                                            .background(barColor)
-                                            .then(
-                                                if (isSelected) Modifier.border(1.5.dp, MaterialTheme.colorScheme.onSurface, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                                                else Modifier
-                                            )
-                                    )
-                                    Spacer(Modifier.height(6.dp))
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Bottom,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { selectedIndex = index }
+                                    .padding(horizontal = 2.dp)
+                            ) {
+                                if (day.points > 0) {
                                     Text(
-                                        text = day.dayLabel,
-                                        fontSize = 12.sp,
-                                        fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected || day.isToday) TealPrimary else Color.Gray,
+                                        text = "${day.points}",
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) TealPrimary else Color.Gray,
                                         maxLines = 1
                                     )
                                     Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        text = day.dateFormatted,
-                                        fontSize = 10.sp,
-                                        color = if (isSelected) TealPrimary else Color.Gray,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
                                 }
+
+                                val maxBarHeight = 68.dp
+                                val barHeight = (maxBarHeight * barFraction).coerceAtLeast(6.dp)
+
+                                Box(
+                                    modifier = Modifier
+                                        .width(if (isSelected) 18.dp else 14.dp)
+                                        .height(barHeight)
+                                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                        .background(barColor)
+                                        .then(
+                                            if (isSelected) Modifier.border(1.5.dp, MaterialTheme.colorScheme.onSurface, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                            else Modifier
+                                        )
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = day.dayLabel,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected || day.isToday) TealPrimary else Color.Gray,
+                                    maxLines = 1
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = day.dateFormatted,
+                                    fontSize = 10.sp,
+                                    color = if (isSelected) TealPrimary else Color.Gray,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
                         }
                     }
                 }
+            }
 
-                Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-                // Detalhes Minimalistas do Dia Selecionado
-                selectedIndex?.let { idx ->
-                    if (idx in weeklyHistory.indices) {
-                        val day = weeklyHistory[idx]
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.25f)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "${day.fullDayName} (${day.dateFormatted})",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "${day.points} pts",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = TealPrimary
-                                    )
-                                }
-
-                                val dailyTarget = 22
-                                val pctOfDaily = ((day.points.toFloat() / dailyTarget) * 100).toInt()
+            // Detalhes Minimalistas do Dia Selecionado
+            selectedIndex?.let { idx ->
+                if (idx in weeklyHistory.indices) {
+                    val day = weeklyHistory[idx]
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.25f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    text = if (day.isFuture) "Dia ainda não iniciado" else "$pctOfDaily% da meta diária da OMS (22 pts/dia)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (day.isGoalMet) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = "${day.fullDayName} (${day.dateFormatted})",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
                                 )
+                                Text(
+                                    text = "${day.points} pts",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = TealPrimary
+                                )
+                            }
 
-                                if (!day.isFuture && idx > 0) {
-                                    val previousDay = weeklyHistory[idx - 1]
-                                    if (!previousDay.isFuture) {
-                                        val diff = day.points - previousDay.points
-                                        val isPositive = diff >= 0
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                if (isPositive) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
-                                                contentDescription = null,
-                                                tint = if (isPositive) Color(0xFF10B981) else Color(0xFFEF4444),
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(Modifier.width(4.dp))
-                                            Text(
-                                                text = if (isPositive) "+$diff pts em relação ao dia anterior" else "$diff pts em relação ao dia anterior",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = FontWeight.Medium,
-                                                color = if (isPositive) Color(0xFF10B981) else Color(0xFFEF4444)
-                                            )
-                                        }
+                            val dailyTarget = 22
+                            val pctOfDaily = ((day.points.toFloat() / dailyTarget) * 100).toInt()
+                            Text(
+                                text = if (day.isFuture) "Dia ainda não iniciado" else "$pctOfDaily% da meta diária da OMS (22 pts/dia)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (day.isGoalMet) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            if (!day.isFuture && idx > 0) {
+                                val previousDay = weeklyHistory[idx - 1]
+                                if (!previousDay.isFuture) {
+                                    val diff = day.points - previousDay.points
+                                    val isPositive = diff >= 0
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            if (isPositive) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                                            contentDescription = null,
+                                            tint = if (isPositive) Color(0xFF10B981) else Color(0xFFEF4444),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            text = if (isPositive) "+$diff pts em relação ao dia anterior" else "$diff pts em relação ao dia anterior",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Medium,
+                                            color = if (isPositive) Color(0xFF10B981) else Color(0xFFEF4444)
+                                        )
                                     }
-                                } else if (!day.isFuture && idx == 0) {
-                                    Text(
-                                        text = "Primeiro dia da semana (Segunda-feira)",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
                                 }
+                            } else if (!day.isFuture && idx == 0) {
+                                Text(
+                                    text = "Primeiro dia da semana (Segunda-feira)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
                 }
             }
         }
+
     }
 }

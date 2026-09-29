@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.vitals
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -394,7 +396,7 @@ fun VitalSignsScreen(
     // Dialogs
     if (sosRecommendation != null) {
         val rec = sosRecommendation!!
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { sosRecommendation = null },
             title = { 
                 Text(
@@ -435,7 +437,7 @@ fun VitalSignsScreen(
     }
 
     if (milestoneMessage != null) {
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { milestoneMessage = null },
             title = { Text("Conquista", color = MaterialTheme.colorScheme.primary) },
             text = { Text(milestoneMessage!!) },
@@ -448,7 +450,7 @@ fun VitalSignsScreen(
     // AUD-AN09: segunda camada de aviso — a notificação do sistema pode ser
     // perdida; o alerta in-app garante que o idoso veja a emergência.
     if (sosMessage != null) {
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { sosMessage = null },
             title = { Text("Atenção imediata", color = MaterialTheme.colorScheme.error) },
             text = { Text(sosMessage!!) },
@@ -464,7 +466,7 @@ fun VitalSignsScreen(
         val sysNorm = BloodPressureParser.normalizePressure(sysRaw)
         val diaNorm = BloodPressureParser.normalizePressure(diaRaw)
 
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { showConfirmation = false },
             title = { Text("Confirmar ${if (currentType == "PRESSURE") "Pressão Arterial" else "Glicemia"}") },
             text = {

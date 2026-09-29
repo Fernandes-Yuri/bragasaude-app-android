@@ -1,5 +1,8 @@
 package br.com.bragasaude.ui.nutrition
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
+import br.com.bragasaude.ui.components.BragaFormSheet
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -514,7 +517,7 @@ fun NutritionScreen(
 
     // Diálogo de Seleção e Busca Dinâmica de Alimentos
     if (showFoodSelectorDialog) {
-        AlertDialog(
+        BragaFormSheet(
             onDismissRequest = { 
                 showFoodSelectorDialog = false
                 selectedFoodForPortion = null
@@ -607,7 +610,7 @@ fun NutritionScreen(
 
     // Diálogo de Cadastrar Alimento Customizado
     if (showCustomFoodDialog) {
-        AlertDialog(
+        BragaFormSheet(
             onDismissRequest = { showCustomFoodDialog = false },
             title = { Text("Cadastrar Alimento", fontWeight = FontWeight.Bold) },
             text = {
@@ -1124,7 +1127,7 @@ fun HydrationProgressCard(
 
     // Diálogo informativo sobre o cálculo de hidratação
     if (showInfoDialog) {
-        AlertDialog(
+        BragaAlertDialog(
             onDismissRequest = { showInfoDialog = false },
             title = {
                 Text(
@@ -1148,9 +1151,7 @@ fun HydrationProgressCard(
                     Text("Entendido")
                 }
             },
-            shape = RoundedCornerShape(20.dp),
-            containerColor = BragaCardSurface
-        )
+            )
     }
 }
 
