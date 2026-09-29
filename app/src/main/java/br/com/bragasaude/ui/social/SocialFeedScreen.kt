@@ -260,6 +260,7 @@ fun SocialFeedScreen(
                                 ?: if (post.hasUserReacted) "apoio" else null
                             SocialPostCard(
                                 post = post,
+                                fallbackPhotoUrl = viewModel.currentUserPhotoUrl.takeIf { post.userId == viewModel.currentUserId },
                                 reactions = reactions,
                                 selectedReaction = selectedReaction,
                                 onReact = { reactionType ->
@@ -399,6 +400,7 @@ private fun CommunityWelcomeBanner(
 @Composable
 private fun SocialPostCard(
     post: SocialPostEntity,
+    fallbackPhotoUrl: String?,
     reactions: List<PostReactionEntity>,
     selectedReaction: String?,
     onReact: (String) -> Unit
@@ -439,7 +441,11 @@ private fun SocialPostCard(
                             .background(BragaMint),
                         contentAlignment = Alignment.Center
                     ) {
-                        var photoFailed by remember(post.userAvatarUrl) { mutableStateOf(false) }
+                        val photoCandidates = remember(post.userAvatarUrl, fallbackPhotoUrl) {
+                            listOfNotNull(post.userAvatarUrl, fallbackPhotoUrl).filter { it.isNotBlank() }.distinct()
+                        }
+                        var photoIndex by remember(photoCandidates) { mutableIntStateOf(0) }
+                        val photoUrl = photoCandidates.getOrNull(photoIndex)
                         val avatarIcon = when (post.userAvatarIdentifier) {
                             "Person" -> Icons.Default.Person
                             "Favorite" -> Icons.Default.Favorite
@@ -449,12 +455,12 @@ private fun SocialPostCard(
                         }
                         when {
                             avatarIcon != null -> Icon(avatarIcon, contentDescription = null, tint = BragaEmeraldDark)
-                            !post.userAvatarUrl.isNullOrBlank() && !photoFailed -> AsyncImage(
-                                model = post.userAvatarUrl,
+                            photoUrl != null -> AsyncImage(
+                                model = photoUrl,
                                 contentDescription = "Foto de perfil",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop,
-                                onError = { photoFailed = true }
+                                onError = { photoIndex++ }
                             )
                             else -> Text(
                                 text = post.userName?.trim()?.takeIf { it.isNotEmpty() }?.take(1)?.uppercase(Locale.ROOT) ?: "C",

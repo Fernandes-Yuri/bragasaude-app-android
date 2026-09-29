@@ -46,7 +46,10 @@ class SocialFeedViewModel @Inject constructor(
     val currentUserId: String
         get() = auth.currentUser?.uid ?: guestId
 
-    val posts: StateFlow<List<SocialPostEntity>> = socialFeedRepository.getGlobalFeed()
+    val currentUserPhotoUrl: String?
+        get() = auth.currentUser?.photoUrl?.toString()
+
+    val posts: StateFlow<List<SocialPostEntity>> = socialFeedRepository.getGlobalFeed(currentUserId, currentUserPhotoUrl)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(30000), emptyList())
 
     private val _isRefreshing = MutableStateFlow(false)
