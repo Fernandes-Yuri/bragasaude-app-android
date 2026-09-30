@@ -62,7 +62,11 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
         }
 
         // Pré-carrega o modelo neural Piper On-Device em background assim que o app é aberto
-        piperModelDownloader.startDownloadInBackground()
+        try {
+            piperModelDownloader.startDownloadInBackground()
+        } catch (t: Throwable) {
+            android.util.Log.w("BragaApp", "Aviso ao iniciar pré-download do modelo Piper: ${t.message}")
+        }
     }
 
     override val workManagerConfiguration: Configuration

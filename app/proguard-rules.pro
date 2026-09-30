@@ -117,4 +117,19 @@
 # ------------------------------------------------------------------------------
 -dontwarn javax.naming.**
 
+# ------------------------------------------------------------------------------
+# 12. SHERPA-ONNX & ON-DEVICE NEURAL TTS (JNI C++ BINDINGS)
+# ------------------------------------------------------------------------------
+-keep class com.k2fsa.sherpa.onnx.** { *; }
+-keepclassmembers class com.k2fsa.sherpa.onnx.** { *; }
+-dontwarn com.k2fsa.sherpa.onnx.**
+
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+-keep class br.com.bragasaude.data.local.voice.** { *; }
+-keepclassmembers class br.com.bragasaude.data.local.voice.** { *; }
+
+
 
