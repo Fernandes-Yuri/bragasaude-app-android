@@ -7,6 +7,7 @@ import android.net.Uri
 import android.util.Log
 import br.com.bragasaude.R
 import br.com.bragasaude.data.local.voice.AndroidSystemTtsFallback
+import br.com.bragasaude.data.local.voice.PiperModelDownloader
 import br.com.bragasaude.data.local.voice.PiperOnDeviceEngine
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -29,6 +30,7 @@ import javax.inject.Singleton
 class NeuralAudioPlayer @Inject constructor(
     @ApplicationContext private val context: Context,
     private val piperOnDeviceEngine: PiperOnDeviceEngine,
+    private val piperModelDownloader: PiperModelDownloader,
     private val androidSystemTtsFallback: AndroidSystemTtsFallback
 ) {
     companion object {
@@ -37,6 +39,11 @@ class NeuralAudioPlayer @Inject constructor(
 
     private var mediaPlayer: MediaPlayer? = null
     private val playbackGeneration = AtomicLong()
+
+    init {
+        // Dispara o download e inicialização do modelo neural em segundo plano
+        piperModelDownloader.startDownloadInBackground()
+    }
 
     /**
      * Tenta reproduzir o áudio neural correspondente ao [text].
