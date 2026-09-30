@@ -7,6 +7,7 @@ import android.net.Uri
 import android.util.Log
 import br.com.bragasaude.R
 import br.com.bragasaude.data.local.voice.AndroidSystemTtsFallback
+import br.com.bragasaude.data.local.voice.PiperModelDownloader
 import br.com.bragasaude.data.local.voice.PiperOnDeviceEngine
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
