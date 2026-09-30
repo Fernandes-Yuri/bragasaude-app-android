@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -76,13 +77,23 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
+        val splashStartedAt = SystemClock.uptimeMillis()
         super.onCreate(savedInstanceState)
+        // A duração do ECG no XML não controla a permanência do splash.
+        // Cada abertura recebe seu próprio prazo, mesmo com o processo já carregado.
+        splashScreen.setKeepOnScreenCondition {
+            SystemClock.uptimeMillis() - splashStartedAt < SPLASH_MIN_DURATION_MS
+        }
         enableEdgeToEdge()
         setContent {
             BragasaudeTheme {
                 AppContent(activity = this)
             }
         }
+    }
+
+    private companion object {
+        const val SPLASH_MIN_DURATION_MS = 650L
     }
 }
