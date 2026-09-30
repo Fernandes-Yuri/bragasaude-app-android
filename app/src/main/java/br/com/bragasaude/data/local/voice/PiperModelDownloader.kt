@@ -1,222 +1,125 @@
 package br.com.bragasaude.data.local.voice
 
-import android.content.Context
-import android.util.Log
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.zip.ZipInputStream
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Gerenciador de download em segundo plano do modelo neural Piper On-Device.
- *
- * Utiliza conexão HTTP isolada via HttpURLConnection (livre de interceptores
- * de autenticação e independente de certificados de API interna) para baixar
- * e extrair o modelo neural hospedado como asset de release.
- */
 @Singleton
-class PiperModelDownloader @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val piperEngine: PiperOnDeviceEngine
-) {
-    companion object {
-        private const val TAG = "PiperModelDownloader"
-        const val MODEL_ZIP_URL =
-            "https://github.com/Fernandes-Yuri/bragasaude-app-android/releases/download/v1.3.0-build14/piper-pt_BR-faber.zip"
-        private const val CONNECT_TIMEOUT_MS = 20_000
-        private const val READ_TIMEOUT_MS = 60_000
-    }
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val isDownloading = AtomicBoolean(false)
-
-    private val _downloadStatus = MutableStateFlow<DownloadState>(DownloadState.Idle)
-    val downloadStatus: StateFlow<DownloadState> = _downloadStatus.asStateFlow()
-
-    sealed class DownloadState {
-        object Idle : DownloadState()
-        object Downloading : DownloadState()
-        object Ready : DownloadState()
-        data class Error(val message: String) : DownloadState()
-    }
-
-    init {
-        try {
-            if (piperEngine.hasModelFiles()) {
-                _downloadStatus.value = DownloadState.Ready
-            }
-        } catch (t: Throwable) {
-            Log.w(TAG, "Erro ao verificar arquivos de modelo no init: ${t.message}")
-        }
-    }
-
-    /**
-     * Inicia o download e extração assíncrona se o modelo ainda não estiver presente.
-     * Retorna imediatamente sem bloquear a UI nem a síntese vocal de fallback.
-     */
-    fun startDownloadInBackground(onComplete: ((Boolean) -> Unit)? = null) {
-        try {
-            if (piperEngine.hasModelFiles()) {
-                _downloadStatus.value = DownloadState.Ready
-                scope.launch {
-                    val initOk = piperEngine.initialize()
-                    onComplete?.invoke(initOk)
+class PiperModelDownloader @Inject constructor() {
+    /** Não altera a instalação ativa. Progresso separado de download e extração. */
+    suspend fun prepare(option: VoiceOption, staging: File, progress: (String, Float?) -> Unit) =
+        withContext(Dispatchers.IO) {
+            val archive = File(staging, "download.tar.bz2")
+            try {
+                download(option, archive) { progress("Baixando voz", it) }
+                progress("Verificando integridade", null)
+                verifyChecksum(archive, requireNotNull(option.sha256))
+                extract(archive, staging, requireNotNull(option.archiveName)) {
+                    progress("Extraindo voz", it)
                 }
-                return
+                check(VoiceModelStore.valid(staging)) { "Modelo incompleto" }
+            } finally { archive.delete() }
+        }
+
+    private suspend fun download(option: VoiceOption, destination: File, progress: (Float) -> Unit) {
+        var url = URL(requireNotNull(option.downloadUrl))
+        repeat(6) {
+            require(url.protocol == "https")
+            val connection = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 20_000
+                readTimeout = 30_000
+                instanceFollowRedirects = false
+                setRequestProperty("Accept-Encoding", "identity")
             }
-
-            if (isDownloading.getAndSet(true)) {
-                Log.d(TAG, "Download do modelo Piper já está em andamento.")
-                return
-            }
-
-            _downloadStatus.value = DownloadState.Downloading
-
-            scope.launch {
-                val success = downloadAndExtractModel()
-                isDownloading.set(false)
-                if (success) {
-                    _downloadStatus.value = DownloadState.Ready
-                    Log.i(TAG, "Modelo Piper pronto. Inicializando motor de inferência...")
-                    val initOk = piperEngine.initialize()
-                    Log.i(TAG, "Motor Piper inicializado após download: $initOk")
-                    onComplete?.invoke(initOk)
+            try {
+                if (connection.responseCode in 300..399) {
+                    url = URL(url, requireNotNull(connection.getHeaderField("Location")))
                 } else {
-                    _downloadStatus.value = DownloadState.Error("Falha no download/extração do modelo Piper")
-                    onComplete?.invoke(false)
+                    check(connection.responseCode == 200) { "Download indisponível" }
+                    var bytes = 0L
+                    connection.inputStream.use { input -> destination.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            currentCoroutineContext().ensureActive()
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            bytes += count
+                            check(bytes <= option.downloadBytes) { "Tamanho de download inesperado" }
+                            output.write(buffer, 0, count)
+                            progress(bytes.toFloat() / option.downloadBytes)
+                        }
+                    } }
+                    check(bytes == option.downloadBytes) { "Download incompleto" }
+                    return
                 }
-            }
-        } catch (t: Throwable) {
-            Log.e(TAG, "Falha ao disparar download em segundo plano: ${t.message}", t)
-            isDownloading.set(false)
-            onComplete?.invoke(false)
+            } finally { connection.disconnect() }
         }
+        error("Redirecionamentos excessivos")
     }
 
-    suspend fun downloadAndExtractModel(): Boolean = withContext(Dispatchers.IO) {
-        val targetDir = piperEngine.modelDir
-        val tempZipFile = File(context.cacheDir, "piper_model_temp.zip")
-        val stagingDir = File(context.cacheDir, "piper_staging_${System.currentTimeMillis()}")
-
-        try {
-            Log.i(TAG, "Iniciando download do modelo Piper: $MODEL_ZIP_URL")
-            val downloaded = downloadFileWithRedirects(MODEL_ZIP_URL, tempZipFile)
-            if (!downloaded || !tempZipFile.exists() || tempZipFile.length() < 1024) {
-                Log.w(TAG, "Falha no download do arquivo ZIP do modelo Piper.")
-                return@withContext false
+    internal fun verifyChecksum(archive: File, expected: String) {
+        val digest = MessageDigest.getInstance("SHA-256")
+        archive.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
             }
-
-            Log.i(TAG, "Download do ZIP concluído (${tempZipFile.length()} bytes). Extraindo para staging...")
-
-            if (stagingDir.exists()) stagingDir.deleteRecursively()
-            stagingDir.mkdirs()
-
-            ZipInputStream(tempZipFile.inputStream().buffered()).use { zis ->
-                var entry = zis.nextEntry
-                while (entry != null) {
-                    val entryFile = File(stagingDir, entry.name)
-
-                    // Proteção contra Zip Slip
-                    val canonicalPath = entryFile.canonicalPath
-                    if (!canonicalPath.startsWith(stagingDir.canonicalPath)) {
-                        throw SecurityException("Entrada ZIP maliciosa detectada: ${entry.name}")
-                    }
-
-                    if (entry.isDirectory) {
-                        entryFile.mkdirs()
-                    } else {
-                        entryFile.parentFile?.mkdirs()
-                        FileOutputStream(entryFile).use { fos ->
-                            zis.copyTo(fos, bufferSize = 64 * 1024)
-                        }
-                    }
-                    zis.closeEntry()
-                    entry = zis.nextEntry
-                }
-            }
-
-            // Move da pasta staging para o diretório final
-            if (!targetDir.exists()) {
-                targetDir.mkdirs()
-            }
-            stagingDir.copyRecursively(targetDir, overwrite = true)
-            Log.i(TAG, "Extração do modelo Piper concluída com sucesso.")
-
-            val ok = piperEngine.hasModelFiles()
-            if (!ok) {
-                Log.w(TAG, "Arquivos do modelo incompletos após extração.")
-            }
-            ok
-        } catch (e: Throwable) {
-            Log.e(TAG, "Erro durante download/extração do modelo Piper: ${e.message}", e)
-            false
-        } finally {
-            try {
-                if (tempZipFile.exists()) tempZipFile.delete()
-                if (stagingDir.exists()) stagingDir.deleteRecursively()
-            } catch (_: Exception) {}
         }
+        check(digest.digest().joinToString("") { "%02x".format(it) } == expected) { "Integridade inválida" }
     }
 
-    private fun downloadFileWithRedirects(urlStr: String, destination: File, maxRedirects: Int = 5): Boolean {
-        var currentUrl = urlStr
-        var redirects = 0
-
-        while (redirects < maxRedirects) {
-            var connection: HttpURLConnection? = null
-            try {
-                val url = URL(currentUrl)
-                connection = (url.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = CONNECT_TIMEOUT_MS
-                    readTimeout = READ_TIMEOUT_MS
-                    instanceFollowRedirects = false
-                    setRequestProperty("User-Agent", "BragaSaudeApp/1.3")
-                    setRequestProperty("Accept", "*/*")
-                }
-
-                val status = connection.responseCode
-                if (status in 300..399) {
-                    val newUrl = connection.getHeaderField("Location")
-                    connection.disconnect()
-                    if (newUrl.isNullOrBlank()) return false
-                    currentUrl = newUrl
-                    redirects++
-                    continue
-                }
-
-                if (status == HttpURLConnection.HTTP_OK) {
-                    connection.inputStream.use { input ->
-                        FileOutputStream(destination).use { output ->
-                            input.copyTo(output, bufferSize = 64 * 1024)
-                        }
-                    }
-                    connection.disconnect()
-                    return true
-                }
-
-                Log.w(TAG, "Código HTTP inesperado ao baixar modelo: $status")
-                connection.disconnect()
-                return false
-            } catch (e: Exception) {
-                Log.e(TAG, "Erro de rede no download: ${e.message}")
-                try { connection?.disconnect() } catch (_: Exception) {}
-                return false
+    internal suspend fun extract(archive: File, target: File, prefix: String, progress: (Float) -> Unit) {
+        fun entries() = TarArchiveInputStream(BZip2CompressorInputStream(archive.inputStream().buffered()))
+        var total = 0L
+        var count = 0
+        entries().use { tar ->
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                val entry = tar.nextTarEntry ?: break
+                check(++count <= 10_000 && entry.size >= 0)
+                total += entry.size
+                check(total <= 250_000_000) { "Modelo excede o tamanho permitido" }
             }
         }
-        return false
+        var written = 0L
+        entries().use { tar ->
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                val entry = tar.nextTarEntry ?: break
+                check(entry.name == prefix || entry.name.startsWith("$prefix/"))
+                check(entry.isDirectory || (entry.isFile && !entry.isLink && !entry.isSymbolicLink))
+                val relative = entry.name.removePrefix(prefix).removePrefix("/")
+                if (relative.isEmpty()) continue
+                val file = File(target, relative)
+                check(file.canonicalPath.startsWith(target.canonicalPath + File.separator)) { "Caminho inválido" }
+                if (entry.isDirectory) { file.mkdirs(); continue }
+                file.parentFile?.mkdirs()
+                file.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val size = tar.read(buffer)
+                        if (size < 0) break
+                        output.write(buffer, 0, size)
+                        written += size
+                        progress(if (total > 0) written.toFloat() / total else 1f)
+                    }
+                }
+            }
+        }
+        val models = target.listFiles().orEmpty().filter { it.extension == "onnx" }
+        check(models.size == 1) { "Modelo ambíguo" }
+        if (models.single().name != "model.onnx") check(models.single().renameTo(File(target, "model.onnx")))
     }
 }
-
