@@ -49,7 +49,6 @@ fun VoiceSelectionBottomSheet(
     val selected = VoiceCatalog.find(selectedId) ?: VoiceCatalog.options.first()
     val preparing = state.busy && state.preparingId != null
     val willDownload = selected.isNeural && selected.id != state.activeId
-    val downloadMb = (selected.downloadBytes / 1_000_000).toInt()
 
     DisposableEffect(Unit) { onDispose { previewJob?.cancel() } }
     LaunchedEffect(state.busy, state.activeId, state.hasChosenVoice, state.error, requestedId) {
@@ -134,7 +133,7 @@ fun VoiceSelectionBottomSheet(
                                         Text(option.displayName, style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                                         Text(if (!option.isNeural) "Sem download" else if (state.activeId == option.id)
-                                            "Em uso" else "Baixar ${(option.downloadBytes / 1_000_000).toInt()} MB",
+                                            "Em uso" else "Voz neural",
                                             style = MaterialTheme.typography.bodySmall)
                                     }
                                     IconButton(enabled = !state.busy, onClick = { preview(option) }) {
@@ -146,12 +145,9 @@ fun VoiceSelectionBottomSheet(
                             }
                         }
                     }
-                    if (willDownload) {
-                        Text("Download de $downloadMb MB. Reserve 180 MB livres para preparar a voz.",
-                            style = MaterialTheme.typography.bodySmall)
-                    } else if (selected.id == VoiceCatalog.SYSTEM_ID && state.activeId != selected.id) {
-                        Text("O modelo da voz atual será removido do aparelho.", style = MaterialTheme.typography.bodySmall)
-                    }
+                    Text("Ao trocar de voz, o modelo anterior é removido do aparelho para economizar espaço.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                     previewError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     TextButton(onClick = { showCredits = !showCredits }, contentPadding = PaddingValues(0.dp)) {
