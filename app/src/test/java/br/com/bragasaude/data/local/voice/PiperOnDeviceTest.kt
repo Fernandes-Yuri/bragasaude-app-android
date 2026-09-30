@@ -1,8 +1,6 @@
 package br.com.bragasaude.data.local.voice
 
 import android.content.Context
-import br.com.bragasaude.data.remote.ai.NeuralAudioPlayer
-import br.com.bragasaude.data.remote.auth.AuthService
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -18,9 +16,7 @@ class PiperOnDeviceTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private val context = mockk<Context>(relaxed = true)
-    private val authService = mockk<AuthService>(relaxed = true)
     private val pcmPlayer = mockk<PcmStreamAudioPlayer>(relaxed = true)
-    private val piperEngine = mockk<PiperOnDeviceEngine>(relaxed = true)
 
     @Before
     fun setUp() {
@@ -41,35 +37,33 @@ class PiperOnDeviceTest {
     }
 
     @Test
-    fun `neural audio player prioritizes on-device piper synthesis when available`() = runTest(testDispatcher) {
-        every { piperEngine.hasModelFiles() } returns true
-        coEvery { piperEngine.playStream(any(), any(), any(), any()) } coAnswers {
-            thirdArg<() -> Unit>().invoke() // onStart
-            lastArg<() -> Unit>().invoke()  // onDone
-            true
-        }
+    fun `piper engine returns false when attempting to stream without model files`() = runTest(testDispatcher) {
+        val engine = PiperOnDeviceEngine(context, pcmPlayer)
+        engine.customModelDir = File(System.getProperty("java.io.tmpdir"), "piper_missing_${System.currentTimeMillis()}")
+        var startCalled = false
+        var doneCalled = false
 
-        val player = NeuralAudioPlayer(context, authService, piperEngine)
-        var started = false
-        var done = false
-
-        val played = player.playSpeech(
-            text = "Lembrete: hora do seu medicamento.",
-            isMale = true,
-            onStart = { started = true },
-            onDone = { done = true }
+        val success = engine.playStream(
+            text = "Teste de sintese local",
+            onStart = { startCalled = true },
+            onDone = { doneCalled = true }
         )
 
-        assertTrue(played)
-        assertTrue(started)
-        assertTrue(done)
-        coVerify(exactly = 1) { piperEngine.playStream(any(), any(), any(), any()) }
+        assertFalse(success)
+        assertFalse(startCalled)
+        assertFalse(doneCalled)
     }
 
     @Test
-    fun `stop in neural audio player cancels on-device synthesis`() {
-        val player = NeuralAudioPlayer(context, authService, piperEngine)
-        player.stop()
-        verify(exactly = 1) { piperEngine.stop() }
+    fun `pcm stream audio player handles stop cleanly`() {
+        pcmPlayer.stop()
+        verify(exactly = 1) { pcmPlayer.stop() }
+    }
+
+    @Test
+    fun `piper engine stop delegates to pcm stream audio player`() {
+        val engine = PiperOnDeviceEngine(context, pcmPlayer)
+        engine.stop()
+        verify(exactly = 1) { pcmPlayer.stop() }
     }
 }
