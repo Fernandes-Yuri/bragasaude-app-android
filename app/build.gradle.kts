@@ -31,8 +31,8 @@ android {
         applicationId = "br.com.bragasaude"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "1.2.9"
+        versionCode = 14
+        versionName = "1.3.0"
 
         buildConfigField("String", "BASE_URL", "\"https://api.bragasaude.online\"")
         // AUD-AN33: o feedback ia pra URL hardcoded do Firebase Hosting
@@ -174,6 +174,9 @@ dependencies {
 
     // OCR de imagem On-Device â€” Google ML Kit Text Recognition (D49 / Fase 1)
     implementation(libs.mlkit.text.recognition)
+
+    // Síntese de Voz On-Device com Streaming de Baixa Latência (Piper / Sherpa-ONNX)
+    implementation(files("libs/sherpa-onnx-1.13.8.aar"))
 
     // Movement & GPS
     implementation("com.google.android.gms:play-services-location:21.3.0")
