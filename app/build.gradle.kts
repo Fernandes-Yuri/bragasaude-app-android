@@ -177,6 +177,7 @@ dependencies {
 
     // S�ntese de Voz On-Device com Streaming de Baixa Lat�ncia (Piper / Sherpa-ONNX)
     implementation(files("libs/sherpa-onnx-1.13.8.aar"))
+    implementation("org.apache.commons:commons-compress:1.28.0")
 
     // Movement & GPS
     implementation("com.google.android.gms:play-services-location:21.3.0")

@@ -119,6 +119,8 @@ fun SettingsScreen(
                 )
             }
 
+            item { VoiceSettingsCard(viewModel.voiceProfiles) }
+
             item {
                 Column(
                     modifier = Modifier

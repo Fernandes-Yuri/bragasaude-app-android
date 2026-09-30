@@ -32,6 +32,7 @@ class AndroidSystemTtsFallback @Inject constructor(
 
     private var tts: TextToSpeech? = null
     private val isReady = AtomicBoolean(false)
+    private var pending: kotlinx.coroutines.CancellableContinuation<Boolean>? = null
 
     init {
         try {
@@ -60,15 +61,17 @@ class AndroidSystemTtsFallback @Inject constructor(
         val engine = tts ?: return@withContext false
         if (!isReady.get()) return@withContext false
 
+        stop()
         suspendCancellableCoroutine { continuation ->
+            pending = continuation
             val utteranceId = "fallback_${System.currentTimeMillis()}"
             engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(id: String?) {
-                    if (id == utteranceId) onStart()
+                    if (id == utteranceId && continuation.isActive) onStart()
                 }
 
                 override fun onDone(id: String?) {
-                    if (id == utteranceId) {
+                    if (id == utteranceId && continuation.isActive) {
                         onDone()
                         if (continuation.isActive) continuation.resume(true)
                     }
@@ -76,7 +79,7 @@ class AndroidSystemTtsFallback @Inject constructor(
 
                 @Deprecated("Deprecated in Java")
                 override fun onError(id: String?) {
-                    if (id == utteranceId) {
+                    if (id == utteranceId && continuation.isActive) {
                         onDone()
                         if (continuation.isActive) continuation.resume(false)
                     }
@@ -97,6 +100,9 @@ class AndroidSystemTtsFallback @Inject constructor(
     }
 
     fun stop() {
+        val previous = pending
+        pending = null
+        if (previous?.isActive == true) previous.cancel()
         try {
             tts?.stop()
         } catch (_: Exception) {}

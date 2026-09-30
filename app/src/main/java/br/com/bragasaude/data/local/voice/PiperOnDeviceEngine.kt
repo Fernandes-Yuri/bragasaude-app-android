@@ -3,6 +3,12 @@ package br.com.bragasaude.data.local.voice
 import android.content.Context
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -24,8 +30,7 @@ class PiperOnDeviceEngine @Inject constructor(
 ) {
     companion object {
         private const val TAG = "PiperOnDeviceEngine"
-        private const val MODEL_FOLDER = "piper_voice"
-        private const val DEFAULT_SAMPLE_RATE = 22050
+        private const val MODEL_FOLDER = "voices/current"
 
         init {
             try {
@@ -53,7 +58,8 @@ class PiperOnDeviceEngine @Inject constructor(
 
     private var sherpaTts: Any? = null
     private val isInitialized = AtomicBoolean(false)
-    private val isInitializing = AtomicBoolean(false)
+    private val modelMutex = Mutex()
+    private val generation = AtomicLong()
 
     var customModelDir: File? = null
 
@@ -62,30 +68,28 @@ class PiperOnDeviceEngine @Inject constructor(
      * residem no armazenamento interno do aplicativo.
      */
     val modelDir: File
-        get() = customModelDir ?: File(context.filesDir, MODEL_FOLDER).apply { if (!exists()) mkdirs() }
+        get() = customModelDir ?: File(context.filesDir, MODEL_FOLDER)
 
     /**
      * Verifica se os arquivos essenciais do modelo Piper estão presentes.
      */
     fun hasModelFiles(): Boolean {
-        val modelFile = File(modelDir, "model.onnx")
-        val tokensFile = File(modelDir, "tokens.txt")
-        return modelFile.exists() && modelFile.length() > 100_000 && tokensFile.exists() && tokensFile.length() > 50
+        return VoiceModelStore.valid(modelDir)
     }
 
     /**
      * Inicializa o motor de inferência C++ em segundo plano.
      * Captura erros de carga de biblioteca nativa defensivamente (ex: testes de JVM).
      */
-    suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
-        if (isInitialized.get()) return@withContext true
-        if (isInitializing.getAndSet(true)) return@withContext false
+    suspend fun initialize(): Boolean = withContext(Dispatchers.IO) { modelMutex.withLock { initializeLocked() } }
 
-        try {
+    private fun initializeLocked(): Boolean {
+        if (isInitialized.get()) return true
+
+        return try {
             if (!hasModelFiles()) {
                 Log.i(TAG, "Arquivos de modelo Piper ainda nao extraidos ou baixados.")
-                isInitializing.set(false)
-                return@withContext false
+                return false
             }
 
             val modelPath = File(modelDir, "model.onnx").absolutePath
@@ -122,8 +126,6 @@ class PiperOnDeviceEngine @Inject constructor(
         } catch (t: Throwable) {
             Log.w(TAG, "Falha ao inicializar motor Piper On-Device: ${t.message}")
             false
-        } finally {
-            isInitializing.set(false)
         }
     }
 
@@ -137,19 +139,17 @@ class PiperOnDeviceEngine @Inject constructor(
         speed: Float = 1.0f,
         onStart: () -> Unit = {},
         onDone: () -> Unit = {}
-    ): Boolean = withContext(Dispatchers.Default) {
+    ): Boolean = withContext(Dispatchers.Default) { modelMutex.withLock {
+        val ticket = generation.get()
         if (!isInitialized.get()) {
-            val ok = initialize()
-            if (!ok) return@withContext false
+            val ok = initializeLocked()
+            if (!ok) return@withLock false
         }
 
-        val engine = sherpaTts as? com.k2fsa.sherpa.onnx.OfflineTts ?: return@withContext false
+        val engine = sherpaTts as? com.k2fsa.sherpa.onnx.OfflineTts ?: return@withLock false
 
         try {
-            val prepared = pcmStreamAudioPlayer.prepare(DEFAULT_SAMPLE_RATE)
-            if (!prepared) return@withContext false
 
-            var started = false
 
             // Executa a sintese via sherpa-onnx
             val audio = engine.generate(
@@ -158,21 +158,28 @@ class PiperOnDeviceEngine @Inject constructor(
                 speed = speed
             )
 
+            currentCoroutineContext().ensureActive()
+            if (ticket != generation.get()) throw CancellationException("Fala interrompida")
+            if (!pcmStreamAudioPlayer.prepare(audio.sampleRate)) return@withLock false
+
             if (audio.samples.isEmpty()) {
                 pcmStreamAudioPlayer.stop()
-                return@withContext false
+                return@withLock false
             }
 
-            if (!started) {
-                started = true
-                withContext(Dispatchers.Main) { onStart() }
-            }
+            withContext(Dispatchers.Main) { onStart() }
 
             // Escreve os samples diretamente no buffer do AudioTrack
-            pcmStreamAudioPlayer.writeSamples(audio.samples)
+            val written = pcmStreamAudioPlayer.writeSamples(audio.samples)
+            currentCoroutineContext().ensureActive()
+            if (ticket != generation.get()) throw CancellationException("Fala interrompida")
+            if (written != audio.samples.size) return@withLock false
 
             withContext(Dispatchers.Main) { onDone() }
             true
+        } catch (e: CancellationException) {
+            pcmStreamAudioPlayer.stop()
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Erro durante sintese streaming: ${e.message}")
             pcmStreamAudioPlayer.stop()
@@ -180,9 +187,45 @@ class PiperOnDeviceEngine @Inject constructor(
         }
     }
 
+    }
+
     fun stop() {
+        generation.incrementAndGet()
         pcmStreamAudioPlayer.stop()
     }
+
+    private fun releaseLocked() {
+        (sherpaTts as? com.k2fsa.sherpa.onnx.OfflineTts)?.release()
+        sherpaTts = null
+        isInitialized.set(false)
+    }
+
+    suspend fun unload() = withContext(Dispatchers.IO) {
+        stop()
+        modelMutex.withLock { releaseLocked() }
+    }
+
+    /** Impede uso de ponteiros JNI durante a troca. Commit só após carga bem-sucedida. */
+    suspend fun replaceModel(install: () -> Unit, commit: () -> Unit, rollback: () -> Unit): Boolean =
+        withContext(Dispatchers.IO) {
+            stop()
+            modelMutex.withLock {
+                releaseLocked()
+                var installed = false
+                try {
+                    install()
+                    installed = true
+                    check(initializeLocked()) { "Falha ao carregar voz" }
+                    commit()
+                    true
+                } catch (e: Exception) {
+                    releaseLocked()
+                    if (installed) rollback()
+                    initializeLocked()
+                    false
+                }
+            }
+        }
 
     val isAvailable: Boolean
         get() = isInitialized.get()
