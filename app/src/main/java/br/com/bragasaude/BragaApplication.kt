@@ -12,6 +12,7 @@ import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import br.com.bragasaude.data.remote.repository.CatalogRepository
 import br.com.bragasaude.data.remote.sync.BragaFirebaseMessagingService
+import br.com.bragasaude.data.local.voice.PiperModelDownloader
 import br.com.bragasaude.data.remote.sync.SyncManager
 import br.com.bragasaude.data.remote.sync.SyncScheduler
 import br.com.bragasaude.ui.util.FamilyNotificationService
@@ -30,6 +31,7 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
     @Inject lateinit var syncManager: SyncManager
     @Inject lateinit var syncScheduler: SyncScheduler
     @Inject lateinit var catalogRepository: CatalogRepository
+    @Inject lateinit var piperModelDownloader: PiperModelDownloader
 
     override fun onCreate() {
         super.onCreate()
@@ -58,6 +60,9 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             catalogRepository.seedDatabaseIfNeeded()
         }
+
+        // Pré-carrega o modelo neural Piper On-Device em background assim que o app é aberto
+        piperModelDownloader.startDownloadInBackground()
     }
 
     override val workManagerConfiguration: Configuration
