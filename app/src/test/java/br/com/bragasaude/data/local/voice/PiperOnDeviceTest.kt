@@ -25,7 +25,6 @@ class PiperOnDeviceTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        every { context.filesDir } returns File(System.getProperty("java.io.tmpdir"), "piper_test")
     }
 
     @After
@@ -36,6 +35,7 @@ class PiperOnDeviceTest {
     @Test
     fun `piper engine reports missing model files gracefully without crashing`() {
         val engine = PiperOnDeviceEngine(context, pcmPlayer)
+        engine.customModelDir = File(System.getProperty("java.io.tmpdir"), "piper_missing_${System.currentTimeMillis()}")
         assertFalse(engine.hasModelFiles())
         assertFalse(engine.isAvailable)
     }
@@ -60,7 +60,6 @@ class PiperOnDeviceTest {
             onDone = { done = true }
         )
 
-        advanceUntilIdle()
         assertTrue(played)
         assertTrue(started)
         assertTrue(done)
