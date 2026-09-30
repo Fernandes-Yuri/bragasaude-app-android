@@ -6,55 +6,40 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.util.Log
 import br.com.bragasaude.R
-import br.com.bragasaude.data.remote.auth.AuthService
+import br.com.bragasaude.data.local.voice.AndroidSystemTtsFallback
+import br.com.bragasaude.data.local.voice.PiperOnDeviceEngine
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
-import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLEncoder
-import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Player de áudio de alta fidelidade para Vozes Neurais (Faber pt-BR e Edresson pt-BR).
+ * Player de áudio de alta fidelidade para Vozes Neurais do Braga Saúde.
  *
- * Suporta:
- * 1. Reprodução instantânea (0ms) de áudios clínicos embutidos no APK (0ms, 100% offline).
- * 2. Streaming e cache dinâmico de falas abertas geradas pelo servidor AI Gateway via Piper TTS.
- * 3. Síntese de voz offline usando Piper TTS (vozes: `faber`, `cadu`, `edresson`).
+ * Arquitetura 100% On-Device:
+ * 1. Reprodução instantânea (0ms) de áudios clínicos embutidos no APK (100% offline).
+ * 2. Síntese local On-Device com streaming de baixa latência via Piper/Sherpa-ONNX.
+ * 3. Fallback imediato para o motor TextToSpeech nativo do sistema Android (Google Speech Engine).
+ * Zero dependência de processamento de áudio ou binários na nuvem.
  */
 @Singleton
 class NeuralAudioPlayer @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val authService: AuthService
+    private val piperOnDeviceEngine: PiperOnDeviceEngine,
+    private val androidSystemTtsFallback: AndroidSystemTtsFallback
 ) {
     companion object {
         private const val TAG = "NeuralAudioPlayer"
-        val DEFAULT_SERVER_URL = br.com.bragasaude.BuildConfig.BASE_URL
-        private const val CONNECT_TIMEOUT_MS = 5000
-        private const val READ_TIMEOUT_MS = 20000
     }
 
-    var serverBaseUrl: String = DEFAULT_SERVER_URL
     private var mediaPlayer: MediaPlayer? = null
     private val playbackGeneration = AtomicLong()
-    private val cacheDir: File by lazy {
-        File(context.cacheDir, "neural_tts").apply { if (!exists()) mkdirs() }
-    }
 
     /**
      * Tenta reproduzir o áudio neural correspondente ao [text].
-     * 1. Verifica se é uma frase clínica pré-gravada embutida no APK (0ms, 100% offline).
-     * 2. Se for texto dinâmico, busca no cache em disco ou no servidor homelab.
-     * 3. Retorna false se falhar, acionando o fallback para o sintetizador do sistema.
      */
     suspend fun playSpeech(
         text: String,
@@ -67,20 +52,41 @@ class NeuralAudioPlayer @Inject constructor(
             val sanitized = br.com.bragasaude.util.PortuguesePhoneticHelper.cleanTextForTts(text)
             if (sanitized.isBlank()) return@withContext false
             try {
+                // 1. Áudios clínicos pré-gravados embutidos no APK (0ms, 100% offline)
                 val resource = getBundledAudioResId(sanitized)
-                val file = if (resource == null) getOrCreateAudioFile(sanitized) else null
-                currentCoroutineContext().ensureActive()
-                if (resource == null && file == null) return@withContext false
-                withContext(Dispatchers.Main) {
-                    playSource(ticket, onStart, onDone) { player ->
-                        if (resource != null) player.setDataSource(context, Uri.parse("android.resource://${context.packageName}/$resource"))
-                        else player.setDataSource(file!!.absolutePath)
+                if (resource != null) {
+                    return@withContext withContext(Dispatchers.Main) {
+                        playSource(ticket, onStart, onDone) { player ->
+                            player.setDataSource(context, Uri.parse("android.resource://${context.packageName}/$resource"))
+                        }
                     }
                 }
+
+                // 2. Síntese neural On-Device com streaming de baixa latência via Piper
+                if (piperOnDeviceEngine.isAvailable || piperOnDeviceEngine.hasModelFiles()) {
+                    val playedLocal = piperOnDeviceEngine.playStream(
+                        text = sanitized,
+                        onStart = onStart,
+                        onDone = onDone
+                    )
+                    if (playedLocal) return@withContext true
+                }
+
+                // 3. Fallback prioritário 100% local: TTS nativo do sistema Android
+                if (androidSystemTtsFallback.isAvailable) {
+                    val playedFallback = androidSystemTtsFallback.speak(
+                        text = sanitized,
+                        onStart = onStart,
+                        onDone = onDone
+                    )
+                    if (playedFallback) return@withContext true
+                }
+
+                false
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.i(TAG, "Falha ao obter voz neural: ${e.message}")
+                Log.i(TAG, "Falha na reprodução de voz: ${e.message}")
                 false
             }
         }
@@ -103,9 +109,12 @@ class NeuralAudioPlayer @Inject constructor(
         mediaPlayer = player
         fun ownsPlayer() = ticket == playbackGeneration.get() && mediaPlayer === player
         try {
-            player.setAudioAttributes(AudioAttributes.Builder()
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY).build())
+            player.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                    .build()
+            )
             source(player)
             player.setOnPreparedListener {
                 if (ownsPlayer()) { it.start(); onStart() }
@@ -140,6 +149,8 @@ class NeuralAudioPlayer @Inject constructor(
 
     fun stop() {
         playbackGeneration.incrementAndGet()
+        piperOnDeviceEngine.stop()
+        androidSystemTtsFallback.stop()
         releasePlayer()
     }
 
@@ -167,110 +178,4 @@ class NeuralAudioPlayer @Inject constructor(
 
     val isPlaying: Boolean
         get() = try { mediaPlayer?.isPlaying == true } catch (_: Exception) { false }
-
-    private fun getOrCreateAudioFile(text: String): File? {
-        val voiceName = "faber"
-        val hash = hashMd5("${voiceName}_${text.trim()}")
-        val cachedFile = File(cacheDir, "$hash.wav")
-
-        if (cachedFile.exists() && cachedFile.length() > 500) {
-            return cachedFile
-        }
-
-        var connection: HttpURLConnection? = null
-        try {
-            // 1. Endpoint nativo POST /synthesize_voice do servidor homelab (Piper TTS)
-            val endpoint = URL("$serverBaseUrl/synthesize_voice")
-            connection = (endpoint.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                doOutput = true
-                doInput = true
-                setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                setRequestProperty("Accept", "audio/wav")
-                authService.getTokenBlocking(timeoutSeconds = 5)?.let {
-                    setRequestProperty("Authorization", "Bearer $it")
-                }
-            }
-
-            val payload = org.json.JSONObject().apply {
-                put("text", text.trim())
-                put("voice", voiceName)
-            }.toString()
-
-            java.io.OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { writer ->
-                writer.write(payload)
-                writer.flush()
-            }
-
-            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                val tempFile = File(cacheDir, "$hash.tmp")
-                connection.inputStream.use { input ->
-                    FileOutputStream(tempFile).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                if (tempFile.length() > 500) {
-                    tempFile.renameTo(cachedFile)
-                    return cachedFile
-                } else {
-                    tempFile.delete()
-                }
-            } else {
-                Log.w(TAG, "Endpoint /synthesize_voice retornou HTTP ${connection.responseCode}. Tentando fallback /v1/audio/speech.")
-            }
-        } catch (e: Exception) {
-            Log.d(TAG, "Tentativa em /synthesize_voice falhou (${e.message}). Tentando fallback GET.")
-        } finally {
-            try { connection?.disconnect() } catch (_: Exception) { }
-            connection = null
-        }
-
-        // 2. Fallback defensivo para GET /v1/audio/speech caso o servidor esteja em versão anterior
-        try {
-            val encodedText = URLEncoder.encode(text.trim(), "UTF-8")
-            val fallbackVoice = "faber"
-            val fallbackUrl = URL("$serverBaseUrl/v1/audio/speech?text=$encodedText&voice=$fallbackVoice")
-
-            connection = (fallbackUrl.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                doInput = true
-                authService.getTokenBlocking(timeoutSeconds = 5)?.let {
-                    setRequestProperty("Authorization", "Bearer $it")
-                }
-            }
-
-            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                val tempFile = File(cacheDir, "$hash.tmp")
-                connection.inputStream.use { input ->
-                    FileOutputStream(tempFile).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                if (tempFile.length() > 500) {
-                    tempFile.renameTo(cachedFile)
-                    return cachedFile
-                } else {
-                    tempFile.delete()
-                    return null
-                }
-            } else {
-                Log.w(TAG, "Servidor de áudio retornou HTTP ${connection.responseCode}")
-                return null
-            }
-        } catch (e: Exception) {
-            Log.d(TAG, "Erro ao baixar áudio neural: ${e.message}")
-            return null
-        } finally {
-            try { connection?.disconnect() } catch (_: Exception) { }
-        }
-    }
-
-    private fun hashMd5(input: String): String {
-        val bytes = MessageDigest.getInstance("MD5").digest(input.toByteArray())
-        return bytes.joinToString("") { "%02x".format(it) }
-    }
 }
