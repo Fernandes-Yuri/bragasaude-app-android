@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Bragasaude.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/teal_light</item>
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="android:statusBarColor">@color/splash_background</item>
+        <item name="android:navigationBarColor">@color/splash_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_logo_braga_animated</item>
         <item name="windowSplashScreenIconBackgroundColor">@color/teal_primary</item>
         <item name="windowSplashScreenAnimationDuration">650</item>
@@ -9,6 +13,7 @@
     </style>
 
     <style name="Theme.Bragasaude" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/splash_background</item>
         <item name="colorPrimary">@color/teal_primary</item>
         <item name="colorSecondary">@color/teal_secondary</item>
         <item name="colorTertiary">@color/green_health</item>
