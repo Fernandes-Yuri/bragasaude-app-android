@@ -87,7 +87,8 @@ class VoiceHealthViewModel @Inject constructor(
     private val audioOrchestrator: ConversationalAudioOrchestrator,
     private val vitalSignDao: VitalSignDao,
     private val dailyMetricsDao: DailyMetricsDao,
-    private val notificationClient: br.com.bragasaude.data.remote.service.NotificationClient
+    private val notificationClient: br.com.bragasaude.data.remote.service.NotificationClient,
+    val voiceProfileManager: br.com.bragasaude.data.local.voice.VoiceProfileManager
 ) : ViewModel() {
 
     private var currentUserRole: String? = null

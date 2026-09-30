@@ -250,18 +250,27 @@ fun DraggableAiAssistantFab(
         }
     }
 
+    var showVoiceOnboarding by remember { mutableStateOf(false) }
+
+    val startListeningWithPermission = {
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (hasPermission) {
+            viewModel.startListening(context)
+        } else {
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     val handleFabTap = {
         when {
+            viewModel.voiceProfileManager.needsOnboarding() -> {
+                showVoiceOnboarding = true
+            }
             !isLiveMode -> {
-                val hasPermission = ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.RECORD_AUDIO
-                ) == PackageManager.PERMISSION_GRANTED
-                if (hasPermission) {
-                    viewModel.startListening(context)
-                } else {
-                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                }
+                startListeningWithPermission()
             }
             else -> {
                 // Também cancela a resposta em geração, antes de haver áudio.
@@ -643,6 +652,17 @@ fun DraggableAiAssistantFab(
             type = "EMERGENCIA",
             message = "Atenção: Sintomas agudos exigem avaliação médica urgente. Escolha uma das opções abaixo para obter socorro imediato:",
             onDismiss = { showEmergencyDialog = false }
+        )
+    }
+
+    if (showVoiceOnboarding) {
+        br.com.bragasaude.ui.voice.VoiceSelectionBottomSheet(
+            manager = viewModel.voiceProfileManager,
+            onDismissRequest = { showVoiceOnboarding = false },
+            onVoiceConfigured = {
+                showVoiceOnboarding = false
+                startListeningWithPermission()
+            }
         )
     }
 }
