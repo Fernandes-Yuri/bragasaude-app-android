@@ -1,6 +1,13 @@
 package br.com.bragasaude.data.local.voice
 
 import android.content.Context
+import androidx.work.WorkManager
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.workDataOf
+import androidx.work.WorkInfo
+import kotlinx.coroutines.flow.first
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +32,9 @@ class VoiceProfileManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val downloader: PiperModelDownloader,
     private val engine: PiperOnDeviceEngine,
-    private val system: AndroidSystemTtsFallback
+    private val system: AndroidSystemTtsFallback,
+    private val workManager: WorkManager,
+    private val notifications: VoicePreparationNotifications
 ) {
     private val preferences = context.getSharedPreferences("voice_profile", Context.MODE_PRIVATE)
     private val store = VoiceModelStore(File(context.filesDir, "voices"))
@@ -36,6 +45,7 @@ class VoiceProfileManager @Inject constructor(
     private val mutableState = MutableStateFlow(ActiveVoiceState())
     val state = mutableState.asStateFlow()
     private var selectionJob: Job? = null
+    private var selectionWorkId: java.util.UUID? = null
 
     init {
         scope.launch { selection.withLock {
@@ -79,12 +89,45 @@ class VoiceProfileManager @Inject constructor(
     fun select(id: String) {
         val option = VoiceCatalog.find(id) ?: return
         if (state.value.busy || selectionJob?.isActive == true) return
+        preferences.edit().remove("background_voice_id").commit()
         mutableState.value = state.value.copy(preparingId = id, phase = "Preparando voz", error = null)
-        selectionJob = scope.launch { selection.withLock {
+        if (option.isNeural) {
+            try {
+                val request = OneTimeWorkRequestBuilder<VoicePreparationWorker>()
+                    .setInputData(workDataOf(VoicePreparationWorker.VOICE_ID to id))
+                    .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                    .build()
+                selectionWorkId = request.id
+                val operation = workManager.enqueueUniqueWork(VoicePreparationWorker.WORK_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+                scope.launch {
+                    try {
+                        operation.result.get()
+                        val finished = workManager.getWorkInfoByIdFlow(request.id).first { it?.state?.isFinished == true }
+                        if (selectionWorkId == request.id && state.value.preparingId == id && state.value.busy) {
+                            if (finished?.state == WorkInfo.State.CANCELLED) {
+                                preferences.edit().remove("background_voice_id").commit()
+                                mutableState.value = state.value.copy(preparingId = null, phase = null, progress = null)
+                            } else preparationCouldNotStart(id)
+                        }
+                    } catch (_: Exception) {
+                        if (selectionWorkId == request.id && state.value.preparingId == id && state.value.busy) preparationCouldNotStart(id)
+                    }
+                }
+            } catch (_: Exception) { preparationCouldNotStart(id) }
+        } else {
+            selectionJob = scope.launch { prepareSelection(id) }
+        }
+    }
+
+    internal suspend fun prepareSelection(id: String): Boolean = selection.withLock {
+            val option = VoiceCatalog.find(id) ?: return@withLock false
+            selectionJob = currentCoroutineContext()[Job]
             val oldId = state.value.activeId
             var committed = false
+            var successful = false
+            mutableState.value = state.value.copy(preparingId = id, phase = "Preparando voz", error = null)
             try {
-                if (option.isNeural) {
+                if (option.isNeural && !(oldId == id && VoiceModelStore.valid(store.current))) {
                     store.recover(oldId)
                     val staging = store.prepare()
                     check(staging.usableSpace > 180_000_000) { "Espaço insuficiente" }
@@ -105,6 +148,11 @@ class VoiceProfileManager @Inject constructor(
                         }
                     }
                     store.finish()
+                } else if (option.isNeural) {
+                    // Worker retomado depois de um commit já concluído: não baixa outra vez.
+                    check(engine.initialize()) { "Não foi possível carregar a voz" }
+                    persist(id)
+                    committed = true
                 } else {
                     withContext(NonCancellable) {
                         stop()
@@ -117,9 +165,13 @@ class VoiceProfileManager @Inject constructor(
                     }
                 }
                 mutableState.value = ActiveVoiceState(activeId = id, phase = null, hasChosenVoice = true)
-                // A confirmação usa a voz realmente selecionada.
-                playSpeech("Olá! Estou pronto para ajudar.", {}, {})
+                successful = true
+                val background = preferences.getString("background_voice_id", null) == id
+                notifyBackgroundResult(id)
+                // Evita reproduzir uma saudação quando a pessoa minimizou a preparação.
+                if (!background) playSpeech("Olá! Estou pronto para ajudar.", {}, {})
             } catch (e: CancellationException) {
+                preferences.edit().remove("background_voice_id").commit()
                 mutableState.value = ActiveVoiceState(activeId = if (committed) id else oldId, phase = null, hasChosenVoice = state.value.hasChosenVoice)
                 throw e
             } catch (_: Exception) {
@@ -129,15 +181,34 @@ class VoiceProfileManager @Inject constructor(
                     error = if (committed) "Voz selecionada. A limpeza será retomada ao abrir o aplicativo." else
                         "Não foi possível preparar a voz. Verifique a conexão e o espaço livre e tente novamente. Sua seleção anterior foi mantida."
                 )
+                notifyBackgroundResult(id)
             } finally {
                 withContext(NonCancellable) { runCatching { VoiceModelStore.clear(store.staging) } }
             }
-        } }
-        selectionJob?.invokeOnCompletion {
-            if (state.value.busy && state.value.preparingId == id) {
-                mutableState.value = state.value.copy(preparingId = null, phase = null, progress = null)
-            }
-        }
+            successful
+    }
+
+    internal fun preparationCouldNotStart(id: String) {
+        mutableState.value = state.value.copy(preparingId = null, phase = null, progress = null,
+            error = "Não foi possível iniciar a preparação. Tente novamente nas configurações do assistente.")
+        notifyBackgroundResult(id)
+    }
+
+    /** Persistido para que o Worker também avise após a recriação do processo. */
+    fun minimizePreparation(id: String): Boolean {
+        if (VoiceCatalog.find(id) == null) return false
+        if (state.value.preparingId != id && !(state.value.activeId == id && !state.value.busy)) return false
+        if (!preferences.edit().putString("background_voice_id", id).commit()) return false
+        notifyBackgroundResult(id)
+        return true
+    }
+
+    @Synchronized
+    private fun notifyBackgroundResult(id: String) {
+        if (state.value.busy || preferences.getString("background_voice_id", null) != id) return
+        if (!preferences.edit().remove("background_voice_id").commit()) return
+        notifications.result(VoiceCatalog.find(id)?.displayName.orEmpty(),
+            state.value.activeId == id && state.value.hasChosenVoice && state.value.error == null)
     }
 
     fun selectSystemExplicit() {
@@ -152,7 +223,15 @@ class VoiceProfileManager @Inject constructor(
     fun needsOnboarding(): Boolean = !state.value.hasChosenVoice
 
     fun cancelDownload() {
-        if (state.value.phase != "Carregando voz") selectionJob?.cancel()
+        if (state.value.phase != "Carregando voz") {
+            workManager.cancelUniqueWork(VoicePreparationWorker.WORK_NAME)
+            selectionJob?.cancel()
+            preferences.edit().remove("background_voice_id").commit()
+            // Se ainda estava na fila, nenhum corpo de Worker existia para limpar o estado.
+            if (selectionJob?.isActive != true) {
+                mutableState.value = state.value.copy(preparingId = null, phase = null, progress = null)
+            }
+        }
     }
 
     fun dismissError() { mutableState.value = state.value.copy(error = null) }
