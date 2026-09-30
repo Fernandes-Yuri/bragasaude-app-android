@@ -176,7 +176,7 @@ dependencies {
     implementation(libs.mlkit.text.recognition)
 
     // Síntese de Voz On-Device com Streaming de Baixa Latência (Piper / Sherpa-ONNX)
-    implementation(libs.sherpa.onnx)
+    implementation(files("libs/sherpa-onnx-1.13.8.aar"))
 
     // Movement & GPS
     implementation("com.google.android.gms:play-services-location:21.3.0")
