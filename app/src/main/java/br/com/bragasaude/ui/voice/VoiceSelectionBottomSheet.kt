@@ -34,28 +34,37 @@ import kotlinx.coroutines.launch
 fun VoiceSelectionBottomSheet(
     manager: VoiceProfileManager,
     onDismissRequest: () -> Unit,
-    onVoiceConfigured: () -> Unit
+    onVoiceConfigured: () -> Unit,
+    readyButtonLabel: String = "Começar a conversar"
 ) {
     val state by manager.state.collectAsState()
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     var selectedId by rememberSaveable { mutableStateOf(state.activeId) }
-    var requestedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var requestedId by rememberSaveable { mutableStateOf(state.preparingId) }
+    var preparationObserved by rememberSaveable { mutableStateOf(state.preparingId != null) }
     var showCredits by rememberSaveable { mutableStateOf(false) }
     var previewJob by remember { mutableStateOf<Job?>(null) }
     var previewingId by remember { mutableStateOf<String?>(null) }
     var previewError by remember { mutableStateOf<String?>(null) }
     val selected = VoiceCatalog.find(selectedId) ?: VoiceCatalog.options.first()
     val preparing = state.busy && state.preparingId != null
+    val showingExperience = requestedId != null || preparing
+    val voiceReady = requestedId != null && !state.busy && state.hasChosenVoice && state.activeId == requestedId
     val willDownload = selected.isNeural && selected.id != state.activeId
 
     DisposableEffect(Unit) { onDispose { previewJob?.cancel() } }
-    LaunchedEffect(state.busy, state.activeId, state.hasChosenVoice, state.error, requestedId) {
-        val requested = requestedId
-        if (requested != null && !state.busy) {
+    LaunchedEffect(state.busy, state.preparingId, state.activeId, state.hasChosenVoice, state.error, requestedId) {
+        if (preparing) {
+            if (requestedId == null) requestedId = state.preparingId
+            preparationObserved = true
+        } else if (requestedId != null && !state.busy && !voiceReady &&
+            (preparationObserved || state.error != null)) {
+            // Não confunde o instante anterior ao início com uma operação cancelada.
+            // Falha ou cancelamento volta à escolha; sucesso aguarda a pessoa continuar.
             requestedId = null
-            if (state.hasChosenVoice && state.activeId == requested && state.error == null) onVoiceConfigured()
+            preparationObserved = false
         }
     }
 
@@ -94,23 +103,15 @@ fun VoiceSelectionBottomSheet(
     BragaFormSheet(
         onDismissRequest = onDismissRequest,
         dismissEnabled = !state.busy,
-        title = { Text(if (preparing) "Preparando sua voz" else "Qual voz você prefere?") },
+        title = { Text(if (showingExperience) {
+            if (voiceReady) "Vamos conversar?" else "Preparando seu assistente"
+        } else "Qual voz você prefere?") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (preparing) {
-                    Column(Modifier.fillMaxWidth().heightIn(min = 240.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text(VoiceCatalog.find(state.preparingId.orEmpty())?.displayName.orEmpty(),
-                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(state.phase.orEmpty(), style = MaterialTheme.typography.bodyMedium)
-                        val progress = state.progress
-                        if (progress == null) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        else {
-                            LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
-                            Text("${(progress.coerceIn(0f, 1f) * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
-                        }
-                        Text("Só um instante. Você poderá conversar assim que a voz estiver pronta.",
-                            style = MaterialTheme.typography.bodyMedium)
+                if (showingExperience) {
+                    AssistantPreparationExperience(ready = voiceReady)
+                    state.error?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
                 } else {
                     Text("Ouça as prévias e escolha. Você pode mudar depois.", style = MaterialTheme.typography.bodyMedium)
@@ -164,14 +165,21 @@ fun VoiceSelectionBottomSheet(
             }
         },
         confirmButton = {
-            if (!preparing) {
+            if (showingExperience) {
+                Button(modifier = Modifier.fillMaxWidth(), enabled = voiceReady, onClick = {
+                    previewJob?.cancel()
+                    manager.stop()
+                    onVoiceConfigured()
+                }) {
+                    Text(if (voiceReady) readyButtonLabel else "Preparando para você...")
+                }
+            } else {
                 Button(modifier = Modifier.fillMaxWidth(), enabled = !state.busy, onClick = {
                     previewJob?.cancel()
-                    if (state.hasChosenVoice && selected.id == state.activeId) onVoiceConfigured()
-                    else {
-                        requestedId = selected.id
-                        manager.select(selected.id)
-                    }
+                    manager.dismissError()
+                    preparationObserved = false
+                    requestedId = selected.id
+                    if (!(state.hasChosenVoice && selected.id == state.activeId)) manager.select(selected.id)
                 }) {
                     Text(if (willDownload) "Baixar e usar ${selected.displayName}"
                         else if (!state.hasChosenVoice) "Começar com esta voz" else "Usar esta voz")
@@ -182,7 +190,7 @@ fun VoiceSelectionBottomSheet(
             if (preparing) {
                 TextButton(modifier = Modifier.fillMaxWidth(), enabled = state.phase != "Carregando voz",
                     onClick = manager::cancelDownload) { Text("Cancelar preparo") }
-            } else {
+            } else if (!showingExperience) {
                 TextButton(modifier = Modifier.fillMaxWidth(), onClick = onDismissRequest) { Text("Agora não") }
             }
         }
