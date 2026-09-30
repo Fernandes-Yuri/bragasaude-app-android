@@ -1,6 +1,6 @@
 # Catálogo de vozes Piper
 
-O aplicativo oferece Faber, Cadu, Edresson e o mecanismo de fala do dispositivo.
+O aplicativo oferece Faber, Cadu e o mecanismo de fala do dispositivo.
 A seleção é local ao dispositivo e não utiliza gênero do perfil do usuário.
 Instalações novas não baixam modelos automaticamente. Instalações anteriores
 preservam o Faber já presente quando seus arquivos estão completos.
@@ -9,8 +9,6 @@ Os pacotes vêm da release `tts-models` de k2-fsa/sherpa-onnx; o catálogo fixa
 nome, tamanho e SHA-256. Não há credenciais nem interceptores da API nesses downloads.
 
 - Faber e Cadu: 22.050 Hz, dados CC0, https://github.com/OHF-Voice/voice-datasets
-- Edresson: 16.000 Hz, dados CC BY 4.0, https://github.com/Edresson/TTS-Portuguese-Corpus
-- Licença CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
 - Modelos e fichas: https://huggingface.co/rhasspy/piper-voices/tree/main/pt/pt_BR
 - Pacotes adaptados: https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models
 

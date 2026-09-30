@@ -23,9 +23,7 @@ object VoiceCatalog {
         VoiceOption("faber", "Faber", "vits-piper-pt_BR-faber-medium", 67_183_065,
             "7add3f923ad6bc25ca8a192805fd1a64d1b3893e4611c4a9719545a825039a83", R.raw.voice_preview_faber),
         VoiceOption("cadu", "Cadu", "vits-piper-pt_BR-cadu-medium", 67_207_562,
-            "aba78157d4b89acc17ddef15a70f4b2474f4c189d4de6035002ac7fec9d5d303", R.raw.voice_preview_cadu),
-        VoiceOption("edresson", "Edresson", "vits-piper-pt_BR-edresson-low", 67_081_775,
-            "670569e755cc48cda0a2f6a3ccba0698815566297069961edcd5f7daaf3d47a5", R.raw.voice_preview_edresson)
+            "aba78157d4b89acc17ddef15a70f4b2474f4c189d4de6035002ac7fec9d5d303", R.raw.voice_preview_cadu)
     )
     fun find(id: String) = options.firstOrNull { it.id == id }
 }

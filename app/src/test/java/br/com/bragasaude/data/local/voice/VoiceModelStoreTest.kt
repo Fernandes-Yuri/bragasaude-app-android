@@ -29,10 +29,10 @@ class VoiceModelStoreTest {
     @Test fun `reinicio apos commit limpa anterior sem desfazer selecao`() {
         val store = VoiceModelStore(temporary.newFolder())
         model(store.current, "faber")
-        model(store.prepare(), "edresson")
-        store.begin("edresson")
-        store.recover("edresson")
-        assertEquals("edresson", VoiceModelStore.id(store.current))
+        model(store.prepare(), "cadu")
+        store.begin("cadu")
+        store.recover("cadu")
+        assertEquals("cadu", VoiceModelStore.id(store.current))
         assertFalse(store.previous.exists())
     }
     @Test fun `falha de inicializacao permite rollback`() {
@@ -61,7 +61,7 @@ class VoiceModelStoreTest {
         val store = VoiceModelStore(temporary.newFolder())
         model(store.current, "cadu")
         model(store.previous, "faber")
-        model(store.staging, "edresson")
+        model(store.staging, "cadu")
         store.recover(VoiceCatalog.SYSTEM_ID)
         assertFalse(store.current.exists())
         assertFalse(store.previous.exists())

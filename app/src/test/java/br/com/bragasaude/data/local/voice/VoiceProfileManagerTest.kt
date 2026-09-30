@@ -59,7 +59,7 @@ class VoiceProfileManagerTest {
             started.complete(Unit)
             awaitCancellation()
         }
-        manager.select("edresson")
+        manager.select("faber")
         withTimeout(5000) { started.await() }
         manager.cancelDownload()
         assertEquals(VoiceCatalog.SYSTEM_ID, ready(manager).activeId)

@@ -9,7 +9,7 @@ import sherpa_onnx
 
 source = pathlib.Path('app/src/main/java/br/com/bragasaude/data/local/voice/VoiceCatalog.kt').read_text(encoding='utf-8-sig')
 models = re.findall(r'VoiceOption\("(\w+)", "[^"]+", "([^"]+)", ([\d_]+),\s*"([a-f0-9]{64})"', source)
-assert len(models) == 3
+assert len(models) == 2
 with tempfile.TemporaryDirectory() as temp:
     root = pathlib.Path(temp)
     for name, archive_name, size, checksum in models:
@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory() as temp:
         tts = sherpa_onnx.OfflineTts(config)
         audio = tts.generate('Olá! Estou pronto para ajudar.', sid=0, speed=1.0)
         assert len(audio.samples) > audio.sample_rate // 2
-        assert audio.sample_rate == (16000 if name == 'edresson' else 22050)
+        assert audio.sample_rate == 22050
         assert max(abs(float(sample)) for sample in audio.samples) > 0.001
         print(f'{name}: síntese válida, {audio.sample_rate} Hz, {len(audio.samples)} amostras')
         del tts
