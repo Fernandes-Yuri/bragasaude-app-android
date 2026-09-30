@@ -21,7 +21,7 @@
 # scp/ssh davam i/o timeout — run 36630084026):
 #   AWS_ACCESS_KEY_ID           IAM gha-bragasaude-android-ssm (mínimo SSM)
 #   AWS_SECRET_ACCESS_KEY       secret da mesma chave
-#   RDS_DATABASE_URL            DATABASE_URL do gateway (promoção no RDS)
+#   ADMIN_API_TOKEN             Bearer do broadcast OTA (/api/app/notify-update)
 # =============================================================================
 
 name: Build APK
@@ -309,7 +309,6 @@ jobs:
 
       - name: Entregar release no gateway (SSM Run Command)
         env:
-          DB_URL: ${{ secrets.RDS_DATABASE_URL }}
           ADMIN_TOKEN: ${{ secrets.ADMIN_API_TOKEN }}
           VERSAO: ${{ steps.versao.outputs.name }}
           BUILD: ${{ steps.versao.outputs.code }}
@@ -321,17 +320,14 @@ jobs:
           cat > /tmp/inner.sh << 'SSMEOF'
           set -euo pipefail
           cd /home/ec2-user/braga-gateway
-          # Fonte da verdade: o .env do proprio servidor (o secret
-          # RDS_DATABASE_URL do repositorio esta com senha desatualizada —
-          # InvalidPasswordError na run 36638524499). Secret fica como
-          # fallback caso o .env suma. Nao usar source .env: a linha 6 tem
-          # senha de app do Gmail sem aspas e quebra o shell.
+          # Fonte da verdade: o .env do proprio servidor (o secret antigo
+          # RDS_DATABASE_URL tinha senha desatualizada — InvalidPasswordError
+          # na run 36638524499 — e foi removido do repo em 30/09/2026).
+          # Nao usar source .env: a linha 6 tem senha de app do Gmail sem
+          # aspas e quebra o shell.
           export DATABASE_URL="$(grep -m1 '^DATABASE_URL=' .env | cut -d= -f2- || true)"
           if [ -z "$DATABASE_URL" ]; then
-            export DATABASE_URL='__DB_URL__'
-          fi
-          if [ -z "$DATABASE_URL" ]; then
-            echo "ERRO: DATABASE_URL ausente (.env do servidor e secret RDS_DATABASE_URL)" >&2
+            echo "ERRO: DATABASE_URL ausente no .env do servidor" >&2
             exit 1
           fi
           V='__VERSAO__'
@@ -411,7 +407,6 @@ jobs:
           s = open(p).read()
           s = s.replace('__VERSAO__', os.environ['VERSAO'])
           s = s.replace('__BUILD__', os.environ['BUILD'])
-          s = s.replace('__DB_URL__', os.environ.get('DB_URL', ''))
           s = s.replace('__ADMIN_TOKEN__', os.environ.get('ADMIN_TOKEN', ''))
           open(p, 'w').write(s)
           PY
