@@ -21,6 +21,7 @@ import br.com.bragasaude.data.local.voice.VoiceCatalog
 import br.com.bragasaude.data.local.voice.VoiceOption
 import br.com.bragasaude.data.local.voice.VoiceProfileManager
 import br.com.bragasaude.ui.components.BragaAlertDialog
+import br.com.bragasaude.ui.components.BragaBottomSheet
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -60,14 +61,12 @@ fun VoiceSelectionBottomSheet(
         }
     }
 
-    ModalBottomSheet(
+    BragaBottomSheet(
         onDismissRequest = {
             if (!state.busy) {
                 onDismissRequest()
             }
-        },
-        containerColor = MaterialTheme.colorScheme.surface,
-        dragHandle = { BottomSheetDefaults.DragHandle() }
+        }
     ) {
         Column(
             modifier = Modifier
