@@ -26,6 +26,29 @@ class PiperOnDeviceEngine @Inject constructor(
         private const val TAG = "PiperOnDeviceEngine"
         private const val MODEL_FOLDER = "piper_voice"
         private const val DEFAULT_SAMPLE_RATE = 22050
+
+        init {
+            try {
+                System.loadLibrary("onnxruntime")
+            } catch (t: Throwable) {
+                Log.d(TAG, "onnxruntime loadLibrary: ${t.message}")
+            }
+            try {
+                System.loadLibrary("sherpa-onnx-c-api")
+            } catch (t: Throwable) {
+                Log.d(TAG, "sherpa-onnx-c-api loadLibrary: ${t.message}")
+            }
+            try {
+                System.loadLibrary("sherpa-onnx-cxx-api")
+            } catch (t: Throwable) {
+                Log.d(TAG, "sherpa-onnx-cxx-api loadLibrary: ${t.message}")
+            }
+            try {
+                System.loadLibrary("sherpa-onnx-jni")
+            } catch (t: Throwable) {
+                Log.d(TAG, "sherpa-onnx-jni loadLibrary: ${t.message}")
+            }
+        }
     }
 
     private var sherpaTts: Any? = null
@@ -47,7 +70,7 @@ class PiperOnDeviceEngine @Inject constructor(
     fun hasModelFiles(): Boolean {
         val modelFile = File(modelDir, "model.onnx")
         val tokensFile = File(modelDir, "tokens.txt")
-        return modelFile.exists() && modelFile.length() > 1024 && tokensFile.exists()
+        return modelFile.exists() && modelFile.length() > 100_000 && tokensFile.exists() && tokensFile.length() > 50
     }
 
     /**

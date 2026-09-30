@@ -18,7 +18,6 @@ class PiperModelDownloaderTest {
     private val testDispatcher = StandardTestDispatcher()
     private val context = mockk<Context>(relaxed = true)
     private val piperEngine = mockk<PiperOnDeviceEngine>(relaxed = true)
-    private val okHttpClient = mockk<OkHttpClient>(relaxed = true)
 
     @Before
     fun setUp() {
@@ -38,7 +37,7 @@ class PiperModelDownloaderTest {
     fun `downloader skips download when model files already exist`() {
         every { piperEngine.hasModelFiles() } returns true
 
-        val downloader = PiperModelDownloader(context, piperEngine, okHttpClient)
+        val downloader = PiperModelDownloader(context, piperEngine)
         downloader.startDownloadInBackground()
 
         assertEquals(PiperModelDownloader.DownloadState.Ready, downloader.downloadStatus.value)
@@ -48,7 +47,7 @@ class PiperModelDownloaderTest {
     fun `downloader enters downloading state when files are missing`() {
         every { piperEngine.hasModelFiles() } returns false
 
-        val downloader = PiperModelDownloader(context, piperEngine, okHttpClient)
+        val downloader = PiperModelDownloader(context, piperEngine)
         downloader.startDownloadInBackground()
 
         assertEquals(PiperModelDownloader.DownloadState.Downloading, downloader.downloadStatus.value)
