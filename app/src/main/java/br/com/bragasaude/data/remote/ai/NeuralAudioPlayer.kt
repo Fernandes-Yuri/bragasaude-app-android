@@ -20,6 +20,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.security.MessageDigest
+import br.com.bragasaude.data.local.voice.PiperOnDeviceEngine
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,13 +29,14 @@ import javax.inject.Singleton
  *
  * Suporta:
  * 1. Reprodução instantânea (0ms) de áudios clínicos embutidos no APK (0ms, 100% offline).
- * 2. Streaming e cache dinâmico de falas abertas geradas pelo servidor AI Gateway via Piper TTS.
- * 3. Síntese de voz offline usando Piper TTS (vozes: `faber`, `cadu`, `edresson`).
+ * 2. Síntese local On-Device com streaming de baixa latência via Piper/Sherpa-ONNX.
+ * 3. Fallback para gateway remoto se o modelo local estiver em carga.
  */
 @Singleton
 class NeuralAudioPlayer @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val authService: AuthService
+    private val authService: AuthService,
+    private val piperOnDeviceEngine: PiperOnDeviceEngine
 ) {
     companion object {
         private const val TAG = "NeuralAudioPlayer"
@@ -68,13 +70,31 @@ class NeuralAudioPlayer @Inject constructor(
             if (sanitized.isBlank()) return@withContext false
             try {
                 val resource = getBundledAudioResId(sanitized)
-                val file = if (resource == null) getOrCreateAudioFile(sanitized) else null
+                if (resource != null) {
+                    return@withContext withContext(Dispatchers.Main) {
+                        playSource(ticket, onStart, onDone) { player ->
+                            player.setDataSource(context, Uri.parse("android.resource://${context.packageName}/$resource"))
+                        }
+                    }
+                }
+
+                // Tenta síntese neural On-Device com streaming de baixa latência via Piper
+                if (piperOnDeviceEngine.isAvailable || piperOnDeviceEngine.hasModelFiles()) {
+                    val playedLocal = piperOnDeviceEngine.playStream(
+                        text = sanitized,
+                        onStart = onStart,
+                        onDone = onDone
+                    )
+                    if (playedLocal) return@withContext true
+                }
+
+                // Fallback: cache em disco ou síntese via gateway remoto
+                val file = getOrCreateAudioFile(sanitized)
                 currentCoroutineContext().ensureActive()
-                if (resource == null && file == null) return@withContext false
+                if (file == null) return@withContext false
                 withContext(Dispatchers.Main) {
                     playSource(ticket, onStart, onDone) { player ->
-                        if (resource != null) player.setDataSource(context, Uri.parse("android.resource://${context.packageName}/$resource"))
-                        else player.setDataSource(file!!.absolutePath)
+                        player.setDataSource(file.absolutePath)
                     }
                 }
             } catch (e: CancellationException) {
@@ -140,6 +160,7 @@ class NeuralAudioPlayer @Inject constructor(
 
     fun stop() {
         playbackGeneration.incrementAndGet()
+        piperOnDeviceEngine.stop()
         releasePlayer()
     }
 
