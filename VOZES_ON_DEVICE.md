@@ -37,3 +37,23 @@ O CI compila o aplicativo e executa os testes. O workflow de modelos baixa os
 três pacotes e sintetiza uma frase com Sherpa-ONNX 1.13.8 no Linux.
 A validação no Android ainda deve conferir audição, cancelamento, rotação,
 modo avião após instalação, pouco espaço e encerramento do processo durante troca.
+
+## Preparação em segundo plano
+
+O botão “Minimizar e continuar usando o app” fecha a apresentação sem cancelar
+a preparação. Modelos neurais são preparados por um Worker único do WorkManager,
+com serviço de primeiro plano do tipo dataSync e aviso discreto durante o trabalho.
+O Android pode retomar uma tarefa interrompida recriando o processo; o download
+reinicia se o pacote estava incompleto, e uma instalação já confirmada é reaproveitada.
+
+A solicitação de aviso fica persistida até a conclusão. O aplicativo notifica
+sucesso ou falha e não reproduz a saudação quando a tarefa foi minimizada.
+No Android 13+, a ação pede POST_NOTIFICATIONS quando necessário. Se a permissão
+for negada ou as notificações estiverem bloqueadas, o trabalho continua e a interface
+informa que o resultado pode ser acompanhado nas configurações de voz.
+
+Os testes do gerenciador incluem minimização sem cancelamento, notificação de
+sucesso/falha, supressão da saudação, cancelamento sem notificação de sucesso e a
+corrida entre conclusão e clique de minimização. Compilação e execução desses testes
+ficam para o CI; validar no aparelho com o app em segundo plano e com notificações
+permitidas e negadas.

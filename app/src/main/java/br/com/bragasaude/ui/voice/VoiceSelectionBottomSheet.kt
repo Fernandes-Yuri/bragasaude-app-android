@@ -1,6 +1,14 @@
 package br.com.bragasaude.ui.voice
 
 import android.media.MediaPlayer
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
@@ -53,6 +61,19 @@ fun VoiceSelectionBottomSheet(
     val showingExperience = requestedId != null || preparing
     val voiceReady = requestedId != null && !state.busy && state.hasChosenVoice && state.activeId == requestedId
     val willDownload = selected.isNeural && selected.id != state.activeId
+
+    fun minimize() {
+        val id = requestedId ?: state.preparingId ?: return
+        if (!manager.minimizePreparation(id)) return
+        val canNotify = NotificationManagerCompat.from(context).areNotificationsEnabled()
+        Toast.makeText(context, if (canNotify) "Continuaremos preparando e avisaremos quando estiver pronto."
+            else "A preparação continua. As notificações estão desativadas; acompanhe nas configurações de voz.", Toast.LENGTH_LONG).show()
+        onDismissRequest()
+    }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        // A escolha de continuar em segundo plano também funciona quando a permissão é negada.
+        minimize()
+    }
 
     DisposableEffect(Unit) { onDispose { previewJob?.cancel() } }
     LaunchedEffect(state.busy, state.preparingId, state.activeId, state.hasChosenVoice, state.error, requestedId) {
@@ -188,8 +209,16 @@ fun VoiceSelectionBottomSheet(
         },
         dismissButton = {
             if (preparing) {
-                TextButton(modifier = Modifier.fillMaxWidth(), enabled = state.phase != "Carregando voz",
+                Column {
+                    OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = {
+                        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context,
+                                Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else minimize()
+                    }) { Text("Minimizar e continuar usando o app") }
+                    TextButton(modifier = Modifier.fillMaxWidth(), enabled = state.phase != "Carregando voz",
                     onClick = manager::cancelDownload) { Text("Cancelar preparo") }
+                }
             } else if (!showingExperience) {
                 TextButton(modifier = Modifier.fillMaxWidth(), onClick = onDismissRequest) { Text("Agora não") }
             }
