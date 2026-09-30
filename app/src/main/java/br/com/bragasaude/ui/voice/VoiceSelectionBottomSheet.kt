@@ -154,13 +154,10 @@ fun VoiceSelectionBottomSheet(
                         Text(if (showCredits) "Ocultar créditos" else "Sobre as vozes", style = MaterialTheme.typography.labelMedium)
                     }
                     if (showCredits) {
-                        Text("Prévias do Piper. Faber e Cadu: dados CC0. Edresson: TTS-Portuguese-Corpus, CC BY 4.0.",
+                        Text("Prévias do Piper. Faber e Cadu: dados CC0.",
                             style = MaterialTheme.typography.bodySmall)
                         TextButton(onClick = { uriHandler.openUri("https://huggingface.co/rhasspy/piper-voices/tree/main/pt/pt_BR") }) {
                             Text("Modelos e autores")
-                        }
-                        TextButton(onClick = { uriHandler.openUri("https://creativecommons.org/licenses/by/4.0/") }) {
-                            Text("Licença de Edresson")
                         }
                     }
                 }

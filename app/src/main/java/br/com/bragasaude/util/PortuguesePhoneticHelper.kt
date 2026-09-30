@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.util
+package br.com.bragasaude.util
 
 import java.util.Locale
 
@@ -6,7 +6,7 @@ import java.util.Locale
  * Utilitário de normalização fonética para síntese de voz (TTS) em Português do Brasil.
  *
  * Ajusta grafias de nomes próprios com raízes anglo-saxãs, germânicas ou convenções
- * cartorárias brasileiras para garantir que os motores neurais (ex: Faber, Cadu, Edresson) garantam...
+ * cartorárias brasileiras para garantir que os motores neurais (ex: Faber, Cadu)
  * pronunciem com a cadência, estresse tônico e sonoridade nativos do Brasil.
  */
 object PortuguesePhoneticHelper {
