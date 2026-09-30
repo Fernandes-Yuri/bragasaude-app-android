@@ -1,104 +1,87 @@
 # Braga Saúde — Android App
 
-> Aplicativo Android do assistente de saúde por voz Braga Saúde.  
-> Kotlin + Jetpack Compose + Firebase + Orb WebSocket.
+> Aplicativo móvel nativo do assistente de saúde por voz Braga Saúde.  
+> Kotlin + Jetpack Compose + Firebase + On-Device Neural Voice (Piper/Sherpa-ONNX) + Offline-First Room.
 
 ## 🏗️ Tech Stack
 
-- **Kotlin** + Jetpack Compose (UI)
-- **Firebase** (auth, FCM push, Firestore)
-- **WebSocket** (chat de voz streaming via Orb)
-- **Room** (SQLite local para cache offline)
-- **Hilt** (dependency injection)
-- **Retrofit/OkHttp** (REST API)
+- **Linguagem & UI:** Kotlin 2.1+, Jetpack Compose, Material 3 (Design System acessível e de alto contraste)
+- **Voz Neural On-Device (0% nuvem):** Piper TTS local via C++ JNI (`sherpa-onnx`) com síntese streaming PCM via `AudioTrack`
+- **Fallback de Síntese:** Android `TextToSpeech` nativo (Google Speech Engine) com chaveamento automático e zero latência
+- **Autenticação & Push:** Firebase Auth (OTP/Phone), Firebase Cloud Messaging (FCM)
+- **Bancos Locais & Criptografia:** Room Database com SQLCipher 4.6+ e Android Security Crypto (Hardware Keystore)
+- **Injeção de Dependências:** Dagger Hilt
+- **Rede & Sincronização:** BragaApiClient com Certificate Pinning em Release (Let's Encrypt leaf e intermediate CA)
+- **OCR & Processamento de Documentos:** Google ML Kit Text Recognition + Apache PDFBox Android
 
-## 🚀 Quick Start
+## 🚀 Arquitetura de Síntese Vocal On-Device
 
-### Pré-requisitos
-- Android Studio Hedgehog+
-- JDK 17+
-- Gradle 8+
-- Firebase project configurado (`google-services.json`)
+A partir da versão **1.3.0+**, a síntese de voz foi migrada 100% para o dispositivo do usuário (on-device), eliminando chamadas remotas à EC2:
 
-### Setup
+1. **Áudios Clínicos Pré-gravados:** Respostas e interjeições curtas de alta frequência executam direto da memória (`res/raw`, 0ms de latência).
+2. **Modelo Neural Faber (ONNX):** Download inteligente e seguro em segundo plano (`PiperModelDownloader`) no primeiro uso via HTTPS puro (sem acoplamento com headers de autenticação), com integridade validada e regras fonéticas `espeak-ng-data`.
+3. **Inferência C++ Sherpa-ONNX:** Execução multithread local na CPU do celular gerando fluxo PCM de ponto flutuante diretamente para o `AudioTrack`.
+4. **Fallback Universal:** Em caso de download pendente ou ausência de modelo, o `AndroidSystemTtsFallback` assume a fala imediatamente sem degradar a experiência do usuário.
 
-1. Clone o repositório
-2. Coloque `google-services.json` em `app/`
-3. Abra no Android Studio, sincronize o Gradle
-4. Rode no emulador ou dispositivo
+## ⚙️ Diretrizes de Compilação & CI/CD
 
-### Build
+> ⛔ **REGRA INVIOLÁVEL:** Toda compilação de APK e testes unitários é 100% delegada para o **GitHub Actions CI**. É proibido rodar `./gradlew assemble` ou builds pesadas localmente.
 
-```bash
-./gradlew assembleDebug    # APK de debug
-./gradlew assembleRelease  # APK de release (precisa de keystore)
-```
+### Fluxo de Trabalho (Branching & Releases)
 
-## ⚙️ Configuração
+1. Crie uma branch isolada para a tarefa (`feat/...` ou `fix/...`).
+2. Valide as regras de UI antes do commit:
+   ```bash
+   python tools/check_emojis_ui.py
+   ```
+3. Realize commits seguindo o padrão **Conventional Commits estritamente em Português (pt-BR)**.
+4. Faça o `git push` e aguarde a validação da pipeline `build.yml` no GitHub Actions.
+5. Após o merge na `master`, dispare a release oficial via GitHub CLI:
+   ```bash
+   gh workflow run android-apk.yml -f destino=lancar-release -f variante=release
+   ```
 
-### URL da API
+### Configuração de Ambiente
 
 Definida em `app/build.gradle.kts`:
+- `BASE_URL`: `"https://api.bragasaude.online"` (Gateway de APIs)
+- `WEBSERVICE_BASE_URL`: `"https://portal.bragasaude.online"` (Portal administrativo e suporte)
+- Versão Atual: **v1.3.2 (build 16)**
 
-```kotlin
-buildConfigField("String", "BASE_URL", "\"https://bragasaude.online\"")
-```
-
-Para desenvolvimento local, troque para `http://192.168.x.x:8080`.
-
-### Firebase
-
-- `google-services.json` na raiz de `app/`
-- Serviços usados: Authentication, Firestore, FCM, Crashlytics
-
-## 📁 Estrutura
+## 📁 Estrutura de Diretórios
 
 ```
 app/src/main/java/br/com/bragasaude/
-├── BragaApplication.kt       # Application + Hilt
-├── di/                       # Dependency injection modules
+├── BragaApplication.kt       # Application, Dagger Hilt & inicialização segura
+├── di/                       # Módulos de injeção de dependências (Hilt)
 ├── data/
-│   ├── local/                # Room DB, DAOs, Entities
-│   ├── remote/
-│   │   ├── api/              # BragaApiClient (REST)
-│   │   ├── ai/               # OrbWebSocket, BragaLocalAiClient, NeuralAudioPlayer
-│   │   ├── sync/             # SyncManager, FirebaseMessagingService
-│   │   ├── service/          # NotificationClient
-│   │   └── repository/       # Repositories
-│   └── util/                 # MovementManager, Mappers
-├── domain/                   # Domain models + VoiceHealthExecutor
-├── ui/                       # Compose screens
-│   ├── onboarding/
-│   ├── profile/
-│   ├── voice/                # Orb voice chat UI
-│   └── home/
-└── util/                     # Helpers (QrCode, Phonetic, AppPreferences)
+│   ├── local/
+│   │   ├── db/               # Room DB, DAOs, Entidades criptografadas (SQLCipher)
+│   │   └── voice/            # Motor On-Device: PiperOnDeviceEngine, PiperModelDownloader,
+│   │                         #   AndroidSystemTtsFallback e PcmStreamAudioPlayer
+│   └── remote/
+│       ├── api/              # BragaApiClient (REST, Cert Pinning, AuthInterceptor)
+│       ├── ai/               # NeuralAudioPlayer, OrbWebSocket, BragaLocalAiClient
+│       ├── auth/             # AuthService, SessionManager
+│       └── sync/             # SyncManager, SyncScheduler, BragaFirebaseMessagingService
+├── domain/                   # Regras de negócio, Parsers clínicos, Executores de voz
+├── ui/                       # Telas e componentes Jetpack Compose
+│   ├── voice/                # Interface do Assistente Conversacional (Orb)
+│   ├── home/                 # Dashboard principal de saúde
+│   ├── profile/              # Perfil clínico, cuidadores e histórico
+│   └── theme/                # Tipografia, Cores e Design System
+└── util/                     # Utilitários (QR Code, Formatação fonética, Preferências)
 ```
 
-## 🔌 Funcionalidades
+## 🔌 Funcionalidades Principais
 
-- **Autenticação** (OTP via Firebase)
-- **Chat de voz** (Orb WebSocket com streaming TTS)
-- **Perfil de saúde** (dados biométricos, metas)
-- **Sincronização offline-first** (Room → API)
-- **Monitoramento de saúde** (vitals, métricas diárias)
-- **Integração familiar** (bindings, mensagens)
-- **Feed social** (posts, reações)
-- **Notificações push** (FCM)
-- **Relatórios PDF** (dados de saúde exportáveis)
+- **Assistente de Voz Clínico On-Device:** Reconhecimento e síntese contínua com streaming de áudio PCM.
+- **Triagem e Registro de Vitais:** Pressão arterial, glicemia, peso, hidratação e sintomas.
+- **Modo Cuidador e Ponte Familiar:** Vínculo seguro entre familiares, histórico compartilhado e alertas.
+- **Mural Social & Gamificação:** Registro de hábitos saudáveis, reações e streaks de cuidado.
+- **Sincronização Offline-First:** Armazenamento local seguro e sincronização bidirecional idempotente.
+- **Preservação R8/ProGuard:** Regras estritas de ofuscação com proteção total de assinaturas JNI C++ nativas.
 
-## 🔒 Segurança
-
-- `google-services.json` NUNCA versionado
-- `keystore` e credenciais no `.gitignore`
-- ProGuard/R8 em release
-- Certificate pinning (em desenvolvimento)
-
-## 📱 Releases (OTA)
-
-O app consulta `/api/app/latest` no gateway para verificar updates.
-
-As releases são gerenciadas via `app/build.gradle.kts` → `versionCode` / `versionName`.
 
 ## Identidade e autenticação
 
