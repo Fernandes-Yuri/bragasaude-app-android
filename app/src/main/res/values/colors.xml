@@ -14,7 +14,7 @@
     <color name="neutral_100">#F1F5F9</color>
     <color name="background_light">#FAFAFA</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="splash_background">#FFFFFF</color>
+    <color name="splash_background">#F0FDFA</color>
     
     <!-- Vermelho apenas para destaque, alertas SOS e erros -->
     <color name="accent_red">#DC2626</color>
