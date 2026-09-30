@@ -32,13 +32,14 @@ class PiperOnDeviceEngine @Inject constructor(
     private val isInitialized = AtomicBoolean(false)
     private val isInitializing = AtomicBoolean(false)
 
+    var customModelDir: File? = null
+
     /**
      * Diretório onde os arquivos do modelo (ONNX, tokens e regras fonéticas)
      * residem no armazenamento interno do aplicativo.
      */
-    val modelDir: File by lazy {
-        File(context.filesDir, MODEL_FOLDER).apply { if (!exists()) mkdirs() }
-    }
+    val modelDir: File
+        get() = customModelDir ?: File(context.filesDir, MODEL_FOLDER).apply { if (!exists()) mkdirs() }
 
     /**
      * Verifica se os arquivos essenciais do modelo Piper estão presentes.
