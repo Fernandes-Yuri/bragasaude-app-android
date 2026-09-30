@@ -153,7 +153,10 @@ fun ProfileDetailScreen(
     }
 
     LaunchedEffect(communityError) {
-        if (!showCommunityDialog) communityError?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+        if (!showCommunityDialog) communityError?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            profileViewModel.consumeCommunityError()
+        }
     }
 
     if (showCommunityDialog) {

@@ -331,8 +331,7 @@ class BragaApiClient @Inject constructor(
     // ==================== FEED SOCIAL ====================
 
     suspend fun getCommunityNickname(): String = withContext(Dispatchers.IO) {
-        val result = getJson("$baseUrl/api/community/profile", strict = true)
-            ?: throw java.io.IOException("Não foi possível carregar o nome comunitário.")
+        val result = getJson("$baseUrl/api/community/profile", strict = false) ?: return@withContext ""
         result.optString("nickname", "").takeUnless { it == "null" }.orEmpty()
     }
 
