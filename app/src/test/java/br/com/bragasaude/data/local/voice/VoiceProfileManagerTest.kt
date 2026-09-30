@@ -23,8 +23,10 @@ class VoiceProfileManagerTest {
         every { context.filesDir } returns temporary.root
         every { context.getSharedPreferences("voice_profile", Context.MODE_PRIVATE) } returns preferences
         every { preferences.getString("active_voice_id", null) } answers { saved }
+        every { preferences.getBoolean("has_chosen_voice", false) } answers { saved != null }
         every { preferences.edit() } returns editor
         every { editor.putString("active_voice_id", any()) } answers { saved = secondArg(); editor }
+        every { editor.putBoolean("has_chosen_voice", any()) } returns editor
         every { editor.commit() } returns true
         return VoiceProfileManager(context, downloader, engine, system)
     }

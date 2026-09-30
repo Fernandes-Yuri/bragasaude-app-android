@@ -16,7 +16,8 @@ data class ActiveVoiceState(
     val preparingId: String? = null,
     val phase: String? = "Verificando voz",
     val progress: Float? = null,
-    val error: String? = null
+    val error: String? = null,
+    val hasChosenVoice: Boolean = false
 ) { val busy: Boolean get() = phase != null }
 
 @Singleton
@@ -40,17 +41,18 @@ class VoiceProfileManager @Inject constructor(
         scope.launch { selection.withLock {
             try {
                 var id = preferences.getString("active_voice_id", null)
+                val explicitlyConfigured = preferences.getBoolean("has_chosen_voice", false)
                 // Preserva o Faber já instalado pela versão anterior, sem baixar novamente.
                 val legacy = File(context.filesDir, "piper_voice")
                 if (id == null && VoiceModelStore.valid(legacy)) {
                     store.current.parentFile?.mkdirs()
                     if (!store.current.exists()) check(legacy.renameTo(store.current))
                     File(store.current, "voice_id").writeText("faber")
-                    persist("faber")
+                    persist("faber", markChosen = true)
                     id = "faber"
                 }
                 if (id == null && VoiceModelStore.id(store.current) == "faber" && VoiceModelStore.valid(store.current)) {
-                    persist("faber")
+                    persist("faber", markChosen = true)
                     id = "faber"
                 }
                 val selected = id?.takeIf { VoiceCatalog.find(it) != null } ?: VoiceCatalog.SYSTEM_ID
@@ -58,11 +60,16 @@ class VoiceProfileManager @Inject constructor(
                 val usable = selected != VoiceCatalog.SYSTEM_ID &&
                     VoiceModelStore.id(store.current) == selected && VoiceModelStore.valid(store.current)
                 if (!usable) {
-                    persist(VoiceCatalog.SYSTEM_ID)
+                    persist(VoiceCatalog.SYSTEM_ID, markChosen = explicitlyConfigured)
                     store.removeModels()
                 }
                 VoiceModelStore.clear(legacy)
-                mutableState.value = ActiveVoiceState(activeId = if (usable) selected else VoiceCatalog.SYSTEM_ID, phase = null)
+                val hasChosen = explicitlyConfigured || (id != null && usable)
+                mutableState.value = ActiveVoiceState(
+                    activeId = if (usable) selected else VoiceCatalog.SYSTEM_ID,
+                    phase = null,
+                    hasChosenVoice = hasChosen
+                )
             } catch (_: Exception) {
                 mutableState.value = ActiveVoiceState(phase = null, error = "Não foi possível recuperar a voz. O dispositivo será usado até uma nova seleção.")
             }
@@ -109,15 +116,16 @@ class VoiceProfileManager @Inject constructor(
                         }
                     }
                 }
-                mutableState.value = ActiveVoiceState(activeId = id, phase = null)
+                mutableState.value = ActiveVoiceState(activeId = id, phase = null, hasChosenVoice = true)
                 // A confirmação usa a voz realmente selecionada.
                 playSpeech("Olá! Estou pronto para ajudar.", {}, {})
             } catch (e: CancellationException) {
-                mutableState.value = ActiveVoiceState(activeId = if (committed) id else oldId, phase = null)
+                mutableState.value = ActiveVoiceState(activeId = if (committed) id else oldId, phase = null, hasChosenVoice = state.value.hasChosenVoice)
                 throw e
             } catch (_: Exception) {
                 mutableState.value = ActiveVoiceState(
                     activeId = if (committed) id else oldId, phase = null,
+                    hasChosenVoice = if (committed) true else state.value.hasChosenVoice,
                     error = if (committed) "Voz selecionada. A limpeza será retomada ao abrir o aplicativo." else
                         "Não foi possível preparar a voz. Verifique a conexão e o espaço livre e tente novamente. Sua seleção anterior foi mantida."
                 )
@@ -132,14 +140,29 @@ class VoiceProfileManager @Inject constructor(
         }
     }
 
+    fun selectSystemExplicit() {
+        persist(VoiceCatalog.SYSTEM_ID, markChosen = true)
+        mutableState.value = state.value.copy(
+            activeId = VoiceCatalog.SYSTEM_ID,
+            phase = null,
+            hasChosenVoice = true
+        )
+    }
+
+    fun needsOnboarding(): Boolean = !state.value.hasChosenVoice
+
     fun cancelDownload() {
         if (state.value.phase != "Carregando voz") selectionJob?.cancel()
     }
 
     fun dismissError() { mutableState.value = state.value.copy(error = null) }
 
-    private fun persist(id: String) {
-        check(preferences.edit().putString("active_voice_id", id).commit()) { "Falha ao salvar seleção" }
+    private fun persist(id: String, markChosen: Boolean = true) {
+        val editor = preferences.edit().putString("active_voice_id", id)
+        if (markChosen) {
+            editor.putBoolean("has_chosen_voice", true)
+        }
+        check(editor.commit()) { "Falha ao salvar seleção" }
     }
 
     suspend fun playSpeech(text: String, onStart: () -> Unit, onDone: () -> Unit): Boolean {
