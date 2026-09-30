@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.components
+package br.com.bragasaude.ui.components
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -411,12 +411,16 @@ fun DraggableAiAssistantFab(
         }
         val shadowDp by animateDpAsState(targetShadow, label = "Shadow")
 
-        // 2. Continuous Glow Pulse + Concentric Rings + Shockwave
-        Canvas(
-            modifier = Modifier
-                .offset { IntOffset(offsetX.value.roundToInt(), offsetY.value.roundToInt()) }
-                .size(62.dp)
-        ) {
+        val isModalOpen = LocalBragaModalState.current.isOpen
+        val shouldHideOrbVisuals = isModalOpen && !showVoiceOnboarding && !showEmergencyDialog
+
+        if (!shouldHideOrbVisuals) {
+            // 2. Continuous Glow Pulse + Concentric Rings + Shockwave
+            Canvas(
+                modifier = Modifier
+                    .offset { IntOffset(offsetX.value.roundToInt(), offsetY.value.roundToInt()) }
+                    .size(62.dp)
+            ) {
             val center = Offset(size.width / 2, size.height / 2)
             val canvasFabSize = size.width
 
@@ -642,6 +646,7 @@ fun DraggableAiAssistantFab(
                     )
                 }
             }
+        }
         }
     }
 
