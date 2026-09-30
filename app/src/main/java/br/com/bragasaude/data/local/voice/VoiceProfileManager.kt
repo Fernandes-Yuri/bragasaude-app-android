@@ -31,6 +31,7 @@ class VoiceProfileManager @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val selection = Mutex()
     private val playback = Mutex()
+    private val speechGeneration = java.util.concurrent.atomic.AtomicLong()
     private val mutableState = MutableStateFlow(ActiveVoiceState())
     val state = mutableState.asStateFlow()
     private var selectionJob: Job? = null
@@ -124,6 +125,11 @@ class VoiceProfileManager @Inject constructor(
                 withContext(NonCancellable) { runCatching { VoiceModelStore.clear(store.staging) } }
             }
         } }
+        selectionJob?.invokeOnCompletion {
+            if (state.value.busy && state.value.preparingId == id) {
+                mutableState.value = state.value.copy(preparingId = null, phase = null, progress = null)
+            }
+        }
     }
 
     fun cancelDownload() {
@@ -137,15 +143,19 @@ class VoiceProfileManager @Inject constructor(
     }
 
     suspend fun playSpeech(text: String, onStart: () -> Unit, onDone: () -> Unit): Boolean {
+        val ticket = speechGeneration.get()
         val played = playback.withLock {
-            if (state.value.activeId != VoiceCatalog.SYSTEM_ID && !state.value.busy)
+            currentCoroutineContext().ensureActive()
+            if (ticket != speechGeneration.get()) throw CancellationException("Fala interrompida")
+            if (state.value.activeId != VoiceCatalog.SYSTEM_ID && state.value.phase != "Carregando voz")
                 engine.playStream(text, onStart = onStart, onDone = onDone)
             else false
         }
         currentCoroutineContext().ensureActive()
+        if (ticket != speechGeneration.get()) throw CancellationException("Fala interrompida")
         return played || system.speak(text, onStart, onDone)
     }
 
     suspend fun previewSystem(): Boolean = system.speak("Olá! Estou pronto para ajudar.")
-    fun stop() { engine.stop(); system.stop() }
+    fun stop() { speechGeneration.incrementAndGet(); engine.stop(); system.stop() }
 }
