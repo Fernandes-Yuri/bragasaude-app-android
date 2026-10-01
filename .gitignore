@@ -9,12 +9,25 @@ captured_images/
 *.jks
 keystore.properties
 
-# Bloqueio estrito de binários de compilação, permitindo apenas a release oficial em releases/
+# Artefatos são publicados no GitHub Actions ou GitHub Releases
 *.apk
-!releases/*.apk
 
 # Arquivos temporarios de mensagem de commit ( nunca devem ser versionados )
 _commit*.txt
 logcat*.txt
 *.log
 
+
+# Dependências e saídas geradas das funções
+/functions/node_modules/
+/functions/lib/
+/functions/dataconnect-generated/
+__pycache__/
+*.pyc
+
+# Documentação operacional e relatórios internos pertencem à base Contexto
+/docs/
+/relatorios/
+/_PENDENTE/
+/_HISTORICO/
+/VOZES_ON_DEVICE.md
