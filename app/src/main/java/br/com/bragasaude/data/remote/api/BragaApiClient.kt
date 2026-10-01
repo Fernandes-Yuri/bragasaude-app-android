@@ -1173,41 +1173,6 @@ class BragaApiClient @Inject constructor(
         }
     }
 
-    suspend fun uploadExamFile(userId: String, fileName: String, fileBytes: ByteArray): String? = withContext(Dispatchers.IO) {
-        var conn: HttpURLConnection? = null
-        try {
-            val encodedFileName = java.net.URLEncoder.encode(fileName, "UTF-8")
-            val url = URL("$baseUrl/api/upload/exam/$userId?filename=$encodedFileName")
-            conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                connectTimeout = 8000
-                readTimeout = 15000
-                doOutput = true
-                doInput = true
-                setRequestProperty("Content-Type", "application/pdf")
-                setFixedLengthStreamingMode(fileBytes.size)
-                attachIdentity(url.toString())
-            }
-            conn.outputStream.use { os ->
-                os.write(fileBytes)
-                os.flush()
-            }
-            if (conn.responseCode in 200..299) {
-                val response = conn.inputStream.bufferedReader().use { it.readText() }
-                val json = JSONObject(response)
-                json.optString("fileUrl", null)
-            } else {
-                Log.w(TAG, "Falha no upload do exame: HTTP ${conn.responseCode}")
-                null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao fazer upload do exame para o servidor: ${e.message}", e)
-            null
-        } finally {
-            try { conn?.disconnect() } catch (_: Exception) {}
-        }
-    }
-
     // ==================== NOVOS CONTRATOS DE EXAMES (D49 / FASE 3) ====================
 
     private fun deleteRequest(urlString: String): Boolean {
@@ -1253,6 +1218,10 @@ class BragaApiClient @Inject constructor(
         try {
             val json = JSONObject().apply {
                 if (examId != null) put("exam_id", examId)
+                put("cloud_consent", true)
+                put("terms_version", br.com.bragasaude.domain.ExamStorageTerms.VERSION)
+                put("valid_exam_attested", true)
+                put("non_diagnostic_purpose_accepted", true)
                 put("title", title)
                 put("category", category)
                 put("exam_date", examDate)
@@ -1277,6 +1246,34 @@ class BragaApiClient @Inject constructor(
             Log.e(TAG, "Erro ao sincronizar exame manual: ${e.message}", e)
             false
         }
+    }
+
+    suspend fun downloadExamOriginal(fileUrl: String): ByteArray = withContext(Dispatchers.IO) {
+        val source = URL(fileUrl)
+        val api = URL(baseUrl)
+        require(source.protocol == api.protocol && source.host == api.host && source.port == api.port &&
+            source.path.startsWith("/api/files/exams/")) { "Origem do arquivo de exame inválida." }
+        val connection = (source.openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = CONNECT_TIMEOUT_MS
+            readTimeout = READ_TIMEOUT_MS
+            instanceFollowRedirects = false
+            attachIdentity(fileUrl)
+        }
+        try {
+            check(connection.responseCode in 200..299) { "Não foi possível obter um exame original. Tente novamente." }
+            connection.inputStream.use { input ->
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                var read = input.read(buffer)
+                while (read != -1) {
+                    check(output.size() + read <= 35 * 1024 * 1024) { "Arquivo de exame muito grande para exportar." }
+                    output.write(buffer, 0, read)
+                    read = input.read(buffer)
+                }
+                output.toByteArray()
+            }
+        } finally { connection.disconnect() }
     }
 
     suspend fun uploadExamContract(
@@ -1321,6 +1318,8 @@ class BragaApiClient @Inject constructor(
                 writeFormField("exam_type", examType)
                 writeFormField("cloud_consent", cloudConsent.toString())
                 writeFormField("terms_version", termsVersion)
+                writeFormField("valid_exam_attested", cloudConsent.toString())
+                writeFormField("non_diagnostic_purpose_accepted", cloudConsent.toString())
 
                 val mimeType = when {
                     fileName.endsWith(".pdf", ignoreCase = true) -> "application/pdf"

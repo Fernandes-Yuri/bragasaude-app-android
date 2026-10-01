@@ -74,16 +74,14 @@ object ClinicalReportAggregator {
         vitals: List<RemoteVitalSign>,
         dailyMetrics: List<DailyMetricsEntity>
     ): MonthlyCycleReport {
-        val cal = Calendar.getInstance()
-        val endDateStr = dateFormat.format(cal.time)
-        val cutoffCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -30) }
-        val startDateStr = dateFormat.format(cutoffCal.time)
-        val cutoffMillis = cutoffCal.timeInMillis
+        val period = PersonalReportPeriod.current()
+        val endDateStr = dateFormat.format(Date(period.endMillis))
+        val startDateStr = dateFormat.format(Date(period.startMillis))
 
         // 1. Filtragem da janela de 30 dias para sinais vitais
         val recentVitals = vitals.filter { v ->
             val measuredDate = v.measuredAt?.let { parseDate(it) }
-            measuredDate != null && measuredDate.time >= cutoffMillis
+            measuredDate != null && period.contains(measuredDate.time)
         }.sortedBy { it.measuredAt?.let { d -> parseDate(d)?.time } ?: 0L }
 
         // --- 2. PRESSÃO ARTERIAL (Isolada de registros hídricos) ---
@@ -183,7 +181,7 @@ object ClinicalReportAggregator {
 
         // --- 5. ATIVIDADE FÍSICA (30 Dias) ---
         val recentMetrics = dailyMetrics
-            .filter { it.date >= startDateStr }
+            .filter { it.date in startDateStr..endDateStr }
             .sortedBy { it.date }
 
         val stepGoal = profile?.stepGoal ?: 8000

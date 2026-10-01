@@ -50,7 +50,7 @@ data class EditableExamItemState(
  * Tela de Conferência Humana Obrigatória.
  * Substitui o antigo ValidationDialog por uma experiência completa, espaçosa e acessível para adultos e idosos.
  *
- * NENHUM laudo é salvo no prontuário definitivo sem a conferência e aprovação explícita do paciente.
+ * A transcrição só é salva após a conferência e aprovação explícita do usuário.
  */
 @Composable
 fun ExamReviewScreen(
@@ -88,7 +88,7 @@ fun ExamReviewScreen(
     // Regras de validação do contrato
     val activeItems = itemsState.filter { !it.isDeleted }
     val isConfirmEnabled = examTitle.isNotBlank() &&
-            activeItems.isNotEmpty() &&
+            (activeItems.isNotEmpty() || !exam.fileUrl.isNullOrBlank()) &&
             activeItems.all { it.isNumericValid }
 
     Scaffold(
@@ -96,7 +96,7 @@ fun ExamReviewScreen(
         topBar = {
             EmeraldHeaderBanner(
                 title = "Conferência Obrigatória",
-                subtitle = "Verifique os valores antes de salvar no prontuário",
+                subtitle = "Verifique os valores antes de salvar nos seus exames",
                 onBack = onBack
             )
         },
@@ -153,7 +153,7 @@ fun ExamReviewScreen(
                         Icon(Icons.Default.Check, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "Confirmar e Gravar no Meu Prontuário",
+                            text = "Confirmar e salvar nos meus exames",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
@@ -161,7 +161,7 @@ fun ExamReviewScreen(
 
                     if (!isConfirmEnabled) {
                         Text(
-                            text = if (activeItems.isEmpty()) "Adicione ao menos 1 parâmetro clínico para salvar."
+                            text = if (activeItems.isEmpty()) "Adicione ao menos 1 valor do exame para salvar."
                             else "Preencha valores numéricos maiores que zero em todos os exames listados.",
                             style = MaterialTheme.typography.labelSmall,
                             color = BragaEmergencyOrange,
@@ -217,7 +217,7 @@ fun ExamReviewScreen(
                             )
                             Spacer(Modifier.height(2.dp))
                             Text(
-                                text = "Nossa inteligência artificial transcreveu os dados. Confira cada número com o laudo em mãos para garantir fidelidade clínica absoluta.",
+                                text = "Nossa inteligência artificial transcreveu os dados. Confira cada número com o laudo em mãos antes de salvar; a transcrição pode conter erros.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = BragaTextPrimary,
                                 lineHeight = 18.sp
@@ -290,7 +290,7 @@ fun ExamReviewScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Parâmetros Clínicos Identificados",
+                            text = "Valores identificados no exame",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = BragaTextPrimary,
@@ -537,7 +537,7 @@ private fun AddNewParamDialog(
 
     BragaFormSheet(
         onDismissRequest = onDismiss,
-        title = { Text("Adicionar Parâmetro Clínico", fontWeight = FontWeight.Bold) },
+        title = { Text("Adicionar valor do exame", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(

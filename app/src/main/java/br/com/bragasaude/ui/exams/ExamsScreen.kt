@@ -89,15 +89,22 @@ fun ExamsScreen(
     var showUploadProgress by remember { mutableStateOf(true) }
     LaunchedEffect(uploadProgress == null) { if (uploadProgress == null) showUploadProgress = true }
     val pendingValidation by viewModel.pendingExamValidation.collectAsState()
-    val showGlucosePrompt by viewModel.showGlucosePrompt.collectAsState()
     var showAddBottomSheet by remember { mutableStateOf(false) }
     var currentFlow by remember { mutableStateOf(ExamsSubFlow.LIST) }
     
-    // FASE 3: Governança LGPD e Consentimento
+    val manualExamSaved by viewModel.manualExamSaved.collectAsState()
+    LaunchedEffect(manualExamSaved) {
+        if (manualExamSaved) {
+            currentFlow = ExamsSubFlow.LIST
+            viewModel.clearManualExamSaved()
+        }
+    }
+
+    // Consentimento específico por envio
     val showCloudConsentDialog by viewModel.showCloudConsentDialog.collectAsState()
     var examToDelete by remember { mutableStateOf<RemoteExam?>(null) }
 
-    // FASE 4: Dossiê Médico Dinâmico
+    // Exportação dos registros e arquivos originais
     val isCompilingDossier by viewModel.isCompilingDossier.collectAsState()
     val compiledDossierResult by viewModel.compiledDossierResult.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
@@ -124,9 +131,9 @@ fun ExamsScreen(
                     setDataAndType(uri, "application/pdf")
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
-                context.startActivity(Intent.createChooser(intent, "Dossiê Médico Completo"))
+                context.startActivity(Intent.createChooser(intent, "Nuvem de Exames em PDF"))
             } catch (e: Exception) {
-                Toast.makeText(context, "Dossiê gerado com sucesso (${result.totalPagesCount} páginas).", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Arquivo de exames gerado com sucesso (${result.totalPagesCount} páginas).", Toast.LENGTH_LONG).show()
                 e.printStackTrace()
             }
             viewModel.clearCompiledDossier()
@@ -172,6 +179,18 @@ fun ExamsScreen(
         }
     }
 
+    // Termo específico, renovado para cada envio
+    if (showCloudConsentDialog) {
+        br.com.bragasaude.ui.exams.components.CloudConsentDialog(
+            onConfirm = { accepted ->
+                viewModel.onCloudConsentDecision(accepted)
+            },
+            onDismiss = {
+                viewModel.onCloudConsentDismissed()
+            }
+        )
+    }
+
     // 1. Conferência Humana Obrigatória (Tela Completa)
     if (pendingValidation != null) {
         val (exam, items) = pendingValidation!!
@@ -203,7 +222,6 @@ fun ExamsScreen(
         ManualExamEntryScreen(
             onBack = { currentFlow = ExamsSubFlow.LIST },
             onSave = { title, category, examDate, items ->
-                currentFlow = ExamsSubFlow.LIST
                 viewModel.saveManualExam(title, category, examDate, items)
             }
         )
@@ -230,7 +248,7 @@ fun ExamsScreen(
                             )
                         } else {
                             IconButton(onClick = { viewModel.compileMedicalDossier() }) {
-                                Icon(Icons.Default.PictureAsPdf, contentDescription = "Dossiê Médico", tint = Color.White)
+                                Icon(Icons.Default.PictureAsPdf, contentDescription = "Nuvem de Exames", tint = Color.White)
                             }
                         }
                     }
@@ -261,7 +279,7 @@ fun ExamsScreen(
                     DashedUploadCard(onClick = { showAddBottomSheet = true })
                     Spacer(Modifier.height(12.dp))
                     
-                    // Botão destacado de Dossiê Dinâmico Estilo PowerBI
+                    // Exportação da Nuvem de Exames
                     if (exams.isNotEmpty()) {
                         Button(
                             onClick = { viewModel.compileMedicalDossier() },
@@ -276,11 +294,11 @@ fun ExamsScreen(
                             if (isCompilingDossier) {
                                 CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                                 Spacer(Modifier.width(10.dp))
-                                Text("Compilando Dossiê Dinâmico...", fontWeight = FontWeight.Bold)
+                                Text("Preparando seus exames...", fontWeight = FontWeight.Bold)
                             } else {
                                 Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(10.dp))
-                                Text("Gerar Dossiê Médico Dinâmico (PDF)", fontWeight = FontWeight.Bold)
+                                Text("Exportar Nuvem de Exames (PDF)", fontWeight = FontWeight.Bold)
                             }
                         }
                         Spacer(Modifier.height(12.dp))
@@ -299,7 +317,7 @@ fun ExamsScreen(
                             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = BragaEmerald, modifier = Modifier.size(22.dp))
                             Spacer(Modifier.width(10.dp))
                             Text(
-                                "A IA transcreve os valores do PDF automaticamente e você confere cada um antes de salvar no seu prontuário permanente.",
+                                "Organize seus exames e compartilhe os arquivos com seu médico. Confira os valores transcritos antes de salvar: o app não interpreta exames nem faz diagnóstico.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = BragaTextPrimary,
                                 lineHeight = 18.sp,
@@ -353,29 +371,6 @@ fun ExamsScreen(
             onManualEntry = {
                 showAddBottomSheet = false
                 currentFlow = ExamsSubFlow.MANUAL_ENTRY
-            }
-        )
-    }
-
-    if (showGlucosePrompt) {
-        BragaAlertDialog(
-            onDismissRequest = { viewModel.dismissGlucosePrompt() },
-            title = { Text("Monitoramento de Glicose", fontWeight = FontWeight.Bold) },
-            text = {
-                Text(
-                    "Detectamos parâmetros de glicose neste exame (glicose/HbA1c). " +
-                    "Deseja ativar o monitoramento de glicose no aplicativo?"
-                )
-            },
-            confirmButton = {
-                Button(onClick = { viewModel.enableDiabetesMonitoring() }) {
-                    Text("Ativar")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissGlucosePrompt() }) {
-                    Text("Agora não")
-                }
             }
         )
     }
@@ -442,17 +437,7 @@ fun ExamsScreen(
         )
     }
 
-    // Diálogo de Consentimento de Nuvem LGPD (Art. 43, III)
-    if (showCloudConsentDialog) {
-        br.com.bragasaude.ui.exams.components.CloudConsentDialog(
-            onConfirm = { accepted ->
-                viewModel.onCloudConsentDecision(accepted)
-            },
-            onDismiss = {
-                viewModel.onCloudConsentDismissed()
-            }
-        )
-    }
+
 }
 
 @Composable
@@ -557,9 +542,9 @@ private fun examStatusBadge(status: String): Pair<String, BragaBadgeType> {
 
 private fun examStatusHint(status: String): String? {
     return when (status) {
-        "uploaded" -> "Aguardando análise da IA"
+        "uploaded" -> "Arquivo recebido — aguardando transcrição"
         "analyzed", "processing" -> "Transcrição concluída — confira os valores antes de salvar"
-        "confirmed", "validated", "user_confirmed" -> "Valores conferidos e salvos no seu prontuário"
+        "confirmed", "validated", "user_confirmed" -> "Valores conferidos e salvos nos seus exames"
         else -> null
     }
 }
