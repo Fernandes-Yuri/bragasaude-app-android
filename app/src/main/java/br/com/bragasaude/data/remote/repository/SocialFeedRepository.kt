@@ -116,14 +116,12 @@ class SocialFeedRepository @Inject constructor(
         val userProfile = profileDao.getProfileOneShot(userId)
         val nickname = apiClient.getCommunityNickname()
         val name = br.com.bragasaude.domain.communityDisplayName(userName ?: userProfile?.fullName, nickname)
-        val level = userProfile?.currentLevel ?: 1
         val post = SocialPostEntity(
             id = UUID.randomUUID().toString(),
             userId = userId,
             userName = name,
             userAvatarUrl = userProfile?.customPhotoUri,
             userAvatarIdentifier = userProfile?.avatarIdentifier,
-            userLevel = level,
             postType = postType,
             title = title,
             description = description,
