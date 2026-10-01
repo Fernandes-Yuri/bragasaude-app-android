@@ -221,10 +221,10 @@ jobs:
       # Agora quebra o CI se alguém voltar a colocar emoji numa string de UI.
       # Python puro, sem dependências — vem com o ubuntu-latest.
       - name: Gate AUD-AN02 (emojis em strings de UI)
-        run: python3 tools/check_emojis_ui.py
+        run: python3 .github/scripts/check_emojis_ui.py
 
       - name: Validar padrão compartilhado de janelas
-        run: python3 tools/check_modal_consistency.py
+        run: python3 .github/scripts/check_modal_consistency.py
 
       - name: Rodar testes unitários
         run: |
