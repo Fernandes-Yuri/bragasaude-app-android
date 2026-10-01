@@ -31,8 +31,8 @@ android {
         applicationId = "br.com.bragasaude"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18
-        versionName = "1.3.4"
+        versionCode = 19
+        versionName = "1.3.5"
 
         buildConfigField("String", "BASE_URL", "\"https://api.bragasaude.online\"")
         // AUD-AN33: o feedback ia pra URL hardcoded do Firebase Hosting
