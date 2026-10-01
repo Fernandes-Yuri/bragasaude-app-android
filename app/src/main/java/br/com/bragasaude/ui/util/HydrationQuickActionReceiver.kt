@@ -3,7 +3,6 @@
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
 import br.com.bragasaude.data.local.VitalSignDao
 import br.com.bragasaude.data.local.VitalSignEntity
 import com.google.firebase.auth.FirebaseAuth
@@ -25,8 +24,9 @@ class HydrationQuickActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val amountMl = intent.getIntExtra("amount_ml", 250)
+        if (amountMl <= 0) return
         val userId = auth.currentUser?.uid ?: return
-
+        val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 vitalSignDao.insert(
@@ -38,6 +38,8 @@ class HydrationQuickActionReceiver : BroadcastReceiver() {
                         pendingSync = true
                     )
                 )
+                // Primeiro registra, depois encerra o lembrete e mostra a confirmação sem ações.
+                NotificationHelper.confirmHydrationRegistration(context, amountMl)
                 // Dispara sincronização em segundo plano para persistir no Cloud SQL
                 val constraints = androidx.work.Constraints.Builder()
                     .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
@@ -47,11 +49,10 @@ class HydrationQuickActionReceiver : BroadcastReceiver() {
                     .build()
                 androidx.work.WorkManager.getInstance(context).enqueue(request)
 
-                // Cancela a notificação após registrar
-                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-                notificationManager.cancel(2002)
             } catch (e: Exception) {
                 e.printStackTrace()
+            } finally {
+                pendingResult.finish()
             }
         }
     }

@@ -367,7 +367,7 @@ class BragaApiClient @Inject constructor(
             val list = mutableListOf<SocialPostEntity>()
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
-                val cAt = try { isoFormat.parse(obj.getString("created_at")) ?: Date() } catch (_: Exception) { Date() }
+                val cAt = br.com.bragasaude.domain.parseSocialPostDate(obj.getString("created_at"))
                 list.add(
                     SocialPostEntity(
                         id = obj.getString("id"),
@@ -377,7 +377,7 @@ class BragaApiClient @Inject constructor(
                         ),
                         userAvatarUrl = obj.optString("photo_url", "").takeIf { it.isNotBlank() && it != "null" },
                         userAvatarIdentifier = obj.optString("avatar_identifier", "").takeIf { it.isNotBlank() && it != "null" },
-                        userLevel = 1,
+                        userLevel = obj.optInt("user_level", 1),
                         postType = obj.getString("post_type"),
                         title = obj.getString("title"),
                         description = obj.optString("description", null),

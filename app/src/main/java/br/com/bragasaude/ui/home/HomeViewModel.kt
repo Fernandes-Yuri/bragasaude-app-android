@@ -84,11 +84,26 @@ class HomeViewModel @Inject constructor(
     private val todayDateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
     private val dismissedAlerts: MutableSet<String> = alertPrefs.getStringSet("dismissed_alerts_$todayDateStr", emptySet())?.toMutableSet() ?: mutableSetOf()
 
+    private val readAlertsKey = "read_alerts_${auth.currentUser?.uid ?: BragaConstants.GUEST_UID}_$todayDateStr"
+    private val readStateStore = br.com.bragasaude.data.local.AlertReadStateStore(alertPrefs, readAlertsKey)
+    val readAlerts = readStateStore.readAlerts
+    val alertIdentifiedAt = readStateStore.identifiedAt
+    private val alertPrefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+        when (key) {
+            "dismissed_alerts_$todayDateStr" -> {
+                dismissedAlerts.clear()
+                dismissedAlerts.addAll(prefs.getStringSet(key, emptySet()).orEmpty())
+                _clinicalAlerts.value = _clinicalAlerts.value.filterNot { it in dismissedAlerts }
+            }
+        }
+    }
+
     private fun saveDismissedAlerts() {
         alertPrefs.edit().putStringSet("dismissed_alerts_$todayDateStr", dismissedAlerts).apply()
     }
 
     init {
+        alertPrefs.registerOnSharedPreferenceChangeListener(alertPrefsListener)
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
         viewModelScope.launch {
@@ -197,6 +212,7 @@ class HomeViewModel @Inject constructor(
                 }
                 
                 _clinicalAlerts.value = alerts.distinct().filter { !dismissedAlerts.contains(it) }
+                readStateStore.identify(_clinicalAlerts.value.toSet())
             }
         }
 
@@ -239,12 +255,18 @@ class HomeViewModel @Inject constructor(
         _clinicalAlerts.value = _clinicalAlerts.value.filterNot { it == alert }
     }
 
+    fun markAlertAsRead(alert: String) {
+        readStateStore.markRead(setOf(alert))
+    }
+
     fun markAlertsAsRead() {
-        viewModelScope.launch {
-            dismissedAlerts.addAll(_clinicalAlerts.value)
-            saveDismissedAlerts()
-            _clinicalAlerts.value = emptyList()
-        }
+        readStateStore.markRead(_clinicalAlerts.value.toSet())
+    }
+
+    override fun onCleared() {
+        alertPrefs.unregisterOnSharedPreferenceChangeListener(alertPrefsListener)
+        readStateStore.close()
+        super.onCleared()
     }
 
     private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
