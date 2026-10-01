@@ -21,6 +21,7 @@ object NotificationHelper {
     private const val HYDRATION_CHANNEL_ID = "bragasaude_hydration"
     private const val HYDRATION_CHANNEL_NAME = "Lembretes de Hidratação"
     private const val HYDRATION_NOTIFICATION_ID = 2002
+    private const val HYDRATION_CONFIRMATION_TAG = "hydration_confirmation"
 
     fun sendPermissionNotification(context: Context) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -114,7 +115,34 @@ object NotificationHelper {
             .setContentIntent(pendingIntent)
             .addAction(android.R.drawable.ic_input_add, "Registrar 250ml", quickPendingIntent)
 
+        notificationManager.cancel(HYDRATION_CONFIRMATION_TAG, HYDRATION_NOTIFICATION_ID)
         notificationManager.notify(HYDRATION_NOTIFICATION_ID, builder.build())
+    }
+
+    fun confirmHydrationRegistration(context: Context, amountMl: Int) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val message = "$amountMl ml de água registrados. Cada cuidado conta!"
+        val openConfirmation = PendingIntent.getActivity(
+            context, HYDRATION_NOTIFICATION_ID,
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("OPEN_HYDRATION", true)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val confirmation = NotificationCompat.Builder(context, HYDRATION_CHANNEL_ID)
+            .setSmallIcon(br.com.bragasaude.R.drawable.ic_water_bottle)
+            .setContentTitle("Hidratação registrada")
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setContentIntent(openConfirmation)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
+            .setAutoCancel(true)
+            .setTimeoutAfter(30_000L)
+            .build()
+        manager.cancel(HYDRATION_NOTIFICATION_ID)
+        manager.notify(HYDRATION_CONFIRMATION_TAG, HYDRATION_NOTIFICATION_ID, confirmation)
     }
 
     private const val GROCERY_CHANNEL_ID = "bragasaude_grocery"
