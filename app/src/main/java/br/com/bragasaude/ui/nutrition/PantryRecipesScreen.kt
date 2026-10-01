@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.nutrition
 
+import br.com.bragasaude.ui.components.EmeraldHeaderBanner
+import br.com.bragasaude.ui.theme.BragaBackground
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -15,12 +17,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
@@ -39,15 +43,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -108,28 +107,12 @@ fun PantryRecipesScreen(
     val scope = rememberCoroutineScope()
 
     Scaffold(
+        containerColor = BragaBackground,
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Receitas da Despensa",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Voltar",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
+            EmeraldHeaderBanner(
+                title = "Receitas da despensa",
+                subtitle = "Ideias para aproveitar o que você tem",
+                onBack = onBack
             )
         }
     ) { innerPadding ->
@@ -139,55 +122,23 @@ fun PantryRecipesScreen(
                 .padding(innerPadding)
         ) {
             // Abas de navegacao com icones vetoriais
-            ScrollableTabRow(
-                selectedTabIndex = pagerState.currentPage,
-                edgePadding = 16.dp,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                divider = {
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                    )
-                }
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                mealTabs.forEachIndexed { index, tab ->
-                    val isSelected = pagerState.currentPage == index
+                items(mealTabs.size) { index ->
+                    val tab = mealTabs[index]
                     val tabIcon = MEAL_TAB_ICONS[tab.key]
-
-                    Tab(
-                        selected = isSelected,
-                        onClick = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(index)
-                            }
-                        },
-                        selectedContentColor = MaterialTheme.colorScheme.primary,
-                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(vertical = 14.dp, horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            if (tabIcon != null) {
-                                Icon(
-                                    imageVector = tabIcon,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = if (isSelected)
-                                        MaterialTheme.colorScheme.primary
-                                    else
-                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                            }
-                            Text(
-                                text = tab.label,
-                                fontSize = 15.sp,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                            )
+                    FilterChip(
+                        selected = pagerState.currentPage == index,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        label = { Text(tab.label, style = MaterialTheme.typography.bodyMedium) },
+                        leadingIcon = {
+                            if (tabIcon != null) Icon(tabIcon, contentDescription = null, modifier = Modifier.size(20.dp))
                         }
-                    }
+                    )
                 }
             }
 
@@ -283,10 +234,7 @@ private fun RecipeCard(match: RecipePantryMatch) {
             Spacer(Modifier.height(12.dp))
 
             // Badges de preparo
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Tempo de preparo com Timer icon
                 PrepBadge(
                     icon = Icons.Default.Timer,
@@ -433,7 +381,7 @@ private fun PrepBadge(
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Medium,
                 color = tint,
-                fontSize = 13.sp
+                fontSize = 16.sp
             )
         }
     }
@@ -448,9 +396,9 @@ private fun IngredientRow(
     items: List<String>,
     color: Color
 ) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Surface(
             shape = RoundedCornerShape(6.dp),
@@ -463,16 +411,15 @@ private fun IngredientRow(
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = color,
-                fontSize = 12.sp
+                fontSize = 16.sp
             )
         }
-        Spacer(Modifier.width(10.dp))
         Text(
             text = items.joinToString(", "),
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            lineHeight = 20.sp,
-            modifier = Modifier.weight(1f)
+            lineHeight = 24.sp,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
@@ -510,15 +457,15 @@ private fun NutritionNote(benefit: String) {
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary,
-                    fontSize = 12.sp
+                    fontSize = 16.sp
                 )
             }
             Spacer(Modifier.height(4.dp))
             Text(
                 benefit,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = 18.sp
+                lineHeight = 24.sp
             )
         }
     }
@@ -582,7 +529,7 @@ private fun RecipeStepItem(
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     else
                         MaterialTheme.colorScheme.primary,
-                    fontSize = 12.sp
+                    fontSize = 16.sp
                 )
             }
 
@@ -665,7 +612,7 @@ private fun PantryBadge(match: RecipePantryMatch) {
                 style = MaterialTheme.typography.labelMedium,
                 color = config.textColor,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp
+                fontSize = 16.sp
             )
         }
     }
@@ -710,7 +657,7 @@ private fun EmptyRecipesView(mealType: String) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
-            lineHeight = 20.sp
+            lineHeight = 24.sp
         )
     }
 }

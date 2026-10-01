@@ -11,6 +11,9 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -31,6 +34,7 @@ fun CaregiverModeSelectionScreen(
     onModeSelected: (mode: String) -> Unit,
     onBack: (() -> Unit)? = null
 ) {
+    var selectedMode by rememberSaveable { mutableStateOf<String?>(null) }
     androidx.activity.compose.BackHandler(enabled = onBack != null) { onBack?.invoke() }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -82,7 +86,8 @@ fun CaregiverModeSelectionScreen(
                 title = "Acompanhar + Cuidar de mim",
                 subtitle = "Quero monitorar minha própria saúde também (pressão, passos, hidratação) e acompanhar meu familiar.",
                 badge = "Experiência completa",
-                onClick = { onModeSelected("HYBRID") }
+                selected = selectedMode == "HYBRID",
+                onClick = { selectedMode = "HYBRID" }
             )
 
             Spacer(Modifier.height(16.dp))
@@ -93,9 +98,17 @@ fun CaregiverModeSelectionScreen(
                 title = "Só acompanhar meu familiar",
                 subtitle = "Quero ver as métricas do meu familiar, enviar mensagens e lembretes, sem monitorar minha própria saúde.",
                 badge = "Modo acompanhante",
-                onClick = { onModeSelected("VIEWER_ONLY") }
+                selected = selectedMode == "VIEWER_ONLY",
+                onClick = { selectedMode = "VIEWER_ONLY" }
             )
 
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = { selectedMode?.let(onModeSelected) },
+                enabled = selectedMode != null,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                shape = RoundedCornerShape(24.dp)
+            ) { Text("Continuar", style = MaterialTheme.typography.bodyMedium) }
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -107,16 +120,17 @@ private fun ModeOptionCard(
     title: String,
     subtitle: String,
     badge: String,
+    selected: Boolean,
     onClick: () -> Unit
 ) {
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().semantics { this.selected = selected },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
@@ -142,6 +156,7 @@ private fun ModeOptionCard(
                 }
 
                 Spacer(Modifier.width(16.dp))
+                RadioButton(selected = selected, onClick = null)
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -169,9 +184,9 @@ private fun ModeOptionCard(
 
             Text(
                 subtitle,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = 18.sp
+                lineHeight = 24.sp
             )
         }
     }
