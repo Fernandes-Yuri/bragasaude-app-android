@@ -36,6 +36,17 @@ object MedicationNotificationScheduler {
     const val PRE_ALERT_MINUTES = 15
     const val SNOOZE_MINUTES = 10
 
+    fun exactNotificationId(medId: String, time: String): Int = "$medId:exact:$time".hashCode()
+
+    /** Remove somente os lembretes desta dose, incluindo formatos anteriores. */
+    fun dismissDoseNotification(context: Context, medId: String, time: String, doseKey: String) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        manager.cancel(exactNotificationId(medId, time))
+        manager.cancel("$medId:pre:$time".hashCode())
+        manager.cancel("$medId:$doseKey".hashCode())
+        manager.cancel(medId.hashCode())
+    }
+
     /**
      * Cria e registra o canal de notificações de medicamentos no sistema Android.
      */
@@ -248,7 +259,7 @@ object MedicationNotificationScheduler {
         doseKey: String
     ) {
         createNotificationChannel(context)
-        val notifId = "$medId:exact:$time".hashCode()
+        val notifId = exactNotificationId(medId, time)
 
         // 1) Ação: "Já Tomei"
         val takenIntent = Intent(context, MedicationAlarmReceiver::class.java).apply {

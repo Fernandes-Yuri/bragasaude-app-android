@@ -10,6 +10,9 @@ import androidx.compose.material.icons.filled.Diversity3
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -31,7 +34,7 @@ fun RoleSelectionScreen(
     onRoleSelected: (userRole: String) -> Unit,
     onBack: (() -> Unit)? = null
 ) {
-    var selectedRole by remember { mutableStateOf<String?>(null) }
+    var selectedRole by rememberSaveable { mutableStateOf<String?>(null) }
     androidx.activity.compose.BackHandler(enabled = onBack != null) { onBack?.invoke() }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -139,7 +142,7 @@ private fun RoleOptionCard(
 ) {
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().semantics { this.selected = selected },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
@@ -172,6 +175,7 @@ private fun RoleOptionCard(
                 }
                 
                 Spacer(Modifier.width(16.dp))
+                RadioButton(selected = selected, onClick = null)
                 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
