@@ -15,7 +15,7 @@ GENERATED_SUFFIXES = {".apk", ".aab", ".log", ".pyc", ".tmp", ".bak", ".iml", ".
 def violation(path: str) -> str | None:
     file = PurePosixPath(path)
     if file.suffix.lower() == ".md" and not (
-        path in PUBLIC_DOCS or file.name == "AGENTS.md"
+        path in PUBLIC_DOCS
         or path.startswith(".github/ISSUE_TEMPLATE/")
     ):
         return "documentação interna deve ficar na Contexto"
