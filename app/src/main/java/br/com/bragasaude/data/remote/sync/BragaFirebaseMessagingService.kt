@@ -72,7 +72,7 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
 
             criar(CHANNEL_DEFAULT, "Avisos da família", "Mensagens e avisos de cuidado da família", alta = true)
             criar(CHANNEL_EMERGENCY, "Alertas de Emergência", "Alertas imediatos de socorro ou crise aguda", alta = true)
-            criar(CHANNEL_CLINICAL, "Alertas clínicos", "Leituras críticas (pressão, glicose) enviadas ao cuidador", alta = true)
+            criar(CHANNEL_CLINICAL, "Avisos de autocuidado", "Leituras críticas (pressão, glicose) enviadas ao cuidador", alta = true)
             criar(CHANNEL_PROACTIVE, "Lembretes proativos", "Lembretes de autocuidado (manhã, hidratação, noite)", alta = false)
             criar(CHANNEL_CONSULTATION, "Consultas", "Status de consultas agendadas", alta = false)
             criar(CHANNEL_UPDATES, "Atualizações do app", "Novas versões e melhorias do Braga Saúde", alta = true)
@@ -206,7 +206,7 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
 
     private fun showClinicNotification(title: String, message: String, isCritical: Boolean) {
         val channelId = if (isCritical) CHANNEL_CLINICAL else CHANNEL_PROACTIVE
-        val channelName = if (isCritical) "Avisos Clínicos e Cuidado Familiar" else "Lembretes do Braga"
+        val channelName = if (isCritical) "Avisos de autocuidado e família" else "Lembretes do Braga"
         val context = applicationContext
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 

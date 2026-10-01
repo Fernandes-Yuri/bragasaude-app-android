@@ -71,7 +71,7 @@ fun AddExamBottomSheet(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Escolha como deseja registrar seu laudo no prontuário:",
+                        text = "Escolha como deseja registrar seu laudo nos seus exames:",
                         style = MaterialTheme.typography.bodyMedium,
                         color = BragaTextSecondary
                     )
@@ -122,7 +122,7 @@ fun AddExamBottomSheet(
                 icon = Icons.Default.EditNote,
                 title = "Digitar Manualmente",
                 subtitle = "Insira diretamente os valores em formulários estruturados (Glicemia, Lipídios, Hemograma, etc.).",
-                tag = "Direto no Prontuário",
+                tag = "Registro manual",
                 tagColor = Color(0xFF7C3AED), // Roxo suave
                 onClick = {
                     onDismiss()
