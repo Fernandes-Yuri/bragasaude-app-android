@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Medication
-import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ThumbUp
@@ -64,7 +63,6 @@ import br.com.bragasaude.ui.theme.BragaMintBorder
 import br.com.bragasaude.ui.theme.BragaMintSurface
 import br.com.bragasaude.ui.theme.BragaTextPrimary
 import br.com.bragasaude.ui.theme.BragaTextSecondary
-import br.com.bragasaude.ui.theme.Success
 import java.text.SimpleDateFormat
 import br.com.bragasaude.domain.formatSocialPostTime
 import androidx.compose.ui.semantics.contentDescription
@@ -478,9 +476,9 @@ private fun SocialPostCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "Nível ${post.userLevel} • ${formatSocialPostTime(post.createdAt, nowMillis)}",
+                            text = formatSocialPostTime(post.createdAt, nowMillis),
                             modifier = Modifier.semantics {
-                                contentDescription = "Nível ${post.userLevel}. Publicado em ${SimpleDateFormat("dd/MM/yyyy 'às' HH:mm", Locale("pt", "BR")).format(post.createdAt)}"
+                                contentDescription = "Publicado em ${SimpleDateFormat("dd/MM/yyyy 'às' HH:mm", Locale("pt", "BR")).format(post.createdAt)}"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             fontSize = 14.sp,
@@ -840,7 +838,7 @@ private fun CreateAchievementBottomSheet(
                                         color = BragaTextPrimary
                                     )
                                     Text(
-                                        text = "Nível ${author.level} • Agora mesmo",
+                                        text = "Agora mesmo",
                                         fontSize = 14.sp,
                                         color = BragaTextSecondary
                                     )
@@ -945,9 +943,7 @@ private fun getPostTypeBadge(postType: String): PostBadgeInfo {
     return when (postType.lowercase(Locale.ROOT)) {
         "milestone" -> PostBadgeInfo(Icons.Default.EmojiEvents, Color(0xFFE5A800), "Conquista")
         "streak" -> PostBadgeInfo(Icons.Default.LocalFireDepartment, Color(0xFFE65100), "Sequência")
-        "level_up" -> PostBadgeInfo(Icons.Default.Star, Success, "Subiu de Nível")
         "goal_hit" -> PostBadgeInfo(Icons.Default.TrendingUp, Color(0xFF1976D2), "Meta Batida")
-        "weekly_recap" -> PostBadgeInfo(Icons.Default.MilitaryTech, Color(0xFF7B1FA2), "Semanal")
         else -> PostBadgeInfo(Icons.Default.Star, BragaEmerald, "Conquista")
     }
 }
