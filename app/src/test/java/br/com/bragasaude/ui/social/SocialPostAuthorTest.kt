@@ -5,14 +5,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SocialPostAuthorTest {
-    @Test fun `previa herda nome comunitario foto personalizada avatar e nivel`() {
+    @Test fun `previa herda nome comunitario foto personalizada e avatar`() {
         val profile = ProfileEntity(userId = "usuario", fullName = "Yuri Fernandes dos Santos",
-            customPhotoUri = "content://foto", avatarIdentifier = "Favorite", currentLevel = 8)
+            customPhotoUri = "content://foto", avatarIdentifier = "Favorite")
         val author = resolveSocialPostAuthor(profile, "Conta", "https://foto-google", "Yuri FJS")
         assertEquals("Yuri FJS", author.name)
         assertEquals("content://foto", author.photoUrl)
         assertEquals("Favorite", author.avatarIdentifier)
-        assertEquals(8, author.level)
     }
 
     @Test fun `sem apelido respeita nome abreviado e usa foto da conta como alternativa`() {
@@ -26,5 +25,14 @@ class SocialPostAuthorTest {
         val author = resolveSocialPostAuthor(null, "Ana Maria Silva", "https://foto-google", "")
         assertEquals("Ana M.", author.name)
         assertEquals("https://foto-google", author.photoUrl)
+    }
+
+    @Test fun `nivel legado do perfil nao interfere na autoria da postagem`() {
+        val profile = ProfileEntity(userId = "usuario", fullName = "Yuri Fernandes",
+            customPhotoUri = "content://foto", avatarIdentifier = "Favorite", currentLevel = 1)
+        val author = resolveSocialPostAuthor(profile, "Conta", "https://foto-google", "Yuri FJS")
+        val authorWithLegacyLevel = resolveSocialPostAuthor(profile.copy(currentLevel = 8),
+            "Conta", "https://foto-google", "Yuri FJS")
+        assertEquals(author, authorWithLegacyLevel)
     }
 }
