@@ -3,10 +3,12 @@ package br.com.bragasaude.ui.social
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.local.SocialPostEntity
+import br.com.bragasaude.data.local.ProfileEntity
 import br.com.bragasaude.data.remote.repository.SocialFeedRepository
 import br.com.bragasaude.data.remote.service.TelemetryService
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +28,27 @@ data class AchievementTemplate(
     val subtitle: String,
     val defaultDescription: String,
     val postType: String = "milestone"
+)
+
+data class SocialPostAuthor(
+    val name: String = "Colega de Saúde",
+    val photoUrl: String? = null,
+    val fallbackPhotoUrl: String? = null,
+    val avatarIdentifier: String? = null,
+    val level: Int = 1
+)
+
+internal fun resolveSocialPostAuthor(
+    profile: ProfileEntity?,
+    accountName: String?,
+    googlePhotoUrl: String?,
+    nickname: String
+): SocialPostAuthor = SocialPostAuthor(
+    name = br.com.bragasaude.domain.communityDisplayName(profile?.fullName?.takeIf { it.isNotBlank() } ?: accountName, nickname),
+    photoUrl = profile?.customPhotoUri?.takeIf { it.isNotBlank() } ?: googlePhotoUrl,
+    fallbackPhotoUrl = googlePhotoUrl,
+    avatarIdentifier = profile?.avatarIdentifier,
+    level = profile?.currentLevel ?: 1
 )
 
 @HiltViewModel
@@ -51,6 +74,16 @@ class SocialFeedViewModel @Inject constructor(
 
     val posts: StateFlow<List<SocialPostEntity>> = socialFeedRepository.getGlobalFeed(currentUserId, currentUserPhotoUrl)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(30000), emptyList())
+
+    private val _communityNickname = MutableStateFlow("")
+    val author: StateFlow<SocialPostAuthor> = combine(
+        socialFeedRepository.getAuthorProfile(currentUserId), _communityNickname
+    ) { profile, nickname ->
+        resolveSocialPostAuthor(profile, auth.currentUser?.displayName, currentUserPhotoUrl, nickname)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(30_000), SocialPostAuthor(
+        name = br.com.bragasaude.domain.communityDisplayName(auth.currentUser?.displayName),
+        photoUrl = currentUserPhotoUrl
+    ))
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -99,6 +132,13 @@ class SocialFeedViewModel @Inject constructor(
     )
 
     init {
+        viewModelScope.launch {
+            try {
+                _communityNickname.value = socialFeedRepository.getCommunityNickname()
+            } catch (_: Exception) {
+                // O perfil local continua disponível se a rede falhar.
+            }
+        }
         refresh()
         telemetryService.logEvent(currentUserId, "SOCIAL_FEED", "OPEN")
     }
