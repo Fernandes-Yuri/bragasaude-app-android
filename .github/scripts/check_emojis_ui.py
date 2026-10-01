@@ -7,7 +7,7 @@
 # no CI em vez de commit de limpeza. Este script é esse gate.
 #
 # Roda em Python puro (sem dependências) — local ou no GitHub Actions:
-#   py tools/check_emojis_ui.py
+#   py .github/scripts/check_emojis_ui.py
 #
 # Regra: nenhum emoji (símbolo pictográfico Unicode) pode aparecer dentro de
 # uma string literal em arquivos de UI (app/src/main). Emojis em COMENTÁRIO
@@ -19,7 +19,7 @@ import sys
 import unicodedata
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parents[2]
 SCAN_ROOT = REPO / "app" / "src" / "main"
 
 # Intervalos Unicode de emojis/pictogramas (cobertura ampla, sem dependências).

@@ -1,75 +1,24 @@
-# Guia de Contribuição — Braga Saúde — Aplicativo Android
+# Contribuição — Braga Saúde Android
 
-Obrigado pelo interesse em contribuir com o **Braga Saúde**! Este guia define o fluxo de trabalho, padrões de código, governança de branches e boas práticas de segurança para este repositório.
-
----
-
-## 🔒 1. Segurança e LGPD em Primeiro Lugar
-
-Trabalhamos com dados sensíveis de saúde e cuidado familiar:
-* **NUNCA commite segredos:** Nunca commite chaves de assinatura (keystore.jks), senhas do keystore.properties ou credenciais do google-services.json de produção.
-* Arquivos de configuração local (`.env`, `keystore.properties`, etc.) devem ser sempre mantidos fora do controle de versão via `.gitignore`.
-* Se identificar qualquer vazamento acidental de credencial, notifique imediatamente a equipe antes de qualquer push.
-
----
-
-## 🌿 2. Fluxo de Branches
-
-Todas as contribuições devem ser feitas em **branches isoladas**:
-
-* `master`: Branch principal de produção estável.
-* `feature/<nome-da-funcionalidade>`: Para novas funcionalidades ou melhorias de produto.
-* `fix/<descricao-do-bug>`: Para correções de bugs identificados.
-* `chore/<manutencao-ou-docs>`: Para tarefas de documentação, refatoração e infraestrutura.
-
-### Criando sua branch:
-```bash
-git checkout master
-git pull origin master
-git checkout -b feature/minha-nova-funcionalidade
-```
-
----
-
-## 📝 3. Padrão de Commits (Conventional Commits)
-
-Utilizamos o padrão de commits semânticos:
-
-* `feat(...)`: Nova funcionalidade para o usuário ou sistema.
-* `fix(...)`: Correção de um bug ou erro em tempo de execução.
-* `refactor(...)`: Mudança no código que não altera comportamento externo.
-* `perf(...)`: Melhoria de desempenho ou consumo de memória.
-* `test(...)`: Adição ou refatoração de testes automatizados.
-* `chore(...)`: Atualização de dependências, documentação, CI/CD ou configurações.
-
-Exemplo:
-```bash
-git commit -m "feat(cards): adiciona ordenacao inteligente por proximidade de dose"
-```
-
----
-
-## 🧪 4. Validação Local
-
-Antes de abrir um Pull Request, execute os comandos de verificação local para garantir que a suite de testes e build estão passando:
-
-```bash
-# Executar testes unitários:
-./gradlew testDebugUnitTest
-
-# Executar build / lint:
-./gradlew assembleDebug
-```
-
----
-
-## 🔀 5. Processo de Pull Request
-
-1. Garanta que sua branch esteja atualizada com a `master`:
+1. Trabalhe em uma branch isolada `feat/...` ou `fix/...`.
+2. Use Conventional Commits, com descrição e corpo em português brasileiro.
+   Exemplo: `fix(mural): corrige data das postagens`.
+3. Execute as verificações leves a partir da raiz do repositório:
    ```bash
-   git fetch origin
-   git rebase origin/master
+   python .github/scripts/check_emojis_ui.py
+   python .github/scripts/check_repository_hygiene.py
+   python .github/scripts/check_modal_consistency.py
+   git diff --check
    ```
-2. Abra o Pull Request no GitHub apontando para a branch `master`.
-3. Preencha o checklist do **Pull Request Template** descrevendo claramente o que foi alterado.
-4. Aguarde a revisão de código e a execução dos gates do GitHub Actions.
+4. Envie a branch quando autorizado e valide a compilação e os testes no
+   GitHub Actions. Não execute builds, Gradle ou testes Android pesados localmente.
+5. Abra o PR para `master`, descreva a alteração e a validação, e aguarde o CI
+   antes de mesclar.
+
+Mantenha no Git apenas código, recursos utilizados, testes de produto,
+configurações necessárias e documentação pública essencial. Scripts necessários
+à validação do projeto ficam em `.github/scripts/`.
+
+Documentos operacionais, planos, auditorias, relatórios e histórico de trabalho
+ficam na base Contexto. APKs ficam no GitHub Actions ou em Releases. Arquivos
+compilados, caches, logs e dependências instaladas não devem ser versionados.

@@ -1,0 +1,15 @@
+name: Validar higiene do repositório
+on:
+  push:
+    branches: [master, 'feat/**', 'fix/**']
+  pull_request:
+    branches: [master]
+permissions:
+  contents: read
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bloquear documentos internos e artefatos gerados
+        run: python3 .github/scripts/check_repository_hygiene.py

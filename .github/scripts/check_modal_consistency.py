@@ -3,7 +3,7 @@ from pathlib import Path
 import re
 import sys
 
-root = Path(__file__).resolve().parents[1]
+root = Path(__file__).resolve().parents[2]
 source = root / "app/src/main/java"
 shared = source / "br/com/bragasaude/ui/components/BragaModals.kt"
 violations = []

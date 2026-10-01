@@ -4,7 +4,7 @@ on:
     branches: ['feat/**', 'fix/**', master]
     paths:
       - 'app/src/main/java/br/com/bragasaude/data/local/voice/**'
-      - 'tools/check_voice_models.py'
+      - '.github/scripts/check_voice_models.py'
       - '.github/workflows/voice-models.yml'
   workflow_dispatch:
 permissions:
@@ -19,4 +19,4 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install sherpa-onnx==1.13.8
-      - run: python tools/check_voice_models.py
+      - run: python .github/scripts/check_voice_models.py
