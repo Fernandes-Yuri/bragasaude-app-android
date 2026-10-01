@@ -66,6 +66,12 @@ import br.com.bragasaude.ui.theme.BragaTextPrimary
 import br.com.bragasaude.ui.theme.BragaTextSecondary
 import br.com.bragasaude.ui.theme.Success
 import java.text.SimpleDateFormat
+import br.com.bragasaude.domain.formatSocialPostTime
+import androidx.compose.ui.semantics.contentDescription
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,6 +81,17 @@ fun SocialFeedScreen(
     viewModel: SocialFeedViewModel = hiltViewModel()
 ) {
     val posts by viewModel.posts.collectAsState()
+    val author by viewModel.author.collectAsState()
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                nowMillis = System.currentTimeMillis()
+                delay(60_000L)
+            }
+        }
+    }
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val publishState by viewModel.publishState.collectAsState()
     val feedError by viewModel.feedError.collectAsState()
@@ -264,6 +281,7 @@ fun SocialFeedScreen(
                             val selectedReaction = reactions.firstOrNull { it.userId == viewModel.currentUserId }?.reactionType
                                 ?: if (post.hasUserReacted) "apoio" else null
                             SocialPostCard(
+                                nowMillis = nowMillis,
                                 post = post,
                                 fallbackPhotoUrl = viewModel.currentUserPhotoUrl.takeIf { post.userId == viewModel.currentUserId },
                                 reactions = reactions,
@@ -282,6 +300,7 @@ fun SocialFeedScreen(
     if (showCreateSheet) {
         CreateAchievementBottomSheet(
             templates = viewModel.achievementTemplates,
+            author = author,
             publishState = publishState,
             onDismiss = {
                 if (publishState != SocialFeedViewModel.PublishState.Loading) {
@@ -405,6 +424,7 @@ private fun CommunityWelcomeBanner(
 @Composable
 private fun SocialPostCard(
     post: SocialPostEntity,
+    nowMillis: Long,
     fallbackPhotoUrl: String?,
     reactions: List<PostReactionEntity>,
     selectedReaction: String?,
@@ -439,43 +459,13 @@ private fun SocialPostCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(BragaMint),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val photoCandidates = remember(post.userAvatarUrl, fallbackPhotoUrl) {
-                            listOfNotNull(post.userAvatarUrl, fallbackPhotoUrl).filter { it.isNotBlank() }.distinct()
-                        }
-                        var photoIndex by remember(photoCandidates) { mutableIntStateOf(0) }
-                        val photoUrl = photoCandidates.getOrNull(photoIndex)
-                        val avatarIcon = when (post.userAvatarIdentifier) {
-                            "Person" -> Icons.Default.Person
-                            "Favorite" -> Icons.Default.Favorite
-                            "Accessibility" -> Icons.Default.AccessibilityNew
-                            "Star" -> Icons.Default.Star
-                            else -> null
-                        }
-                        when {
-                            avatarIcon != null -> Icon(avatarIcon, contentDescription = null, tint = BragaEmeraldDark)
-                            photoUrl != null -> AsyncImage(
-                                model = photoUrl,
-                                contentDescription = "Foto de perfil",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                                onError = { photoIndex++ }
-                            )
-                            else -> Text(
-                                text = post.userName?.trim()?.takeIf { it.isNotEmpty() }?.take(1)?.uppercase(Locale.ROOT) ?: "C",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 17.sp,
-                                color = BragaEmeraldDark
-                            )
-                        }
-                    }
+                    SocialAuthorAvatar(
+                        name = post.userName,
+                        photo = post.userAvatarUrl,
+                        avatarIdentifier = post.userAvatarIdentifier,
+                        fallbackPhotoUrl = fallbackPhotoUrl,
+                        size = 44.dp
+                    )
 
                     Column {
                         Text(
@@ -488,7 +478,10 @@ private fun SocialPostCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "Nível ${post.userLevel} • ${formatRelativeTime(post.createdAt)}",
+                            text = "Nível ${post.userLevel} • ${formatSocialPostTime(post.createdAt, nowMillis)}",
+                            modifier = Modifier.semantics {
+                                contentDescription = "Nível ${post.userLevel}. Publicado em ${SimpleDateFormat("dd/MM/yyyy 'às' HH:mm", Locale("pt", "BR")).format(post.createdAt)}"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             fontSize = 14.sp,
                             color = BragaTextSecondary
@@ -627,6 +620,7 @@ private fun SocialPostCard(
 @Composable
 private fun CreateAchievementBottomSheet(
     templates: List<AchievementTemplate>,
+    author: SocialPostAuthor,
     publishState: SocialFeedViewModel.PublishState,
     onDismiss: () -> Unit,
     onPublish: (title: String, description: String, postType: String, isPublic: Boolean) -> Unit
@@ -825,32 +819,28 @@ private fun CreateAchievementBottomSheet(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(
+                                modifier = Modifier.weight(1f),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .background(BragaMint),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "V",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp,
-                                        color = BragaEmeraldDark
-                                    )
-                                }
+                                SocialAuthorAvatar(
+                                    name = author.name,
+                                    photo = author.photoUrl,
+                                    avatarIdentifier = author.avatarIdentifier,
+                                    fallbackPhotoUrl = author.fallbackPhotoUrl,
+                                    size = 38.dp
+                                )
                                 Column {
                                     Text(
-                                        text = "Você",
+                                        text = author.name,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 16.sp,
                                         color = BragaTextPrimary
                                     )
                                     Text(
-                                        text = "Nível 1 • Agora mesmo",
+                                        text = "Nível ${author.level} • Agora mesmo",
                                         fontSize = 14.sp,
                                         color = BragaTextSecondary
                                     )
@@ -962,19 +952,50 @@ private fun getPostTypeBadge(postType: String): PostBadgeInfo {
     }
 }
 
-private fun formatRelativeTime(date: Date): String {
-    val diff = System.currentTimeMillis() - date.time
-    val minutes = diff / (60 * 1000)
-    val hours = minutes / 60
-    val days = hours / 24
-
-    return when {
-        minutes < 1 -> "Agora mesmo"
-        minutes < 60 -> "Há ${minutes}m"
-        hours < 24 -> "Há ${hours}h"
-        days == 1L -> "Ontem"
-        days < 7 -> "Há ${days}d"
-        else -> SimpleDateFormat("dd/MM", Locale.getDefault()).format(date)
+@Composable
+private fun SocialAuthorAvatar(
+    name: String?,
+    photo: String?,
+    avatarIdentifier: String?,
+    fallbackPhotoUrl: String?,
+    size: androidx.compose.ui.unit.Dp
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(BragaMint),
+        contentAlignment = Alignment.Center
+    ) {
+        val photoCandidates = remember(photo, fallbackPhotoUrl) {
+            listOfNotNull(photo, fallbackPhotoUrl).filter { it.isNotBlank() }.distinct()
+        }
+        var photoIndex by remember(photoCandidates) { mutableIntStateOf(0) }
+        val photoUrl = photoCandidates.getOrNull(photoIndex)
+        val avatarIcon = when (avatarIdentifier) {
+            "Person" -> Icons.Default.Person
+            "Favorite" -> Icons.Default.Favorite
+            "Accessibility" -> Icons.Default.AccessibilityNew
+            "Star" -> Icons.Default.Star
+            else -> null
+        }
+        when {
+            avatarIcon != null -> Icon(avatarIcon, contentDescription = null, tint = BragaEmeraldDark)
+            photoUrl != null -> AsyncImage(
+                model = photoUrl,
+                contentDescription = "Foto de perfil",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                onError = { photoIndex++ }
+            )
+            else -> Text(
+                text = name?.trim()?.takeIf { it.isNotEmpty() }?.take(1)?.uppercase(Locale.ROOT) ?: "C",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                fontSize = 17.sp,
+                color = BragaEmeraldDark
+            )
+        }
     }
 }
 
