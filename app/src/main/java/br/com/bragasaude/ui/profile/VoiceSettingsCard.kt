@@ -53,6 +53,6 @@ fun VoiceSettingsCard(manager: VoiceProfileManager) {
     if (showSelector) {
         VoiceSelectionBottomSheet(manager = manager,
             onDismissRequest = { showSelector = false },
-            onVoiceConfigured = { showSelector = false })
+            onVoiceConfigured = { showSelector = false }, readyButtonLabel = "Concluir")
     }
 }

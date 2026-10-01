@@ -288,9 +288,7 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             try {
-                // Cancelar a notificação
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                manager.cancel("$medId:$doseKey".hashCode())
 
                 // Registrar dose no Room via Hilt EntryPoint
                 val appContext = context.applicationContext
@@ -304,21 +302,37 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
                 // Execução assíncrona suspensa direta em Dispatchers.IO (sem travar a main thread e prevenindo ANR)
                 val date = java.time.LocalDate.parse(doseKey.substringBefore("T"))
                 if (!repository.takeMedication(userId, medId, time, date)) return@launch
+
+                // Só encerra o lembrete quando o registro local tiver sido concluído.
+                br.com.bragasaude.ui.medication.MedicationNotificationScheduler.dismissDoseNotification(
+                    context, medId, time, doseKey
+                )
+
+                // Mostrar confirmação rápida
+                val confirmationId = "$medId:confirmed:$doseKey".hashCode()
+                val openConfirmation = PendingIntent.getActivity(
+                    context, confirmationId,
+                    Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_SINGLE_TOP },
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                val confirmNotification = NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setContentTitle("Dose registrada")
+                    .setContentText("$medName registrado às ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
+                    .setSmallIcon(android.R.drawable.ic_menu_my_calendar)
+                    .setContentIntent(openConfirmation)
+                    .setPriority(NotificationCompat.PRIORITY_LOW)
+                    .setSilent(true)
+                    .setAutoCancel(true)
+                    .setTimeoutAfter(30_000L)
+                    .build()
+                manager.notify(confirmationId, confirmNotification)
+
+                // A pontuação é secundária: sua falha não mantém o lembrete de uma dose já registrada.
                 xpService.grantXp(
                     userId = userId,
                     action = br.com.bragasaude.domain.GamificationActionType.MEDICATION_TAKEN_ON_TIME,
                     isActionValid = date == java.time.LocalDate.now() && br.com.bragasaude.domain.GamificationEngine.isMedicationOnTime(time, Calendar.getInstance().get(Calendar.HOUR_OF_DAY), Calendar.getInstance().get(Calendar.MINUTE))
                 )
-
-                // Mostrar confirmação rápida
-                val confirmNotification = NotificationCompat.Builder(context, CHANNEL_ID)
-                    .setContentTitle("Dose registrada")
-                    .setContentText("$medName registrado às ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
-                    .setSmallIcon(android.R.drawable.ic_menu_my_calendar)
-                    .setPriority(NotificationCompat.PRIORITY_LOW)
-                    .setAutoCancel(true)
-                    .build()
-                manager.notify(medId.hashCode() + 1, confirmNotification)
 
                 Log.d("MedAlarm", "Dose registrada; pontuação avaliada pela janela de horário")
             } catch (e: Exception) {

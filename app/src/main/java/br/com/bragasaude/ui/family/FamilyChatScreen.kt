@@ -564,14 +564,14 @@ private fun HorizontalQuickReplyChips(
             AssistChip(
                 onClick = { onSendQuickReply(reply) },
                 label = {
-                    Text(reply, maxLines = 1, fontSize = 13.sp)
+                    Text(reply, style = MaterialTheme.typography.bodyMedium)
                 },
                 leadingIcon = {
                     Icon(
                         when {
                             reply.contains("remédio", ignoreCase = true) -> Icons.Default.Medication
                             reply.contains("bem", ignoreCase = true) -> Icons.Default.Favorite
-                            reply.contains("pressão", ignoreCase = true) -> Icons.Default.DirectionsRun
+                            reply.contains("pressão", ignoreCase = true) -> Icons.Default.Favorite
                             reply.contains("obrigado", ignoreCase = true) -> Icons.Default.SentimentSatisfied
                             reply.contains("água", ignoreCase = true) -> Icons.Default.WaterDrop
                             reply.contains("caminh", ignoreCase = true) -> Icons.Default.DirectionsWalk
@@ -581,7 +581,7 @@ private fun HorizontalQuickReplyChips(
                         modifier = Modifier.size(16.dp)
                     )
                 },
-                modifier = Modifier.height(36.dp)
+                modifier = Modifier.heightIn(min = 48.dp)
             )
         }
     }

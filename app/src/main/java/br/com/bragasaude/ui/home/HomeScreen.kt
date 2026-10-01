@@ -89,6 +89,8 @@ fun HomeScreen(
     val vitals by viewModel.dashboardVitals.collectAsState()
     val milestone by viewModel.latestMilestone.collectAsState()
     val clinicalAlerts by viewModel.clinicalAlerts.collectAsState()
+    val readAlerts by viewModel.readAlerts.collectAsState()
+    val hasUnreadAlerts = clinicalAlerts.any { it !in readAlerts }
     val scoreBreakdown by viewModel.scoreBreakdown.collectAsState()
     val userStepGoal by viewModel.userStepGoal.collectAsState()
     val profile by viewModel.profile.collectAsState()
@@ -181,7 +183,7 @@ fun HomeScreen(
                     IconButton(onClick = onNavigateToNotifications) {
                         BadgedBox(
                             badge = {
-                                if (clinicalAlerts.isNotEmpty()) {
+                                if (hasUnreadAlerts) {
                                     Badge(
                                         containerColor = MaterialTheme.colorScheme.error,
                                         modifier = Modifier.offset(x = (-4).dp, y = 4.dp)
@@ -193,7 +195,7 @@ fun HomeScreen(
                                 Icons.Default.Notifications,
                                 contentDescription = "Notificações",
                                 tint = Color.White,
-                                modifier = if (clinicalAlerts.isNotEmpty()) Modifier.graphicsLayer(alpha = alpha) else Modifier
+                                modifier = if (hasUnreadAlerts) Modifier.graphicsLayer(alpha = alpha) else Modifier
                             )
                         }
                     }
