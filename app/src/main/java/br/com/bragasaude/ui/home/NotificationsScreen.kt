@@ -2,6 +2,7 @@ package br.com.bragasaude.ui.home
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import br.com.bragasaude.ui.MainViewModel
 import br.com.bragasaude.ui.components.BragaFormSheet
@@ -41,6 +45,31 @@ fun NotificationsScreen(onBack: () -> Unit, viewModel: HomeViewModel = hiltViewM
     val identifiedAt by viewModel.alertIdentifiedAt.collectAsState()
     var selectedAlert by rememberSaveable { mutableStateOf<String?>(null) }
     val unreadCount = alerts.count { it !in readAlerts }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var batteryAllowed by remember(context) { mutableStateOf(BatteryOptimizationHelper.estaLiberado(context)) }
+    var batteryGuidance by rememberSaveable { mutableStateOf<String?>(null) }
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                batteryAllowed = BatteryOptimizationHelper.estaLiberado(context)
+                if (batteryAllowed) batteryGuidance = null
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val openBatterySettings: () -> Unit = {
+        val result = BatteryOptimizationHelper.pedirIgnorarOtimizacao(context)
+        batteryGuidance = when (result) {
+            BatteryOptimizationHelper.ResultadoLiberacao.CONFIG_APP_ABERTA ->
+                "Nas configurações do Braga Saúde, abra Bateria e escolha Sem restrições, Irrestrito ou Não otimizado. O nome varia conforme o aparelho."
+            BatteryOptimizationHelper.ResultadoLiberacao.INDISPONIVEL ->
+                "Não foi possível abrir essa tela. Abra Configurações > Aplicativos > Braga Saúde > Bateria para permitir o uso sem restrições."
+            else -> null
+        }
+        if (result == BatteryOptimizationHelper.ResultadoLiberacao.JA_LIBERADO) batteryAllowed = true
+        batteryGuidance?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+    }
 
     Scaffold(
         containerColor = BragaBackground,
@@ -51,18 +80,21 @@ fun NotificationsScreen(onBack: () -> Unit, viewModel: HomeViewModel = hiltViewM
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (!BatteryOptimizationHelper.estaLiberado(context)) {
+            if (!batteryAllowed) {
                 item {
                     Card(
-                        onClick = { BatteryOptimizationHelper.pedirIgnorarOtimizacao(context) },
+                        onClick = openBatterySettings,
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                     ) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Icon(Icons.Default.NotificationsActive, contentDescription = null)
                             Text("Receba os avisos com o app fechado", style = MaterialTheme.typography.titleSmall)
-                            Text("Toque para permitir que o Braga Saúde continue funcionando em segundo plano. Nas configurações de bateria, escolha \"Não otimizado\".",
+                            Text(batteryGuidance ?: "Permita que o Braga Saúde continue ativo para acompanhar sua rotina. Na confirmação do Android, autorize o funcionamento em segundo plano.",
                                 style = MaterialTheme.typography.bodyMedium)
+                            Button(onClick = openBatterySettings, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+                                Text("Permitir funcionamento em segundo plano", style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
                 }
