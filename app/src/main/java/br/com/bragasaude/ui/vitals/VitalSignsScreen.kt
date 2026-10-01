@@ -153,7 +153,7 @@ fun VitalSignsScreen(
                 }
                 EmeraldHeaderBanner(
                     title = bannerTitle,
-                    subtitle = "Diretrizes Clínicas SBC / OMS",
+                    subtitle = "Informações de autocuidado",
                     onBack = onBack
                 )
                 if (initialType == null) {

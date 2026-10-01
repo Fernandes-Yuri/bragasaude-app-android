@@ -111,7 +111,7 @@ val MANUAL_EXAM_CATALOG = listOf(
 /**
  * Tela de Entrada Manual Estruturada de Exames.
  * Permite inserção organizada por categorias normativas, com validação instantânea de formato
- * e gravação direta no prontuário como 'confirmed'.
+ * e gravação direta nos seus exames como 'confirmed'.
  */
 @Composable
 fun ManualExamEntryScreen(
@@ -202,7 +202,7 @@ fun ManualExamEntryScreen(
                         Spacer(Modifier.width(8.dp))
                         Text(
                             text = if (validEnteredItems.isEmpty()) "Preencha ao menos 1 parâmetro"
-                            else "Gravar no Meu Prontuário (${validEnteredItems.size} ${if (validEnteredItems.size == 1) "exame" else "exames"})",
+                            else "Salvar nos meus exames (${validEnteredItems.size} ${if (validEnteredItems.size == 1) "exame" else "exames"})",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )

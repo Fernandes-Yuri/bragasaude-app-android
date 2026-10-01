@@ -538,7 +538,7 @@ fun ProfileScreen(
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text("Perfil de Cuidador", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                Text("Dados clínicos, corporais e metas nutricionais são preenchidos e acompanhados diretamente na conta do seu familiar.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Registros de autocuidado, dados corporais e metas nutricionais são preenchidos e acompanhados diretamente na conta do seu familiar.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
