@@ -4,13 +4,11 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import br.com.bragasaude.R
 import br.com.bragasaude.data.remote.model.RemoteExam
 import br.com.bragasaude.data.remote.model.RemoteExamItem
 import br.com.bragasaude.data.remote.repository.ExamsRepository
 import br.com.bragasaude.data.util.ExamExtractor
 import br.com.bragasaude.data.util.toRemote
-import br.com.bragasaude.domain.HealthEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.google.firebase.auth.FirebaseAuth
@@ -31,7 +29,6 @@ class ExamsViewModel @Inject constructor(
     private val repository: ExamsRepository,
     private val examExtractor: ExamExtractor,
     private val syncManager: SyncManager,
-    private val healthEngine: HealthEngine,
     private val profileRepository: br.com.bragasaude.data.remote.repository.ProfileRepository,
     private val auth: FirebaseAuth
 ) : ViewModel() {
@@ -39,8 +36,6 @@ class ExamsViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing = _isRefreshing.asStateFlow()
 
-    private val _showGlucosePrompt = MutableStateFlow(false)
-    val showGlucosePrompt = _showGlucosePrompt.asStateFlow()
 
     private val _exams = MutableStateFlow<List<RemoteExam>>(emptyList())
     val exams = _exams.asStateFlow()
@@ -59,8 +54,12 @@ class ExamsViewModel @Inject constructor(
     val showCloudConsentDialog = _showCloudConsentDialog.asStateFlow()
 
     private var pendingConsentCallback: ((Boolean) -> Unit)? = null
+    private val consentedExamIds = mutableSetOf<String>()
+    private val _manualExamSaved = MutableStateFlow(false)
+    val manualExamSaved = _manualExamSaved.asStateFlow()
+    fun clearManualExamSaved() { _manualExamSaved.value = false }
 
-    // FASE 4: Dossiê Médico Dinâmico
+    // FASE 4: Nuvem de Exames Dinâmico
     private val _isCompilingDossier = MutableStateFlow(false)
     val isCompilingDossier = _isCompilingDossier.asStateFlow()
 
@@ -120,17 +119,30 @@ class ExamsViewModel @Inject constructor(
             try {
                 val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
                 val profile = profileRepository.getProfile(userId).firstOrNull()?.toRemote() 
-                    ?: br.com.bragasaude.data.remote.model.RemoteProfile(id = userId, fullName = "Paciente")
+                    ?: br.com.bragasaude.data.remote.model.RemoteProfile(id = userId, fullName = "Usuário")
 
                 val examEntities = repository.getExams(userId).firstOrNull() ?: emptyList()
                 val itemEntities = repository.getExamItems(userId).firstOrNull() ?: emptyList()
 
                 val compiler = br.com.bragasaude.domain.MedicalDossierCompiler(context)
-                val result = compiler.compileDossier(profile, examEntities, itemEntities)
-                _compiledDossierResult.value = result
+                val temporaryOriginals = mutableListOf<java.io.File>()
+                try {
+                    val result = compiler.compileDossier(profile, examEntities, itemEntities) { path ->
+                        if (path.startsWith("https://") || path.startsWith("http://")) {
+                            val bytes = repository.downloadExamOriginal(path)
+                            val extension = android.net.Uri.parse(path).lastPathSegment?.substringAfterLast('.', "pdf") ?: "pdf"
+                            val directory = java.io.File(context.cacheDir, "exam_originals").apply { mkdirs() }
+                            val file = java.io.File(directory, "${UUID.randomUUID()}.$extension")
+                            temporaryOriginals.add(file)
+                            file.writeBytes(bytes)
+                            file
+                        } else java.io.File(path).takeIf { it.isFile }
+                    }
+                    _compiledDossierResult.value = result
+                } finally { temporaryOriginals.forEach { it.delete() } }
             } catch (e: Exception) {
-                android.util.Log.e("ExamsViewModel", "Erro ao compilar dossiê: ${e.message}", e)
-                _statusMessage.value = "Erro ao compilar dossiê em PDF: ${e.message}"
+                android.util.Log.e("ExamsViewModel", "Erro ao exportar exames: ${e.message}", e)
+                _statusMessage.value = "Não foi possível exportar os exames: ${e.message}"
             } finally {
                 _isCompilingDossier.value = false
             }
@@ -146,11 +158,35 @@ class ExamsViewModel @Inject constructor(
     }
 
     fun onValidationConfirmed(exam: RemoteExam, items: List<RemoteExamItem>) {
+        if (_isLoading.value || _showCloudConsentDialog.value) return
+        if (auth.currentUser?.uid != null && exam.id?.let { it in consentedExamIds } != true) {
+            promptCloudConsent { accepted ->
+                if (accepted) {
+                    exam.id?.let { consentedExamIds.add(it) }
+                    saveValidatedExam(exam, items)
+                }
+            }
+        } else saveValidatedExam(exam, items)
+    }
+
+    private fun saveValidatedExam(exam: RemoteExam, items: List<RemoteExamItem>) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
                 val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
-                val confirmedExam = exam.copy(status = "confirmed")
+                val originalPath = exam.fileUrl?.takeIf { !it.startsWith("https://") && !it.startsWith("http://") }
+                val remoteOriginal = if (userId != BragaConstants.GUEST_UID && originalPath != null) {
+                    val original = java.io.File(originalPath)
+                    check(original.length() <= 35 * 1024 * 1024) { "O exame deve ter no máximo 35 MB." }
+                    val result = repository.uploadExamContract(exam.id ?: error("Exame sem identificador."),
+                        exam.title, exam.category ?: "Geral", exam.examDate, "UNSTRUCTURED_DOCUMENT",
+                        true, br.com.bragasaude.domain.ExamStorageTerms.VERSION, original.name, original.readBytes())
+                    check(result?.success == true && !result.fileUrl.isNullOrBlank()) {
+                        "Não foi possível enviar o arquivo original. Tente novamente."
+                    }
+                    result.fileUrl
+                } else exam.fileUrl
+                val confirmedExam = exam.copy(status = "confirmed", fileUrl = remoteOriginal)
                 val confirmedItems = items.map {
                     it.copy(
                         status = "confirmed",
@@ -160,12 +196,12 @@ class ExamsViewModel @Inject constructor(
                 }
                 repository.saveExam(confirmedExam, confirmedItems)
 
-                // ANALISA OS ITENS (CÉREBRO)
-                healthEngine.analyzeExamItems(userId, confirmedItems)
-                checkGlucoseItems(confirmedItems, userId)
 
+                if (userId != BragaConstants.GUEST_UID && originalPath != null) java.io.File(originalPath).delete()
+                exam.id?.let { consentedExamIds.remove(it) }
                 _pendingExamValidation.value = null
             } catch (e: Exception) {
+                _statusMessage.value = e.message ?: "Não foi possível salvar os exames. Tente novamente."
                 e.printStackTrace()
             } finally {
                 _isLoading.value = false
@@ -175,9 +211,20 @@ class ExamsViewModel @Inject constructor(
 
     /**
      * Salva exames inseridos diretamente pelo usuário via formulário estruturado.
-     * Gravação imediata no prontuário com status 'confirmed'.
+     * Gravação imediata nos seus exames com status 'confirmed'.
      */
     fun saveManualExam(title: String, category: String, examDate: String, items: List<RemoteExamItem>) {
+        if (_isLoading.value || _showCloudConsentDialog.value) return
+        if (auth.currentUser?.uid == null) {
+            saveConsentedManualExam(title, category, examDate, items)
+            return
+        }
+        promptCloudConsent { accepted ->
+            if (accepted) saveConsentedManualExam(title, category, examDate, items)
+        }
+    }
+
+    private fun saveConsentedManualExam(title: String, category: String, examDate: String, items: List<RemoteExamItem>) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
@@ -200,9 +247,9 @@ class ExamsViewModel @Inject constructor(
                     )
                 }
                 repository.saveExam(exam, confirmedItems)
-                healthEngine.analyzeExamItems(userId, confirmedItems)
-                checkGlucoseItems(confirmedItems, userId)
+                _manualExamSaved.value = true
             } catch (e: Exception) {
+                _statusMessage.value = e.message ?: "Não foi possível salvar os exames. Tente novamente."
                 e.printStackTrace()
             } finally {
                 _isLoading.value = false
@@ -227,17 +274,41 @@ class ExamsViewModel @Inject constructor(
                 val sanitizedText = examExtractor.sanitizeDocumentText(rawText)
                 val extractedItems = examExtractor.parseToExamItems(sanitizedText, userId, examId)
 
+                val originalFile = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val directory = java.io.File(context.filesDir, "exams").apply { mkdirs() }
+                    val file = java.io.File(directory, "$examId.pdf")
+                    val document = android.graphics.pdf.PdfDocument()
+                    try {
+                        pages.forEachIndexed { index, bitmap ->
+                            val page = document.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, index + 1).create())
+                            val scale = minOf(595f / bitmap.width, 842f / bitmap.height)
+                            val width = bitmap.width * scale
+                            val height = bitmap.height * scale
+                            val left = (595f - width) / 2
+                            val top = (842f - height) / 2
+                            page.canvas.drawColor(android.graphics.Color.WHITE)
+                            page.canvas.drawBitmap(bitmap, null, android.graphics.RectF(left, top, left + width, top + height),
+                                android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+                            document.finishPage(page)
+                        }
+                        file.outputStream().use { document.writeTo(it) }
+                        file
+                    } finally { document.close() }
+                }
+
                 val exam = RemoteExam(
                     id = examId,
                     userId = userId,
                     title = title,
                     category = category,
                     examDate = dateStr,
+                    fileUrl = originalFile.absolutePath,
                     status = "analyzed"
                 )
 
                 _pendingExamValidation.value = Pair(exam, extractedItems)
             } catch (e: Exception) {
+                _statusMessage.value = "Não foi possível preparar o exame capturado. Tente novamente."
                 e.printStackTrace()
             } finally {
                 _isLoading.value = false
@@ -249,6 +320,17 @@ class ExamsViewModel @Inject constructor(
      * Processa arquivo anexado (PDF ou Imagem da galeria) com extração OCR e triagem.
      */
     fun processAttachedFile(title: String, category: String, date: Date, fileUri: Uri, fileName: String) {
+        if (_isLoading.value || _showCloudConsentDialog.value) return
+        if (auth.currentUser?.uid == null) {
+            processConsentedFile(title, category, date, fileUri, fileName)
+            return
+        }
+        promptCloudConsent { accepted ->
+            if (accepted) processConsentedFile(title, category, date, fileUri, fileName)
+        }
+    }
+
+    private fun processConsentedFile(title: String, category: String, date: Date, fileUri: Uri, fileName: String) {
         viewModelScope.launch {
             _isLoading.value = true
             _uploadProgress.value = 0.2f
@@ -271,15 +353,32 @@ class ExamsViewModel @Inject constructor(
                 val extractedItems = examExtractor.parseToExamItems(sanitizedText, userId, examId)
 
                 _uploadProgress.value = 0.6f
-                var fileUrl: String? = null
-                try {
-                    val fileBytes = context.contentResolver.openInputStream(fileUri)?.use { it.readBytes() }
-                    if (fileBytes != null) {
-                        fileUrl = repository.uploadExamFile(userId, fileName, fileBytes)
+                val fileBytes = context.contentResolver.openInputStream(fileUri)?.use { input ->
+                    val bytes = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    var count = input.read(buffer)
+                    while (count != -1) {
+                        check(bytes.size() + count <= 35 * 1024 * 1024) { "O exame deve ter no máximo 35 MB." }
+                        bytes.write(buffer, 0, count)
+                        count = input.read(buffer)
                     }
-                } catch (uploadEx: Exception) {
-                    uploadEx.printStackTrace()
+                    bytes.toByteArray()
+                } ?: error("Não foi possível ler o exame. Selecione o arquivo novamente.")
+                val fileUrl = if (userId == BragaConstants.GUEST_UID) {
+                    val localDir = java.io.File(context.filesDir, "exams").apply { mkdirs() }
+                    val localFile = java.io.File(localDir, "$examId.${if (isPdf) "pdf" else "jpg"}")
+                    localFile.writeBytes(fileBytes)
+                    localFile.absolutePath
+                } else {
+                    val result = repository.uploadExamContract(examId, title, category, dateStr,
+                        "UNSTRUCTURED_DOCUMENT", true, br.com.bragasaude.domain.ExamStorageTerms.VERSION,
+                        fileName, fileBytes)
+                    check(result?.success == true && !result.fileUrl.isNullOrBlank()) {
+                        "Não foi possível enviar o exame. Tente novamente; ele ainda não foi salvo."
+                    }
+                    result.fileUrl
                 }
+                consentedExamIds.add(examId)
 
                 val exam = RemoteExam(
                     id = examId,
@@ -294,6 +393,7 @@ class ExamsViewModel @Inject constructor(
                 _pendingExamValidation.value = Pair(exam, extractedItems)
                 _uploadProgress.value = 1f
             } catch (e: Exception) {
+                _statusMessage.value = e.message ?: "Não foi possível enviar o exame. Tente novamente."
                 e.printStackTrace()
             } finally {
                 _isLoading.value = false
@@ -337,102 +437,8 @@ class ExamsViewModel @Inject constructor(
     }
 
     fun onValidationCancelled() {
+        _pendingExamValidation.value?.first?.id?.let { consentedExamIds.remove(it) }
         _pendingExamValidation.value = null
-    }
-
-    fun uploadAndSaveExam(title: String, category: String, date: Date, fileUri: Uri?, fileName: String?) {
-        android.util.Log.d("ExamsViewModel", "uploadAndSaveExam: $title, uri: $fileUri, file: $fileName")
-        viewModelScope.launch {
-            _isLoading.value = true
-            _uploadProgress.value = 0f
-            try {
-                val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
-                val examId = UUID.randomUUID().toString()
-                
-                var fileUrl: String? = null
-                var extractedItems = emptyList<RemoteExamItem>()
-
-                if (fileUri != null && fileName != null) {
-                    _uploadProgress.value = 0.2f
-                    val mimeType = context.contentResolver.getType(fileUri)
-                    val isPdf = mimeType?.contains("pdf", true) == true || fileName.endsWith(".pdf", true)
-
-                    // DECISOES.md (D1): apenas PDF no fluxo de exames. Defesa em profundidade
-                    // (a UI já restringe o picker); qualquer não-PDF é rejeitado aqui.
-                    if (!isPdf) {
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            android.widget.Toast.makeText(context, context.getString(R.string.exam_pdf_only_error), android.widget.Toast.LENGTH_LONG).show()
-                        }
-                        return@launch
-                    }
-
-                    android.util.Log.d("ExamsViewModel", "Extracting text. isPdf: $isPdf")
-
-                    val rawText = examExtractor.extractTextFromPdf(fileUri)
-                    android.util.Log.d("ExamsViewModel", "Raw text length: ${rawText.length}")
-
-                    // Trava 1: Rejeição de PDF não textual (Scans/Fotos/Imagens convertidas em PDF)
-                    if (rawText.isBlank() || rawText.trim().length < 50) {
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            android.widget.Toast.makeText(
-                                context,
-                                "Este PDF não possui texto digital legível (parece ser uma foto ou imagem escaneada). Por favor, anexe o laudo original em PDF fornecido pelo laboratório.",
-                                android.widget.Toast.LENGTH_LONG
-                            ).show()
-                        }
-                        return@launch
-                    }
-
-                    extractedItems = examExtractor.parseToExamItems(rawText, userId, examId)
-                    android.util.Log.d("ExamsViewModel", "Extracted items count: ${extractedItems.size}")
-
-                    // Trava 2: Rejeição de PDFs sem parâmetros clínicos reconhecidos
-                    if (extractedItems.isEmpty()) {
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            android.widget.Toast.makeText(
-                                context,
-                                "Nenhum parâmetro de exame laboratorial reconhecido no documento. Certifique-se de anexar um laudo válido.",
-                                android.widget.Toast.LENGTH_LONG
-                            ).show()
-                        }
-                        return@launch
-                    }
-
-                    checkGlucoseItems(extractedItems, userId)
-
-                    _uploadProgress.value = 0.5f
-                    val fileBytes = context.contentResolver.openInputStream(fileUri)?.use { it.readBytes() }
-                    if (fileBytes != null) {
-                        fileUrl = repository.uploadExamFile(userId, fileName, fileBytes)
-                    }
-                }
-
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                val exam = RemoteExam(
-                    id = examId,
-                    userId = userId,
-                    title = title,
-                    category = category,
-                    examDate = dateFormat.format(date),
-                    fileUrl = fileUrl,
-                    // Fluxo de status: "uploaded" → "analyzed" (IA extrai) → "confirmed" (usuário confere)
-                    status = if (fileUrl != null) "uploaded" else "confirmed"
-                )
-                
-                if (fileUrl != null) {
-                    _pendingExamValidation.value = Pair(exam, extractedItems)
-                } else {
-                    repository.saveExam(exam)
-                }
-                
-                _uploadProgress.value = 1f
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                _isLoading.value = false
-                _uploadProgress.value = null
-            }
-        }
     }
 
     fun refresh() {
@@ -449,45 +455,4 @@ class ExamsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Se o exame extraído contém parâmetros de glicose (glicose em jejum, HbA1c)
-     * e o usuário não tem diabetes marcado no perfil, oferecer a ativação do
-     * monitoramento de glicose.
-     */
-    private fun checkGlucoseItems(items: List<RemoteExamItem>, userId: String) {
-        viewModelScope.launch {
-            try {
-                val glucoseKeys = setOf("glucose", "hba1c")
-                val hasGlucoseItem = items.any { it.itemKey in glucoseKeys }
-                if (!hasGlucoseItem) return@launch
-
-                val profile = profileRepository.getProfile(userId).firstOrNull()?.toRemote() ?: return@launch
-                if (!profile.hasDiabetes) {
-                    _showGlucosePrompt.value = true
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    fun dismissGlucosePrompt() {
-        _showGlucosePrompt.value = false
-    }
-
-    fun enableDiabetesMonitoring() {
-        viewModelScope.launch {
-            try {
-                val userId = auth.currentUser?.uid ?: return@launch
-                val current = profileRepository.getProfile(userId).firstOrNull()
-                val profile = (current?.toRemote() ?: br.com.bragasaude.data.remote.model.RemoteProfile(id = userId))
-                    .copy(hasDiabetes = true)
-                profileRepository.saveProfile(profile)
-                _showGlucosePrompt.value = false
-            } catch (e: Exception) {
-                e.printStackTrace()
-                _showGlucosePrompt.value = false
-            }
-        }
-    }
 }

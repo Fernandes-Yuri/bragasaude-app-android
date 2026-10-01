@@ -27,50 +27,29 @@ class ExamsRepository @Inject constructor(
 
     suspend fun saveExam(exam: RemoteExam, items: List<RemoteExamItem> = emptyList()) {
         val examWithId = if (exam.id == null) exam.copy(id = UUID.randomUUID().toString()) else exam
-        val examEntity = examWithId.toEntity().copy(pendingSync = true)
-        val localRowId = examDao.insert(examEntity)
-        
         val itemsWithIds = items.map { it.copy(id = it.id ?: UUID.randomUUID().toString(), examId = examWithId.id!!) }
-        examItemDao.insertAll(itemsWithIds.map { it.toEntity().copy(pendingSync = true) })
-
-        if (exam.userId == guestId) return
-        
-        try {
-            // Tenta sincronização direta com o backend
-            if (examWithId.fileUrl == null && items.isNotEmpty()) {
-                val synced = apiClient.syncManualExam(
-                    examId = examWithId.id,
-                    title = examWithId.title,
-                    category = examWithId.category ?: "Laboratorial",
-                    examDate = examWithId.examDate,
-                    items = itemsWithIds
-                )
-                if (synced) {
-                    examDao.insert(examEntity.copy(localId = localRowId, pendingSync = false))
-                    examItemDao.insertAll(itemsWithIds.map { it.toEntity().copy(pendingSync = false) })
-                    return
-                }
+        val manual = examWithId.fileUrl == null
+        if (exam.userId != guestId && manual) {
+            check(apiClient.syncManualExam(examWithId.id, examWithId.title,
+                examWithId.category ?: "Laboratorial", examWithId.examDate, itemsWithIds)) {
+                "Não foi possível armazenar os exames na nuvem. Tente novamente; seus dados continuam na tela."
             }
-            triggerSync()
-        } catch (e: Exception) {
-            triggerSync()
         }
+        val pending = exam.userId != guestId && !manual
+        examDao.insert(examWithId.toEntity().copy(pendingSync = pending))
+        examItemDao.insertAll(itemsWithIds.map { it.toEntity().copy(pendingSync = pending) })
+        if (pending) triggerSync()
     }
 
     suspend fun deleteExamAtomically(examId: String, userId: String): Boolean {
-        // 1. Exclusão local imediata no banco Room
+        if (userId != guestId) {
+            check(apiClient.deleteExam(examId)) {
+                "Não foi possível excluir o exame da nuvem. Verifique a conexão e tente novamente."
+            }
+        }
         examDao.deleteByRemoteId(examId)
         examItemDao.deleteByExamId(examId)
-
-        if (userId == guestId) return true
-
-        // 2. Exclusão remota no PostgreSQL RDS e destruição de arquivo físico (LGPD Art. 18)
-        return try {
-            apiClient.deleteExam(examId)
-        } catch (e: Exception) {
-            android.util.Log.e("ExamsRepo", "Erro ao excluir exame remoto: ${e.message}", e)
-            false
-        }
+        return true
     }
 
     suspend fun confirmExamItem(itemId: String) {
@@ -119,10 +98,7 @@ class ExamsRepository @Inject constructor(
         }
     }
 
-    suspend fun uploadExamFile(userId: String, fileName: String, byteArray: ByteArray): String? {
-        if (userId == guestId) return null
-        return apiClient.uploadExamFile(userId, fileName, byteArray)
-    }
+    suspend fun downloadExamOriginal(fileUrl: String) = apiClient.downloadExamOriginal(fileUrl)
 
     suspend fun uploadExamContract(
         examId: String,

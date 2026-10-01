@@ -82,6 +82,7 @@ object FamilyConversationPdfExporter {
         }
 
         fun drawFooter() {
+            PdfBranding.watermark(context, canvas)
             textPaint.color = Color.parseColor("#9E9E9E")
             textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
             textPaint.textSize = 9f

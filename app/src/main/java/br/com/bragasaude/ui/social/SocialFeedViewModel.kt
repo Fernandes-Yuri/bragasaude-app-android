@@ -34,8 +34,7 @@ data class SocialPostAuthor(
     val name: String = "Colega de Saúde",
     val photoUrl: String? = null,
     val fallbackPhotoUrl: String? = null,
-    val avatarIdentifier: String? = null,
-    val level: Int = 1
+    val avatarIdentifier: String? = null
 )
 
 internal fun resolveSocialPostAuthor(
@@ -47,8 +46,7 @@ internal fun resolveSocialPostAuthor(
     name = br.com.bragasaude.domain.communityDisplayName(profile?.fullName?.takeIf { it.isNotBlank() } ?: accountName, nickname),
     photoUrl = profile?.customPhotoUri?.takeIf { it.isNotBlank() } ?: googlePhotoUrl,
     fallbackPhotoUrl = googlePhotoUrl,
-    avatarIdentifier = profile?.avatarIdentifier,
-    level = profile?.currentLevel ?: 1
+    avatarIdentifier = profile?.avatarIdentifier
 )
 
 @HiltViewModel

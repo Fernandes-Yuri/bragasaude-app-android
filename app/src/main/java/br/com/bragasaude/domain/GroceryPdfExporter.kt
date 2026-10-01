@@ -50,6 +50,7 @@ object GroceryPdfExporter {
             // D-PDF2: quebra de página dinâmica. Finaliza a página atual (com rodapé)
             // e abre uma nova com cabeçalho de continuação.
             fun startNewPage() {
+                PdfBranding.watermark(context, canvas)
                 drawPageFooter(canvas, textPaint, pageNum)
                 doc.finishPage(page)
                 pageNum++
@@ -94,6 +95,7 @@ object GroceryPdfExporter {
             }
 
             // 5. Rodapé da última página
+            PdfBranding.watermark(context, canvas)
             drawPageFooter(canvas, textPaint, pageNum)
 
             doc.finishPage(page)

@@ -52,7 +52,7 @@ fun MedicalReportScreen(
                         setDataAndType(uri, "application/pdf")
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
-                    context.startActivity(Intent.createChooser(intent, "Abrir Relatório Clínico em PDF"))
+                    context.startActivity(Intent.createChooser(intent, "Abrir relatório dos últimos 30 dias"))
                 } catch (e: Exception) {
                     Toast.makeText(context, "Não foi possível abrir o PDF. Verifique se possui um leitor instalado.", Toast.LENGTH_LONG).show()
                     e.printStackTrace()
@@ -134,12 +134,12 @@ fun MedicalReportScreen(
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    "Relatório Clínico (30 Dias)",
+                                    "Relatório dos últimos 30 dias",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    "Prontuário consolidado para seu médico",
+                                    "Seus registros de autocuidado em um só lugar",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.outline
                                 )
@@ -149,7 +149,7 @@ fun MedicalReportScreen(
                         Spacer(Modifier.height(14.dp))
 
                         Text(
-                            "Exporta os gráficos e histórico dos últimos 30 dias de pressão arterial, glicemia, hidratação, atividade física e exames em formato PDF assinado.",
+                            "Exporta os gráficos e registros dos últimos 30 dias de pressão arterial, glicemia, hidratação e atividade física em PDF. Não realiza diagnóstico nem substitui uma avaliação profissional.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -208,7 +208,7 @@ fun MedicalReportScreen(
                             )
                             Spacer(Modifier.height(12.dp))
                             Text(
-                                "Evolução Laboratorial",
+                                "Histórico de exames",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )

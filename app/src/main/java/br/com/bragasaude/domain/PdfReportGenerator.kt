@@ -38,8 +38,8 @@ class PdfReportGenerator(private val context: Context) {
             isAntiAlias = true
         }
 
-        val disclaimerText = "¹ Nota técnica: Compilado de dados autorreportados pelo usuário e medições de autocuidado para suporte ao diálogo clínico. Não substitui laudo pericial, prontuário médico ou diagnóstico formal emitido por profissional de saúde."
-        val deviceDisclaimerText = "² Aviso regulatório: O aplicativo Braga Saúde não é dispositivo médico e não realiza diagnósticos, prescrições ou intervenções clínicas. Os dados devem ser interpretados e validados por profissional habilitado."
+        val disclaimerText = "Registros informados pelo usuário para organização pessoal e compartilhamento. A precisão depende dos dados registrados."
+        val deviceDisclaimerText = "O Braga Saúde não realiza diagnóstico, interpretação de exames ou prescrição. Este relatório não substitui uma avaliação profissional."
         
         val disclaimerPaint = Paint().apply {
             textSize = 6.2f
@@ -50,8 +50,25 @@ class PdfReportGenerator(private val context: Context) {
 
         val cycleReport = ClinicalReportAggregator.aggregate30DayCycle(profile, vitals, dailyMetrics)
         
-        val wearablePagesData = summarizeWearableReadings(wearableReadings).chunked(10)
-        val totalPages = 3 + wearablePagesData.size
+        val period = PersonalReportPeriod.current()
+        val recentVitals = vitals.filter { vital ->
+            vital.measuredAt?.let { br.com.bragasaude.data.util.parseDate(it) }?.time?.let(period::contains) == true
+        }.sortedByDescending { it.measuredAt }
+        val historyLines = recentVitals.flatMap { vital ->
+            val values = buildList {
+                if (vital.systolicPressure != null || vital.diastolicPressure != null)
+                    add("Pressão arterial: ${vital.systolicPressure ?: "--"}/${vital.diastolicPressure ?: "--"} mmHg")
+                vital.glucoseLevel?.let { add("Glicose: $it mg/dL (${vital.glucoseType ?: "avulso"})") }
+                vital.heartRate?.let { add("Frequência cardíaca: $it bpm") }
+                vital.hydrationMl?.takeIf { it > 0 }?.let { add("Hidratação: $it ml") }
+            }
+            values.flatMap { value ->
+                PdfTextLayout.wrap("${vital.measuredAt?.take(16) ?: "--"} • $value", 471f, textPaint::measureText)
+            }
+        }.ifEmpty { listOf("Nenhum registro informado neste período.") }
+        val historyPages = historyLines.chunked(38)
+        val wearablePagesData = summarizeWearableReadings(wearableReadings.filter { period.contains(it.measuredAt) }).chunked(10)
+        val totalPages = 2 + historyPages.size + wearablePagesData.size
 
         // ==========================================
         // PÁGINA 1
@@ -60,7 +77,7 @@ class PdfReportGenerator(private val context: Context) {
         val page1 = pdfDocument.startPage(pageInfo1)
         val canvas1: Canvas = page1.canvas
 
-        drawPageHeader(canvas1, "Registro de Autocuidado para Consulta Médica")
+        drawPageHeader(canvas1, "Relatório dos últimos 30 dias")
 
         var yPos = 85f
 
@@ -103,13 +120,15 @@ class PdfReportGenerator(private val context: Context) {
             color = Color.BLACK
             isAntiAlias = true
         }
-        canvas1.drawText("Pessoa Acompanhada: ${profile.fullName ?: "Não informado"}", 90f, yPos + 26f, patientTitle)
+        PdfTextLayout.wrap("Titular: ${profile.fullName ?: "Não informado"}", 440f, patientTitle::measureText)
+            .take(2).forEachIndexed { index, line -> canvas1.drawText(line, 90f, yPos + 19f + index * 14f, patientTitle) }
         
         val infoLine = "Idade/Nasc: ${profile.birthDate ?: "--"}  |  Gênero: ${profile.gender ?: "--"}  |  Peso: ${profile.weight ?: "--"}kg  |  Altura: ${profile.height ?: "--"}m"
-        canvas1.drawText(infoLine, 90f, yPos + 44f, textPaint)
+        PdfTextLayout.wrap(infoLine, 440f, subTextPaint::measureText)
+            .take(2).forEachIndexed { index, line -> canvas1.drawText(line, 90f, yPos + 48f + index * 12f, subTextPaint) }
         yPos += 65f + 28f
 
-        canvas1.drawText("Evolução Clínica e Sinais Vitais (Ciclo de 30 Dias)", 50f, yPos, sectionTitlePaint)
+        canvas1.drawText("Registros de autocuidado dos últimos 30 dias", 50f, yPos, sectionTitlePaint)
         yPos += 18f
 
         // Gráficos
@@ -126,7 +145,7 @@ class PdfReportGenerator(private val context: Context) {
                 ChartSeries("Sistólica (mmHg)", pressureDataSys, Color.rgb(0, 137, 123)),
                 ChartSeries("Diastólica (mmHg)", pressureDataDia, Color.rgb(0, 229, 255))
             ),
-            target = 120.0
+            target = null
         )
         yPos += 160f
 
@@ -141,7 +160,7 @@ class PdfReportGenerator(private val context: Context) {
             series = listOf(
                 ChartSeries("Glicose", glucoseData, Color.rgb(234, 88, 12))
             ),
-            target = 99.0
+            target = null
         )
         yPos += 160f
 
@@ -230,93 +249,28 @@ class PdfReportGenerator(private val context: Context) {
         
         pdfDocument.finishPage(page2)
 
-        // ==========================================
-        // PÁGINA 3
-        // ==========================================
-        val pageInfo3 = PdfDocument.PageInfo.Builder(595, 842, 3).create()
-        val page3 = pdfDocument.startPage(pageInfo3)
-        val canvas3: Canvas = page3.canvas
-
-        drawPageHeader(canvas3, "Histórico Detalhado de Registros")
-
-        var yPos3 = 85f
-        canvas3.drawText("HISTÓRICO DETALHADO DE REGISTROS", 50f, yPos3, sectionTitlePaint)
-        yPos3 += 28f
-
-        // Cabeçalho da Tabela
-        val tableHeaderPaint = Paint().apply {
-            color = Color.rgb(0, 137, 123)
-            style = Paint.Style.FILL
-        }
-        canvas3.drawRect(50f, yPos3 - 14f, 545f, yPos3 + 6f, tableHeaderPaint)
-
-        val thText = Paint(textPaint).apply { 
-            color = Color.WHITE
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) 
-        }
-        canvas3.drawText("Data/Hora", 60f, yPos3, thText)
-        canvas3.drawText("Indicador", 180f, yPos3, thText)
-        canvas3.drawText("Valor Registrado", 380f, yPos3, thText)
-        yPos3 += 20f
-
-        val alternateRowPaint = Paint().apply {
-            color = Color.rgb(248, 250, 252)
-            style = Paint.Style.FILL
-        }
-        val defaultRowPaint = Paint().apply {
-            color = Color.WHITE
-            style = Paint.Style.FILL
-        }
-        val colSeparatorPaint = Paint().apply {
-            color = Color.rgb(229, 235, 232)
-            strokeWidth = 0.5f
-        }
-        
-        var rowIndex = 0
-
-        vitals.take(25).forEach { vital ->
-            val dateStr = vital.measuredAt?.take(16) ?: "--"
-
-            fun drawTableRow(label: String, value: String) {
-                if (yPos3 > 720) return
-                
-                val rowBgPaint = if (rowIndex % 2 == 0) alternateRowPaint else defaultRowPaint
-                canvas3.drawRect(50f, yPos3 - 14f, 545f, yPos3 + 6f, rowBgPaint)
-                
-                canvas3.drawLine(170f, yPos3 - 14f, 170f, yPos3 + 6f, colSeparatorPaint)
-                canvas3.drawLine(370f, yPos3 - 14f, 370f, yPos3 + 6f, colSeparatorPaint)
-
-                canvas3.drawText(dateStr, 60f, yPos3, textPaint)
-                canvas3.drawText(label, 180f, yPos3, textPaint)
-                canvas3.drawText(value, 380f, yPos3, textPaint)
-                
-                yPos3 += 20f
-                rowIndex++
+        historyPages.forEachIndexed { index, lines ->
+            val pageNum = 3 + index
+            val historyPage = pdfDocument.startPage(PdfDocument.PageInfo.Builder(595, 842, pageNum).create())
+            val canvas = historyPage.canvas
+            drawPageHeader(canvas, "Registros dos últimos 30 dias • Histórico")
+            var y = 95f
+            lines.forEachIndexed { rowIndex, line ->
+                val rowPaint = Paint().apply { color = if (rowIndex % 2 == 0) Color.rgb(240, 250, 248) else Color.TRANSPARENT }
+                canvas.drawRect(50f, y - 13f, 545f, y + 5f, rowPaint)
+                canvas.drawText(line, 62f, y, textPaint)
+                y += 17f
             }
-
-            if (vital.systolicPressure != null || vital.diastolicPressure != null) {
-                drawTableRow("Pressão Arterial", "${vital.systolicPressure ?: "--"}/${vital.diastolicPressure ?: "--"} mmHg")
-            }
-            if (vital.glucoseLevel != null) {
-                drawTableRow("Glicose", "${vital.glucoseLevel} mg/dL (${vital.glucoseType ?: "avulso"})")
-            }
-            if (vital.heartRate != null) {
-                drawTableRow("Freq. Cardíaca", "${vital.heartRate} bpm")
-            }
-            if (vital.hydrationMl != null && vital.hydrationMl!! > 0) {
-                drawTableRow("Hidratação", "${vital.hydrationMl} ml")
-            }
+            drawLegalDisclaimers(canvas, disclaimerText, deviceDisclaimerText, disclaimerPaint)
+            drawPageFooter(canvas, pageNum, totalPages)
+            pdfDocument.finishPage(historyPage)
         }
-
-        drawLegalDisclaimers(canvas3, disclaimerText, deviceDisclaimerText, disclaimerPaint)
-        drawPageFooter(canvas3, 3, totalPages)
-        pdfDocument.finishPage(page3)
 
         // ==========================================
         // WEARABLE PAGES
         // ==========================================
         wearablePagesData.forEachIndexed { index, rows ->
-            val pageNum = index + 4
+            val pageNum = index + 3 + historyPages.size
             val page = pdfDocument.startPage(PdfDocument.PageInfo.Builder(595, 842, pageNum).create())
             val canvas = page.canvas
             
@@ -351,7 +305,7 @@ class PdfReportGenerator(private val context: Context) {
             // incluindo áudio TTS derivado de texto de saúde). Agora em
             // subpasta própria, e o cache_root foi removido do file_paths.xml.
             val outDir = File(context.cacheDir, "relatorios").apply { if (!exists()) mkdirs() }
-            val file = File(outDir, "relatorio_clinico_${System.currentTimeMillis()}.pdf")
+            val file = File(outDir, "relatorio_ultimos_30_dias_${System.currentTimeMillis()}.pdf")
             val outputStream = FileOutputStream(file)
             pdfDocument.writeTo(outputStream)
             pdfDocument.close()
@@ -410,6 +364,7 @@ class PdfReportGenerator(private val context: Context) {
     }
 
     private fun drawPageFooter(canvas: Canvas, pageNumber: Int, totalPages: Int) {
+        PdfBranding.watermark(context, canvas)
         val linePaint = Paint().apply {
             color = Color.rgb(203, 213, 225)
             strokeWidth = 0.5f
@@ -445,24 +400,9 @@ class PdfReportGenerator(private val context: Context) {
     ): Float {
         val prevAlign = paint.textAlign
         paint.textAlign = Paint.Align.LEFT
-        val words = text.split(" ")
-        var currentLine = ""
         var currentY = startY
-
-        for (word in words) {
-            val candidate = if (currentLine.isEmpty()) word else "$currentLine $word"
-            if (paint.measureText(candidate) <= maxWidth) {
-                currentLine = candidate
-            } else {
-                if (currentLine.isNotEmpty()) {
-                    canvas.drawText(currentLine, x, currentY, paint)
-                    currentY += lineSpacing
-                }
-                currentLine = word
-            }
-        }
-        if (currentLine.isNotEmpty()) {
-            canvas.drawText(currentLine, x, currentY, paint)
+        PdfTextLayout.wrap(text, maxWidth, paint::measureText).forEach { line ->
+            canvas.drawText(line, x, currentY, paint)
             currentY += lineSpacing
         }
         paint.textAlign = prevAlign
@@ -533,15 +473,15 @@ class PdfReportGenerator(private val context: Context) {
             legendTextPaint.color = s.color
             val textWidth = legendTextPaint.measureText(s.name)
             legendX -= textWidth
-            canvas.drawText(s.name, legendX, y + 18f, legendTextPaint)
+            canvas.drawText(s.name, legendX, y + 34f, legendTextPaint)
             legendX -= 16f
-            canvas.drawCircle(legendX + 6f, y + 15f, 3.5f, Paint().apply { color = s.color; isAntiAlias = true })
+            canvas.drawCircle(legendX + 6f, y + 31f, 3.5f, Paint().apply { color = s.color; isAntiAlias = true })
             legendX -= 12f
         }
 
         val chartLeft = x + 30f
         val chartRight = x + width - 20f
-        val chartTop = y + 32f
+        val chartTop = y + 48f
         val chartBottom = y + height - 20f
 
         val gridPaint = Paint().apply {
