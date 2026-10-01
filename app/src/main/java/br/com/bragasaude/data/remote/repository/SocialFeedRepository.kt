@@ -43,6 +43,10 @@ class SocialFeedRepository @Inject constructor(
         return posts.size
     }
 
+    fun getAuthorProfile(userId: String) = profileDao.getProfile(userId)
+
+    suspend fun getCommunityNickname(): String = apiClient.getCommunityNickname()
+
     fun reactionsForPost(postId: String) = socialFeedDao.getReactionsForPost(postId)
 
     suspend fun reactToPost(postId: String, userId: String, reactionType: String = "apoio"): Boolean {

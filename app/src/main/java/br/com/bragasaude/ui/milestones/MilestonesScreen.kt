@@ -118,13 +118,13 @@ fun MilestoneItem(milestone: br.com.bragasaude.data.remote.model.RemoteMilestone
                 Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(Modifier.width(16.dp))
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(milestone.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 milestone.description?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
                 milestone.achievedAt?.let {
-                    Text(it.take(10), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    Text(formatMilestoneDate(it), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -135,7 +135,7 @@ fun MilestoneItem(milestone: br.com.bragasaude.data.remote.model.RemoteMilestone
             title = { Text(milestone.title) },
             text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 milestone.description?.let { Text(it) }
-                milestone.achievedAt?.let { Text("Conquistado em " + it.take(10), style = MaterialTheme.typography.labelLarge) }
+                milestone.achievedAt?.let { Text("Conquistado em " + formatMilestoneDate(it), style = MaterialTheme.typography.labelLarge) }
                 Text("Cada dia de cuidado conta.")
             } },
             confirmButton = { TextButton(onClick = {
@@ -145,3 +145,8 @@ fun MilestoneItem(milestone: br.com.bragasaude.data.remote.model.RemoteMilestone
             dismissButton = { TextButton(onClick = { showDetails = false }) { Text("Fechar") } })
     }
 }
+
+private fun formatMilestoneDate(value: String): String = runCatching {
+    java.time.LocalDate.parse(value.substringBefore('T').substringBefore(' '))
+        .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy", java.util.Locale.forLanguageTag("pt-BR")))
+}.getOrDefault("Data não disponível")
