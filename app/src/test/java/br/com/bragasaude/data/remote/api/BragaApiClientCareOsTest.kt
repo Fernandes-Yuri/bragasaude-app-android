@@ -481,5 +481,40 @@ class BragaApiClientCareOsTest {
         val meds = api.getPatientMedications("p1")
         assertTrue(meds != null && meds.isEmpty())
     }
+
+    @Test
+    fun `feedback exige confirmacao de persistencia e o mesmo identificador`() = runBlocking {
+        val id = "e4fbbbf7-501f-4aeb-965e-554c47ce1de0"
+        val payload = JSONObject().put("id", id).put("userId", "usuario").put("category", "bug").put("message", "relato")
+        for (body in listOf(
+            "{\"status\":\"offline_mode\"}",
+            "{\"status\":\"success\",\"id\":\"$id\"}",
+            "{\"status\":\"success\",\"persisted\":true,\"id\":\"outro\"}"
+        )) {
+            server.enqueue(MockResponse().setResponseCode(200).setBody(body))
+            assertNull(api.syncFeedback(payload))
+        }
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{\"status\":\"success\",\"persisted\":true,\"id\":\"$id\"}"))
+        assertEquals(id, api.syncFeedback(payload))
+        repeat(4) {
+            val request = server.takeRequest()
+            assertEquals("Bearer care-os-token", request.getHeader("Authorization"))
+            assertEquals("/api/sync/feedback", request.path)
+            assertEquals(id, JSONObject(request.body.readUtf8()).getString("id"))
+        }
+    }
+
+    @Test
+    fun `feedback legado conserva identidade e captura nas retentativas`() {
+        val id = "e4fbbbf7-501f-4aeb-965e-554c47ce1de0"
+        val entity = br.com.bragasaude.data.local.FeedbackEntity(
+            id = "fb-$id", userId = "usuario", category = "bug", message = "relato", screenshotBase64 = "captura"
+        )
+        val first = br.com.bragasaude.data.remote.model.feedbackPayload(entity)
+        val retry = br.com.bragasaude.data.remote.model.feedbackPayload(entity)
+        assertEquals(id, first.getString("id"))
+        assertEquals(first.toString(), retry.toString())
+        assertEquals("captura", first.getString("screenshotBase64"))
+    }
 }
 
