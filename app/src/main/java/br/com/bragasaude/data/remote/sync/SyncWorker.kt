@@ -6,6 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.api.BragaApiClient
+import br.com.bragasaude.data.remote.repository.FeedbackRepository
 import br.com.bragasaude.data.remote.model.BleTelemetryRequest
 import br.com.bragasaude.data.remote.model.MedicationTakeRequest
 import br.com.bragasaude.data.remote.model.SymptomCheckInCreate
@@ -28,7 +29,7 @@ class SyncWorker @AssistedInject constructor(
     private val medicationLogDao: MedicationLogDao,
     private val milestoneDao: MilestoneDao,
     private val dailyMetricsDao: DailyMetricsDao,
-    private val feedbackDao: FeedbackDao,
+    private val feedbackRepository: FeedbackRepository,
     private val socialFeedDao: SocialFeedDao,
     private val familyDao: FamilyDao,
     private val auditLogDao: AuditLogDao,
@@ -66,6 +67,8 @@ class SyncWorker @AssistedInject constructor(
         return try {
             block()
             true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("SyncWorker", "Erro na sincronização em background: ${e.message}", e)
             false
@@ -198,24 +201,7 @@ class SyncWorker @AssistedInject constructor(
     }
 
     private suspend fun syncFeedbacks() {
-        val pending = feedbackDao.getPendingSync()
-        for (f in pending) {
-            val json = org.json.JSONObject().apply {
-                put("userId", f.userId ?: "")
-                if (f.userEmail != null) put("userEmail", f.userEmail)
-                if (f.userName != null) put("userName", f.userName)
-                put("category", f.category)
-                if (f.title != null) put("title", f.title)
-                put("message", f.message)
-                if (f.inputMethod != null) put("inputMethod", f.inputMethod)
-                if (f.appVersion != null) put("appVersion", f.appVersion)
-                if (f.deviceInfo != null) put("deviceInfo", f.deviceInfo)
-            }
-            val res = apiClient.syncFeedback(json)
-            if (res != null) {
-                feedbackDao.markAsSynced(f.id)
-            }
-        }
+        feedbackRepository.syncPendingFeedbacks()
 
         // doc 10 §4.1: pull das respostas da equipe. Aparelho em background também
         // recebe — a notificação local é o canal de aviso de que responderam.

@@ -149,7 +149,7 @@ class BatchMedicationItem(
     val scheduleTimes = mutableStateListOf<String>().apply {
         if (initialScheduleTimes.isNotEmpty()) {
             addAll(initialScheduleTimes.map { sanitizeInput(it).ifBlank { "08:00" } })
-        } else {
+        } else if (initialIntervalHours > 0 && !initialIsDivergent) {
             add("08:00")
         }
     }
@@ -178,7 +178,7 @@ class BatchMedicationItem(
         } else {
             scheduleTimes[0] = sanitized
         }
-        if (sanitized.matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$"))) {
+        if (intervalHours > 0 && sanitized.matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$"))) {
             val calculated = calculateScheduleTimes(sanitized, intervalHours)
             scheduleTimes.clear()
             scheduleTimes.addAll(calculated)
@@ -245,9 +245,9 @@ fun BarcodeScannerScreen(
                     if (response.medications.isNotEmpty()) {
                         batchList.clear()
                         response.medications.forEach { med ->
-                            val hasDivergence = med.nameDivergent || med.dosageDivergent
+                            val hasDivergence = med.nameDivergent || med.dosageDivergent || med.frequencyDivergent || med.requiresHumanFill
                             var resolvedName = ""
-                            if (!hasDivergence) {
+                            run {
                                 val n = if (!med.nameDivergent && med.name.isNotBlank()) med.name else ""
                                 val d = if (!med.dosageDivergent && med.dosage.isNotBlank()) med.dosage else ""
                                 resolvedName = if (n.isNotBlank() && d.isNotBlank()) {
@@ -256,20 +256,20 @@ fun BarcodeScannerScreen(
                                     (n.ifBlank { d }).trim()
                                 }
                             }
-                            val interval = med.frequencyIntervalHours ?: when (med.suggestedTimes.size) {
+                            val interval = if (med.frequencyDivergent) 0 else med.frequencyIntervalHours ?: when (med.suggestedTimes.size) {
                                 1 -> 24
                                 2 -> 12
                                 3 -> 8
                                 4 -> 6
-                                else -> 12
+                                else -> 0
                             }
                             val times = if (med.suggestedTimes.isNotEmpty() && !med.frequencyDivergent) {
                                 med.suggestedTimes
                             } else {
-                                calculateScheduleTimes("08:00", interval)
+                                emptyList()
                             }
                             val divergenceReason = if (hasDivergence) {
-                                med.divergenceReason ?: "Caligrafia médica incerta: por favor, digite o nome e a dosagem deste remédio."
+                                med.divergenceReason ?: "Confira nome, dose, frequência e horários com a receita antes de salvar."
                             } else null
 
                             val item = BatchMedicationItem(
@@ -844,7 +844,7 @@ fun BarcodeScannerScreen(
             // Validação Reativa e SaMD (RDC 657/2022)
             val allNamesValid = batchList.isNotEmpty() && batchList.all { it.name.trim().length >= 2 }
             val allTimesValid = batchList.isNotEmpty() && batchList.all { item ->
-                item.scheduleTimes.isNotEmpty() && item.scheduleTimes.all { t ->
+                item.intervalHours > 0 && item.scheduleTimes.isNotEmpty() && item.scheduleTimes.all { t ->
                     t.trim().matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$"))
                 }
             }
