@@ -557,7 +557,12 @@ class BragaApiClient @Inject constructor(
     suspend fun syncFeedback(json: JSONObject): String? = withContext(Dispatchers.IO) {
         try {
             val res = postJson("$baseUrl/api/sync/feedback", json)
-            return@withContext res?.optString("id", null)
+            val expectedId = json.optString("id", "")
+            val returnedId = res?.optString("id", "")
+            return@withContext if (res != null && expectedId.isNotBlank() && returnedId == expectedId &&
+                res.optString("status") == "success" && res.optBoolean("persisted", false)) returnedId else null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao sincronizar feedback: ${e.message}")
             return@withContext null
