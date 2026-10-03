@@ -84,7 +84,7 @@ class BragaLocalAiClient @Inject constructor(
         if (messages.lastOrNull() != ("user" to userSpeech)) messages.add("user" to userSpeech)
         val speech = if (isEmergency(userSpeech)) resolved.fallback else try {
             val generated = engine.reply(messages, resolved.instruction) { partial ->
-                if (!resolved.factual && authService.currentUserId == owner) onPartial(partial)
+                if (!resolved.factual && authService.currentUserId == owner) onPartial(br.com.bragasaude.data.local.slm.BragaResponseGuard.accept(partial, resolved))
             }
             br.com.bragasaude.data.local.slm.BragaResponseGuard.accept(generated, resolved)
         } catch (e: CancellationException) { throw e }

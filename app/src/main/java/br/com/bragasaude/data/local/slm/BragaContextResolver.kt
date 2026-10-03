@@ -111,13 +111,27 @@ class BragaContextResolver @Inject constructor(
         val end = date.plusDays(1).atStartOfDay(now.zone).toInstant().toEpochMilli()
         val taken = logs.logsInRange(owner, start, end)
         val query = request.medicationQuery.orEmpty()
+        if (Regex("\\b(ontem|anteontem|semana|mes|ano)\\b").containsMatchIn(query))
+            return unavailable(request.type, "Você mencionou outro dia. Escolha a data e o horário na tela de remédios para marcar essa dose.")
+        val explicitTime = Regex("\\b(?:as|das) ([0-9]{1,2})(?: ([0-9]{2}))?\\b").find(query)?.let {
+            val hour = it.groupValues[1].toInt()
+            val minute = it.groupValues[2].toIntOrNull() ?: 0
+            if (hour in 0..23 && minute in 0..59) "%02d:%02d".format(hour, minute) else "INVALIDO"
+        }
         val candidates = medications.getAllSync(owner).filter { med ->
             query.isBlank() || parser.normalize(med.name) == query ||
                 Regex("\\b${Regex.escape(parser.normalize(med.name))}\\b").containsMatchIn(query)
         }.flatMap { med -> MedicationSchedule.times(med.scheduleTimes, med.scheduleTime).mapNotNull { time ->
             val distance = java.time.Duration.between(date.atTime(LocalTime.parse(time)), now.toLocalDateTime()).toMinutes()
             val recorded = taken.any { it.medicationId == med.id && (it.scheduledFor == MedicationSchedule.key(date, time) || it.scheduledFor == null) }
-            if (distance in -120..120 && !recorded) med to time else null
+            val hour = LocalTime.parse(time).hour
+            val periodMatches = when {
+                "manha" in query -> hour < 12
+                "tarde" in query -> hour in 12..17
+                "noite" in query -> hour >= 18
+                else -> true
+            }
+            if (distance in -120..120 && !recorded && periodMatches && (explicitTime == null || explicitTime == time)) med to time else null
         } }
         if (candidates.size != 1) return unavailable(request.type, if (candidates.isEmpty())
             "Não encontrei uma dose pendente desse remédio neste horário. Qual remédio e horário você quer marcar?"

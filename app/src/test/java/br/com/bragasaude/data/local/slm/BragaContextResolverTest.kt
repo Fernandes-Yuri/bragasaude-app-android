@@ -61,6 +61,13 @@ class BragaContextResolverTest {
         coEvery { logs.logsInRange("owner", any(), any()) } returns listOf(taken)
         assertNull(resolver.resolve("tomei a Losartana", now = now).action)
     }
+    @Test fun namedDoseFromAnotherDayOrTimeIsNotMarkedAsCurrentDose() = runTest {
+        coEvery { meds.getAllSync("owner") } returns listOf(MedicationEntity("a", "owner", "Losartana", scheduleTime = "08:00"))
+        coEvery { logs.logsInRange("owner", any(), any()) } returns emptyList()
+        listOf("tomei a Losartana ontem", "tomei a Losartana da noite", "tomei a Losartana às 20:00").forEach {
+            assertNull(it, resolver.resolve(it, now = now).action)
+        }
+    }
     @Test fun ambiguousMedicationsRequireClarification() = runTest {
         coEvery { meds.getAllSync("owner") } returns listOf(MedicationEntity("a", "owner", "Losartana", scheduleTime = "08:00"), MedicationEntity("b", "owner", "Outro", scheduleTime = "09:00"))
         coEvery { logs.logsInRange("owner", any(), any()) } returns emptyList()
