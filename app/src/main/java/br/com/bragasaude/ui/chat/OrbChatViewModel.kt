@@ -189,6 +189,7 @@ class OrbChatViewModel @Inject constructor(
     }
 
     fun sendMessage(text: String = state.value.input) {
+        if (!gateway.ready) { showError(br.com.bragasaude.data.local.slm.BragaModelStore.REQUIRED_MESSAGE); return }
         val value = text.trim()
         if (value.isEmpty() || state.value.isStreaming) return
         if (value.length > 16000) { showError("Sua mensagem é muito longa. Use até 16.000 caracteres."); return }

@@ -23,6 +23,7 @@ class OrbChatViewModelTest {
     @Before fun setup() {
         Dispatchers.setMain(dispatcher)
         gateway = mockk(relaxed = true)
+        every { gateway.ready } returns true
         every { gateway.connection } returns MutableStateFlow(OrbConnectionState.CONNECTED)
         val store = mockk<OrbChatStore>(relaxed = true)
         every { store.observe(any()) } returns flowOf(emptyList())

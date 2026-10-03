@@ -27,6 +27,7 @@ import br.com.bragasaude.util.BragaConstants
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     val voiceProfiles: br.com.bragasaude.data.local.voice.VoiceProfileManager,
+    val bragaModel: br.com.bragasaude.data.local.slm.BragaModelManager,
     private val profileRepository: ProfileRepository,
     private val auth: FirebaseAuth,
     private val database: BragaDatabase,

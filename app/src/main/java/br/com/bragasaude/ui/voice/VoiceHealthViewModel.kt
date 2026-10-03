@@ -306,6 +306,12 @@ class VoiceHealthViewModel @Inject constructor(
      * Deve ser chamado com um Context válido (Activity ou Application).
      */
     fun startListening(context: Context) {
+        if (!localAiClient.isOnDeviceReady) {
+            _isLiveMode.value = false
+            _state.value = VoiceUiState.Error(br.com.bragasaude.data.local.slm.BragaModelStore.REQUIRED_MESSAGE,
+                retryable = false, isSpokenOnly = false)
+            return
+        }
         conversationMemory.selectUser(getCurrentUserId())
         if (!_isLiveMode.value) voiceSession.reset()
         _isLiveMode.value = true
@@ -340,6 +346,7 @@ class VoiceHealthViewModel @Inject constructor(
                 if (!_isLiveMode.value || !voiceSession.accepts(listenTicket)) return@launch
                 speechRecognizer?.setRecognitionListener(VoiceRecognitionListener(listenTicket))
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
