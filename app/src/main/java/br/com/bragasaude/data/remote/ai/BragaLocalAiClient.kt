@@ -73,12 +73,6 @@ class BragaLocalAiClient @Inject constructor(
         val messages = listOf("user" to userSpeech)
         // Conversa livre usa somente o prompt validado e a fala atual, sem contexto clínico.
         val modelContext = resolved.instruction.takeIf { resolved.factual }
-        val speech = if (role == "assistant") runCatching { JSONObject(content).optString("fala", content) }.getOrDefault(content) else content
-                    messages.add(role to speech)
-                }
-            }
-        }
-        if (messages.lastOrNull() != ("user" to userSpeech)) messages.add("user" to userSpeech)
         val speech = if (isEmergency(userSpeech)) resolved.fallback else try {
             val generated = engine.reply(messages, modelContext) { partial ->
                 if (!resolved.factual && authService.currentUserId == owner) onPartial(br.com.bragasaude.data.local.slm.BragaResponseGuard.accept(partial, resolved))
