@@ -1,11 +1,8 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(braga_slm LANGUAGES C CXX)
 include(FetchContent)
-include(CheckIPOSupported)
-check_ipo_supported(RESULT BRAGA_IPO_SUPPORTED OUTPUT BRAGA_IPO_ERROR)
-if(NOT BRAGA_IPO_SUPPORTED)
-    message(FATAL_ERROR "LTO indisponível: ${BRAGA_IPO_ERROR}")
-endif()
+# O try_compile de CheckIPOSupported do CMake 3.22 perde a ABI do NDK.
+# Clang/LLVM do NDK 27 suporta LTO, validado na compilação real do APK.
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 add_compile_options(-O3 -flto)
 add_link_options(-flto)
@@ -32,3 +29,6 @@ FetchContent_MakeAvailable(llama)
 add_library(braga_slm SHARED braga_slm.cpp)
 target_compile_features(braga_slm PRIVATE cxx_std_17)
 target_link_libraries(braga_slm PRIVATE llama android log)
+target_link_options(braga_slm PRIVATE
+    "-Wl,-z,max-page-size=16384"
+    "-Wl,-z,common-page-size=16384")

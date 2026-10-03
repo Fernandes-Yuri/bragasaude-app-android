@@ -42,6 +42,7 @@ android {
             cmake {
                 cppFlags += listOf("-std=c++17", "-O3", "-flto")
                 arguments += "-DGGML_LTO=ON"
+                arguments += "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
             }
         }
 
