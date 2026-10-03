@@ -2,8 +2,6 @@ package br.com.bragasaude.data.local.slm
 
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
 import br.com.bragasaude.BragaApplication
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
@@ -20,12 +18,17 @@ class BragaOnDeviceSmokeTest {
         val app = context.applicationContext as BragaApplication
         val allowInstall = InstrumentationRegistry.getArguments().getString("installModels") == "true"
         if (!store.installed() && allowInstall) {
-            app.bragaModelManager.install()
-            val info = withTimeout(900_000L) {
-                WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(BragaModelManager.WORK_NAME)
-                    .first { infos -> infos.isNotEmpty() && infos.all { it.state.isFinished } }.last()
+            InstrumentationRegistry.getInstrumentation().startActivitySync(
+                android.content.Intent(context, br.com.bragasaude.MainActivity::class.java)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            val voices = app.voiceProfileManager
+            withTimeout(30_000L) { voices.state.first { !it.busy } }
+            voices.select("faber")
+            val prepared = withTimeout(900_000L) {
+                voices.state.first { !it.busy && ((it.hasChosenVoice && app.bragaEngine.ready) || it.error != null) }
             }
-            assertEquals(info.outputData.getString("error"), WorkInfo.State.SUCCEEDED, info.state)
+            assertNull(prepared.error)
+            Log.i("BragaSmoke", "INSTALACAO_COMBINADA_OK")
         }
         assertTrue("Instale primeiro o Braga nas configurações do app", store.installed())
         val engine = app.bragaEngine

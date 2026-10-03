@@ -120,7 +120,6 @@ fun SettingsScreen(
             }
 
             item { VoiceSettingsCard(viewModel.voiceProfiles) }
-            item { BragaModelSettingsCard(viewModel.bragaModel) }
 
             item {
                 Column(

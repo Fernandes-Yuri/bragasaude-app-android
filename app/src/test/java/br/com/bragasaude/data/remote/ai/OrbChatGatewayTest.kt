@@ -14,7 +14,7 @@ class OrbChatGatewayTest {
         val client = mockk<BragaLocalAiClient>()
         val gateway = OrbChatGateway(client, engine)
         try { gateway.send(listOf("user" to "Olá")) {}; fail("Deveria bloquear") }
-        catch (e: IllegalStateException) { assertTrue(e.message!!.contains("Instale o Braga")) }
+        catch (e: IllegalStateException) { assertTrue(e.message!!.contains("Escolha uma voz")) }
         coVerify(exactly = 0) { client.interpretSpeech(any(), any(), any(), any(), any(), any()) }
     }
     @Test fun inferenceFailureAndCancellationHaveNoRemoteFallback() = runTest {

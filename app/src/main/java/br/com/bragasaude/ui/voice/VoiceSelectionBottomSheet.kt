@@ -59,8 +59,7 @@ fun VoiceSelectionBottomSheet(
     val selected = VoiceCatalog.find(selectedId) ?: VoiceCatalog.options.first()
     val preparing = state.busy && state.preparingId != null
     val showingExperience = requestedId != null || preparing
-    val voiceReady = requestedId != null && !state.busy && state.hasChosenVoice && state.activeId == requestedId
-    val willDownload = selected.isNeural && selected.id != state.activeId
+    val voiceReady = requestedId != null && !state.busy && state.hasChosenVoice && state.activeId == requestedId && manager.isAssistantReady
 
     fun minimize() {
         val id = requestedId ?: state.preparingId ?: return
@@ -154,7 +153,7 @@ fun VoiceSelectionBottomSheet(
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                         Text(option.displayName, style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                                        Text(if (!option.isNeural) "Sem download" else if (state.activeId == option.id)
+                                        Text(if (!option.isNeural) "Voz do aparelho" else if (state.activeId == option.id)
                                             "Em uso" else "Voz neural",
                                             style = MaterialTheme.typography.bodySmall)
                                     }
@@ -167,7 +166,7 @@ fun VoiceSelectionBottomSheet(
                             }
                         }
                     }
-                    Text("Ao trocar de voz, o modelo anterior é removido do aparelho para economizar espaço.",
+                    Text("Na primeira vez, preparamos seu assistente no aparelho. Você pode deixar para depois.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     previewError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
@@ -200,10 +199,9 @@ fun VoiceSelectionBottomSheet(
                     manager.dismissError()
                     preparationObserved = false
                     requestedId = selected.id
-                    if (!(state.hasChosenVoice && selected.id == state.activeId)) manager.select(selected.id)
+                    if (!(state.hasChosenVoice && selected.id == state.activeId && manager.isAssistantReady)) manager.select(selected.id)
                 }) {
-                    Text(if (willDownload) "Baixar e usar ${selected.displayName}"
-                        else if (!state.hasChosenVoice) "Começar com esta voz" else "Usar esta voz")
+                    Text(if (!manager.isAssistantReady || !state.hasChosenVoice) "Começar com esta voz" else "Usar esta voz")
                 }
             }
         },

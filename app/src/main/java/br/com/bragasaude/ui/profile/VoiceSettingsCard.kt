@@ -42,7 +42,7 @@ fun VoiceSettingsCard(manager: VoiceProfileManager) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Voz do assistente", style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold, color = BragaTextPrimary)
-                    Text(if (state.busy) "Preparando sua voz..." else activeName,
+                    Text(if (state.busy) "Preparando seu assistente..." else activeName,
                         style = MaterialTheme.typography.bodyMedium, color = BragaTextSecondary)
                 }
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Trocar voz",

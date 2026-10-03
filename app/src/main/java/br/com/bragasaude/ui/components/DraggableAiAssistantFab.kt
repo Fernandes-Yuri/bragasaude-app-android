@@ -251,11 +251,6 @@ fun DraggableAiAssistantFab(
     }
 
     var showVoiceOnboarding by remember { mutableStateOf(false) }
-    var showModelOnboarding by remember { mutableStateOf(false) }
-    val bragaModels = remember(context) {
-        (context.applicationContext as br.com.bragasaude.BragaApplication).bragaModelManager
-    }
-    val bragaState by bragaModels.state.collectAsState()
 
     val startListeningWithPermission = {
         val hasPermission = ContextCompat.checkSelfPermission(
@@ -271,7 +266,6 @@ fun DraggableAiAssistantFab(
 
     val handleFabTap = {
         when {
-            !bragaState.ready -> { showModelOnboarding = true }
             viewModel.voiceProfileManager.needsOnboarding() -> {
                 showVoiceOnboarding = true
             }
@@ -418,7 +412,7 @@ fun DraggableAiAssistantFab(
         val shadowDp by animateDpAsState(targetShadow, label = "Shadow")
 
         val isModalOpen = LocalBragaModalState.current.isOpen
-        val shouldHideOrbVisuals = isModalOpen && !showVoiceOnboarding && !showModelOnboarding && !showEmergencyDialog
+        val shouldHideOrbVisuals = isModalOpen && !showVoiceOnboarding && !showEmergencyDialog
 
         if (!shouldHideOrbVisuals) {
             // 2. Continuous Glow Pulse + Concentric Rings + Shockwave
@@ -673,17 +667,6 @@ fun DraggableAiAssistantFab(
             onVoiceConfigured = {
                 showVoiceOnboarding = false
                 startListeningWithPermission()
-            }
-        )
-    }
-    if (showModelOnboarding) {
-        br.com.bragasaude.ui.voice.BragaModelInstallSheet(
-            manager = bragaModels,
-            onDismiss = { showModelOnboarding = false },
-            onReady = {
-                showModelOnboarding = false
-                if (viewModel.voiceProfileManager.needsOnboarding()) showVoiceOnboarding = true
-                else startListeningWithPermission()
             }
         )
     }

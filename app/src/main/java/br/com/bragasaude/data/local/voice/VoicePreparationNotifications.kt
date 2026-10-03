@@ -57,8 +57,8 @@ class VoicePreparationNotifications @Inject constructor(@ApplicationContext priv
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return
-        val text = if (success) "A voz $voiceName está pronta. Toque para abrir o Braga Saúde."
-            else "Não foi possível preparar a voz. Abra as configurações do assistente para tentar novamente."
+        val text = if (success) "Seu assistente com a voz $voiceName está pronto. Toque para abrir o Braga Saúde."
+            else "Não foi possível preparar seu assistente. Abra as configurações do assistente para tentar novamente."
         try {
             manager.notify(RESULT_ID, NotificationCompat.Builder(context, RESULT_CHANNEL)
                 .setSmallIcon(R.drawable.ic_shield_ecg)

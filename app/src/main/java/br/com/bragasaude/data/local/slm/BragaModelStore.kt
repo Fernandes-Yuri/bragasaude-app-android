@@ -14,7 +14,7 @@ class BragaModelStore @Inject constructor(@ApplicationContext context: Context) 
         const val SIZE = 396090752L
         const val SHA256 = "3ae9da6efa232d25562151ffe4604b4a9e0700d30373e69b28340c0f506151b8"
         const val URL = "https://huggingface.co/fernandes-yuri/braga-slm-0.5b/resolve/$REVISION/$FILE_NAME"
-        const val REQUIRED_MESSAGE = "Instale o Braga local em Configurações > Assistente para usar o chat e o assistente de voz."
+        const val REQUIRED_MESSAGE = "Escolha uma voz nas configurações do assistente para começar a conversar."
     }
     private val directory = File(context.noBackupFilesDir, "braga_slm")
     val model = File(directory, FILE_NAME)
