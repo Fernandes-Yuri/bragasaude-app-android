@@ -3,6 +3,9 @@ project(braga_slm LANGUAGES C CXX)
 include(FetchContent)
 # O try_compile de CheckIPOSupported do CMake 3.22 perde a ABI do NDK.
 # Clang/LLVM do NDK 27 suporta LTO, validado na compilação real do APK.
+# CMake 3.22 escolhe gold para IPO do Clang; Android requer o LLD do NDK.
+set(CMAKE_C_LINK_OPTIONS_IPO "-fuse-ld=lld")
+set(CMAKE_CXX_LINK_OPTIONS_IPO "-fuse-ld=lld")
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 add_compile_options(-O3 -flto)
 add_link_options(-flto)
