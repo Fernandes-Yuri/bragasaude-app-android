@@ -33,7 +33,8 @@ class OrbChatViewModelTest {
         every { auth.currentUser } returns user
         vm = OrbChatViewModel(gateway, store, auth, mockk<NeuralAudioPlayer>(relaxed = true),
             mockk<NotificationClient>(relaxed = true), mockk<ProfileDao>(relaxed = true),
-            mockk<FamilyBridgeRepository>(relaxed = true))
+            mockk<FamilyBridgeRepository>(relaxed = true),
+            mockk<br.com.bragasaude.data.remote.repository.MedicationRepository>(relaxed = true))
     }
     @After fun tearDown() { vm.leaveScreen(); Dispatchers.resetMain() }
 
@@ -99,6 +100,32 @@ class OrbChatViewModelTest {
         assertEquals("cancelled", vm.state.value.messages.last().status)
         assertNull(vm.state.value.messages.last().action)
     }
+    @Test fun confirmationCardWaitsForReplyCompletion() = runTest(dispatcher) {
+        val done = CompletableDeferred<OrbReply>()
+        coEvery { gateway.send(any(), any(), any(), any()) } coAnswers {
+            arg<(String) -> Unit>(3)("Deixei pronta")
+            done.await()
+        }
+        vm.sendMessage("minha pressão deu 12 por 8")
+        runCurrent()
+        assertTrue(vm.state.value.messages.none { it.action != null })
+        assertTrue(vm.state.value.isStreaming)
+        done.complete(reply)
+        runCurrent()
+        assertEquals("REGISTRAR_PRESSAO", vm.state.value.messages.last().action)
+    }
+
+    @Test fun emergencyScreenDoesNotWaitForGeneration() = runTest(dispatcher) {
+        every { gateway.isEmergency(any()) } returns true
+        coEvery { gateway.send(any(), any(), any(), any()) } coAnswers { awaitCancellation() }
+        val event = async(UnconfinedTestDispatcher(testScheduler)) { vm.events.first() }
+        vm.sendMessage("dor forte no peito")
+        runCurrent()
+        assertEquals(OrbChatEvent.Emergency, event.await())
+        assertTrue(vm.state.value.isStreaming)
+        vm.cancelGeneration()
+    }
+
     @Test fun longMessageDoesNotReachGateway() = runTest(dispatcher) {
         vm.sendMessage("x".repeat(16001))
         assertNotNull(vm.state.value.error)

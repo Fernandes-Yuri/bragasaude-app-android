@@ -642,7 +642,7 @@ private fun actionPreview(parameters: String): String = try {
         } else "Abrir lista de compras"
     } else {
         val labels = mapOf("sistolica" to "Sistólica", "diastolica" to "Diastólica", "glicemia" to "Glicemia",
-            "quantidade_ml" to "Água (ml)", "batimentos" to "Batimentos", "saturacao" to "Saturação", "alimento" to "Alimento", "tipo_metrica" to "Métrica")
+            "quantidade_ml" to "Água (ml)", "batimentos" to "Batimentos", "saturacao" to "Saturação", "alimento" to "Alimento", "tipo_metrica" to "Métrica", "medicamento" to "Remédio", "dose" to "Dose cadastrada", "horario" to "Horário", "data" to "Data")
         labels.mapNotNull { (key, label) -> if (p.has(key) && !p.isNull(key)) "$label: ${p.get(key)}" else null }.joinToString(" · ")
     }
 } catch (_: Exception) { "" }

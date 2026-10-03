@@ -61,6 +61,7 @@ class OrbChatViewModel @Inject constructor(
     private val notifications: NotificationClient,
     private val profiles: ProfileDao,
     private val familyRepository: FamilyBridgeRepository,
+    private val medicationRepository: br.com.bragasaude.data.remote.repository.MedicationRepository,
     private val voiceParser: VoiceHealthParser = VoiceHealthParser()
 ) : ViewModel() {
     private val mutable = MutableStateFlow(OrbChatUiState())
@@ -189,10 +190,11 @@ class OrbChatViewModel @Inject constructor(
     }
 
     fun sendMessage(text: String = state.value.input) {
+        if (gateway.isEmergency(text)) navigation.trySend(OrbChatEvent.Emergency)
         if (!gateway.ready) { showError(br.com.bragasaude.data.local.slm.BragaModelStore.REQUIRED_MESSAGE); return }
         val value = text.trim()
         if (value.isEmpty() || state.value.isStreaming) return
-        if (value.length > 16000) { showError("Sua mensagem é muito longa. Use até 16.000 caracteres."); return }
+        if (value.length > 1000) { showError("Sua mensagem é muito longa. Use até 1.000 caracteres."); return }
         if (uid == null || auth.currentUser?.uid != uid) { showError("Entre na sua conta para conversar."); return }
         stopAudio()
         val user = ChatMessage(role = "user", text = value)
@@ -302,7 +304,7 @@ class OrbChatViewModel @Inject constructor(
                 check(auth.currentUser?.uid == owner)
                 val profile = profiles.getProfileOneShot(owner)
                 if (uid != owner || auth.currentUser?.uid != owner) return@launch
-                if (action in listOf("REGISTRAR_PRESSAO", "REGISTRAR_GLICEMIA", "REGISTRAR_AGUA", "REGISTRAR_BATIMENTOS", "REGISTRAR_OXIGENACAO", "EXAMES", "LEMBRETES") &&
+                if (action in listOf("REGISTRAR_PRESSAO", "REGISTRAR_GLICEMIA", "REGISTRAR_AGUA", "REGISTRAR_BATIMENTOS", "REGISTRAR_OXIGENACAO", "REGISTRAR_MEDICAMENTO", "EXAMES", "LEMBRETES") &&
                     profile?.userRole == "CAREGIVER" && profile.caregiverMode != "HYBRID") {
                     error("Ative o autocuidado no perfil para registrar seus dados.")
                 }
@@ -314,6 +316,13 @@ class OrbChatViewModel @Inject constructor(
                     "REGISTRAR_BATIMENTOS" -> Screen.HealthReadings("HEART_RATE", p.optString("batimentos").takeIf { it.isNotBlank() })
                     "REGISTRAR_OXIGENACAO" -> Screen.HealthReadings("OXYGEN_SATURATION", p.optString("saturacao").takeIf { it.isNotBlank() })
                     "REGISTRAR_AGUA" -> Screen.Hydration(p.optInt("quantidade_ml", 250).coerceIn(1, 5000), true)
+                    "REGISTRAR_MEDICAMENTO" -> {
+                        check(medicationRepository.takeMedication(owner, p.getString("medication_id"),
+                            p.getString("horario"), java.time.LocalDate.parse(p.getString("data")))) {
+                            "Essa dose já foi marcada ou não está mais disponível."
+                        }
+                        Screen.Reminders
+                    }
                     "BUSCAR_ALIMENTO" -> Screen.Nutrition(p.optString("alimento"))
                     "ABRIR_LISTA_COMPRAS" -> {
                         val items = mutableListOf<String>()
@@ -405,7 +414,7 @@ class OrbChatViewModel @Inject constructor(
         return when (rawAction) {
             "EMERGENCIA", "LEMBRETES", "EXAMES", "CONSULTAR_METRICAS", "ABRIR_LISTA_COMPRAS",
             "REGISTRAR_PRESSAO", "REGISTRAR_GLICEMIA", "REGISTRAR_AGUA",
-            "REGISTRAR_BATIMENTOS", "REGISTRAR_OXIGENACAO",
+            "REGISTRAR_BATIMENTOS", "REGISTRAR_OXIGENACAO", "REGISTRAR_MEDICAMENTO",
             // D51: rascunho de agendamento por voz — card com botao Confirmar
             "AGENDAR_RASCUNHO" -> rawAction to rawParams
             else -> null to JSONObject()
@@ -421,6 +430,7 @@ fun actionLabel(action: String): String = when (action) {
     "REGISTRAR_BATIMENTOS" -> "batimentos cardíacos"
     "REGISTRAR_OXIGENACAO" -> "saturação de oxigênio"
     "REGISTRAR_AGUA" -> "hidratação"
+    "REGISTRAR_MEDICAMENTO" -> "remédio tomado"
     "BUSCAR_ALIMENTO" -> "alimentação"
     "ABRIR_LISTA_COMPRAS" -> "lista de compras"
     "CONSULTAR_METRICAS" -> "relatório de saúde"

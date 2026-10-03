@@ -62,9 +62,9 @@ class BragaOnDeviceEngine @Inject constructor(private val store: BragaModelStore
         }
     }
 
-    suspend fun reply(history: List<Pair<String, String>>, onPartial: (String) -> Unit = {}): String =
+    suspend fun reply(history: List<Pair<String, String>>, context: String? = null, onPartial: (String) -> Unit = {}): String =
         withContext(Dispatchers.Default) { mutex.withLock {
-            val prompt = BragaPrompt.build(history)
+            val prompt = BragaPrompt.build(history, context)
             currentCoroutineContext().ensureActive()
             loadLocked()
             val callback = BragaGenerationCallback(currentCoroutineContext()[Job], onPartial)

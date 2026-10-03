@@ -33,6 +33,8 @@ class OrbChatGateway @Inject constructor(
         }
     }
 
+    fun isEmergency(text: String): Boolean = rest.isEmergency(text)
+
     suspend fun send(history: List<Pair<String, String>>, actingAs: String? = null,
                      patientId: String? = null, onPartial: (String) -> Unit): OrbReply {
         check(ready) { BragaModelStore.REQUIRED_MESSAGE }
@@ -42,8 +44,8 @@ class OrbChatGateway @Inject constructor(
         }
         val result = rest.interpretSpeech(history.lastOrNull()?.second.orEmpty(), history = history,
             actingAs = actingAs, patientId = patientId, onPartial = onPartial)
-        return OrbReply(JSONObject().put("fala", result.fala).put("acao", "CONVERSA")
-            .put("parametros", JSONObject()).toString(), "Braga V2.2 no aparelho")
+        return OrbReply(JSONObject().put("fala", result.fala).put("acao", result.action ?: "CONVERSA")
+            .put("parametros", JSONObject(result.parameters)).toString(), "Braga V2.2 no aparelho")
     }
 
     // Os registros continuam sob confirmação e validação local do app.

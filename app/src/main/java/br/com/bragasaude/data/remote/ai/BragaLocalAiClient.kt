@@ -20,7 +20,9 @@ import javax.inject.Singleton
 @Singleton
 class BragaLocalAiClient @Inject constructor(
     private val engine: BragaOnDeviceEngine,
-    private val authService: AuthService
+    private val authService: AuthService,
+    private val router: br.com.bragasaude.data.local.slm.BragaIntentRouter,
+    private val resolver: br.com.bragasaude.data.local.slm.BragaContextResolver
 ) {
     companion object {
         val DEFAULT_SERVER_URL = BuildConfig.BASE_URL
@@ -54,6 +56,10 @@ class BragaLocalAiClient @Inject constructor(
     }
 
 
+    fun isHistoryQuery(text: String): Boolean = router.route(text).type == br.com.bragasaude.data.local.slm.BragaIntent.CONSULTA_HISTORICO
+
+    fun isEmergency(text: String): Boolean = router.route(text).type == br.com.bragasaude.data.local.slm.BragaIntent.EMERGENCIA
+
     suspend fun interpretSpeech(userSpeech: String, preferWebSocket: Boolean = true,
                                 history: List<Pair<String, String>> = emptyList(),
                                 actingAs: String? = null, patientId: String? = null,
@@ -62,14 +68,43 @@ class BragaLocalAiClient @Inject constructor(
         LocalConversationAnswers.answer(userSpeech, history)?.let {
             return BragaAiResult(tipo = "CONVERSA", fala = it)
         }
-        val messages = history.map { (role, content) ->
-            role to if (role == "assistant") {
-                runCatching { JSONObject(content).optString("fala", content) }.getOrDefault(content)
-            } else content
-        }.toMutableList()
+        val owner = authService.currentUserId
+        val resolved = resolver.resolve(userSpeech, actingAs, patientId)
+        val messages = mutableListOf<Pair<String, String>>()
+        if (!resolved.factual) {
+            var includeTurn = false
+            history.forEach { (role, content) ->
+                if (role == "user") includeTurn = router.route(content).type == br.com.bragasaude.data.local.slm.BragaIntent.CONVERSA_LIVRE
+                if (includeTurn && role in listOf("user", "assistant")) {
+                    val speech = if (role == "assistant") runCatching { JSONObject(content).optString("fala", content) }.getOrDefault(content) else content
+                    messages.add(role to speech)
+                }
+            }
+        }
         if (messages.lastOrNull() != ("user" to userSpeech)) messages.add("user" to userSpeech)
-        val speech = engine.reply(messages, onPartial)
-        // O modelo gera fala. Ações e valores são resolvidos pelo parser validado do app.
-        return BragaAiResult(tipo = "CONVERSA", fala = speech)
+        val speech = if (isEmergency(userSpeech)) resolved.fallback else try {
+            val generated = engine.reply(messages, resolved.instruction) { partial ->
+                if (!resolved.factual && authService.currentUserId == owner) onPartial(partial)
+            }
+            br.com.bragasaude.data.local.slm.BragaResponseGuard.accept(generated, resolved)
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { resolved.fallback }
+        check(authService.currentUserId == owner) { "A conta mudou. Abra novamente a conversa." }
+        onPartial(speech)
+        val intent = resolved.draft
+        return BragaAiResult(tipo = when (resolved.action) {
+            "REGISTRAR_PRESSAO" -> "PRESSAO"
+            "REGISTRAR_GLICEMIA" -> "GLICEMIA"
+            "REGISTRAR_AGUA" -> "AGUA"
+            "REGISTRAR_MEDICAMENTO" -> "MEDICAMENTO"
+            "EMERGENCIA" -> "EMERGENCIA"
+            else -> "CONVERSA"
+        }, fala = speech,
+            sistolica = (intent as? br.com.bragasaude.domain.VoiceHealthIntent.BloodPressure)?.systolic,
+            diastolica = (intent as? br.com.bragasaude.domain.VoiceHealthIntent.BloodPressure)?.diastolic,
+            glicemia = (intent as? br.com.bragasaude.domain.VoiceHealthIntent.Glucose)?.glucoseMgDl,
+            quantidadeMl = (intent as? br.com.bragasaude.domain.VoiceHealthIntent.Hydration)?.amountMl,
+            action = resolved.action, parameters = resolved.parameters, localIntent = intent)
+
     }
 }

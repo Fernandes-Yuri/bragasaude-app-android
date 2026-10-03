@@ -65,7 +65,9 @@ sealed interface VoiceHealthIntent {
      */
     data class Medication(
         val query: String,
-        val scheduleTimeHint: String? = null
+        val scheduleTimeHint: String? = null,
+        val medicationId: String? = null,
+        val scheduledDate: String? = null
     ) : VoiceHealthIntent
 
     /**
