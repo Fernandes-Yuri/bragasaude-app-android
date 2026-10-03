@@ -43,7 +43,7 @@ class BragaOnDeviceSmokeTest {
             val second = engine.reply(listOf("user" to "Como posso lembrar de beber água durante o dia?"))
             Log.i("BragaSmoke", "SEGUNDA_RESPOSTA=$second")
             assertTrue(second.isNotBlank())
-            if (allowInstall) {
+            if (allowInstall || app.voiceProfileManager.state.value.activeId != br.com.bragasaude.data.local.voice.VoiceCatalog.SYSTEM_ID) {
                 val voices = app.voiceProfileManager
                 withTimeout(30_000L) { voices.state.first { !it.busy } }
                 if (voices.state.value.activeId == br.com.bragasaude.data.local.voice.VoiceCatalog.SYSTEM_ID) {
