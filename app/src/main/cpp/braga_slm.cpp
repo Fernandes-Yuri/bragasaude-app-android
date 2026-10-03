@@ -5,6 +5,8 @@
 #include <vector>
 #include <mutex>
 #include <stdexcept>
+#include <chrono>
+#include <android/log.h>
 
 namespace {
 struct Engine {
@@ -41,6 +43,7 @@ bool abort_decode(void *data) { return static_cast<Callback *>(data)->stopped();
 extern "C" JNIEXPORT jlong JNICALL
 Java_br_com_bragasaude_data_local_slm_BragaNative_load(JNIEnv *env, jobject, jbyteArray path, jint threads) {
     try {
+        const auto started = std::chrono::steady_clock::now();
         static std::once_flag initialized;
         std::call_once(initialized, [] { llama_backend_init(); });
         auto engine = std::make_unique<Engine>();
@@ -49,13 +52,17 @@ Java_br_com_bragasaude_data_local_slm_BragaNative_load(JNIEnv *env, jobject, jby
         engine->model = llama_model_load_from_file(bytes(env, path).c_str(), mp);
         if (!engine->model) throw std::runtime_error("Não foi possível carregar o Braga local.");
         auto cp = llama_context_default_params();
-        cp.n_ctx = 2048;
-        cp.n_batch = 256;
+        cp.n_ctx = 1024;
+        cp.n_batch = 512;
         cp.n_ubatch = 128;
         cp.n_threads = threads;
         cp.n_threads_batch = threads;
         engine->context = llama_init_from_model(engine->model, cp);
         if (!engine->context) throw std::runtime_error("Memória insuficiente para o Braga local.");
+        const auto load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - started).count();
+        __android_log_print(ANDROID_LOG_INFO, "BragaSlm", "load_ms=%lld threads=%d n_ctx=1024 n_batch=512",
+                            static_cast<long long>(load_ms), threads);
         return reinterpret_cast<jlong>(engine.release());
     } catch (const std::exception &e) { fail(env, e.what()); return 0; }
 }
@@ -74,6 +81,7 @@ Java_br_com_bragasaude_data_local_slm_BragaNative_generate(JNIEnv *env, jobject,
         ~Reset() { llama_set_abort_callback(ctx, nullptr, nullptr); llama_memory_clear(llama_get_memory(ctx), true); }
     } reset{engine->context};
     try {
+        const auto started = std::chrono::steady_clock::now();
         llama_memory_clear(llama_get_memory(engine->context), true);
         const auto *vocab = llama_model_get_vocab(engine->model);
         auto text = bytes(env, prompt);
@@ -83,15 +91,17 @@ Java_br_com_bragasaude_data_local_slm_BragaNative_generate(JNIEnv *env, jobject,
         std::vector<llama_token> tokens(count);
         count = llama_tokenize(vocab, text.data(), text.size(), tokens.data(), count, false, true);
         if (count <= 0) throw std::runtime_error("Não foi possível preparar a mensagem.");
-        for (int i = 0; i < count; i += 256) {
+        const int batch_size = static_cast<int>(llama_n_batch(engine->context));
+        for (int i = 0; i < count; i += batch_size) {
             if (callback.stopped()) return nullptr;
-            int size = std::min(256, count - i);
+            int size = std::min(batch_size, count - i);
             auto batch = llama_batch_get_one(tokens.data() + i, size);
             if (llama_decode(engine->context, batch) != 0) {
                 if (callback.stopped()) return nullptr;
                 throw std::runtime_error("Falha na inferência local.");
             }
         }
+        const auto prefilled = std::chrono::steady_clock::now();
         std::unique_ptr<llama_sampler, decltype(&llama_sampler_free)> sampler(
             llama_sampler_chain_init(llama_sampler_chain_default_params()), llama_sampler_free);
         llama_sampler_chain_add(sampler.get(), llama_sampler_init_penalties(llama_vocab_n_tokens(vocab), 64, 1.1f, 0, 0));
@@ -100,28 +110,64 @@ Java_br_com_bragasaude_data_local_slm_BragaNative_generate(JNIEnv *env, jobject,
         llama_sampler_chain_add(sampler.get(), llama_sampler_init_temp(0.1f));
         llama_sampler_chain_add(sampler.get(), llama_sampler_init_dist(42));
         std::string output;
+        output.reserve(max_tokens * 8);
+        std::string pending;
+        pending.reserve(256);
+        std::vector<char> piece(256);
+        auto last_update = prefilled;
+        auto first_token = prefilled;
+        int generated = 0;
+        int pending_tokens = 0;
+        int callbacks = 0;
+        auto flush_delta = [&]() {
+            if (pending.empty()) return true;
+            auto chunk = array(env, pending);
+            if (!chunk) return false;
+            env->CallVoidMethod(target, progress, chunk);
+            env->DeleteLocalRef(chunk);
+            pending.clear();
+            pending_tokens = 0;
+            ++callbacks;
+            last_update = std::chrono::steady_clock::now();
+            return !env->ExceptionCheck();
+        };
         for (int i = 0; i < max_tokens; ++i) {
             if (callback.stopped()) return nullptr;
             auto token = llama_sampler_sample(sampler.get(), engine->context, -1);
             if (llama_vocab_is_eog(vocab, token)) break;
-            std::vector<char> piece(256);
             int size = llama_token_to_piece(vocab, token, piece.data(), piece.size(), 0, false);
             if (size < 0) {
                 piece.resize(-size);
                 size = llama_token_to_piece(vocab, token, piece.data(), piece.size(), 0, false);
             }
-            if (size > 0) output.append(piece.data(), size);
-            auto chunk = array(env, output);
-            if (!chunk) return nullptr;
-            env->CallVoidMethod(target, progress, chunk);
-            env->DeleteLocalRef(chunk);
-            if (env->ExceptionCheck()) return nullptr;
+            if (size > 0) {
+                output.append(piece.data(), size);
+                pending.append(piece.data(), size);
+            }
+            ++generated;
+            ++pending_tokens;
+            const auto now = std::chrono::steady_clock::now();
+            if (generated == 1) first_token = now;
+            if (generated == 1 || pending_tokens >= 4 || now - last_update >= std::chrono::milliseconds(80)) {
+                if (!flush_delta()) return nullptr;
+            }
+            // O último token não precisa de decode: não haverá uma próxima amostragem.
+            if (i + 1 == max_tokens) break;
             auto batch = llama_batch_get_one(&token, 1);
             if (llama_decode(engine->context, batch) != 0) {
                 if (callback.stopped()) return nullptr;
                 throw std::runtime_error("Falha na geração da resposta local.");
             }
         }
+        if (callback.stopped() || !flush_delta()) return nullptr;
+        const auto finished = std::chrono::steady_clock::now();
+        const auto total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(finished - started).count();
+        const auto prefill_ms = std::chrono::duration_cast<std::chrono::milliseconds>(prefilled - started).count();
+        const auto ttft_ms = std::chrono::duration_cast<std::chrono::milliseconds>(first_token - started).count();
+        __android_log_print(ANDROID_LOG_INFO, "BragaSlm",
+                            "prompt_tokens=%d generated_tokens=%d callbacks=%d prefill_ms=%lld ttft_ms=%lld total_ms=%lld",
+                            count, generated, callbacks, static_cast<long long>(prefill_ms),
+                            static_cast<long long>(ttft_ms), static_cast<long long>(total_ms));
         return array(env, output);
     } catch (const std::exception &e) { fail(env, e.what()); return nullptr; }
 }

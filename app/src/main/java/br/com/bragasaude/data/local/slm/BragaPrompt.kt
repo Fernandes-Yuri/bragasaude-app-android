@@ -10,9 +10,9 @@ object BragaPrompt {
     fun build(history: List<Pair<String, String>>): String {
         val valid = history.filter { it.first == "user" || it.first == "assistant" }
         require(valid.isNotEmpty() && valid.last().first == "user") { "Digite uma mensagem para conversar." }
-        require(valid.last().second.length <= 1800) { "Use até 1.800 caracteres por mensagem no Braga local." }
+        require(valid.last().second.length <= 1000) { "Use até 1.000 caracteres por mensagem no Braga local." }
         val selected = mutableListOf<Pair<String, String>>()
-        var remaining = 2600
+        var remaining = 1200
         for (message in valid.takeLast(8).asReversed()) {
             if (message.second.length > remaining) break
             selected.add(0, message)

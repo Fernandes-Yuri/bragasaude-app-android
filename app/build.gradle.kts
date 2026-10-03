@@ -38,7 +38,12 @@ android {
         versionCode = 19
         versionName = "1.3.5"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
-        externalNativeBuild { cmake { cppFlags += "-std=c++17" } }
+        externalNativeBuild {
+            cmake {
+                cppFlags += listOf("-std=c++17", "-O3", "-flto")
+                arguments += "-DGGML_LTO=ON"
+            }
+        }
 
         buildConfigField("String", "BASE_URL", "\"https://api.bragasaude.online\"")
         // AUD-AN33: o feedback ia pra URL hardcoded do Firebase Hosting

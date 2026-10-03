@@ -10,6 +10,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.nio.ByteBuffer
+import java.nio.CharBuffer
+import java.nio.charset.CodingErrorAction
 
 @Keep
 internal object BragaNative {
@@ -21,9 +24,21 @@ internal object BragaNative {
 
 @Keep
 internal class BragaGenerationCallback(private val job: Job?, private val partial: (String) -> Unit) {
+    private val decoder = Charsets.UTF_8.newDecoder()
+        .onMalformedInput(CodingErrorAction.REPLACE).onUnmappableCharacter(CodingErrorAction.REPLACE)
+    private val text = StringBuilder()
+    private var pending = byteArrayOf()
     fun isCancelled(): Boolean = job?.isActive == false
+    /** O JNI envia só bytes novos; preserva sequências UTF-8 incompletas entre lotes. */
     fun onBytes(bytes: ByteArray) {
-        if (!isCancelled()) partial(bytes.toString(Charsets.UTF_8).trimEnd('\uFFFD'))
+        if (isCancelled()) return
+        val input = ByteBuffer.wrap(pending + bytes)
+        val decoded = CharBuffer.allocate(input.remaining())
+        decoder.decode(input, decoded, false)
+        pending = ByteArray(input.remaining()).also { input.get(it) }
+        decoded.flip()
+        text.append(decoded)
+        if (decoded.hasRemaining()) partial(text.toString())
     }
 }
 
@@ -39,7 +54,7 @@ class BragaOnDeviceEngine @Inject constructor(private val store: BragaModelStore
         if (handle == 0L) {
             try {
                 handle = BragaNative.load(store.model.absolutePath.toByteArray(Charsets.UTF_8),
-                    Runtime.getRuntime().availableProcessors().coerceIn(1, 4))
+                    Runtime.getRuntime().availableProcessors().coerceIn(1, 2))
                 check(handle != 0L) { "Não foi possível carregar o Braga." }
             } catch (e: LinkageError) {
                 throw IllegalStateException("Este aparelho não suporta o motor local do Braga.", e)
