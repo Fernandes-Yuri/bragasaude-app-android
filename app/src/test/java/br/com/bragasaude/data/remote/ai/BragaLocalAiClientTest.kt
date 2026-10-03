@@ -31,9 +31,10 @@ class BragaLocalAiClientTest {
         val context = BragaResolvedContext(BragaIntent.CONVERSA_LIVRE, "Acolha", "Estou aqui", factual = false)
         coEvery { resolver.resolve(any(), any(), any(), any()) } returns context
         val messages = slot<List<Pair<String, String>>>()
-        coEvery { engine.reply(capture(messages), any(), any()) } returns "Sinto sua saudade, meu bem."
+        coEvery { engine.reply(capture(messages), null, any()) } returns "Entendo essa saudade. Estou aqui para conversar."
         client.interpretSpeech("estou com saudade", history = listOf("user" to "bebi 300ml de água", "assistant" to "Preparei 300 ml", "user" to "estou com saudade"))
         assertEquals(listOf("user" to "estou com saudade"), messages.captured)
+        coVerify(exactly = 1) { engine.reply(any(), null, any()) }
     }
     @Test fun cancellationDoesNotReturnDraftAction() = runTest {
         coEvery { resolver.resolve(any(), any(), any(), any()) } returns BragaResolvedContext(BragaIntent.REGISTRO_AGUA, "Prepare", "Pronto", "REGISTRAR_AGUA")

@@ -45,7 +45,7 @@ class OrbChatGateway @Inject constructor(
         val result = rest.interpretSpeech(history.lastOrNull()?.second.orEmpty(), history = history,
             actingAs = actingAs, patientId = patientId, onPartial = onPartial)
         return OrbReply(JSONObject().put("fala", result.fala).put("acao", result.action ?: "CONVERSA")
-            .put("parametros", JSONObject(result.parameters)).toString(), "Braga V2.2 no aparelho")
+            .put("parametros", JSONObject(result.parameters)).toString(), "Braga V2.1 no aparelho")
     }
 
     // Os registros continuam sob confirmação e validação local do app.

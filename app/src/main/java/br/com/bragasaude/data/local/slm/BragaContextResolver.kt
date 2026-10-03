@@ -42,7 +42,7 @@ class BragaContextResolver @Inject constructor(
             "Ligue para o SAMU 192 e procure socorro agora. As opções de ajuda estão aqui.", "EMERGENCIA")
         if (request.type == BragaIntent.CONVERSA_LIVRE) return BragaResolvedContext(request.type,
             "Converse sobre o assunto do usuário e acolha seus sentimentos. Nenhum registro foi solicitado ou salvo. Não invente histórico, diagnóstico ou dose de remédio.",
-            "Estou aqui com você, meu bem. Pode me contar um pouco mais?", factual = false)
+            "Estou aqui com você. Pode me contar um pouco mais?", factual = false)
         val owner = auth.currentUserId ?: return unavailable(request.type, "Entre na sua conta para consultar ou preparar seus registros.")
         var target = owner
         if (request.otherPerson) {
@@ -77,8 +77,8 @@ class BragaContextResolver @Inject constructor(
         else -> unavailable(request.type, "Preciso que você me diga o valor da medida para preparar a anotação.")
     }
     private fun prepared(request: BragaRequest, value: String, action: String, params: Map<String, String>) =
-        BragaResolvedContext(request.type, "O Kotlin preparou $value. A gravação ainda está pendente. Diga com carinho que a anotação está pronta. Não diga que já salvou.",
-            "Deixei a anotação de $value pronta para você, meu bem.", action, params, request.draft)
+        BragaResolvedContext(request.type, "O Kotlin preparou $value. A gravação ainda está pendente. Diga com respeito que a anotação está pronta. Não diga que já salvou.",
+            "Deixei a anotação de $value pronta para você.", action, params, request.draft)
 
     private suspend fun history(request: BragaRequest, target: String, now: ZonedDateTime): BragaResolvedContext {
         if (request.unsupportedPeriod) return unavailable(request.type,
@@ -100,7 +100,7 @@ class BragaContextResolver @Inject constructor(
             } ?: "Não encontrei glicose registrada nesse período."
             null -> "Qual histórico você quer consultar?"
         }
-        return BragaResolvedContext(request.type, "O banco local informa: $fact Responda com carinho usando somente esses fatos, sem avaliar a medida.", fact)
+        return BragaResolvedContext(request.type, "O banco local informa: $fact Responda com respeito usando somente esses fatos, sem avaliar a medida.", fact)
     }
     private fun timeOf(millis: Long, zone: ZoneId): String = Instant.ofEpochMilli(millis).atZone(zone)
         .format(DateTimeFormatter.ofPattern("'em' dd/MM/yyyy 'às' HH:mm"))
@@ -141,8 +141,8 @@ class BragaContextResolver @Inject constructor(
         val name = med.name
         val intent = VoiceHealthIntent.Medication(name, time, med.id, date.toString())
         return BragaResolvedContext(request.type,
-            "O Kotlin encontrou $name, $dose, horário $time. A marcação como tomado está preparada, ainda não salva. Diga isso com afeto, sem sugerir tomar outra dose.",
-            "Deixei pronta a marcação de $name, $dose, das $time, meu bem.", "REGISTRAR_MEDICAMENTO",
+            "O Kotlin encontrou $name, $dose, horário $time. A marcação como tomado está preparada, ainda não salva. Diga isso com respeito, sem sugerir tomar outra dose.",
+            "Deixei pronta a marcação de $name, $dose, das $time.", "REGISTRAR_MEDICAMENTO",
             mapOf("medication_id" to med.id, "medicamento" to name, "dose" to dose, "horario" to time, "data" to date.toString()), intent)
     }
 }

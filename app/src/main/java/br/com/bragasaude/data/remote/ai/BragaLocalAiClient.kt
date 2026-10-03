@@ -70,20 +70,17 @@ class BragaLocalAiClient @Inject constructor(
         }
         val owner = authService.currentUserId
         val resolved = resolver.resolve(userSpeech, actingAs, patientId)
-        val messages = mutableListOf<Pair<String, String>>()
-        if (!resolved.factual) {
-            var includeTurn = false
-            history.forEach { (role, content) ->
-                if (role == "user") includeTurn = router.route(content).type == br.com.bragasaude.data.local.slm.BragaIntent.CONVERSA_LIVRE
-                if (includeTurn && role in listOf("user", "assistant")) {
-                    val speech = if (role == "assistant") runCatching { JSONObject(content).optString("fala", content) }.getOrDefault(content) else content
+        val messages = listOf("user" to userSpeech)
+        // Conversa livre usa somente o prompt validado e a fala atual, sem contexto clínico.
+        val modelContext = resolved.instruction.takeIf { resolved.factual }
+        val speech = if (role == "assistant") runCatching { JSONObject(content).optString("fala", content) }.getOrDefault(content) else content
                     messages.add(role to speech)
                 }
             }
         }
         if (messages.lastOrNull() != ("user" to userSpeech)) messages.add("user" to userSpeech)
         val speech = if (isEmergency(userSpeech)) resolved.fallback else try {
-            val generated = engine.reply(messages, resolved.instruction) { partial ->
+            val generated = engine.reply(messages, modelContext) { partial ->
                 if (!resolved.factual && authService.currentUserId == owner) onPartial(br.com.bragasaude.data.local.slm.BragaResponseGuard.accept(partial, resolved))
             }
             br.com.bragasaude.data.local.slm.BragaResponseGuard.accept(generated, resolved)

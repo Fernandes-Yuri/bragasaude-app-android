@@ -9,11 +9,10 @@ import javax.inject.Singleton
 @Singleton
 class BragaModelStore @Inject constructor(@ApplicationContext context: Context) {
     companion object {
-        const val REVISION = "478ca692c88ae63d3eb8f839d90bbc887e9346a1"
-        const val FILE_NAME = "braga_slm_v2_2_q4_k_m.gguf"
-        const val SIZE = 396090752L
-        const val SHA256 = "3ae9da6efa232d25562151ffe4604b4a9e0700d30373e69b28340c0f506151b8"
-        const val URL = "https://huggingface.co/fernandes-yuri/braga-slm-0.5b/resolve/$REVISION/$FILE_NAME"
+        const val FILE_NAME = "braga_slm_v2_1_q4_k_m.gguf"
+        const val SIZE = 396091296L
+        const val SHA256 = "ef00e91adab2328a2598b47905b047eea354ef434c6f9964019c8f0a57623b04"
+        const val URL = "https://huggingface.co/fernandes-yuri/braga-slm-0.5b/resolve/main/$FILE_NAME"
         const val REQUIRED_MESSAGE = "Escolha uma voz nas configurações do assistente para começar a conversar."
     }
     private val directory = File(context.noBackupFilesDir, "braga_slm")
@@ -30,5 +29,7 @@ class BragaModelStore @Inject constructor(@ApplicationContext context: Context) 
         check(staging.length() == SIZE)
         check(staging.renameTo(model)) { "Não foi possível instalar o modelo." }
         marker.writeText(SHA256)
+        // Libera o modelo anterior somente depois de concluir a instalação verificada.
+        File(directory, "braga_slm_v2_2_q4_k_m.gguf").delete()
     }
 }
