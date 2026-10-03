@@ -46,9 +46,9 @@ class BragaIntentRouter @Inject constructor(private val parser: VoiceHealthParse
         // Não transforma relato negado, futuro, hipótese ou pergunta de orientação em adesão.
         if (Regex("\\b(nao|nunca|vou|preciso|devo|posso|se eu|amanha)\\b").containsMatchIn(text) || input.trim().endsWith("?"))
             return BragaRequest(BragaIntent.CONVERSA_LIVRE)
-        if (Regex("\\b(tomei|tomo|ja tomei)\\b").containsMatchIn(text) &&
+        if (Regex("\\b(tomei|ja tomei)\\b").containsMatchIn(text) &&
             !Regex("\\b(agua|copo|ml|litro|cafe|leite|suco|cha|sol)\\b").containsMatchIn(text)) {
-            val query = text.substringAfter("tomei", "").replace(Regex("^(?:o |a |meu |minha |um |uma )+"), "")
+            val query = text.substringAfter("tomei", "").trim().replace(Regex("^(?:o |a |meu |minha |um |uma )+"), "")
                 .replace(Regex("\\b(remedio|medicamento|comprimido|agora|hoje|ja)\\b"), "").trim()
             return BragaRequest(BragaIntent.REGISTRO_MEDICAMENTO, medicationQuery = query, otherPerson = other)
         }
