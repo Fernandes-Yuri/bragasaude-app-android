@@ -23,7 +23,7 @@ class BragaIntentRouterTest {
         assertNull(request.draft)
     }
     @Test fun negationFutureAndSmallTalkNeverPrepareRecords() {
-        listOf("não bebi 300ml de água", "vou tomar meu remédio", "devo tomar Losartana?", "estou com saudade", "como foi seu dia?").forEach {
+        listOf("não bebi 300ml de água", "vou tomar meu remédio", "devo tomar Losartana?", "estou com saudade", "como foi seu dia?", "qual é a pressão normal?", "quanta água devo beber hoje?", "tomei um café").forEach {
             assertEquals(it, BragaIntent.CONVERSA_LIVRE, router.route(it).type)
         }
     }

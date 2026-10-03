@@ -81,6 +81,8 @@ class BragaContextResolver @Inject constructor(
             "Deixei a anotação de $value pronta para você, meu bem.", action, params, request.draft)
 
     private suspend fun history(request: BragaRequest, target: String, now: ZonedDateTime): BragaResolvedContext {
+        if (request.unsupportedPeriod) return unavailable(request.type,
+            "Posso consultar hoje, ontem, anteontem ou a última medição. Qual período você prefere?")
         val date = now.toLocalDate().minusDays(request.dayOffset ?: 0)
         val start = if (request.dayOffset == null && request.metric != BragaMetric.AGUA) 0L else date.atStartOfDay(now.zone).toInstant().toEpochMilli()
         val end = date.plusDays(1).atStartOfDay(now.zone).toInstant().toEpochMilli()

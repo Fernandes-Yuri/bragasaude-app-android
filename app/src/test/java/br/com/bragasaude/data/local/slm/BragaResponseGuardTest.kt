@@ -10,6 +10,10 @@ class BragaResponseGuardTest {
         assertEquals(draft.fallback, BragaResponseGuard.accept("Já registrei seus 300 mililitros", draft))
         assertEquals("Preparei 300 mililitros com carinho", BragaResponseGuard.accept("Preparei 300 mililitros com carinho", draft))
     }
+    @Test fun swappedPressureValuesAreRejected() {
+        val pressure = BragaResolvedContext(BragaIntent.REGISTRO_PRESSAO, "Prepare 120 por 80", "Preparei 120 por 80.", "REGISTRAR_PRESSAO")
+        assertEquals(pressure.fallback, BragaResponseGuard.accept("Preparei 80 por 120", pressure))
+    }
     @Test fun clinicalHistoryCannotBeReinterpretedByModel() {
         val history = BragaResolvedContext(BragaIntent.CONSULTA_HISTORICO, "130 por 80", "Sua pressão registrada foi 130 por 80.")
         assertEquals(history.fallback, BragaResponseGuard.accept("Sua pressão 130 por 80 está normal", history))

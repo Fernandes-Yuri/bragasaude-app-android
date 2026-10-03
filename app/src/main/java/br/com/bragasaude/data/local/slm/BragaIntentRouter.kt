@@ -13,7 +13,8 @@ data class BragaRequest(
     val metric: BragaMetric? = null,
     val dayOffset: Long? = null,
     val medicationQuery: String? = null,
-    val otherPerson: Boolean = false
+    val otherPerson: Boolean = false,
+    val unsupportedPeriod: Boolean = false
 )
 
 /** Classifica antes da inferência. Perguntas e negações nunca viram registros. */
@@ -37,13 +38,16 @@ class BragaIntentRouter @Inject constructor(private val parser: VoiceHealthParse
             else -> null
         }
         val question = Regex("\\b(quanto|quanta|como esta|como ficou|qual|historico|ultima|ultimo|mostre|consulte)\\b").containsMatchIn(text)
-        if (metric != null && question) return BragaRequest(BragaIntent.CONSULTA_HISTORICO,
-            metric = metric, dayOffset = when { "anteontem" in text -> 2; "ontem" in text -> 1; "hoje" in text -> 0; else -> null }, otherPerson = other)
+        val personalHistory = Regex("\\b(minha|meu|bebi|tomei|hoje|ontem|anteontem|ultima|ultimo|historico|mae|pai|paciente)\\b").containsMatchIn(text)
+        val educational = Regex("\\b(normal|ideal|significa|devo|posso|por que|recomendad|o que e)\\b").containsMatchIn(text)
+        if (metric != null && question && personalHistory && !educational) return BragaRequest(BragaIntent.CONSULTA_HISTORICO,
+            metric = metric, dayOffset = when { "anteontem" in text -> 2; "ontem" in text -> 1; "hoje" in text -> 0; else -> null }, otherPerson = other,
+            unsupportedPeriod = Regex("\\b(semana|mes|ano|segunda|terca|quarta|quinta|sexta|sabado|domingo|dia [0-9]+)\\b").containsMatchIn(text))
         // Não transforma relato negado, futuro, hipótese ou pergunta de orientação em adesão.
         if (Regex("\\b(nao|nunca|vou|preciso|devo|posso|se eu|amanha)\\b").containsMatchIn(text) || input.trim().endsWith("?"))
             return BragaRequest(BragaIntent.CONVERSA_LIVRE)
         if (Regex("\\b(tomei|tomo|ja tomei)\\b").containsMatchIn(text) &&
-            !Regex("\\b(agua|copo|ml|litro)\\b").containsMatchIn(text)) {
+            !Regex("\\b(agua|copo|ml|litro|cafe|leite|suco|cha|sol)\\b").containsMatchIn(text)) {
             val query = text.substringAfter("tomei", "").replace(Regex("^(?:o |a |meu |minha |um |uma )+"), "")
                 .replace(Regex("\\b(remedio|medicamento|comprimido|agora|hoje|ja)\\b"), "").trim()
             return BragaRequest(BragaIntent.REGISTRO_MEDICAMENTO, medicationQuery = query, otherPerson = other)
