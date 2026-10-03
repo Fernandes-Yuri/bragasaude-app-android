@@ -128,26 +128,12 @@ class VoiceHealthExecutor @Inject constructor(
             }
 
             is VoiceHealthIntent.Medication -> {
-                val meds = medicationRepository.getMedications(userId).first()
-                val match = meds.firstOrNull { med ->
-                    med.name.contains(intent.query, ignoreCase = true) ||
-                        intent.query.contains(med.name, ignoreCase = true)
+                val medicationId = intent.medicationId ?: error("Selecione o remédio cadastrado antes de confirmar.")
+                val date = java.time.LocalDate.parse(intent.scheduledDate ?: error("Horário não identificado."))
+                check(medicationRepository.takeMedication(userId, medicationId, intent.scheduleTimeHint, date)) {
+                    "Essa dose já foi marcada ou não está mais disponível."
                 }
-                if (match != null) {
-                    medicationRepository.takeMedication(userId, match.id)
-                    "Medicacao: ${match.name} marcado como tomado!"
-                } else {
-                    val newMed = RemoteMedication(
-                        id = UUID.randomUUID().toString(),
-                        userId = userId,
-                        name = intent.query.replaceFirstChar {
-                            if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString()
-                        },
-                        scheduleTime = intent.scheduleTimeHint
-                    )
-                    medicationRepository.saveMedication(newMed)
-                    "Medicacao: \"${newMed.name}\" registrado!"
-                }
+                "${intent.query} marcado como tomado!"
             }
 
             is VoiceHealthIntent.Meal,

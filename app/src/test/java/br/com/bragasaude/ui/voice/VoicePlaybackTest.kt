@@ -21,7 +21,7 @@ class VoicePlaybackTest {
         every { auth.currentUser } returns null
         vm = VoiceHealthViewModel(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
             mockk(relaxed = true), auth, mockk(relaxed = true), player, mockk(relaxed = true),
-            mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+            mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
     }
 
     @After fun cleanup() { vm.stopLiveMode(); Dispatchers.resetMain() }

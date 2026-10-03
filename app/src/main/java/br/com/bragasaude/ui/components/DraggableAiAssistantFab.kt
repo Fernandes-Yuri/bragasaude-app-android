@@ -216,6 +216,7 @@ fun DraggableAiAssistantFab(
     val audioRmsDb by viewModel.audioRmsDb.collectAsState()
     val isSpeaking by viewModel.isSpeaking.collectAsState()
     val isLiveMode by viewModel.isLiveMode.collectAsState()
+    var triage by remember { mutableStateOf<br.com.bragasaude.data.local.slm.ImmediateTriageResponse?>(null) }
     var showEmergencyDialog by remember { mutableStateOf(false) }
 
     // Observar eventos de navegação autônoma disparados pelo Copiloto de Voz
@@ -235,6 +236,7 @@ fun DraggableAiAssistantFab(
                 is VoiceNavigationEvent.NavigateToNutrition -> {
                     onNavigate(Screen.Nutrition(searchFood = event.searchFoodQuery, openGroceryList = event.openGroceryList))
                 }
+                is VoiceNavigationEvent.Triage -> triage = event.response
                 is VoiceNavigationEvent.OpenEmergencyDialog -> {
                     showEmergencyDialog = true
                 }
@@ -649,6 +651,9 @@ fun DraggableAiAssistantFab(
         }
         }
     }
+
+    triage?.let { response -> RiskNotificationDialog(type = response.severity.name, message = response.text,
+        severity = response.severity, onDismiss = { triage = null }) }
 
     if (showEmergencyDialog) {
         // Assume this component exists in the current scope or is imported

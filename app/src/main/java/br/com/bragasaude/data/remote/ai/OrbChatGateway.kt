@@ -1,85 +1,62 @@
 package br.com.bragasaude.data.remote.ai
 
-import br.com.bragasaude.data.remote.auth.AuthService
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
-import java.io.IOException
-import javax.inject.Inject
+import br.com.bragasaude.data.local.slm.BragaOnDeviceEngine
+import br.com.bragasaude.data.local.slm.BragaModelStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import org.json.JSONObject
+import javax.inject.Inject
 
+/** Mantém o contrato de UI do chat; não abre transporte para inferência remota. */
 class OrbChatGateway @Inject constructor(
-    private val socket: OrbWebSocket,
     private val rest: BragaLocalAiClient,
-    private val authService: AuthService
+    private val engine: BragaOnDeviceEngine
 ) {
-    private var session: OrbWebSocket.Session? = null
-    private var observer: Job? = null
     private val status = MutableStateFlow(OrbConnectionState.CLOSED)
     val connection: StateFlow<OrbConnectionState> = status.asStateFlow()
+    val ready: Boolean get() = engine.ready
+    private var observer: Job? = null
 
     fun open(scope: CoroutineScope) {
-        if (session != null) return
-        val uid = authService.currentUserId ?: return
-        session = socket.openSession(scope, rest.serverBaseUrl) { force ->
-            if (authService.currentUserId != uid) throw OrbRejectedException("Entre na sua conta novamente.")
-            authService.getFreshToken(force) ?: throw OrbRejectedException("Sessão indisponível.")
+        observer?.cancel()
+        status.value = OrbConnectionState.CONNECTING
+        observer = scope.launch {
+            try {
+                engine.initialize()
+                status.value = OrbConnectionState.CONNECTED
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { status.value = OrbConnectionState.FAILED }
         }
-        observer = scope.launch { session?.state?.collect { status.value = it } }
     }
 
-    suspend fun send(history: List<Pair<String, String>>,
-                     actingAs: String? = null, patientId: String? = null,
-                     onPartial: (String) -> Unit): OrbReply {
+    fun isEmergency(text: String): Boolean = rest.isEmergency(text)
+
+    fun immediateResponse(text: String) = rest.immediateResponse(text)
+
+    suspend fun send(history: List<Pair<String, String>>, actingAs: String? = null,
+                     patientId: String? = null, onPartial: (String) -> Unit): OrbReply {
+        immediateResponse(history.lastOrNull()?.second.orEmpty())?.let {
+            onPartial(it.text)
+            return OrbReply(JSONObject().put("fala", it.text).put("acao", "TRIAGEM")
+                .put("gravidade", it.severity.name).put("parametros", JSONObject()).toString())
+        }
+        check(ready) { BragaModelStore.REQUIRED_MESSAGE }
         LocalConversationAnswers.answer(history.lastOrNull()?.second.orEmpty(), history)?.let {
             return OrbReply(JSONObject().put("fala", it).put("acao", "CONVERSA")
                 .put("parametros", JSONObject()).toString())
         }
-        try {
-            return session?.chat(history, actingAs, patientId, onPartial)
-                ?: throw IOException("Sem conexão")
-        } catch (e: OrbRejectedException) {
-            throw e
-        } catch (_: TimeoutCancellationException) {
-            currentCoroutineContext().ensureActive()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: IOException) {
-            // Provider errors and transport failure can use the REST gateway once.
-        }
-        onPartial("")
-        // AUD-AN05: history.last() crashava com NoSuchElementException se o
-        // histórico estiver vazio (primeira fala após login/limpeza). A própria
-        // linha 35 já usa lastOrNull; aqui era inconsistente.
-        val lastMessage = history.lastOrNull()?.second.orEmpty()
-        val result = rest.interpretSpeech(lastMessage, preferWebSocket = false,
-                                          history = history,
-                                          actingAs = actingAs, patientId = patientId,
-                                          onPartial = onPartial)
-            ?: throw IOException("Não foi possível obter resposta. Tente novamente.")
-        val raw = result.rawResponse
-        val structured = try { JSONObject(raw ?: "").has("fala") } catch (_: Exception) { false }
-        val content = if (structured) raw!! else JSONObject().put("fala", result.fala)
-            .put("acao", "CONVERSA").put("parametros", JSONObject()).toString()
-        return OrbReply(content, "Resposta via REST")
+        val result = rest.interpretSpeech(history.lastOrNull()?.second.orEmpty(), history = history,
+            actingAs = actingAs, patientId = patientId, onPartial = onPartial)
+        return OrbReply(JSONObject().put("fala", result.fala).put("acao", result.action ?: "CONVERSA")
+            .put("parametros", JSONObject(result.parameters)).toString(), "Braga V2.1 no aparelho")
     }
 
-    /**
-     * Agente B1: recibo de executor (melhor-esforço). Retorna a fala de
-     * fechamento do servidor ou null.
-     */
-    suspend fun sendReceipt(action: String, params: JSONObject, idempotencyKey: String): String? {
-        return try {
-            session?.receipt(action, params, idempotencyKey)
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    fun retry() { session?.retry() }
-    fun close() {
-        observer?.cancel()
-        session?.close()
-        session = null
-        status.value = OrbConnectionState.CLOSED
-    }
+    // Os registros continuam sob confirmação e validação local do app.
+    suspend fun sendReceipt(action: String, params: JSONObject, idempotencyKey: String): String? = null
+    fun retry() { status.value = if (ready) OrbConnectionState.CONNECTED else OrbConnectionState.FAILED }
+    fun close() { observer?.cancel(); observer = null; status.value = OrbConnectionState.CLOSED }
 }

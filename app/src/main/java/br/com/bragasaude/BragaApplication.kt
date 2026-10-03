@@ -32,6 +32,7 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
     @Inject lateinit var syncScheduler: SyncScheduler
     @Inject lateinit var catalogRepository: CatalogRepository
     @Inject lateinit var voiceProfileManager: VoiceProfileManager
+    @Inject lateinit var bragaEngine: br.com.bragasaude.data.local.slm.BragaOnDeviceEngine
 
     override fun onCreate() {
         super.onCreate()

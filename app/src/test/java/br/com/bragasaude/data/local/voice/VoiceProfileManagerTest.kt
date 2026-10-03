@@ -22,6 +22,7 @@ class VoiceProfileManagerTest {
     private val system = mockk<AndroidSystemTtsFallback>(relaxed = true)
     private val workManager = mockk<WorkManager>(relaxed = true)
     private val notifications = mockk<VoicePreparationNotifications>(relaxed = true)
+    private val assistantInstaller = mockk<br.com.bragasaude.data.local.slm.BragaModelInstaller>(relaxed = true)
     private var saved: String? = null
     private var background: String? = null
 
@@ -40,7 +41,8 @@ class VoiceProfileManagerTest {
         every { editor.remove("background_voice_id") } answers { background = null; editor }
         every { editor.putBoolean("has_chosen_voice", any()) } returns editor
         every { editor.commit() } returns true
-        return VoiceProfileManager(context, downloader, engine, system, workManager, notifications)
+        every { assistantInstaller.ready } returns true
+        return VoiceProfileManager(context, downloader, engine, system, workManager, notifications, assistantInstaller)
     }
     private suspend fun ready(manager: VoiceProfileManager) = withTimeout(5000) { manager.state.first { !it.busy } }
 
@@ -48,6 +50,7 @@ class VoiceProfileManagerTest {
         val manager = manager()
         assertEquals(VoiceCatalog.SYSTEM_ID, ready(manager).activeId)
         coVerify(exactly = 0) { downloader.prepare(any(), any(), any()) }
+        coVerify(exactly = 0) { assistantInstaller.prepare(any()) }
         manager.playSpeech("Teste", {}, {})
         coVerify(exactly = 0) { engine.playStream(any(), any(), any(), any()) }
         coVerify(exactly = 1) { system.speak("Teste", any(), any()) }
@@ -61,6 +64,27 @@ class VoiceProfileManagerTest {
         assertNotNull(manager.state.value.error)
         coVerify(exactly = 0) { engine.replaceModel(any(), any(), any()) }
         verify(exactly = 0) { notifications.result(any(), any()) }
+    }
+    @Test fun `escolha da voz so libera conversa depois da segunda instalacao`() = runBlocking {
+        val manager = manager()
+        ready(manager)
+        every { assistantInstaller.ready } returns false
+        val started = CompletableDeferred<Unit>()
+        val finish = CompletableDeferred<Unit>()
+        coEvery { assistantInstaller.prepare(any()) } coAnswers {
+            started.complete(Unit)
+            finish.await()
+            every { assistantInstaller.ready } returns true
+        }
+        val job = launch(Dispatchers.IO) { manager.prepareSelection(VoiceCatalog.SYSTEM_ID) }
+        withTimeout(5000) { started.await() }
+        assertTrue(manager.state.value.busy)
+        assertTrue(manager.needsOnboarding())
+        finish.complete(Unit)
+        withTimeout(5000) { job.join() }
+        assertFalse(manager.state.value.busy)
+        assertFalse(manager.needsOnboarding())
+        coVerify(exactly = 1) { assistantInstaller.prepare(any()) }
     }
     @Test fun `cancelamento libera interface e remove staging sem notificar sucesso`() = runBlocking {
         val manager = manager()

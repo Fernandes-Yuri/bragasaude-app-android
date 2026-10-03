@@ -9,6 +9,15 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface VitalSignDao {
+    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND measuredAt >= :start AND measuredAt < :end AND systolicPressure IS NOT NULL AND diastolicPressure IS NOT NULL ORDER BY measuredAt DESC LIMIT 1")
+    suspend fun latestPressureInRange(userId: String, start: Long, end: Long): VitalSignEntity?
+
+    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND measuredAt >= :start AND measuredAt < :end AND glucoseLevel IS NOT NULL ORDER BY measuredAt DESC LIMIT 1")
+    suspend fun latestGlucoseInRange(userId: String, start: Long, end: Long): VitalSignEntity?
+
+    @Query("SELECT COALESCE(SUM(hydrationMl), 0) FROM vital_signs_local WHERE userId = :userId AND measuredAt >= :start AND measuredAt < :end AND hydrationMl > 0")
+    suspend fun hydrationInRange(userId: String, start: Long, end: Long): Long
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(vitalSign: VitalSignEntity): Long
 
@@ -254,6 +263,9 @@ interface MedicationDao {
 
 @Dao
 interface MedicationLogDao {
+    @Query("SELECT * FROM medication_logs_local WHERE userId = :userId AND takenAt >= :start AND takenAt < :end")
+    suspend fun logsInRange(userId: String, start: Long, end: Long): List<MedicationLogEntity>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertOnce(log: MedicationLogEntity): Long
 

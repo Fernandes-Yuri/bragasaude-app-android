@@ -1,0 +1,37 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(braga_slm LANGUAGES C CXX)
+include(FetchContent)
+# O try_compile de CheckIPOSupported do CMake 3.22 perde a ABI do NDK.
+# Clang/LLVM do NDK 27 suporta LTO, validado na compilação real do APK.
+# CMake 3.22 escolhe gold para IPO do Clang; Android requer o LLD do NDK.
+set(CMAKE_C_LINK_OPTIONS_IPO "-fuse-ld=lld")
+set(CMAKE_CXX_LINK_OPTIONS_IPO "-fuse-ld=lld")
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+add_compile_options(-O3 -flto)
+add_link_options(-flto)
+set(GGML_LTO ON CACHE BOOL "" FORCE)
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+    # GGML_ARM_NET não existe nesta revisão; esta opção habilita os kernels ARM.
+    set(GGML_CPU_ARM_ARCH "armv8.2-a+fp16+dotprod" CACHE STRING "" FORCE)
+    add_compile_options(-march=armv8.2-a+fp16+dotprod)
+endif()
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+set(LLAMA_CURL OFF CACHE BOOL "" FORCE)
+set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
+set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
+set(GGML_CPU_ALL_VARIANTS OFF CACHE BOOL "" FORCE)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+FetchContent_Declare(llama
+    URL https://codeload.github.com/ggml-org/llama.cpp/tar.gz/edd6e2bbdad5930899a93db8fa73c3b61c7b9bcc
+    URL_HASH SHA256=12f869f66555d409954d8d68d7fd85a308e4fa42e25e0631e9776f23cc898234)
+FetchContent_MakeAvailable(llama)
+add_library(braga_slm SHARED braga_slm.cpp)
+target_compile_features(braga_slm PRIVATE cxx_std_17)
+target_link_libraries(braga_slm PRIVATE llama android log)
+target_link_options(braga_slm PRIVATE
+    "-Wl,-z,max-page-size=16384"
+    "-Wl,-z,common-page-size=16384")

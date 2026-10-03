@@ -1,7 +1,7 @@
 ﻿package br.com.bragasaude.data.remote.ai
 
 /**
- * Resultado estruturado retornado pelo cérebro da IA local (Qwen 2.5 0.5B).
+ * Resultado estruturado pelo Kotlin; somente a fala é humanizada pelo SLM.
  *
  * @param tipo Categoria da intenção detectada ("CONVERSA", "PRESSAO", "GLICEMIA", "DESCONHECIDO").
  * @param fala Mensagem humanizada e acolhedora gerada pelo Braga para ser falada via TextToSpeech.
@@ -22,5 +22,9 @@ data class BragaAiResult(
     val porcaoGramas: Int? = null,
     val motivoClinico: String? = null,
     val tipoMetrica: String? = null,
-    val rawResponse: String? = null
+    val rawResponse: String? = null,
+    val action: String? = null,
+    val parameters: Map<String, String> = emptyMap(),
+    val localIntent: br.com.bragasaude.domain.VoiceHealthIntent? = null,
+    val triageSeverity: br.com.bragasaude.data.local.slm.TriageSeverity? = null
 )

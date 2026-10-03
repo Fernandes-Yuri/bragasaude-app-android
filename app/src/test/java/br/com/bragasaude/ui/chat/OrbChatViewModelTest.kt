@@ -23,6 +23,8 @@ class OrbChatViewModelTest {
     @Before fun setup() {
         Dispatchers.setMain(dispatcher)
         gateway = mockk(relaxed = true)
+        every { gateway.ready } returns true
+        every { gateway.immediateResponse(any()) } returns null
         every { gateway.connection } returns MutableStateFlow(OrbConnectionState.CONNECTED)
         val store = mockk<OrbChatStore>(relaxed = true)
         every { store.observe(any()) } returns flowOf(emptyList())
@@ -32,7 +34,8 @@ class OrbChatViewModelTest {
         every { auth.currentUser } returns user
         vm = OrbChatViewModel(gateway, store, auth, mockk<NeuralAudioPlayer>(relaxed = true),
             mockk<NotificationClient>(relaxed = true), mockk<ProfileDao>(relaxed = true),
-            mockk<FamilyBridgeRepository>(relaxed = true))
+            mockk<FamilyBridgeRepository>(relaxed = true),
+            mockk<br.com.bragasaude.data.remote.repository.MedicationRepository>(relaxed = true))
     }
     @After fun tearDown() { vm.leaveScreen(); Dispatchers.resetMain() }
 
@@ -98,6 +101,38 @@ class OrbChatViewModelTest {
         assertEquals("cancelled", vm.state.value.messages.last().status)
         assertNull(vm.state.value.messages.last().action)
     }
+    @Test fun confirmationCardWaitsForReplyCompletion() = runTest(dispatcher) {
+        val done = CompletableDeferred<OrbReply>()
+        coEvery { gateway.send(any(), any(), any(), any()) } coAnswers {
+            arg<(String) -> Unit>(3)("Deixei pronta")
+            done.await()
+        }
+        vm.sendMessage("minha pressão deu 12 por 8")
+        runCurrent()
+        assertTrue(vm.state.value.messages.none { it.action != null })
+        assertTrue(vm.state.value.isStreaming)
+        done.complete(reply)
+        runCurrent()
+        assertEquals("REGISTRAR_PRESSAO", vm.state.value.messages.last().action)
+    }
+
+    @Test fun emergencyBypassesMissingModelAndInterruptsGeneration() = runTest(dispatcher) {
+        coEvery { gateway.send(any(), any(), any(), any()) } coAnswers { awaitCancellation() }
+        vm.sendMessage("Olá")
+        runCurrent()
+        every { gateway.ready } returns false
+        val response = br.com.bragasaude.data.local.slm.ImmediateTriageResponse(
+            br.com.bragasaude.data.local.slm.TriageSeverity.EMERGENCIA, "Ligue 192 agora.", "Risco")
+        every { gateway.immediateResponse("dor forte no peito") } returns response
+        val event = async(UnconfinedTestDispatcher(testScheduler)) { vm.events.first() }
+        vm.sendMessage("dor forte no peito")
+        assertEquals(OrbChatEvent.Triage(response), event.await())
+        assertEquals("Ligue 192 agora.", vm.state.value.messages.last().text)
+        assertFalse(vm.state.value.isStreaming)
+        runCurrent()
+        coVerify(exactly = 1) { gateway.send(any(), any(), any(), any()) }
+    }
+
     @Test fun longMessageDoesNotReachGateway() = runTest(dispatcher) {
         vm.sendMessage("x".repeat(16001))
         assertNotNull(vm.state.value.error)

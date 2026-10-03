@@ -27,7 +27,8 @@ import br.com.bragasaude.ui.theme.Success
 fun RiskNotificationDialog(
     type: String,
     message: String,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    severity: br.com.bragasaude.data.local.slm.TriageSeverity = br.com.bragasaude.data.local.slm.TriageSeverity.EMERGENCIA
 ) {
     val context = LocalContext.current
     val profileViewModel: ProfileViewModel = hiltViewModel()
@@ -35,6 +36,12 @@ fun RiskNotificationDialog(
     
     val contactPhone = profileState?.emergencyContactPhone
     val contactName = profileState?.emergencyContactName ?: "Contato de Emergência"
+
+    val red = severity == br.com.bragasaude.data.local.slm.TriageSeverity.EMERGENCIA
+    val orange = severity == br.com.bragasaude.data.local.slm.TriageSeverity.URGENCIA
+    val yellow = severity == br.com.bragasaude.data.local.slm.TriageSeverity.GRAVE
+    val tint = when { red -> Color(0xFFDC2626); orange -> Color(0xFFC2410C); yellow -> Color(0xFF8A6500); else -> Color(0xFF166534) }
+    LaunchedEffect(message, severity) { if (red) br.com.bragasaude.ui.util.ClinicalAlertFeedback.play(context) }
 
     BragaAlertDialog(
         onDismissRequest = onDismiss,
@@ -52,13 +59,13 @@ fun RiskNotificationDialog(
                 Icon(
                     Icons.Default.Warning,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = tint,
                     modifier = Modifier.size(48.dp)
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Emergência e apoio",
-                    color = MaterialTheme.colorScheme.error,
+                    when { red -> "Emergência: SAMU 192"; orange -> "Acidente: peça ajuda"; yellow -> "Procure avaliação hoje"; else -> "Cuidado e conforto" },
+                    color = tint,
                     fontWeight = FontWeight.ExtraBold,
                     textAlign = TextAlign.Center
                 )
@@ -78,6 +85,7 @@ fun RiskNotificationDialog(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                if (red || orange || yellow) {
                 // BOTÃO 1: Ligar para Emergência (192)
                 Button(
                     onClick = { 
@@ -93,6 +101,12 @@ fun RiskNotificationDialog(
                     Text("Emergência — 192")
                 }
 
+                }
+                if (orange) {
+                    OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:193"))) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("Bombeiros — 193") }
+                }
+                if (red || orange || yellow) {
                 // BOTÃO 2: Encontrar UPA mais próxima
                 Button(
                     onClick = {
@@ -114,20 +128,26 @@ fun RiskNotificationDialog(
                     Text("UPA mais próxima")
                 }
 
+                }
+                if (red || orange || yellow) {
                 // BOTÃO 3: Contato de Emergência Cadastrado
                 OutlinedButton(
                     onClick = {
-                        val number = if (!contactPhone.isNullOrBlank()) contactPhone else "192"
+                        val number = contactPhone ?: return@OutlinedButton
                         val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))
                         context.startActivity(intent)
                     },
+                    enabled = !contactPhone.isNullOrBlank(),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Icon(Icons.Default.Person, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text(contactName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(if (contactPhone.isNullOrBlank()) "Nenhum contato familiar cadastrado" else contactName, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                }
+                if (yellow) Text("Confira seus sinais, se puder fazer isso com segurança, sem adiar o atendimento hoje.")
+                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Entendi") }
             }
         }
     )

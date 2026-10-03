@@ -34,7 +34,8 @@ class VoiceProfileManager @Inject constructor(
     private val engine: PiperOnDeviceEngine,
     private val system: AndroidSystemTtsFallback,
     private val workManager: WorkManager,
-    private val notifications: VoicePreparationNotifications
+    private val notifications: VoicePreparationNotifications,
+    private val assistantInstaller: br.com.bragasaude.data.local.slm.BragaModelInstaller
 ) {
     private val preferences = context.getSharedPreferences("voice_profile", Context.MODE_PRIVATE)
     private val store = VoiceModelStore(File(context.filesDir, "voices"))
@@ -91,7 +92,7 @@ class VoiceProfileManager @Inject constructor(
         if (state.value.busy || selectionJob?.isActive == true) return
         preferences.edit().remove("background_voice_id").commit()
         mutableState.value = state.value.copy(preparingId = id, phase = "Preparando voz", error = null)
-        if (option.isNeural) {
+        run {
             try {
                 val request = OneTimeWorkRequestBuilder<VoicePreparationWorker>()
                     .setInputData(workDataOf(VoicePreparationWorker.VOICE_ID to id))
@@ -114,8 +115,6 @@ class VoiceProfileManager @Inject constructor(
                     }
                 }
             } catch (_: Exception) { preparationCouldNotStart(id) }
-        } else {
-            selectionJob = scope.launch { prepareSelection(id) }
         }
     }
 
@@ -164,6 +163,10 @@ class VoiceProfileManager @Inject constructor(
                         }
                     }
                 }
+                mutableState.value = state.value.copy(phase = "Preparando seu assistente", progress = null)
+                assistantInstaller.prepare { percent ->
+                    mutableState.value = state.value.copy(phase = "Preparando seu assistente", progress = percent / 100f)
+                }
                 mutableState.value = ActiveVoiceState(activeId = id, phase = null, hasChosenVoice = true)
                 successful = true
                 val background = preferences.getString("background_voice_id", null) == id
@@ -178,8 +181,7 @@ class VoiceProfileManager @Inject constructor(
                 mutableState.value = ActiveVoiceState(
                     activeId = if (committed) id else oldId, phase = null,
                     hasChosenVoice = if (committed) true else state.value.hasChosenVoice,
-                    error = if (committed) "Voz selecionada. A limpeza será retomada ao abrir o aplicativo." else
-                        "Não foi possível preparar a voz. Verifique a conexão e o espaço livre e tente novamente. Sua seleção anterior foi mantida."
+                    error = "Não foi possível preparar seu assistente. Verifique a conexão e o espaço livre e tente novamente."
                 )
                 notifyBackgroundResult(id)
             } finally {
@@ -220,7 +222,8 @@ class VoiceProfileManager @Inject constructor(
         )
     }
 
-    fun needsOnboarding(): Boolean = !state.value.hasChosenVoice
+    val isAssistantReady: Boolean get() = assistantInstaller.ready
+    fun needsOnboarding(): Boolean = !state.value.hasChosenVoice || !isAssistantReady
 
     fun cancelDownload() {
         if (state.value.phase != "Carregando voz") {

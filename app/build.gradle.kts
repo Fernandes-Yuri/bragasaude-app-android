@@ -26,6 +26,10 @@ val hasKeystore = if (keystorePropertiesFile != null && keystorePropertiesFile.e
 android {
     namespace = "br.com.bragasaude"
     compileSdk = 35
+    ndkVersion = "27.2.12479018"
+    externalNativeBuild {
+        cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" }
+    }
 
     defaultConfig {
         applicationId = "br.com.bragasaude"
@@ -33,6 +37,14 @@ android {
         targetSdk = 35
         versionCode = 19
         versionName = "1.3.5"
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        externalNativeBuild {
+            cmake {
+                cppFlags += listOf("-std=c++17", "-O3", "-flto")
+                arguments += "-DGGML_LTO=ON"
+                arguments += "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+            }
+        }
 
         buildConfigField("String", "BASE_URL", "\"https://api.bragasaude.online\"")
         // AUD-AN33: o feedback ia pra URL hardcoded do Firebase Hosting

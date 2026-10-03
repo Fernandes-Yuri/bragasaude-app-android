@@ -1,0 +1,57 @@
+name: Braga on-device APK
+on:
+  push:
+    branches: [feat/braga-slm-on-device]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: braga-slm-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            25
+      - uses: android-actions/setup-android@v4
+      - name: Instalar SDK, NDK e CMake
+        run: yes | sdkmanager --install "platforms;android-35" "ndk;27.2.12479018" "cmake;3.22.1"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+      - name: Materializar assinatura de teste compatível com o app instalado
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_STORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          KEYSTORE_KEY_ALIAS: ${{ secrets.KEYSTORE_KEY_ALIAS }}
+          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
+        run: |
+          test -n "$RELEASE_KEYSTORE_BASE64"
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 -d > release-keystore.jks
+          printf 'storeFile=release-keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$KEYSTORE_STORE_PASSWORD" "$KEYSTORE_KEY_ALIAS" "$KEYSTORE_KEY_PASSWORD" > keystore.properties
+      - name: Validar repositório
+        run: |
+          python .github/scripts/check_emojis_ui.py
+          python .github/scripts/check_repository_hygiene.py
+          python .github/scripts/check_modal_consistency.py
+      - name: Compilar APK e smoke instrumentado; executar testes de unidade
+        run: |
+          JDK_PATHS="$JAVA_HOME_21_X64,$JAVA_HOME_25_X64"
+          gradle assembleDebug assembleDebugAndroidTest testDebugUnitTest --no-daemon --stacktrace -Dorg.gradle.java.installations.paths="$JDK_PATHS"
+      - name: Validar alinhamento nativo de 16 KB
+        run: python .github/scripts/check_native_page_alignment.py app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: braga-ondevice-test
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/androidTest/debug/*.apk
+            app/build/reports/tests/testDebugUnitTest/
+          retention-days: 7
