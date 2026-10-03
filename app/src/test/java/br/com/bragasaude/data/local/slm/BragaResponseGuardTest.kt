@@ -10,6 +10,12 @@ class BragaResponseGuardTest {
         assertEquals(draft.fallback, BragaResponseGuard.accept("Já registrei seus 300 mililitros", draft))
         assertEquals("Preparei 300 mililitros com carinho", BragaResponseGuard.accept("Preparei 300 mililitros com carinho", draft))
     }
+    @Test fun freeConversationCannotClaimAnUnrequestedRegistration() {
+        val free = BragaResolvedContext(BragaIntent.CONVERSA_LIVRE, "Acolha", "Estou aqui com você, meu bem.", factual = false)
+        assertEquals(free.fallback, BragaResponseGuard.accept("Já anotei sua água", free))
+        assertEquals(free.fallback, BragaResponseGuard.accept("Confira os dados e toque em salvar", free))
+        assertEquals("Pode me contar mais sobre essa saudade?", BragaResponseGuard.accept("Pode me contar mais sobre essa saudade?", free))
+    }
     @Test fun swappedPressureValuesAreRejected() {
         val pressure = BragaResolvedContext(BragaIntent.REGISTRO_PRESSAO, "Prepare 120 por 80", "Preparei 120 por 80.", "REGISTRAR_PRESSAO")
         assertEquals(pressure.fallback, BragaResponseGuard.accept("Preparei 80 por 120", pressure))
