@@ -35,8 +35,15 @@ class OrbChatGateway @Inject constructor(
 
     fun isEmergency(text: String): Boolean = rest.isEmergency(text)
 
+    fun immediateResponse(text: String) = rest.immediateResponse(text)
+
     suspend fun send(history: List<Pair<String, String>>, actingAs: String? = null,
                      patientId: String? = null, onPartial: (String) -> Unit): OrbReply {
+        immediateResponse(history.lastOrNull()?.second.orEmpty())?.let {
+            onPartial(it.text)
+            return OrbReply(JSONObject().put("fala", it.text).put("acao", "TRIAGEM")
+                .put("gravidade", it.severity.name).put("parametros", JSONObject()).toString())
+        }
         check(ready) { BragaModelStore.REQUIRED_MESSAGE }
         LocalConversationAnswers.answer(history.lastOrNull()?.second.orEmpty(), history)?.let {
             return OrbReply(JSONObject().put("fala", it).put("acao", "CONVERSA")

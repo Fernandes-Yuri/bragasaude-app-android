@@ -42,4 +42,17 @@ class BragaLocalAiClientTest {
         try { client.interpretSpeech("bebi água"); fail("Cancelamento deve ser propagado") }
         catch (_: CancellationException) { }
     }
+    @Test fun allClinicalLevelsBypassUnavailableModelAndDatabase() = runTest {
+        every { engine.ready } returns false
+        listOf("dor no peito", "caí no chão", "glicose deu 55", "azia").forEach {
+            val result = client.interpretSpeech(it)
+            assertNotNull(result.triageSeverity)
+            assertTrue(result.fala.isNotBlank())
+            assertNull(result.localIntent)
+        }
+        coVerify(exactly = 0) { engine.reply(any(), any(), any()) }
+        coVerify(exactly = 0) { resolver.resolve(any(), any(), any(), any()) }
+        verify(exactly = 0) { auth.currentUserId }
+    }
+
 }

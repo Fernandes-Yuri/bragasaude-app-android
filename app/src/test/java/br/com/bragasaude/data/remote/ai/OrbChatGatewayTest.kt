@@ -12,6 +12,7 @@ class OrbChatGatewayTest {
         val engine = mockk<BragaOnDeviceEngine>()
         every { engine.ready } returns false
         val client = mockk<BragaLocalAiClient>()
+        every { client.immediateResponse(any()) } returns null
         val gateway = OrbChatGateway(client, engine)
         try { gateway.send(listOf("user" to "Olá")) {}; fail("Deveria bloquear") }
         catch (e: IllegalStateException) { assertTrue(e.message!!.contains("Escolha uma voz")) }
@@ -22,6 +23,7 @@ class OrbChatGatewayTest {
             val engine = mockk<BragaOnDeviceEngine>()
             every { engine.ready } returns true
             val client = mockk<BragaLocalAiClient>()
+        every { client.immediateResponse(any()) } returns null
             coEvery { client.interpretSpeech(any(), any(), any(), any(), any(), any()) } throws failure
             val gateway = OrbChatGateway(client, engine)
             try { gateway.send(listOf("user" to "Estou sozinho")) {}; fail("Deveria falhar") }

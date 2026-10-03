@@ -18,6 +18,7 @@ class LocalConversationAnswersTest {
     @Test fun `repeat extracts speech without executing old action`() = runTest {
         val socket = mockk<OrbWebSocket>()
         val rest = mockk<BragaLocalAiClient>()
+        every { rest.immediateResponse(any()) } returns null
         val gateway = OrbChatGateway(rest, mockk<br.com.bragasaude.data.local.slm.BragaOnDeviceEngine> { every { ready } returns true })
         val history = listOf("assistant" to """{"fala":"Confira 500 ml na tela","acao":"REGISTRAR_AGUA","parametros":{"quantidade_ml":500}}""", "user" to "repete a última mensagem")
         val reply = JSONObject(gateway.send(history) {}.content)
@@ -29,6 +30,7 @@ class LocalConversationAnswersTest {
 
     @Test fun `calendar answer works without opening network session`() = runTest {
         val rest = mockk<BragaLocalAiClient>()
+        every { rest.immediateResponse(any()) } returns null
         val gateway = OrbChatGateway(rest, mockk<br.com.bragasaude.data.local.slm.BragaOnDeviceEngine> { every { ready } returns true })
         val reply = JSONObject(gateway.send(listOf("user" to "em que ano estamos")) {}.content)
         assertEquals("Estamos em ${java.time.Year.now().value}.", reply.getString("fala"))

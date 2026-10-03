@@ -50,6 +50,7 @@ data class OrbChatUiState(
 sealed interface OrbChatEvent {
     data class Navigate(val screen: Screen) : OrbChatEvent
     data object Emergency : OrbChatEvent
+    data class Triage(val response: br.com.bragasaude.data.local.slm.ImmediateTriageResponse) : OrbChatEvent
 }
 
 @HiltViewModel
@@ -190,7 +191,17 @@ class OrbChatViewModel @Inject constructor(
     }
 
     fun sendMessage(text: String = state.value.input) {
-        if (gateway.isEmergency(text)) navigation.trySend(OrbChatEvent.Emergency)
+        gateway.immediateResponse(text)?.let { response ->
+            cancelGeneration()
+            stopAudio()
+            val answer = ChatMessage(role = "assistant", text = response.text, status = "received")
+            mutable.update { it.copy(messages = it.messages + ChatMessage(role = "user", text = text.trim(), status = "received") + answer,
+                input = "", error = null, partialText = "", isStreaming = false, showHistory = false) }
+            navigation.trySend(OrbChatEvent.Triage(response))
+            save()
+            toggleAudio(answer)
+            return
+        }
         if (!gateway.ready) { showError(br.com.bragasaude.data.local.slm.BragaModelStore.REQUIRED_MESSAGE); return }
         val value = text.trim()
         if (value.isEmpty() || state.value.isStreaming) return

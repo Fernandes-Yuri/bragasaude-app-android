@@ -84,8 +84,19 @@ class BragaContextResolver @Inject constructor(
         if (request.unsupportedPeriod) return unavailable(request.type,
             "Posso consultar hoje, ontem, anteontem ou a última medição. Qual período você prefere?")
         val date = now.toLocalDate().minusDays(request.dayOffset ?: 0)
-        val start = if (request.dayOffset == null && request.metric != BragaMetric.AGUA) 0L else date.atStartOfDay(now.zone).toInstant().toEpochMilli()
-        val end = date.plusDays(1).atStartOfDay(now.zone).toInstant().toEpochMilli()
+        val dayStart = if (request.dayOffset == null && request.metric !in listOf(BragaMetric.AGUA, BragaMetric.MEDICAMENTO)) 0L else date.atStartOfDay(now.zone).toInstant().toEpochMilli()
+        val dayEnd = date.plusDays(1).atStartOfDay(now.zone).toInstant().toEpochMilli()
+        val start = when (request.dayPart) {
+            "MANHA" -> date.atStartOfDay(now.zone).toInstant().toEpochMilli()
+            "TARDE" -> date.atTime(12, 0).atZone(now.zone).toInstant().toEpochMilli()
+            "NOITE" -> date.atTime(18, 0).atZone(now.zone).toInstant().toEpochMilli()
+            else -> dayStart
+        }
+        val end = when (request.dayPart) {
+            "MANHA" -> date.atTime(12, 0).atZone(now.zone).toInstant().toEpochMilli()
+            "TARDE" -> date.atTime(18, 0).atZone(now.zone).toInstant().toEpochMilli()
+            else -> dayEnd
+        }
         val period = when (request.dayOffset) { 1L -> "ontem"; 2L -> "anteontem"; else -> "hoje" }
         val fact = when (request.metric) {
             BragaMetric.AGUA -> {
@@ -98,6 +109,19 @@ class BragaContextResolver @Inject constructor(
             BragaMetric.GLICOSE -> vitals.latestGlucoseInRange(target, start, end)?.let {
                 "A glicose registrada foi ${it.glucoseLevel} mg/dL, ${timeOf(it.measuredAt.time, now.zone)}."
             } ?: "Não encontrei glicose registrada nesse período."
+            BragaMetric.MEDICAMENTO -> {
+                val names = medications.getAllSync(target).associateBy { it.id }
+                val query = request.medicationQuery.orEmpty()
+                val requested = names.values.filter { query.isBlank() ||
+                    Regex("\\b${Regex.escape(parser.normalize(it.name))}\\b").containsMatchIn(query) }.map { it.id }.toSet()
+                if (query.isNotBlank() && requested.isEmpty()) return unavailable(request.type,
+                    "Não identifiquei qual remédio você quer consultar. Diga o nome cadastrado.")
+                val taken = logs.logsInRange(target, start, end).filter { it.medicationId in requested }
+                if (taken.isEmpty()) "Não encontrei remédio marcado como tomado nesse período. Isso não confirma se você tomou: confira seus registros antes de repetir uma dose."
+                else "Encontrei estas marcações de remédio tomado: " + taken.joinToString("; ") { log ->
+                    "${names[log.medicationId]?.name ?: "remédio sem nome disponível"}, ${timeOf(log.takenAt.time, now.zone)}"
+                } + ". Não repita uma dose com base apenas nesta consulta."
+            }
             null -> "Qual histórico você quer consultar?"
         }
         return BragaResolvedContext(request.type, "O banco local informa: $fact Responda com respeito usando somente esses fatos, sem avaliar a medida.", fact)

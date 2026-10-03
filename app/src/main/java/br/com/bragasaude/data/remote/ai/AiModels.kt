@@ -25,5 +25,6 @@ data class BragaAiResult(
     val rawResponse: String? = null,
     val action: String? = null,
     val parameters: Map<String, String> = emptyMap(),
-    val localIntent: br.com.bragasaude.domain.VoiceHealthIntent? = null
+    val localIntent: br.com.bragasaude.domain.VoiceHealthIntent? = null,
+    val triageSeverity: br.com.bragasaude.data.local.slm.TriageSeverity? = null
 )

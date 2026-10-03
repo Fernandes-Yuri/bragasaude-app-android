@@ -84,4 +84,20 @@ class BragaContextResolverTest {
         assertFalse(resolver.resolve("estou com saudade", now = now).factual)
         coVerify(exactly = 0) { profiles.getProfileOneShot(any()) }
     }
+    @Test fun morningHistoryUsesTodayBeforeNoon() = runTest {
+        val start = now.toLocalDate().atStartOfDay(now.zone).toInstant().toEpochMilli()
+        val end = now.toLocalDate().atTime(12, 0).atZone(now.zone).toInstant().toEpochMilli()
+        coEvery { vitals.latestGlucoseInRange("owner", start, end) } returns null
+        assertTrue(resolver.resolve("qual foi minha glicose de manhã?", now = now).fallback.contains("Não encontrei"))
+        coVerify(exactly = 1) { vitals.latestGlucoseInRange("owner", start, end) }
+    }
+    @Test fun medicationHistoryReportsLogsWithoutSuggestingAnotherDose() = runTest {
+        coEvery { meds.getAllSync("owner") } returns listOf(MedicationEntity("med1", "owner", "Losartana", dosage = "50 mg", scheduleTime = "08:00"))
+        coEvery { logs.logsInRange("owner", any(), any()) } returns listOf(MedicationLogEntity("log1", "owner", "med1", takenAt = Date(now.toInstant().toEpochMilli())))
+        val result = resolver.resolve("eu já tomei o remédio hoje?", now = now)
+        assertTrue(result.fallback.contains("Losartana"))
+        assertTrue(result.fallback.contains("Não repita"))
+        assertNull(result.action)
+    }
+
 }

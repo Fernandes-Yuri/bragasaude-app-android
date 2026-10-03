@@ -68,6 +68,7 @@ sealed interface VoiceNavigationEvent {
     data class NavigateToHydration(val addMl: Int? = null, val openCustomDialog: Boolean = true) : VoiceNavigationEvent
     data class NavigateToNutrition(val searchFoodQuery: String? = null, val openGroceryList: Boolean = false) : VoiceNavigationEvent
     object OpenEmergencyDialog : VoiceNavigationEvent
+    data class Triage(val response: br.com.bragasaude.data.local.slm.ImmediateTriageResponse) : VoiceNavigationEvent
 }
 
 /**
@@ -308,12 +309,6 @@ class VoiceHealthViewModel @Inject constructor(
      * Deve ser chamado com um Context válido (Activity ou Application).
      */
     fun startListening(context: Context) {
-        if (!localAiClient.isOnDeviceReady) {
-            _isLiveMode.value = false
-            _state.value = VoiceUiState.Error(br.com.bragasaude.data.local.slm.BragaModelStore.REQUIRED_MESSAGE,
-                retryable = false, isSpokenOnly = false)
-            return
-        }
         conversationMemory.selectUser(getCurrentUserId())
         if (!_isLiveMode.value) voiceSession.reset()
         _isLiveMode.value = true
@@ -569,10 +564,18 @@ class VoiceHealthViewModel @Inject constructor(
             conversationMemory.recordUser(bestMatch)
             try {
                 // Socorro não depende de carga do SLM, consulta ao banco ou término do áudio.
-                if (localAiClient.isEmergency(bestMatch)) {
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.OpenEmergencyDialog)
-                    _state.value = VoiceUiState.Saved("Opções de socorro", isConversational = true)
-                    speak("Ligue para o SAMU 192 e procure socorro agora. As opções de ajuda estão aqui.") { onSpeechFinished() }
+                localAiClient.immediateResponse(bestMatch)?.let { response ->
+                    _isLiveMode.value = false
+                    _navigationEvent.tryEmit(VoiceNavigationEvent.Triage(response))
+                    _state.value = VoiceUiState.Saved(response.text, isConversational = true)
+                    _partialResponse.value = ""
+                    speak(response.text)
+                    return
+                }
+                if (!localAiClient.isOnDeviceReady) {
+                    _isLiveMode.value = false
+                    _state.value = VoiceUiState.Error(br.com.bragasaude.data.local.slm.BragaModelStore.REQUIRED_MESSAGE,
+                        retryable = false, isSpokenOnly = false)
                     return
                 }
                 var input = bestMatch

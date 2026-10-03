@@ -22,7 +22,8 @@ class BragaLocalAiClient @Inject constructor(
     private val engine: BragaOnDeviceEngine,
     private val authService: AuthService,
     private val router: br.com.bragasaude.data.local.slm.BragaIntentRouter,
-    private val resolver: br.com.bragasaude.data.local.slm.BragaContextResolver
+    private val resolver: br.com.bragasaude.data.local.slm.BragaContextResolver,
+    private val inputRouter: br.com.bragasaude.data.local.slm.UserInputRouter = br.com.bragasaude.data.local.slm.UserInputRouter(router, br.com.bragasaude.data.local.slm.ClinicalTriageEngine(), br.com.bragasaude.data.local.slm.ResponseRotator())
 ) {
     companion object {
         val DEFAULT_SERVER_URL = BuildConfig.BASE_URL
@@ -60,10 +61,17 @@ class BragaLocalAiClient @Inject constructor(
 
     fun isEmergency(text: String): Boolean = router.route(text).type == br.com.bragasaude.data.local.slm.BragaIntent.EMERGENCIA
 
+    fun immediateResponse(text: String) = inputRouter.immediateResponse(text)
+
     suspend fun interpretSpeech(userSpeech: String, preferWebSocket: Boolean = true,
                                 history: List<Pair<String, String>> = emptyList(),
                                 actingAs: String? = null, patientId: String? = null,
                                 onPartial: (String) -> Unit = {}): BragaAiResult {
+        immediateResponse(userSpeech)?.let {
+            onPartial(it.text)
+            return BragaAiResult(tipo = "TRIAGEM", fala = it.text, triageSeverity = it.severity,
+                motivoClinico = it.reason)
+        }
         check(engine.ready) { BragaModelStore.REQUIRED_MESSAGE }
         LocalConversationAnswers.answer(userSpeech, history)?.let {
             return BragaAiResult(tipo = "CONVERSA", fala = it)

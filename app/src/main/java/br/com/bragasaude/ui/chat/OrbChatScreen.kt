@@ -73,6 +73,7 @@ fun OrbChatScreen(onBack: () -> Unit, onNavigate: (Screen) -> Unit, viewModel: O
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val clipboard = LocalClipboardManager.current
+    var triage by remember { mutableStateOf<br.com.bragasaude.data.local.slm.ImmediateTriageResponse?>(null) }
     var emergency by remember { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
     val recognizer = remember(context) {
@@ -125,6 +126,7 @@ fun OrbChatScreen(onBack: () -> Unit, onNavigate: (Screen) -> Unit, viewModel: O
             when (event) {
                 is OrbChatEvent.Navigate -> onNavigate(event.screen)
                 OrbChatEvent.Emergency -> emergency = true
+                is OrbChatEvent.Triage -> triage = event.response
             }
         }
     }
@@ -142,6 +144,8 @@ fun OrbChatScreen(onBack: () -> Unit, onNavigate: (Screen) -> Unit, viewModel: O
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startVoice()
             else permission.launch(Manifest.permission.RECORD_AUDIO)
         })
+    triage?.let { response -> RiskNotificationDialog(type = response.severity.name, message = response.text,
+        severity = response.severity, onDismiss = { triage = null }) }
     if (emergency) RiskNotificationDialog(type = "EMERGENCIA",
         message = "Se precisar de socorro imediato, ligue 192. Escolha uma opção abaixo.", onDismiss = { emergency = false })
 }
@@ -571,7 +575,7 @@ fun ChatInput(text: String, onTextChange: (String) -> Unit, onSend: (String) -> 
                     val pulse by transition.animateFloat(1f, 1.5f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "pulse")
                     Box(Modifier.size(40.dp).scale(pulse).clip(CircleShape).border(1.dp, Color(0xFFFF5252).copy(alpha = 0.5f), CircleShape))
                 }
-                IconButton(onClick = onVoice, enabled = !isStreaming) {
+                IconButton(onClick = onVoice) {
                     Icon(
                         if (listening) Icons.Default.Stop else Icons.Default.Mic,
                         if (listening) "Parar ditado" else "Ditar mensagem",
@@ -586,15 +590,15 @@ fun ChatInput(text: String, onTextChange: (String) -> Unit, onSend: (String) -> 
                 placeholder = { Text(if (listening) "Ouvindo…" else "Digite sua mensagem…") },
                 modifier = Modifier.weight(1f).testTag("chatInput").onPreviewKeyEvent {
                     if (it.key == Key.Enter && !it.isShiftPressed) {
-                        if (it.type == KeyEventType.KeyDown && !isStreaming && text.isNotBlank()) onSend(text)
+                        if (it.type == KeyEventType.KeyDown && text.isNotBlank()) onSend(text)
                         true
                     } else false
                 },
                 maxLines = 5,
-                enabled = !isStreaming,
+                enabled = true,
                 shape = RoundedCornerShape(24.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { if (!isStreaming && text.isNotBlank()) onSend(text) }),
+                keyboardActions = KeyboardActions(onSend = { if (text.isNotBlank()) onSend(text) }),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -610,7 +614,8 @@ fun ChatInput(text: String, onTextChange: (String) -> Unit, onSend: (String) -> 
             
             if (isStreaming) {
                 IconButton(onClick = onCancel) { Icon(Icons.Default.StopCircle, "Cancelar geração", tint = Color(0xFF64748B)) }
-            } else {
+            }
+            run {
                 IconButton(onClick = { onSend(text) }, enabled = text.isNotBlank()) {
                     Icon(Icons.AutoMirrored.Filled.Send, "Enviar mensagem", tint = Color(0xFF00897B))
                 }

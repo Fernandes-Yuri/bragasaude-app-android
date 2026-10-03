@@ -24,6 +24,7 @@ class OrbChatViewModelTest {
         Dispatchers.setMain(dispatcher)
         gateway = mockk(relaxed = true)
         every { gateway.ready } returns true
+        every { gateway.immediateResponse(any()) } returns null
         every { gateway.connection } returns MutableStateFlow(OrbConnectionState.CONNECTED)
         val store = mockk<OrbChatStore>(relaxed = true)
         every { store.observe(any()) } returns flowOf(emptyList())
@@ -115,15 +116,21 @@ class OrbChatViewModelTest {
         assertEquals("REGISTRAR_PRESSAO", vm.state.value.messages.last().action)
     }
 
-    @Test fun emergencyScreenDoesNotWaitForGeneration() = runTest(dispatcher) {
-        every { gateway.isEmergency(any()) } returns true
+    @Test fun emergencyBypassesMissingModelAndInterruptsGeneration() = runTest(dispatcher) {
         coEvery { gateway.send(any(), any(), any(), any()) } coAnswers { awaitCancellation() }
+        vm.sendMessage("Olá")
+        runCurrent()
+        every { gateway.ready } returns false
+        val response = br.com.bragasaude.data.local.slm.ImmediateTriageResponse(
+            br.com.bragasaude.data.local.slm.TriageSeverity.EMERGENCIA, "Ligue 192 agora.", "Risco")
+        every { gateway.immediateResponse("dor forte no peito") } returns response
         val event = async(UnconfinedTestDispatcher(testScheduler)) { vm.events.first() }
         vm.sendMessage("dor forte no peito")
+        assertEquals(OrbChatEvent.Triage(response), event.await())
+        assertEquals("Ligue 192 agora.", vm.state.value.messages.last().text)
+        assertFalse(vm.state.value.isStreaming)
         runCurrent()
-        assertEquals(OrbChatEvent.Emergency, event.await())
-        assertTrue(vm.state.value.isStreaming)
-        vm.cancelGeneration()
+        coVerify(exactly = 1) { gateway.send(any(), any(), any(), any()) }
     }
 
     @Test fun longMessageDoesNotReachGateway() = runTest(dispatcher) {
