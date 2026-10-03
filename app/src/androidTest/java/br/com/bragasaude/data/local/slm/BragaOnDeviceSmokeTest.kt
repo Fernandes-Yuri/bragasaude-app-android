@@ -2,7 +2,13 @@ package br.com.bragasaude.data.local.slm
 
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import br.com.bragasaude.BragaApplication
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -11,8 +17,18 @@ class BragaOnDeviceSmokeTest {
     @Test fun generatesPortugueseOnDeviceAndResetsConversation() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store = BragaModelStore(context)
+        val app = context.applicationContext as BragaApplication
+        val allowInstall = InstrumentationRegistry.getArguments().getString("installModels") == "true"
+        if (!store.installed() && allowInstall) {
+            app.bragaModelManager.install()
+            val info = withTimeout(900_000L) {
+                WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(BragaModelManager.WORK_NAME)
+                    .first { infos -> infos.isNotEmpty() && infos.all { it.state.isFinished } }.last()
+            }
+            assertEquals(info.outputData.getString("error"), WorkInfo.State.SUCCEEDED, info.state)
+        }
         assertTrue("Instale primeiro o Braga nas configurações do app", store.installed())
-        val engine = BragaOnDeviceEngine(store)
+        val engine = app.bragaEngine
         try {
             val start = android.os.SystemClock.elapsedRealtime()
             var chunks = 0
@@ -24,6 +40,22 @@ class BragaOnDeviceSmokeTest {
             val second = engine.reply(listOf("user" to "Como posso lembrar de beber água durante o dia?"))
             Log.i("BragaSmoke", "SEGUNDA_RESPOSTA=$second")
             assertTrue(second.isNotBlank())
+            if (allowInstall) {
+                val voices = app.voiceProfileManager
+                withTimeout(30_000L) { voices.state.first { !it.busy } }
+                if (voices.state.value.activeId == br.com.bragasaude.data.local.voice.VoiceCatalog.SYSTEM_ID) {
+                    voices.select("faber")
+                    withTimeout(600_000L) {
+                        voices.state.first { !it.busy && (it.activeId == "faber" || it.error != null) }
+                    }
+                }
+                assertNull(voices.state.value.error)
+                assertNotEquals(br.com.bragasaude.data.local.voice.VoiceCatalog.SYSTEM_ID, voices.state.value.activeId)
+                val finished = CompletableDeferred<Unit>()
+                assertTrue(voices.playSpeech(answer, {}, { finished.complete(Unit) }))
+                withTimeout(90_000L) { finished.await() }
+                Log.i("BragaSmoke", "PIPER_LOCAL_OK")
+            }
         } finally { engine.unload() }
     }
 }
