@@ -40,6 +40,7 @@ class OrbChatViewModelTest {
         vm = OrbChatViewModel(gateway, store, auth, mockk<NeuralAudioPlayer>(relaxed = true),
             mockk<NotificationClient>(relaxed = true), mockk<ProfileDao>(relaxed = true),
             mockk<FamilyBridgeRepository>(relaxed = true), hybrid = hybrid)
+        vm.nluResponseDelayMs = 0L
     }
     @After fun tearDown() { vm.leaveScreen(); Dispatchers.resetMain() }
 
