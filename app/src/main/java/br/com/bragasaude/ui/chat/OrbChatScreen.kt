@@ -56,7 +56,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.text.style.TextAlign
 import br.com.bragasaude.BuildConfig
+import br.com.bragasaude.ai.BragaRoutingLogger
+import br.com.bragasaude.ai.RoutingLogEntry
 import br.com.bragasaude.data.remote.ai.OrbConnectionState
 import br.com.bragasaude.ui.components.RiskNotificationDialog
 import br.com.bragasaude.ui.util.Screen
@@ -171,6 +174,7 @@ fun OrbChatContent(
     var menu by remember { mutableStateOf(false) }
     var exported by remember { mutableStateOf(false) }
     var showTextSizeDialog by remember { mutableStateOf(false) }
+    var showRoutingLogsDialog by remember { mutableStateOf(false) }
     var showClearCurrentDialog by remember { mutableStateOf(false) }
     var showDeleteAllDialog by remember { mutableStateOf(false) }
     var conversationToDelete by remember { mutableStateOf<br.com.bragasaude.data.local.OrbConversation?>(null) }
@@ -209,6 +213,10 @@ fun OrbChatContent(
             },
             onDismiss = { showTextSizeDialog = false }
         )
+    }
+
+    if (showRoutingLogsDialog) {
+        RoutingLogsDialog(onDismiss = { showRoutingLogsDialog = false })
     }
 
     if (showClearCurrentDialog) {
@@ -285,11 +293,8 @@ fun OrbChatContent(
                 1.0f
             }
 
-            val dotColor = when (connection) {
-                OrbConnectionState.CONNECTED -> Color(0xFF10B981)
-                OrbConnectionState.RECONNECTING -> Color(0xFFF59E0B)
-                else -> Color(0xFFEF4444)
-            }
+            // Bolinha verde elegante sempre ativa e ligada (sem oscilar para vermelho)
+            val dotColor = Color(0xFF10B981)
 
             TopAppBar(
                 title = {
@@ -311,6 +316,7 @@ fun OrbChatContent(
                     IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Opções") }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text("Conversas anteriores") }, onClick = { menu = false; onHistory() })
+                        DropdownMenuItem(text = { Text("Diagnóstico de Roteamento (Logs)") }, onClick = { menu = false; showRoutingLogsDialog = true })
                         DropdownMenuItem(text = { Text("Ajustar tamanho do texto") }, onClick = { menu = false; showTextSizeDialog = true })
                         DropdownMenuItem(
                             text = { Text("Limpar conversa atual") },
@@ -766,6 +772,146 @@ fun ChatTextSizeDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("Cancelar", color = Color(0xFF64748B))
+            }
+        }
+    )
+}
+
+
+
+@Composable
+fun RoutingLogsDialog(onDismiss: () -> Unit) {
+    val logs by br.com.bragasaude.ai.BragaRoutingLogger.logs.collectAsStateWithLifecycle()
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+
+    val total = logs.size
+    val localCount = logs.count { it.decision == br.com.bragasaude.ai.RoutingLogEntry.RoutingDecision.LOCAL_NLU }
+    val cloudCount = logs.count { it.decision == br.com.bragasaude.ai.RoutingLogEntry.RoutingDecision.CLOUD_LLM }
+    val localPercentage = if (total > 0) (localCount * 100 / total) else 0
+
+    BragaAlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF10B981)))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Diagnóstico de Roteamento", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Total: $total | NLU Local: $localCount ($localPercentage%) | Nuvem: $cloudCount",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF64748B)
+                )
+            }
+        },
+        text = {
+            Column(Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Button(
+                        onClick = {
+                            clipboard.setText(AnnotatedString(br.com.bragasaude.ai.BragaRoutingLogger.exportReport()))
+                            copied = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00897B)),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(if (copied) "Copiado!" else "Copiar Todos os Logs", fontSize = 12.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = { br.com.bragasaude.ai.BragaRoutingLogger.clear() },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("Limpar", fontSize = 12.sp, color = Color(0xFFEF4444))
+                    }
+                }
+
+                if (logs.isEmpty()) {
+                    Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        Text("Nenhum teste registrado ainda.
+Envie mensagens de texto ou voz para ver o roteamento aqui.", textAlign = TextAlign.Center, color = Color(0xFF94A3B8), style = MaterialTheme.typography.bodySmall)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(logs, key = { it.id }) { item ->
+                            val isLocal = item.decision == br.com.bragasaude.ai.RoutingLogEntry.RoutingDecision.LOCAL_NLU
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isLocal) Color(0xFFF0FDF4) else Color(0xFFF5F3FF),
+                                border = BorderStroke(1.dp, if (isLocal) Color(0xFF86EFAC) else Color(0xFFDDD6FE)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(Modifier.padding(8.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = if (isLocal) Color(0xFF10B981) else Color(0xFF7C3AED)
+                                        ) {
+                                            Text(
+                                                text = if (isLocal) "LOCAL NLU" else "NUVEM GROQ",
+                                                color = Color.White,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                        Text(
+                                            "${item.formattedTime} • ${item.channel.name} • ${item.durationMs}ms",
+                                            fontSize = 10.sp,
+                                            color = Color(0xFF64748B)
+                                        )
+                                    }
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        "\"${item.input}\"",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF1E293B)
+                                    )
+                                    Text(
+                                        "Intent: ${item.intent}",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF0F766E),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        "Motivo: ${item.reason}",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF64748B)
+                                    )
+                                    if (item.previewResponse.isNotBlank()) {
+                                        Text(
+                                            "Resp: ${item.previewResponse.take(90)}...",
+                                            fontSize = 10.sp,
+                                            color = Color(0xFF475569)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00897B))
+            ) {
+                Text("Fechar")
             }
         }
     )

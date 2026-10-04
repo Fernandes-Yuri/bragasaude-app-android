@@ -29,7 +29,7 @@ object BragaInputLanguage {
     }
 
     fun forChannel(text: String, channel: InputChannel): String {
-        if (channel == InputChannel.VOICE) return text
+        if (channel == InputChannel.VOICE) return br.com.bragasaude.util.PortuguesePhoneticHelper.cleanTextForTts(text)
         val normalized = java.text.Normalizer.normalize(text.lowercase(java.util.Locale.ROOT),
             java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
         return if (auditoryRepair.containsMatchIn(normalized)) clarification(channel) else text

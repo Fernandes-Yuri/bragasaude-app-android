@@ -245,17 +245,19 @@ class VoiceProfileManager @Inject constructor(
     }
 
     suspend fun playSpeech(text: String, onStart: () -> Unit, onDone: () -> Unit): Boolean {
+        val sanitized = br.com.bragasaude.util.PortuguesePhoneticHelper.cleanTextForTts(text)
+        if (sanitized.isBlank()) return false
         val ticket = speechGeneration.get()
         val played = playback.withLock {
             currentCoroutineContext().ensureActive()
             if (ticket != speechGeneration.get()) throw CancellationException("Fala interrompida")
             if (state.value.activeId != VoiceCatalog.SYSTEM_ID && state.value.phase != "Carregando voz")
-                engine.playStream(text, speed = 0.94f, onStart = onStart, onDone = onDone)
+                engine.playStream(sanitized, speed = 0.94f, onStart = onStart, onDone = onDone)
             else false
         }
         currentCoroutineContext().ensureActive()
         if (ticket != speechGeneration.get()) throw CancellationException("Fala interrompida")
-        return played || system.speak(text, onStart, onDone)
+        return played || system.speak(sanitized, onStart, onDone)
     }
 
     suspend fun previewSystem(): Boolean = system.speak("Olá! Estou pronto para ajudar.")

@@ -161,6 +161,22 @@ object BragaNluEngine {
         "(até logo|tchau|até mais|vou dormir|boa noite|vou deitar|fui descansar|até amanhã)",
         RegexOption.IGNORE_CASE
     )
+    private val REGEX_AGRADECIMENTO = Regex(
+        """\b(obrigad[oa]|valeu|agradec[oa]|muito obrigad[oa]|obrigad[aã]o|gratid[aã]o)\b""",
+        RegexOption.IGNORE_CASE
+    )
+    private val REGEX_APRESENTACAO = Regex(
+        """\b(quem (e|eh|sou) voce|quem (e|eh) o braga|qual (e|eh) o seu nome|qual seu nome|o que voce faz|como voce funciona|como voce pode me ajudar|me fale sobre voce)\b""",
+        RegexOption.IGNORE_CASE
+    )
+    private val REGEX_COMO_ESTA = Regex(
+        """\b(como (voce|vc) (esta|ta|vai)|tudo bem com (voce|vc)|como vao as coisas)\b""",
+        RegexOption.IGNORE_CASE
+    )
+    private val REGEX_CONFIRMACAO = Regex(
+        """^(ok|ta bom|tá bom|entendi|beleza|certo|combinado|perfeito|ta certo|tá certo|joia|maravilha)[!?. ]*$""",
+        RegexOption.IGNORE_CASE
+    )
 
     // Memória de última resposta para garantir sorteio sem repetição imediata
     private val ultimasRespostas = mutableMapOf<String, String>()
@@ -321,6 +337,27 @@ object BragaNluEngine {
             "Para adicionar um remédio, use a área de medicações. Na seção exclusiva de medicações do aplicativo, você pode usar a leitura de código de barras, tirar uma foto da receita ou anexar a receita. Confira tudo certinho com calma antes de salvar, para que os alarmes e notificações funcionem sem erro.",
             "Posso orientar o caminho para cadastrar seu medicamento. Na seção exclusiva de medicações do aplicativo, você pode usar a leitura de código de barras, tirar uma foto da receita ou anexar a receita. Confira tudo certinho com calma antes de salvar, para que os alarmes e notificações funcionem sem erro.",
             "Você encontra o cadastro de medicamentos em uma seção própria do app. Na seção exclusiva de medicações do aplicativo, você pode usar a leitura de código de barras, tirar uma foto da receita ou anexar a receita. Confira tudo certinho com calma antes de salvar, para que os alarmes e notificações funcionem sem erro."
+        ),
+        "conversa_agradecimento" to listOf(
+            "Por nada! Fico muito feliz em ajudar no seu cuidado diário.",
+            "Disponha sempre! Estou aqui com você para o que precisar.",
+            "É um prazer ajudar! Pode contar comigo sempre que quiser.",
+            "Não há de que! Cuidar do seu bem-estar é minha missão."
+        ),
+        "conversa_apresentacao_assistente" to listOf(
+            "Eu sou o Braga, seu assistente pessoal de saúde e bem-estar! Posso ajudar acompanhando sua pressão, glicemia, hidratação e conversando com você.",
+            "Sou o Braga! Fico aqui no seu celular para apoiar sua rotina de cuidados, lembrar dos seus remédios e acompanhar seus registros de saúde.",
+            "Muito prazer! Eu sou o Braga. Meu foco é apoiar seu autocuidado, sua saúde e estar ao seu lado no dia a dia."
+        ),
+        "conversa_como_esta_assistente" to listOf(
+            "Comigo está tudo ótimo, muito obrigado por perguntar! E com você, como está seu dia e sua saúde?",
+            "Tudo em paz por aqui, pronto para te ajudar! Como você está se sentindo hoje?",
+            "Estou muito bem! Agradeço o carinho. Como posso apoiar você agora?"
+        ),
+        "conversa_confirmacao_compreensao" to listOf(
+            "Perfeito! Se precisar de algo ou tiver qualquer dúvida, é só me chamar.",
+            "Combinado! Estou por aqui acompanhando você.",
+            "Ótimo! Qualquer novidade nos seus registros, estou à disposição."
         )
     )
 
@@ -465,6 +502,18 @@ object BragaNluEngine {
         }
         if (REGEX_DESPEDIDA.containsMatchIn(limpo)) {
             return NluOutput("conversa_despedida", sortearResposta("conversa_despedida"), tempoMs = deltaMs(inicio))
+        }
+        if (REGEX_AGRADECIMENTO.containsMatchIn(limpo) || REGEX_AGRADECIMENTO.containsMatchIn(protegido)) {
+            return NluOutput("conversa_agradecimento", sortearResposta("conversa_agradecimento"), tempoMs = deltaMs(inicio))
+        }
+        if (REGEX_APRESENTACAO.containsMatchIn(limpo) || REGEX_APRESENTACAO.containsMatchIn(protegido)) {
+            return NluOutput("conversa_apresentacao_assistente", sortearResposta("conversa_apresentacao_assistente"), tempoMs = deltaMs(inicio))
+        }
+        if (REGEX_COMO_ESTA.containsMatchIn(limpo) || REGEX_COMO_ESTA.containsMatchIn(protegido)) {
+            return NluOutput("conversa_como_esta_assistente", sortearResposta("conversa_como_esta_assistente"), tempoMs = deltaMs(inicio))
+        }
+        if (REGEX_CONFIRMACAO.matches(limpo) || REGEX_CONFIRMACAO.matches(protegido)) {
+            return NluOutput("conversa_confirmacao_compreensao", sortearResposta("conversa_confirmacao_compreensao"), tempoMs = deltaMs(inicio))
         }
 
         // 6. FALLBACK -> DELEGA PARA A API GROQ COM CONTEXTO COMPACTADO!
