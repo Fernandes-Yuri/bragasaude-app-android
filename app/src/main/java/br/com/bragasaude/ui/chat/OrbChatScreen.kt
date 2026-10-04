@@ -834,8 +834,7 @@ fun RoutingLogsDialog(onDismiss: () -> Unit) {
 
                 if (logs.isEmpty()) {
                     Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        Text("Nenhum teste registrado ainda.
-Envie mensagens de texto ou voz para ver o roteamento aqui.", textAlign = TextAlign.Center, color = Color(0xFF94A3B8), style = MaterialTheme.typography.bodySmall)
+                        Text("Nenhum teste registrado ainda.\nEnvie mensagens de texto ou voz para ver o roteamento aqui.", textAlign = TextAlign.Center, color = Color(0xFF94A3B8), style = MaterialTheme.typography.bodySmall)
                     }
                 } else {
                     LazyColumn(
