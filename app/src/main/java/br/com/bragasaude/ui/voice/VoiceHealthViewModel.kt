@@ -43,6 +43,8 @@ import br.com.bragasaude.ai.BragaHybridEvent
 import br.com.bragasaude.ai.BragaSpeechBuffer
 import br.com.bragasaude.ai.InputChannel
 import br.com.bragasaude.ai.BragaHealthMemory
+import br.com.bragasaude.ai.BragaRoutingLogger
+import br.com.bragasaude.ai.RoutingLogEntry
 import br.com.bragasaude.data.remote.ai.NeuralAudioPlayer
 import br.com.bragasaude.data.remote.ai.BragaLocalAiClient
 import br.com.bragasaude.data.local.VitalSignDao
@@ -571,6 +573,21 @@ class VoiceHealthViewModel @Inject constructor(
             if (output.isEmergencia) {
                 _navigationEvent.tryEmit(VoiceNavigationEvent.OpenEmergencyDialog)
             }
+            val reason = when {
+                output.isBloqueioSeguranca -> "Muralha de segurança (voz)"
+                output.isEmergencia -> "Emergência SAMU 192 (voz)"
+                BragaHealthMemory.supports(output.intent) -> "Consulta local Room (histórico de saúde - voz)"
+                else -> "NLU nativo on-device (voz)"
+            }
+            BragaRoutingLogger.record(
+                channel = InputChannel.VOICE,
+                input = conversationMemory.snapshot().lastOrNull()?.second.orEmpty(),
+                decision = RoutingLogEntry.RoutingDecision.LOCAL_NLU,
+                intent = output.intent,
+                reason = reason,
+                durationMs = output.tempoMs.toLong(),
+                previewResponse = reply
+            )
             speak(reply) { onSpeechFinished() }
         }
 
@@ -697,6 +714,15 @@ class VoiceHealthViewModel @Inject constructor(
                 phrases.close()
                 player.join()
                 if (completed.isNotBlank() && generation == speechGeneration && owner == getCurrentUserId()) {
+                    BragaRoutingLogger.record(
+                        channel = InputChannel.VOICE,
+                        input = speech,
+                        decision = RoutingLogEntry.RoutingDecision.CLOUD_LLM,
+                        intent = "conversa_incompreendida_fallback",
+                        reason = "Streaming de voz em nuvem (Groq)",
+                        durationMs = 0L,
+                        previewResponse = completed
+                    )
                     conversationMemory.recordAssistant(completed)
                     _state.value = VoiceUiState.Saved(completed, isConversational = true)
                     _isSpeaking.value = false
@@ -764,9 +790,14 @@ class VoiceHealthViewModel @Inject constructor(
                     }
                 }
                 "AGUA", "ÁGUA", "HIDRATACAO", "HIDRATAÇÃO" -> {
+                "AGUA", "ÁGUA", "HIDRATACAO", "HIDRATAÇÃO" -> {
                     val waterTarget = profile?.hydrationTargetMl ?: 2000
-                    val percent = if (waterTarget > 0) (waterConsumed * 100) / waterTarget else 0
-                    "Conforme orientações da Organização Mundial da Saúde e do Ministério da Saúde, a hidratação adequada é essencial. Você já registrou $waterConsumed ml hoje, atingindo $percent% da sua meta sugerida de $waterTarget ml. Sugiro validar com seu profissional de saúde o volume ideal para o seu organismo!"
+                    if (waterConsumed <= 0) {
+                        "Você ainda não registrou água hoje. Que tal beber um copo de água agora para começar a cuidar da sua hidratação? Sua meta é de $waterTarget ml."
+                    } else {
+                        val percent = if (waterTarget > 0) (waterConsumed * 100) / waterTarget else 0
+                        "Você já registrou $waterConsumed ml de água hoje, alcançando $percent% da sua meta diária de $waterTarget ml. Continue assim!"
+                    }
                 }
                 else -> {
                     val latestBp = allVitals.firstOrNull { it.systolicPressure != null && it.diastolicPressure != null }

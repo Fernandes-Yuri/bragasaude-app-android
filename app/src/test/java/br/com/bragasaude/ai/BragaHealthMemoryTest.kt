@@ -70,6 +70,15 @@ class BragaHealthMemoryTest {
         assertTrue(answer.contains("Faltam 0 ml"))
     }
 
+    @Test fun `consumo de agua zerado nao exibe 0 porcento e convida a beber agua`() = runTest {
+        every { dao.getHydrationRecent30Days("owner", any()) } returns flowOf(emptyList())
+        coEvery { profiles.getProfileOneShot("owner") } returns ProfileEntity("owner", hydrationTargetMl = 2000)
+        val answer = memory.answer(BragaHealthMemory.WATER, "owner")
+        assertTrue(answer.contains("ainda não registrou água hoje"))
+        assertFalse(answer.contains("0%"))
+        assertFalse(answer.contains("0 ml"))
+    }
+
     @Test fun `ausencia e falha no Room jamais chamam nuvem`() = runTest {
         every { dao.getBloodPressureRecords("owner") } returns flowOf(emptyList())
         every { dao.getGlucoseRecords("owner") } throws IllegalStateException("Banco indisponível")

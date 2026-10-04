@@ -93,9 +93,13 @@ class BragaHealthMemory internal constructor(
                     val configured = profile?.hydrationTargetMl?.takeIf { it > 0 }
                     val goal = configured ?: 2000
                     val goalLabel = if (configured == null) "referência padrão do aplicativo de" else "meta cadastrada de"
-                    val progress = consumed * 100 / goal
-                    val remaining = (goal.toLong() - consumed).coerceAtLeast(0)
-                    "$intro você registrou $consumed ml de água hoje: $progress% da $goalLabel $goal ml. Faltam $remaining ml."
+                    if (consumed <= 0) {
+                        "$intro você ainda não registrou água hoje. Sua meta para o dia é de $goal ml. Que tal beber um copo d'água agora para começar?"
+                    } else {
+                        val progress = consumed * 100 / goal
+                        val remaining = (goal.toLong() - consumed).coerceAtLeast(0)
+                        "$intro você registrou $consumed ml de água hoje: $progress% da $goalLabel $goal ml. Faltam $remaining ml."
+                    }
                 }
             }
         } catch (e: CancellationException) {

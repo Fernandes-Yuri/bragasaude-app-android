@@ -208,6 +208,7 @@ class OrbChatViewModel @Inject constructor(
             .takeLast(30).map { it.role to (it.rawContent ?: it.text) }
         val previousGeneration = generation
         generation = viewModelScope.launch {
+            val startTimeMs = System.currentTimeMillis()
             try {
                 previousGeneration?.join()
                 currentCoroutineContext().ensureActive()
@@ -225,11 +226,17 @@ class OrbChatViewModel @Inject constructor(
                 val useLocal = local.isBloqueioSeguranca || local.isEmergencia ||
                     local.intent == "orientacao_cadastro_medicamento" || BragaHealthMemory.supports(local.intent) ||
                     (!local.delegarParaNuvem && (concrete is VoiceHealthIntent.Unknown || concrete is VoiceHealthIntent.ConversationalReply))
-                val reply = if (shortcut != null) OrbReply(JSONObject().put("fala", "Abrir ${actionLabel(shortcut)}.")
-                    .put("acao", shortcut).put("parametros", JSONObject()).toString())
-                else if (useLocal) {
+                val reply = if (shortcut != null) {
+                    if (channel == InputChannel.TEXT) delay(500)
+                    OrbReply(JSONObject().put("fala", "Abrir ${actionLabel(shortcut)}.")
+                        .put("acao", shortcut).put("parametros", JSONObject()).toString())
+                } else if (useLocal) {
                     val owner = uid ?: throw CancellationException("Sessão alterada")
                     val resolved = hybrid.resolveLocal(local, owner, channel)
+                    // Delay mínimo no chat de texto para experiência humana e cadenciada
+                    if (channel == InputChannel.TEXT) {
+                        delay(500)
+                    }
                     if (auth.currentUser?.uid != owner || uid != owner || version != revision) return@launch
                     if (local.isEmergencia) navigation.send(OrbChatEvent.Emergency)
                     OrbReply(JSONObject().put("fala", resolved.respostaLocal.orEmpty())
@@ -254,6 +261,22 @@ class OrbChatViewModel @Inject constructor(
                     resolveHealthAction(value, rawAction, rawParams)
                 }
                 val answerText = BragaInputLanguage.forChannel(parsed.getString("fala"), channel)
+
+                val elapsedMs = System.currentTimeMillis() - startTimeMs
+                if (shortcut != null) {
+                    BragaRoutingLogger.record(channel, value, RoutingLogEntry.RoutingDecision.LOCAL_NLU, "atalho_chat", "Atalho executado no dispositivo", elapsedMs, answerText)
+                } else if (useLocal) {
+                    val reason = when {
+                        local.isBloqueioSeguranca -> "Muralha de segurança local (0 tokens)"
+                        local.isEmergencia -> "Emergência detectada localmente (SAMU 192)"
+                        BragaHealthMemory.supports(local.intent) -> "Consulta local Room (histórico de saúde)"
+                        else -> "NLU nativo on-device (0 tokens de nuvem)"
+                    }
+                    BragaRoutingLogger.record(channel, value, RoutingLogEntry.RoutingDecision.LOCAL_NLU, local.intent, reason, elapsedMs, answerText)
+                } else {
+                    BragaRoutingLogger.record(channel, value, RoutingLogEntry.RoutingDecision.CLOUD_LLM, local.intent, "Roteado para Groq Cloud LLM", elapsedMs, answerText)
+                }
+
                 val answer = ChatMessage(role = "assistant", text = answerText, status = "received",
                     action = action, parameters = finalParams.toString(),
                     rawContent = if (channel == InputChannel.TEXT) JSONObject(reply.content)
