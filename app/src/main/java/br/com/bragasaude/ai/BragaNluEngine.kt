@@ -28,7 +28,7 @@ object BragaNluEngine {
         """\b(cont[ea]|repita|repete|gere|liste)\b.{0,50}(\d+|infinito|sem parar|vezes)|ate o infinito"""
     )
     private val ESCOPO_NORMALIZADO = Regex(
-        """\b(python|javascript|html|sql|redacao|enem|fisica|equacao|derivada|jogo|poema|politica|criptomoeda)\b|\b(crie|gere|escreva|faca)\b.{0,30}\bcodigo\b(?! de barras)"""
+        """\b(python|javascript|html|sql|redacao|enem|equacao|derivada|poema|politica|criptomoeda)\b|\b(crie|gere|escreva|faca)\b.{0,30}\bcodigo\b(?! de barras)|\b(resolv\w*|trabalho de)\b.{0,30}\bfisica\b"""
     )
     private val CADASTRO_NORMALIZADO = Regex(
         """\b(cadastr\w*|adicion\w*|inclu\w*|registr\w*|anot\w*|alter\w*|mud\w*|edit\w*|coloc\w*)\b.{0,90}\b(remedio\w*|medicamento\w*|medicacao|receita|losartana|atenolol|comprimido\w*)\b|\b(novo remedio|nova medicacao|remedio novo)\b"""
@@ -38,6 +38,9 @@ object BragaNluEngine {
     )
     private val DUVIDA_COMPLEXA = Regex(
         """intera\w*|contraindic\w*|efeito\w* (colatera\w*|advers\w*)|por que|porque|diferenca entre|diagnostic\w*|exame\w*|posso (misturar|combinar)|qual dose"""
+    )
+    private val SAUDACAO_NORMALIZADA = Regex(
+        """^(ola|oi|bom dia|boa tarde|boa noite|como vai|e ai|tudo bem|oi braga|ola braga)[!?. ]*$"""
     )
 
     // 0. MURALHA DE SEGURANÇA E GUARDRAILS
@@ -118,7 +121,7 @@ object BragaNluEngine {
         RegexOption.IGNORE_CASE
     )
     private val REGEX_ATIVIDADE_FISICA = Regex(
-        "(caminhada|caminhar|exercitar|exercício|alongamento|lombar|postura|parque)",
+        "(atividade f[ií]sica|caminhada|caminhar|exercitar|exercício|alongamento|lombar|postura|parque)",
         RegexOption.IGNORE_CASE
     )
 
@@ -441,7 +444,7 @@ object BragaNluEngine {
         if (REGEX_CLIMA.containsMatchIn(limpo)) {
             return NluOutput("conversa_natureza_clima", sortearResposta("conversa_natureza_clima"), tempoMs = deltaMs(inicio))
         }
-        if (REGEX_SAUDACAO.containsMatchIn(limpo)) {
+        if (REGEX_SAUDACAO.containsMatchIn(limpo) || SAUDACAO_NORMALIZADA.matches(protegido)) {
             return NluOutput("conversa_saudacao_social", sortearResposta("conversa_saudacao_social"), tempoMs = deltaMs(inicio))
         }
         if (REGEX_DESPEDIDA.containsMatchIn(limpo)) {

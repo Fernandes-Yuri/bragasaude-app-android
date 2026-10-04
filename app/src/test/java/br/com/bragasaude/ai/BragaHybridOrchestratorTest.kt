@@ -72,4 +72,13 @@ class BragaHybridOrchestratorTest {
         assertFalse(output.delegarParaNuvem)
         assertTrue(output.respostaLocal!!.contains("SAMU 192"))
     }
+
+    @Test fun `muralha distingue atividade fisica e codigo de barras de tarefas tecnicas`() {
+        listOf("quero fazer atividade física", "ola", "quero cadastrar remédio pelo código de barras")
+            .forEach { input ->
+                val output = BragaNluEngine.analisar(input)
+                assertFalse(input, output.isBloqueioSeguranca)
+                assertFalse(input, output.delegarParaNuvem)
+            }
+    }
 }
