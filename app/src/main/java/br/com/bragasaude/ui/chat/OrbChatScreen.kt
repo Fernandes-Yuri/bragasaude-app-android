@@ -438,7 +438,7 @@ fun OrbChatContent(
                             }
                         }
                     }
-                    item(key = "chatBottom") { Spacer(Modifier.height(1.dp).testTag("chatBottom")) }
+                    item(key = "chatBottom") { Spacer(Modifier.fillMaxWidth().height(1.dp).testTag("chatBottom")) }
                 }
             }
         }
@@ -539,6 +539,7 @@ fun TypingIndicator() {
     )
 
     Surface(
+        modifier = Modifier.testTag("typingIndicator"),
         color = Color.Transparent,
         shape = RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp)
     ) {
