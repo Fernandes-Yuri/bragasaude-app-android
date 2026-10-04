@@ -160,4 +160,18 @@ class OrbChatViewModelTest {
         runCurrent()
         coVerify(exactly = 1) { gateway.send(any(), any(), any(), any()) }
     }
+
+    @Test fun modalityContextSurvivesLongConversation() = runTest(dispatcher) {
+        repeat(16) { vm.sendMessage("Olá"); runCurrent() }
+        coEvery { gateway.send(any(), any(), any(), any()) } coAnswers {
+            val messages = firstArg<List<Pair<String, String>>>()
+            assertTrue(messages.size <= 30)
+            assertTrue(messages.first().second.contains("Canal de entrada: TEXT"))
+            assertEquals("Qual a diferença entre apneia e alterações hormonais?", messages.last().second)
+            OrbReply("""{"fala":"Procure orientação profissional.","acao":"CONVERSA","parametros":{}}""")
+        }
+        vm.sendMessage("Qual a diferença entre apneia e alterações hormonais?")
+        runCurrent()
+        coVerify(exactly = 1) { gateway.send(any(), any(), any(), any()) }
+    }
 }

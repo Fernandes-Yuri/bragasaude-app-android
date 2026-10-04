@@ -239,7 +239,7 @@ class OrbChatViewModel @Inject constructor(
                     val scope = caregiverScope()
                     if (version != revision) return@launch
                     gateway.open(viewModelScope)
-                    val context = listOf("assistant" to GroqDynamicPrompt().build(history.dropLast(1), channel)) + history
+                    val context = listOf("assistant" to GroqDynamicPrompt().build(history.dropLast(1), channel)) + history.takeLast(10)
                     gateway.send(context, actingAs = scope?.first, patientId = scope?.second) { partial ->
                         if (version == revision) mutable.update { it.copy(partialText = BragaInputLanguage.forChannel(partial, channel)) }
                     }
