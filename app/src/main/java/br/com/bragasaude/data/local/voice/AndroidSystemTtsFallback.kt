@@ -46,6 +46,7 @@ class AndroidSystemTtsFallback @Inject constructor(
         if (status == TextToSpeech.SUCCESS) {
             val result = tts?.setLanguage(Locale("pt", "BR"))
             if (result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED) {
+                tts?.setSpeechRate(0.92f)
                 isReady.set(true)
             } else {
                 Log.w(TAG, "Idioma pt-BR nao suportado no TTS do sistema")

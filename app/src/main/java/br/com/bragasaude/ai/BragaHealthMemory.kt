@@ -37,8 +37,8 @@ class BragaHealthMemory internal constructor(
     private val previous = mutableMapOf<String, String>()
     @Synchronized private fun introduction(userId: String, intent: String): String {
         if (owner != userId) { previous.clear(); owner = userId }
-        val choices = listOf("Nos seus registros locais,", "Consultando suas anotações,",
-            "Pelo histórico salvo no aparelho,", "Com base nos seus registros no aplicativo,")
+        val choices = listOf("Nos seus registros,", "Pelas suas anotações,",
+            "No seu histórico,", "Consultando seus dados,")
         return choices.filter { it != previous[intent] }.random().also { previous[intent] = it }
     }
 
@@ -62,23 +62,28 @@ class BragaHealthMemory internal constructor(
             when (intent) {
                 PRESSURE -> {
                     val last = pressure(vitals.getBloodPressureRecords(userId).first()).firstOrNull()
-                        ?: return@withContext "$intro ainda não há uma medição completa de pressão. Você pode registrar os valores na tela de pressão."
+                        ?: return@withContext "$intro ainda não há registro de pressão. Você pode anotar na tela de pressão."
                     val recent = pressure(vitals.getBloodPressureRecent30Days(userId, since).first(), since)
                     val systolic = BloodPressureParser.normalizePressure(last.systolicPressure!!)
                     val diastolic = BloodPressureParser.normalizePressure(last.diastolicPressure!!)
-                    val average = if (recent.isEmpty()) "Não há medições completas nos últimos 30 dias para calcular a média."
-                    else "A média de ${recent.size} registros nos últimos 30 dias é " +
-                        "${recent.map { BloodPressureParser.normalizePressure(it.systolicPressure!!).toDouble() }.average().roundToInt()} por " +
-                        "${recent.map { BloodPressureParser.normalizePressure(it.diastolicPressure!!).toDouble() }.average().roundToInt()} milímetros de mercúrio."
-                    "$intro seu último registro de pressão foi $systolic por $diastolic milímetros de mercúrio em ${time(last)}. $average"
+                    val average = if (recent.isEmpty()) ""
+                    else {
+                        val avgSys = recent.map { BloodPressureParser.normalizePressure(it.systolicPressure!!).toDouble() }.average().roundToInt()
+                        val avgDia = recent.map { BloodPressureParser.normalizePressure(it.diastolicPressure!!).toDouble() }.average().roundToInt()
+                        " A média recente de ${recent.size} registros é $avgSys por $avgDia."
+                    }
+                    "$intro sua última pressão foi $systolic por $diastolic, em ${time(last)}.$average"
                 }
                 GLUCOSE -> {
                     val last = valid(vitals.getGlucoseRecords(userId).first()).firstOrNull { (it.glucoseLevel ?: 0) > 0 }
-                        ?: return@withContext "$intro ainda não há um valor de glicemia registrado. Você pode registrar uma medição na tela de glicemia."
+                        ?: return@withContext "$intro ainda não há registro de glicemia. Você pode anotar na tela de glicemia."
                     val recent = valid(vitals.getGlucoseRecent30Days(userId, since).first(), since).filter { (it.glucoseLevel ?: 0) > 0 }
-                    val average = if (recent.isEmpty()) "Não há valores nos últimos 30 dias para calcular a média."
-                    else "A média de ${recent.size} registros nos últimos 30 dias é ${recent.map { it.glucoseLevel!!.toDouble() }.average().roundToInt()} miligramas por decilitro."
-                    "$intro sua última glicemia foi ${last.glucoseLevel} miligramas por decilitro em ${time(last)}. $average Os registros podem incluir horários e condições diferentes; a média não é uma avaliação clínica."
+                    val average = if (recent.isEmpty()) ""
+                    else {
+                        val avg = recent.map { it.glucoseLevel!!.toDouble() }.average().roundToInt()
+                        " A média recente é $avg."
+                    }
+                    "$intro sua última glicemia foi de ${last.glucoseLevel}, em ${time(last)}.$average"
                 }
                 else -> {
                     val dayStart = instant.atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli()
@@ -87,16 +92,15 @@ class BragaHealthMemory internal constructor(
                     val profile = profiles.getProfileOneShot(userId)
                     val configured = profile?.hydrationTargetMl?.takeIf { it > 0 }
                     val goal = configured ?: 2000
-                    val goalLabel = if (configured == null) "referência padrão do aplicativo de" else "meta cadastrada de"
                     val progress = consumed * 100 / goal
                     val remaining = (goal.toLong() - consumed).coerceAtLeast(0)
-                    "$intro hoje você registrou $consumed ml de água: $progress% da $goalLabel $goal ml. Faltam $remaining ml para esse valor. Respeite a orientação do seu profissional sobre líquidos."
+                    "$intro você registrou $consumed ml de água hoje, $progress% da meta de $goal ml. Faltam $remaining ml."
                 }
             }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            "$intro não consegui consultar o banco local agora. Tente novamente ou consulte seus registros na tela correspondente."
+            "$intro não consegui consultar os dados agora. Você pode ver direto na tela do aplicativo."
         }
     }
 }

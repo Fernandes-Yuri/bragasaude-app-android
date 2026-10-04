@@ -250,7 +250,7 @@ class VoiceProfileManager @Inject constructor(
             currentCoroutineContext().ensureActive()
             if (ticket != speechGeneration.get()) throw CancellationException("Fala interrompida")
             if (state.value.activeId != VoiceCatalog.SYSTEM_ID && state.value.phase != "Carregando voz")
-                engine.playStream(text, onStart = onStart, onDone = onDone)
+                engine.playStream(text, speed = 0.94f, onStart = onStart, onDone = onDone)
             else false
         }
         currentCoroutineContext().ensureActive()
