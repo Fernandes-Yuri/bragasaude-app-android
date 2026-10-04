@@ -137,7 +137,7 @@ jobs:
           JDK_PATHS=$(ls -d "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}/Java_Temurin_jdk"/*/x64 2>/dev/null | paste -sd, -)
           echo "JDKs visíveis ao Gradle: $JDK_PATHS"
           if [ "$INPUT_VARIANTE" = "debug" ] || [ -z "$INPUT_VARIANTE" ] || [ "$GITHUB_REF_NAME" = "codex/debug-sem-bloqueio-dev" ]; then
-            gradle assembleDebug --no-daemon --stacktrace \
+            gradle assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace \
               -Dorg.gradle.java.installations.paths="$JDK_PATHS"
             echo "path=app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
             echo "artifact=braga-debug-apk" >> "$GITHUB_OUTPUT"
@@ -166,6 +166,15 @@ jobs:
           name: ${{ steps.apk.outputs.artifact }}
           path: ${{ steps.apk.outputs.path }}
           retention-days: ${{ steps.apk.outputs.retention }}
+          if-no-files-found: error
+
+      - name: Salvar APK dos testes instrumentados
+        if: steps.apk.outputs.artifact == 'braga-debug-apk'
+        uses: actions/upload-artifact@v4
+        with:
+          name: braga-debug-androidTest-apk
+          path: app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          retention-days: 7
           if-no-files-found: error
 
       - name: Resumo da build

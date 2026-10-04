@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,6 +61,7 @@ import br.com.bragasaude.data.remote.ai.OrbConnectionState
 import br.com.bragasaude.ui.components.RiskNotificationDialog
 import br.com.bragasaude.ui.util.Screen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -88,10 +90,10 @@ fun OrbChatScreen(onBack: () -> Unit, onNavigate: (Screen) -> Unit, viewModel: O
             override fun onError(error: Int) { listening = false; viewModel.showError("Não consegui ouvir. Você pode tentar novamente ou digitar.") }
             override fun onResults(results: Bundle?) {
                 listening = false
-                results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(viewModel::updateInput)
+                results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(viewModel::updateVoiceInput)
             }
             override fun onPartialResults(partialResults: Bundle?) {
-                partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(viewModel::updateInput)
+                partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(viewModel::updateVoiceInput)
             }
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
@@ -128,7 +130,7 @@ fun OrbChatScreen(onBack: () -> Unit, onNavigate: (Screen) -> Unit, viewModel: O
             }
         }
     }
-    OrbChatContent(state, connection, onBack, viewModel::updateInput, viewModel::sendMessage,
+    OrbChatContent(state, connection, onBack, viewModel::updateInput, viewModel::sendInput,
         viewModel::cancelGeneration, viewModel::clearError, viewModel::retryConnection,
         viewModel::newConversation, viewModel::showHistory,
         onOpenConversation = { id -> state.conversations.find { it.id == id }?.let(viewModel::openConversation) },
@@ -162,6 +164,9 @@ fun OrbChatContent(
     onExport: () -> Unit = {}, listening: Boolean = false, onVoice: () -> Unit = {}
 ) {
     val scroll = rememberLazyListState()
+    val dragging by scroll.interactionSource.collectIsDraggedAsState()
+    val currentState by rememberUpdatedState(state)
+    val scrollPolicy = remember { ChatScrollPolicy() }
     val snackbar = remember { SnackbarHostState() }
     var menu by remember { mutableStateOf(false) }
     var exported by remember { mutableStateOf(false) }
@@ -172,12 +177,27 @@ fun OrbChatContent(
 
     LaunchedEffect(state.error) { state.error?.let { snackbar.showSnackbar(it); onClearError() } }
     LaunchedEffect(exported) { if (exported) { snackbar.showSnackbar("Conversa copiada."); exported = false } }
-    // AUD-AN04: antes era keyado em state.partialText, que muda a CADA TOKEN do
-    // streaming — o efeito era cancelado e re-lançado a cada token, reiniciando
-    // o scrollToItem e fazendo o auto-scroll engasgar. Keyar em isStreaming cobre
-    // o início e o fim da resposta sem oscilar.
-    LaunchedEffect(state.messages.size, state.isStreaming, state.showHistory) {
-        if (!state.showHistory) scroll.scrollToItem(state.messages.size)
+    // Um coletor conflacionado acompanha o crescimento do streaming e do viewport.
+    // O marcador final permite chegar ao fim até de uma resposta maior que a tela.
+    LaunchedEffect(scroll) {
+        snapshotFlow {
+            ChatScrollSnapshot(
+                firstMessage = currentState.messages.firstOrNull()?.id,
+                latestUser = currentState.messages.lastOrNull { it.role == "user" }?.id,
+                messageCount = currentState.messages.size,
+                partialLength = currentState.partialText.length,
+                streaming = currentState.isStreaming,
+                history = currentState.showHistory,
+                dragging = dragging,
+                atBottom = !scroll.canScrollForward,
+                itemCount = scroll.layoutInfo.totalItemsCount,
+                viewportEnd = scroll.layoutInfo.viewportEndOffset
+            )
+        }.collectLatest { snapshot ->
+            if (scrollPolicy.follow(snapshot) && !snapshot.atBottom && snapshot.itemCount == snapshot.messageCount + 2) {
+                scroll.scrollToItem(snapshot.itemCount - 1)
+            }
+        }
     }
 
     if (showTextSizeDialog) {
@@ -418,6 +438,7 @@ fun OrbChatContent(
                             }
                         }
                     }
+                    item(key = "chatBottom") { Spacer(Modifier.height(1.dp).testTag("chatBottom")) }
                 }
             }
         }

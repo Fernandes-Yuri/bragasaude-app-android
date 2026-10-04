@@ -42,6 +42,9 @@ object BragaNluEngine {
     private val SAUDACAO_NORMALIZADA = Regex(
         """^(ola|oi|bom dia|boa tarde|boa noite|como vai|e ai|tudo bem|oi braga|ola braga)[!?. ]*$"""
     )
+    private val CONSULTA_OUTRA_PESSOA = Regex(
+        """\b(do meu|da minha|meu|minha) (pai|mae|filho|filha|esposo|esposa|marido|mulher|paciente|familiar)\b"""
+    )
 
     // 0. MURALHA DE SEGURANÇA E GUARDRAILS
     private val REGEX_INJECTION = Regex(
@@ -113,7 +116,7 @@ object BragaNluEngine {
         RegexOption.IGNORE_CASE
     )
     private val REGEX_LAZER_GASTRONOMIA = Regex(
-        "(pão caseiro|padaria|churrasco|café passado|tricotar|manta|horta|samambaias|sopinha|banho quentinho|bolo de fubá|plantinhas|regar)",
+        "(pão caseiro|padaria|churrasco|café|cafe|café passado|tricotar|manta|horta|samambaias|sopinha|banho quentinho|bolo de fubá|plantinhas|regar)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_CULTURA = Regex(
@@ -131,7 +134,7 @@ object BragaNluEngine {
         RegexOption.IGNORE_CASE
     )
     private val REGEX_CANSACO = Regex(
-        "(cansa a gente|sem disposição|corpo pesado|corpo moído|canseira|pernas fracas|lesera|envelhecer|lomba|idade vai pesando)",
+        "(cansaço|cansaco|cansad[oa]|cansa a gente|sem disposição|corpo pesado|corpo moído|canseira|pernas fracas|lesera|envelhecer|lomba|idade vai pesando)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_TRISTEZA = Regex(
@@ -336,7 +339,7 @@ object BragaNluEngine {
      * Ponto de entrada: analisa a fala do usuário sem chamadas de rede.
      */
     @Synchronized
-    fun analisar(texto: String): NluOutput {
+    fun analisar(texto: String, channel: InputChannel = InputChannel.VOICE): NluOutput {
         val inicio = System.nanoTime()
         if (texto.length > 350) return NluOutput(
             "guardrail_abuso_tokens_loop", sortearResposta("guardrail_abuso_tokens_loop"),
@@ -348,7 +351,7 @@ object BragaNluEngine {
         val protegido = normalizado.replace(Regex("\\s+"), " ")
 
         if (texto.isBlank()) return NluOutput(
-            "conversa_saudacao_social", sortearResposta("conversa_saudacao_social"), tempoMs = deltaMs(inicio)
+            "entrada_sem_clareza", BragaInputLanguage.clarification(channel), tempoMs = deltaMs(inicio)
         )
 
         // 0. MURALHA DE SEGURANÇA (Bloqueio sem gastar API)
@@ -383,6 +386,19 @@ object BragaNluEngine {
         if (REGEX_CADASTRO_REMEDIO.containsMatchIn(limpo) || CADASTRO_NORMALIZADO.containsMatchIn(protegido)) {
             val resp = sortearResposta("orientacao_cadastro_medicamento")
             return NluOutput("orientacao_cadastro_medicamento", resp, tempoMs = deltaMs(inicio))
+        }
+
+        // Consultas pessoais precedem dúvidas clínicas gerais, mas nunca a muralha ou emergências.
+        val perguntaPessoal = Regex("\\b(quanto|quanta|quantos|qual|como|mostre|consultar|consulta|historico)\\b").containsMatchIn(protegido) &&
+            Regex("\\b(minha|meu|minhas|meus|ultima|ultimo|bebi|tomei|ingeri)\\b").containsMatchIn(protegido)
+        if (perguntaPessoal && !CONSULTA_OUTRA_PESSOA.containsMatchIn(protegido)) {
+            val consulta = when {
+                Regex("\\bpressao\\b").containsMatchIn(protegido) -> BragaHealthMemory.PRESSURE
+                Regex("\\b(glicemia|glicose|acucar no sangue)\\b").containsMatchIn(protegido) -> BragaHealthMemory.GLUCOSE
+                Regex("\\bagua\\b").containsMatchIn(protegido) -> BragaHealthMemory.WATER
+                else -> null
+            }
+            if (consulta != null) return NluOutput(consulta, null, tempoMs = deltaMs(inicio))
         }
 
         // 3. DÚVIDAS

@@ -41,6 +41,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.channels.Channel
 import br.com.bragasaude.ai.BragaHybridEvent
 import br.com.bragasaude.ai.BragaSpeechBuffer
+import br.com.bragasaude.ai.InputChannel
+import br.com.bragasaude.ai.BragaHealthMemory
 import br.com.bragasaude.data.remote.ai.NeuralAudioPlayer
 import br.com.bragasaude.data.remote.ai.BragaLocalAiClient
 import br.com.bragasaude.data.local.VitalSignDao
@@ -531,7 +533,7 @@ class VoiceHealthViewModel @Inject constructor(
             voiceSession.hasSpeech()
             _liveTranscription.value = bestMatch
             conversationMemory.selectUser(getCurrentUserId())
-            val nlu = hybridOrchestrator.analyze(bestMatch)
+            val nlu = hybridOrchestrator.analyze(bestMatch, InputChannel.VOICE)
             if (nlu.isBloqueioSeguranca) {
                 speechJob?.cancel()
                 speechJob = viewModelScope.launch { processUserSpeech(bestMatch, nlu) }
@@ -589,6 +591,12 @@ class VoiceHealthViewModel @Inject constructor(
                 return
             }
             try {
+                if (BragaHealthMemory.supports(local.intent)) {
+                    val reply = hybridOrchestrator.resolveLocal(local, owner, InputChannel.VOICE)
+                    currentCoroutineContext().ensureActive()
+                    if (owner == getCurrentUserId()) showLocalResponse(reply)
+                    return
+                }
                 // Mantém a preferência confirmada existente, apenas para registro de copos.
                 // A muralha e as emergências já retornaram antes desta consulta ao gateway.
                 val cupPreference = if (Regex("(?i)\\bcopos?\\b").containsMatchIn(bestMatch) &&
@@ -671,7 +679,7 @@ class VoiceHealthViewModel @Inject constructor(
             }
             playbackJob = player
             try {
-                hybridOrchestrator.respond(speech, history).collect { event ->
+                hybridOrchestrator.respond(speech, history, InputChannel.VOICE, owner).collect { event ->
                     currentCoroutineContext().ensureActive()
                     if (owner != getCurrentUserId()) throw kotlinx.coroutines.CancellationException("Sessão alterada")
                     when (event) {
