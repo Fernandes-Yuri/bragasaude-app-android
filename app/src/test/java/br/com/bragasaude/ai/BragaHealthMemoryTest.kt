@@ -36,6 +36,7 @@ class BragaHealthMemoryTest {
         assertTrue(answer, answer.contains("04/10/2026 às 11:00"))
         assertTrue(answer.contains("2 registros"))
         assertFalse(answer.contains("estabilidade"))
+        assertFalse(answer.contains("mercúrio"))
     }
 
     @Test fun `glicemia calcula media sem concluir diagnostico`() = runTest {
@@ -43,9 +44,9 @@ class BragaHealthMemoryTest {
         every { dao.getGlucoseRecords("owner") } returns flowOf(records)
         every { dao.getGlucoseRecent30Days("owner", any()) } returns flowOf(records)
         val answer = memory.answer(BragaHealthMemory.GLUCOSE, "owner")
-        assertTrue(answer.contains("última glicemia foi 100"))
-        assertTrue(answer.contains("é 110 miligramas"))
-        assertTrue(answer.contains("não é uma avaliação clínica"))
+        assertTrue(answer.contains("última glicemia foi de 100"))
+        assertTrue(answer.contains("é 110"))
+        assertFalse(answer.contains("miligramas"))
     }
 
     @Test fun `agua respeita dia local e conta atual sem somar ontem ou futuro`() = runTest {
