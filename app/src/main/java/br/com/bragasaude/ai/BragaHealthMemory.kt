@@ -91,6 +91,7 @@ class BragaHealthMemory internal constructor(
                         .sumOf { (it.hydrationMl ?: 0).coerceAtLeast(0).toLong() }
                     val profile = profiles.getProfileOneShot(userId)
                     val configured = profile?.hydrationTargetMl?.takeIf { it > 0 }
+                    val goal = configured ?: 2000
                     val goalLabel = if (configured == null) "referência padrão do aplicativo de" else "meta cadastrada de"
                     val progress = consumed * 100 / goal
                     val remaining = (goal.toLong() - consumed).coerceAtLeast(0)
