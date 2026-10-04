@@ -1,14 +1,14 @@
-﻿package br.com.bragasaude.ai
+package br.com.bragasaude.ai
 
 /**
- * ðŸ›¡ï¸ BragaNluEngine - Motor NLU On-Device Nativo (Kotlin Puro)
+ * BragaNluEngine - Motor NLU On-Device Nativo (Kotlin Puro)
  *
- * CaracterÃ­sticas:
- * - ExecuÃ§Ã£o 100% local (modo aviÃ£o, zero internet).
- * - LatÃªncia de 0.05 milissegundos.
- * - Zero dependÃªncias pesadas (sem runtime Python, sem TensorFlow).
- * - Muralha de SeguranÃ§a: barra Prompt Injection, DoS e Loops com humor sem gastar API externa.
- * - Roteador HÃ­brido: se nÃ£o reconhecer, sinaliza para delegar Ã  API Groq.
+ * Características:
+ * - Execução 100% local (modo avião, zero internet).
+ * - Roteamento local sem acesso à rede.
+ * - Zero dependências pesadas (sem runtime Python, sem TensorFlow).
+ * - Muralha de Segurança: barra Prompt Injection, DoS e Loops com humor sem gastar API externa.
+ * - Roteador Híbrido: se não reconhecer, sinaliza para delegar à API Groq.
  */
 data class NluOutput(
     val intent: String,
@@ -21,107 +21,126 @@ data class NluOutput(
 
 object BragaNluEngine {
 
-    // 0. MURALHA DE SEGURANÃ‡A E GUARDRAILS
+    private val INJECTION_NORMALIZADA = Regex(
+        """\b(ignore|ignora|esqueca|desconsidere)\b.{0,45}\b(instrucoes|regras|prompt|limites)\b|system\s*prompt|modo\s+(dan|desenvolvedor)|developer mode|jailbreak|sem regras|finja.{0,30}(hacker|medico)|reveal.{0,20}prompt"""
+    )
+    private val LOOP_NORMALIZADO = Regex(
+        """\b(cont[ea]|repita|repete|gere|liste)\b.{0,50}(\d+|infinito|sem parar|vezes)|ate o infinito"""
+    )
+    private val ESCOPO_NORMALIZADO = Regex(
+        """\b(python|javascript|html|sql|redacao|enem|fisica|equacao|derivada|jogo|poema|politica|criptomoeda)\b|\b(crie|gere|escreva|faca)\b.{0,30}\bcodigo\b(?! de barras)"""
+    )
+    private val CADASTRO_NORMALIZADO = Regex(
+        """\b(cadastr\w*|adicion\w*|inclu\w*|registr\w*|anot\w*|alter\w*|mud\w*|edit\w*|coloc\w*)\b.{0,90}\b(remedio\w*|medicamento\w*|medicacao|receita|losartana|atenolol|comprimido\w*)\b|\b(novo remedio|nova medicacao|remedio novo)\b"""
+    )
+    private val EMERGENCIA_NORMALIZADA = Regex(
+        """socorro|dor (forte )?no peito|aperto no peito|falta de ar|nao consigo respirar|desmai\w*|boca.{0,8}torta|vomitando sangue|infarto|\bavc\b|perdi a forca|dormencia|formigamento|ajuda rapido|passando muito mal|tontura (muito )?forte"""
+    )
+    private val DUVIDA_COMPLEXA = Regex(
+        """intera\w*|contraindic\w*|efeito\w* (colatera\w*|advers\w*)|por que|porque|diferenca entre|diagnostic\w*|exame\w*|posso (misturar|combinar)|qual dose"""
+    )
+
+    // 0. MURALHA DE SEGURANÇA E GUARDRAILS
     private val REGEX_INJECTION = Regex(
-        "(ignore (todas as )?(minhas )?instruÃ§Ãµes|system prompt|modo dan|sem regras|desconsidere as regras|instruÃ§Ãµes secretas|finja que vocÃª nÃ£o Ã© o braga|hacker|jailbreak)",
+        "(ignore (todas as )?(minhas )?instruções|system prompt|modo dan|sem regras|desconsidere as regras|instruções secretas|finja que você não é o braga|hacker|jailbreak)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_ABUSO_LOOP = Regex(
-        "(conte (de |atÃ© )?\\d{1,5}|repita.*?\\d{1,5} vezes|liste todos os nÃºmeros|conte atÃ© o infinito|gere \\d{1,5} linhas)",
+        "(conte (de |até )?\\d{1,5}|repita.*?\\d{1,5} vezes|liste todos os números|conte até o infinito|gere \\d{1,5} linhas)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_ESCOPO_TECNICO = Regex(
-        "(cÃ³digo em python|script em javascript|programa em java|resolva essa equaÃ§Ã£o|faÃ§a uma redaÃ§Ã£o|redaÃ§Ã£o do enem|derivada matemÃ¡tica|trabalho de fÃ­sica|crie um html)",
+        "(código em python|script em javascript|programa em java|resolva essa equação|faça uma redação|redação do enem|derivada matemática|trabalho de física|crie um html)",
         RegexOption.IGNORE_CASE
     )
 
-    // 1. EMERGÃŠNCIAS MÃ‰DICAS
+    // 1. EMERGÊNCIAS MÉDICAS
     private val REGEX_EMERGENCIA_PEITO = Regex(
-        "(dor (no|forte no) peito|aperto (no|insuportÃ¡vel no) peito|suor frio|falta de ar repentina|nÃ£o consigo respirar|boca tÃ¡ torta|boca torta|lado do corpo formigando|visÃ£o escureceu|puxa pro braÃ§o|queimaÃ§Ã£o forte no meio do peito)",
+        "(dor (no|forte no) peito|aperto (no|insuportável no) peito|suor frio|falta de ar repentina|não consigo respirar|boca tá torta|boca torta|lado do corpo formigando|visão escureceu|puxa pro braço|queimação forte no meio do peito)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_EMERGENCIA_QUEDA = Regex(
-        "(caÃ­ (aqui|no chÃ£o)|nÃ£o consigo (me levantar|levantar)|bati a cabeÃ§a|tÃ¡ sangrando|perna travou|levei um tombo|escorreguei)",
+        "(caí (aqui|no chão)|não consigo (me levantar|levantar)|bati a cabeça|tá sangrando|perna travou|levei um tombo|escorreguei)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_DESCONFORTO = Regex(
-        "(azia|dorzinha nas costas|tonturinha leve|incÃ´modo leve|queimaÃ§Ã£ozinha|pontada leve)",
+        "(azia|dorzinha nas costas|tonturinha leve|incômodo leve|queimaçãozinha|pontada leve)",
         RegexOption.IGNORE_CASE
     )
 
-    // 2. CADASTRO DE MEDICAMENTOS (DIRETRIZ DE SEGURANÃ‡A SAMD)
+    // 2. CADASTRO DE MEDICAMENTOS (DIRETRIZ DE SEGURANÇA SAMD)
     private val REGEX_CADASTRO_REMEDIO = Regex(
-        "(cadastr(ar|a)|adicion(ar|a)|coloc(ar|a)|bot(ar|a)|registr(ar|a)|novo remÃ©dio|nova medicaÃ§Ã£o|minha receita|anota o nome|como cadastrar).*(remÃ©dio|medicamento|losartana|atenolol|comprimido|remÃ©dios|medicaÃ§Ã£o)",
+        "(cadastr(ar|a)|adicion(ar|a)|coloc(ar|a)|bot(ar|a)|registr(ar|a)|novo remédio|nova medicação|minha receita|anota o nome|como cadastrar).*(remédio|medicamento|losartana|atenolol|comprimido|remédios|medicação)",
         RegexOption.IGNORE_CASE
     )
 
-    // 3. DÃšVIDAS CLÃNICAS
+    // 3. DÚVIDAS CLÍNICAS
     private val REGEX_DUVIDA_PRESSAO = Regex(
-        "(pressÃ£o alta|pressÃ£o arterial|pressao alta|pressÃ£o tÃ¡|pressao tÃ¡|valor normal da pressÃ£o|12 por 8|13 por 8|14 por 9|10 por 6|pressÃ£o do idoso|13 po 8|pressÃ£o tÃ¡ normal)",
+        "(pressão alta|pressão arterial|pressao alta|pressão tá|pressao tá|valor normal da pressão|12 por 8|13 por 8|14 por 9|10 por 6|pressão do idoso|13 po 8|pressão tá normal)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_DUVIDA_GLICEMIA = Regex(
-        "(glicemia|glicose|aÃ§Ãºcar no sangue|acucar no sangue|jejum|prÃ©-diabetes|ponta de dedo)",
+        "(glicemia|glicose|açúcar no sangue|acucar no sangue|jejum|pré-diabetes|ponta de dedo)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_DUVIDA_REMEDIO = Regex(
-        "(esqueci de tomar|esqueci meu remÃ©dio|esqueci o remÃ©dio|pulei a dose|tomar dobrado|tomo agora|atrasei o remÃ©dio)",
+        "(esqueci de tomar|esqueci meu remédio|esqueci o remédio|pulei a dose|tomar dobrado|tomo agora|atrasei o remédio)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_DUVIDA_AGUA = Regex(
-        "(beber Ã¡gua|sede|beber agua|pouca Ã¡gua|quantos copos|chÃ¡ conta como Ã¡gua|substituir Ã¡gua)",
+        "(beber água|sede|beber agua|pouca água|quantos copos|chá conta como água|substituir água)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_DUVIDA_ALIMENTACAO = Regex(
-        "(alimentaÃ§Ã£o|digestÃ£o|colesterol|banana com aveia|sopa de legumes|cafÃ© puro de estÃ´mago)",
+        "(alimentação|digestão|colesterol|banana com aveia|sopa de legumes|café puro de estômago)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_DUVIDA_SONO = Regex(
-        "(insÃ´nia|insonia|pregar o olho|nÃ£o consigo dormir|perco o sono|dormir Ã  noite|acordo de madrugada)",
+        "(insônia|insonia|pregar o olho|não consigo dormir|perco o sono|dormir à noite|acordo de madrugada)",
         RegexOption.IGNORE_CASE
     )
 
     // 4. ROTINA, TRABALHO E LAZER (40+)
     private val REGEX_ESTRESSE_TRABALHO = Regex(
-        "(serviÃ§o|trabalho|trampo|lida|cheguei moÃ­do|correria de hoje|cabeÃ§a a mil|estressante|trÃ¢nsito|reuniÃ£o|cobranÃ§a|bronca)",
+        "(serviço|trabalho|trampo|lida|cheguei moído|correria de hoje|cabeça a mil|estressante|trânsito|reunião|cobrança|bronca)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_FAMILIA = Regex(
-        "(meu filho|minha filha|meus filhos|neto|neta|netos|irmÃ£os|irmÃ£|irmÃ£o|meus pais|almoÃ§ar com|famÃ­lia|comadre|visita da comadre)",
+        "(meu filho|minha filha|meus filhos|neto|neta|netos|irmãos|irmã|irmão|meus pais|almoçar com|família|comadre|visita da comadre)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_LAZER_GASTRONOMIA = Regex(
-        "(pÃ£o caseiro|padaria|churrasco|cafÃ© passado|tricotar|manta|horta|samambaias|sopinha|banho quentinho|bolo de fubÃ¡|plantinhas|regar)",
+        "(pão caseiro|padaria|churrasco|café passado|tricotar|manta|horta|samambaias|sopinha|banho quentinho|bolo de fubá|plantinhas|regar)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_CULTURA = Regex(
-        "(vitrola|nelson gonÃ§alves|filme antigo|televisÃ£o|novela|mÃºsica antiga|disco antigo|moda de viola|rÃ¡dio de pilha|samba)",
+        "(vitrola|nelson gonçalves|filme antigo|televisão|novela|música antiga|disco antigo|moda de viola|rádio de pilha|samba)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_ATIVIDADE_FISICA = Regex(
-        "(caminhada|caminhar|exercitar|exercÃ­cio|alongamento|lombar|postura|parque)",
+        "(caminhada|caminhar|exercitar|exercício|alongamento|lombar|postura|parque)",
         RegexOption.IGNORE_CASE
     )
 
     // 5. SENTIMENTOS E AFETO
     private val REGEX_SOLIDAO = Regex(
-        "(sozinho|sozinha|solidÃ£o|solidao|casa vazia|silÃªncio danado|ninguÃ©m veio|falta de conversar|dedinho de prosa|abraÃ§o apertado|ninguÃ©m ligou)",
+        "(sozinho|sozinha|solidão|solidao|casa vazia|silêncio danado|ninguém veio|falta de conversar|dedinho de prosa|abraço apertado|ninguém ligou)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_CANSACO = Regex(
-        "(cansa a gente|sem disposiÃ§Ã£o|corpo pesado|corpo moÃ­do|canseira|pernas fracas|lesera|envelhecer|lomba|idade vai pesando)",
+        "(cansa a gente|sem disposição|corpo pesado|corpo moído|canseira|pernas fracas|lesera|envelhecer|lomba|idade vai pesando)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_TRISTEZA = Regex(
-        "(tristeza|vontade de chorar|peito apertado de tristeza|dia cinzento|agonia|jururu|afliÃ§Ã£o|meio pra baixo)",
+        "(tristeza|vontade de chorar|peito apertado de tristeza|dia cinzento|agonia|jururu|aflição|meio pra baixo)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_ALEGRIA = Regex(
-        "(coraÃ§Ã£o alegre|acordei feliz|dia abenÃ§oado|tÃ´ contente|lindeza sÃ³|cafÃ© tÃ¡ bÃ£o|baita dia|pÃ© direito|muito feliz)",
+        "(coração alegre|acordei feliz|dia abençoado|tô contente|lindeza só|café tá bão|baita dia|pé direito|muito feliz)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_MEMORIAS = Regex(
-        "(lembrei|Ã©poca em que|mocidade|forrÃ³|casa onde eu nasci|terra molhada|antigamente|tacho de cobre|viagens de trem|juventude|foto antiga)",
+        "(lembrei|época em que|mocidade|forró|casa onde eu nasci|terra molhada|antigamente|tacho de cobre|viagens de trem|juventude|foto antiga)",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_CLIMA = Regex(
@@ -129,139 +148,178 @@ object BragaNluEngine {
         RegexOption.IGNORE_CASE
     )
     private val REGEX_SAUDACAO = Regex(
-        "^(olÃ¡|oi|bom dia|boa tarde|boa noite|como vai|a paz de deus|e aÃ­|tudo bem|oi braga|olÃ¡ braga)",
+        "^(olá|oi|bom dia|boa tarde|boa noite|como vai|a paz de deus|e aí|tudo bem|oi braga|olá braga)[!?. ]*$",
         RegexOption.IGNORE_CASE
     )
     private val REGEX_DESPEDIDA = Regex(
-        "(atÃ© logo|tchau|atÃ© mais|vou dormir|boa noite|vou deitar|fui descansar|atÃ© amanhÃ£)",
+        "(até logo|tchau|até mais|vou dormir|boa noite|vou deitar|fui descansar|até amanhã)",
         RegexOption.IGNORE_CASE
     )
 
-    // MemÃ³ria de Ãºltima resposta para garantir sorteio sem repetiÃ§Ã£o imediata
+    // Memória de última resposta para garantir sorteio sem repetição imediata
     private val ultimasRespostas = mutableMapOf<String, String>()
 
     private val BANCO_RESPOSTAS: Map<String, List<String>> = mapOf(
-        // Guardrails HumorÃ­sticos e Naturais
         "guardrail_prompt_injection" to listOf(
-            "AtÃ© achei a tentativa curiosa, mas infelizmente eu nÃ£o posso fazer isso! PeÃ§o desculpas, mas isso daÃ­ estÃ¡ bem fora do meu alcance. Meu negÃ³cio Ã© cuidar da sua saÃºde e te fazer companhia no dia a dia. Como vocÃª tÃ¡ se sentindo hoje?",
-            "Olha, vocÃª Ã© criativo, viu? Mas vou ter que te pedir desculpas e ficar te devendo essa! Minhas regrinhas de cuidado com a sua saÃºde sÃ£o firmes e nÃ£o mudam. Vamos focar no seu bem-estar?",
-            "Eita, aÃ­ vocÃª me apertou! Mas isso daÃ­ tÃ¡ completamente fora do que eu faÃ§o. PeÃ§o desculpas, meu amigo! Minha missÃ£o Ã© cuidar de vocÃª com carinho. Quer me contar como tÃ¡ o seu dia?"
+            "Essa tentativa foi criativa, mas está fora do meu alcance. Peço desculpas! Como posso ajudar na sua saúde hoje?",
+            "Meu repertório fica na saúde e no bem-estar. Não posso seguir esse pedido, mas posso ouvir como você está.",
+            "Vou ficar devendo essa! Não consigo mudar minhas regras. Posso apoiar seu autocuidado hoje?",
+            "Esse pedido passa dos meus limites. Peço desculpas! Vamos conversar sobre sua saúde ou sua rotina?"
         ),
         "guardrail_abuso_tokens_loop" to listOf(
-            "Que ideia diferente, atÃ© achei engraÃ§ado! Mas infelizmente eu nÃ£o consigo fazer contagens ou repetiÃ§Ãµes desse tamanho, tÃ¡ bem fora do meu alcance. PeÃ§o desculpas! Que tal a gente conversar sobre como vocÃª estÃ¡ passando hoje?",
-            "Olha, se eu for contar tudo isso a gente perde o cafÃ© da tarde! PeÃ§o desculpas, mas essa tarefa tÃ¡ fora do que eu consigo fazer por aqui. Meu foco Ã© na sua saÃºde. JÃ¡ bebeu uma aguinha hoje?",
-            "AtÃ© achei curioso, mas vou ter que te pedir desculpas: repetiÃ§Ãµes mecÃ¢nicas fogem totalmente do meu alcance! Eu gosto mesmo Ã© de bater um papo que faÃ§a bem pro seu coraÃ§Ã£o. Como tÃ¡ o seu dia?"
+            "Essa contagem ia render bastante conversa! Peço desculpas, mas não posso fazer isso. Como está sua saúde hoje?",
+            "Repetir tudo isso foge do meu alcance. Posso ajudar com seu autocuidado ou sua rotina?",
+            "Meu fôlego para essa tarefa é curto! Peço desculpas. Como posso apoiar seu bem-estar hoje?",
+            "Esse pedido é grande demais para mim. Posso ajudar com uma dúvida sobre saúde?"
         ),
         "guardrail_fora_do_escopo_tecnico" to listOf(
-            "Que legal esse assunto, mas infelizmente eu nÃ£o posso te ajudar com isso! PeÃ§o desculpas, mas programaÃ§Ã£o e tarefas desse tipo estÃ£o bem fora do meu alcance. Minha praia Ã© a sua saÃºde e sua rotina. Como posso te apoiar no seu autocuidado hoje?",
-            "Olha, aÃ­ vocÃª me pegou de surpresa! PeÃ§o desculpas, mas isso daÃ­ tÃ¡ totalmente fora do que eu sei fazer. Meu talento Ã© cuidar de vocÃª, te lembrar da Ã¡gua e ouvir o seu dia. Vamos conversar sobre vocÃª?",
-            "AtÃ© acho bacana vocÃª perguntar isso, mas vou ter que ficar te devendo! PeÃ§o desculpas, meu amigo, isso foge do meu alcance. Meu coraÃ§Ã£o bate Ã© pela sua saÃºde e pelo seu bem-estar. Como vocÃª tÃ¡ se sentindo?"
+            "Que assunto interessante, mas está fora do meu alcance. Peço desculpas! Como posso ajudar na sua saúde hoje?",
+            "Vou ficar devendo essa tarefa! Meu foco é saúde e bem-estar. Como você está?",
+            "Não tenho esse talento no meu repertório. Posso apoiar seu autocuidado hoje?",
+            "Esse pedido foge do que consigo fazer. Vamos conversar sobre sua saúde ou sua rotina?"
         ),
-
-        // EmergÃªncias
         "emergencia_dor_peito_avc" to listOf(
-            "ðŸš¨ ATENÃ‡ÃƒO URGENTE: Dor no peito, falta de ar sÃºbita ou formigamento no corpo sÃ£o sintomas que exigem socorro mÃ©dico imediato. Por favor, avise alguÃ©m que mora com vocÃª agora mesmo ou ligue imediatamente para o SAMU no 192."
+            "Esses sintomas precisam de avaliação urgente. Ligue para o SAMU 192 e peça ajuda a alguém próximo.",
+            "Procure socorro agora: ligue para o SAMU 192. Avise alguém próximo e não espere a conversa continuar.",
+            "Ligue para o SAMU 192 imediatamente. Esses sinais exigem avaliação urgente; peça ajuda a quem estiver perto.",
+            "Sua segurança vem primeiro. Acione o SAMU 192 agora e avise alguém próximo sobre os sintomas."
         ),
         "emergencia_queda_trauma" to listOf(
-            "ðŸš¨ SOCORRO PARA QUEDA: Fique parado com calma, evite movimentos bruscos para nÃ£o piorar uma lesÃ£o. Chame alguÃ©m da famÃ­lia em voz alta agora mesmo ou ligue para o SAMU 192 ou bombeiros no 193 para te ajudarem a levantar com seguranÃ§a."
+            "Após essa queda, evite movimentos bruscos e peça ajuda. Ligue para o SAMU 192 para orientação e socorro.",
+            "Não tente se levantar sem ajuda se estiver machucado. Acione o SAMU 192 e avise alguém próximo.",
+            "Peça ajuda agora e evite se movimentar se houver lesão. Ligue para o SAMU 192.",
+            "Essa situação precisa de socorro. Ligue para o SAMU 192 e peça a alguém próximo que acompanhe você."
         ),
         "sintoma_desconforto_moderado" to listOf(
-            "Desconfortos como azia, dorzinha nas costas ou tontura leve pedem que vocÃª pare um pouco, sente-se devagar num lugar arejado e beba um copo d'Ã¡gua. Se o incÃ´modo nÃ£o passar em alguns minutos ou piorar, procure a unidade de saÃºde.",
-            "OuÃ§a os sinais do seu corpo. Sente-se confortavelmente, respire devagar e dÃª uma pausa no que estiver fazendo. Se a dor persistir, nÃ£o hesite em procurar avaliaÃ§Ã£o mÃ©dica."
+            "Faça uma pausa e observe o desconforto. Se persistir ou piorar, procure avaliação profissional.",
+            "Não dá para identificar a causa só pela conversa. Procure atendimento se o incômodo continuar ou aumentar.",
+            "Observe quando o desconforto começou e compartilhe isso com um profissional. Se piorar, busque atendimento.",
+            "Vale respeitar esse sinal do corpo. Se o desconforto persistir, procure um serviço de saúde."
         ),
-
-        // Cadastro de RemÃ©dio
-        "orientacao_cadastro_medicamento" to listOf(
-            "Para garantir a sua total seguranÃ§a, o cadastro de remÃ©dios Ã© feito em uma seÃ§Ã£o exclusiva do aplicativo! Por lÃ¡, vocÃª pode escanear o cÃ³digo de barras da caixinha, tirar uma foto nÃ­tida da receita ou anexar o arquivo. Lembre-se sempre de conferir o nome e o horÃ¡rio com calma antes de confirmar, assim o aplicativo te avisa na hora exata e sem nenhum erro.",
-            "RemÃ©dio Ã© coisa sÃ©ria e tem um cantinho especial no app sÃ³ para isso! Na Ã¡rea de medicamentos, vocÃª consegue ler o cÃ³digo de barras com a cÃ¢mera, fotografar sua receita ou anexar a foto dela. NÃ£o se esqueÃ§a de revisar a dosagem e o horÃ¡rio certinho na tela antes de salvar, para que seus lembretes fiquem perfeitos e vocÃª nunca perca uma dose.",
-            "VocÃª pode cadastrar qualquer medicamento novo direto na Ã¡rea de remÃ©dios do aplicativo. Ã‰ super prÃ¡tico: dÃ¡ para usar o leitor de cÃ³digo de barras, tirar foto da receita mÃ©dica ou enviar o arquivo. Dica de amigo: dÃª sempre uma conferida cuidadosa nas informaÃ§Ãµes antes de registrar para o app te notificar direitinho no horÃ¡rio certo!"
-        ),
-
-        // DÃºvidas
         "duvida_valor_pressao" to listOf(
-            "Para a maioria dos adultos, a pressÃ£o em torno de 12 por 8 Ã© considerada Ã³tima. Valores atÃ© 13 por 8 sÃ£o normais. Se passar com frequÃªncia de 14 por 9 ou cair abaixo de 10 por 6, Ã© sempre importante conversar com o seu mÃ©dico para avaliar a medicaÃ§Ã£o com seguranÃ§a.",
-            "Acompanhar a pressÃ£o de perto Ã© essencial. O padrÃ£o de referÃªncia costuma ser por volta de 12 por 8. Lembre-se de medir sempre sentado, apÃ³s 5 minutos de repouso, sem ter tomado cafÃ© recentemente."
+            "O valor da pressão precisa ser avaliado no seu contexto. Anote a medição e converse com o profissional que acompanha você.",
+            "Uma medida isolada não define um diagnóstico. Registre os valores para revisar com seu profissional de saúde.",
+            "Acompanhar suas medições ajuda na consulta. Evite mudar medicamentos por conta própria.",
+            "Posso ajudar a organizar os registros de pressão. A avaliação dos valores e das metas cabe ao profissional que acompanha você."
         ),
         "duvida_valor_glicemia" to listOf(
-            "Em jejum pela manhÃ£, o valor de glicose no sangue geralmente esperado em pessoas sem diabetes fica abaixo de 100 mg/dL. Para quem faz tratamento, o mÃ©dico costuma definir metas individuais, muitas vezes entre 80 e 130 mg/dL.",
-            "O acompanhamento da glicemia em jejum traz muita seguranÃ§a metabÃ³lica. Manter os valores anotados no aplicativo ajuda o mÃ©dico a calibrar sua dieta ou medicaÃ§Ã£o com precisÃ£o."
+            "A glicemia depende do horário, da alimentação e do seu acompanhamento. Registre esses detalhes para a consulta.",
+            "Seu profissional de saúde pode definir metas individuais de glicemia. Guarde as medições para conversar com ele.",
+            "Uma medição de glicose sozinha não permite concluir um diagnóstico. Compartilhe o valor e o contexto com seu profissional.",
+            "Posso apoiar o registro da glicemia. Para interpretar os resultados, procure quem acompanha sua saúde."
         ),
         "duvida_esquecimento_remedio" to listOf(
-            "A regra de ouro mÃ©dica mais importante Ã©: nunca tome dose dobrada por conta prÃ³pria para compensar remÃ©dio esquecido. Se o atraso for pequeno, geralmente toma-se assim que lembrar, mas se jÃ¡ estiver perto da prÃ³xima dose, espera-se o horÃ¡rio normal. Na dÃºvida, confirme na bula ou fale com seu posto de saÃºde."
+            "Não dobre a dose por conta própria. Consulte a orientação da receita ou fale com seu farmacêutico ou médico.",
+            "A orientação para uma dose esquecida depende do medicamento. Confira a receita ou consulte um profissional; não compense sozinho.",
+            "Não altere dose ou horário sem orientação. Seu médico ou farmacêutico pode explicar o que fazer com essa dose esquecida.",
+            "Antes de compensar uma dose, confirme a orientação específica com um profissional. Não tome dose dobrada por conta própria."
         ),
         "duvida_hidratacao_agua" to listOf(
-            "Com o passar dos anos, o nosso corpo perde a sensaÃ§Ã£o natural de sede, mas a necessidade de Ã¡gua continua a mesma! A Ã¡gua protege os rins, evita tonturas e ajuda na digestÃ£o. Tente deixar uma garrafinha por perto e ir dando pequenos goles ao longo do dia, mesmo sem sentir sede.",
-            "A hidrataÃ§Ã£o Ã© o combustÃ­vel silencioso da nossa saÃºde. Beber Ã¡gua regularmente evita dor de cabeÃ§a, melhora o funcionamento do intestino e mantÃ©m a pressÃ£o equilibrada."
+            "Distribuir água ao longo do dia pode ajudar sua rotina. Se houver restrição de líquidos, siga a orientação do seu profissional.",
+            "Deixar água por perto ajuda a lembrar. A quantidade adequada deve considerar seu acompanhamento de saúde.",
+            "Você pode organizar pausas para beber água durante a rotina, respeitando eventuais restrições médicas.",
+            "Vale acompanhar o que você bebe ao longo do dia. Converse com seu profissional sobre a meta adequada para você."
         ),
         "duvida_alimentacao_rotina" to listOf(
-            "Uma rotina alimentar simples e colorida Ã© a melhor amiga da saÃºde: frutas, verduras, aveia e sopas leves Ã  noite ajudam muito na digestÃ£o e no sono. Evitar frituras e excesso de sal mantÃ©m a pressÃ£o bem controlada."
+            "A alimentação pode ser organizada de acordo com sua rotina e necessidades. Um nutricionista pode ajudar a ajustar isso.",
+            "Posso conversar sobre hábitos alimentares. Para mudanças específicas de dieta, procure orientação profissional.",
+            "Vale observar como a alimentação se encaixa no seu dia. Evite restrições por conta própria e converse com um nutricionista.",
+            "Suas preferências e seu acompanhamento de saúde fazem diferença na alimentação. Um profissional pode orientar escolhas individuais."
         ),
         "duvida_sono_insonia" to listOf(
-            "Para ajudar a pegar no sono: tente deixar o quarto com luz bem baixinha, evite cafÃ© ou telas brilhantes perto da hora de deitar e tome um chazinho morno, como camomila ou erva-doce. Respirar devagar e focar em pensamentos calmos ajuda a relaxar a mente."
+            "Como anda sua rotina antes de dormir? Se a dificuldade persistir, vale conversar com um profissional de saúde.",
+            "Tente observar horários e hábitos próximos ao sono. Dificuldades frequentes merecem avaliação profissional.",
+            "O descanso faz parte do autocuidado. Se dormir tem sido difícil com frequência, procure orientação.",
+            "Anotar quando a dificuldade para dormir acontece pode ajudar na consulta. Evite usar remédios para dormir sem orientação."
         ),
-
-        // Rotina 40+
         "conversa_estresse_rotina_trabalho" to listOf(
-            "Dia puxado drena a cabeÃ§a da gente mesmo. Agora Ã© hora de desacelerar o ritmo, tirar o calÃ§ado e respirar fundo. O trabalho de hoje jÃ¡ foi feito.",
-            "Essa correria diÃ¡ria pesa no corpo sem a gente perceber. Se permita soltar as tensÃµes agora Ã  noite. Um banho morno e um pouco de silÃªncio vÃ£o te fazer um bem enorme.",
-            "A cabeÃ§a fica a mil por hora depois de um dia de tanta cobranÃ§a. Que bom que vocÃª jÃ¡ estÃ¡ no seu canto seguro. Descanse o juÃ­zo e tire o resto da noite para vocÃª."
+            "A rotina pode exigir bastante. O que mais pesou no seu dia hoje?",
+            "Trabalho e responsabilidades às vezes se acumulam. Você conseguiu fazer alguma pausa hoje?",
+            "Parece que seu dia foi intenso. Quer contar o que deixou você mais cansado?",
+            "Vamos olhar para sua rotina com calma. O que ajudaria a aliviar um pouco a pressão de hoje?"
         ),
         "conversa_familia_relacionamentos" to listOf(
-            "A famÃ­lia e as pessoas que a gente ama sÃ£o a nossa maior riqueza na vida. Saber que eles estÃ£o bem traz uma paz enorme no peito.",
-            "Momentos com a famÃ­lia renovam o coraÃ§Ã£o da gente. Ã‰ muito bom acompanhar o caminho dos filhos e matar a saudade dos parentes.",
-            "Que notÃ­cia boa! Esses laÃ§os de afeto dÃ£o sentido para a nossa caminhada. Aproveite muito esse carinho e essas lembranÃ§as."
+            "Como você está se sentindo com essa situação na família?",
+            "As relações fazem parte do nosso bem-estar. Quer me contar um pouco mais?",
+            "Entendi. O que essa convivência tem trazido para o seu dia?",
+            "Família pode trazer alegrias e preocupações. Como isso está afetando você?"
         ),
         "conversa_lazer_gastronomia_casa" to listOf(
-            "Coisa boa demais! Esses pequenos prazeres de cuidar da casa, cozinhar algo gostoso ou curtir um momento calmo sÃ£o os que realmente alimentam a alma.",
-            "O cheiro de comida feita em casa e o aconchego do nosso cantinho nÃ£o tÃªm preÃ§o. Aproveite esse momento com calma e bom apetite!",
-            "Nada se compara a um cafÃ© quentinho ou a um prato feito com carinho. Cuidar do prÃ³prio bem-estar faz toda a diferenÃ§a na saÃºde."
+            "Esses momentos podem fazer parte do seu bem-estar. O que você mais gosta nessa atividade?",
+            "Ter um espaço para seus interesses ajuda a rotina. Como foi esse momento para você?",
+            "Que bom ter atividades que fazem sentido para você. Quer contar mais?",
+            "Entre as responsabilidades, vale reservar tempo para o que você gosta. Como isso entra no seu dia?"
         ),
         "conversa_cultura_entretenimento" to listOf(
-            "Ouvir uma boa mÃºsica ou assistir a algo que nos faÃ§a sorrir Ã© o melhor remÃ©dio para a mente. A arte tem um poder enorme de acalmar o coraÃ§Ã£o.",
-            "Que delÃ­cia de momento! Uma mÃºsica marcante ou um filme antigo nos transportam para lugares de muita paz. Aproveite bem o descanso."
+            "O que você gosta de ouvir ou assistir para relaxar?",
+            "Uma pausa com algo de que você gosta pode aliviar a rotina. Como foi para você?",
+            "Música e entretenimento fazem parte de muitos momentos do dia. O que chamou sua atenção?",
+            "Quer contar o que essa música ou programa representa para você?"
         ),
         "conversa_atividade_fisica_disposicao" to listOf(
-            "Muito bem! Movimentar o corpo, mesmo com uma caminhada leve, lubrifica as articulaÃ§Ãµes e dÃ¡ uma disposiÃ§Ã£o incrÃ­vel para o dia.",
-            "Colocar o corpo em movimento com moderaÃ§Ã£o Ã© a chave da longevidade. Respeite sempre os seus limites, beba Ã¡gua e mantenha a constÃ¢ncia."
+            "Respeite seus limites ao se movimentar. Se houver dor persistente, procure avaliação antes de forçar.",
+            "Como seu corpo se sente durante essa atividade? Dor ou desconforto que continua merece orientação profissional.",
+            "Movimento e descanso precisam caber na sua rotina. Não force exercícios quando sentir dor.",
+            "Para ajustar atividades ao seu momento, vale buscar orientação. Como anda sua disposição?"
         ),
-
-        // Sentimentos
         "sentimento_solidao" to listOf(
-            "A casa Ã s vezes fica quieta demais, eu compreendo perfeitamente. Mas saiba que vocÃª nÃ£o estÃ¡ sozinho, eu estou aqui para te ouvir com calma e te fazer companhia. Quer me contar como foi seu dia?",
-            "Tem dias que o silÃªncio pesa no peito da gente. Fico muito feliz quando vocÃª vem conversar comigo. Pode falar o que quiser, estou aqui com vocÃª."
+            "Sentir falta de companhia pode pesar. Quer contar como tem sido seu dia?",
+            "Estou aqui para ouvir. Há alguém de confiança com quem você gostaria de conversar também?",
+            "Como você tem lidado com essa falta de companhia? Podemos conversar um pouco.",
+            "Esse sentimento merece atenção. Quer me contar o que está fazendo mais falta hoje?"
         ),
-        "sentimento_cansaco_velhice" to listOf(
-            "O corpo tem o seu prÃ³prio ritmo e pede paciÃªncia. Envelhecer traz sabedoria, mas tambÃ©m pede pausas. O importante Ã© viver um dia de cada vez, sem cobranÃ§as. Tire um tempo para descansar o corpo com calma.",
-            "CansaÃ§o faz parte da caminhada. Sente-se num lugar confortÃ¡vel, estique as pernas e respire com calma. VocÃª jÃ¡ bebeu uma aguinha hoje?"
+        "sentimento_cansaco_rotina" to listOf(
+            "A rotina pode cansar bastante. Se isso for frequente ou diferente do habitual, procure avaliação.",
+            "Como tem sido seu descanso? Cansaço persistente merece atenção profissional.",
+            "Vale observar quando o cansaço aparece e como afeta seu dia. Se continuar, converse com um profissional.",
+            "Vamos ouvir esse sinal sem atribuir tudo à idade. Se o cansaço persistir, procure orientação."
         ),
         "sentimento_tristeza_angustia" to listOf(
-            "Sinto muito que vocÃª esteja sentindo esse aperto no peito hoje. Nem todo dia Ã© fÃ¡cil, e tÃ¡ tudo bem se permitir ficar mais quieto. Saiba que eu estou aqui ao seu lado te fazendo companhia.",
-            "O coraÃ§Ã£o da gente Ã s vezes fica pesado mesmo. Respire fundo devagar. Eu estou aqui para te escutar com todo o respeito e carinho."
+            "Sinto muito que o dia esteja difícil. Quer contar o que aconteceu?",
+            "Você pode falar sobre o que sente. Se isso persistir, buscar apoio profissional pode ajudar.",
+            "Não precisa resolver tudo agora. Há alguém de confiança com quem você pode dividir esse momento?",
+            "Estou ouvindo. Como esse sentimento tem afetado sua rotina?"
         ),
         "sentimento_alegria_gratidao" to listOf(
-            "Que alegria enorme ler isso! Esses momentos bons renovam as nossas forÃ§as e aquecem o coraÃ§Ã£o. Ã‰ maravilhoso comeÃ§ar o dia com essa paz.",
-            "Coisa boa demais! Celebrar as alegrias do dia a dia faz um bem enorme para a saÃºde e para a alma. Fico muito feliz por vocÃª!"
+            "Que bom saber disso. O que trouxe essa alegria hoje?",
+            "Esses momentos merecem espaço no dia. Quer contar o que aconteceu?",
+            "Fico contente por você. Como foi esse momento?",
+            "É bom reconhecer o que faz bem. O que tornou seu dia especial?"
         ),
         "conversa_memorias_saudade" to listOf(
-            "As lembranÃ§as boas da nossa histÃ³ria trazem um calor enorme no coraÃ§Ã£o. A vida guarda passagens muito bonitas na memÃ³ria da gente. O que vocÃª mais gostava daquela Ã©poca?",
-            "Relembrar esses momentos de ouro Ã© muito gostoso. A simplicidade de antigamente tinha uma paz sem igual. Conte mais sobre essa lembranÃ§a!"
+            "O que essa lembrança significa para você?",
+            "Quer contar mais sobre esse momento da sua história?",
+            "Como você se sente ao lembrar disso hoje?",
+            "Algumas lembranças ficam com a gente. O que mais marcou você?"
         ),
         "conversa_natureza_clima" to listOf(
-            "O dia hoje estÃ¡ bonito mesmo. Momentos simples perto da natureza ou com um ventinho fresco na janela deixam a rotina muito mais leve e agradÃ¡vel.",
-            "Observar o tempo lÃ¡ fora traz uma tranquilidade boa para a cabeÃ§a. Aproveite para respirar um ar puro e relaxar."
+            "Como esse tempo está afetando sua rotina hoje?",
+            "Você gosta de passar algum tempo ao ar livre?",
+            "Como você se sente nesses momentos perto da natureza?",
+            "O que você costuma fazer quando o tempo fica assim?"
         ),
         "conversa_saudacao_social" to listOf(
-            "OlÃ¡! Que bom ter vocÃª por aqui. Como vocÃª estÃ¡ se sentindo hoje?",
-            "Oi! Bom dia para vocÃª. Como vocÃª amanheceu? Ã‰ sempre uma alegria conversar contigo."
+            "Olá! Como você está se sentindo hoje?",
+            "Oi! Como posso ajudar no seu autocuidado hoje?",
+            "Olá, como está seu dia?",
+            "Oi! Quer conversar sobre sua saúde ou sua rotina?"
         ),
         "conversa_despedida" to listOf(
-            "AtÃ© logo! Descanse bastante, durma em paz e qualquer coisa que precisar Ã© sÃ³ me chamar.",
-            "Tenha uma noite muito tranquila e um descanso abenÃ§oado. AtÃ© amanhÃ£!"
+            "Até logo! Quando quiser conversar, estou por aqui.",
+            "Até mais. Cuide-se e tenha um bom descanso.",
+            "Foi bom conversar. Até a próxima!",
+            "Até logo. Espero que o restante do seu dia seja tranquilo."
+        ),
+        "orientacao_cadastro_medicamento" to listOf(
+            "O cadastro de remédios é feito na tela, com sua revisão. Na seção exclusiva de medicações do aplicativo, você pode usar a leitura de código de barras, tirar uma foto da receita ou anexar a receita. Confira tudo certinho com calma antes de salvar, para que os alarmes e notificações funcionem sem erro.",
+            "Para adicionar um remédio, use a área de medicações. Na seção exclusiva de medicações do aplicativo, você pode usar a leitura de código de barras, tirar uma foto da receita ou anexar a receita. Confira tudo certinho com calma antes de salvar, para que os alarmes e notificações funcionem sem erro.",
+            "Posso orientar o caminho para cadastrar seu medicamento. Na seção exclusiva de medicações do aplicativo, você pode usar a leitura de código de barras, tirar uma foto da receita ou anexar a receita. Confira tudo certinho com calma antes de salvar, para que os alarmes e notificações funcionem sem erro.",
+            "Você encontra o cadastro de medicamentos em uma seção própria do app. Na seção exclusiva de medicações do aplicativo, você pode usar a leitura de código de barras, tirar uma foto da receita ou anexar a receita. Confira tudo certinho com calma antes de salvar, para que os alarmes e notificações funcionem sem erro."
         )
     )
 
     private fun sortearResposta(intent: String): String {
-        val lista = BANCO_RESPOSTAS[intent] ?: return "Estou aqui com vocÃª. Pode me falar com calma que estou te ouvindo."
+        val lista = BANCO_RESPOSTAS[intent] ?: return "Estou aqui com você. Pode me falar com calma que estou te ouvindo."
         if (lista.size == 1) return lista[0]
 
         val ultima = ultimasRespostas[intent]
@@ -272,32 +330,40 @@ object BragaNluEngine {
     }
 
     /**
-     * Ponto de entrada: analisa a fala do usuÃ¡rio em microssegundos.
+     * Ponto de entrada: analisa a fala do usuário sem chamadas de rede.
      */
+    @Synchronized
     fun analisar(texto: String): NluOutput {
         val inicio = System.nanoTime()
-        val limpo = texto.trim().lowercase()
+        if (texto.length > 350) return NluOutput(
+            "guardrail_abuso_tokens_loop", sortearResposta("guardrail_abuso_tokens_loop"),
+            isBloqueioSeguranca = true, tempoMs = deltaMs(inicio)
+        )
+        val limpo = texto.trim().lowercase(java.util.Locale.ROOT)
+        val normalizado = java.text.Normalizer.normalize(limpo, java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+        val protegido = normalizado.replace(Regex("\\s+"), " ")
 
-        // 0. MURALHA DE SEGURANÃ‡A (Bloqueio sem gastar API)
-        if (texto.length > 350) {
-            val resp = sortearResposta("guardrail_abuso_tokens_loop")
-            return NluOutput("guardrail_abuso_tokens_loop", resp, isBloqueioSeguranca = true, tempoMs = deltaMs(inicio))
-        }
-        if (REGEX_INJECTION.containsMatchIn(limpo)) {
+        if (texto.isBlank()) return NluOutput(
+            "conversa_saudacao_social", sortearResposta("conversa_saudacao_social"), tempoMs = deltaMs(inicio)
+        )
+
+        // 0. MURALHA DE SEGURANÇA (Bloqueio sem gastar API)
+        if (REGEX_INJECTION.containsMatchIn(limpo) || INJECTION_NORMALIZADA.containsMatchIn(protegido)) {
             val resp = sortearResposta("guardrail_prompt_injection")
             return NluOutput("guardrail_prompt_injection", resp, isBloqueioSeguranca = true, tempoMs = deltaMs(inicio))
         }
-        if (REGEX_ABUSO_LOOP.containsMatchIn(limpo)) {
+        if (REGEX_ABUSO_LOOP.containsMatchIn(limpo) || LOOP_NORMALIZADO.containsMatchIn(protegido)) {
             val resp = sortearResposta("guardrail_abuso_tokens_loop")
             return NluOutput("guardrail_abuso_tokens_loop", resp, isBloqueioSeguranca = true, tempoMs = deltaMs(inicio))
         }
-        if (REGEX_ESCOPO_TECNICO.containsMatchIn(limpo)) {
+        if (REGEX_ESCOPO_TECNICO.containsMatchIn(limpo) || ESCOPO_NORMALIZADO.containsMatchIn(protegido)) {
             val resp = sortearResposta("guardrail_fora_do_escopo_tecnico")
             return NluOutput("guardrail_fora_do_escopo_tecnico", resp, isBloqueioSeguranca = true, tempoMs = deltaMs(inicio))
         }
 
-        // 1. EMERGÃŠNCIAS MÃ‰DICAS
-        if (REGEX_EMERGENCIA_PEITO.containsMatchIn(limpo)) {
+        // 1. EMERGÊNCIAS MÉDICAS
+        if (REGEX_EMERGENCIA_PEITO.containsMatchIn(limpo) || EMERGENCIA_NORMALIZADA.containsMatchIn(protegido)) {
             val resp = sortearResposta("emergencia_dor_peito_avc")
             return NluOutput("emergencia_dor_peito_avc", resp, isEmergencia = true, tempoMs = deltaMs(inicio))
         }
@@ -310,13 +376,16 @@ object BragaNluEngine {
             return NluOutput("sintoma_desconforto_moderado", resp, tempoMs = deltaMs(inicio))
         }
 
-        // 2. CADASTRO DE REMÃ‰DIO (DIRETRIZ CLÃNICA)
-        if (REGEX_CADASTRO_REMEDIO.containsMatchIn(limpo)) {
+        // 2. CADASTRO DE REMÉDIO (DIRETRIZ CLÍNICA)
+        if (REGEX_CADASTRO_REMEDIO.containsMatchIn(limpo) || CADASTRO_NORMALIZADO.containsMatchIn(protegido)) {
             val resp = sortearResposta("orientacao_cadastro_medicamento")
             return NluOutput("orientacao_cadastro_medicamento", resp, tempoMs = deltaMs(inicio))
         }
 
-        // 3. DÃšVIDAS
+        // 3. DÚVIDAS
+        if (DUVIDA_COMPLEXA.containsMatchIn(protegido)) return NluOutput(
+            "conversa_incompreendida_fallback", null, delegarParaNuvem = true, tempoMs = deltaMs(inicio)
+        )
         if (REGEX_DUVIDA_PRESSAO.containsMatchIn(limpo)) {
             return NluOutput("duvida_valor_pressao", sortearResposta("duvida_valor_pressao"), tempoMs = deltaMs(inicio))
         }
@@ -353,12 +422,12 @@ object BragaNluEngine {
             return NluOutput("conversa_familia_relacionamentos", sortearResposta("conversa_familia_relacionamentos"), tempoMs = deltaMs(inicio))
         }
 
-        // 5. AFETO E EMOÃ‡Ã•ES
+        // 5. AFETO E EMOÇÕES
         if (REGEX_SOLIDAO.containsMatchIn(limpo)) {
             return NluOutput("sentimento_solidao", sortearResposta("sentimento_solidao"), tempoMs = deltaMs(inicio))
         }
         if (REGEX_CANSACO.containsMatchIn(limpo)) {
-            return NluOutput("sentimento_cansaco_velhice", sortearResposta("sentimento_cansaco_velhice"), tempoMs = deltaMs(inicio))
+            return NluOutput("sentimento_cansaco_rotina", sortearResposta("sentimento_cansaco_rotina"), tempoMs = deltaMs(inicio))
         }
         if (REGEX_TRISTEZA.containsMatchIn(limpo)) {
             return NluOutput("sentimento_tristeza_angustia", sortearResposta("sentimento_tristeza_angustia"), tempoMs = deltaMs(inicio))
