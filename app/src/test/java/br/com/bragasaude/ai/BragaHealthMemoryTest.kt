@@ -76,7 +76,7 @@ class BragaHealthMemoryTest {
         val answer = memory.answer(BragaHealthMemory.WATER, "owner")
         assertTrue(answer.contains("ainda não registrou água hoje"))
         assertFalse(answer.contains("0%"))
-        assertFalse(answer.contains("0 ml"))
+        assertFalse(Regex("""\b0\s*ml\b""").containsMatchIn(answer))
     }
 
     @Test fun `ausencia e falha no Room jamais chamam nuvem`() = runTest {

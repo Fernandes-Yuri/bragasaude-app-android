@@ -79,6 +79,7 @@ class OrbChatViewModel @Inject constructor(
     private var revision = 0
     private var visible = false
     private var inputChannel = InputChannel.TEXT
+    var nluResponseDelayMs: Long = 500L
     private val authListener = FirebaseAuth.AuthStateListener {
         val next = it.currentUser?.uid
         if (uid != next) {
@@ -227,15 +228,15 @@ class OrbChatViewModel @Inject constructor(
                     local.intent == "orientacao_cadastro_medicamento" || BragaHealthMemory.supports(local.intent) ||
                     (!local.delegarParaNuvem && (concrete is VoiceHealthIntent.Unknown || concrete is VoiceHealthIntent.ConversationalReply))
                 val reply = if (shortcut != null) {
-                    if (channel == InputChannel.TEXT) delay(500)
+                    if (channel == InputChannel.TEXT && nluResponseDelayMs > 0) delay(nluResponseDelayMs)
                     OrbReply(JSONObject().put("fala", "Abrir ${actionLabel(shortcut)}.")
                         .put("acao", shortcut).put("parametros", JSONObject()).toString())
                 } else if (useLocal) {
                     val owner = uid ?: throw CancellationException("Sessão alterada")
                     val resolved = hybrid.resolveLocal(local, owner, channel)
                     // Delay mínimo no chat de texto para experiência humana e cadenciada
-                    if (channel == InputChannel.TEXT) {
-                        delay(500)
+                    if (channel == InputChannel.TEXT && nluResponseDelayMs > 0) {
+                        delay(nluResponseDelayMs)
                     }
                     if (auth.currentUser?.uid != owner || uid != owner || version != revision) return@launch
                     if (local.isEmergencia) navigation.send(OrbChatEvent.Emergency)
