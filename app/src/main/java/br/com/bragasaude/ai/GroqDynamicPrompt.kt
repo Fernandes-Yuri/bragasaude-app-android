@@ -4,7 +4,11 @@ import javax.inject.Inject
 
 /** Compactação extrativa local: até cinco turnos, sem chamada adicional ao modelo. */
 class GroqDynamicPrompt @Inject constructor() {
-    fun build(history: List<Pair<String, String>>): String {
+    fun build(history: List<Pair<String, String>>, channel: InputChannel = InputChannel.VOICE): String {
+        val modality = when (channel) {
+            InputChannel.TEXT -> "Canal de entrada: TEXT. O usuário digitou. Nunca peça para falar, repetir mais alto ou melhorar o áudio; se necessário, peça para reformular ou detalhar o texto."
+            InputChannel.VOICE -> "Canal de entrada: VOICE. A entrada é uma transcrição de voz; use linguagem natural para áudio."
+        }
         val context = history.filter { it.first == "user" || it.first == "assistant" }
             .takeLast(10).joinToString("\n") { (role, text) ->
                 val excerpt = text.replace(Regex("\\s+"), " ").trim().take(240)
@@ -14,6 +18,7 @@ class GroqDynamicPrompt @Inject constructor() {
         return """
             Você é o cérebro avançado do Braga Saúde. O motor local on-device não foi
             capaz de responder com precisão à dúvida atual deste usuário (40+).
+            $modality
             Responda em português brasileiro, com linguagem natural, acolhedora,
             tom maduro e seguro. Não infantilize nem presuma fragilidade pela idade.
             Não faça diagnósticos definitivos, não interprete exames como laudos e

@@ -14,25 +14,36 @@ sealed interface BragaHybridEvent {
 /** A nuvem somente produz fala; ações e persistência permanecem no domínio local. */
 class BragaHybridOrchestrator internal constructor(
     private val cloud: GroqStreamSource,
-    private val prompt: GroqDynamicPrompt
+    private val prompt: GroqDynamicPrompt,
+    private val memory: BragaHealthMemory? = null
 ) {
-    @Inject constructor(client: GroqStreamingClient, prompt: GroqDynamicPrompt) : this(
-        client as GroqStreamSource, prompt
+    @Inject constructor(client: GroqStreamingClient, prompt: GroqDynamicPrompt, memory: BragaHealthMemory) : this(
+        client as GroqStreamSource, prompt, memory
     )
 
-    fun analyze(speech: String): NluOutput = BragaNluEngine.analisar(speech)
+    fun analyze(speech: String, channel: InputChannel = InputChannel.VOICE): NluOutput = BragaNluEngine.analisar(speech, channel)
 
-    fun respond(speech: String, history: List<Pair<String, String>>): Flow<BragaHybridEvent> = flow {
-        val local = analyze(speech)
+    suspend fun resolveLocal(output: NluOutput, userId: String, channel: InputChannel): NluOutput {
+        val reply = if (BragaHealthMemory.supports(output.intent)) {
+            memory?.answer(output.intent, userId) ?: "Não foi possível consultar seus registros locais agora."
+        } else output.respostaLocal.orEmpty()
+        return output.copy(respostaLocal = BragaInputLanguage.forChannel(reply, channel))
+    }
+
+    fun respond(speech: String, history: List<Pair<String, String>>, channel: InputChannel = InputChannel.VOICE,
+                userId: String = "anonymous"): Flow<BragaHybridEvent> = flow {
+        val local = analyze(speech, channel)
         if (!local.delegarParaNuvem || local.isEmergencia || local.isBloqueioSeguranca) {
-            emit(BragaHybridEvent.Local(local))
+            emit(BragaHybridEvent.Local(resolveLocal(local, userId, channel)))
             return@flow
         }
         val answer = StringBuilder()
-        cloud.stream(prompt.build(history), speech).collect { delta ->
+        cloud.stream(prompt.build(history, channel), speech).collect { delta ->
             answer.append(delta)
-            emit(BragaHybridEvent.Delta(delta))
+            if (channel == InputChannel.VOICE) emit(BragaHybridEvent.Delta(delta))
         }
-        emit(BragaHybridEvent.Completed(answer.toString()))
+        val safe = BragaInputLanguage.forChannel(answer.toString(), channel)
+        if (channel == InputChannel.TEXT) emit(BragaHybridEvent.Delta(safe))
+        emit(BragaHybridEvent.Completed(safe))
     }
 }

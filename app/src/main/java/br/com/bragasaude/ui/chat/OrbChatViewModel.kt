@@ -9,6 +9,7 @@ import br.com.bragasaude.data.remote.service.NotificationClient
 import br.com.bragasaude.domain.VoiceHealthIntent
 import br.com.bragasaude.domain.VoiceHealthParser
 import br.com.bragasaude.ui.util.Screen
+import br.com.bragasaude.ai.*
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
@@ -61,7 +62,8 @@ class OrbChatViewModel @Inject constructor(
     private val notifications: NotificationClient,
     private val profiles: ProfileDao,
     private val familyRepository: FamilyBridgeRepository,
-    private val voiceParser: VoiceHealthParser = VoiceHealthParser()
+    private val voiceParser: VoiceHealthParser = VoiceHealthParser(),
+    private val hybrid: BragaHybridOrchestrator
 ) : ViewModel() {
     private val mutable = MutableStateFlow(OrbChatUiState())
     val state: StateFlow<OrbChatUiState> = mutable.asStateFlow()
@@ -76,6 +78,7 @@ class OrbChatViewModel @Inject constructor(
     private var audioJob: Job? = null
     private var revision = 0
     private var visible = false
+    private var inputChannel = InputChannel.TEXT
     private val authListener = FirebaseAuth.AuthStateListener {
         val next = it.currentUser?.uid
         if (uid != next) {
@@ -101,15 +104,17 @@ class OrbChatViewModel @Inject constructor(
         }
     }
 
-    fun enterScreen() { visible = true; gateway.open(viewModelScope) }
+    fun enterScreen() { visible = true }
     fun leaveScreen() {
         visible = false
         cancelGeneration()
         stopAudio()
         gateway.close()
     }
-    fun retryConnection() { gateway.retry() }
-    fun updateInput(text: String) { mutable.update { it.copy(input = text) } }
+    fun retryConnection() { gateway.open(viewModelScope); gateway.retry() }
+    fun updateInput(text: String) { inputChannel = InputChannel.TEXT; mutable.update { it.copy(input = text) } }
+    fun updateVoiceInput(text: String) { inputChannel = InputChannel.VOICE; mutable.update { it.copy(input = text) } }
+    fun sendInput(text: String) = sendMessage(text, if (text == state.value.input) inputChannel else InputChannel.TEXT)
     fun showError(message: String) { mutable.update { it.copy(error = message) } }
     fun clearError() { mutable.update { it.copy(error = null) } }
     fun changeTextScale() { mutable.update { it.copy(textScale = if (it.textScale >= 1.4f) 1f else it.textScale + .2f) } }
@@ -188,7 +193,7 @@ class OrbChatViewModel @Inject constructor(
         }
     }
 
-    fun sendMessage(text: String = state.value.input) {
+    fun sendMessage(text: String = state.value.input, channel: InputChannel = InputChannel.TEXT) {
         val value = text.trim()
         if (value.isEmpty() || state.value.isStreaming) return
         if (value.length > 16000) { showError("Sua mensagem é muito longa. Use até 16.000 caracteres."); return }
@@ -199,16 +204,17 @@ class OrbChatViewModel @Inject constructor(
             partialText = "", error = null, showHistory = false) }
         save()
         val version = ++revision
-        val history = state.value.messages.filter { it.status !in listOf("cancelled", "error") }
+        val history = state.value.messages.filter { it.status !in listOf("cancelled", "error", "blocked") }
             .takeLast(30).map { it.role to (it.rawContent ?: it.text) }
         val previousGeneration = generation
         generation = viewModelScope.launch {
             try {
                 previousGeneration?.join()
                 currentCoroutineContext().ensureActive()
-                // D50/D51: no modo cuidador, envia o escopo para o gateway
-                // habilitar o agendamento de consulta por voz do paciente.
-                val scope = caregiverScope()
+                val local = hybrid.analyze(text, channel)
+                val concrete = if (local.isBloqueioSeguranca || local.isEmergencia ||
+                    local.intent == "orientacao_cadastro_medicamento" || BragaHealthMemory.supports(local.intent)) null
+                    else voiceParser.parse(value, null, null)
                 val shortcut = when (value.lowercase()) {
                     "/pressão", "/pressao" -> "REGISTRAR_PRESSAO"
                     "/remédio", "/remedio" -> "LEMBRETES"
@@ -216,10 +222,27 @@ class OrbChatViewModel @Inject constructor(
                     "/emergência", "/emergencia" -> "EMERGENCIA"
                     else -> null
                 }
+                val useLocal = local.isBloqueioSeguranca || local.isEmergencia ||
+                    local.intent == "orientacao_cadastro_medicamento" || BragaHealthMemory.supports(local.intent) ||
+                    (!local.delegarParaNuvem && (concrete is VoiceHealthIntent.Unknown || concrete is VoiceHealthIntent.ConversationalReply))
                 val reply = if (shortcut != null) OrbReply(JSONObject().put("fala", "Abrir ${actionLabel(shortcut)}.")
                     .put("acao", shortcut).put("parametros", JSONObject()).toString())
-                else gateway.send(history, actingAs = scope?.first, patientId = scope?.second) { partial ->
-                    if (version == revision) mutable.update { it.copy(partialText = partial) }
+                else if (useLocal) {
+                    val owner = uid ?: throw CancellationException("Sessão alterada")
+                    val resolved = hybrid.resolveLocal(local, owner, channel)
+                    if (auth.currentUser?.uid != owner || uid != owner || version != revision) return@launch
+                    if (local.isEmergencia) navigation.send(OrbChatEvent.Emergency)
+                    OrbReply(JSONObject().put("fala", resolved.respostaLocal.orEmpty())
+                        .put("acao", "CONVERSA").put("parametros", JSONObject()).toString(), "Resposta local; 0 tokens de nuvem")
+                } else {
+                    // Mantém o escopo e os cards B1. Só abre transporte após o filtro local.
+                    val scope = caregiverScope()
+                    if (version != revision) return@launch
+                    gateway.open(viewModelScope)
+                    val context = listOf("assistant" to GroqDynamicPrompt().build(history.dropLast(1), channel)) + history
+                    gateway.send(context, actingAs = scope?.first, patientId = scope?.second) { partial ->
+                        if (version == revision) mutable.update { it.copy(partialText = BragaInputLanguage.forChannel(partial, channel)) }
+                    }
                 }
                 if (version != revision) return@launch
                 val parsed = JSONObject(reply.content)
@@ -230,17 +253,20 @@ class OrbChatViewModel @Inject constructor(
                 } else {
                     resolveHealthAction(value, rawAction, rawParams)
                 }
-                val answer = ChatMessage(role = "assistant", text = parsed.getString("fala"), status = "received",
+                val answerText = BragaInputLanguage.forChannel(parsed.getString("fala"), channel)
+                val answer = ChatMessage(role = "assistant", text = answerText, status = "received",
                     action = action, parameters = finalParams.toString(),
-                    rawContent = reply.content, metrics = reply.metrics)
-                mutable.update { it.copy(messages = it.messages.map { m -> if (m.id == user.id) m.copy(status = "received") else m } + answer,
+                    rawContent = if (channel == InputChannel.TEXT) JSONObject(reply.content)
+                        .put("fala", answerText).toString() else reply.content,
+                    metrics = reply.metrics)
+                mutable.update { it.copy(messages = it.messages.map { m -> if (m.id == user.id) m.copy(status = if (local.isBloqueioSeguranca) "blocked" else "received") else m } + answer,
                     isStreaming = false, partialText = "") }
                 save()
                 if (shortcut != null) confirmAction(answer.id)
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 if (version == revision) {
-                    mutable.update { it.copy(isStreaming = false, partialText = "", error = e.message ?: "Falha ao obter resposta.",
+                    mutable.update { it.copy(isStreaming = false, partialText = "", error = BragaInputLanguage.forChannel(e.message ?: "Falha ao obter resposta.", channel),
                         messages = it.messages.map { m -> if (m.id == user.id) m.copy(status = "error") else m }) }
                     save()
                 }
