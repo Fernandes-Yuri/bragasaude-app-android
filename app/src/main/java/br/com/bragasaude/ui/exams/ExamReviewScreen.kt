@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -96,8 +97,8 @@ fun ExamReviewScreen(
         containerColor = BragaBackground,
         topBar = {
             EmeraldHeaderBanner(
-                title = "Conferência Obrigatória",
-                subtitle = "Verifique os valores antes de salvar nos seus exames",
+                title = "Conferir exame",
+                subtitle = "Revise os valores antes de salvar",
                 onBack = onBack
             )
         },
@@ -142,7 +143,7 @@ fun ExamReviewScreen(
                         enabled = isConfirmEnabled,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(54.dp),
+                            .heightIn(min = 54.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = BragaEmerald,
@@ -154,7 +155,9 @@ fun ExamReviewScreen(
                         Icon(Icons.Default.Check, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "Confirmar e salvar nos meus exames",
+                            text = "Confirmar e salvar",
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
@@ -214,14 +217,14 @@ fun ExamReviewScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Conferência Obrigatória do Usuário",
+                                text = "Compare com o laudo",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = BragaEmerald
                             )
                             Spacer(Modifier.height(2.dp))
                             Text(
-                                text = "Nossa inteligência artificial transcreveu os dados. Confira cada número com o laudo em mãos antes de salvar; a transcrição pode conter erros.",
+                                text = "A leitura pode conter erros. Confira os números, as vírgulas e as unidades antes de salvar.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = BragaTextPrimary,
                                 lineHeight = 18.sp
@@ -259,66 +262,61 @@ fun ExamReviewScreen(
                             shape = RoundedCornerShape(12.dp)
                         )
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = examDate,
-                                onValueChange = { examDate = it },
-                                label = { Text("Data da Coleta (AAAA-MM-DD)") },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp)
-                            )
-
-                            OutlinedTextField(
-                                value = examCategory,
-                                onValueChange = { examCategory = it },
-                                label = { Text("Categoria") },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                        }
+                        AdaptiveReviewFields(
+                            first = { fieldModifier ->
+                                OutlinedTextField(
+                                    value = examDate,
+                                    onValueChange = { examDate = it },
+                                    label = { Text("Data (AAAA-MM-DD)") },
+                                    modifier = fieldModifier,
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                            },
+                            second = { fieldModifier ->
+                                OutlinedTextField(
+                                    value = examCategory,
+                                    onValueChange = { examCategory = it },
+                                    label = { Text("Categoria") },
+                                    modifier = fieldModifier,
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                            }
+                        )
                     }
                 }
             }
 
             // Cabeçalho da Lista de Parâmetros
             item {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Valores identificados no exame",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = BragaTextPrimary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "${activeItems.size} parâmetros ativos",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = BragaTextSecondary
-                        )
-                    }
-
+                    Text(
+                        text = "Valores do exame",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = BragaTextPrimary
+                    )
+                    Text(
+                        text = if (activeItems.size == 1) "1 valor para conferir" else "${activeItems.size} valores para conferir",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BragaTextSecondary
+                    )
                     FilledTonalButton(
                         onClick = { showAddItemDialog = true },
-                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = BragaMint,
                             contentColor = BragaEmerald
                         )
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("+ Adicionar", fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Adicionar valor", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -352,7 +350,7 @@ fun ExamReviewScreen(
                                 color = BragaTextPrimary
                             )
                             Text(
-                                text = "Clique em '+ Adicionar' acima para incluir manualmente os parâmetros do seu laudo.",
+                                text = "Toque em Adicionar valor para incluir um resultado do laudo.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = BragaTextSecondary,
                                 textAlign = TextAlign.Center
@@ -492,32 +490,32 @@ private fun ExamItemReviewCard(
             }
 
             // Linha de Edição: Valor com Teclado Decimal + Unidade
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = item.valueInput,
-                    onValueChange = onValueChange,
-                    label = { Text("Valor Medido") },
-                    placeholder = { Text("ex: 95") },
-                    modifier = Modifier.weight(1.3f),
-                    singleLine = true,
-                    isError = !item.isNumericValid,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                OutlinedTextField(
-                    value = item.unit,
-                    onValueChange = onUnitChange,
-                    label = { Text("Unidade") },
-                    modifier = Modifier.weight(0.9f),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
-            }
+            AdaptiveReviewFields(
+                firstWeight = 1.3f,
+                first = { fieldModifier ->
+                    OutlinedTextField(
+                        value = item.valueInput,
+                        onValueChange = onValueChange,
+                        label = { Text("Valor") },
+                        placeholder = { Text("ex: 95") },
+                        modifier = fieldModifier,
+                        singleLine = true,
+                        isError = !item.isNumericValid,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                },
+                second = { fieldModifier ->
+                    OutlinedTextField(
+                        value = item.unit,
+                        onValueChange = onUnitChange,
+                        label = { Text("Unidade") },
+                        modifier = fieldModifier,
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            )
 
             if (!item.isNumericValid) {
                 Text(
@@ -593,4 +591,28 @@ private fun AddNewParamDialog(
             }
         }
     )
+}
+
+
+/** Mantém os campos legíveis em telas estreitas e com fonte ampliada. */
+@Composable
+private fun AdaptiveReviewFields(
+    firstWeight: Float = 1f,
+    first: @Composable (Modifier) -> Unit,
+    second: @Composable (Modifier) -> Unit
+) {
+    val fontScale = LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (maxWidth < 320.dp || fontScale > 1.3f) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                first(Modifier.fillMaxWidth())
+                second(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                first(Modifier.weight(firstWeight))
+                second(Modifier.weight(1f))
+            }
+        }
+    }
 }
