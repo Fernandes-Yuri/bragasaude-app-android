@@ -42,7 +42,9 @@ data class TourSlide(
     val title: String,
     val description: String,
     val icon: ImageVector? = null,
-    val useShieldIcon: Boolean = false
+    val useShieldIcon: Boolean = false,
+    val examScene: ExamEducationScene? = null,
+    val notice: String? = null
 )
 
 // ----- Slides para TITULAR / PACIENTE (autocuidado) -----
@@ -52,11 +54,9 @@ val patientTourSlides = listOf(
         description = "Acompanhe seus sinais vitais, pressão e glicose com faixas de referência científicas (AHA/ADA 2026) e total transparência metodológica.",
         useShieldIcon = true
     ),
-    TourSlide(
-        title = "Seus Laudos e Exames Organizados",
-        description = "Carregue seus laudos em PDF e visualize a evolução dos seus parâmetros laboratoriais ao longo do tempo de forma leve e descomplicada.",
-        icon = Icons.Default.Description
-    ),
+    *examEducationSteps.map { step ->
+        TourSlide(title = step.title, description = step.description, examScene = step.scene, notice = step.notice)
+    }.toTypedArray(),
     TourSlide(
         title = "Autocuidado e Nutrição Consciente",
         description = "Receba orientações inteligentes de refeições e combinações de alimentos ajustadas para suas preferências e perfil de saúde.",
@@ -78,7 +78,7 @@ val patientTourSlides = listOf(
 val caregiverTourSlides = listOf(
     TourSlide(
         title = "Anjo da Guarda do Seu Familiar",
-        description = "Você foi convidado a acompanhar a saúde de alguém importante. Tudo o que ele registrar aparece aqui automaticamente.",
+        description = "Você foi convidado a acompanhar a saúde de alguém importante. Acompanhe os dados que ele autorizar compartilhar. Exames também podem chegar como um PDF enviado por ele.",
         useShieldIcon = true
     ),
     TourSlide(
@@ -224,7 +224,7 @@ fun OnboardingTourScreen(
                         },
                         modifier = Modifier
                             .weight(1f)
-                            .height(54.dp),
+                            .heightIn(min = 54.dp),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
@@ -264,25 +264,30 @@ fun OnboardingTourScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Surface(
-                    color = TealSurface,
-                    shape = RoundedCornerShape(28.dp),
-                    modifier = Modifier.size(140.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Box(Modifier.size(124.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.06f), CircleShape))
-                        Box(Modifier.size(96.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), CircleShape))
-                        if (slide.useShieldIcon) {
-                            ShieldEcgIcon(sizeDp = 80.dp, shieldColor = TealPrimary)
-                        } else if (slide.icon != null) {
-                            Icon(
-                                imageVector = slide.icon,
-                                contentDescription = null,
-                                tint = TealPrimary,
-                                modifier = Modifier.size(64.dp)
-                            )
+                if (slide.examScene != null) {
+                    ExamEducationIllustration(slide.examScene)
+                } else {
+                    Surface(
+                        color = TealSurface,
+                        shape = RoundedCornerShape(28.dp),
+                        modifier = Modifier.size(140.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(124.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.06f), CircleShape))
+                            Box(Modifier.size(96.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), CircleShape))
+                            if (slide.useShieldIcon) {
+                                ShieldEcgIcon(sizeDp = 80.dp, shieldColor = TealPrimary)
+                            } else if (slide.icon != null) {
+                                Icon(
+                                    imageVector = slide.icon,
+                                    contentDescription = null,
+                                    tint = TealPrimary,
+                                    modifier = Modifier.size(64.dp)
+                                )
+                            }
                         }
                     }
+
                 }
 
                 Spacer(Modifier.height(36.dp))
@@ -304,6 +309,11 @@ fun OnboardingTourScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 24.sp
                 )
+
+                slide.notice?.let {
+                    Spacer(Modifier.height(16.dp))
+                    ExamStorageNotice(it)
+                }
 
                 // Na última página, convida ao vínculo do WhatsApp. O usuário pode
                 // pular e fazer depois pela tela de Perfil.
