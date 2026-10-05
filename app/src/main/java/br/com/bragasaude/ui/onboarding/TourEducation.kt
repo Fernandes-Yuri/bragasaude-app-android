@@ -38,8 +38,10 @@ fun TourEducationIllustration(scene: TourEducationScene, modifier: Modifier = Mo
     val painter = remember(artwork, scene) {
         val column = scene.cell % 3
         val row = scene.cell / 3
-        val left = artwork.width * column / 3
-        // A arte tem alturas diferentes entre as fileiras; o recorte respeita os espaços brancos reais.
+        val columnEdges = intArrayOf(0, 333, 662, 1000)
+        val left = artwork.width * columnEdges[column] / 1000
+        val right = artwork.width * columnEdges[column + 1] / 1000
+        // Os cortes seguem os espaços brancos reais da arte, que não forma uma grade uniforme.
         val rowEdges = intArrayOf(0, 340, 644, 1000)
         val top = artwork.height * rowEdges[row] / 1000
         val bottom = artwork.height * rowEdges[row + 1] / 1000
@@ -47,7 +49,7 @@ fun TourEducationIllustration(scene: TourEducationScene, modifier: Modifier = Mo
             image = artwork,
             srcOffset = IntOffset(left, top),
             srcSize = IntSize(
-                artwork.width * (column + 1) / 3 - left,
+                right - left,
                 bottom - top
             )
         )
