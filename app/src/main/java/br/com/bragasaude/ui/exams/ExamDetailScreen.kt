@@ -40,10 +40,10 @@ internal fun ExamDetailScreen(exam: RemoteExam, items: List<RemoteExamItem>, bus
             Button(onClick = onPdf, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Gerar PDF deste exame") }
             OutlinedButton(onClick = onShare, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Compartilhar PDF") }
             if (exam.cloudState != ExamCloudState.SYNCED) OutlinedButton(onClick = onCloud,
-                enabled = !busy && exam.cloudState != ExamCloudState.PENDING, modifier = Modifier.fillMaxWidth()) {
+                enabled = !busy && exam.cloudState !in setOf(ExamCloudState.PENDING, ExamCloudState.SENDING), modifier = Modifier.fillMaxWidth()) {
                 Text(if (exam.cloudState == ExamCloudState.ERROR) "Tentar envio à nuvem novamente" else "Salvar também na nuvem")
             }
-            if (exam.cloudState in setOf(ExamCloudState.PENDING, ExamCloudState.ERROR, ExamCloudState.SYNCED)) {
+            if (exam.cloudState in setOf(ExamCloudState.PENDING, ExamCloudState.SENDING, ExamCloudState.ERROR, ExamCloudState.SYNCED)) {
                 TextButton(onClick = onPause, enabled = !busy) { Text("Parar novos envios à nuvem") }
             }
             if (exam.hasCloudCopy || exam.cloudState == ExamCloudState.UNKNOWN || exam.cloudState == ExamCloudState.ERROR) {

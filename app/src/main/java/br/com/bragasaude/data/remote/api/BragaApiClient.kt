@@ -1190,7 +1190,7 @@ class BragaApiClient @Inject constructor(
 
     // ==================== NOVOS CONTRATOS DE EXAMES (D49 / FASE 3) ====================
 
-    private fun deleteRequest(urlString: String): Boolean {
+    private fun deleteRequest(urlString: String, allowMissingExam: Boolean = false): Boolean {
         var conn: HttpURLConnection? = null
         return try {
             val url = URL(urlString)
@@ -1202,7 +1202,9 @@ class BragaApiClient @Inject constructor(
                 instanceFollowRedirects = false
                 attachIdentity(urlString)
             }
-            conn.responseCode in 200..299
+            val responseCode = conn.responseCode
+            responseCode in 200..299 || (allowMissingExam && responseCode == 404 &&
+                conn.errorStream?.bufferedReader()?.use { JSONObject(it.readText()).optString("detail") } == "Exame não encontrado.")
         } catch (e: Exception) {
             false
         } finally {
@@ -1211,7 +1213,7 @@ class BragaApiClient @Inject constructor(
     }
 
     suspend fun deleteExam(examId: String): Boolean = withContext(Dispatchers.IO) {
-        deleteRequest("$baseUrl/api/exams/$examId")
+        deleteRequest("$baseUrl/api/exams/$examId", allowMissingExam = true)
     }
 
     /**

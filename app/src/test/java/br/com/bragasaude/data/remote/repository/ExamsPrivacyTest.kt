@@ -135,4 +135,15 @@ class ExamsPrivacyTest {
         verify(exactly = 0) { files.delete(any()) }
     }
 
+
+    @Test fun `envio interrompido nao pode descartar uma copia remota possivel`() = runTest {
+        stored = ExamEntity(remoteId = "exame", userId = "paciente", title = "Manual", examDate = Date(),
+            cloudState = ExamCloudState.SENDING, cloudConsentAccepted = true, pendingSync = true)
+        repo.pauseCloud("exame", "paciente")
+        assertEquals(ExamCloudState.UNKNOWN, stored!!.cloudState)
+        coEvery { api.deleteExam("exame") } returns false
+        try { repo.deleteExamAtomically("exame", "paciente"); fail("Exclusão remota não confirmada") } catch (_: IllegalStateException) { }
+        coVerify(exactly = 0) { dao.deleteWithItems(any()) }
+    }
+
 }

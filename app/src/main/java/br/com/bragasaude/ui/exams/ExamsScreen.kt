@@ -118,7 +118,7 @@ fun ExamsScreen(
         (exam.title.contains(search, true) || exam.category.orEmpty().contains(search, true)) && when (storageFilter) {
             "Neste aparelho" -> exam.cloudState == ExamCloudState.LOCAL_ONLY
             "Na nuvem" -> exam.hasCloudCopy
-            "Envio pendente" -> exam.cloudState in setOf(ExamCloudState.PENDING, ExamCloudState.ERROR)
+            "Envio pendente" -> exam.cloudState in setOf(ExamCloudState.PENDING, ExamCloudState.SENDING, ExamCloudState.ERROR)
             else -> true
         }
     }
