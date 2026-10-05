@@ -73,7 +73,7 @@ class ExamsPrivacyTest {
     }
 
     @Test fun `falha da nuvem conserva dados e pendencia`() = runTest {
-        stored = ExamEntity(localId = 1, remoteId = "exame", userId = "paciente", title = "Manual", examDate = Date(), cloudConsentAccepted = true, cloudState = ExamCloudState.PENDING, pendingSync = true)
+        stored = ExamEntity(localId = 1, remoteId = "exame", userId = "paciente", title = "Manual", examDate = Date(), cloudConsentAccepted = true, cloudConsentVersion = br.com.bragasaude.domain.ExamStorageTerms.VERSION, cloudState = ExamCloudState.PENDING, pendingSync = true)
         coEvery { api.supportsExamSnapshots() } returns true
         coEvery { itemsDao.getByExamLocal("exame") } returns emptyList()
         coEvery { api.syncManualExam(any(), any(), any(), any(), any()) } returns false
@@ -81,6 +81,7 @@ class ExamsPrivacyTest {
         assertEquals(ExamCloudState.ERROR, stored!!.cloudState)
         assertTrue(stored!!.pendingSync)
         assertEquals("Manual", stored!!.title)
+        coVerify(exactly = 1) { api.syncManualExam(any(), any(), any(), any(), any()) }
     }
 
     @Test fun `worker nao envia dados de outra conta`() = runTest {
@@ -95,4 +96,43 @@ class ExamsPrivacyTest {
         coVerify { dao.deleteWithItems("exame") }
         coVerify(exactly = 0) { api.deleteExam(any()) }
     }
+
+    @Test fun `servidor antigo nao recebe original nem resultados`() = runTest {
+        stored = ExamEntity(remoteId = "exame", userId = "paciente", title = "Foto", examDate = Date(),
+            cloudConsentAccepted = true, cloudConsentVersion = br.com.bragasaude.domain.ExamStorageTerms.VERSION,
+            localFilePath = "/privado/exame.enc", pendingSync = true)
+        coEvery { api.supportsExamSnapshots() } returns false
+        try { repo.syncAuthorizedExam("exame"); fail("Servidor antigo deve bloquear envio") } catch (_: IllegalStateException) { }
+        coVerify(exactly = 0) { files.readBytes(any()) }
+        coVerify(exactly = 0) { api.uploadExamContract(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { api.syncManualExam(any(), any(), any(), any(), any()) }
+    }
+
+    @Test fun `pausar envio nao declara apagada a copia remota`() = runTest {
+        stored = ExamEntity(remoteId = "exame", userId = "paciente", title = "Foto", examDate = Date(),
+            hasCloudCopy = true, cloudConsentAccepted = true, pendingSync = true)
+        repo.pauseCloud("exame", "paciente")
+        assertFalse(stored!!.pendingSync)
+        assertFalse(stored!!.cloudConsentAccepted)
+        assertTrue(stored!!.hasCloudCopy)
+        assertEquals(ExamCloudState.UNKNOWN, stored!!.cloudState)
+        coVerify(exactly = 0) { api.deleteExam(any()) }
+    }
+
+    @Test fun `remover copia remota preserva original e resultados locais`() = runTest {
+        stored = ExamEntity(remoteId = "exame", userId = "paciente", title = "Foto", examDate = Date(),
+            localFilePath = "/privado/exame.enc", fileUrl = "https://api.example/exame.pdf", hasCloudCopy = true,
+            cloudConsentAccepted = true, cloudState = ExamCloudState.SYNCED)
+        coEvery { files.readBytes(any()) } returns byteArrayOf(1)
+        coEvery { api.deleteExam("exame") } returns true
+        repo.removeCloudCopy("exame", "paciente")
+        assertEquals("/privado/exame.enc", stored!!.localFilePath)
+        assertNull(stored!!.fileUrl)
+        assertFalse(stored!!.hasCloudCopy)
+        assertFalse(stored!!.cloudConsentAccepted)
+        assertEquals(ExamCloudState.LOCAL_ONLY, stored!!.cloudState)
+        coVerify(exactly = 0) { dao.deleteWithItems(any()) }
+        verify(exactly = 0) { files.delete(any()) }
+    }
+
 }

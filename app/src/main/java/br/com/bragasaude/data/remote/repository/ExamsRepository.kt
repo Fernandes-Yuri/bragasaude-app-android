@@ -37,6 +37,7 @@ class ExamsRepository @Inject constructor(
 
     /** Login e UUID nunca autorizam envio. A transação termina antes de qualquer rede. */
     suspend fun saveExam(exam: RemoteExam, items: List<RemoteExamItem> = emptyList()) = mutation.withLock {
+        require(exam.userId == (auth.currentUser?.uid ?: BragaConstants.GUEST_UID)) { "Conta diferente da proprietária do exame." }
         val id = exam.id ?: UUID.randomUUID().toString()
         val existing = examDao.getLatestByExamId(id)
         require(existing == null || existing.userId == exam.userId)
@@ -83,6 +84,7 @@ class ExamsRepository @Inject constructor(
         var exam = examDao.getLatestByExamId(examId) ?: return@withLock
         if (!exam.cloudConsentAccepted || !exam.pendingSync || auth.currentUser?.uid != exam.userId) return@withLock
         try {
+            check(exam.cloudConsentVersion == ExamStorageTerms.VERSION) { "Confirme os termos atuais antes de enviar." }
             check(apiClient.supportsExamSnapshots()) { "O serviço de nuvem precisa ser atualizado. Seu exame continua neste aparelho." }
             val items = examItemDao.getByExamLocal(examId)
             val local = exam.localFilePath
@@ -107,6 +109,23 @@ class ExamsRepository @Inject constructor(
             examDao.insert(exam.copy(cloudState = ExamCloudState.ERROR))
             throw e
         }
+    }
+
+    suspend fun removeCloudCopy(examId: String, userId: String) = mutation.withLock {
+        var exam = requireNotNull(examDao.getLatestByExamId(examId))
+        require(exam.userId == userId && auth.currentUser?.uid == userId)
+        // Recuperar original antes de remover a única cópia, se ele só existir remotamente.
+        if (exam.localFilePath == null && exam.fileUrl != null) {
+            val url = requireNotNull(exam.fileUrl)
+            val path = fileStore.store(apiClient.downloadExamOriginal(url), java.net.URI(url).path.substringAfterLast('.', "pdf"))
+            exam = exam.copy(localFilePath = path)
+            examDao.insert(exam)
+        } else if (exam.localFilePath != null) {
+            fileStore.readBytes(requireNotNull(exam.localFilePath))
+        }
+        check(auth.currentUser?.uid == userId && apiClient.deleteExam(examId)) { "Remoção remota não confirmada." }
+        examDao.insert(exam.copy(fileUrl = null, hasCloudCopy = false, cloudConsentAccepted = false,
+            pendingSync = false, cloudState = ExamCloudState.LOCAL_ONLY, lastCloudSyncAt = null))
     }
 
     suspend fun deleteExamAtomically(examId: String, userId: String): Boolean = mutation.withLock {
