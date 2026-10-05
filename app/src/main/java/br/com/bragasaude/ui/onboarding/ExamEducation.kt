@@ -1,24 +1,30 @@
 package br.com.bragasaude.ui.onboarding
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import br.com.bragasaude.R
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import br.com.bragasaude.ui.components.BragaFormSheet
 import br.com.bragasaude.ui.theme.BragaEmerald
-import br.com.bragasaude.ui.theme.BragaMint
 import br.com.bragasaude.ui.theme.BragaMintBorder
 import br.com.bragasaude.ui.theme.BragaTextPrimary
 
@@ -50,76 +56,35 @@ val examEducationSteps = listOf(
     )
 )
 
-/** Ilustrações locais: nenhum exemplo é inserido no banco ou enviado ao servidor. */
+/** Arte aprovada, empacotada para uso offline; cada etapa exibe sua própria cena. */
 @Composable
-fun ExamEducationIllustration(scene: ExamEducationScene, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = BragaMint.copy(alpha = 0.65f),
-        contentColor = BragaTextPrimary
-    ) {
-        Column(
-            Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            when (scene) {
-                ExamEducationScene.STORE -> {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        ExamAvatar("Você", BragaEmerald)
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = BragaEmerald)
-                        Surface(shape = RoundedCornerShape(16.dp), color = Color.White) {
-                            Icon(Icons.Default.Description, null, tint = BragaEmerald, modifier = Modifier.padding(20.dp).size(48.dp))
-                        }
-                    }
-                    Text("Foto · Arquivo · Digitação", style = MaterialTheme.typography.labelLarge, color = BragaEmerald, textAlign = TextAlign.Center)
-                    ExamExampleCard()
-                }
-                ExamEducationScene.PRIVACY -> {
-                    ExamAvatar("A escolha é sua", BragaEmerald)
-                    Surface(shape = RoundedCornerShape(16.dp), color = Color.White) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.PhoneAndroid, null, tint = BragaEmerald, modifier = Modifier.size(32.dp))
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("Neste aparelho", fontWeight = FontWeight.Bold)
-                                Text("Salvamento padrão", style = MaterialTheme.typography.bodySmall)
-                            }
-                            Icon(Icons.Default.CheckCircle, null, tint = BragaEmerald)
-                        }
-                    }
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CloudQueue, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Nuvem opcional", fontWeight = FontWeight.SemiBold)
-                            Text("Somente com sua autorização", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-                ExamEducationScene.SHARE -> {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
-                        ExamAvatar("Você", BragaEmerald)
-                        Surface(shape = CircleShape, color = Color.White) {
-                            Icon(Icons.Default.PictureAsPdf, null, tint = BragaEmerald, modifier = Modifier.padding(16.dp).size(32.dp))
-                        }
-                        ExamAvatar("Quem você escolher", Color(0xFF567889))
-                    }
-                    Text("Seu PDF, seu destinatário", style = MaterialTheme.typography.labelLarge, color = BragaEmerald, textAlign = TextAlign.Center)
-                }
-            }
+fun ExamEducationIllustration(
+    scene: ExamEducationScene,
+    modifier: Modifier = Modifier,
+    height: Dp = 250.dp
+) {
+    val artwork = ImageBitmap.imageResource(id = R.drawable.exams_onboarding_story)
+    val painter = remember(artwork, scene) {
+        val index = when (scene) {
+            ExamEducationScene.STORE -> 0
+            ExamEducationScene.PRIVACY -> 1
+            ExamEducationScene.SHARE -> 2
         }
+        val start = artwork.width * index / 3
+        val end = artwork.width * (index + 1) / 3
+        BitmapPainter(
+            image = artwork,
+            srcOffset = IntOffset(start, 0),
+            srcSize = IntSize(end - start, artwork.height)
+        )
     }
-}
-
-@Composable
-private fun ExamAvatar(label: String, color: Color) {
-    Column(Modifier.widthIn(max = 88.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Surface(shape = CircleShape, color = color.copy(alpha = 0.12f)) {
-            Icon(Icons.Default.Person, null, tint = color, modifier = Modifier.padding(12.dp).size(36.dp))
-        }
-        Text(label, style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center)
+    val description = when (scene) {
+        ExamEducationScene.STORE -> "Personagem fotografa um laudo para organizar seus exames."
+        ExamEducationScene.PRIVACY -> "Personagem mostra o laudo protegido no celular; a nuvem aparece separada como opção."
+        ExamEducationScene.SHARE -> "Personagem compartilha um documento com uma pessoa de confiança."
+    }
+    Surface(modifier = modifier.fillMaxWidth().height(height), shape = RoundedCornerShape(24.dp), color = Color.White) {
+        Image(painter = painter, contentDescription = description, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
     }
 }
 
@@ -144,6 +109,7 @@ fun ExamGettingStarted(onAddExam: () -> Unit, onLearnMore: () -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Seus exames, à mão", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("Guarde seus laudos, encontre os resultados e compartilhe quando precisar.", style = MaterialTheme.typography.bodyMedium)
+        ExamEducationIllustration(ExamEducationScene.STORE, height = 190.dp)
         ExamExampleCard()
         Text("Os novos exames ficam no celular. Você escolhe se quer uma cópia na nuvem.", style = MaterialTheme.typography.bodySmall)
         Button(onClick = onAddExam, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(14.dp)) {
