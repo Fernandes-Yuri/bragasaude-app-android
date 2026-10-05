@@ -42,4 +42,29 @@ class MainScaffoldRouteMatchingTest {
         assertTrue(isCurrentRoute("br.com.bragasaude.ui.util.Screen.Nutrition?searchFood=feijao", Screen.Nutrition()))
         assertFalse(isCurrentRoute("br.com.bragasaude.ui.util.Screen.ProfileEdit", Screen.Profile))
     }
+    @Test fun `orbe aparece nas visoes gerais com argumentos de navegacao`() {
+        assertTrue(shouldShowAssistantOrb("Screen\$Home"))
+        assertTrue(shouldShowAssistantOrb("Screen\$Report"))
+        assertTrue(shouldShowAssistantOrb("Screen\$CaregiverDashboard"))
+        assertTrue(shouldShowAssistantOrb("Screen\$Nutrition?searchFood=arroz"))
+        assertTrue(shouldShowAssistantOrb("Screen\$Hydration?initialMl=200"))
+        assertTrue(shouldShowAssistantOrb("Screen\$Steps"))
+        assertTrue(shouldShowAssistantOrb("Screen\$Reminders"))
+    }
+
+    @Test fun `orbe fica oculta em exames formularios conversas e telas administrativas`() {
+        listOf("Exams", "Vitals", "HealthReadings", "Biometry", "AddData", "ProfileEdit",
+            "CaregiverRegistration", "FamilyConnect", "FamilyChat", "DoctorMode", "Settings",
+            "TermsOfUse", "PrivacyPolicy", "Feedback", "MedicationStock", "BarcodeScanner",
+            "SocialFeed", "OrbChat").forEach { name ->
+            assertFalse(name, shouldShowAssistantOrb("Screen\$$name"))
+        }
+    }
+
+    @Test fun `rota desconhecida nao cria sobreposicao por padrao`() {
+        assertFalse(shouldShowAssistantOrb(null))
+        assertFalse(shouldShowAssistantOrb(""))
+        assertFalse(shouldShowAssistantOrb("Screen\$HomeEdit"))
+        assertFalse(shouldShowAssistantOrb("Screen\$NewForm"))
+    }
 }
