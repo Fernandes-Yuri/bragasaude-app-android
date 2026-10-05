@@ -39,13 +39,16 @@ fun TourEducationIllustration(scene: TourEducationScene, modifier: Modifier = Mo
         val column = scene.cell % 3
         val row = scene.cell / 3
         val left = artwork.width * column / 3
-        val top = artwork.height * row / 3
+        // A arte tem alturas diferentes entre as fileiras; o recorte respeita os espaços brancos reais.
+        val rowEdges = intArrayOf(0, 340, 644, 1000)
+        val top = artwork.height * rowEdges[row] / 1000
+        val bottom = artwork.height * rowEdges[row + 1] / 1000
         BitmapPainter(
             image = artwork,
             srcOffset = IntOffset(left, top),
             srcSize = IntSize(
                 artwork.width * (column + 1) / 3 - left,
-                artwork.height * (row + 1) / 3 - top
+                bottom - top
             )
         )
     }
