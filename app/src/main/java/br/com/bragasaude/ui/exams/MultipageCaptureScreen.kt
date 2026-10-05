@@ -1,10 +1,19 @@
 package br.com.bragasaude.ui.exams
 
+import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.ImageDecoder
+import android.widget.Toast
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import androidx.compose.runtime.saveable.rememberSaveable
+import br.com.bragasaude.data.util.ExamPhotoDecoder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import android.net.Uri
-import android.os.Build
-import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -59,59 +68,87 @@ fun MultipageCaptureScreen(
     val capturedPages = remember { mutableStateListOf<Bitmap>() }
 
     // Estado da última foto capturada/avaliada
-    var lastCapturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var lastEvaluationResult by remember { mutableStateOf<QualityEvaluationResult?>(null) }
     var selectedPageIndex by remember { mutableStateOf<Int?>(null) }
 
-    // Launcher de Câmera (foto direta)
-    val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap: Bitmap? ->
-        if (bitmap != null) {
-            lastCapturedBitmap = bitmap
-            val evaluation = ImageQualityGatekeeper.evaluateImageQuality(bitmap)
-            lastEvaluationResult = evaluation
+    val scope = rememberCoroutineScope()
+    var pendingPhotoPath by rememberSaveable { mutableStateOf<String?>(null) }
+    var processingPhoto by remember { mutableStateOf(false) }
 
-            if (evaluation is QualityEvaluationResult.Approved) {
-                if (capturedPages.size < 5) {
+    fun readPhoto(uri: Uri, temporaryFile: File? = null) {
+        processingPhoto = true
+        scope.launch {
+            try {
+                val (bitmap, evaluation) = withContext(Dispatchers.IO) {
+                    val bitmap = ExamPhotoDecoder.decode(context.contentResolver, uri)
+                    bitmap to ImageQualityGatekeeper.evaluateImageQuality(bitmap)
+                }
+                lastEvaluationResult = evaluation
+                if (evaluation is QualityEvaluationResult.Approved && capturedPages.size < 5) {
                     capturedPages.add(bitmap)
                     selectedPageIndex = capturedPages.lastIndex
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                Toast.makeText(context, "Não foi possível ler a foto. Tente novamente ou use a galeria.", Toast.LENGTH_LONG).show()
+            } finally {
+                temporaryFile?.delete()
+                processingPhoto = false
             }
         }
     }
 
-    // Launcher da Galeria como alternativa
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            try {
-                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { decoder, _, _ ->
-                        decoder.isMutableRequired = true
-                    }
-                } else {
-                    @Suppress("DEPRECATION")
-                    MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
-                }
-
-                if (bitmap != null) {
-                    lastCapturedBitmap = bitmap
-                    val evaluation = ImageQualityGatekeeper.evaluateImageQuality(bitmap)
-                    lastEvaluationResult = evaluation
-
-                    if (evaluation is QualityEvaluationResult.Approved) {
-                        if (capturedPages.size < 5) {
-                            capturedPages.add(bitmap)
-                            selectedPageIndex = capturedPages.lastIndex
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+    // A câmera grava a foto completa em um arquivo privado temporário.
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val file = pendingPhotoPath?.let(::File)
+        pendingPhotoPath = null
+        if (success && file != null) {
+            readPhoto(Uri.fromFile(file), file)
+        } else {
+            file?.delete()
         }
+    }
+
+    fun launchCamera() {
+        try {
+            val directory = File(context.cacheDir, "exam_photos").apply { mkdirs() }
+            val file = File.createTempFile("exam_", ".jpg", directory)
+            pendingPhotoPath = file.absolutePath
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            cameraLauncher.launch(uri)
+        } catch (_: SecurityException) {
+            pendingPhotoPath?.let { File(it).delete() }
+            pendingPhotoPath = null
+            Toast.makeText(context, "Permita o acesso à câmera nas configurações do app ou use a galeria.", Toast.LENGTH_LONG).show()
+        } catch (_: ActivityNotFoundException) {
+            pendingPhotoPath?.let { File(it).delete() }
+            pendingPhotoPath = null
+            Toast.makeText(context, "Câmera indisponível. Escolha uma foto da galeria.", Toast.LENGTH_LONG).show()
+        } catch (_: Exception) {
+            pendingPhotoPath?.let { File(it).delete() }
+            pendingPhotoPath = null
+            Toast.makeText(context, "Não foi possível abrir a câmera. Tente novamente ou use a galeria.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) launchCamera()
+        else Toast.makeText(context, "Para fotografar, permita a câmera nas configurações do app. Você também pode usar a galeria.", Toast.LENGTH_LONG).show()
+    }
+
+    fun requestCamera() {
+        if (processingPhoto || pendingPhotoPath != null) return
+        lastEvaluationResult = null
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            launchCamera()
+        } else {
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let { readPhoto(it) }
     }
 
     Scaffold(
@@ -119,7 +156,7 @@ fun MultipageCaptureScreen(
         topBar = {
             EmeraldHeaderBanner(
                 title = "Captura de Laudo",
-                subtitle = "Página ${capturedPages.size.coerceAtMost(4) + 1} de 5 • Trava de Foco",
+                subtitle = "Até 5 páginas por exame",
                 onBack = onBack
             )
         },
@@ -137,7 +174,7 @@ fun MultipageCaptureScreen(
                 ) {
                     // Botão primário para concluir documento
                     val isRejectedActive = lastEvaluationResult is QualityEvaluationResult.Rejected
-                    val canConclude = capturedPages.isNotEmpty() && !isRejectedActive
+                    val canConclude = capturedPages.isNotEmpty() && !isRejectedActive && !processingPhoto && pendingPhotoPath == null
 
                     Button(
                         onClick = {
@@ -177,8 +214,7 @@ fun MultipageCaptureScreen(
                     if (isRejectedActive) {
                         OutlinedButton(
                             onClick = {
-                                lastEvaluationResult = null
-                                cameraLauncher.launch(null)
+                                requestCamera()
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -206,6 +242,8 @@ fun MultipageCaptureScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (processingPhoto) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+
             // Metadados do Exame (Título e Categoria)
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -293,7 +331,7 @@ fun MultipageCaptureScreen(
                                 )
 
                                 Text(
-                                    text = "O botão de envio foi travado para evitar leitura médica incorreta.",
+                                    text = "Tire outra foto para continuar.",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.SemiBold,
                                     color = BragaEmergencyOrange
@@ -321,13 +359,13 @@ fun MultipageCaptureScreen(
                                 Spacer(Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = "Foto Aprovada pelo Gatekeeper",
+                                        text = "Foto adicionada",
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = BragaEmerald
                                     )
                                     Text(
-                                        text = "Nitidez calculada: ${result.sharpnessScore.toInt()} pts (Mínimo: 85 pts)",
+                                        text = "Confira os valores após a leitura.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = BragaTextPrimary
                                     )
@@ -392,10 +430,9 @@ fun MultipageCaptureScreen(
                     ) {
                         Button(
                             onClick = {
-                                lastEvaluationResult = null
-                                cameraLauncher.launch(null)
+                                requestCamera()
                             },
-                            enabled = capturedPages.size < 5,
+                            enabled = capturedPages.size < 5 && !processingPhoto && pendingPhotoPath == null,
                             modifier = Modifier
                                 .weight(1f)
                                 .height(50.dp),
@@ -418,7 +455,7 @@ fun MultipageCaptureScreen(
                                 lastEvaluationResult = null
                                 galleryLauncher.launch("image/*")
                             },
-                            enabled = capturedPages.size < 5,
+                            enabled = capturedPages.size < 5 && !processingPhoto && pendingPhotoPath == null,
                             modifier = Modifier
                                 .weight(0.9f)
                                 .height(50.dp),
