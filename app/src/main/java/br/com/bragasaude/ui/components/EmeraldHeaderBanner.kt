@@ -55,111 +55,113 @@ fun EmeraldHeaderBanner(
     trailingContent: (@Composable () -> Unit)? = null,
     bottomContent: (@Composable () -> Unit)? = null
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(BragaEmeraldLight, BragaEmerald)
+    BragaSubtleRipple(color = Color.White) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(BragaEmeraldLight, BragaEmerald)
+                    )
                 )
-            )
-            .padding(horizontal = 20.dp, vertical = 20.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+                .padding(horizontal = 20.dp, vertical = 20.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f, fill = false)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    if (onBack != null) {
-                        IconButton(
-                            onClick = onBack,
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Voltar",
-                                tint = Color.White
-                            )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
+                        if (onBack != null) {
+                            IconButton(
+                                onClick = onBack,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Voltar",
+                                    tint = Color.White
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
                         }
-                        Spacer(Modifier.width(8.dp))
-                    }
 
-                    if (!photoUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = photoUrl,
-                            contentDescription = "Foto de perfil",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .border(1.5.dp, BragaMint.copy(alpha = 0.8f), CircleShape)
-                                .then(if (onAvatarClick != null) Modifier.clickable { onAvatarClick() } else Modifier)
-                        )
-                        Spacer(Modifier.width(14.dp))
-                    } else if (avatarInitials != null) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(BragaMint.copy(alpha = 0.9f))
-                                .then(if (onAvatarClick != null) Modifier.clickable { onAvatarClick() } else Modifier),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = avatarInitials.take(2).uppercase(),
-                                color = BragaEmerald,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
+                        if (!photoUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = photoUrl,
+                                contentDescription = "Foto de perfil",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .border(1.5.dp, BragaMint.copy(alpha = 0.8f), CircleShape)
+                                    .then(if (onAvatarClick != null) Modifier.clickable { onAvatarClick() } else Modifier)
                             )
+                            Spacer(Modifier.width(14.dp))
+                        } else if (avatarInitials != null) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(BragaMint.copy(alpha = 0.9f))
+                                    .then(if (onAvatarClick != null) Modifier.clickable { onAvatarClick() } else Modifier),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = avatarInitials.take(2).uppercase(),
+                                    color = BragaEmerald,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(Modifier.width(14.dp))
                         }
-                        Spacer(Modifier.width(14.dp))
-                    }
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        if (greetingPrefix != null) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            if (greetingPrefix != null) {
+                                Text(
+                                    text = greetingPrefix,
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                             Text(
-                                text = greetingPrefix,
-                                color = Color.White.copy(alpha = 0.85f),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
+                                text = title,
+                                color = Color.White,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            if (subtitle != null) {
+                                Text(
+                                    text = subtitle,
+                                    color = Color.White.copy(alpha = 0.8f),
+                                    fontSize = 13.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
-                        Text(
-                            text = title,
-                            color = Color.White,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (subtitle != null) {
-                            Text(
-                                text = subtitle,
-                                color = Color.White.copy(alpha = 0.8f),
-                                fontSize = 13.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                    }
+
+                    if (trailingContent != null) {
+                        trailingContent()
                     }
                 }
 
-                if (trailingContent != null) {
-                    trailingContent()
+                if (bottomContent != null) {
+                    Spacer(Modifier.height(16.dp))
+                    bottomContent()
                 }
-            }
-
-            if (bottomContent != null) {
-                Spacer(Modifier.height(16.dp))
-                bottomContent()
             }
         }
     }

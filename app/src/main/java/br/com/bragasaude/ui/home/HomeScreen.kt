@@ -4,6 +4,9 @@ import br.com.bragasaude.ui.components.BragaAlertDialog
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import br.com.bragasaude.ui.components.BragaSubtleRipple
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -241,23 +244,26 @@ fun HomeScreen(
                         
                         items(items.size) { index ->
                             val (label, icon, route) = items[index]
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.clickable { onNavigateToScreen(route) }
-                            ) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = BragaCardSurface,
-                                    border = BorderStroke(1.dp, BragaCardBorder),
-                                    shadowElevation = 1.dp,
-                                    modifier = Modifier.size(52.dp)
+                            val interactionSource = remember { MutableInteractionSource() }
+                            BragaSubtleRipple(color = BragaEmerald) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.clickable(interactionSource = interactionSource, indication = null) { onNavigateToScreen(route) }
                                 ) {
-                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                        Icon(icon, contentDescription = label, tint = BragaEmerald)
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = BragaCardSurface,
+                                        border = BorderStroke(1.dp, BragaCardBorder),
+                                        shadowElevation = 1.dp,
+                                        modifier = Modifier.size(52.dp).clip(CircleShape).indication(interactionSource, ripple())
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                            Icon(icon, contentDescription = label, tint = BragaEmerald)
+                                        }
                                     }
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(label, style = MaterialTheme.typography.labelSmall, color = BragaTextPrimary)
                                 }
-                                Spacer(Modifier.height(8.dp))
-                                Text(label, style = MaterialTheme.typography.labelSmall, color = BragaTextPrimary)
                             }
                         }
                     }

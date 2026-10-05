@@ -108,6 +108,7 @@ fun ExamsScreen(
     var examToDelete by remember { mutableStateOf<RemoteExam?>(null) }
     var cloudCopyToRemove by remember { mutableStateOf<String?>(null) }
     var selectedExamId by remember { mutableStateOf<String?>(null) }
+    var showStorageInfo by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf("") }
     var storageFilter by remember { mutableStateOf("Todos") }
     var shareExamIds by remember { mutableStateOf<Set<String>?>(null) }
@@ -345,78 +346,45 @@ fun ExamsScreen(
                 ) {
                 // Card de upload em destaque com borda tracejada (padrão 110918/112059)
                 item {
-                    Text("${exams.size} exames salvos", style = MaterialTheme.typography.titleMedium)
-                    Text("${exams.count { it.cloudState == ExamCloudState.LOCAL_ONLY }} somente neste aparelho · ${exams.count { it.hasCloudCopy }} com cópia na nuvem", style = MaterialTheme.typography.bodySmall)
-                    Spacer(Modifier.height(8.dp))
-                    Text("Exames locais podem ser perdidos ao desinstalar o app, apagar seus dados ou perder acesso ao aparelho. Você pode gerar um PDF ou salvar exames escolhidos também na nuvem.", style = MaterialTheme.typography.bodySmall)
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(value = search, onValueChange = { search = it }, label = { Text("Buscar exame ou categoria") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Todos", "Neste aparelho", "Na nuvem", "Envio pendente").forEach { filter ->
-                            FilterChip(selected = storageFilter == filter, onClick = { storageFilter = filter }, label = { Text(filter) })
+                    Spacer(Modifier.height(4.dp))
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("${exams.size} exames", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("${exams.count { it.cloudState == ExamCloudState.LOCAL_ONLY }} locais · ${exams.count { it.hasCloudCopy }} na nuvem", style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary)
+                        }
+                        IconButton(onClick = { showStorageInfo = true }) {
+                            Icon(Icons.Default.InfoOutlined, contentDescription = "Sobre o armazenamento", tint = BragaEmerald)
                         }
                     }
-                    DashedUploadCard(onClick = { showAddBottomSheet = true })
                     Spacer(Modifier.height(12.dp))
-                    
-                    // Exportação da Nuvem de Exames
+                    DashedUploadCard(onClick = { showAddBottomSheet = true })
+                    TextButton(onClick = { showStorageInfo = true }) {
+                        Icon(Icons.Default.PhoneAndroid, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Salvos no aparelho. Nuvem opcional.", style = MaterialTheme.typography.labelMedium)
+                    }
                     if (exams.isNotEmpty()) {
-                        Button(
-                            onClick = { viewModel.compileMedicalDossier() },
-                            enabled = !isCompilingDossier,
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF00897B),
-                                contentColor = Color.White
-                            )
-                        ) {
-                            if (isCompilingDossier) {
-                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                Spacer(Modifier.width(10.dp))
-                                Text("Preparando seus exames...", fontWeight = FontWeight.Bold)
-                            } else {
-                                Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(20.dp))
-                                Spacer(Modifier.width(10.dp))
-                                Text("Gerar PDF dos exames", fontWeight = FontWeight.Bold)
+                        OutlinedTextField(value = search, onValueChange = { search = it }, label = { Text("Buscar exame") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("Todos", "Neste aparelho", "Na nuvem", "Envio pendente").forEach { filter ->
+                                FilterChip(selected = storageFilter == filter, onClick = { storageFilter = filter }, label = { Text(filter) })
                             }
                         }
-                        OutlinedButton(onClick = { shareExamIds = exams.mapNotNull { it.id }.toSet() }, enabled = !isCompilingDossier, modifier = Modifier.fillMaxWidth()) { Text("Compartilhar PDF dos exames") }
-                        Spacer(Modifier.height(12.dp))
-                    }
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = BragaMint.copy(alpha = 0.6f)),
-                        border = BorderStroke(1.dp, BragaMintBorder)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = BragaEmerald, modifier = Modifier.size(22.dp))
-                            Spacer(Modifier.width(10.dp))
-                            Text(
-                                "Organize seus exames e compartilhe os arquivos com seu médico. Confira os valores transcritos antes de salvar: o app não interpreta exames nem faz diagnóstico.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = BragaTextPrimary,
-                                lineHeight = 18.sp,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 4,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                        OutlinedButton(onClick = { shareExamIds = exams.mapNotNull { it.id }.toSet() }, enabled = !isCompilingDossier, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (isCompilingDossier) "Preparando PDF..." else "Compartilhar exames em PDF")
                         }
                     }
                 }
 
-                if (visibleExams.isEmpty()) {
+                if (visibleExams.isEmpty() && exams.isNotEmpty()) {
                     item {
                         Box(
-                            modifier = Modifier.fillMaxWidth().height(200.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(if (exams.isEmpty()) "Nenhum exame cadastrado. Adicione um exame para salvá-lo neste aparelho." else "Nenhum exame encontrado para este filtro.", color = MaterialTheme.colorScheme.outline)
+                            Text("Nenhum exame encontrado para este filtro.", color = MaterialTheme.colorScheme.outline)
                         }
                     }
                 }
@@ -434,6 +402,21 @@ fun ExamsScreen(
         }
         } // fecha PullToRefreshBox
     } // fecha Scaffold
+
+    if (showStorageInfo) {
+        BragaAlertDialog(
+            onDismissRequest = { showStorageInfo = false },
+            title = { Text("Seus exames, sua escolha") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Os novos exames ficam neste aparelho. Uma cópia na nuvem só é enviada quando você autoriza, no detalhe do exame.")
+                    Text("Sem uma cópia fora do aparelho, você pode perder todos os exames ao desinstalar o app, apagar seus dados ou perder acesso ao celular. Você pode gerar e guardar um PDF.")
+                    Text("Confira os valores transcritos antes de salvar. O app organiza exames; não interpreta resultados nem faz diagnóstico.")
+                }
+            },
+            confirmButton = { TextButton(onClick = { showStorageInfo = false }) { Text("Entendi") } }
+        )
+    }
 
     if (showAddBottomSheet) {
         AddExamBottomSheet(
@@ -672,7 +655,7 @@ private fun DashedUploadCard(onClick: () -> Unit) {
                 )
             }
             .clickable { onClick() }
-            .padding(vertical = 24.dp, horizontal = 20.dp),
+            .padding(vertical = 18.dp, horizontal = 20.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -683,7 +666,7 @@ private fun DashedUploadCard(onClick: () -> Unit) {
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        Icons.Default.CloudUpload,
+                        Icons.Default.Add,
                         contentDescription = null,
                         tint = BragaEmerald,
                         modifier = Modifier.size(28.dp)
@@ -699,7 +682,7 @@ private fun DashedUploadCard(onClick: () -> Unit) {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "Fotografe, anexe um arquivo ou digite. O exame será salvo primeiro neste aparelho.",
+                "Foto, arquivo ou preenchimento manual",
                 style = MaterialTheme.typography.bodySmall,
                 color = BragaTextSecondary,
                 textAlign = TextAlign.Center
