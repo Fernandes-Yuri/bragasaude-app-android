@@ -57,7 +57,8 @@ fun ExamReviewScreen(
     exam: RemoteExam,
     initialItems: List<RemoteExamItem>,
     onBack: () -> Unit,
-    onConfirm: (RemoteExam, List<RemoteExamItem>) -> Unit
+    onConfirm: (RemoteExam, List<RemoteExamItem>) -> Unit,
+    onOpenOriginal: (() -> Unit)? = null
 ) {
     var examTitle by remember { mutableStateOf(exam.title) }
     var examCategory by remember { mutableStateOf(exam.category ?: "Laboratorial") }
@@ -180,6 +181,9 @@ fun ExamReviewScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            if (onOpenOriginal != null && (exam.localFilePath != null || exam.fileUrl != null)) {
+                item { OutlinedButton(onClick = onOpenOriginal, modifier = Modifier.fillMaxWidth()) { Text("Abrir original para conferir") } }
+            }
             // Card Institucional Informativo
             item {
                 Spacer(Modifier.height(4.dp))

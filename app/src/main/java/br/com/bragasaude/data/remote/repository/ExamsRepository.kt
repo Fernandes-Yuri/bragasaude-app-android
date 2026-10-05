@@ -1,17 +1,24 @@
 package br.com.bragasaude.data.remote.repository
 
 import br.com.bragasaude.data.local.*
+import br.com.bragasaude.data.local.security.ExamFileStore
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.model.RemoteExam
 import br.com.bragasaude.data.remote.model.RemoteExamItem
 import br.com.bragasaude.data.remote.sync.SyncScheduler
-import br.com.bragasaude.data.util.toEntity
-import br.com.bragasaude.data.util.toRemote
+import br.com.bragasaude.data.util.*
+import br.com.bragasaude.domain.ExamCloudState
+import br.com.bragasaude.domain.ExamStorageTerms
+import br.com.bragasaude.util.BragaConstants
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.Date
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
-import br.com.bragasaude.util.BragaConstants
 
 @Singleton
 class ExamsRepository @Inject constructor(
@@ -19,110 +26,122 @@ class ExamsRepository @Inject constructor(
     private val examDao: ExamDao,
     private val examItemDao: ExamItemDao,
     private val clinicalReferenceDao: ClinicalReferenceDao,
-    private val syncScheduler: SyncScheduler
+    private val syncScheduler: SyncScheduler,
+    private val fileStore: ExamFileStore,
+    private val auth: FirebaseAuth
 ) {
-    private val guestId = BragaConstants.GUEST_UID
-
+    private val mutation = Mutex()
     fun getExams(userId: String): Flow<List<ExamEntity>> = examDao.getAll(userId)
+    fun getExamItems(userId: String): Flow<List<ExamItemEntity>> = examItemDao.getAll(userId)
+    fun getItemsForExam(examId: String) = examItemDao.getByExam(examId)
 
-    suspend fun saveExam(exam: RemoteExam, items: List<RemoteExamItem> = emptyList()) {
-        val examWithId = if (exam.id == null) exam.copy(id = UUID.randomUUID().toString()) else exam
-        val itemsWithIds = items.map { it.copy(id = it.id ?: UUID.randomUUID().toString(), examId = examWithId.id!!) }
-        val manual = examWithId.fileUrl == null
-        if (exam.userId != guestId && manual) {
-            check(apiClient.syncManualExam(examWithId.id, examWithId.title,
-                examWithId.category ?: "Laboratorial", examWithId.examDate, itemsWithIds)) {
-                "Não foi possível armazenar os exames na nuvem. Tente novamente; seus dados continuam na tela."
-            }
-        }
-        val pending = exam.userId != guestId && !manual
-        examDao.insert(examWithId.toEntity().copy(pendingSync = pending))
-        examItemDao.insertAll(itemsWithIds.map { it.toEntity().copy(pendingSync = pending) })
-        if (pending) triggerSync()
+    /** Login e UUID nunca autorizam envio. A transação termina antes de qualquer rede. */
+    suspend fun saveExam(exam: RemoteExam, items: List<RemoteExamItem> = emptyList()) = mutation.withLock {
+        val id = exam.id ?: UUID.randomUUID().toString()
+        val existing = examDao.getLatestByExamId(id)
+        require(existing == null || existing.userId == exam.userId)
+        val entity = exam.copy(id = id).toEntity().copy(
+            localId = existing?.localId ?: 0,
+            fileUrl = existing?.fileUrl?.takeIf { it.startsWith("http") },
+            localFilePath = exam.localFilePath ?: exam.fileUrl?.takeUnless { it.startsWith("http") } ?: existing?.localFilePath,
+            cloudState = existing?.cloudState ?: ExamCloudState.LOCAL_ONLY,
+            cloudConsentAccepted = existing?.cloudConsentAccepted ?: false,
+            cloudConsentVersion = existing?.cloudConsentVersion,
+            cloudConsentAt = existing?.cloudConsentAt,
+            hasCloudCopy = existing?.hasCloudCopy ?: false,
+            lastCloudSyncAt = existing?.lastCloudSyncAt,
+            createdAt = existing?.createdAt ?: Date(),
+            pendingSync = existing?.cloudConsentAccepted == true
+        )
+        val storedItems = items.map { it.copy(id = it.id ?: UUID.randomUUID().toString(), examId = id, userId = exam.userId, status = "confirmed").toEntity().copy(pendingSync = false) }
+        examDao.saveWithItems(entity.copy(cloudState = if (entity.pendingSync) ExamCloudState.PENDING else entity.cloudState), storedItems)
+        if (entity.pendingSync) syncScheduler.scheduleSync()
     }
 
-    suspend fun deleteExamAtomically(examId: String, userId: String): Boolean {
-        if (userId != guestId) {
-            check(apiClient.deleteExam(examId)) {
-                "Não foi possível excluir o exame da nuvem. Verifique a conexão e tente novamente."
+    suspend fun authorizeCloud(examId: String, userId: String) = mutation.withLock {
+        require(userId != BragaConstants.GUEST_UID && auth.currentUser?.uid == userId) { "Entre na sua conta para salvar na nuvem." }
+        val exam = requireNotNull(examDao.getLatestByExamId(examId))
+        require(exam.userId == userId)
+        examDao.insert(exam.copy(cloudConsentAccepted = true, cloudConsentVersion = ExamStorageTerms.VERSION,
+            cloudConsentAt = System.currentTimeMillis(), cloudState = ExamCloudState.PENDING, pendingSync = true))
+        syncScheduler.scheduleSync()
+    }
+
+    suspend fun pauseCloud(examId: String, userId: String) = mutation.withLock {
+        val exam = requireNotNull(examDao.getLatestByExamId(examId))
+        require(exam.userId == userId)
+        examDao.insert(exam.copy(cloudConsentAccepted = false, pendingSync = false,
+            cloudState = if (exam.hasCloudCopy || exam.cloudState == ExamCloudState.ERROR) ExamCloudState.UNKNOWN else ExamCloudState.LOCAL_ONLY))
+    }
+
+    suspend fun syncAuthorizedExams() {
+        for (pending in examDao.getPendingSync()) syncAuthorizedExam(requireNotNull(pending.remoteId))
+    }
+
+    /** A mesma trava protege envio, edição e exclusão contra respostas antigas. */
+    suspend fun syncAuthorizedExam(examId: String) = mutation.withLock {
+        var exam = examDao.getLatestByExamId(examId) ?: return@withLock
+        if (!exam.cloudConsentAccepted || !exam.pendingSync || auth.currentUser?.uid != exam.userId) return@withLock
+        try {
+            check(apiClient.supportsExamSnapshots()) { "O serviço de nuvem precisa ser atualizado. Seu exame continua neste aparelho." }
+            val items = examItemDao.getByExamLocal(examId)
+            val local = exam.localFilePath
+            if (local != null) {
+                check(auth.currentUser?.uid == exam.userId) { "Conta alterada durante o envio." }
+                val bytes = fileStore.readBytes(local)
+                val name = java.io.File(local).name.removeSuffix(".enc")
+                val result = apiClient.uploadExamContract(examId, exam.title, exam.category ?: "Geral",
+                    java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(exam.examDate), "UNSTRUCTURED_DOCUMENT", true,
+                    requireNotNull(exam.cloudConsentVersion), name, bytes)
+                check(result?.success == true && !result.fileUrl.isNullOrBlank()) { "Envio do original não concluído." }
+                exam = exam.copy(fileUrl = result.fileUrl, hasCloudCopy = true)
+                examDao.insert(exam)
             }
+            check(auth.currentUser?.uid == exam.userId) { "Conta alterada durante o envio." }
+            check(apiClient.syncManualExam(examId, exam.title, exam.category ?: "Laboratorial",
+                java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(exam.examDate), items.map { it.toRemote() })) { "Envio dos resultados não concluído." }
+            exam = exam.copy(hasCloudCopy = true)
+            examDao.insert(exam.copy(pendingSync = false, cloudState = ExamCloudState.SYNCED, lastCloudSyncAt = System.currentTimeMillis()))
+        } catch (e: CancellationException) { throw e
+        } catch (e: Exception) {
+            examDao.insert(exam.copy(cloudState = ExamCloudState.ERROR))
+            throw e
         }
-        examDao.deleteByRemoteId(examId)
-        examItemDao.deleteByExamId(examId)
-        return true
+    }
+
+    suspend fun deleteExamAtomically(examId: String, userId: String): Boolean = mutation.withLock {
+        val exam = examDao.getLatestByExamId(examId) ?: return@withLock true
+        require(exam.userId == userId)
+        if (exam.hasCloudCopy || exam.cloudState == ExamCloudState.UNKNOWN) {
+            check(auth.currentUser?.uid == userId && apiClient.deleteExam(examId)) { "Não foi possível excluir a cópia remota. O exame continua disponível." }
+        }
+        examDao.deleteWithItems(examId)
+        fileStore.delete(exam.localFilePath)
+        true
     }
 
     suspend fun confirmExamItem(itemId: String) {
         val item = itemId.toLongOrNull()?.let { examItemDao.getById(it) } ?: examItemDao.getByRemoteId(itemId)
-        if (item != null) {
-            val confirmedItem = item.copy(status = "confirmed", pendingSync = false)
-            examItemDao.insert(confirmedItem)
-        }
+        if (item != null) examItemDao.insert(item.copy(status = "confirmed", pendingSync = false))
     }
 
     suspend fun confirmAllItemsForExam(examId: String) {
-        val items = examItemDao.getByExamLocal(examId).filter { it.status == "analyzed" }
-        for (item in items) {
-            val confirmedItem = item.copy(status = "confirmed", pendingSync = false)
-            examItemDao.insert(confirmedItem)
-        }
-        val exam = examDao.getLatestByExamId(examId)
-        if (exam != null && items.isNotEmpty()) {
-            examDao.insert(exam.copy(status = "confirmed", pendingSync = false))
-        }
+        val exam = examDao.getLatestByExamId(examId) ?: return
+        saveExam(exam.toRemote().copy(status = "confirmed"), examItemDao.getByExamLocal(examId).map { it.toRemote() })
     }
-
-    fun getExamItems(userId: String): Flow<List<ExamItemEntity>> = examItemDao.getAll(userId)
-    
     suspend fun getClinicalReference(key: String) = clinicalReferenceDao.getByKey(key)
+    suspend fun syncClinicalReferences() = Unit
 
-    suspend fun syncClinicalReferences() {
-        // As referências clínicas são estáticas e carregadas via Room/Asset
-    }
-
-    suspend fun pullAndMergeExams(userId: String) {
-        if (userId == guestId) return
-        try {
-            val remoteExams = apiClient.getExams(userId)
-            for (remote in remoteExams) {
-                val existing = remote.id?.let { examDao.getLatestByExamId(it) }
-                if (existing == null) {
-                    val entity = remote.toEntity().copy(pendingSync = false)
-                    examDao.insert(entity)
-                } else if (existing.pendingSync) {
-                    examDao.insert(existing.copy(pendingSync = false))
-                }
+    suspend fun pullAndMergeExams(userId: String) = mutation.withLock {
+        if (userId == BragaConstants.GUEST_UID) return@withLock
+        for (remote in apiClient.getExams(userId)) {
+            val id = remote.id ?: continue
+            // Não sobrescrever conteúdo/política locais nem limpar fila por um pull antigo.
+            if (examDao.getLatestByExamId(id) == null) {
+                examDao.saveWithItems(remote.toEntity().copy(hasCloudCopy = true, cloudState = ExamCloudState.SYNCED),
+                    remote.labItems.map { it.toEntity().copy(pendingSync = false) })
             }
-        } catch (e: Exception) {
-            android.util.Log.w("ExamsRepo", "Falha ao puxar exames do servidor: ${e.message}")
         }
     }
-
     suspend fun downloadExamOriginal(fileUrl: String) = apiClient.downloadExamOriginal(fileUrl)
-
-    suspend fun uploadExamContract(
-        examId: String,
-        title: String,
-        category: String,
-        examDate: String,
-        examType: String,
-        cloudConsent: Boolean,
-        termsVersion: String,
-        fileName: String,
-        fileBytes: ByteArray
-    ) = apiClient.uploadExamContract(
-        examId = examId,
-        title = title,
-        category = category,
-        examDate = examDate,
-        examType = examType,
-        cloudConsent = cloudConsent,
-        termsVersion = termsVersion,
-        fileName = fileName,
-        fileBytes = fileBytes
-    )
-
-    private fun triggerSync() {
-        syncScheduler.scheduleSync()
-    }
 }

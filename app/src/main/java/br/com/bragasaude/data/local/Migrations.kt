@@ -452,6 +452,23 @@ object Migrations {
         }
     }
 
+    val MIGRATION_49_50 = object : Migration(49, 50) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE exams_local ADD COLUMN cloudState TEXT NOT NULL DEFAULT 'UNKNOWN'")
+            db.execSQL("ALTER TABLE exams_local ADD COLUMN cloudConsentAccepted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE exams_local ADD COLUMN cloudConsentVersion TEXT")
+            db.execSQL("ALTER TABLE exams_local ADD COLUMN cloudConsentAt INTEGER")
+            db.execSQL("ALTER TABLE exams_local ADD COLUMN localFilePath TEXT")
+            db.execSQL("ALTER TABLE exams_local ADD COLUMN hasCloudCopy INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE exams_local ADD COLUMN lastCloudSyncAt INTEGER")
+            // UUID e pendência antigos não comprovam autorização. Preservar conteúdo e pausar envios.
+            db.execSQL("UPDATE exams_local SET pendingSync = 0")
+            db.execSQL("UPDATE exam_items_local SET pendingSync = 0")
+            db.execSQL("UPDATE exams_local SET localFilePath = fileUrl WHERE fileUrl IS NOT NULL AND fileUrl NOT LIKE 'http%'")
+            db.execSQL("UPDATE exams_local SET hasCloudCopy = 1 WHERE fileUrl LIKE 'https://%' OR fileUrl LIKE 'http://%'")
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -476,6 +493,7 @@ object Migrations {
         MIGRATION_45_46,
         MIGRATION_46_47,
         MIGRATION_47_48,
-        MIGRATION_48_49
+        MIGRATION_48_49,
+        MIGRATION_49_50
     )
 }
