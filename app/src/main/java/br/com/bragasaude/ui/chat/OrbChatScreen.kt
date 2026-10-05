@@ -369,7 +369,9 @@ fun OrbChatContent(
                     IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Opções") }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text("Conversas anteriores") }, onClick = { menu = false; onHistory() })
-                        DropdownMenuItem(text = { Text("Diagnóstico de Roteamento (Logs)") }, onClick = { menu = false; showRoutingLogsDialog = true })
+                        if (BuildConfig.DEBUG) {
+                            DropdownMenuItem(text = { Text("Diagnóstico de Roteamento (Logs)") }, onClick = { menu = false; showRoutingLogsDialog = true })
+                        }
                         DropdownMenuItem(text = { Text("Ajustar tamanho do texto") }, onClick = { menu = false; showTextSizeDialog = true })
                         DropdownMenuItem(
                             text = { Text("Limpar conversa atual") },
