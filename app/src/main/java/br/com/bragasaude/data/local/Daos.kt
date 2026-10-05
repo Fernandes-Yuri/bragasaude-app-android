@@ -39,6 +39,25 @@ interface VitalSignDao {
     @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND measuredAt >= :sinceMillis ORDER BY measuredAt DESC")
     fun getRecent30Days(userId: String, sinceMillis: Long): Flow<List<VitalSignEntity>>
 
+    // Memória pessoal: intervalos no fuso do aparelho, sem carregar o histórico inteiro.
+    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND systolicPressure > 0 AND diastolicPressure > 0 AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis ORDER BY measuredAt DESC, localId DESC LIMIT 1")
+    suspend fun getLatestPressureForMemory(userId: String, startInclusiveMillis: Long, endExclusiveMillis: Long): VitalSignEntity?
+
+    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND systolicPressure > 0 AND diastolicPressure > 0 AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis ORDER BY measuredAt DESC, localId DESC")
+    suspend fun getPressureIntervalForMemory(userId: String, startInclusiveMillis: Long, endExclusiveMillis: Long): List<VitalSignEntity>
+
+    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND glucoseLevel > 0 AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis AND (:filterType = 0 OR LOWER(TRIM(COALESCE(glucoseType, ''))) IN (:glucoseTypes)) ORDER BY measuredAt DESC, localId DESC LIMIT 1")
+    suspend fun getLatestGlucoseForMemory(userId: String, startInclusiveMillis: Long, endExclusiveMillis: Long, filterType: Boolean, glucoseTypes: List<String>): VitalSignEntity?
+
+    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND glucoseLevel > 0 AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis AND (:filterType = 0 OR LOWER(TRIM(COALESCE(glucoseType, ''))) IN (:glucoseTypes)) ORDER BY measuredAt DESC, localId DESC")
+    suspend fun getGlucoseIntervalForMemory(userId: String, startInclusiveMillis: Long, endExclusiveMillis: Long, filterType: Boolean, glucoseTypes: List<String>): List<VitalSignEntity>
+
+    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND hydrationMl > 0 AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis ORDER BY measuredAt DESC, localId DESC LIMIT 1")
+    suspend fun getLatestHydrationForMemory(userId: String, startInclusiveMillis: Long, endExclusiveMillis: Long): VitalSignEntity?
+
+    @Query("SELECT COALESCE(SUM(hydrationMl), 0) AS totalMl, COUNT(*) AS recordCount FROM vital_signs_local WHERE userId = :userId AND hydrationMl > 0 AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis")
+    suspend fun getHydrationSummaryForMemory(userId: String, startInclusiveMillis: Long, endExclusiveMillis: Long): HydrationMemoryAggregate
+
     @Query("SELECT * FROM vital_signs_local WHERE pendingSync = 1")
     suspend fun getPendingSync(): List<VitalSignEntity>
 
@@ -880,3 +899,6 @@ interface BleTelemetryReceiptDao {
     @Query("DELETE FROM ble_telemetry_receipts_local WHERE patientId = :patientId")
     suspend fun deleteForPatient(patientId: String)
 }
+
+/** Agregado de hidratação lido diretamente pelo Room, sem valores clínicos inferidos. */
+data class HydrationMemoryAggregate(val totalMl: Long, val recordCount: Int)

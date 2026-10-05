@@ -45,10 +45,12 @@ class VoicePlaybackTest {
         vm.speak("Segunda resposta") { second++ }
         runCurrent()
         finishes[0]()
+        runCurrent()
         assertTrue(vm.isSpeaking.value)
         assertEquals(0, first)
         assertEquals(0, second)
         finishes[1]()
+        runCurrent()
         assertFalse(vm.isSpeaking.value)
         assertEquals(1, second)
     }

@@ -1,10 +1,8 @@
 package br.com.bragasaude.ui.voice
 
 import android.content.Context
-import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -43,6 +41,8 @@ import br.com.bragasaude.ai.BragaHybridEvent
 import br.com.bragasaude.ai.BragaSpeechBuffer
 import br.com.bragasaude.ai.InputChannel
 import br.com.bragasaude.ai.BragaHealthMemory
+import br.com.bragasaude.ai.HealthQuerySession
+import br.com.bragasaude.ui.util.OnDeviceSpeechRecognition
 import br.com.bragasaude.data.remote.ai.NeuralAudioPlayer
 import br.com.bragasaude.data.remote.ai.BragaLocalAiClient
 import br.com.bragasaude.data.local.VitalSignDao
@@ -93,7 +93,8 @@ class VoiceHealthViewModel @Inject constructor(
     private val dailyMetricsDao: DailyMetricsDao,
     private val notificationClient: br.com.bragasaude.data.remote.service.NotificationClient,
     val voiceProfileManager: br.com.bragasaude.data.local.voice.VoiceProfileManager,
-    private val hybridOrchestrator: br.com.bragasaude.ai.BragaHybridOrchestrator
+    private val hybridOrchestrator: br.com.bragasaude.ai.BragaHybridOrchestrator,
+    private val playbackFocus: VoicePlaybackFocus = VoicePlaybackFocus()
 ) : ViewModel() {
 
     private var currentUserRole: String? = null
@@ -140,7 +141,17 @@ class VoiceHealthViewModel @Inject constructor(
     private var restartJob: kotlinx.coroutines.Job? = null
     private var playbackJob: kotlinx.coroutines.Job? = null
     private var speechGeneration = 0L
+    private var conversationGeneration = 0L
+    private var sessionOwner = getCurrentUserId()
+    private var conversationId = java.util.UUID.randomUUID().toString()
+    private val healthQuerySession = HealthQuerySession()
+    private var recognitionJob: kotlinx.coroutines.Job? = null
+    private val authStateListener = FirebaseAuth.AuthStateListener {
+        viewModelScope.launch(Dispatchers.Main.immediate) { selectSessionOwner() }
+    }
     private var activeTtsId: String? = null
+    private var activeTtsOwner: String? = null
+    private var activeTtsTurn = 0L
     private val conversationMemory = VoiceConversationMemory()
     private var onTtsDoneListener: (() -> Unit)? = null
 
@@ -150,27 +161,86 @@ class VoiceHealthViewModel @Inject constructor(
     private var isTtsReady: Boolean = false
 
     init {
+        auth.addAuthStateListener(authStateListener)
+        loadSessionProfile(sessionOwner)
+    }
+
+    private fun loadSessionProfile(owner: String) {
         viewModelScope.launch {
             try {
-                val uid = auth.currentUser?.uid
-                if (uid != null) {
-                    val p = profileDao.getProfileOneShot(uid)
-                    currentUserRole = p?.userRole
-                    currentCaregiverMode = p?.caregiverMode
-                    currentUserGender = p?.gender
-                    currentUserName = p?.fullName
-                }
+                val profile = if (owner == "anonymous") null else profileDao.getProfileOneShot(owner)
+                if (owner != sessionOwner || owner != getCurrentUserId()) return@launch
+                currentUserRole = profile?.userRole
+                currentCaregiverMode = profile?.caregiverMode
+                currentUserGender = profile?.gender
+                currentUserName = profile?.fullName
+            } catch (_: kotlinx.coroutines.CancellationException) {
+                throw kotlinx.coroutines.CancellationException("Carregamento de perfil cancelado")
             } catch (e: Exception) {
                 android.util.Log.w("VoiceHealthVM", "Falha ao carregar perfil para assistente de voz: ${e.message}")
             }
         }
     }
 
+    private fun selectSessionOwner() {
+        val owner = getCurrentUserId()
+        if (owner == sessionOwner) return
+        cancel()
+        sessionOwner = owner
+        currentUserRole = null
+        currentCaregiverMode = null
+        currentUserGender = null
+        currentUserName = null
+        loadSessionProfile(owner)
+    }
+
+    private fun currentTurn(owner: String, ticket: Long): Boolean =
+        owner == sessionOwner && owner == getCurrentUserId() && ticket == conversationGeneration
+
+    private fun destroyRecognizer() {
+        recognitionJob?.cancel()
+        recognitionJob = null
+        val previous = speechRecognizer
+        speechRecognizer = null
+        runCatching { previous?.cancel() }
+        runCatching { previous?.destroy() }
+    }
+
+    private fun invalidateConversationWork() {
+        conversationGeneration++
+        speechJob?.cancel()
+        speechJob = null
+        voiceSession.invalidate()
+        destroyRecognizer()
+        _partialResponse.value = ""
+        stopSpeaking()
+    }
+
+    /** A tela/app deixou de estar visível: não manter microfone, fila ou retomada automática. */
+    fun onHostStopped() = cancel()
+
+    private fun requestPlaybackFocus(): Boolean {
+        val context = currentContext ?: return true
+        val owner = sessionOwner
+        val turn = conversationGeneration
+        val generation = speechGeneration
+        val granted = playbackFocus.request(context) {
+            viewModelScope.launch(Dispatchers.Main.immediate) {
+                if (currentTurn(owner, turn) && generation == speechGeneration) onHostStopped()
+            }
+        }
+        if (!granted) onHostStopped()
+        return granted
+    }
+
+    private fun abandonPlaybackFocus() = playbackFocus.release()
+
     /**
      * Chamado sempre que qualquer fala da assistente termina (ou é cancelada).
      * No modo Live Streaming, retoma a escuta automaticamente após um breve intervalo.
      */
     fun onSpeechFinished() {
+        selectSessionOwner()
         if (_isLiveMode.value) scheduleListeningRestart(350)
         else _state.value = VoiceUiState.Idle
     }
@@ -178,9 +248,11 @@ class VoiceHealthViewModel @Inject constructor(
     private fun scheduleListeningRestart(waitMs: Long) {
         restartJob?.cancel()
         val ticket = speechGeneration
+        val owner = sessionOwner
+        val turn = conversationGeneration
         restartJob = viewModelScope.launch(Dispatchers.Main) {
             delay(waitMs)
-            if (_isLiveMode.value && ticket == speechGeneration) {
+            if (_isLiveMode.value && ticket == speechGeneration && currentTurn(owner, turn)) {
                 restartJob = null
                 currentContext?.let { startListening(it) }
             }
@@ -188,20 +260,16 @@ class VoiceHealthViewModel @Inject constructor(
     }
 
     fun interruptAndListen(context: Context) {
-        speechJob?.cancel()
-        _partialResponse.value = ""
-        voiceSession.invalidate()
-        stopSpeaking()
+        invalidateConversationWork()
         startListening(context)
     }
 
     private fun pauseConversation() {
         _isLiveMode.value = false
+        invalidateConversationWork()
         voiceSession.reset()
-        speechJob?.cancel()
-        stopSpeaking()
-        try { speechRecognizer?.cancel(); speechRecognizer?.destroy() } catch (_: Exception) { }
-        speechRecognizer = null
+        healthQuerySession.clear()
+        conversationId = java.util.UUID.randomUUID().toString()
         _state.value = VoiceUiState.Idle
         speak("Conversa pausada. Toque no orbe quando quiser continuar.", remember = false)
     }
@@ -228,7 +296,8 @@ class VoiceHealthViewModel @Inject constructor(
                     textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                         override fun onStart(utteranceId: String?) {
                             viewModelScope.launch(Dispatchers.Main) {
-                                if (utteranceId != null && utteranceId == activeTtsId) _isSpeaking.value = true
+                                if (utteranceId != null && utteranceId == activeTtsId &&
+                                    activeTtsOwner?.let { currentTurn(it, activeTtsTurn) } == true) _isSpeaking.value = true
                             }
                         }
                         override fun onDone(utteranceId: String?) { finishLocalTts(utteranceId) }
@@ -241,46 +310,58 @@ class VoiceHealthViewModel @Inject constructor(
 
     private fun finishLocalTts(id: String?) {
         viewModelScope.launch(Dispatchers.Main) {
-            if (id == null || id != activeTtsId) return@launch
+            if (id == null || id != activeTtsId ||
+                activeTtsOwner?.let { currentTurn(it, activeTtsTurn) } != true) return@launch
             activeTtsId = null
+            activeTtsOwner = null
             _isSpeaking.value = false
             val callback = onTtsDoneListener
             onTtsDoneListener = null
+            abandonPlaybackFocus()
             callback?.invoke()
         }
     }
 
     fun speak(text: String, isMale: Boolean = true, remember: Boolean = true, onDone: (() -> Unit)? = null) {
+        selectSessionOwner()
         stopSpeaking()
         val sanitized = br.com.bragasaude.util.PortuguesePhoneticHelper.cleanTextForTts(text)
         if (sanitized.isBlank()) { onDone?.invoke(); return }
         conversationMemory.selectUser(getCurrentUserId())
         if (remember) conversationMemory.recordAssistant(sanitized)
         val ticket = speechGeneration
+        val owner = sessionOwner
+        val turn = conversationGeneration
+        if (!requestPlaybackFocus()) return
         onTtsDoneListener = onDone
         playbackJob = viewModelScope.launch {
             val played = neuralAudioPlayer.playSpeech(sanitized, true,
-                onStart = { if (ticket == speechGeneration) _isSpeaking.value = true },
-                onDone = {
-                    if (ticket == speechGeneration) {
+                onStart = { viewModelScope.launch(Dispatchers.Main.immediate) {
+                    if (ticket == speechGeneration && currentTurn(owner, turn)) _isSpeaking.value = true
+                } },
+                onDone = { viewModelScope.launch(Dispatchers.Main.immediate) {
+                    if (ticket == speechGeneration && currentTurn(owner, turn)) {
                         _isSpeaking.value = false
                         val callback = onTtsDoneListener
                         onTtsDoneListener = null
+                        abandonPlaybackFocus()
                         callback?.invoke()
                     }
-                })
+                } })
             currentCoroutineContext().ensureActive()
-            if (!played && ticket == speechGeneration) speakLocalTts(sanitized, ticket)
+            if (!played && ticket == speechGeneration && currentTurn(owner, turn)) speakLocalTts(sanitized, ticket, owner, turn)
         }
     }
 
-    private suspend fun speakLocalTts(text: String, ticket: Long) {
+    private suspend fun speakLocalTts(text: String, ticket: Long, owner: String, turn: Long) {
         var retries = 0
         while (!isTtsReady && retries++ < 15) delay(100)
         currentCoroutineContext().ensureActive()
-        if (ticket != speechGeneration) return
+        if (ticket != speechGeneration || !currentTurn(owner, turn)) return
         val id = "braga_tts_$ticket"
         activeTtsId = id
+        activeTtsOwner = owner
+        activeTtsTurn = turn
         try {
             if (isTtsReady && textToSpeech != null) {
                 val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f) }
@@ -299,67 +380,63 @@ class VoiceHealthViewModel @Inject constructor(
         playbackJob?.cancel()
         playbackJob = null
         activeTtsId = null
+        activeTtsOwner = null
         onTtsDoneListener = null
         _isSpeaking.value = false
         neuralAudioPlayer.stop()
         try { textToSpeech?.stop() } catch (_: Exception) { }
+        abandonPlaybackFocus()
     }
 
-    /**
-     * Inicia a escuta por voz do idoso.
-     * Deve ser chamado com um Context válido (Activity ou Application).
-     */
+    /** Inicia reconhecimento estritamente on-device; síntese tem disponibilidade independente. */
     fun startListening(context: Context) {
-        conversationMemory.selectUser(getCurrentUserId())
-        if (!_isLiveMode.value) voiceSession.reset()
+        selectSessionOwner()
+        conversationMemory.selectUser(sessionOwner)
+        if (!_isLiveMode.value) {
+            voiceSession.reset()
+            healthQuerySession.clear()
+            conversationId = java.util.UUID.randomUUID().toString()
+        }
+        invalidateConversationWork()
         _isLiveMode.value = true
         val listenTicket = voiceSession.begin()
-        // AUD-AN08: antes guardava a Activity direto — o ViewModel sobrevive à
-        // rotação, então a Activity destruída era retida até a próxima
-        // startListening (leak de memória de um objeto pesado com view tree).
-        // O applicationContext cumpre o mesmo papel (TTS e SpeechRecognizer
-        // funcionam com ele) e nunca é destruído.
+        val owner = sessionOwner
+        val turn = conversationGeneration
         currentContext = context.applicationContext
         initTts(context)
-        
-        // Parar qualquer áudio residual
-        stopSpeaking()
-        onTtsDoneListener = null
-        
-        // Limpar buffers
         _audioRmsDb.value = -2f
         _liveTranscription.value = ""
         _state.value = VoiceUiState.Listening
-        
-        viewModelScope.launch(Dispatchers.Main) {
+
+        recognitionJob = viewModelScope.launch(Dispatchers.Main) {
             try {
-                if (speechRecognizer == null) {
-                    android.util.Log.i("VoiceHealthVM", "Criando nova instância de SpeechRecognizer")
-                    // AUD-AN08: applicationContext — nunca retém a Activity.
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context.applicationContext)
-                } else {
-                    speechRecognizer?.cancel()
+                val localRecognizer = OnDeviceSpeechRecognition.create(context.applicationContext)
+                speechRecognizer = localRecognizer
+                localRecognizer.setRecognitionListener(VoiceRecognitionListener(listenTicket, owner, turn))
+                val request = OnDeviceSpeechRecognition.intent()
+                OnDeviceSpeechRecognition.checkPortugueseSupport(context.applicationContext, localRecognizer, request)
+                if (!_isLiveMode.value || !voiceSession.accepts(listenTicket) || !currentTurn(owner, turn)) return@launch
+                android.util.Log.i("VoiceHealthVM", "Iniciando reconhecimento de voz on-device em português brasileiro")
+                localRecognizer.startListening(request)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (currentTurn(owner, turn) && voiceSession.accepts(listenTicket)) {
+                    recognitionUnavailable(error.message ?: OnDeviceSpeechRecognition.errorMessage(SpeechRecognizer.ERROR_CLIENT))
                 }
-                
-                if (!_isLiveMode.value || !voiceSession.accepts(listenTicket)) return@launch
-                speechRecognizer?.setRecognitionListener(VoiceRecognitionListener(listenTicket))
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                }
-                android.util.Log.i("VoiceHealthVM", "Iniciando escuta no SpeechRecognizer...")
-                speechRecognizer?.startListening(intent)
-            } catch (e: Exception) {
-                android.util.Log.e("VoiceHealthVM", "Falha ao iniciar SpeechRecognizer: ${e.message}", e)
-                _state.value = VoiceUiState.Error("Não foi possível iniciar o microfone.", true, isSpokenOnly = false)
             }
         }
     }
 
+    private fun recognitionUnavailable(message: String) {
+        _isLiveMode.value = false
+        invalidateConversationWork()
+        healthQuerySession.clear()
+        _state.value = VoiceUiState.Error(message, retryable = false, isSpokenOnly = false)
+    }
+
     /**
-     * Para a escuta manualmente (quando o idoso solta o botão).
+     * Para a escuta manualmente quando a pessoa encerra a captura.
      */
     fun stopListening() {
         try {
@@ -370,32 +447,20 @@ class VoiceHealthViewModel @Inject constructor(
     /**
      * Descarta o estado atual e volta para Idle.
      */
-    fun reset() {
-        conversationMemory.clear()
-        voiceSession.reset()
-        hydrationConversation.reset()
-        speechJob?.cancel()
-        _partialResponse.value = ""
-        stopSpeaking()
-        _state.value = VoiceUiState.Idle
-    }
+    fun reset() = cancel()
 
-    /**
-     * Cancela o reconhecimento e volta para Idle.
-     */
+    /** Cancela reconhecimento, geração e áudio sem permitir callbacks de sessões anteriores. */
     fun cancel() {
         _isLiveMode.value = false
+        invalidateConversationWork()
         voiceSession.reset()
         conversationMemory.clear()
+        healthQuerySession.clear()
+        conversationId = java.util.UUID.randomUUID().toString()
         hydrationConversation.reset()
-        speechJob?.cancel()
-        _partialResponse.value = ""
         telemetryService.logVoiceEvent(getCurrentUserId(), "CANCEL", null, null)
-        try { speechRecognizer?.cancel(); speechRecognizer?.destroy() } catch (_: Exception) {}
-        speechRecognizer = null
-        stopSpeaking()
-        onTtsDoneListener = null
         _liveTranscription.value = ""
+        _audioRmsDb.value = -2f
         _state.value = VoiceUiState.Idle
     }
 
@@ -406,18 +471,26 @@ class VoiceHealthViewModel @Inject constructor(
         telemetryService.logVoiceEvent(getCurrentUserId(), "CONFIRM", null, intent.javaClass.simpleName)
         if (_state.value is VoiceUiState.Saving || _state.value is VoiceUiState.Saved) return
         stopSpeaking()
-        viewModelScope.launch {
+        val owner = sessionOwner
+        val turn = conversationGeneration
+        speechJob = viewModelScope.launch {
+            if (!currentTurn(owner, turn)) return@launch
             _state.value = VoiceUiState.Saving
             try {
                 android.util.Log.i("VoiceHealthVM", "Persistindo intenção de voz em segundo plano: ${intent.javaClass.simpleName}")
                 val summary = withContext(Dispatchers.IO) {
                     executor.execute(intent)
                 }
+                currentCoroutineContext().ensureActive()
+                if (!currentTurn(owner, turn)) return@launch
                 _state.value = VoiceUiState.Saved(summary)
                 speak(summary) {
                     onSpeechFinished()
                 }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
+                if (!currentTurn(owner, turn)) return@launch
                 android.util.Log.e("VoiceHealthVM", "Falha ao salvar dados de voz: ${e.message}", e)
                 _state.value = VoiceUiState.Error(
                     message = "Não consegui salvar: ${e.message}",
@@ -462,6 +535,7 @@ class VoiceHealthViewModel @Inject constructor(
 
     override fun onCleared() {
         stopLiveMode()
+        auth.removeAuthStateListener(authStateListener)
         super.onCleared()
         try {
             speechRecognizer?.destroy()
@@ -478,8 +552,10 @@ class VoiceHealthViewModel @Inject constructor(
 
     // ==================== RECONHECIMENTO ====================
 
-    private inner class VoiceRecognitionListener(private val ticket: Long) : RecognitionListener {
-        private fun current() = _isLiveMode.value && voiceSession.accepts(ticket)
+    private inner class VoiceRecognitionListener(
+        private val ticket: Long, private val owner: String, private val turn: Long
+    ) : RecognitionListener {
+        private fun current() = _isLiveMode.value && voiceSession.accepts(ticket) && currentTurn(owner, turn)
         override fun onReadyForSpeech(params: Bundle?) {
             if (!current()) return
             _state.value = VoiceUiState.Listening
@@ -495,11 +571,6 @@ class VoiceHealthViewModel @Inject constructor(
 
         override fun onError(error: Int) {
             if (!current()) return
-            // Cancelamentos rápidos ao reabrir o modal não devem travar nem emitir erro
-            if (error == SpeechRecognizer.ERROR_CLIENT) {
-                return
-            }
-            
             android.util.Log.w("VoiceHealthVM", "VoiceRecognitionListener.onError code=$error isLiveMode=${_isLiveMode.value}")
             if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || error == SpeechRecognizer.ERROR_NO_MATCH) {
                 if (voiceSession.consume(ticket)) handleSilence()
@@ -507,21 +578,12 @@ class VoiceHealthViewModel @Inject constructor(
             }
             voiceSession.consume(ticket)
 
-            // Outros erros técnicos reais (áudio/permissão): definir erro SEM falar
-            val message = when (error) {
-                SpeechRecognizer.ERROR_AUDIO -> "Problema de áudio. Verifique o microfone."
-                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Permissão de microfone negada."
-                SpeechRecognizer.ERROR_NETWORK -> "Problema de internet. Tente offline."
-                SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Tempo limite da rede."
-                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Reconhecedor ocupado. Aguarde um instante."
-                SpeechRecognizer.ERROR_SERVER -> "Erro do servidor de voz."
-                else -> "Não foi possível processar. Tente novamente."
-            }
-            _state.value = VoiceUiState.Error(message, retryable = true, isSpokenOnly = false)
+            // Interrompe a sessão técnica sem loop de reinício e sem reconhecimento remoto.
+            recognitionUnavailable(OnDeviceSpeechRecognition.errorMessage(error))
         }
 
         override fun onResults(results: Bundle?) {
-            if (!_isLiveMode.value || !voiceSession.consume(ticket)) return
+            if (!current() || !voiceSession.consume(ticket)) return
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val bestMatch = matches?.firstOrNull()
             
@@ -533,7 +595,8 @@ class VoiceHealthViewModel @Inject constructor(
             voiceSession.hasSpeech()
             _liveTranscription.value = bestMatch
             conversationMemory.selectUser(getCurrentUserId())
-            val nlu = hybridOrchestrator.analyze(bestMatch, InputChannel.VOICE)
+            healthQuerySession.advanceTurn(owner, conversationId)
+            val nlu = hybridOrchestrator.analyze(bestMatch, InputChannel.VOICE, healthQuerySession, owner, conversationId)
             if (nlu.isBloqueioSeguranca) {
                 speechJob?.cancel()
                 speechJob = viewModelScope.launch { processUserSpeech(bestMatch, nlu) }
@@ -566,20 +629,16 @@ class VoiceHealthViewModel @Inject constructor(
         }
 
         private fun showLocalResponse(output: br.com.bragasaude.ai.NluOutput) {
+            if (!currentTurn(owner, turn)) return
             val reply = output.respostaLocal.orEmpty()
             _state.value = VoiceUiState.Saved(reply, isConversational = true)
             if (output.isEmergencia) {
                 _navigationEvent.tryEmit(VoiceNavigationEvent.OpenEmergencyDialog)
             }
-            val reason = when {
-                output.isBloqueioSeguranca -> "Muralha de segurança (voz)"
-                output.isEmergencia -> "Emergência SAMU 192 (voz)"
-                br.com.bragasaude.ai.BragaHealthMemory.supports(output.intent) -> "Consulta local Room (histórico de saúde - voz)"
-                else -> "NLU nativo on-device (voz)"
-            }
+            val reason = output.routingReason
             br.com.bragasaude.ai.BragaRoutingLogger.record(
                 channel = br.com.bragasaude.ai.InputChannel.VOICE,
-                input = conversationMemory.snapshot().lastOrNull()?.second.orEmpty(),
+                input = _liveTranscription.value,
                 decision = br.com.bragasaude.ai.RoutingLogEntry.RoutingDecision.LOCAL_NLU,
                 intent = output.intent,
                 reason = reason,
@@ -590,7 +649,7 @@ class VoiceHealthViewModel @Inject constructor(
         }
 
         private suspend fun processUserSpeech(bestMatch: String, local: br.com.bragasaude.ai.NluOutput) {
-            val owner = getCurrentUserId()
+            if (!currentTurn(owner, turn)) return
             conversationMemory.selectUser(owner)
             // Antes de preferências, parser, telemetria de conversa ou qualquer rede.
             if (local.isBloqueioSeguranca) {
@@ -600,16 +659,21 @@ class VoiceHealthViewModel @Inject constructor(
             }
             val history = conversationMemory.snapshot()
             conversationMemory.recordUser(bestMatch)
-            if (local.isEmergencia || local.intent == "orientacao_cadastro_medicamento") {
+            if (local.isEmergencia || local.intent == "orientacao_cadastro_medicamento" ||
+                local.intent == "entrada_consulta_ambigua" || local.intent == "sintoma_contextual") {
                 hydrationConversation.reset()
                 showLocalResponse(local)
                 return
             }
             try {
                 if (BragaHealthMemory.supports(local.intent)) {
-                    val reply = hybridOrchestrator.resolveLocal(local, owner, InputChannel.VOICE)
+                    val reply = hybridOrchestrator.resolveLocal(local, owner, InputChannel.VOICE, healthQuerySession, conversationId)
                     currentCoroutineContext().ensureActive()
-                    if (owner == getCurrentUserId()) showLocalResponse(reply)
+                    if (currentTurn(owner, turn)) showLocalResponse(reply)
+                    return
+                }
+                if (local.delegarParaNuvem) {
+                    streamHybridResponse(bestMatch, history, owner, local)
                     return
                 }
                 // Mantém a preferência confirmada existente, apenas para registro de copos.
@@ -619,7 +683,7 @@ class VoiceHealthViewModel @Inject constructor(
                     localAiClient.loadCupPreference()
                 } else null
                 currentCoroutineContext().ensureActive()
-                if (owner != getCurrentUserId()) return
+                if (!currentTurn(owner, turn)) return
                 val hydrationReply = hydrationConversation.respond(
                     bestMatch, owner,
                     allowed = currentUserRole != "CAREGIVER" || currentCaregiverMode == "HYBRID",
@@ -656,12 +720,12 @@ class VoiceHealthViewModel @Inject constructor(
                         return
                     }
                 }
-                streamHybridResponse(bestMatch, history, owner)
+                streamHybridResponse(bestMatch, history, owner, local)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (_: Exception) {
                 currentCoroutineContext().ensureActive()
-                if (owner != getCurrentUserId()) return
+                if (!currentTurn(owner, turn)) return
                 stopSpeaking()
                 val reply = "Não consegui concluir a resposta agora. Você pode tentar novamente ou procurar orientação de um profissional de saúde."
                 _state.value = VoiceUiState.Error(reply, retryable = true, isSpokenOnly = true)
@@ -670,10 +734,12 @@ class VoiceHealthViewModel @Inject constructor(
         }
 
         private suspend fun streamHybridResponse(
-            speech: String, history: List<Pair<String, String>>, owner: String
+            speech: String, history: List<Pair<String, String>>, owner: String,
+            decision: br.com.bragasaude.ai.NluOutput
         ) = coroutineScope {
             stopSpeaking()
             val generation = speechGeneration
+            if (!requestPlaybackFocus()) return@coroutineScope
             _partialResponse.value = ""
             _state.value = VoiceUiState.Saving
             val phrases = Channel<String>(32)
@@ -682,11 +748,11 @@ class VoiceHealthViewModel @Inject constructor(
             val player = launch {
                 for (phrase in phrases) {
                     currentCoroutineContext().ensureActive()
-                    if (owner != getCurrentUserId()) throw kotlinx.coroutines.CancellationException("Sessão alterada")
+                    if (!currentTurn(owner, turn) || generation != speechGeneration) throw kotlinx.coroutines.CancellationException("Sessão alterada")
                     val finished = kotlinx.coroutines.CompletableDeferred<Unit>()
                     val played = neuralAudioPlayer.playSpeech(phrase,
                         onStart = { viewModelScope.launch {
-                            if (generation == speechGeneration) _isSpeaking.value = true
+                            if (generation == speechGeneration && currentTurn(owner, turn)) _isSpeaking.value = true
                         } },
                         onDone = { finished.complete(Unit) })
                     if (played) finished.await()
@@ -694,9 +760,9 @@ class VoiceHealthViewModel @Inject constructor(
             }
             playbackJob = player
             try {
-                hybridOrchestrator.respond(speech, history, InputChannel.VOICE, owner).collect { event ->
+                hybridOrchestrator.respond(speech, history, InputChannel.VOICE, owner, decision).collect { event ->
                     currentCoroutineContext().ensureActive()
-                    if (owner != getCurrentUserId()) throw kotlinx.coroutines.CancellationException("Sessão alterada")
+                    if (!currentTurn(owner, turn) || generation != speechGeneration) throw kotlinx.coroutines.CancellationException("Sessão alterada")
                     when (event) {
                         is BragaHybridEvent.Local -> showLocalResponse(event.output)
                         is BragaHybridEvent.Delta -> {
@@ -711,19 +777,20 @@ class VoiceHealthViewModel @Inject constructor(
                 }
                 phrases.close()
                 player.join()
-                if (completed.isNotBlank() && generation == speechGeneration && owner == getCurrentUserId()) {
+                if (completed.isNotBlank() && generation == speechGeneration && currentTurn(owner, turn)) {
                     br.com.bragasaude.ai.BragaRoutingLogger.record(
                         channel = br.com.bragasaude.ai.InputChannel.VOICE,
                         input = speech,
                         decision = br.com.bragasaude.ai.RoutingLogEntry.RoutingDecision.CLOUD_LLM,
-                        intent = "conversa_incompreendida_fallback",
-                        reason = "Streaming de voz em nuvem (Groq)",
+                        intent = decision.intent,
+                        reason = decision.routingReason,
                         durationMs = 0L,
                         previewResponse = completed
                     )
                     conversationMemory.recordAssistant(completed)
                     _state.value = VoiceUiState.Saved(completed, isConversational = true)
                     _isSpeaking.value = false
+                    abandonPlaybackFocus()
                     onSpeechFinished()
                 }
             } finally {
@@ -733,6 +800,7 @@ class VoiceHealthViewModel @Inject constructor(
                 if (generation == speechGeneration) {
                     neuralAudioPlayer.stop()
                     _isSpeaking.value = false
+                    abandonPlaybackFocus()
                 }
             }
         }
@@ -811,6 +879,7 @@ class VoiceHealthViewModel @Inject constructor(
         }
 
         private fun handleIntent(bestMatch: String, intent: VoiceHealthIntent) {
+            if (!currentTurn(owner, turn)) return
             when (intent) {
                 is VoiceHealthIntent.BloodPressure -> {
                     val systolic = intent.systolic
@@ -887,6 +956,8 @@ class VoiceHealthViewModel @Inject constructor(
                                 generateMetricsSummary(intent.metric)
                             }
                         }
+                        currentCoroutineContext().ensureActive()
+                        if (!currentTurn(owner, turn)) return@launch
                         speak(summary) {
                             onSpeechFinished()
                         }

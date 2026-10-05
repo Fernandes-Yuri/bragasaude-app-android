@@ -1,5 +1,7 @@
 package br.com.bragasaude.ai
 
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
@@ -23,16 +25,34 @@ class BragaHybridOrchestrator internal constructor(
 
     fun analyze(speech: String, channel: InputChannel = InputChannel.VOICE): NluOutput = BragaNluEngine.analisar(speech, channel)
 
-    suspend fun resolveLocal(output: NluOutput, userId: String, channel: InputChannel): NluOutput {
+    fun analyze(speech: String, channel: InputChannel, session: HealthQuerySession,
+                userId: String, conversationId: String): NluOutput {
+        val local = analyze(speech, channel)
+        if (local.isBloqueioSeguranca || local.isEmergencia || local.delegarParaNuvem ||
+            local.intent == "orientacao_cadastro_medicamento" || HealthQueryResolver.isAmbiguous(speech)) return local
+        val query = session.resolve(speech, userId, conversationId) ?: local.healthQuery
+        return if (query == null) local else local.copy(intent = query.intent, respostaLocal = null, healthQuery = query)
+    }
+
+    suspend fun resolveLocal(output: NluOutput, userId: String, channel: InputChannel,
+                             session: HealthQuerySession? = null, conversationId: String = ""): NluOutput {
         val reply = if (BragaHealthMemory.supports(output.intent)) {
-            memory?.answer(output.intent, userId) ?: "Não foi possível consultar seus registros locais agora."
+            val query = output.healthQuery
+            if (memory == null) "Não foi possível consultar seus registros locais agora."
+            else if (query == null) memory.answer(output.intent, userId)
+            else {
+                val result = memory.answerResult(query, userId)
+                currentCoroutineContext().ensureActive()
+                if (result.hasData) session?.remember(query, userId, conversationId)
+                result.text
+            }
         } else output.respostaLocal.orEmpty()
         return output.copy(respostaLocal = BragaInputLanguage.forChannel(reply, channel))
     }
 
     fun respond(speech: String, history: List<Pair<String, String>>, channel: InputChannel = InputChannel.VOICE,
-                userId: String = "anonymous"): Flow<BragaHybridEvent> = flow {
-        val local = analyze(speech, channel)
+                userId: String = "anonymous", decision: NluOutput? = null): Flow<BragaHybridEvent> = flow {
+        val local = decision ?: analyze(speech, channel)
         if (!local.delegarParaNuvem || local.isEmergencia || local.isBloqueioSeguranca) {
             emit(BragaHybridEvent.Local(resolveLocal(local, userId, channel)))
             return@flow

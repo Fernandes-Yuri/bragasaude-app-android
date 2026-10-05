@@ -33,9 +33,17 @@ class OrbChatViewModelTest {
         every { user.uid } returns "owner"
         every { auth.currentUser } returns user
         hybrid = mockk()
-        every { hybrid.analyze(any(), any()) } answers { BragaNluEngine.analisar(firstArg(), secondArg()) }
-        coEvery { hybrid.resolveLocal(any(), any(), any()) } answers {
-            firstArg<NluOutput>().let { it.copy(respostaLocal = it.respostaLocal ?: "Seu último registro local foi consultado.") }
+        every { hybrid.analyze(any(), any(), any(), any(), any()) } answers {
+            val local = BragaNluEngine.analisar(firstArg(), secondArg())
+            val query = if (!local.isBloqueioSeguranca && !local.isEmergencia && !local.delegarParaNuvem)
+                thirdArg<HealthQuerySession>().resolve(firstArg(), arg(3), arg(4)) ?: local.healthQuery else null
+            if (query == null) local else local.copy(intent = query.intent, healthQuery = query)
+        }
+        coEvery { hybrid.resolveLocal(any(), any(), any(), any(), any()) } answers {
+            firstArg<NluOutput>().let {
+                it.healthQuery?.let { query -> arg<HealthQuerySession>(3).remember(query, secondArg(), arg(4)) }
+                it.copy(respostaLocal = it.respostaLocal ?: "Seu último registro local foi consultado.")
+            }
         }
         vm = OrbChatViewModel(gateway, store, auth, mockk<NeuralAudioPlayer>(relaxed = true),
             mockk<NotificationClient>(relaxed = true), mockk<ProfileDao>(relaxed = true),
@@ -61,7 +69,7 @@ class OrbChatViewModelTest {
             arg<(String) -> Unit>(3)("Confira os valores")
             awaitCancellation()
         }
-        vm.sendMessage("pressão?")
+        vm.sendMessage("Qual a diferença entre apneia e alterações hormonais?")
         runCurrent()
         assertEquals("Confira os valores", vm.state.value.partialText)
         vm.cancelGeneration()
@@ -134,19 +142,19 @@ class OrbChatViewModelTest {
         val response = vm.state.value.messages.last()
         assertFalse(response.text.contains("ouvir"))
         assertFalse(response.rawContent!!.contains("ouvir"))
-        verify { hybrid.analyze(any(), InputChannel.TEXT) }
+        verify { hybrid.analyze(any(), InputChannel.TEXT, any(), any(), any()) }
     }
 
     @Test fun editingDictationChangesChannelBackToText() = runTest(dispatcher) {
         vm.updateVoiceInput("quanto foi minha pressão")
         vm.sendInput(vm.state.value.input)
         runCurrent()
-        coVerify { hybrid.resolveLocal(any(), "owner", InputChannel.VOICE) }
+        coVerify { hybrid.resolveLocal(any(), "owner", InputChannel.VOICE, any(), any()) }
         vm.updateVoiceInput("quanto foi minha pressão")
         vm.updateInput("quanto foi minha pressão hoje")
         vm.sendInput(vm.state.value.input)
         runCurrent()
-        coVerify { hybrid.resolveLocal(any(), "owner", InputChannel.TEXT) }
+        coVerify { hybrid.resolveLocal(any(), "owner", InputChannel.TEXT, any(), any()) }
     }
 
     @Test fun blockedTranscriptIsNotReplayedToCloud() = runTest(dispatcher) {
@@ -174,5 +182,61 @@ class OrbChatViewModelTest {
         vm.sendMessage("Qual a diferença entre apneia e alterações hormonais?")
         runCurrent()
         coVerify(exactly = 1) { gateway.send(any(), any(), any(), any()) }
+    }
+
+    @Test fun emergencyBypassesTextCadenceAndGateway() = runTest(dispatcher) {
+        vm.nluResponseDelayMs = 500L
+        vm.sendMessage("Não tenho dor no peito, mas não consigo respirar")
+        runCurrent()
+        assertFalse(vm.state.value.isStreaming)
+        assertTrue(vm.state.value.messages.last().text.contains("SAMU 192"))
+        verify(exactly = 0) { gateway.open(any()) }
+        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+    }
+
+    @Test fun unknownAndOffTopicInputsStayLocal() = runTest(dispatcher) {
+        listOf("Quem ganhou o jogo?", "me explica melhor", "Não estou com dor no peito").forEach {
+            vm.sendMessage(it); runCurrent()
+            assertFalse(vm.state.value.isStreaming)
+        }
+        verify(exactly = 0) { gateway.open(any()) }
+        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+    }
+
+    @Test fun clinicalQuestionWithPersonalMetricDoesNotReadHistory() = runTest(dispatcher) {
+        coEvery { gateway.send(any(), any(), any(), any()) } returns OrbReply(
+            """{"fala":"Converse com seu profissional de saúde.","acao":"CONVERSA","parametros":{}}""")
+        vm.sendMessage("Como minha pressão afeta os rins?")
+        runCurrent()
+        coVerify(exactly = 1) { gateway.send(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { hybrid.resolveLocal(any(), any(), any(), any(), any()) }
+    }
+
+    @Test fun registrationCardIsPreparedWithoutGateway() = runTest(dispatcher) {
+        vm.sendMessage("minha pressão deu 12 por 8"); runCurrent()
+        assertEquals("REGISTRAR_PRESSAO", vm.state.value.messages.last().action)
+        assertTrue(vm.state.value.messages.last().parameters.contains("120"))
+        verify(exactly = 0) { gateway.open(any()) }
+        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+    }
+
+    @Test fun followUpQueriesKeepPeriodWithoutGateway() = runTest(dispatcher) {
+        listOf("Qual foi minha última pressão?", "e ontem?", "e a média da semana?", "e minha glicemia?").forEach {
+            vm.sendMessage(it); runCurrent()
+            assertFalse(vm.state.value.isStreaming)
+        }
+        coVerify { hybrid.resolveLocal(match { it.healthQuery?.period == HealthPeriod.YESTERDAY }, "owner", InputChannel.TEXT, any(), any()) }
+        coVerify { hybrid.resolveLocal(match { it.healthQuery?.metric == HealthMetric.GLUCOSE && it.healthQuery?.period == HealthPeriod.LAST_7_DAYS }, "owner", InputChannel.TEXT, any(), any()) }
+        verify(exactly = 0) { gateway.open(any()) }
+        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+    }
+
+    @Test fun newConversationClearsIncompleteQueryContext() = runTest(dispatcher) {
+        vm.sendMessage("Qual foi minha última pressão?"); runCurrent()
+        vm.newConversation()
+        vm.sendMessage("e ontem?"); runCurrent()
+        coVerify(exactly = 1) { hybrid.resolveLocal(match { it.healthQuery != null }, any(), any(), any(), any()) }
+        assertNull(vm.state.value.messages.last().action)
+        verify(exactly = 0) { gateway.open(any()) }
     }
 }

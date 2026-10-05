@@ -1,6 +1,8 @@
 package br.com.bragasaude.util
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PortuguesePhoneticHelperTest {
@@ -66,5 +68,18 @@ class PortuguesePhoneticHelperTest {
         val input = "Você bebeu 500 ml hoje, que é 25% da meta."
         val output = PortuguesePhoneticHelper.cleanTextForTts(input)
         assertEquals("Você bebeu quinhentos ml hoje, que é vinte e cinco por cento da meta.", output)
+    }
+
+    @Test
+    fun `cleanTextForTts preserva digitos repetidos e reduz apenas letras repetidas`() {
+        val agua = PortuguesePhoneticHelper.cleanTextForTts("A referência é de 2000 ml.")
+        assertTrue(agua, agua.contains("dois mil"))
+        assertFalse(agua, agua.contains("vinte"))
+
+        val glicemia = PortuguesePhoneticHelper.cleanTextForTts("Sua glicemia foi 111 mg/dL.")
+        assertFalse(glicemia, glicemia.contains(" um mg"))
+        assertTrue(glicemia, glicemia.contains("onze"))
+
+        assertEquals("oi, tudo bem?", PortuguesePhoneticHelper.cleanTextForTts("oiiii, tudo bem?"))
     }
 }

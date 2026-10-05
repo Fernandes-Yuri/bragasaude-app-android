@@ -4,11 +4,9 @@ import br.com.bragasaude.ui.components.BragaAlertDialog
 import br.com.bragasaude.ui.components.BragaFormSheet
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -63,7 +61,11 @@ import br.com.bragasaude.ai.RoutingLogEntry
 import br.com.bragasaude.data.remote.ai.OrbConnectionState
 import br.com.bragasaude.ui.components.RiskNotificationDialog
 import br.com.bragasaude.ui.util.Screen
+import br.com.bragasaude.ui.util.OnDeviceSpeechRecognition
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -80,50 +82,94 @@ fun OrbChatScreen(onBack: () -> Unit, onNavigate: (Screen) -> Unit, viewModel: O
     val clipboard = LocalClipboardManager.current
     var emergency by remember { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
-    val recognizer = remember(context) {
-        if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
+    var recognitionStarting by remember { mutableStateOf(false) }
+    var recognitionActive by remember { mutableStateOf(false) }
+    var recognitionRevision by remember { mutableIntStateOf(0) }
+    var screenActive by remember { mutableStateOf(true) }
+    var recognitionJob by remember { mutableStateOf<Job?>(null) }
+    val voiceScope = rememberCoroutineScope()
+    val recognition = remember(context) { runCatching { OnDeviceSpeechRecognition.create(context) } }
+    val recognizer = recognition.getOrNull()
+    fun stopVoice() {
+        recognitionRevision++
+        recognitionJob?.cancel()
+        recognitionJob = null
+        recognitionStarting = false
+        recognitionActive = false
+        listening = false
+        recognizer?.cancel()
     }
     DisposableEffect(recognizer) {
         recognizer?.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) { listening = true }
+            override fun onReadyForSpeech(params: Bundle?) { if (recognitionActive) listening = true }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() { listening = false }
-            override fun onError(error: Int) { listening = false; viewModel.showError("Não consegui ouvir. Você pode tentar novamente ou digitar.") }
+            override fun onError(error: Int) {
+                if (!recognitionActive || !screenActive) return
+                recognitionActive = false
+                listening = false
+                viewModel.showError(OnDeviceSpeechRecognition.errorMessage(error))
+            }
             override fun onResults(results: Bundle?) {
+                if (!recognitionActive || !screenActive) return
+                recognitionActive = false
                 listening = false
                 results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(viewModel::updateVoiceInput)
             }
             override fun onPartialResults(partialResults: Bundle?) {
+                if (!recognitionActive || !screenActive) return
                 partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(viewModel::updateVoiceInput)
             }
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
-        onDispose { recognizer?.destroy() }
+        onDispose { stopVoice(); recognizer?.destroy() }
     }
     fun startVoice() {
-        if (recognizer == null) { viewModel.showError("Reconhecimento de voz indisponível neste aparelho."); return }
-        if (listening) { recognizer.stopListening(); listening = false; return }
-        try {
-            recognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            })
-        } catch (_: Exception) { viewModel.showError("Não foi possível iniciar o microfone.") }
+        if (!screenActive) return
+        if (recognizer == null) {
+            viewModel.showError(recognition.exceptionOrNull()?.message
+                ?: "Reconhecimento de voz no dispositivo indisponível. Você pode digitar no chat.")
+            return
+        }
+        if (recognitionStarting || recognitionActive) { stopVoice(); return }
+        val token = ++recognitionRevision
+        recognitionStarting = true
+        recognitionJob = voiceScope.launch {
+            try {
+                val intent = OnDeviceSpeechRecognition.intent()
+                OnDeviceSpeechRecognition.checkPortugueseSupport(context, recognizer, intent)
+                if (token != recognitionRevision || !screenActive) return@launch
+                recognitionActive = true
+                listening = true
+                recognizer.startListening(intent)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                if (token == recognitionRevision && screenActive) {
+                    recognitionActive = false
+                    listening = false
+                    viewModel.showError(failure.message
+                        ?: "Não foi possível iniciar a voz no dispositivo. Você pode digitar no chat.")
+                }
+            } finally {
+                if (token == recognitionRevision) recognitionStarting = false
+            }
+        }
     }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startVoice() else viewModel.showError("Permita o microfone para ditar uma mensagem.")
     }
     DisposableEffect(lifecycle, viewModel) {
+        screenActive = lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
         viewModel.enterScreen()
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START) viewModel.enterScreen()
-            if (event == Lifecycle.Event.ON_STOP) { recognizer?.cancel(); listening = false; viewModel.leaveScreen() }
+            if (event == Lifecycle.Event.ON_START) { screenActive = true; viewModel.enterScreen() }
+            if (event == Lifecycle.Event.ON_STOP) { screenActive = false; stopVoice(); viewModel.leaveScreen() }
         }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); viewModel.leaveScreen() }
+        onDispose { screenActive = false; stopVoice(); lifecycle.removeObserver(observer); viewModel.leaveScreen() }
     }
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
@@ -143,7 +189,7 @@ fun OrbChatScreen(onBack: () -> Unit, onNavigate: (Screen) -> Unit, viewModel: O
         onDeleteAll = viewModel::deleteAllConversations,
         onDeleteConversation = viewModel::deleteConversation,
         onExport = { clipboard.setText(AnnotatedString(viewModel.exportText())) },
-        listening = listening, onVoice = {
+        listening = listening || recognitionStarting, onVoice = {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startVoice()
             else permission.launch(Manifest.permission.RECORD_AUDIO)
         })
@@ -169,7 +215,11 @@ fun OrbChatContent(
     val scroll = rememberLazyListState()
     val dragging by scroll.interactionSource.collectIsDraggedAsState()
     val currentState by rememberUpdatedState(state)
+    val scrollMessages = remember(state.messages) { state.messages.map { ChatScrollMessage(it.id, it.role == "user") } }
+    val currentScrollMessages by rememberUpdatedState(scrollMessages)
     val scrollPolicy = remember { ChatScrollPolicy() }
+    var scrollNavigation by remember { mutableStateOf(ChatScrollNavigation()) }
+    var returnToLatestRequest by remember { mutableIntStateOf(0) }
     val snackbar = remember { SnackbarHostState() }
     var menu by remember { mutableStateOf(false) }
     var exported by remember { mutableStateOf(false) }
@@ -195,10 +245,13 @@ fun OrbChatContent(
                 dragging = dragging,
                 atBottom = !scroll.canScrollForward,
                 itemCount = scroll.layoutInfo.totalItemsCount,
-                viewportEnd = scroll.layoutInfo.viewportEndOffset
+                viewportEnd = scroll.layoutInfo.viewportEndOffset,
+                messages = currentScrollMessages,
+                returnRequest = returnToLatestRequest
             )
         }.collectLatest { snapshot ->
-            if (scrollPolicy.follow(snapshot) && !snapshot.atBottom && snapshot.itemCount == snapshot.messageCount + 2) {
+            scrollNavigation = scrollPolicy.update(snapshot)
+            if (scrollNavigation.shouldFollow && !snapshot.atBottom && snapshot.itemCount == snapshot.messageCount + 2) {
                 scroll.scrollToItem(snapshot.itemCount - 1)
             }
         }
@@ -341,6 +394,12 @@ fun OrbChatContent(
             if (!state.showHistory) {
                 Surface(color = Color.Transparent, tonalElevation = 0.dp) {
                     Column {
+                        if (scrollNavigation.showReturnToLatest) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.Center) {
+                                ChatReturnToLatest(scrollNavigation.unreadMessages) { returnToLatestRequest++ }
+                            }
+                        }
                         ChatInput(state.input, onInput, onSend, state.isStreaming, onCancel, listening, onVoice)
                     }
                 }
@@ -448,6 +507,27 @@ fun OrbChatContent(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ChatReturnToLatest(unreadMessages: Int, onClick: () -> Unit) {
+    val label = when (unreadMessages) {
+        0 -> "Voltar ao fim"
+        1 -> "1 nova mensagem · Voltar ao fim"
+        else -> "$unreadMessages novas mensagens · Voltar ao fim"
+    }
+    FilledTonalButton(
+        onClick = onClick,
+        modifier = Modifier.heightIn(min = 48.dp).testTag("chatReturnToLatest")
+            .semantics { contentDescription = label },
+        colors = ButtonDefaults.filledTonalButtonColors(
+            containerColor = Color(0xFFE0F2EC), contentColor = Color(0xFF00695C)
+        )
+    ) {
+        Icon(Icons.Default.ArrowDownward, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text(label)
     }
 }
 
