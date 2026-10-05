@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.exams
 
+import br.com.bragasaude.ui.onboarding.ExamGettingStarted
+import br.com.bragasaude.ui.onboarding.ExamIntroductionSheet
 import br.com.bragasaude.ui.components.BragaAlertDialog
 
 import android.Manifest
@@ -108,6 +110,7 @@ fun ExamsScreen(
     var examToDelete by remember { mutableStateOf<RemoteExam?>(null) }
     var cloudCopyToRemove by remember { mutableStateOf<String?>(null) }
     var selectedExamId by remember { mutableStateOf<String?>(null) }
+    var showExamIntroduction by remember { mutableStateOf(false) }
     var showStorageInfo by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf("") }
     var storageFilter by remember { mutableStateOf("Todos") }
@@ -357,7 +360,14 @@ fun ExamsScreen(
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    DashedUploadCard(onClick = { showAddBottomSheet = true })
+                    if (exams.isEmpty()) {
+                        ExamGettingStarted(
+                            onAddExam = { showAddBottomSheet = true },
+                            onLearnMore = { showExamIntroduction = true }
+                        )
+                    } else {
+                        DashedUploadCard(onClick = { showAddBottomSheet = true })
+                    }
                     TextButton(onClick = { showStorageInfo = true }) {
                         Icon(Icons.Default.PhoneAndroid, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
@@ -402,6 +412,13 @@ fun ExamsScreen(
         }
         } // fecha PullToRefreshBox
     } // fecha Scaffold
+
+    if (showExamIntroduction) {
+        ExamIntroductionSheet(
+            onDismiss = { showExamIntroduction = false },
+            onAddExam = { showExamIntroduction = false; showAddBottomSheet = true }
+        )
+    }
 
     if (showStorageInfo) {
         BragaAlertDialog(
