@@ -15,10 +15,13 @@ internal object BragaRoutingPolicy {
     private val unrelated = Regex("""\b(futebol|jogo|placar|campeonato|novela|loteria|cotacao|acoes da bolsa|bitcoins?|receita de bolo|previsao do tempo|capital de|presidente|eleicoes|resolva matematica|traduz\w*)\b""")
     private val chest = Regex("""\b(socorro|dor (forte |insuportavel )?no peito|aperto (insuportavel )?no peito|suor frio|falta de ar( repentina)?|nao (consigo|consegue) respira[r]?|desmai\w*|boca (ta |esta )?torta|vomitando sangue|infarto|avc|perdi a forca|dormencia|formigamento|ajuda rapido|passando muito mal|tontura (muito )?forte|visao escureceu|puxa pro braco|queimacao forte no meio do peito)\b""")
     private val fall = Regex("""\b(cai(u)?( aqui| no chao)?|nao (consigo|consegue) (me |se )?levantar|bati a cabeca|ta sangrando|esta sangrando|perna travou|levei um tombo|levou um tombo|escorreguei)\b""")
-    private val deniedPrefix = Regex("""\b(nao|sem|nego|negou)\b(?:\W+\w+){0,6}\W*$""")
+    private val deniedPrefix = Regex("""\b(nao|sem|nego|negou|nunca|jamais)\b(?:\W+\w+){0,6}\W*$""")
     private val historical = Regex("""\b(ontem|anteontem|semana passada|mes passado|ano passado|ja tive|ja teve|tive|teve|sentia|senti|sentiu|ha \d+ (dias|meses|anos))\b""")
     private val present = Regex("""\b(agora|hoje|estou|esta|tenho|tem|sinto|sente|continua|continuo|ainda|desde|socorro|nao (consigo|consegue))\b""")
     private val hypothetical = Regex("""\b(se (eu |ele |ela |alguem )?(tiver|sentir)|hipotet\w*|exemplo|no filme|no livro|li a frase|o que (e|significa|causa)|por que|porque|como evitar|como prevenir)\b""")
+
+    // Recorrência atual em qualquer trecho invalida a leitura de relato passado.
+    private val recurrence = Regex("""\b(voltou|voltaram|de novo|outra vez|novamente|piorou|piorando|continua|ainda)\b""")
 
     fun inHealthScope(text: String) = health.containsMatchIn(text) && !unrelated.containsMatchIn(text)
     fun complexHealthQuestion(text: String): Boolean {
@@ -31,13 +34,14 @@ internal object BragaRoutingPolicy {
 
     fun emergency(text: String): EmergencyAssessment {
         var contextual = false
+        val recurring = recurrence.containsMatchIn(text)
         val clauses = text.split(Regex("""\b(mas|porem|contudo|e)\b|[.;!?]"""))
         for (clause in clauses) {
             for ((pattern, intent) in listOf(chest to "emergencia_dor_peito_avc", fall to "emergencia_queda_trauma")) {
                 for (match in pattern.findAll(clause)) {
                     val prefix = clause.take(match.range.first)
                     val denial = !match.value.startsWith("nao ") && deniedPrefix.containsMatchIn(prefix)
-                    val past = historical.containsMatchIn(clause) && !present.containsMatchIn(clause)
+                    val past = historical.containsMatchIn(clause) && !present.containsMatchIn(clause) && !recurring
                     val example = hypothetical.containsMatchIn(clause)
                     if (!denial && !past && !example) return EmergencyAssessment(intent)
                     // Perguntas explicativas continuam na análise clínica, sem disparar alerta por palavra.
