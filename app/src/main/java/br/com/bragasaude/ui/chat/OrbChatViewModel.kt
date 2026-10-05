@@ -79,6 +79,7 @@ class OrbChatViewModel @Inject constructor(
     private var revision = 0
     private var visible = false
     private var inputChannel = InputChannel.TEXT
+    private val healthQuerySession = HealthQuerySession()
     var nluResponseDelayMs: Long = 500L
     private val authListener = FirebaseAuth.AuthStateListener {
         val next = it.currentUser?.uid
@@ -108,6 +109,7 @@ class OrbChatViewModel @Inject constructor(
     fun enterScreen() { visible = true }
     fun leaveScreen() {
         visible = false
+        healthQuerySession.clear()
         cancelGeneration()
         stopAudio()
         gateway.close()
@@ -122,6 +124,7 @@ class OrbChatViewModel @Inject constructor(
     fun setTextScale(scale: Float) { mutable.update { it.copy(textScale = scale.coerceIn(0.8f, 2.0f)) } }
 
     fun newConversation() {
+        healthQuerySession.clear()
         cancelGeneration()
         stopAudio()
         conversationId = UUID.randomUUID().toString()
@@ -129,6 +132,7 @@ class OrbChatViewModel @Inject constructor(
     }
 
     fun clearCurrentMessages() {
+        healthQuerySession.clear()
         cancelGeneration()
         stopAudio()
         val owner = uid
@@ -169,9 +173,10 @@ class OrbChatViewModel @Inject constructor(
         }
     }
 
-    fun showHistory() { cancelGeneration(); mutable.update { it.copy(showHistory = true, input = "") } }
+    fun showHistory() { healthQuerySession.clear(); cancelGeneration(); mutable.update { it.copy(showHistory = true, input = "") } }
     fun openConversation(conversation: OrbConversation) {
         if (conversation.userId != uid) return
+        healthQuerySession.clear()
         cancelGeneration()
         stopAudio()
         try {
@@ -209,34 +214,52 @@ class OrbChatViewModel @Inject constructor(
             .takeLast(30).map { it.role to (it.rawContent ?: it.text) }
         val previousGeneration = generation
         generation = viewModelScope.launch {
-            val startTimeMs = System.currentTimeMillis()
+            val startedAt = System.nanoTime()
+            fun elapsedMs() = (System.nanoTime() - startedAt) / 1_000_000.0
+            var roomMs: Double? = null
+            var firstTextMs: Double? = null
+            var cadenceMs = 0L
             try {
                 previousGeneration?.join()
                 currentCoroutineContext().ensureActive()
-                val local = hybrid.analyze(text, channel)
-                val concrete = if (local.isBloqueioSeguranca || local.isEmergencia ||
+                val owner = uid ?: throw CancellationException("Sessão alterada")
+                healthQuerySession.advanceTurn(owner, conversationId)
+                val nluStartedAt = System.nanoTime()
+                val local = hybrid.analyze(text, channel, healthQuerySession, owner, conversationId)
+                val nluMs = (System.nanoTime() - nluStartedAt) / 1_000_000.0
+                val concrete = if (local.isBloqueioSeguranca || local.isEmergencia || local.delegarParaNuvem ||
+                    local.intent in setOf("entrada_consulta_ambigua", "sintoma_contextual") ||
                     local.intent == "orientacao_cadastro_medicamento" || BragaHealthMemory.supports(local.intent)) null
                     else voiceParser.parse(value, null, null)
-                val shortcut = when (value.lowercase()) {
+                val shortcut = if (local.isBloqueioSeguranca) null else when (value.lowercase()) {
                     "/pressão", "/pressao" -> "REGISTRAR_PRESSAO"
                     "/remédio", "/remedio" -> "LEMBRETES"
                     "/exame" -> "EXAMES"
                     "/emergência", "/emergencia" -> "EMERGENCIA"
                     else -> null
                 }
+                val actionReply = if (concrete != null) BragaChatActions.reply(concrete) else null
                 val useLocal = local.isBloqueioSeguranca || local.isEmergencia ||
                     local.intent == "orientacao_cadastro_medicamento" || BragaHealthMemory.supports(local.intent) ||
-                    (!local.delegarParaNuvem && (concrete is VoiceHealthIntent.Unknown || concrete is VoiceHealthIntent.ConversationalReply))
+                    (!local.delegarParaNuvem && actionReply == null)
                 val reply = if (shortcut != null) {
-                    if (channel == InputChannel.TEXT && nluResponseDelayMs > 0) delay(nluResponseDelayMs)
+                    if (shortcut != "EMERGENCIA" && channel == InputChannel.TEXT && nluResponseDelayMs > 0) {
+                        cadenceMs = nluResponseDelayMs
+                        delay(cadenceMs)
+                    }
                     OrbReply(JSONObject().put("fala", "Abrir ${actionLabel(shortcut)}.")
                         .put("acao", shortcut).put("parametros", JSONObject()).toString())
+                } else if (actionReply != null && !local.isBloqueioSeguranca && !local.isEmergencia &&
+                    local.intent != "orientacao_cadastro_medicamento" && !BragaHealthMemory.supports(local.intent)) {
+                    actionReply
                 } else if (useLocal) {
-                    val owner = uid ?: throw CancellationException("Sessão alterada")
-                    val resolved = hybrid.resolveLocal(local, owner, channel)
+                    val roomStartedAt = System.nanoTime()
+                    val resolved = hybrid.resolveLocal(local, owner, channel, healthQuerySession, conversationId)
+                    if (BragaHealthMemory.supports(local.intent)) roomMs = (System.nanoTime() - roomStartedAt) / 1_000_000.0
                     // Delay mínimo no chat de texto para experiência humana e cadenciada
-                    if (channel == InputChannel.TEXT && nluResponseDelayMs > 0) {
-                        delay(nluResponseDelayMs)
+                    if (!local.isEmergencia && !local.isBloqueioSeguranca && channel == InputChannel.TEXT && nluResponseDelayMs > 0) {
+                        cadenceMs = nluResponseDelayMs
+                        delay(cadenceMs)
                     }
                     if (auth.currentUser?.uid != owner || uid != owner || version != revision) return@launch
                     if (local.isEmergencia) navigation.send(OrbChatEvent.Emergency)
@@ -244,12 +267,16 @@ class OrbChatViewModel @Inject constructor(
                         .put("acao", "CONVERSA").put("parametros", JSONObject()).toString(), "Resposta local; 0 tokens de nuvem")
                 } else {
                     // Mantém o escopo e os cards B1. Só abre transporte após o filtro local.
+                    check(local.delegarParaNuvem) { "A entrada precisa de esclarecimento local." }
                     val scope = caregiverScope()
                     if (version != revision) return@launch
                     gateway.open(viewModelScope)
                     val context = listOf("assistant" to GroqDynamicPrompt().build(history.dropLast(1), channel)) + history.takeLast(10)
                     gateway.send(context, actingAs = scope?.first, patientId = scope?.second) { partial ->
-                        if (version == revision) mutable.update { it.copy(partialText = BragaInputLanguage.forChannel(partial, channel)) }
+                        if (version == revision) {
+                            if (partial.isNotBlank() && firstTextMs == null) firstTextMs = elapsedMs()
+                            mutable.update { it.copy(partialText = BragaInputLanguage.forChannel(partial, channel)) }
+                        }
                     }
                 }
                 if (version != revision) return@launch
@@ -263,26 +290,33 @@ class OrbChatViewModel @Inject constructor(
                 }
                 val answerText = BragaInputLanguage.forChannel(parsed.getString("fala"), channel)
 
-                val elapsedMs = System.currentTimeMillis() - startTimeMs
+                val totalMs = elapsedMs()
+                val elapsedMs = totalMs.toLong()
+                val timing = RoutingTiming(nluMs, roomMs, firstTextMs ?: totalMs, totalMs, cadenceMs)
+                val diagnostic = JSONObject().put("nluMs", nluMs).put("roomMs", roomMs)
+                    .put("firstTextMs", firstTextMs ?: totalMs).put("completedMs", totalMs).put("cadenceMs", cadenceMs).toString()
                 if (shortcut != null) {
-                    BragaRoutingLogger.record(channel, value, RoutingLogEntry.RoutingDecision.LOCAL_NLU, "atalho_chat", "Atalho executado no dispositivo", elapsedMs, answerText)
+                    BragaRoutingLogger.record(channel, value, RoutingLogEntry.RoutingDecision.LOCAL_NLU, "atalho_chat", "Atalho executado no dispositivo", elapsedMs, answerText, timing)
+                } else if (actionReply != null) {
+                    BragaRoutingLogger.record(channel, value, RoutingLogEntry.RoutingDecision.LOCAL_NLU,
+                        "acao_local", "Ação preparada localmente para revisão", elapsedMs, answerText, timing)
                 } else if (useLocal) {
                     val reason = when {
                         local.isBloqueioSeguranca -> "Muralha de segurança local (0 tokens)"
                         local.isEmergencia -> "Emergência detectada localmente (SAMU 192)"
                         BragaHealthMemory.supports(local.intent) -> "Consulta local Room (histórico de saúde)"
-                        else -> "NLU nativo on-device (0 tokens de nuvem)"
+                        else -> local.routingReason
                     }
-                    BragaRoutingLogger.record(channel, value, RoutingLogEntry.RoutingDecision.LOCAL_NLU, local.intent, reason, elapsedMs, answerText)
+                    BragaRoutingLogger.record(channel, value, RoutingLogEntry.RoutingDecision.LOCAL_NLU, local.intent, reason, elapsedMs, answerText, timing)
                 } else {
-                    BragaRoutingLogger.record(channel, value, RoutingLogEntry.RoutingDecision.CLOUD_LLM, local.intent, "Roteado para Groq Cloud LLM", elapsedMs, answerText)
+                    BragaRoutingLogger.record(channel, value, RoutingLogEntry.RoutingDecision.CLOUD_LLM, local.intent, "Roteado para Groq Cloud LLM", elapsedMs, answerText, timing)
                 }
 
                 val answer = ChatMessage(role = "assistant", text = answerText, status = "received",
                     action = action, parameters = finalParams.toString(),
                     rawContent = if (channel == InputChannel.TEXT) JSONObject(reply.content)
                         .put("fala", answerText).toString() else reply.content,
-                    metrics = reply.metrics)
+                    metrics = listOfNotNull(reply.metrics, diagnostic).joinToString("\n"))
                 mutable.update { it.copy(messages = it.messages.map { m -> if (m.id == user.id) m.copy(status = if (local.isBloqueioSeguranca) "blocked" else "received") else m } + answer,
                     isStreaming = false, partialText = "") }
                 save()
@@ -326,6 +360,7 @@ class OrbChatViewModel @Inject constructor(
     }
 
     fun cancelGeneration() {
+        healthQuerySession.clear()
         ++revision
         generation?.cancel()
         if (state.value.isStreaming) {
@@ -375,6 +410,7 @@ class OrbChatViewModel @Inject constructor(
                         Screen.Nutrition(openGroceryList = true, groceryItems = items)
                     }
                     "CONSULTAR_METRICAS" -> Screen.Report
+                    "ABRIR_FAMILIA" -> Screen.FamilyConnect
                     "LEMBRETES" -> Screen.Reminders
                     "EXAMES" -> Screen.Exams
                     // D51: confirma o rascunho -> grava a consulta no dispositivo
@@ -452,7 +488,7 @@ class OrbChatViewModel @Inject constructor(
         // Agente B1: ações com executor real no app. Registro clínico abre
         // tela pré-preenchida (o usuário confirma lá); lista/relatório navegam.
         return when (rawAction) {
-            "EMERGENCIA", "LEMBRETES", "EXAMES", "CONSULTAR_METRICAS", "ABRIR_LISTA_COMPRAS",
+            "EMERGENCIA", "LEMBRETES", "EXAMES", "CONSULTAR_METRICAS", "ABRIR_FAMILIA", "ABRIR_LISTA_COMPRAS",
             "REGISTRAR_PRESSAO", "REGISTRAR_GLICEMIA", "REGISTRAR_AGUA",
             "REGISTRAR_BATIMENTOS", "REGISTRAR_OXIGENACAO",
             // D51: rascunho de agendamento por voz — card com botao Confirmar
@@ -473,6 +509,7 @@ fun actionLabel(action: String): String = when (action) {
     "BUSCAR_ALIMENTO" -> "alimentação"
     "ABRIR_LISTA_COMPRAS" -> "lista de compras"
     "CONSULTAR_METRICAS" -> "relatório de saúde"
+    "ABRIR_FAMILIA" -> "Família"
     "LEMBRETES" -> "lembretes de remédios"
     "EXAMES" -> "exames"
     "EMERGENCIA" -> "opções de socorro e avisar contatos"

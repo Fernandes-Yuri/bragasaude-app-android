@@ -12,6 +12,16 @@ import java.util.UUID
 /**
  * Registro estruturado de cada decisão de roteamento do assistente (NLU Local vs Groq LLM).
  */
+data class RoutingTiming(
+    val nluMs: Double,
+    val roomMs: Double? = null,
+    val firstTextMs: Double? = null,
+    val completedMs: Double? = null,
+    val cadenceMs: Long = 0,
+    val firstAudioMs: Double? = null,
+    val interruptionMs: Double? = null
+)
+
 data class RoutingLogEntry(
     val id: String = UUID.randomUUID().toString(),
     val timestamp: Long = System.currentTimeMillis(),
@@ -21,7 +31,8 @@ data class RoutingLogEntry(
     val intent: String,
     val reason: String,
     val durationMs: Long,
-    val previewResponse: String
+    val previewResponse: String,
+    val timing: RoutingTiming? = null
 ) {
     enum class RoutingDecision { LOCAL_NLU, CLOUD_LLM }
 
@@ -50,7 +61,8 @@ object BragaRoutingLogger {
         intent: String,
         reason: String,
         durationMs: Long,
-        previewResponse: String
+        previewResponse: String,
+        timing: RoutingTiming? = null
     ) {
         val entry = RoutingLogEntry(
             channel = channel,
@@ -59,7 +71,8 @@ object BragaRoutingLogger {
             intent = intent,
             reason = reason,
             durationMs = durationMs,
-            previewResponse = previewResponse.trim()
+            previewResponse = previewResponse.trim(),
+            timing = timing
         )
 
         val updated = (listOf(entry) + _logs.value).take(MAX_LOGS)
@@ -68,7 +81,7 @@ object BragaRoutingLogger {
         // Logcat com tag dedicada e formato claro para adb logcat -s BRAGA_ROUTING
         Log.i(
             TAG,
-            "[$decision] [${channel.name}] (${durationMs}ms) intent=$intent | input=\"${entry.input}\" | reason=\"$reason\" | preview=\"${entry.previewResponse.take(90)}\""
+            "[$decision] [${channel.name}] (${durationMs}ms) intent=$intent | input=\"${entry.input}\" | reason=\"$reason\" | preview=\"${entry.previewResponse.take(90)}\" | timing=$timing"
         )
     }
 
@@ -85,7 +98,7 @@ object BragaRoutingLogger {
         val localPercentage = if (total > 0) (localCount * 100.0 / total) else 0.0
 
         val sb = StringBuilder()
-        sb.appendLine("=== RELATÓRIO DE ROTEAMENTO BRAGA SLM ===")
+        sb.appendLine("=== RELATÓRIO DE ROTEAMENTO BRAGA HÍBRIDO ===")
         sb.appendLine("Total de Interações: $total")
         sb.appendLine("Locais (NLU On-Device): $localCount (%.1f%%)".format(Locale.ROOT, localPercentage))
         sb.appendLine("Nuvem (Groq LLM): $cloudCount")
@@ -96,6 +109,7 @@ object BragaRoutingLogger {
             sb.appendLine("  Entrada: \"${item.input}\"")
             sb.appendLine("  Intent: ${item.intent} (${item.durationMs}ms)")
             sb.appendLine("  Motivo: ${item.reason}")
+            item.timing?.let { sb.appendLine("  Tempos por etapa: $it") }
             sb.appendLine("  Resposta: \"${item.previewResponse.take(120)}\"")
             sb.appendLine()
         }

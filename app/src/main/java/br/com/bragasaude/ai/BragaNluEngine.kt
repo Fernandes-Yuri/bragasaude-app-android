@@ -16,8 +16,26 @@ data class NluOutput(
     val isEmergencia: Boolean = false,
     val isBloqueioSeguranca: Boolean = false,
     val delegarParaNuvem: Boolean = false,
-    val tempoMs: Double = 0.0
-)
+    val tempoMs: Double = 0.0,
+    val healthQuery: HealthQuery? = null
+) {
+    val route: BragaRoute get() = when {
+        isBloqueioSeguranca -> BragaRoute.BLOCKED
+        isEmergencia -> BragaRoute.EMERGENCY
+        BragaHealthMemory.supports(intent) -> BragaRoute.HEALTH_MEMORY
+        delegarParaNuvem -> BragaRoute.CLOUD
+        intent.startsWith("entrada_") -> BragaRoute.CLARIFICATION
+        else -> BragaRoute.LOCAL_CONVERSATION
+    }
+    val routingReason: String get() = when (route) {
+        BragaRoute.BLOCKED -> "Pedido recusado pelo filtro local"
+        BragaRoute.EMERGENCY -> "Sinal de emergência atual; orientação imediata"
+        BragaRoute.HEALTH_MEMORY -> "Consulta pessoal respondida pelo Room"
+        BragaRoute.CLOUD -> "Dúvida complexa de saúde elegível para o gateway"
+        BragaRoute.CLARIFICATION -> "Informação insuficiente; esclarecimento local"
+        else -> "Conversa resolvida no dispositivo"
+    }
+}
 
 object BragaNluEngine {
 
@@ -33,17 +51,8 @@ object BragaNluEngine {
     private val CADASTRO_NORMALIZADO = Regex(
         """\b(cadastr\w*|adicion\w*|inclu\w*|registr\w*|anot\w*|alter\w*|mud\w*|edit\w*|coloc\w*)\b.{0,90}\b(remedio\w*|medicamento\w*|medicacao|receita|losartana|atenolol|comprimido\w*)\b|\b(novo remedio|nova medicacao|remedio novo)\b"""
     )
-    private val EMERGENCIA_NORMALIZADA = Regex(
-        """socorro|dor (forte )?no peito|aperto no peito|falta de ar|nao consigo respirar|desmai\w*|boca.{0,8}torta|vomitando sangue|infarto|\bavc\b|perdi a forca|dormencia|formigamento|ajuda rapido|passando muito mal|tontura (muito )?forte"""
-    )
-    private val DUVIDA_COMPLEXA = Regex(
-        """intera\w*|contraindic\w*|efeito\w* (colatera\w*|advers\w*)|por que|porque|diferenca entre|diagnostic\w*|exame\w*|posso (misturar|combinar)|qual dose"""
-    )
     private val SAUDACAO_NORMALIZADA = Regex(
         """^(ola|oi|bom dia|boa tarde|boa noite|como vai|e ai|tudo bem|oi braga|ola braga)[!?. ]*$"""
-    )
-    private val CONSULTA_OUTRA_PESSOA = Regex(
-        """\b(do meu|da minha|meu|minha) (pai|mae|filho|filha|esposo|esposa|marido|mulher|paciente|familiar)\b"""
     )
 
     // 0. MURALHA DE SEGURANÇA E GUARDRAILS
@@ -61,14 +70,6 @@ object BragaNluEngine {
     )
 
     // 1. EMERGÊNCIAS MÉDICAS
-    private val REGEX_EMERGENCIA_PEITO = Regex(
-        "(dor (no|forte no) peito|aperto (no|insuportável no) peito|suor frio|falta de ar repentina|não consigo respirar|boca tá torta|boca torta|lado do corpo formigando|visão escureceu|puxa pro braço|queimação forte no meio do peito)",
-        RegexOption.IGNORE_CASE
-    )
-    private val REGEX_EMERGENCIA_QUEDA = Regex(
-        "(caí (aqui|no chão)|não consigo (me levantar|levantar)|bati a cabeça|tá sangrando|perna travou|levei um tombo|escorreguei)",
-        RegexOption.IGNORE_CASE
-    )
     private val REGEX_DESCONFORTO = Regex(
         "(azia|dorzinha nas costas|tonturinha leve|incômodo leve|queimaçãozinha|pontada leve)",
         RegexOption.IGNORE_CASE
@@ -338,6 +339,12 @@ object BragaNluEngine {
             "Posso orientar o caminho para cadastrar seu medicamento. Na seção exclusiva de medicações do aplicativo, você pode usar a leitura de código de barras, tirar uma foto da receita ou anexar a receita. Confira tudo certinho com calma antes de salvar, para que os alarmes e notificações funcionem sem erro.",
             "Você encontra o cadastro de medicamentos em uma seção própria do app. Na seção exclusiva de medicações do aplicativo, você pode usar a leitura de código de barras, tirar uma foto da receita ou anexar a receita. Confira tudo certinho com calma antes de salvar, para que os alarmes e notificações funcionem sem erro."
         ),
+        "sintoma_contextual" to listOf(
+            "Entendi o contexto que você contou. Se houver algum sintoma agora, me diga o que está acontecendo; sinais urgentes precisam de socorro imediato.",
+            "Vou considerar o que você explicou sobre os sintomas. Como você está se sentindo neste momento?",
+            "Obrigado por esclarecer. Conte se há algum desconforto acontecendo agora para eu orientar o próximo passo.",
+            "Entendi seu relato. Você quer conversar sobre o que aconteceu ou está sentindo algo neste momento?"
+        ),
         "conversa_agradecimento" to listOf(
             "Por nada! Fico muito feliz em ajudar no seu cuidado diário.",
             "Disponha sempre! Estou aqui com você para o que precisar.",
@@ -347,22 +354,25 @@ object BragaNluEngine {
         "conversa_apresentacao_assistente" to listOf(
             "Eu sou o Braga, seu assistente pessoal de saúde e bem-estar! Posso ajudar acompanhando sua pressão, glicemia, hidratação e conversando com você.",
             "Sou o Braga! Fico aqui no seu celular para apoiar sua rotina de cuidados, lembrar dos seus remédios e acompanhar seus registros de saúde.",
-            "Muito prazer! Eu sou o Braga. Meu foco é apoiar seu autocuidado, sua saúde e estar ao seu lado no dia a dia."
+            "Muito prazer! Eu sou o Braga. Meu foco é apoiar seu autocuidado, sua saúde e estar ao seu lado no dia a dia.",
+            "Sou o Braga, o assistente do aplicativo. Posso consultar seus registros e conversar sobre sua rotina de cuidados."
         ),
         "conversa_como_esta_assistente" to listOf(
             "Comigo está tudo ótimo, muito obrigado por perguntar! E com você, como está seu dia e sua saúde?",
             "Tudo em paz por aqui, pronto para te ajudar! Como você está se sentindo hoje?",
-            "Estou muito bem! Agradeço o carinho. Como posso apoiar você agora?"
+            "Estou muito bem! Agradeço o carinho. Como posso apoiar você agora?",
+            "Estou por aqui para ajudar. Como está sua rotina de cuidados hoje?"
         ),
         "conversa_confirmacao_compreensao" to listOf(
             "Perfeito! Se precisar de algo ou tiver qualquer dúvida, é só me chamar.",
             "Combinado! Estou por aqui acompanhando você.",
-            "Ótimo! Qualquer novidade nos seus registros, estou à disposição."
+            "Ótimo! Qualquer novidade nos seus registros, estou à disposição.",
+            "Certo! Quando precisar, podemos retomar sua dúvida ou consultar seus registros."
         )
     )
 
     private fun sortearResposta(intent: String): String {
-        val lista = BANCO_RESPOSTAS[intent] ?: return "Estou aqui com você. Pode me falar com calma que estou te ouvindo."
+        val lista = BANCO_RESPOSTAS[intent] ?: return BragaInputLanguage.clarification(InputChannel.TEXT)
         if (lista.size == 1) return lista[0]
 
         val ultima = ultimasRespostas[intent]
@@ -396,7 +406,9 @@ object BragaNluEngine {
             val resp = sortearResposta("guardrail_prompt_injection")
             return NluOutput("guardrail_prompt_injection", resp, isBloqueioSeguranca = true, tempoMs = deltaMs(inicio))
         }
-        if (REGEX_ABUSO_LOOP.containsMatchIn(limpo) || LOOP_NORMALIZADO.containsMatchIn(protegido)) {
+        val smallHealthList = Regex("""\bliste\s+([1-9]|10)\b""").containsMatchIn(protegido) &&
+            BragaRoutingPolicy.inHealthScope(protegido) && !Regex("infinito|sem parar|vezes").containsMatchIn(protegido)
+        if (!smallHealthList && (REGEX_ABUSO_LOOP.containsMatchIn(limpo) || LOOP_NORMALIZADO.containsMatchIn(protegido))) {
             val resp = sortearResposta("guardrail_abuso_tokens_loop")
             return NluOutput("guardrail_abuso_tokens_loop", resp, isBloqueioSeguranca = true, tempoMs = deltaMs(inicio))
         }
@@ -405,14 +417,12 @@ object BragaNluEngine {
             return NluOutput("guardrail_fora_do_escopo_tecnico", resp, isBloqueioSeguranca = true, tempoMs = deltaMs(inicio))
         }
 
-        // 1. EMERGÊNCIAS MÉDICAS
-        if (REGEX_EMERGENCIA_PEITO.containsMatchIn(limpo) || EMERGENCIA_NORMALIZADA.containsMatchIn(protegido)) {
-            val resp = sortearResposta("emergencia_dor_peito_avc")
-            return NluOutput("emergencia_dor_peito_avc", resp, isEmergencia = true, tempoMs = deltaMs(inicio))
+        val emergency = BragaRoutingPolicy.emergency(protegido)
+        emergency.intent?.let { intent ->
+            return NluOutput(intent, sortearResposta(intent), isEmergencia = true, tempoMs = deltaMs(inicio))
         }
-        if (REGEX_EMERGENCIA_QUEDA.containsMatchIn(limpo)) {
-            val resp = sortearResposta("emergencia_queda_trauma")
-            return NluOutput("emergencia_queda_trauma", resp, isEmergencia = true, tempoMs = deltaMs(inicio))
+        if (emergency.contextualMention && !BragaRoutingPolicy.complexHealthQuestion(protegido)) {
+            return NluOutput("sintoma_contextual", sortearResposta("sintoma_contextual"), tempoMs = deltaMs(inicio))
         }
         if (REGEX_DESCONFORTO.containsMatchIn(limpo)) {
             val resp = sortearResposta("sintoma_desconforto_moderado")
@@ -425,23 +435,26 @@ object BragaNluEngine {
             return NluOutput("orientacao_cadastro_medicamento", resp, tempoMs = deltaMs(inicio))
         }
 
-        // Consultas pessoais precedem dúvidas clínicas gerais, mas nunca a muralha ou emergências.
-        val perguntaPessoal = Regex("\\b(quanto|quanta|quantos|qual|como|mostre|consultar|consulta|historico)\\b").containsMatchIn(protegido) &&
-            Regex("\\b(minha|meu|minhas|meus|ultima|ultimo|bebi|tomei|ingeri)\\b").containsMatchIn(protegido)
-        if (perguntaPessoal && !CONSULTA_OUTRA_PESSOA.containsMatchIn(protegido)) {
-            val consulta = when {
-                Regex("\\bpressao\\b").containsMatchIn(protegido) -> BragaHealthMemory.PRESSURE
-                Regex("\\b(glicemia|glicose|acucar no sangue)\\b").containsMatchIn(protegido) -> BragaHealthMemory.GLUCOSE
-                Regex("\\bagua\\b").containsMatchIn(protegido) -> BragaHealthMemory.WATER
-                else -> null
+        // Uma pergunta explicativa não pode ser reduzida à última medição pessoal.
+        if (BragaRoutingPolicy.outsideScope(protegido)) return NluOutput(
+            "guardrail_fora_do_escopo_tecnico", sortearResposta("guardrail_fora_do_escopo_tecnico"),
+            isBloqueioSeguranca = true, tempoMs = deltaMs(inicio)
+        )
+        if (BragaRoutingPolicy.complexHealthQuestion(protegido)) return NluOutput(
+            "duvida_clinica_complexa", null, delegarParaNuvem = true, tempoMs = deltaMs(inicio)
+        )
+        if (HealthQueryResolver.isAmbiguous(texto)) return NluOutput(
+            "entrada_consulta_ambigua", BragaInputLanguage.clarification(channel), tempoMs = deltaMs(inicio)
+        )
+        HealthQueryResolver.explicit(texto)?.let { query ->
+            val intent = when (query.metric) {
+                HealthMetric.PRESSURE -> BragaHealthMemory.PRESSURE
+                HealthMetric.GLUCOSE -> BragaHealthMemory.GLUCOSE
+                HealthMetric.WATER -> BragaHealthMemory.WATER
             }
-            if (consulta != null) return NluOutput(consulta, null, tempoMs = deltaMs(inicio))
+            return NluOutput(intent, null, tempoMs = deltaMs(inicio), healthQuery = query)
         }
 
-        // 3. DÚVIDAS
-        if (DUVIDA_COMPLEXA.containsMatchIn(protegido)) return NluOutput(
-            "conversa_incompreendida_fallback", null, delegarParaNuvem = true, tempoMs = deltaMs(inicio)
-        )
         if (REGEX_DUVIDA_PRESSAO.containsMatchIn(limpo)) {
             return NluOutput("duvida_valor_pressao", sortearResposta("duvida_valor_pressao"), tempoMs = deltaMs(inicio))
         }
@@ -516,14 +529,11 @@ object BragaNluEngine {
             return NluOutput("conversa_confirmacao_compreensao", sortearResposta("conversa_confirmacao_compreensao"), tempoMs = deltaMs(inicio))
         }
 
-        // 6. FALLBACK -> DELEGA PARA A API GROQ COM CONTEXTO COMPACTADO!
-        return NluOutput(
-            intent = "conversa_incompreendida_fallback",
-            respostaLocal = null,
-            delegarParaNuvem = true,
-            tempoMs = deltaMs(inicio)
-        )
+        // Desconhecer a frase não autoriza uso da nuvem.
+        return NluOutput("entrada_sem_clareza", BragaInputLanguage.clarification(channel), tempoMs = deltaMs(inicio))
     }
+
+    internal fun responseVariationCounts() = BANCO_RESPOSTAS.mapValues { it.value.size }
 
     private fun deltaMs(inicioNano: Long): Double {
         return (System.nanoTime() - inicioNano) / 1_000_000.0

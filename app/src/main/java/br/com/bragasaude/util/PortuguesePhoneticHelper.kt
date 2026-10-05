@@ -255,8 +255,9 @@ object PortuguesePhoneticHelper {
         clean = clean.replace(Regex("""(?i)\bh+[m]+\b"""), "")
         clean = clean.replace(Regex("""(?i)\bah+[h]+\b"""), "")
         clean = clean.replace(Regex("""(?i)\b(k{2,}|rs{2,}|haha+)\b"""), "")
-        // Reduz repetições excessivas de caracteres (ex: "oiiii" -> "oi")
-        clean = clean.replace(Regex("""(.)\1{2,}"""), "$1")
+        // Reduz repetições excessivas de letras (ex: "oiiii" -> "oi").
+        // Apenas letras: dígitos repetidos são valores clínicos ("2000 ml", "111 mg/dL").
+        clean = clean.replace(Regex("""(\p{L})\1{2,}"""), "$1")
 
         // Converte datas, horários e números para texto por extenso natural para áudio
         clean = normalizeDatesAndNumbersForSpeech(clean)
