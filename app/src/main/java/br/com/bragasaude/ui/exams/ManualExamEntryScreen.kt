@@ -189,7 +189,7 @@ fun ManualExamEntryScreen(
                         enabled = canSave,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(54.dp),
+                            .heightIn(min = 54.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = BragaEmerald,
