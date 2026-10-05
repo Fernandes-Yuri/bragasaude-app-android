@@ -1,7 +1,6 @@
 package br.com.bragasaude.ui.onboarding
 
 import android.content.Context
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -12,8 +11,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.Message
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.runtime.getValue
@@ -24,25 +21,21 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import br.com.bragasaude.ui.components.ShieldEcgIcon
 import br.com.bragasaude.ui.components.WhatsAppLinkButton
-import br.com.bragasaude.ui.theme.TealLight
 import br.com.bragasaude.ui.theme.TealPrimary
-import br.com.bragasaude.ui.theme.TealSurface
 import kotlinx.coroutines.launch
 
 data class TourSlide(
     val title: String,
     val description: String,
-    val icon: ImageVector? = null,
-    val useShieldIcon: Boolean = false
+    val scene: TourEducationScene? = null,
+    val examScene: ExamEducationScene? = null,
+    val notice: String? = null
 )
 
 // ----- Slides para TITULAR / PACIENTE (autocuidado) -----
@@ -50,27 +43,25 @@ val patientTourSlides = listOf(
     TourSlide(
         title = "Seu Guardião de Saúde Pessoal",
         description = "Acompanhe seus sinais vitais, pressão e glicose com faixas de referência científicas (AHA/ADA 2026) e total transparência metodológica.",
-        useShieldIcon = true
+        scene = TourEducationScene.SELF_CARE
     ),
-    TourSlide(
-        title = "Seus Laudos e Exames Organizados",
-        description = "Carregue seus laudos em PDF e visualize a evolução dos seus parâmetros laboratoriais ao longo do tempo de forma leve e descomplicada.",
-        icon = Icons.Default.Description
-    ),
+    *examEducationSteps.map { step ->
+        TourSlide(title = step.title, description = step.description, examScene = step.scene, notice = step.notice)
+    }.toTypedArray(),
     TourSlide(
         title = "Autocuidado e Nutrição Consciente",
         description = "Receba orientações inteligentes de refeições e combinações de alimentos ajustadas para suas preferências e perfil de saúde.",
-        icon = Icons.Default.Restaurant
+        scene = TourEducationScene.NUTRITION
     ),
     TourSlide(
         title = "Movimento, Água e Conquistas",
         description = "Mantenha sua meta de hidratação diária, registre sua caminhada e acompanhe sua disciplina com respeito absoluto à sua privacidade.",
-        icon = Icons.Default.EmojiEvents
+        scene = TourEducationScene.MOVEMENT
     ),
     TourSlide(
         title = "Sua Família por Perto, Mesmo de Longe",
         description = "Compartilhe um código seguro com filhos, netos ou cuidadores de confiança. Eles acompanham sua evolução e mandam mensagens de incentivo direto no app.",
-        icon = Icons.Default.Favorite
+        scene = TourEducationScene.FAMILY
     )
 )
 
@@ -78,28 +69,28 @@ val patientTourSlides = listOf(
 val caregiverTourSlides = listOf(
     TourSlide(
         title = "Anjo da Guarda do Seu Familiar",
-        description = "Você foi convidado a acompanhar a saúde de alguém importante. Tudo o que ele registrar aparece aqui automaticamente.",
-        useShieldIcon = true
+        description = "Você foi convidado a acompanhar a saúde de alguém importante. Acompanhe os dados que ele autorizar compartilhar. Exames também podem chegar como um PDF enviado por ele.",
+        scene = TourEducationScene.CAREGIVER
     ),
     TourSlide(
         title = "Métricas em Tempo Real",
         description = "Veja pressão arterial, glicemia, hidratação e passos do seu familiar — sempre com a última atualização destacada.",
-        icon = Icons.Default.BarChart
+        scene = TourEducationScene.METRICS
     ),
     TourSlide(
         title = "Mensagens de Afeto com 1 Toque",
         description = "Envie lembretes de remédio, incentivos de hidratação e recados personalizados. Tudo chega no celular dele com o seu nome.",
-        icon = Icons.AutoMirrored.Filled.Message
+        scene = TourEducationScene.MESSAGES
     ),
     TourSlide(
         title = "Lista de Compras Colaborativa",
         description = "A lista semanal do seu familiar aparece aqui. Marque o que você já comprou e a despensa dele atualiza automaticamente em casa.",
-        icon = Icons.Default.ShoppingCart
+        scene = TourEducationScene.SHOPPING
     ),
     TourSlide(
         title = "Alertas Silenciosos de Segurança",
         description = "Se algo fugir muito da faixa de referência (ex.: pressão fora do habitual), você recebe um aviso discreto para acolher e conversar. Nenhuma notificação alarmista é enviada.",
-        icon = Icons.Default.NotificationsActive
+        scene = TourEducationScene.ALERTS
     )
 )
 
@@ -224,7 +215,7 @@ fun OnboardingTourScreen(
                         },
                         modifier = Modifier
                             .weight(1f)
-                            .height(54.dp),
+                            .heightIn(min = 54.dp),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
@@ -264,28 +255,13 @@ fun OnboardingTourScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Surface(
-                    color = TealSurface,
-                    shape = RoundedCornerShape(28.dp),
-                    modifier = Modifier.size(140.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Box(Modifier.size(124.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.06f), CircleShape))
-                        Box(Modifier.size(96.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), CircleShape))
-                        if (slide.useShieldIcon) {
-                            ShieldEcgIcon(sizeDp = 80.dp, shieldColor = TealPrimary)
-                        } else if (slide.icon != null) {
-                            Icon(
-                                imageVector = slide.icon,
-                                contentDescription = null,
-                                tint = TealPrimary,
-                                modifier = Modifier.size(64.dp)
-                            )
-                        }
-                    }
+                if (slide.examScene != null) {
+                    ExamEducationIllustration(slide.examScene)
+                } else if (slide.scene != null) {
+                    TourEducationIllustration(slide.scene)
                 }
 
-                Spacer(Modifier.height(36.dp))
+                Spacer(Modifier.height(24.dp))
 
                 Text(
                     text = slide.title,
@@ -304,6 +280,11 @@ fun OnboardingTourScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 24.sp
                 )
+
+                slide.notice?.let {
+                    Spacer(Modifier.height(16.dp))
+                    ExamStorageNotice(it)
+                }
 
                 // Na última página, convida ao vínculo do WhatsApp. O usuário pode
                 // pular e fazer depois pela tela de Perfil.
