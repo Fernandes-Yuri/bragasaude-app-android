@@ -421,7 +421,8 @@ object BragaNluEngine {
         emergency.intent?.let { intent ->
             return NluOutput(intent, sortearResposta(intent), isEmergencia = true, tempoMs = deltaMs(inicio))
         }
-        if (emergency.contextualMention && !BragaRoutingPolicy.complexHealthQuestion(protegido)) {
+        if (emergency.contextualMention && !BragaRoutingPolicy.complexHealthQuestion(protegido) &&
+            HealthQueryResolver.explicit(texto) == null) {
             return NluOutput("sintoma_contextual", sortearResposta("sintoma_contextual"), tempoMs = deltaMs(inicio))
         }
         if (REGEX_DESCONFORTO.containsMatchIn(limpo)) {
