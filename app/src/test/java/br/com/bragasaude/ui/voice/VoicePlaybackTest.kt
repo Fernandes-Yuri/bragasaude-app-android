@@ -19,9 +19,14 @@ class VoicePlaybackTest {
         player = mockk(relaxed = true)
         val auth = mockk<FirebaseAuth>(relaxed = true)
         every { auth.currentUser } returns null
-        vm = VoiceHealthViewModel(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
-            mockk(relaxed = true), auth, mockk(relaxed = true), player, mockk(relaxed = true),
-            mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        vm = VoiceHealthViewModel(
+            parser = mockk(relaxed = true), executor = mockk(relaxed = true),
+            telemetryService = mockk(relaxed = true), profileDao = mockk(relaxed = true),
+            auth = auth, localAiClient = mockk(relaxed = true), neuralAudioPlayer = player,
+            vitalSignDao = mockk(relaxed = true), dailyMetricsDao = mockk(relaxed = true),
+            notificationClient = mockk(relaxed = true), voiceProfileManager = mockk(relaxed = true),
+            hybridOrchestrator = mockk(relaxed = true)
+        )
     }
 
     @After fun cleanup() { vm.stopLiveMode(); Dispatchers.resetMain() }
@@ -40,10 +45,12 @@ class VoicePlaybackTest {
         vm.speak("Segunda resposta") { second++ }
         runCurrent()
         finishes[0]()
+        runCurrent()
         assertTrue(vm.isSpeaking.value)
         assertEquals(0, first)
         assertEquals(0, second)
         finishes[1]()
+        runCurrent()
         assertFalse(vm.isSpeaking.value)
         assertEquals(1, second)
     }

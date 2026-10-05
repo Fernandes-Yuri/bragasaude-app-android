@@ -1,10 +1,8 @@
 package br.com.bragasaude.ui.voice
 
 import android.content.Context
-import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -36,10 +34,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import br.com.bragasaude.data.remote.ai.BragaLocalAiClient
-import br.com.bragasaude.data.remote.ai.BragaAiResult
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.channels.Channel
+import br.com.bragasaude.ai.BragaHybridEvent
+import br.com.bragasaude.ai.BragaSpeechBuffer
+import br.com.bragasaude.ai.InputChannel
+import br.com.bragasaude.ai.BragaHealthMemory
+import br.com.bragasaude.ai.HealthQuerySession
+import br.com.bragasaude.ui.util.OnDeviceSpeechRecognition
 import br.com.bragasaude.data.remote.ai.NeuralAudioPlayer
-import br.com.bragasaude.domain.ConversationalAudioOrchestrator
+import br.com.bragasaude.data.remote.ai.BragaLocalAiClient
 import br.com.bragasaude.data.local.VitalSignDao
 import br.com.bragasaude.data.local.DailyMetricsDao
 import kotlinx.coroutines.withContext
@@ -84,11 +89,12 @@ class VoiceHealthViewModel @Inject constructor(
     private val auth: FirebaseAuth,
     private val localAiClient: BragaLocalAiClient,
     private val neuralAudioPlayer: NeuralAudioPlayer,
-    private val audioOrchestrator: ConversationalAudioOrchestrator,
     private val vitalSignDao: VitalSignDao,
     private val dailyMetricsDao: DailyMetricsDao,
     private val notificationClient: br.com.bragasaude.data.remote.service.NotificationClient,
-    val voiceProfileManager: br.com.bragasaude.data.local.voice.VoiceProfileManager
+    val voiceProfileManager: br.com.bragasaude.data.local.voice.VoiceProfileManager,
+    private val hybridOrchestrator: br.com.bragasaude.ai.BragaHybridOrchestrator,
+    private val playbackFocus: VoicePlaybackFocus = VoicePlaybackFocus()
 ) : ViewModel() {
 
     private var currentUserRole: String? = null
@@ -135,7 +141,17 @@ class VoiceHealthViewModel @Inject constructor(
     private var restartJob: kotlinx.coroutines.Job? = null
     private var playbackJob: kotlinx.coroutines.Job? = null
     private var speechGeneration = 0L
+    private var conversationGeneration = 0L
+    private var sessionOwner = getCurrentUserId()
+    private var conversationId = java.util.UUID.randomUUID().toString()
+    private val healthQuerySession = HealthQuerySession()
+    private var recognitionJob: kotlinx.coroutines.Job? = null
+    private val authStateListener = FirebaseAuth.AuthStateListener {
+        viewModelScope.launch(Dispatchers.Main.immediate) { selectSessionOwner() }
+    }
     private var activeTtsId: String? = null
+    private var activeTtsOwner: String? = null
+    private var activeTtsTurn = 0L
     private val conversationMemory = VoiceConversationMemory()
     private var onTtsDoneListener: (() -> Unit)? = null
 
@@ -145,27 +161,86 @@ class VoiceHealthViewModel @Inject constructor(
     private var isTtsReady: Boolean = false
 
     init {
+        auth.addAuthStateListener(authStateListener)
+        loadSessionProfile(sessionOwner)
+    }
+
+    private fun loadSessionProfile(owner: String) {
         viewModelScope.launch {
             try {
-                val uid = auth.currentUser?.uid
-                if (uid != null) {
-                    val p = profileDao.getProfileOneShot(uid)
-                    currentUserRole = p?.userRole
-                    currentCaregiverMode = p?.caregiverMode
-                    currentUserGender = p?.gender
-                    currentUserName = p?.fullName
-                }
+                val profile = if (owner == "anonymous") null else profileDao.getProfileOneShot(owner)
+                if (owner != sessionOwner || owner != getCurrentUserId()) return@launch
+                currentUserRole = profile?.userRole
+                currentCaregiverMode = profile?.caregiverMode
+                currentUserGender = profile?.gender
+                currentUserName = profile?.fullName
+            } catch (_: kotlinx.coroutines.CancellationException) {
+                throw kotlinx.coroutines.CancellationException("Carregamento de perfil cancelado")
             } catch (e: Exception) {
                 android.util.Log.w("VoiceHealthVM", "Falha ao carregar perfil para assistente de voz: ${e.message}")
             }
         }
     }
 
+    private fun selectSessionOwner() {
+        val owner = getCurrentUserId()
+        if (owner == sessionOwner) return
+        cancel()
+        sessionOwner = owner
+        currentUserRole = null
+        currentCaregiverMode = null
+        currentUserGender = null
+        currentUserName = null
+        loadSessionProfile(owner)
+    }
+
+    private fun currentTurn(owner: String, ticket: Long): Boolean =
+        owner == sessionOwner && owner == getCurrentUserId() && ticket == conversationGeneration
+
+    private fun destroyRecognizer() {
+        recognitionJob?.cancel()
+        recognitionJob = null
+        val previous = speechRecognizer
+        speechRecognizer = null
+        runCatching { previous?.cancel() }
+        runCatching { previous?.destroy() }
+    }
+
+    private fun invalidateConversationWork() {
+        conversationGeneration++
+        speechJob?.cancel()
+        speechJob = null
+        voiceSession.invalidate()
+        destroyRecognizer()
+        _partialResponse.value = ""
+        stopSpeaking()
+    }
+
+    /** A tela/app deixou de estar visível: não manter microfone, fila ou retomada automática. */
+    fun onHostStopped() = cancel()
+
+    private fun requestPlaybackFocus(): Boolean {
+        val context = currentContext ?: return true
+        val owner = sessionOwner
+        val turn = conversationGeneration
+        val generation = speechGeneration
+        val granted = playbackFocus.request(context) {
+            viewModelScope.launch(Dispatchers.Main.immediate) {
+                if (currentTurn(owner, turn) && generation == speechGeneration) onHostStopped()
+            }
+        }
+        if (!granted) onHostStopped()
+        return granted
+    }
+
+    private fun abandonPlaybackFocus() = playbackFocus.release()
+
     /**
      * Chamado sempre que qualquer fala da assistente termina (ou é cancelada).
      * No modo Live Streaming, retoma a escuta automaticamente após um breve intervalo.
      */
     fun onSpeechFinished() {
+        selectSessionOwner()
         if (_isLiveMode.value) scheduleListeningRestart(350)
         else _state.value = VoiceUiState.Idle
     }
@@ -173,9 +248,11 @@ class VoiceHealthViewModel @Inject constructor(
     private fun scheduleListeningRestart(waitMs: Long) {
         restartJob?.cancel()
         val ticket = speechGeneration
+        val owner = sessionOwner
+        val turn = conversationGeneration
         restartJob = viewModelScope.launch(Dispatchers.Main) {
             delay(waitMs)
-            if (_isLiveMode.value && ticket == speechGeneration) {
+            if (_isLiveMode.value && ticket == speechGeneration && currentTurn(owner, turn)) {
                 restartJob = null
                 currentContext?.let { startListening(it) }
             }
@@ -183,20 +260,16 @@ class VoiceHealthViewModel @Inject constructor(
     }
 
     fun interruptAndListen(context: Context) {
-        speechJob?.cancel()
-        _partialResponse.value = ""
-        voiceSession.invalidate()
-        stopSpeaking()
+        invalidateConversationWork()
         startListening(context)
     }
 
     private fun pauseConversation() {
         _isLiveMode.value = false
+        invalidateConversationWork()
         voiceSession.reset()
-        speechJob?.cancel()
-        stopSpeaking()
-        try { speechRecognizer?.cancel(); speechRecognizer?.destroy() } catch (_: Exception) { }
-        speechRecognizer = null
+        healthQuerySession.clear()
+        conversationId = java.util.UUID.randomUUID().toString()
         _state.value = VoiceUiState.Idle
         speak("Conversa pausada. Toque no orbe quando quiser continuar.", remember = false)
     }
@@ -223,7 +296,8 @@ class VoiceHealthViewModel @Inject constructor(
                     textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                         override fun onStart(utteranceId: String?) {
                             viewModelScope.launch(Dispatchers.Main) {
-                                if (utteranceId != null && utteranceId == activeTtsId) _isSpeaking.value = true
+                                if (utteranceId != null && utteranceId == activeTtsId &&
+                                    activeTtsOwner?.let { currentTurn(it, activeTtsTurn) } == true) _isSpeaking.value = true
                             }
                         }
                         override fun onDone(utteranceId: String?) { finishLocalTts(utteranceId) }
@@ -236,46 +310,58 @@ class VoiceHealthViewModel @Inject constructor(
 
     private fun finishLocalTts(id: String?) {
         viewModelScope.launch(Dispatchers.Main) {
-            if (id == null || id != activeTtsId) return@launch
+            if (id == null || id != activeTtsId ||
+                activeTtsOwner?.let { currentTurn(it, activeTtsTurn) } != true) return@launch
             activeTtsId = null
+            activeTtsOwner = null
             _isSpeaking.value = false
             val callback = onTtsDoneListener
             onTtsDoneListener = null
+            abandonPlaybackFocus()
             callback?.invoke()
         }
     }
 
     fun speak(text: String, isMale: Boolean = true, remember: Boolean = true, onDone: (() -> Unit)? = null) {
+        selectSessionOwner()
         stopSpeaking()
         val sanitized = br.com.bragasaude.util.PortuguesePhoneticHelper.cleanTextForTts(text)
         if (sanitized.isBlank()) { onDone?.invoke(); return }
         conversationMemory.selectUser(getCurrentUserId())
         if (remember) conversationMemory.recordAssistant(sanitized)
         val ticket = speechGeneration
+        val owner = sessionOwner
+        val turn = conversationGeneration
+        if (!requestPlaybackFocus()) return
         onTtsDoneListener = onDone
         playbackJob = viewModelScope.launch {
             val played = neuralAudioPlayer.playSpeech(sanitized, true,
-                onStart = { if (ticket == speechGeneration) _isSpeaking.value = true },
-                onDone = {
-                    if (ticket == speechGeneration) {
+                onStart = { viewModelScope.launch(Dispatchers.Main.immediate) {
+                    if (ticket == speechGeneration && currentTurn(owner, turn)) _isSpeaking.value = true
+                } },
+                onDone = { viewModelScope.launch(Dispatchers.Main.immediate) {
+                    if (ticket == speechGeneration && currentTurn(owner, turn)) {
                         _isSpeaking.value = false
                         val callback = onTtsDoneListener
                         onTtsDoneListener = null
+                        abandonPlaybackFocus()
                         callback?.invoke()
                     }
-                })
+                } })
             currentCoroutineContext().ensureActive()
-            if (!played && ticket == speechGeneration) speakLocalTts(sanitized, ticket)
+            if (!played && ticket == speechGeneration && currentTurn(owner, turn)) speakLocalTts(sanitized, ticket, owner, turn)
         }
     }
 
-    private suspend fun speakLocalTts(text: String, ticket: Long) {
+    private suspend fun speakLocalTts(text: String, ticket: Long, owner: String, turn: Long) {
         var retries = 0
         while (!isTtsReady && retries++ < 15) delay(100)
         currentCoroutineContext().ensureActive()
-        if (ticket != speechGeneration) return
+        if (ticket != speechGeneration || !currentTurn(owner, turn)) return
         val id = "braga_tts_$ticket"
         activeTtsId = id
+        activeTtsOwner = owner
+        activeTtsTurn = turn
         try {
             if (isTtsReady && textToSpeech != null) {
                 val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f) }
@@ -294,68 +380,63 @@ class VoiceHealthViewModel @Inject constructor(
         playbackJob?.cancel()
         playbackJob = null
         activeTtsId = null
+        activeTtsOwner = null
         onTtsDoneListener = null
         _isSpeaking.value = false
-        audioOrchestrator.stop()
         neuralAudioPlayer.stop()
         try { textToSpeech?.stop() } catch (_: Exception) { }
+        abandonPlaybackFocus()
     }
 
-    /**
-     * Inicia a escuta por voz do idoso.
-     * Deve ser chamado com um Context válido (Activity ou Application).
-     */
+    /** Inicia reconhecimento estritamente on-device; síntese tem disponibilidade independente. */
     fun startListening(context: Context) {
-        conversationMemory.selectUser(getCurrentUserId())
-        if (!_isLiveMode.value) voiceSession.reset()
+        selectSessionOwner()
+        conversationMemory.selectUser(sessionOwner)
+        if (!_isLiveMode.value) {
+            voiceSession.reset()
+            healthQuerySession.clear()
+            conversationId = java.util.UUID.randomUUID().toString()
+        }
+        invalidateConversationWork()
         _isLiveMode.value = true
         val listenTicket = voiceSession.begin()
-        // AUD-AN08: antes guardava a Activity direto — o ViewModel sobrevive à
-        // rotação, então a Activity destruída era retida até a próxima
-        // startListening (leak de memória de um objeto pesado com view tree).
-        // O applicationContext cumpre o mesmo papel (TTS e SpeechRecognizer
-        // funcionam com ele) e nunca é destruído.
+        val owner = sessionOwner
+        val turn = conversationGeneration
         currentContext = context.applicationContext
         initTts(context)
-        
-        // Parar qualquer áudio residual
-        stopSpeaking()
-        onTtsDoneListener = null
-        
-        // Limpar buffers
         _audioRmsDb.value = -2f
         _liveTranscription.value = ""
         _state.value = VoiceUiState.Listening
-        
-        viewModelScope.launch(Dispatchers.Main) {
+
+        recognitionJob = viewModelScope.launch(Dispatchers.Main) {
             try {
-                if (speechRecognizer == null) {
-                    android.util.Log.i("VoiceHealthVM", "Criando nova instância de SpeechRecognizer")
-                    // AUD-AN08: applicationContext — nunca retém a Activity.
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context.applicationContext)
-                } else {
-                    speechRecognizer?.cancel()
+                val localRecognizer = OnDeviceSpeechRecognition.create(context.applicationContext)
+                speechRecognizer = localRecognizer
+                localRecognizer.setRecognitionListener(VoiceRecognitionListener(listenTicket, owner, turn))
+                val request = OnDeviceSpeechRecognition.intent()
+                OnDeviceSpeechRecognition.checkPortugueseSupport(context.applicationContext, localRecognizer, request)
+                if (!_isLiveMode.value || !voiceSession.accepts(listenTicket) || !currentTurn(owner, turn)) return@launch
+                android.util.Log.i("VoiceHealthVM", "Iniciando reconhecimento de voz on-device em português brasileiro")
+                localRecognizer.startListening(request)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (currentTurn(owner, turn) && voiceSession.accepts(listenTicket)) {
+                    recognitionUnavailable(error.message ?: OnDeviceSpeechRecognition.errorMessage(SpeechRecognizer.ERROR_CLIENT))
                 }
-                
-                if (!_isLiveMode.value || !voiceSession.accepts(listenTicket)) return@launch
-                speechRecognizer?.setRecognitionListener(VoiceRecognitionListener(listenTicket))
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                }
-                android.util.Log.i("VoiceHealthVM", "Iniciando escuta no SpeechRecognizer...")
-                speechRecognizer?.startListening(intent)
-            } catch (e: Exception) {
-                android.util.Log.e("VoiceHealthVM", "Falha ao iniciar SpeechRecognizer: ${e.message}", e)
-                _state.value = VoiceUiState.Error("Não foi possível iniciar o microfone.", true, isSpokenOnly = false)
             }
         }
     }
 
+    private fun recognitionUnavailable(message: String) {
+        _isLiveMode.value = false
+        invalidateConversationWork()
+        healthQuerySession.clear()
+        _state.value = VoiceUiState.Error(message, retryable = false, isSpokenOnly = false)
+    }
+
     /**
-     * Para a escuta manualmente (quando o idoso solta o botão).
+     * Para a escuta manualmente quando a pessoa encerra a captura.
      */
     fun stopListening() {
         try {
@@ -366,32 +447,20 @@ class VoiceHealthViewModel @Inject constructor(
     /**
      * Descarta o estado atual e volta para Idle.
      */
-    fun reset() {
-        conversationMemory.clear()
-        voiceSession.reset()
-        hydrationConversation.reset()
-        speechJob?.cancel()
-        _partialResponse.value = ""
-        stopSpeaking()
-        _state.value = VoiceUiState.Idle
-    }
+    fun reset() = cancel()
 
-    /**
-     * Cancela o reconhecimento e volta para Idle.
-     */
+    /** Cancela reconhecimento, geração e áudio sem permitir callbacks de sessões anteriores. */
     fun cancel() {
         _isLiveMode.value = false
+        invalidateConversationWork()
         voiceSession.reset()
         conversationMemory.clear()
+        healthQuerySession.clear()
+        conversationId = java.util.UUID.randomUUID().toString()
         hydrationConversation.reset()
-        speechJob?.cancel()
-        _partialResponse.value = ""
         telemetryService.logVoiceEvent(getCurrentUserId(), "CANCEL", null, null)
-        try { speechRecognizer?.cancel(); speechRecognizer?.destroy() } catch (_: Exception) {}
-        speechRecognizer = null
-        stopSpeaking()
-        onTtsDoneListener = null
         _liveTranscription.value = ""
+        _audioRmsDb.value = -2f
         _state.value = VoiceUiState.Idle
     }
 
@@ -402,18 +471,26 @@ class VoiceHealthViewModel @Inject constructor(
         telemetryService.logVoiceEvent(getCurrentUserId(), "CONFIRM", null, intent.javaClass.simpleName)
         if (_state.value is VoiceUiState.Saving || _state.value is VoiceUiState.Saved) return
         stopSpeaking()
-        viewModelScope.launch {
+        val owner = sessionOwner
+        val turn = conversationGeneration
+        speechJob = viewModelScope.launch {
+            if (!currentTurn(owner, turn)) return@launch
             _state.value = VoiceUiState.Saving
             try {
                 android.util.Log.i("VoiceHealthVM", "Persistindo intenção de voz em segundo plano: ${intent.javaClass.simpleName}")
                 val summary = withContext(Dispatchers.IO) {
                     executor.execute(intent)
                 }
+                currentCoroutineContext().ensureActive()
+                if (!currentTurn(owner, turn)) return@launch
                 _state.value = VoiceUiState.Saved(summary)
                 speak(summary) {
                     onSpeechFinished()
                 }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
+                if (!currentTurn(owner, turn)) return@launch
                 android.util.Log.e("VoiceHealthVM", "Falha ao salvar dados de voz: ${e.message}", e)
                 _state.value = VoiceUiState.Error(
                     message = "Não consegui salvar: ${e.message}",
@@ -458,6 +535,7 @@ class VoiceHealthViewModel @Inject constructor(
 
     override fun onCleared() {
         stopLiveMode()
+        auth.removeAuthStateListener(authStateListener)
         super.onCleared()
         try {
             speechRecognizer?.destroy()
@@ -474,8 +552,10 @@ class VoiceHealthViewModel @Inject constructor(
 
     // ==================== RECONHECIMENTO ====================
 
-    private inner class VoiceRecognitionListener(private val ticket: Long) : RecognitionListener {
-        private fun current() = _isLiveMode.value && voiceSession.accepts(ticket)
+    private inner class VoiceRecognitionListener(
+        private val ticket: Long, private val owner: String, private val turn: Long
+    ) : RecognitionListener {
+        private fun current() = _isLiveMode.value && voiceSession.accepts(ticket) && currentTurn(owner, turn)
         override fun onReadyForSpeech(params: Bundle?) {
             if (!current()) return
             _state.value = VoiceUiState.Listening
@@ -491,11 +571,6 @@ class VoiceHealthViewModel @Inject constructor(
 
         override fun onError(error: Int) {
             if (!current()) return
-            // Cancelamentos rápidos ao reabrir o modal não devem travar nem emitir erro
-            if (error == SpeechRecognizer.ERROR_CLIENT) {
-                return
-            }
-            
             android.util.Log.w("VoiceHealthVM", "VoiceRecognitionListener.onError code=$error isLiveMode=${_isLiveMode.value}")
             if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || error == SpeechRecognizer.ERROR_NO_MATCH) {
                 if (voiceSession.consume(ticket)) handleSilence()
@@ -503,25 +578,15 @@ class VoiceHealthViewModel @Inject constructor(
             }
             voiceSession.consume(ticket)
 
-            // Outros erros técnicos reais (áudio/permissão): definir erro SEM falar
-            val message = when (error) {
-                SpeechRecognizer.ERROR_AUDIO -> "Problema de áudio. Verifique o microfone."
-                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Permissão de microfone negada."
-                SpeechRecognizer.ERROR_NETWORK -> "Problema de internet. Tente offline."
-                SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Tempo limite da rede."
-                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Reconhecedor ocupado. Aguarde um instante."
-                SpeechRecognizer.ERROR_SERVER -> "Erro do servidor de voz."
-                else -> "Não foi possível processar. Tente novamente."
-            }
-            _state.value = VoiceUiState.Error(message, retryable = true, isSpokenOnly = false)
+            // Interrompe a sessão técnica sem loop de reinício e sem reconhecimento remoto.
+            recognitionUnavailable(OnDeviceSpeechRecognition.errorMessage(error))
         }
 
         override fun onResults(results: Bundle?) {
-            if (!_isLiveMode.value || !voiceSession.consume(ticket)) return
+            if (!current() || !voiceSession.consume(ticket)) return
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val bestMatch = matches?.firstOrNull()
             
-            telemetryService.logVoiceEvent(getCurrentUserId(), "PARSE", bestMatch, null)
             
             if (bestMatch.isNullOrBlank()) {
                 handleSilence()
@@ -530,6 +595,13 @@ class VoiceHealthViewModel @Inject constructor(
             voiceSession.hasSpeech()
             _liveTranscription.value = bestMatch
             conversationMemory.selectUser(getCurrentUserId())
+            healthQuerySession.advanceTurn(owner, conversationId)
+            val nlu = hybridOrchestrator.analyze(bestMatch, InputChannel.VOICE, healthQuerySession, owner, conversationId)
+            if (nlu.isBloqueioSeguranca) {
+                speechJob?.cancel()
+                speechJob = viewModelScope.launch { processUserSpeech(bestMatch, nlu) }
+                return
+            }
             when (VoiceSessionCommand.parse(bestMatch)) {
                 VoiceSessionCommand.CLOSE -> {
                     stopLiveMode()
@@ -547,33 +619,73 @@ class VoiceHealthViewModel @Inject constructor(
             speechJob?.cancel()
             speechJob = viewModelScope.launch {
                 try {
-                    processUserSpeech(bestMatch)
+                    processUserSpeech(bestMatch, nlu)
                 } finally {
-                    _partialResponse.value = ""
+                    if (currentCoroutineContext()[kotlinx.coroutines.Job] === speechJob) {
+                        _partialResponse.value = ""
+                    }
                 }
             }
         }
 
-        private val emergencyKeywords = listOf(
-            "dor no peito", "aperto no peito", "falta de ar", "falta de ar forte", "nao consigo respirar", "não consigo respirar",
-            "formigamento no braco", "formigamento no braço", "formigamento", "dormencia", "dormência",
-            "perdi a forca", "perdi a força", "desmaio", "desmaiei", "tontura muito forte", "tontura forte",
-            "coração disparado", "taquicardia forte", "visao escura", "visão escura", "vomitando sangue",
-            "socorro", "ajuda rapido", "ajuda rápido", "passando muito mal", "infarto", "avc", "derrame"
-        )
+        private fun showLocalResponse(output: br.com.bragasaude.ai.NluOutput) {
+            if (!currentTurn(owner, turn)) return
+            val reply = output.respostaLocal.orEmpty()
+            _state.value = VoiceUiState.Saved(reply, isConversational = true)
+            if (output.isEmergencia) {
+                _navigationEvent.tryEmit(VoiceNavigationEvent.OpenEmergencyDialog)
+            }
+            val reason = output.routingReason
+            br.com.bragasaude.ai.BragaRoutingLogger.record(
+                channel = br.com.bragasaude.ai.InputChannel.VOICE,
+                input = _liveTranscription.value,
+                decision = br.com.bragasaude.ai.RoutingLogEntry.RoutingDecision.LOCAL_NLU,
+                intent = output.intent,
+                reason = reason,
+                durationMs = output.tempoMs.toLong(),
+                previewResponse = reply
+            )
+            speak(reply) { onSpeechFinished() }
+        }
 
-        private suspend fun processUserSpeech(bestMatch: String) {
+        private suspend fun processUserSpeech(bestMatch: String, local: br.com.bragasaude.ai.NluOutput) {
+            if (!currentTurn(owner, turn)) return
+            conversationMemory.selectUser(owner)
+            // Antes de preferências, parser, telemetria de conversa ou qualquer rede.
+            if (local.isBloqueioSeguranca) {
+                hydrationConversation.reset()
+                showLocalResponse(local)
+                return
+            }
+            val history = conversationMemory.snapshot()
+            conversationMemory.recordUser(bestMatch)
+            if (local.isEmergencia || local.intent == "orientacao_cadastro_medicamento" ||
+                local.intent == "entrada_consulta_ambigua" || local.intent == "sintoma_contextual") {
+                hydrationConversation.reset()
+                showLocalResponse(local)
+                return
+            }
             try {
-                conversationMemory.selectUser(getCurrentUserId())
-                conversationMemory.recordUser(bestMatch)
-                val ownerAtStart = getCurrentUserId()
-                val cupPreference = if (Regex("(?i)\\bcopos?\\b").containsMatchIn(bestMatch)) {
+                if (BragaHealthMemory.supports(local.intent)) {
+                    val reply = hybridOrchestrator.resolveLocal(local, owner, InputChannel.VOICE, healthQuerySession, conversationId)
+                    currentCoroutineContext().ensureActive()
+                    if (currentTurn(owner, turn)) showLocalResponse(reply)
+                    return
+                }
+                if (local.delegarParaNuvem) {
+                    streamHybridResponse(bestMatch, history, owner, local)
+                    return
+                }
+                // Mantém a preferência confirmada existente, apenas para registro de copos.
+                // A muralha e as emergências já retornaram antes desta consulta ao gateway.
+                val cupPreference = if (Regex("(?i)\\bcopos?\\b").containsMatchIn(bestMatch) &&
+                    Regex("(?i)\\b(bebi|tomei|registra|registre|anota|anote)\\b").containsMatchIn(bestMatch)) {
                     localAiClient.loadCupPreference()
                 } else null
-                if (getCurrentUserId() != ownerAtStart) return
+                currentCoroutineContext().ensureActive()
+                if (!currentTurn(owner, turn)) return
                 val hydrationReply = hydrationConversation.respond(
-                    bestMatch,
-                    getCurrentUserId(),
+                    bestMatch, owner,
                     allowed = currentUserRole != "CAREGIVER" || currentCaregiverMode == "HYBRID",
                     defaultCupMl = cupPreference
                 )
@@ -584,334 +696,111 @@ class VoiceHealthViewModel @Inject constructor(
                         return
                     }
                     is HydrationConversation.Reply.Review -> {
-                        // Reutiliza a validação existente, inclusive clarificação de volumes altos.
                         val intent = parser.parse("${hydrationReply.amountMl} ml de água", currentUserRole, currentCaregiverMode)
                         handleIntent(bestMatch, intent)
                         return
                     }
                     null -> Unit
                 }
-                val friendlyName = br.com.bragasaude.util.PortuguesePhoneticHelper.toTtsFriendlyName(currentUserName)
-                val nameSuffix = if (friendlyName.isNotBlank()) ", $friendlyName" else ""
-
-                // 1. Camada 1: Edge-First Local Instantâneo (0.001s)
-                // Se o usuário falou um comando clínico concreto (Pressão, Glicemia, Hidratação, Refeição, Remédio),
-                // ou uma saudação/gentileza (Boa noite, Bom dia, Olá, Obrigado), o parser local executa na hora com latência zero.
-                val localIntent = parser.parse(
-                    rawTranscript = bestMatch, 
-                    userRole = currentUserRole,
-                    caregiverMode = currentCaregiverMode
-                )
-
-                // Saudações e respostas conversacionais diretas: resposta calorosa instantânea (0ms), sem filler e sem rede
-                if (localIntent is VoiceHealthIntent.ConversationalReply) {
-                    val replyMessage = localIntent.message
-                    _state.value = VoiceUiState.Saved(summary = replyMessage, isConversational = true)
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "CONVERSATIONAL_REPLY", bestMatch, "EDGE_LOCAL_0MS")
-                    speak(replyMessage) {
-                        onSpeechFinished()
-                    }
+                // Registros concretos continuam preparados localmente para confirmação.
+                val intent = parser.parse(bestMatch, currentUserRole, currentCaregiverMode)
+                if (intent !is VoiceHealthIntent.Unknown && intent !is VoiceHealthIntent.ConversationalReply) {
+                    handleIntent(bestMatch, intent)
                     return
                 }
-
-                // Intenções clínicas concretas (Pressão, Glicemia, Água, Refeição, etc.)
-                if (localIntent !is VoiceHealthIntent.Unknown) {
-                    handleIntent(bestMatch, localIntent)
+                if (!local.delegarParaNuvem) {
+                    showLocalResponse(local)
                     return
                 }
-
-                // 2. Detecção Instantânea de Sintomas Agudos de Emergência (Layer 1 Heuristic)
-                val isEmergency = emergencyKeywords.any { bestMatch.contains(it, ignoreCase = true) }
-                if (isEmergency) {
-                    _state.value = VoiceUiState.Saved(summary = "Central de Emergência Aberta", isConversational = true)
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.OpenEmergencyDialog)
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "EMERGENCY_DETECTED", bestMatch, "VOICE_HEURISTIC")
-                    notificationClient.triggerEmergency(getCurrentUserId(), currentUserName ?: "Usuário", "Relatou sintomas agudos via voz: $bestMatch")
-
-                    val emergencySpeech = "Atenção$nameSuffix! Sintomas como esse no peito e no corpo exigem avaliação médica imediata. O mais seguro e prudente é não esperar: procure um pronto atendimento ou acione o socorro, combinado? Já coloquei as opções de ajuda na sua tela!"
-                    speak(emergencySpeech) {
-                        onSpeechFinished()
-                    }
-                    return
-                }
-
                 if (currentUserRole != "CAREGIVER" || currentCaregiverMode == "HYBRID") {
                     br.com.bragasaude.domain.HealthReadingInput.spoken(bestMatch)?.let { draft ->
-                        _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToVitals(draft.metric, if (draft.metric == "HEART_RATE") draft.value.toInt().toString() else draft.value.toString()))
-                        speak("Confira o valor na tela e toque em salvar para registrar a medição.") {
-                            onSpeechFinished()
-                        }
+                        _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToVitals(draft.metric,
+                            if (draft.metric == "HEART_RATE") draft.value.toInt().toString() else draft.value.toString()))
+                        speak("Confira o valor na tela e toque em salvar para registrar a medição.") { onSpeechFinished() }
                         return
                     }
                 }
+                streamHybridResponse(bestMatch, history, owner, local)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                if (!currentTurn(owner, turn)) return
+                stopSpeaking()
+                val reply = "Não consegui concluir a resposta agora. Você pode tentar novamente ou procurar orientação de um profissional de saúde."
+                _state.value = VoiceUiState.Error(reply, retryable = true, isSpokenOnly = true)
+                speak(reply) { onSpeechFinished() }
+            }
+        }
 
-                // 3. Camada 2: Qwen Homelab (Lenovo G460) para Diálogo Livre e Dúvidas Complexas de Saúde
-                _state.value = VoiceUiState.Saving
-
-                // Inicia o fluxo conversacional em 3 Atos:
-                // Ato 1: Filler Neutro 0ms (sem nome)
-                // Ato 2: Gesto Vocal Condicional ("Hummm...") se a IA demorar
-                // Ato 3: Chegada da resposta com re-entrada afetuosa e nome fonético
-                val aiSpeechDeferred = kotlinx.coroutines.CompletableDeferred<String?>()
-
-                audioOrchestrator.startThreeActFlow(
-                    scope = viewModelScope,
-                    aiSpeechDeferred = aiSpeechDeferred,
-                    onSpeakingStateChanged = { speaking ->
-                        _isSpeaking.value = speaking
-                    },
-                    onDone = {
-                        onSpeechFinished()
-                    }
-                )
-
-                val aiResult = try {
-                    localAiClient.interpretSpeech(bestMatch, history = conversationMemory.snapshot(),
-                        onPartial = { partial ->
-                            _partialResponse.value = partial
-                        })
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    aiSpeechDeferred.cancel()
-                    throw e
-                } catch (e: Exception) {
-                    android.util.Log.w("VoiceHealthVM", "Aviso: Falha ao interpretar fala com IA local: ${e.message}. Acionando fallback gracioso.")
-                    null
-                }
-
-                if (aiResult != null && aiResult.tipo != "DESCONHECIDO") {
+        private suspend fun streamHybridResponse(
+            speech: String, history: List<Pair<String, String>>, owner: String,
+            decision: br.com.bragasaude.ai.NluOutput
+        ) = coroutineScope {
+            stopSpeaking()
+            val generation = speechGeneration
+            if (!requestPlaybackFocus()) return@coroutineScope
+            _partialResponse.value = ""
+            _state.value = VoiceUiState.Saving
+            val phrases = Channel<String>(32)
+            val buffer = BragaSpeechBuffer()
+            var completed = ""
+            val player = launch {
+                for (phrase in phrases) {
                     currentCoroutineContext().ensureActive()
-                    val finalSpeech = prepareAiSpeech(bestMatch, aiResult, friendlyName)
-                    conversationMemory.recordAssistant(finalSpeech)
-                    aiSpeechDeferred.complete(finalSpeech)
-                    applyAiUiState(bestMatch, aiResult)
-                    return
-                }
-
-                // 4. Fallback gracioso: Se o homelab estiver offline ou demorar, acolher com o parser local
-                val fallbackIntent = parser.parse(
-                    rawTranscript = bestMatch, 
-                    userRole = currentUserRole,
-                    caregiverMode = currentCaregiverMode
-                )
-                val fallbackSpeech = getFallbackSpeech(fallbackIntent, friendlyName)
-                conversationMemory.recordAssistant(fallbackSpeech)
-                aiSpeechDeferred.complete(fallbackSpeech)
-                applyIntentUiState(bestMatch, fallbackIntent)
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                android.util.Log.w("VoiceHealthVM", "Falha no processamento de voz, acionando fallback: ${e.message}")
-                val fallbackIntent = parser.parse(
-                    rawTranscript = bestMatch, 
-                    userRole = currentUserRole,
-                    caregiverMode = currentCaregiverMode
-                )
-                handleIntent(bestMatch, fallbackIntent)
-            }
-        }
-
-        private fun formatConversationalReentry(speech: String, friendlyName: String? = null): String {
-            return speech.trim()
-        }
-
-        private suspend fun prepareAiSpeech(rawTranscript: String, aiResult: BragaAiResult, friendlyName: String?): String {
-            val rawFala = aiResult.fala
-            return when (aiResult.tipo) {
-                "CONVERSA" -> {
-                    val baseFala = if (rawFala.isNotBlank()) rawFala else "Estou aqui com você. Como posso te ajudar?"
-                    formatConversationalReentry(baseFala, friendlyName)
-                }
-                "CONSULTAR_METRICAS" -> {
-                    val summary = generateMetricsSummary(aiResult.tipoMetrica)
-                    formatConversationalReentry(summary, friendlyName)
-                }
-                "PRESSAO" -> {
-                    val systolic = aiResult.sistolica ?: 120
-                    val diastolic = aiResult.diastolica ?: 80
-                    val sysFmt = if (systolic > 30) systolic / 10 else systolic
-                    val diaFmt = if (diastolic > 20) diastolic / 10 else diastolic
-                    if (rawFala.isNotBlank()) rawFala
-                    else "Já preenchi $sysFmt por $diaFmt aqui para você! A sua pressão está anotada na tela, confira os valores e toque em salvar."
-                }
-                "GLICEMIA" -> {
-                    val glyc = aiResult.glicemia ?: 100
-                    if (rawFala.isNotBlank()) rawFala
-                    else "Já preenchi $glyc de glicemia para você! Dá uma olhadinha na tela e toque em salvar."
-                }
-                "AGUA" -> {
-                    val ml = aiResult.quantidadeMl ?: 250
-                    "Preparei $ml ml de água na tela. Toque em Adicionar para confirmar."
-                }
-                "ALIMENTO", "REFEICAO", "REGISTRAR_REFEICAO", "LISTA_COMPRAS", "COMPRAS", "ADICIONAR_COMPRAS", "SUGERIR_ALIMENTO", "SUGESTAO" -> {
-                    "Eu faço apenas o preenchimento de água, pressão e glicemia por voz. Para suas refeições e lista de compras, você pode usar a tela de Alimentação!"
-                }
-                "EMERGENCIA", "ACIONAR_EMERGENCIA" -> {
-                    val nameSuffix = if (!friendlyName.isNullOrBlank()) ", $friendlyName" else ""
-                    if (rawFala.isNotBlank()) rawFala
-                    else "Atenção$nameSuffix! Sintomas agudos exigem avaliação médica urgente. O mais seguro e prudente é procurar atendimento imediato!"
-                }
-                else -> {
-                    if (rawFala.isNotBlank()) formatConversationalReentry(rawFala, friendlyName)
-                    else "Estou aqui para te ajudar."
+                    if (!currentTurn(owner, turn) || generation != speechGeneration) throw kotlinx.coroutines.CancellationException("Sessão alterada")
+                    val finished = kotlinx.coroutines.CompletableDeferred<Unit>()
+                    val played = neuralAudioPlayer.playSpeech(phrase,
+                        onStart = { viewModelScope.launch {
+                            if (generation == speechGeneration && currentTurn(owner, turn)) _isSpeaking.value = true
+                        } },
+                        onDone = { finished.complete(Unit) })
+                    if (played) finished.await()
                 }
             }
-        }
-
-        private fun applyAiUiState(rawTranscript: String, aiResult: BragaAiResult) {
-            telemetryService.logAiConversation(
-                userId = getCurrentUserId(),
-                userPrompt = rawTranscript,
-                aiResponse = aiResult.fala,
-                detectedIntent = aiResult.tipo,
-                isConfirmed = false,
-                rawPayload = aiResult.rawResponse
-            )
-
-            when (aiResult.tipo) {
-                "PRESSAO" -> {
-                    if (aiResult.sistolica != null && aiResult.diastolica != null) {
-                        val systolic = aiResult.sistolica!!
-                        val diastolic = aiResult.diastolica!!
-                        telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", rawTranscript, "BloodPressure")
-                        _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToVitals("PRESSURE", "$systolic/$diastolic"))
-                        _state.value = VoiceUiState.Saved(summary = "Pressão $systolic/$diastolic", isConversational = false)
+            playbackJob = player
+            try {
+                hybridOrchestrator.respond(speech, history, InputChannel.VOICE, owner, decision).collect { event ->
+                    currentCoroutineContext().ensureActive()
+                    if (!currentTurn(owner, turn) || generation != speechGeneration) throw kotlinx.coroutines.CancellationException("Sessão alterada")
+                    when (event) {
+                        is BragaHybridEvent.Local -> showLocalResponse(event.output)
+                        is BragaHybridEvent.Delta -> {
+                            _partialResponse.value += event.text
+                            buffer.append(event.text).forEach { phrases.send(it) }
+                        }
+                        is BragaHybridEvent.Completed -> {
+                            completed = event.text
+                            buffer.finish().takeIf { it.isNotBlank() }?.let { phrases.send(it) }
+                        }
                     }
                 }
-                "GLICEMIA" -> {
-                    if (aiResult.glicemia != null) {
-                        val glyc = aiResult.glicemia!!
-                        telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", rawTranscript, "Glucose")
-                        _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToVitals("GLUCOSE", "$glyc"))
-                        _state.value = VoiceUiState.Saved(summary = "Glicemia $glyc", isConversational = false)
-                    }
+                phrases.close()
+                player.join()
+                if (completed.isNotBlank() && generation == speechGeneration && currentTurn(owner, turn)) {
+                    br.com.bragasaude.ai.BragaRoutingLogger.record(
+                        channel = br.com.bragasaude.ai.InputChannel.VOICE,
+                        input = speech,
+                        decision = br.com.bragasaude.ai.RoutingLogEntry.RoutingDecision.CLOUD_LLM,
+                        intent = decision.intent,
+                        reason = decision.routingReason,
+                        durationMs = 0L,
+                        previewResponse = completed
+                    )
+                    conversationMemory.recordAssistant(completed)
+                    _state.value = VoiceUiState.Saved(completed, isConversational = true)
+                    _isSpeaking.value = false
+                    abandonPlaybackFocus()
+                    onSpeechFinished()
                 }
-                "AGUA" -> {
-                    val ml = aiResult.quantidadeMl ?: 250
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", rawTranscript, "Hydration")
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToHydration(addMl = ml, openCustomDialog = true))
-                    _state.value = VoiceUiState.Saved(summary = "Água ${ml}ml", isConversational = false)
-                }
-                "ALIMENTO", "REFEICAO", "REGISTRAR_REFEICAO", "LISTA_COMPRAS", "COMPRAS", "ADICIONAR_COMPRAS", "SUGERIR_ALIMENTO", "SUGESTAO" -> {
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", rawTranscript, "NutritionRedirect")
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToNutrition(searchFoodQuery = null, openGroceryList = false))
-                    _state.value = VoiceUiState.Saved(summary = "Alimentação", isConversational = true)
-                }
-                "CONSULTAR_METRICAS" -> {
-                    _state.value = VoiceUiState.Saved(summary = "Métricas", isConversational = true)
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "TTS_COMPLETE", null, "METRICS_QUERY")
-                }
-                "CONVERSA" -> {
-                    _state.value = VoiceUiState.Saved(summary = "", isConversational = true)
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "TTS_COMPLETE", null, "CONVERSATIONAL_AI")
-                }
-                "EMERGENCIA", "ACIONAR_EMERGENCIA" -> {
-                    _state.value = VoiceUiState.Saved(summary = "Central de Emergência", isConversational = true)
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.OpenEmergencyDialog)
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "EMERGENCY_TRIGGERED", rawTranscript, "AI_EMERGENCY")
-                    viewModelScope.launch {
-                        notificationClient.triggerEmergency(getCurrentUserId(), currentUserName ?: "Usuário", "Acionado socorro via IA: $rawTranscript")
-                    }
-                }
-            }
-        }
-
-        private fun applyIntentUiState(bestMatch: String, intent: VoiceHealthIntent) {
-            when (intent) {
-                is VoiceHealthIntent.BloodPressure -> {
-                    val systolic = intent.systolic
-                    val diastolic = intent.diastolic
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", bestMatch, "BloodPressure")
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToVitals("PRESSURE", "$systolic/$diastolic"))
-                    _state.value = VoiceUiState.Saved(summary = "Pressão $systolic/$diastolic", isConversational = false)
-                }
-                is VoiceHealthIntent.Glucose -> {
-                    val glyc = intent.glucoseMgDl
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", bestMatch, "Glucose")
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToVitals("GLUCOSE", "$glyc"))
-                    _state.value = VoiceUiState.Saved(summary = "Glicemia $glyc", isConversational = false)
-                }
-                is VoiceHealthIntent.HeartRate -> {
-                    val bpm = intent.heartRateBpm
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", bestMatch, "HeartRate")
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToVitals("HEART_RATE", "$bpm"))
-                    _state.value = VoiceUiState.Saved(summary = "Batimentos $bpm bpm", isConversational = false)
-                }
-                is VoiceHealthIntent.OxygenSaturation -> {
-                    val spo2 = intent.oxygenPercent
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", bestMatch, "OxygenSaturation")
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToVitals("OXYGEN_SATURATION", "$spo2"))
-                    _state.value = VoiceUiState.Saved(summary = "SpO2 $spo2%", isConversational = false)
-                }
-                is VoiceHealthIntent.Hydration -> {
-                    val ml = intent.amountMl
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", bestMatch, "Hydration")
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToHydration(addMl = ml, openCustomDialog = true))
-                    _state.value = VoiceUiState.Saved(summary = "Água ${ml}ml", isConversational = false)
-                }
-                else -> {
-                    _state.value = VoiceUiState.Saved(summary = "", isConversational = true)
-                }
-            }
-        }
-
-        private fun getFallbackSpeech(intent: VoiceHealthIntent, friendlyName: String?): String {
-            return when (intent) {
-                is VoiceHealthIntent.BloodPressure -> {
-                    val sys = if (intent.systolic > 30) intent.systolic / 10 else intent.systolic
-                    val dia = if (intent.diastolic > 20) intent.diastolic / 10 else intent.diastolic
-                    "Já preenchi $sys por $dia aqui para você. Confira os valores e toque em salvar!"
-                }
-                is VoiceHealthIntent.Glucose -> {
-                    "Já preenchi ${intent.glucoseMgDl} de glicemia para você. Confira e toque em salvar!"
-                }
-                is VoiceHealthIntent.HeartRate -> {
-                    "Já preenchi ${intent.heartRateBpm} batimentos por minuto para você. Confira e toque em salvar!"
-                }
-                is VoiceHealthIntent.OxygenSaturation -> {
-                    "Já preenchi ${intent.oxygenPercent} por cento de saturação para você. Confira e toque em salvar!"
-                }
-                is VoiceHealthIntent.Hydration -> {
-                    "Já preparei mais ${intent.amountMl} ml de água para você. Toque em Adicionar para confirmar!"
-                }
-                is VoiceHealthIntent.ConversationalReply -> {
-                    intent.message
-                }
-                else -> {
-                    formatConversationalReentry("Estou aqui com você. Como posso te ajudar com sua pressão, glicemia ou água?", friendlyName)
-                }
-            }
-        }
-
-        private fun generateConversationalFiller(query: String): String {
-            val lower = query.lowercase(Locale.getDefault())
-
-            return when {
-                lower.contains("pressão") || lower.contains("glicemia") || lower.contains("exame") || lower.contains("histórico") || lower.contains("métrica") || lower.contains("sinais") -> {
-                    listOf(
-                        "Certo! Deixa eu consultar seu histórico aqui, só um segundinho...",
-                        "Com certeza! Deixa eu verificar suas anotações com carinho...",
-                        "Um instante, estou dando uma olhadinha nos seus registros..."
-                    ).random()
-                }
-                lower.contains("comer") || lower.contains("comida") || lower.contains("almoço") || lower.contains("jantar") || lower.contains("dieta") || lower.contains("alimento") || lower.contains("fruta") -> {
-                    listOf(
-                        "Boa pergunta! Deixa eu pensar em uma boa opção saudável para você...",
-                        "Com certeza! Deixa eu dar uma olhadinha no que é mais recomendado...",
-                        "Só um momentinho, estou verificando as opções de alimentação..."
-                    ).random()
-                }
-                lower.contains("sinto") || lower.contains("dor") || lower.contains("tontura") || lower.contains("remédio") || lower.contains("sintoma") || lower.contains("mal") -> {
-                    listOf(
-                        "Entendi. Deixa eu checar com atenção as orientações de cuidado...",
-                        "Compreendo. Só um instante enquanto organizo as informações para você...",
-                        "Certo, estou aqui com você. Deixa eu verificar isso direitinho..."
-                    ).random()
-                }
-                else -> {
-                    listOf(
-                        "Entendido! Deixa eu organizar essas informações com carinho...",
-                        "Com certeza! Já estou buscando as melhores orientações para você...",
-                        "Só um instante, estou consultando isso com atenção para te responder..."
-                    ).random()
+            } finally {
+                phrases.cancel()
+                player.cancel()
+                if (playbackJob === player) playbackJob = null
+                if (generation == speechGeneration) {
+                    neuralAudioPlayer.stop()
+                    _isSpeaking.value = false
+                    abandonPlaybackFocus()
                 }
             }
         }
@@ -969,7 +858,11 @@ class VoiceHealthViewModel @Inject constructor(
                 "AGUA", "ÁGUA", "HIDRATACAO", "HIDRATAÇÃO" -> {
                     val waterTarget = profile?.hydrationTargetMl ?: 2000
                     val percent = if (waterTarget > 0) (waterConsumed * 100) / waterTarget else 0
-                    "Conforme orientações da Organização Mundial da Saúde e do Ministério da Saúde, a hidratação adequada é essencial. Você já registrou $waterConsumed ml hoje, atingindo $percent% da sua meta sugerida de $waterTarget ml. Sugiro validar com seu profissional de saúde o volume ideal para o seu organismo!"
+                    if (waterConsumed <= 0) {
+                        "Você ainda não registrou água hoje. Que tal beber um copo de água agora para começar a cuidar da sua hidratação? Sua meta é de $waterTarget ml."
+                    } else {
+                        "Você já registrou $waterConsumed ml de água hoje, alcançando $percent% da sua meta diária de $waterTarget ml. Continue assim!"
+                    }
                 }
                 else -> {
                     val latestBp = allVitals.firstOrNull { it.systolicPressure != null && it.diastolicPressure != null }
@@ -985,126 +878,8 @@ class VoiceHealthViewModel @Inject constructor(
             }
         }
 
-        private fun handleAiResult(rawTranscript: String, aiResult: BragaAiResult) {
-            // Registrar diálogo na telemetria para o dataset de Fine-Tuning
-            telemetryService.logAiConversation(
-                userId = getCurrentUserId(),
-                userPrompt = rawTranscript,
-                aiResponse = aiResult.fala,
-                detectedIntent = aiResult.tipo,
-                isConfirmed = false,
-                rawPayload = aiResult.rawResponse
-            )
-
-            when (aiResult.tipo) {
-                "PRESSAO" -> {
-                    if (aiResult.sistolica != null && aiResult.diastolica != null) {
-                        // AUD-AN01: a IA pode devolver pressão em escala coloquial
-                        // ("12/8" em vez de 120/80). O parser local e a tela normalizam;
-                        // este caminho usava o valor cru. Normalizar ANTES de navegar,
-                        // gravar e anunciar — senão 12/8 salvo dispara falso alerta
-                        // clínico no HealthEngine (value < 90).
-                        var systolic = aiResult.sistolica!!
-                        var diastolic = aiResult.diastolica!!
-                        if (systolic > 30) systolic /= 10
-                        if (diastolic > 20) diastolic /= 10
-                        telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", rawTranscript, "BloodPressure")
-
-                        _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToVitals("PRESSURE", "$systolic/$diastolic"))
-                        _state.value = VoiceUiState.Saved(summary = "Pressão $systolic/$diastolic", isConversational = false)
-                        val spokenPrompt = if (aiResult.fala.isNotBlank()) aiResult.fala
-                            else "Já preenchi $systolic por $diastolic aqui para você! A sua pressão está ótima e dentro da faixa normal. Dá uma conferida certinha nos valores e é só tocar em salvar!"
-                        speak(spokenPrompt) {
-                        onSpeechFinished()
-                    }
-                    } else {
-                        val fallbackIntent = parser.parse(rawTranscript, currentUserRole, currentCaregiverMode)
-                        handleIntent(rawTranscript, fallbackIntent)
-                    }
-                }
-                "GLICEMIA" -> {
-                    if (aiResult.glicemia != null) {
-                        val glyc = aiResult.glicemia!!
-                        telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", rawTranscript, "Glucose")
-                        
-                        _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToVitals("GLUCOSE", "$glyc"))
-                        _state.value = VoiceUiState.Saved(summary = "Glicemia $glyc", isConversational = false)
-                        val spokenPrompt = if (aiResult.fala.isNotBlank()) aiResult.fala
-                            else "Já preenchi $glyc de glicemia para você! Está dentro do padrão recomendado. Dá uma olhadinha e é só tocar em salvar!"
-                        speak(spokenPrompt) {
-                        onSpeechFinished()
-                    }
-                    } else {
-                        val fallbackIntent = parser.parse(rawTranscript, currentUserRole, currentCaregiverMode)
-                        handleIntent(rawTranscript, fallbackIntent)
-                    }
-                }
-                "AGUA" -> {
-                    val ml = aiResult.quantidadeMl ?: 250
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", rawTranscript, "Hydration")
-                    
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToHydration(addMl = ml, openCustomDialog = true))
-                    _state.value = VoiceUiState.Saved(summary = "Água ${ml}ml", isConversational = false)
-                    val spokenPrompt = if (aiResult.fala.isNotBlank()) aiResult.fala
-                        else "Já preparei a anotação de mais $ml ml de água para você. É só você tocar em Adicionar para confirmar!"
-                    speak(spokenPrompt) {
-                        onSpeechFinished()
-                    }
-                }
-                "ALIMENTO", "REFEICAO", "REGISTRAR_REFEICAO", "LISTA_COMPRAS", "COMPRAS", "ADICIONAR_COMPRAS", "SUGERIR_ALIMENTO", "SUGESTAO" -> {
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", rawTranscript, "NutritionRedirect")
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToNutrition(searchFoodQuery = null, openGroceryList = false))
-                    _state.value = VoiceUiState.Saved(summary = "Alimentação", isConversational = true)
-                    val spokenPrompt = "Eu faço apenas o preenchimento de água, pressão e glicemia por voz. Abri a tela de Alimentação para você!"
-                    speak(spokenPrompt) {
-                        onSpeechFinished()
-                    }
-                }
-                "CONSULTAR_METRICAS" -> {
-                    viewModelScope.launch {
-                        _state.value = VoiceUiState.Saved(summary = "Métricas", isConversational = true)
-                        val summary = generateMetricsSummary(aiResult.tipoMetrica)
-                        speak(summary) {
-                        onSpeechFinished()
-                    }
-                        telemetryService.logVoiceEvent(getCurrentUserId(), "TTS_COMPLETE", null, "METRICS_QUERY")
-                    }
-                }
-                "CONVERSA" -> {
-                    _state.value = VoiceUiState.Saved(summary = "", isConversational = true)
-                    val fala = if (aiResult.fala.isNotBlank()) aiResult.fala else "Estou aqui com você. Como posso te ajudar?"
-                    speak(fala) {
-                        onSpeechFinished()
-                    }
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "TTS_COMPLETE", null, "CONVERSATIONAL_AI")
-                }
-                "EMERGENCIA", "ACIONAR_EMERGENCIA" -> {
-                    _state.value = VoiceUiState.Saved(summary = "Central de Emergência", isConversational = true)
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.OpenEmergencyDialog)
-                    telemetryService.logVoiceEvent(getCurrentUserId(), "EMERGENCY_TRIGGERED", rawTranscript, "AI_EMERGENCY")
-                    viewModelScope.launch {
-                        notificationClient.triggerEmergency(getCurrentUserId(), currentUserName ?: "Usuário", "Acionado socorro via IA: $rawTranscript")
-                    }
-
-                    val friendlyName = br.com.bragasaude.util.PortuguesePhoneticHelper.toTtsFriendlyName(currentUserName)
-                    val nameSuffix = if (friendlyName.isNotBlank()) ", $friendlyName" else ""
-                    // D-EMERG1: em emergência, NÃO usa o texto gerado pela IA — ele pode
-                    // alucinar cidade/endereço e ainda consome tokens num momento crítico.
-                    // Orienta sempre pelo botão "UPA mais próxima" (GPS real do aparelho),
-                    // que já está aberto na tela do usuário: zero alucinação e zero latência.
-                    val fala = "Atenção$nameSuffix! Sintomas agudos exigem avaliação médica urgente, não espere. Toque no botão \"UPA mais próxima\" que está na sua tela: o mapa usa sua localização real e te leva direto. Já abri as opções de ajuda!"
-                    speak(fala) {
-                        onSpeechFinished()
-                    }
-                }
-                else -> {
-                    val fallbackIntent = parser.parse(rawTranscript, currentUserRole, currentCaregiverMode)
-                    handleIntent(rawTranscript, fallbackIntent)
-                }
-            }
-        }
-
         private fun handleIntent(bestMatch: String, intent: VoiceHealthIntent) {
+            if (!currentTurn(owner, turn)) return
             when (intent) {
                 is VoiceHealthIntent.BloodPressure -> {
                     val systolic = intent.systolic
@@ -1181,6 +956,8 @@ class VoiceHealthViewModel @Inject constructor(
                                 generateMetricsSummary(intent.metric)
                             }
                         }
+                        currentCoroutineContext().ensureActive()
+                        if (!currentTurn(owner, turn)) return@launch
                         speak(summary) {
                             onSpeechFinished()
                         }
