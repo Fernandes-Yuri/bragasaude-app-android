@@ -89,10 +89,10 @@ object NotificationHelper {
         val remaining = (targetMl - currentMl).coerceAtLeast(0)
         val progressPercent = if (targetMl > 0) (currentMl * 100 / targetMl).coerceIn(0, 100) else 0
 
-        val text = if (remaining > 0) {
-            "Hora de cuidar de você! Que tal um copo d'água agora? Você já registrou $currentMl ml hoje ($progressPercent% da sua meta)."
-        } else {
-            "Muito bem! Você já alcançou sua meta de $targetMl ml de água hoje. Continue com esse ótimo hábito!"
+        val text = when {
+            currentMl <= 0 -> "Hora de cuidar de você! Que tal beber seu primeiro copo d'água do dia? Manter o corpo hidratado faz toda a diferença."
+            remaining > 0 -> "Hora de cuidar de você! Que tal um copo d'água agora? Você já registrou $currentMl ml hoje ($progressPercent% da sua meta)."
+            else -> "Muito bem! Você já alcançou sua meta de $targetMl ml de água hoje. Continue com esse ótimo hábito!"
         }
 
         val quickIntent = Intent(context, HydrationQuickActionReceiver::class.java).apply {

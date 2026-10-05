@@ -35,3 +35,4 @@ __pycache__/
 # Instruções dos agentes são locais e não devem ser publicadas
 AGENTS.md
 AGENTS.MD
+/ARQUITETURA_HIBRIDA_BRAGA_SAUDE.md

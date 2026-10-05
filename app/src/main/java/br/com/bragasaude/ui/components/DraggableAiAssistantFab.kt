@@ -55,6 +55,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import br.com.bragasaude.ui.theme.BragaEmerald
 import br.com.bragasaude.ui.theme.BragaMint
 import br.com.bragasaude.ui.util.Screen
@@ -217,6 +220,17 @@ fun DraggableAiAssistantFab(
     val isSpeaking by viewModel.isSpeaking.collectAsState()
     val isLiveMode by viewModel.isLiveMode.collectAsState()
     var showEmergencyDialog by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.onHostStopped()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.onHostStopped()
+        }
+    }
 
     // Observar eventos de navegação autônoma disparados pelo Copiloto de Voz
     LaunchedEffect(Unit) {
