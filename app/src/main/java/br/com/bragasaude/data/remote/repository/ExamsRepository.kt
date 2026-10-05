@@ -72,7 +72,7 @@ class ExamsRepository @Inject constructor(
         val exam = requireNotNull(examDao.getLatestByExamId(examId))
         require(exam.userId == userId)
         examDao.insert(exam.copy(cloudConsentAccepted = false, pendingSync = false,
-            cloudState = if (exam.hasCloudCopy || exam.cloudState == ExamCloudState.ERROR) ExamCloudState.UNKNOWN else ExamCloudState.LOCAL_ONLY))
+            cloudState = if (exam.hasCloudCopy || exam.cloudState in setOf(ExamCloudState.ERROR, ExamCloudState.SENDING)) ExamCloudState.UNKNOWN else ExamCloudState.LOCAL_ONLY))
     }
 
     suspend fun syncAuthorizedExams() {
@@ -88,6 +88,9 @@ class ExamsRepository @Inject constructor(
             check(apiClient.supportsExamSnapshots()) { "O serviço de nuvem precisa ser atualizado. Seu exame continua neste aparelho." }
             val items = examItemDao.getByExamLocal(examId)
             val local = exam.localFilePath
+            // Persistir antes de transmitir: morte do processo não pode parecer ausência de cópia remota.
+            exam = exam.copy(cloudState = ExamCloudState.SENDING)
+            examDao.insert(exam)
             if (local != null) {
                 check(auth.currentUser?.uid == exam.userId) { "Conta alterada durante o envio." }
                 val bytes = fileStore.readBytes(local)
@@ -104,7 +107,11 @@ class ExamsRepository @Inject constructor(
                 java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(exam.examDate), items.map { it.toRemote() })) { "Envio dos resultados não concluído." }
             exam = exam.copy(hasCloudCopy = true)
             examDao.insert(exam.copy(pendingSync = false, cloudState = ExamCloudState.SYNCED, lastCloudSyncAt = System.currentTimeMillis()))
-        } catch (e: CancellationException) { throw e
+        } catch (e: CancellationException) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                examDao.insert(exam.copy(cloudState = ExamCloudState.ERROR))
+            }
+            throw e
         } catch (e: Exception) {
             examDao.insert(exam.copy(cloudState = ExamCloudState.ERROR))
             throw e
@@ -131,7 +138,7 @@ class ExamsRepository @Inject constructor(
     suspend fun deleteExamAtomically(examId: String, userId: String): Boolean = mutation.withLock {
         val exam = examDao.getLatestByExamId(examId) ?: return@withLock true
         require(exam.userId == userId)
-        if (exam.hasCloudCopy || exam.cloudState == ExamCloudState.UNKNOWN) {
+        if (exam.hasCloudCopy || exam.cloudState in setOf(ExamCloudState.UNKNOWN, ExamCloudState.ERROR, ExamCloudState.SENDING)) {
             check(auth.currentUser?.uid == userId && apiClient.deleteExam(examId)) { "Não foi possível excluir a cópia remota. O exame continua disponível." }
         }
         examDao.deleteWithItems(examId)
