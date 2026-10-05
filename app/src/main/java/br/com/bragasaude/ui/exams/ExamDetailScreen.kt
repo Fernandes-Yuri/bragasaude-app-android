@@ -18,7 +18,7 @@ import br.com.bragasaude.ui.components.BragaAlertDialog
 @Composable
 internal fun ExamDetailScreen(exam: RemoteExam, items: List<RemoteExamItem>, busy: Boolean,
     onBack: () -> Unit, onOpen: () -> Unit, onEdit: () -> Unit,
-    onPdf: () -> Unit, onShare: () -> Unit, onCloud: () -> Unit, onPause: () -> Unit) {
+    onPdf: () -> Unit, onShare: () -> Unit, onCloud: () -> Unit, onPause: () -> Unit, onRemoveCloud: () -> Unit) {
     Scaffold(topBar = {
         TopAppBar(title = { Text("Detalhe do exame") }, navigationIcon = {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar") }
@@ -45,6 +45,9 @@ internal fun ExamDetailScreen(exam: RemoteExam, items: List<RemoteExamItem>, bus
             }
             if (exam.cloudState in setOf(ExamCloudState.PENDING, ExamCloudState.ERROR, ExamCloudState.SYNCED)) {
                 TextButton(onClick = onPause, enabled = !busy) { Text("Parar novos envios à nuvem") }
+            }
+            if (exam.hasCloudCopy || exam.cloudState == ExamCloudState.UNKNOWN || exam.cloudState == ExamCloudState.ERROR) {
+                TextButton(onClick = onRemoveCloud, enabled = !busy) { Text("Remover cópia da nuvem e manter no aparelho") }
             }
             Text("Compartilhar PDF não ativa acompanhamento automático. Exames locais podem ser perdidos ao apagar os dados do app ou perder acesso ao aparelho.", style = MaterialTheme.typography.bodySmall)
         }

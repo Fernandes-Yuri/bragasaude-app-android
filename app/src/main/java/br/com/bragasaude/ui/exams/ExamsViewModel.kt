@@ -76,16 +76,28 @@ class ExamsViewModel @Inject constructor(
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage = _statusMessage.asStateFlow()
 
-    init {
-        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
-        viewModelScope.launch {
-            repository.getExamItems(userId).collectLatest { _examItems.value = it.map { item -> item.toRemote() } }
-        }
-        viewModelScope.launch {
-            repository.getExams(userId).collectLatest { entities ->
-                _exams.value = entities.map { it.toRemote() }
-            }
-        }
+    private var observeExams: kotlinx.coroutines.Job? = null
+    private var observeItems: kotlinx.coroutines.Job? = null
+    private val authListener = FirebaseAuth.AuthStateListener { changedAuth ->
+        observeExams?.cancel()
+        observeItems?.cancel()
+        _exams.value = emptyList()
+        _examItems.value = emptyList()
+        _pendingExamValidation.value = null
+        _showCloudConsentDialog.value = false
+        pendingConsentCallback = null
+        _compiledDossierResult.value = null
+        _originalToOpen.value = null
+        val userId = changedAuth.currentUser?.uid ?: BragaConstants.GUEST_UID
+        observeExams = viewModelScope.launch { repository.getExams(userId).collectLatest { _exams.value = it.map { exam -> exam.toRemote() } } }
+        observeItems = viewModelScope.launch { repository.getExamItems(userId).collectLatest { _examItems.value = it.map { item -> item.toRemote() } } }
+    }
+
+    init { auth.addAuthStateListener(authListener) }
+
+    override fun onCleared() {
+        auth.removeAuthStateListener(authListener)
+        super.onCleared()
     }
 
     fun promptCloudConsent(onDecision: (Boolean) -> Unit) {
@@ -154,6 +166,7 @@ class ExamsViewModel @Inject constructor(
                             file
                         }
                     }
+                    check(userId == (auth.currentUser?.uid ?: BragaConstants.GUEST_UID)) { "Conta alterada durante a exportação." }
                     _compiledDossierResult.value = result
                 } finally { temporaryOriginals.forEach { it.delete() } }
             } catch (e: Exception) {
@@ -204,6 +217,18 @@ class ExamsViewModel @Inject constructor(
         }
     }
 
+    fun removeCloudCopy(examId: String) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                repository.removeCloudCopy(examId, auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
+                _statusMessage.value = "Cópia da nuvem removida. O exame continua salvo neste aparelho."
+            } catch (e: Exception) {
+                _statusMessage.value = "Não foi possível remover a cópia da nuvem. Verifique a conexão; seu exame continua disponível."
+            } finally { _isLoading.value = false }
+        }
+    }
+
     fun editExam(exam: RemoteExam) {
         if (exam.userId != (auth.currentUser?.uid ?: BragaConstants.GUEST_UID)) return
         _pendingExamValidation.value = exam to _examItems.value.filter { it.examId == exam.id }
@@ -233,6 +258,7 @@ class ExamsViewModel @Inject constructor(
             _isLoading.value = true
             try {
                 val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
+                check(exam.userId == userId) { "A conta foi alterada. Abra o exame na conta que o cadastrou." }
                 val confirmedExam = exam.copy(status = "confirmed", userId = userId)
                 val confirmedItems = items.map {
                     it.copy(

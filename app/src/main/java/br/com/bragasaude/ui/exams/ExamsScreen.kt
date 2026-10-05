@@ -106,6 +106,7 @@ fun ExamsScreen(
     // Consentimento específico por envio
     val showCloudConsentDialog by viewModel.showCloudConsentDialog.collectAsState()
     var examToDelete by remember { mutableStateOf<RemoteExam?>(null) }
+    var cloudCopyToRemove by remember { mutableStateOf<String?>(null) }
     var selectedExamId by remember { mutableStateOf<String?>(null) }
     var search by remember { mutableStateOf("") }
     var storageFilter by remember { mutableStateOf("Todos") }
@@ -279,7 +280,15 @@ fun ExamsScreen(
             onPdf = { selectedExam.id?.let { viewModel.compileMedicalDossier(setOf(it)) } },
             onShare = { selectedExam.id?.let { shareExamIds = setOf(it) } },
             onCloud = { selectedExam.id?.let { viewModel.sendExamToCloud(it) } },
-            onPause = { selectedExam.id?.let { viewModel.pauseCloud(it) } }
+            onPause = { selectedExam.id?.let { viewModel.pauseCloud(it) } },
+            onRemoveCloud = { cloudCopyToRemove = selectedExam.id }
+        )
+        if (cloudCopyToRemove != null) BragaAlertDialog(
+            onDismissRequest = { cloudCopyToRemove = null },
+            title = { Text("Remover cópia da nuvem") },
+            text = { Text("O exame e seus resultados serão mantidos neste aparelho. A cópia ativa no servidor será removida após confirmação com conexão. PDFs compartilhados e backups sujeitos à política de retenção não são apagados por esta ação.") },
+            confirmButton = { TextButton(onClick = { cloudCopyToRemove?.let { viewModel.removeCloudCopy(it) }; cloudCopyToRemove = null }) { Text("Remover cópia da nuvem") } },
+            dismissButton = { TextButton(onClick = { cloudCopyToRemove = null }) { Text("Cancelar") } }
         )
         if (shareExamIds != null) ShareExamsDialog(
             onDismiss = { shareExamIds = null },
