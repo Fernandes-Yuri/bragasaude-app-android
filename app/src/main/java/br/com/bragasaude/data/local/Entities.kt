@@ -110,7 +110,14 @@ data class ExamEntity(
     val validatedBy: String? = null,
     val validationNotes: String? = null,
     val createdAt: Date? = null,
-    val pendingSync: Boolean = false
+    val pendingSync: Boolean = false,
+    @androidx.room.ColumnInfo(defaultValue = "'UNKNOWN'") val cloudState: String = br.com.bragasaude.domain.ExamCloudState.UNKNOWN,
+    @androidx.room.ColumnInfo(defaultValue = "0") val cloudConsentAccepted: Boolean = false,
+    val cloudConsentVersion: String? = null,
+    val cloudConsentAt: Long? = null,
+    val localFilePath: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "0") val hasCloudCopy: Boolean = false,
+    val lastCloudSyncAt: Long? = null
 )
 
 @Entity(tableName = "clinical_references_local")

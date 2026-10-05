@@ -25,6 +25,7 @@ class SyncWorker @AssistedInject constructor(
     private val biometryDao: BiometryDao,
     private val examDao: ExamDao,
     private val examItemDao: ExamItemDao,
+    private val examsRepository: br.com.bragasaude.data.remote.repository.ExamsRepository,
     private val medicationDao: MedicationDao,
     private val medicationLogDao: MedicationLogDao,
     private val milestoneDao: MilestoneDao,
@@ -43,7 +44,6 @@ class SyncWorker @AssistedInject constructor(
         if (!safeSync { syncProfiles() }) hasErrors = true
         if (!safeSync { syncVitalSigns() }) hasErrors = true
         if (!safeSync { syncExams() }) hasErrors = true
-        if (!safeSync { syncExamItems() }) hasErrors = true
         if (!safeSync { syncMedications() }) hasErrors = true
         if (!safeSync { syncMedicationLogs() }) hasErrors = true
         if (!safeSync { syncSymptomsDiary() }) hasErrors = true
@@ -96,25 +96,7 @@ class SyncWorker @AssistedInject constructor(
         }
     }
 
-    private suspend fun syncExams() {
-        val pending = examDao.getPendingSync()
-        for (e in pending) {
-            val remoteId = apiClient.syncExam(e)
-            if (remoteId != null) {
-                examDao.insert(e.copy(remoteId = remoteId, pendingSync = false))
-            }
-        }
-    }
-
-    private suspend fun syncExamItems() {
-        val pending = examItemDao.getPendingSync()
-        for (item in pending) {
-            val remoteId = apiClient.syncExamItem(item)
-            if (remoteId != null) {
-                examItemDao.insert(item.copy(remoteId = remoteId, pendingSync = false))
-            }
-        }
-    }
+    private suspend fun syncExams() = examsRepository.syncAuthorizedExams()
 
     private suspend fun syncMedications() {
         val pending = medicationDao.getPendingSync()

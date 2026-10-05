@@ -59,7 +59,11 @@ data class RemoteExam(
     val status: String = "uploaded",
     @SerialName("ai_extracted_data") val aiExtractedData: String? = null,
     @SerialName("validated_by") val validatedBy: String? = null,
-    @SerialName("validation_notes") val validationNotes: String? = null
+    @SerialName("validation_notes") val validationNotes: String? = null,
+    @kotlinx.serialization.Transient val cloudState: String = br.com.bragasaude.domain.ExamCloudState.UNKNOWN,
+    @kotlinx.serialization.Transient val localFilePath: String? = null,
+    @kotlinx.serialization.Transient val hasCloudCopy: Boolean = false,
+    @kotlinx.serialization.Transient val labItems: List<RemoteExamItem> = emptyList()
 )
 
 @Serializable

@@ -178,14 +178,17 @@ fun ExamEntity.toRemote() = RemoteExam(
     userId = userId,
     title = title,
     category = category,
-    examDate = formatDate(examDate),
+    examDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(examDate),
     resultSummary = resultSummary,
     fileUrl = fileUrl,
     status = status,
     aiExtractedData = aiExtractedData,
     validatedBy = validatedBy,
     validationNotes = validationNotes,
-    createdAt = createdAt?.let { formatDate(it) }
+    createdAt = createdAt?.let { formatDate(it) },
+    cloudState = cloudState,
+    localFilePath = localFilePath,
+    hasCloudCopy = hasCloudCopy
 )
 
 fun RemoteMilestone.toEntity() = MilestoneEntity(
