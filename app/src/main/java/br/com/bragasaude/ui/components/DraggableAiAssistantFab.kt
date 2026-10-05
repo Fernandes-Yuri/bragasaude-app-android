@@ -78,7 +78,7 @@ private val FabListeningRed = Color(0xFFFF5252)
 
 /**
  * Ícone estilizado com 3 corações verdes (BragaEmerald) com cruz médica branca dentro,
- * dispostos em ordem crescente (pequeno → médio → grande) em arco ascendente diagonal,
+ * dispostos em ordem crescente da direita para a esquerda, em arco ascendente diagonal,
  * inspirado no padrão visual das estrelas do Gemini.
  */
 @Composable
@@ -91,10 +91,10 @@ fun TripleHeartAssistantIcon(
         val w = size.width
         val h = size.height
 
-        // Heart 1 — Pequeno (canto inferior esquerdo, proporcional e visível)
+        // Heart 1 — Pequeno (canto inferior direito, proporcional e visível)
         drawHeartWithCross(
             drawScope = this,
-            centerX = w * 0.20f,
+            centerX = w * 0.80f,
             centerY = h * 0.76f,
             width = w * 0.26f,
             height = h * 0.25f,
@@ -105,7 +105,7 @@ fun TripleHeartAssistantIcon(
         // Heart 2 — Médio (central, harmonioso e equidistante)
         drawHeartWithCross(
             drawScope = this,
-            centerX = w * 0.44f,
+            centerX = w * 0.56f,
             centerY = h * 0.52f,
             width = w * 0.34f,
             height = h * 0.33f,
@@ -113,10 +113,10 @@ fun TripleHeartAssistantIcon(
             crossColor = crossColor
         )
 
-        // Heart 3 — Grande (canto superior direito, sem sobrepor o médio)
+        // Heart 3 — Grande (canto superior esquerdo, sem sobrepor o médio)
         drawHeartWithCross(
             drawScope = this,
-            centerX = w * 0.77f,
+            centerX = w * 0.23f,
             centerY = h * 0.23f,
             width = w * 0.43f,
             height = h * 0.41f,
@@ -208,6 +208,7 @@ private fun AnimatedAudioWaveBar(delay: Int) {
 /**
  * UI-V01 / D14 — Copiloto de Voz Metamórfico e Arrastável (In-App Copilot).
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DraggableAiAssistantFab(
     onNavigate: (Screen) -> Unit,
@@ -426,7 +427,11 @@ fun DraggableAiAssistantFab(
         val shadowDp by animateDpAsState(targetShadow, label = "Shadow")
 
         val isModalOpen = LocalBragaModalState.current.isOpen
-        val shouldHideOrbVisuals = isModalOpen && !showVoiceOnboarding && !showEmergencyDialog
+        val isKeyboardOpen = WindowInsets.isImeVisible
+        val shouldHideOrbVisuals = (isModalOpen || isKeyboardOpen) && !showVoiceOnboarding && !showEmergencyDialog
+        LaunchedEffect(shouldHideOrbVisuals) {
+            if (shouldHideOrbVisuals) viewModel.onHostStopped()
+        }
 
         if (!shouldHideOrbVisuals) {
             // 2. Continuous Glow Pulse + Concentric Rings + Shockwave

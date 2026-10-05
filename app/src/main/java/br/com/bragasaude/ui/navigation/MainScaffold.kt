@@ -113,11 +113,8 @@ fun MainScaffold(
             )
         }
 
-        // FAB Metamórfico de Voz flutuante — oculto no OrbChat e nas telas de cadastro/estoque de remédios (Fase B)
-        if (!isCurrentRoute(currentRoute, Screen.OrbChat) &&
-            !isCurrentRoute(currentRoute, Screen.BarcodeScanner) &&
-            !isCurrentRoute(currentRoute, Screen.MedicationStock) &&
-            !isCurrentRoute(currentRoute, Screen.SocialFeed) &&
+        // Presente nas visões gerais; formulários e telas de foco ficam livres.
+        if (shouldShowAssistantOrb(currentRoute) &&
             AppPreferences.isVoiceAssistantEnabled(appContext)
         ) {
             DraggableAiAssistantFab(
@@ -156,3 +153,16 @@ internal fun isCurrentRoute(currentRoute: String?, screen: Screen): Boolean {
            withoutArgs.endsWith(".$simpleName") ||
            withoutArgs.endsWith("\$$simpleName")
 }
+
+
+/** Telas novas começam sem sobreposição, até uma decisão explícita de produto. */
+internal fun shouldShowAssistantOrb(currentRoute: String?): Boolean =
+    listOf(
+        Screen.Home,
+        Screen.Report,
+        Screen.CaregiverDashboard,
+        Screen.Nutrition(),
+        Screen.Hydration(),
+        Screen.Steps,
+        Screen.Reminders
+    ).any { isCurrentRoute(currentRoute, it) }
