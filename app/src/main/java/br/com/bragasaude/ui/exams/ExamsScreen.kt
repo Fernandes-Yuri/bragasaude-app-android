@@ -353,7 +353,7 @@ fun ExamsScreen(
                             Text("${exams.count { it.cloudState == ExamCloudState.LOCAL_ONLY }} locais · ${exams.count { it.hasCloudCopy }} na nuvem", style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary)
                         }
                         IconButton(onClick = { showStorageInfo = true }) {
-                            Icon(Icons.Default.InfoOutlined, contentDescription = "Sobre o armazenamento", tint = BragaEmerald)
+                            Icon(Icons.Default.Info, contentDescription = "Sobre o armazenamento", tint = BragaEmerald)
                         }
                     }
                     Spacer(Modifier.height(12.dp))
