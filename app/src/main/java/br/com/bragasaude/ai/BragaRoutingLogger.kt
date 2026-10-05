@@ -1,6 +1,7 @@
 package br.com.bragasaude.ai
 
 import android.util.Log
+import br.com.bragasaude.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,11 +79,13 @@ object BragaRoutingLogger {
         val updated = (listOf(entry) + _logs.value).take(MAX_LOGS)
         _logs.value = updated
 
-        // Logcat com tag dedicada e formato claro para adb logcat -s BRAGA_ROUTING
-        Log.i(
-            TAG,
-            "[$decision] [${channel.name}] (${durationMs}ms) intent=$intent | input=\"${entry.input}\" | reason=\"$reason\" | preview=\"${entry.previewResponse.take(90)}\" | timing=$timing"
-        )
+        // Logcat com tag dedicada: detalhes completos de mensagem apenas em builds DEBUG de desenvolvimento
+        if (BuildConfig.DEBUG) {
+            Log.i(
+                TAG,
+                "[$decision] [${channel.name}] (${durationMs}ms) intent=$intent | input=\"${entry.input}\" | reason=\"$reason\" | preview=\"${entry.previewResponse.take(90)}\" | timing=$timing"
+            )
+        }
     }
 
     @Synchronized
