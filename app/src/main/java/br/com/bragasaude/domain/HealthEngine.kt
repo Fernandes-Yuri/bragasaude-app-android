@@ -404,7 +404,7 @@ class HealthEngine @Inject constructor(
                         showNotification(context.getString(R.string.exam_critical_alert), "${rec.message} ${rec.action}", NOTIFICATION_ID_EMERGENCY)
                         // doc 10 §3.3: exame crítico avisa os cuidadores ativos,
                         // pelo mesmo caminho do alerta de sinal vital.
-                        notifyCaregiversOfCriticalExam(userId, item.itemName, numVal, isLow)
+                        // Exames são compartilhados com o cuidador apenas por iniciativa do usuário (PDF).
                         conditions.add(RemoteDetectedCondition(
                             userId = userId,
                             conditionName = context.getString(if (isLow) R.string.observation_exam_low else R.string.observation_exam_high, item.itemName),
@@ -440,9 +440,7 @@ class HealthEngine @Inject constructor(
             }
         }
 
-        if (!silent) {
-            conditions.forEach { conditionRepository.saveDetectedCondition(it) }
-        }
+        // Observações de exames permanecem locais; compartilhamento ocorre pelo PDF.
 
         return AnalysisResult(alerts, recommendations.sortedByDescending { it.isEmergency }, emptyList(), conditions)
     }

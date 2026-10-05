@@ -10,6 +10,9 @@ import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import br.com.bragasaude.domain.ExamCloudState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -103,6 +106,21 @@ fun ExamsScreen(
     // Consentimento específico por envio
     val showCloudConsentDialog by viewModel.showCloudConsentDialog.collectAsState()
     var examToDelete by remember { mutableStateOf<RemoteExam?>(null) }
+    var selectedExamId by remember { mutableStateOf<String?>(null) }
+    var search by remember { mutableStateOf("") }
+    var storageFilter by remember { mutableStateOf("Todos") }
+    var shareExamIds by remember { mutableStateOf<Set<String>?>(null) }
+    val examItems by viewModel.examItems.collectAsState()
+    val originalToOpen by viewModel.originalToOpen.collectAsState()
+    val shareDossier by viewModel.shareDossier.collectAsState()
+    val visibleExams = exams.filter { exam ->
+        (exam.title.contains(search, true) || exam.category.orEmpty().contains(search, true)) && when (storageFilter) {
+            "Neste aparelho" -> exam.cloudState == ExamCloudState.LOCAL_ONLY
+            "Na nuvem" -> exam.hasCloudCopy
+            "Envio pendente" -> exam.cloudState in setOf(ExamCloudState.PENDING, ExamCloudState.ERROR)
+            else -> true
+        }
+    }
 
     // Exportação dos registros e arquivos originais
     val isCompilingDossier by viewModel.isCompilingDossier.collectAsState()
@@ -127,16 +145,36 @@ fun ExamsScreen(
                     "${context.packageName}.fileprovider",
                     result.pdfFile
                 )
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "application/pdf")
+                val intent = Intent(if (shareDossier) Intent.ACTION_SEND else Intent.ACTION_VIEW).apply {
+                    if (shareDossier) {
+                        type = "application/pdf"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        clipData = android.content.ClipData.newRawUri("Exames", uri)
+                    } else setDataAndType(uri, "application/pdf")
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
-                context.startActivity(Intent.createChooser(intent, "Nuvem de Exames em PDF"))
+                context.startActivity(Intent.createChooser(intent, if (shareDossier) "Compartilhar PDF dos exames" else "Abrir PDF dos exames"))
             } catch (e: Exception) {
                 Toast.makeText(context, "Arquivo de exames gerado com sucesso (${result.totalPagesCount} páginas).", Toast.LENGTH_LONG).show()
                 e.printStackTrace()
             }
             viewModel.clearCompiledDossier()
+        }
+    }
+
+    LaunchedEffect(originalToOpen) {
+        originalToOpen?.let { file ->
+            try {
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                val mime = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension) ?: "application/pdf"
+                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, mime)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }, "Abrir original do exame"))
+            } catch (e: Exception) {
+                Toast.makeText(context, "Não foi possível abrir o arquivo. Verifique se possui um leitor instalado.", Toast.LENGTH_LONG).show()
+            }
+            viewModel.clearOriginalToOpen()
         }
     }
 
@@ -200,7 +238,8 @@ fun ExamsScreen(
             onBack = { viewModel.onValidationCancelled() },
             onConfirm = { confirmedExam, confirmedItems ->
                 viewModel.onValidationConfirmed(confirmedExam, confirmedItems)
-            }
+            },
+            onOpenOriginal = { viewModel.openOriginal(exam) }
         )
         return
     }
@@ -228,6 +267,27 @@ fun ExamsScreen(
         return
     }
 
+    val selectedExam = exams.firstOrNull { it.id == selectedExamId }
+    if (selectedExam != null) {
+        ExamDetailScreen(
+            exam = selectedExam,
+            items = examItems.filter { it.examId == selectedExam.id },
+            busy = isLoading || isCompilingDossier,
+            onBack = { selectedExamId = null },
+            onOpen = { viewModel.openOriginal(selectedExam) },
+            onEdit = { viewModel.editExam(selectedExam) },
+            onPdf = { selectedExam.id?.let { viewModel.compileMedicalDossier(setOf(it)) } },
+            onShare = { selectedExam.id?.let { shareExamIds = setOf(it) } },
+            onCloud = { selectedExam.id?.let { viewModel.sendExamToCloud(it) } },
+            onPause = { selectedExam.id?.let { viewModel.pauseCloud(it) } }
+        )
+        if (shareExamIds != null) ShareExamsDialog(
+            onDismiss = { shareExamIds = null },
+            onConfirm = { viewModel.compileMedicalDossier(shareExamIds, share = true); shareExamIds = null }
+        )
+        return
+    }
+
     Scaffold(
         containerColor = BragaBackground,
         topBar = {
@@ -248,7 +308,7 @@ fun ExamsScreen(
                             )
                         } else {
                             IconButton(onClick = { viewModel.compileMedicalDossier() }) {
-                                Icon(Icons.Default.PictureAsPdf, contentDescription = "Nuvem de Exames", tint = Color.White)
+                                Icon(Icons.Default.PictureAsPdf, contentDescription = "Gerar PDF dos exames", tint = Color.White)
                             }
                         }
                     }
@@ -276,6 +336,17 @@ fun ExamsScreen(
                 ) {
                 // Card de upload em destaque com borda tracejada (padrão 110918/112059)
                 item {
+                    Text("${exams.size} exames salvos", style = MaterialTheme.typography.titleMedium)
+                    Text("${exams.count { it.cloudState == ExamCloudState.LOCAL_ONLY }} somente neste aparelho · ${exams.count { it.hasCloudCopy }} com cópia na nuvem", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Exames locais podem ser perdidos ao desinstalar o app, apagar seus dados ou perder acesso ao aparelho. Você pode gerar um PDF ou salvar exames escolhidos também na nuvem.", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(value = search, onValueChange = { search = it }, label = { Text("Buscar exame ou categoria") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("Todos", "Neste aparelho", "Na nuvem", "Envio pendente").forEach { filter ->
+                            FilterChip(selected = storageFilter == filter, onClick = { storageFilter = filter }, label = { Text(filter) })
+                        }
+                    }
                     DashedUploadCard(onClick = { showAddBottomSheet = true })
                     Spacer(Modifier.height(12.dp))
                     
@@ -298,9 +369,10 @@ fun ExamsScreen(
                             } else {
                                 Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(10.dp))
-                                Text("Exportar Nuvem de Exames (PDF)", fontWeight = FontWeight.Bold)
+                                Text("Gerar PDF dos exames", fontWeight = FontWeight.Bold)
                             }
                         }
+                        OutlinedButton(onClick = { shareExamIds = exams.mapNotNull { it.id }.toSet() }, enabled = !isCompilingDossier, modifier = Modifier.fillMaxWidth()) { Text("Compartilhar PDF dos exames") }
                         Spacer(Modifier.height(12.dp))
                     }
 
@@ -329,20 +401,21 @@ fun ExamsScreen(
                     }
                 }
 
-                if (exams.isEmpty()) {
+                if (visibleExams.isEmpty()) {
                     item {
                         Box(
                             modifier = Modifier.fillMaxWidth().height(200.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("Nenhum exame cadastrado.", color = MaterialTheme.colorScheme.outline)
+                            Text(if (exams.isEmpty()) "Nenhum exame cadastrado. Adicione um exame para salvá-lo neste aparelho." else "Nenhum exame encontrado para este filtro.", color = MaterialTheme.colorScheme.outline)
                         }
                     }
                 }
 
-                items(exams) { exam ->
+                items(visibleExams) { exam ->
                     ExamCard(
                         exam = exam,
+                        onOpen = { selectedExamId = exam.id },
                         onDelete = { examToDelete = exam }
                     )
                 }
@@ -375,6 +448,11 @@ fun ExamsScreen(
         )
     }
 
+    if (shareExamIds != null) ShareExamsDialog(
+        onDismiss = { shareExamIds = null },
+        onConfirm = { viewModel.compileMedicalDossier(shareExamIds, share = true); shareExamIds = null }
+    )
+
     // Progress Overlay
     uploadProgress?.takeIf { showUploadProgress }?.let { progress ->
         BragaAlertDialog(
@@ -406,11 +484,11 @@ fun ExamsScreen(
                 )
             },
             title = {
-                Text("Exclusão Definitiva (LGPD)", fontWeight = FontWeight.Bold)
+                Text("Excluir exame", fontWeight = FontWeight.Bold)
             },
             text = {
                 Text(
-                    "Deseja excluir permanentemente o laudo \"${examToDelete?.title}\"?\n\nEsta ação destruirá o laudo deste aparelho e de todos os servidores remotos de forma definitiva e irrecuperável (Direito ao Esquecimento — LGPD Art. 18).",
+                    "Deseja excluir o exame \"${examToDelete?.title}\" e seus resultados? Se houver cópia na nuvem, a exclusão dependerá de conexão e confirmação do servidor. PDFs já compartilhados não serão apagados.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFF475569),
                     lineHeight = 20.sp
@@ -443,12 +521,13 @@ fun ExamsScreen(
 @Composable
 fun ExamCard(
     exam: RemoteExam,
-    onDelete: () -> Unit = {}
+    onDelete: () -> Unit = {},
+    onOpen: () -> Unit = {}
 ) {
     val badge = examStatusBadge(exam.status)
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = BragaCardSurface),
         border = BorderStroke(1.dp, BragaMintBorder),
@@ -509,6 +588,9 @@ fun ExamCard(
                 }
             }
 
+            Spacer(Modifier.height(8.dp))
+            Text(ExamCloudState.label(exam.cloudState), style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary)
+            Text(if (exam.localFilePath != null) "Original salvo neste aparelho" else if (exam.fileUrl != null) "Original disponível na nuvem" else "Exame digitado, sem arquivo anexado", style = MaterialTheme.typography.bodySmall)
             examStatusHint(exam.status)?.let { hint ->
                 Spacer(Modifier.height(10.dp))
                 Surface(
@@ -601,14 +683,14 @@ private fun DashedUploadCard(onClick: () -> Unit) {
             }
             Spacer(Modifier.height(12.dp))
             Text(
-                "+ Enviar novo exame",
+                "Adicionar exame",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = BragaEmerald
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "Anexe o PDF do seu laudo para transcrição automática",
+                "Fotografe, anexe um arquivo ou digite. O exame será salvo primeiro neste aparelho.",
                 style = MaterialTheme.typography.bodySmall,
                 color = BragaTextSecondary,
                 textAlign = TextAlign.Center

@@ -30,6 +30,7 @@ class ExamsViewModel @Inject constructor(
     private val examExtractor: ExamExtractor,
     private val syncManager: SyncManager,
     private val profileRepository: br.com.bragasaude.data.remote.repository.ProfileRepository,
+    private val fileStore: br.com.bragasaude.data.local.security.ExamFileStore,
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
@@ -54,7 +55,13 @@ class ExamsViewModel @Inject constructor(
     val showCloudConsentDialog = _showCloudConsentDialog.asStateFlow()
 
     private var pendingConsentCallback: ((Boolean) -> Unit)? = null
-    private val consentedExamIds = mutableSetOf<String>()
+    private var draftOriginal: String? = null
+    private val _examItems = MutableStateFlow<List<RemoteExamItem>>(emptyList())
+    val examItems = _examItems.asStateFlow()
+    private val _originalToOpen = MutableStateFlow<java.io.File?>(null)
+    val originalToOpen = _originalToOpen.asStateFlow()
+    private val _shareDossier = MutableStateFlow(false)
+    val shareDossier = _shareDossier.asStateFlow()
     private val _manualExamSaved = MutableStateFlow(false)
     val manualExamSaved = _manualExamSaved.asStateFlow()
     fun clearManualExamSaved() { _manualExamSaved.value = false }
@@ -71,6 +78,9 @@ class ExamsViewModel @Inject constructor(
 
     init {
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
+        viewModelScope.launch {
+            repository.getExamItems(userId).collectLatest { _examItems.value = it.map { item -> item.toRemote() } }
+        }
         viewModelScope.launch {
             repository.getExams(userId).collectLatest { entities ->
                 _exams.value = entities.map { it.toRemote() }
@@ -101,7 +111,7 @@ class ExamsViewModel @Inject constructor(
                 val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
                 val success = repository.deleteExamAtomically(examId, userId)
                 if (success) {
-                    _statusMessage.value = "Exame excluído com sucesso (LGPD Art. 18)."
+                    _statusMessage.value = "Exame excluído com sucesso."
                 } else {
                     _statusMessage.value = "Exame excluído localmente."
                 }
@@ -113,7 +123,9 @@ class ExamsViewModel @Inject constructor(
         }
     }
 
-    fun compileMedicalDossier() {
+    fun compileMedicalDossier(examIds: Set<String>? = null, share: Boolean = false) {
+        if (_isCompilingDossier.value) return
+        _shareDossier.value = share
         viewModelScope.launch {
             _isCompilingDossier.value = true
             try {
@@ -121,7 +133,7 @@ class ExamsViewModel @Inject constructor(
                 val profile = profileRepository.getProfile(userId).firstOrNull()?.toRemote() 
                     ?: br.com.bragasaude.data.remote.model.RemoteProfile(id = userId, fullName = "Usuário")
 
-                val examEntities = repository.getExams(userId).firstOrNull() ?: emptyList()
+                val examEntities = (repository.getExams(userId).firstOrNull() ?: emptyList()).filter { examIds == null || it.remoteId in examIds }
                 val itemEntities = repository.getExamItems(userId).firstOrNull() ?: emptyList()
 
                 val compiler = br.com.bragasaude.domain.MedicalDossierCompiler(context)
@@ -136,7 +148,11 @@ class ExamsViewModel @Inject constructor(
                             temporaryOriginals.add(file)
                             file.writeBytes(bytes)
                             file
-                        } else java.io.File(path).takeIf { it.isFile }
+                        } else {
+                            val file = fileStore.materialize(path)
+                            temporaryOriginals.add(file)
+                            file
+                        }
                     }
                     _compiledDossierResult.value = result
                 } finally { temporaryOriginals.forEach { it.delete() } }
@@ -159,34 +175,65 @@ class ExamsViewModel @Inject constructor(
 
     fun onValidationConfirmed(exam: RemoteExam, items: List<RemoteExamItem>) {
         if (_isLoading.value || _showCloudConsentDialog.value) return
-        if (auth.currentUser?.uid != null && exam.id?.let { it in consentedExamIds } != true) {
-            promptCloudConsent { accepted ->
-                if (accepted) {
-                    exam.id?.let { consentedExamIds.add(it) }
-                    saveValidatedExam(exam, items)
+        saveValidatedExam(exam, items)
+    }
+
+    fun sendExamToCloud(examId: String) {
+        if (_isLoading.value || _showCloudConsentDialog.value) return
+        val userId = auth.currentUser?.uid
+        if (userId == null) {
+            _statusMessage.value = "Entre na sua conta para salvar na nuvem. Seu exame continua neste aparelho."
+            return
+        }
+        promptCloudConsent { accepted ->
+            if (accepted) viewModelScope.launch {
+                try {
+                    repository.authorizeCloud(examId, userId)
+                    _statusMessage.value = "Envio autorizado. Seu exame continua salvo neste aparelho."
+                } catch (e: Exception) {
+                    _statusMessage.value = "Não foi possível autorizar o envio. Seu exame continua neste aparelho."
                 }
             }
-        } else saveValidatedExam(exam, items)
+        }
     }
+
+    fun pauseCloud(examId: String) {
+        viewModelScope.launch {
+            repository.pauseCloud(examId, auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
+            _statusMessage.value = "Novos envios interrompidos. Cópias já enviadas continuam na nuvem."
+        }
+    }
+
+    fun editExam(exam: RemoteExam) {
+        if (exam.userId != (auth.currentUser?.uid ?: BragaConstants.GUEST_UID)) return
+        _pendingExamValidation.value = exam to _examItems.value.filter { it.examId == exam.id }
+    }
+
+    fun openOriginal(exam: RemoteExam) {
+        if (exam.userId != (auth.currentUser?.uid ?: BragaConstants.GUEST_UID)) return
+        viewModelScope.launch {
+            try {
+                val local = exam.localFilePath ?: exam.fileUrl?.takeUnless { it.startsWith("http") }
+                _originalToOpen.value = if (local != null) fileStore.materialize(local, share = true) else {
+                    val url = requireNotNull(exam.fileUrl) { "Exame digitado, sem arquivo anexado." }
+                    val bytes = repository.downloadExamOriginal(url)
+                    val path = fileStore.store(bytes, android.net.Uri.parse(url).lastPathSegment?.substringAfterLast('.', "pdf") ?: "pdf")
+                    // Recuperação para visualização sem alterar a política do exame.
+                    try { fileStore.materialize(path, share = true) } finally { fileStore.delete(path) }
+                }
+            } catch (e: Exception) {
+                _statusMessage.value = "Não foi possível abrir o original. Verifique a disponibilidade do arquivo."
+            }
+        }
+    }
+    fun clearOriginalToOpen() { _originalToOpen.value = null }
 
     private fun saveValidatedExam(exam: RemoteExam, items: List<RemoteExamItem>) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
                 val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
-                val originalPath = exam.fileUrl?.takeIf { !it.startsWith("https://") && !it.startsWith("http://") }
-                val remoteOriginal = if (userId != BragaConstants.GUEST_UID && originalPath != null) {
-                    val original = java.io.File(originalPath)
-                    check(original.length() <= 35 * 1024 * 1024) { "O exame deve ter no máximo 35 MB." }
-                    val result = repository.uploadExamContract(exam.id ?: error("Exame sem identificador."),
-                        exam.title, exam.category ?: "Geral", exam.examDate, "UNSTRUCTURED_DOCUMENT",
-                        true, br.com.bragasaude.domain.ExamStorageTerms.VERSION, original.name, original.readBytes())
-                    check(result?.success == true && !result.fileUrl.isNullOrBlank()) {
-                        "Não foi possível enviar o arquivo original. Tente novamente."
-                    }
-                    result.fileUrl
-                } else exam.fileUrl
-                val confirmedExam = exam.copy(status = "confirmed", fileUrl = remoteOriginal)
+                val confirmedExam = exam.copy(status = "confirmed", userId = userId)
                 val confirmedItems = items.map {
                     it.copy(
                         status = "confirmed",
@@ -197,8 +244,8 @@ class ExamsViewModel @Inject constructor(
                 repository.saveExam(confirmedExam, confirmedItems)
 
 
-                if (userId != BragaConstants.GUEST_UID && originalPath != null) java.io.File(originalPath).delete()
-                exam.id?.let { consentedExamIds.remove(it) }
+                draftOriginal = null
+                _statusMessage.value = "Exame salvo neste aparelho. Você pode consultá-lo em Meus exames."
                 _pendingExamValidation.value = null
             } catch (e: Exception) {
                 _statusMessage.value = e.message ?: "Não foi possível salvar os exames. Tente novamente."
@@ -215,13 +262,7 @@ class ExamsViewModel @Inject constructor(
      */
     fun saveManualExam(title: String, category: String, examDate: String, items: List<RemoteExamItem>) {
         if (_isLoading.value || _showCloudConsentDialog.value) return
-        if (auth.currentUser?.uid == null) {
-            saveConsentedManualExam(title, category, examDate, items)
-            return
-        }
-        promptCloudConsent { accepted ->
-            if (accepted) saveConsentedManualExam(title, category, examDate, items)
-        }
+        saveConsentedManualExam(title, category, examDate, items)
     }
 
     private fun saveConsentedManualExam(title: String, category: String, examDate: String, items: List<RemoteExamItem>) {
@@ -248,6 +289,7 @@ class ExamsViewModel @Inject constructor(
                 }
                 repository.saveExam(exam, confirmedItems)
                 _manualExamSaved.value = true
+                _statusMessage.value = "Exame salvo neste aparelho."
             } catch (e: Exception) {
                 _statusMessage.value = e.message ?: "Não foi possível salvar os exames. Tente novamente."
                 e.printStackTrace()
@@ -296,13 +338,15 @@ class ExamsViewModel @Inject constructor(
                     } finally { document.close() }
                 }
 
+                val protectedPath = try { fileStore.store(originalFile.readBytes(), "pdf") } finally { originalFile.delete() }
+                draftOriginal = protectedPath
                 val exam = RemoteExam(
                     id = examId,
                     userId = userId,
                     title = title,
                     category = category,
                     examDate = dateStr,
-                    fileUrl = originalFile.absolutePath,
+                    fileUrl = protectedPath,
                     status = "analyzed"
                 )
 
@@ -321,13 +365,7 @@ class ExamsViewModel @Inject constructor(
      */
     fun processAttachedFile(title: String, category: String, date: Date, fileUri: Uri, fileName: String) {
         if (_isLoading.value || _showCloudConsentDialog.value) return
-        if (auth.currentUser?.uid == null) {
-            processConsentedFile(title, category, date, fileUri, fileName)
-            return
-        }
-        promptCloudConsent { accepted ->
-            if (accepted) processConsentedFile(title, category, date, fileUri, fileName)
-        }
+        processConsentedFile(title, category, date, fileUri, fileName)
     }
 
     private fun processConsentedFile(title: String, category: String, date: Date, fileUri: Uri, fileName: String) {
@@ -364,21 +402,13 @@ class ExamsViewModel @Inject constructor(
                     }
                     bytes.toByteArray()
                 } ?: error("Não foi possível ler o exame. Selecione o arquivo novamente.")
-                val fileUrl = if (userId == BragaConstants.GUEST_UID) {
-                    val localDir = java.io.File(context.filesDir, "exams").apply { mkdirs() }
-                    val localFile = java.io.File(localDir, "$examId.${if (isPdf) "pdf" else "jpg"}")
-                    localFile.writeBytes(fileBytes)
-                    localFile.absolutePath
-                } else {
-                    val result = repository.uploadExamContract(examId, title, category, dateStr,
-                        "UNSTRUCTURED_DOCUMENT", true, br.com.bragasaude.domain.ExamStorageTerms.VERSION,
-                        fileName, fileBytes)
-                    check(result?.success == true && !result.fileUrl.isNullOrBlank()) {
-                        "Não foi possível enviar o exame. Tente novamente; ele ainda não foi salvo."
-                    }
-                    result.fileUrl
+                val extension = if (isPdf) "pdf" else when (mimeType) {
+                    "image/png" -> "png"
+                    "image/webp" -> "webp"
+                    else -> "jpg"
                 }
-                consentedExamIds.add(examId)
+                val fileUrl = fileStore.store(fileBytes, extension)
+                draftOriginal = fileUrl
 
                 val exam = RemoteExam(
                     id = examId,
@@ -393,7 +423,7 @@ class ExamsViewModel @Inject constructor(
                 _pendingExamValidation.value = Pair(exam, extractedItems)
                 _uploadProgress.value = 1f
             } catch (e: Exception) {
-                _statusMessage.value = e.message ?: "Não foi possível enviar o exame. Tente novamente."
+                _statusMessage.value = e.message ?: "Não foi possível preparar o exame. Tente novamente."
                 e.printStackTrace()
             } finally {
                 _isLoading.value = false
@@ -437,7 +467,8 @@ class ExamsViewModel @Inject constructor(
     }
 
     fun onValidationCancelled() {
-        _pendingExamValidation.value?.first?.id?.let { consentedExamIds.remove(it) }
+        draftOriginal?.let { fileStore.delete(it) }
+        draftOriginal = null
         _pendingExamValidation.value = null
     }
 
@@ -446,7 +477,7 @@ class ExamsViewModel @Inject constructor(
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                syncManager.syncUserData(userId, force = true)
+                repository.pullAndMergeExams(userId)
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
