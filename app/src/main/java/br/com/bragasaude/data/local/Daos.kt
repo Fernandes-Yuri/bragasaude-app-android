@@ -194,6 +194,25 @@ interface BiometryDao {
 @Dao
 interface ExamDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertItems(items: List<ExamItemEntity>)
+
+    @Query("DELETE FROM exam_items_local WHERE examId = :examId")
+    suspend fun deleteItems(examId: String)
+
+    @androidx.room.Transaction
+    suspend fun saveWithItems(exam: ExamEntity, items: List<ExamItemEntity>) {
+        insert(exam)
+        deleteItems(requireNotNull(exam.remoteId))
+        insertItems(items)
+    }
+
+    @androidx.room.Transaction
+    suspend fun deleteWithItems(examId: String) {
+        deleteItems(examId)
+        deleteByRemoteId(examId)
+    }
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(exam: ExamEntity): Long
 
     @Query("SELECT * FROM exams_local WHERE userId = :userId ORDER BY examDate DESC")
@@ -208,7 +227,7 @@ interface ExamDao {
     @Query("DELETE FROM exams_local WHERE localId NOT IN (SELECT MIN(localId) FROM exams_local GROUP BY userId, COALESCE(remoteId, title || '_' || examDate))")
     suspend fun deduplicateExams()
 
-    @Query("SELECT * FROM exams_local WHERE pendingSync = 1")
+    @Query("SELECT * FROM exams_local WHERE pendingSync = 1 AND cloudConsentAccepted = 1")
     suspend fun getPendingSync(): List<ExamEntity>
 
     /** Busca o exame com maior localId para um remoteId */

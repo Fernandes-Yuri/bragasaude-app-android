@@ -37,7 +37,7 @@ class MedicalDossierCompiler(private val context: Context) {
         var pageNumber = 1
         var page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, pageNumber).create())
         var y = 120f
-        PdfBranding.header(context, page.canvas, "Nuvem de Exames • Organização de registros")
+        PdfBranding.header(context, page.canvas, "Meus exames • Organização de registros")
 
         fun finishPage() {
             PdfBranding.footer(page.canvas, pageNumber)
@@ -47,7 +47,7 @@ class MedicalDossierCompiler(private val context: Context) {
             finishPage()
             pageNumber++
             page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, pageNumber).create())
-            PdfBranding.header(context, page.canvas, "Nuvem de Exames • Continuação")
+            PdfBranding.header(context, page.canvas, "Meus exames • Continuação")
             y = 120f
         }
         fun paragraph(text: String, bold: Boolean = false) {
@@ -81,7 +81,7 @@ class MedicalDossierCompiler(private val context: Context) {
             finishPage()
             var attachedPages = 0
             exams.forEach { exam ->
-                val path = exam.fileUrl?.takeIf { it.isNotBlank() } ?: return@forEach
+                val path = (exam.localFilePath ?: exam.fileUrl)?.takeIf { it.isNotBlank() } ?: return@forEach
                 val file = checkNotNull(resolveFile(path)) { "Um arquivo original não está disponível. Tente exportar novamente." }
                 if (file.extension.equals("pdf", true)) {
                     ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->

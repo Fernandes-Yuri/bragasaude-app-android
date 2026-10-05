@@ -37,7 +37,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 49, // T17: foto e avatar no mural
+    version = 50, // Exames locais e autorização específica de nuvem
     exportSchema = true
 )
 @TypeConverters(Converters::class)

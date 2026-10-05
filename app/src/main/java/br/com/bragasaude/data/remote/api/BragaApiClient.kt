@@ -651,7 +651,18 @@ class BragaApiClient @Inject constructor(
                         aiExtractedData = obj.optString("ai_extracted_data", null),
                         validatedBy = obj.optString("validated_by", null),
                         validationNotes = obj.optString("validation_notes", null),
-                        createdAt = obj.optString("created_at", null)
+                        createdAt = obj.optString("created_at", null),
+                        labItems = obj.optJSONArray("lab_items")?.let { items ->
+                            (0 until items.length()).map { index ->
+                                val item = items.getJSONObject(index)
+                                RemoteExamItem(id = item.getString("id"), examId = obj.getString("id"), userId = userId,
+                                    itemKey = item.getString("item_key"), itemName = item.getString("item_name"),
+                                    valueNumeric = if (item.isNull("value_numeric")) null else item.optDouble("value_numeric"),
+                                    valueText = item.optString("value_text", null), unit = item.optString("unit", null),
+                                    referenceText = item.optString("reference_text", null), status = item.optString("status", "confirmed"),
+                                    measuredAt = item.optString("measured_at", null))
+                            }
+                        } ?: emptyList()
                     )
                 )
             }
@@ -1179,7 +1190,7 @@ class BragaApiClient @Inject constructor(
 
     // ==================== NOVOS CONTRATOS DE EXAMES (D49 / FASE 3) ====================
 
-    private fun deleteRequest(urlString: String): Boolean {
+    private fun deleteRequest(urlString: String, allowMissingExam: Boolean = false): Boolean {
         var conn: HttpURLConnection? = null
         return try {
             val url = URL(urlString)
@@ -1191,7 +1202,9 @@ class BragaApiClient @Inject constructor(
                 instanceFollowRedirects = false
                 attachIdentity(urlString)
             }
-            conn.responseCode in 200..299
+            val responseCode = conn.responseCode
+            responseCode in 200..299 || (allowMissingExam && responseCode == 404 &&
+                conn.errorStream?.bufferedReader()?.use { JSONObject(it.readText()).optString("detail") } == "Exame não encontrado.")
         } catch (e: Exception) {
             false
         } finally {
@@ -1200,7 +1213,7 @@ class BragaApiClient @Inject constructor(
     }
 
     suspend fun deleteExam(examId: String): Boolean = withContext(Dispatchers.IO) {
-        deleteRequest("$baseUrl/api/exams/$examId")
+        deleteRequest("$baseUrl/api/exams/$examId", allowMissingExam = true)
     }
 
     /**
@@ -1210,6 +1223,11 @@ class BragaApiClient @Inject constructor(
      */
     suspend fun deleteAccount(userId: String): Boolean = withContext(Dispatchers.IO) {
         deleteRequest("$baseUrl/api/profile/$userId")
+    }
+
+    suspend fun supportsExamSnapshots(): Boolean = withContext(Dispatchers.IO) {
+        try { getJson("$baseUrl/api/exams-sync/capabilities")?.optBoolean("snapshot_updates", false) == true }
+        catch (e: Exception) { false }
     }
 
     suspend fun syncManualExam(
@@ -1223,6 +1241,7 @@ class BragaApiClient @Inject constructor(
             val json = JSONObject().apply {
                 if (examId != null) put("exam_id", examId)
                 put("cloud_consent", true)
+                put("replace_items", true)
                 put("terms_version", br.com.bragasaude.domain.ExamStorageTerms.VERSION)
                 put("valid_exam_attested", true)
                 put("non_diagnostic_purpose_accepted", true)
@@ -1245,7 +1264,7 @@ class BragaApiClient @Inject constructor(
                 put("items", itemsArr)
             }
             val res = postJson("$baseUrl/api/exams/manual", json)
-            res?.optBoolean("success", false) == true
+            res?.optBoolean("success", false) == true && res.optBoolean("snapshot_applied", false)
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao sincronizar exame manual: ${e.message}", e)
             false
