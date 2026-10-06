@@ -60,7 +60,7 @@ fun GroceryPriceContributionSheet(
                             label = { Text(if (option == "ml") "mL" else option) })
                     }
                 }
-                Text("Exemplos: R$ 8 por 500 g; R$ 12 por 12 un. Informe o peso do produto, sem a embalagem.",
+                Text("Exemplos: R$ 8 por 500 g; R$ 12 por 12 ovos. Para pacotes, informe o peso ou volume total, sem a embalagem. Use un apenas para alimentos vendidos por unidade ou maço.",
                     style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(date, { date = it }, label = { Text("Data da compra (dd/mm/aaaa)") },
                     enabled = enabled, singleLine = true, modifier = Modifier.fillMaxWidth())
