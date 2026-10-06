@@ -102,6 +102,10 @@ fun PantryRecipesScreen(
     viewModel: RecipesViewModel = hiltViewModel()
 ) {
     val isLoading by viewModel.isLoading.collectAsState()
+    val breakfastRecipes by viewModel.breakfastRecipes.collectAsState()
+    val lunchRecipes by viewModel.lunchRecipes.collectAsState()
+    val snackRecipes by viewModel.snackRecipes.collectAsState()
+    val dinnerRecipes by viewModel.dinnerRecipes.collectAsState()
     val mealTabs = viewModel.mealTabs
     val pagerState = rememberPagerState(pageCount = { mealTabs.size })
     val scope = rememberCoroutineScope()
@@ -110,8 +114,8 @@ fun PantryRecipesScreen(
         containerColor = BragaBackground,
         topBar = {
             EmeraldHeaderBanner(
-                title = "Receitas da despensa",
-                subtitle = "Ideias para aproveitar o que você tem",
+                title = "Receitas da sua lista",
+                subtitle = "Sugestões com os alimentos da sua lista de compras",
                 onBack = onBack
             )
         }
@@ -159,7 +163,13 @@ fun PantryRecipesScreen(
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
                     val mealType = mealTabs[page].key
-                    val recipes = viewModel.getRecipesForMealType(mealType)
+                    val recipes = when (mealType) {
+                        "BREAKFAST" -> breakfastRecipes
+                        "LUNCH" -> lunchRecipes
+                        "SNACK" -> snackRecipes
+                        "DINNER" -> dinnerRecipes
+                        else -> emptyList()
+                    }
 
                     if (recipes.isEmpty()) {
                         EmptyRecipesView(mealType = mealTabs[page].label)
@@ -253,13 +263,13 @@ private fun RecipeCard(match: RecipePantryMatch) {
             Spacer(Modifier.height(14.dp))
 
             // Selo de despensa (zero emojis)
-            PantryBadge(match = match)
+            PantryBadge()
 
             Spacer(Modifier.height(14.dp))
 
             // Ingredientes
             IngredientRow(
-                label = "Disponivel",
+                label = "Na lista de compras",
                 items = match.availableIngredients,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -566,30 +576,14 @@ private data class PantryBadgeConfig(
  * Zero emojis — icones vetoriais CheckCircle, Info, ShoppingCart.
  */
 @Composable
-private fun PantryBadge(match: RecipePantryMatch) {
-    val config = when {
-        match.hasAll -> PantryBadgeConfig(
-            backgroundColor = Color(0xFFE8F5E9),
-            borderColor = Color(0xFF4CAF50).copy(alpha = 0.4f),
-            textColor = Color(0xFF2E7D32),
-            text = "Voce tem tudo na despensa",
-            icon = Icons.Default.CheckCircle
-        )
-        match.missingCount == 1 -> PantryBadgeConfig(
-            backgroundColor = Color(0xFFFFF8E1),
-            borderColor = Color(0xFFFFA000).copy(alpha = 0.4f),
-            textColor = Color(0xFFE65100),
-            text = "Falta apenas 1 ingrediente",
-            icon = Icons.Default.Info
-        )
-        else -> PantryBadgeConfig(
-            backgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-            textColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            text = "${match.availableIngredients.size}/${match.availableIngredients.size + match.missingCount} ingredientes disponiveis",
-            icon = Icons.Default.ShoppingCart
-        )
-    }
+private fun PantryBadge() {
+    val config = PantryBadgeConfig(
+        backgroundColor = Color(0xFFE8F5E9),
+        borderColor = Color(0xFF4CAF50).copy(alpha = 0.4f),
+        textColor = Color(0xFF2E7D32),
+        text = "Todos os ingredientes estão na sua lista",
+        icon = Icons.Default.CheckCircle
+    )
 
     Surface(
         shape = RoundedCornerShape(10.dp),
@@ -653,7 +647,7 @@ private fun EmptyRecipesView(mealType: String) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Adicione mais itens a sua despensa para receber sugestoes de receitas.",
+            text = "Não há receitas com todos os ingredientes na sua lista de compras.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

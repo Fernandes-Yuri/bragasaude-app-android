@@ -1011,14 +1011,14 @@ fun PantryRecipesCard(onClick: () -> Unit) {
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Sugestões da Minha Despensa",
+                        "Receitas da Minha Lista",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = BragaTextPrimary
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Ideias saudáveis com os alimentos que você tem em casa",
+                        "Receitas com todos os ingredientes na sua lista de compras",
                         style = MaterialTheme.typography.bodySmall,
                         color = BragaTextSecondary
                     )
