@@ -53,7 +53,7 @@ data class HealthQueryInterval(val startInclusiveMillis: Long, val endExclusiveM
 
 /** Vocabulário de recuperação pessoal, separado de explicações clínicas e ações. */
 object HealthQueryResolver {
-    private fun normalized(text: String) = Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD)
+    private fun normalized(text: String) = Normalizer.normalize(BragaLanguageRecovery.recognize(text), Normalizer.Form.NFD)
         .replace(Regex("\\p{M}+"), "").replace(Regex("[^a-z0-9\\s]"), " ")
         .replace(Regex("\\s+"), " ").trim()
 
@@ -94,7 +94,7 @@ object HealthQueryResolver {
 
     fun explicit(text: String): HealthQuery? {
         val input = normalized(text)
-        if (excluded(input) || hasUnsupportedPeriod(text)) return null
+        if (excluded(input) || hasUnsupportedPeriod(text) || BragaLanguageRecovery.clarification(text) != null) return null
         val metric = metrics(input).singleOrNull() ?: return null
         if (!own.containsMatchIn(input) || (!request.containsMatchIn(input) &&
                 period(input) == null && !isFollowUp(input))) return null
@@ -106,7 +106,7 @@ object HealthQueryResolver {
 
     fun isFollowUp(text: String): Boolean {
         val input = normalized(text)
-        if (excluded(input) || hasUnsupportedPeriod(text) || metrics(input).size > 1 || input.length > 100) return false
+        if (excluded(input) || hasUnsupportedPeriod(text) || BragaLanguageRecovery.clarification(text) != null || metrics(input).size > 1 || input.length > 100) return false
         val hasQueryPart = period(input) != null || operation(input) != null || metrics(input).isNotEmpty() || glucoseType(input) != null
         if (!hasQueryPart) return false
         val remainder = input.replace(Regex("\\b(?:e|a|o|as|os|da|do|das|dos|de|em|no|na|nos|nas|minha|meu|minhas|meus|foi|foram|quanto|quanta|qual|como|ficou|deu|ta|esta|estao|media|resumo|ultimo|ultima|registro|registros|medicao|medicoes|pressao|arterial|glicemia|glicose|acucar|sangue|agua|hidratacao|hoje|ontem|semana|mes|ultimos|ultimas|dias|7|sete|30|trinta|jejum|apos|depois|refeicao|almoco|jantar|pos|prandial|sensor|continuo|aleatoria|casual|capilar)\\b"), "")

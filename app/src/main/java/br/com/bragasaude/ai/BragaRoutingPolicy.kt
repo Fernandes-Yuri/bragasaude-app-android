@@ -1,14 +1,11 @@
 package br.com.bragasaude.ai
 
-import java.text.Normalizer
-import java.util.Locale
 
 enum class BragaRoute { BLOCKED, EMERGENCY, HEALTH_MEMORY, LOCAL_ACTION, LOCAL_CONVERSATION, CLARIFICATION, CLOUD }
 
 /** Decisões locais explicáveis, sem modelo remoto para classificar a entrada. */
 internal object BragaRoutingPolicy {
-    fun normalize(text: String) = Normalizer.normalize(text.lowercase(Locale.ROOT), Normalizer.Form.NFD)
-        .replace(Regex("\\p{M}+"), "").replace(Regex("\\s+"), " ").trim()
+    fun normalize(text: String) = BragaLanguageRecovery.recognize(text)
 
     private val health = Regex("""\b(saude|medic\w*|remedio\w*|comprimido\w*|dose|tratamento\w*|pressao|glic\w*|diabet\w*|acucar|sangue|renal|rins|rim|cardi\w*|coracao|apneia|hormon\w*|menopausa|anemia|enxaqueca|muscular|exames?|contraindic\w*|efeitos? colaterais|efeitos? adversos|sono|insonia|dor|dores|sintomas?|respirar|respiracao|infarto|avc|hidrat\w*|agua|aliment\w*|nutri\w*|colesterol|cansaco|fadiga|lombar|caminha\w*|exercicios?|vacinas?|alerg\w*|hipertensao|cancer|artrite|artrose|ansiedade|depressao|febre|infecc\w*|doenc\w*|pulmao|pulmon\w*|estomago|figado|tireoide|osteoporose)\b""")
     private val complex = Regex("""\b(por que|porque|diferenca|interac\w*|intera\w*|contraindic\w*|efeitos? colaterais|efeitos? adversos|interpret\w*|exames?|diagnostic\w*|investig\w*|relacao|afeta\w*|interfere\w*|influencia\w*|posso (misturar|combinar)|qual dose|o que (e|significa|causa)|como (funciona|age)|precis\w* ser discutid\w*)\b""")

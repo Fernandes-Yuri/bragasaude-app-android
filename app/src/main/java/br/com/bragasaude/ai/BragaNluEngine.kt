@@ -396,7 +396,7 @@ object BragaNluEngine {
         val limpo = texto.trim().lowercase(java.util.Locale.ROOT)
         val normalizado = java.text.Normalizer.normalize(limpo, java.text.Normalizer.Form.NFD)
             .replace(Regex("\\p{M}+"), "")
-        val protegido = normalizado.replace(Regex("\\s+"), " ")
+        val protegido = BragaLanguageRecovery.recognize(normalizado)
 
         if (texto.isBlank()) return NluOutput(
             "entrada_sem_clareza", BragaInputLanguage.clarification(channel), tempoMs = deltaMs(inicio)
@@ -429,6 +429,10 @@ object BragaNluEngine {
         if (REGEX_DESCONFORTO.containsMatchIn(limpo)) {
             val resp = sortearResposta("sintoma_desconforto_moderado")
             return NluOutput("sintoma_desconforto_moderado", resp, tempoMs = deltaMs(inicio))
+        }
+
+        BragaLanguageRecovery.clarification(texto)?.let { reply ->
+            return NluOutput("entrada_linguagem_ambigua", reply, tempoMs = deltaMs(inicio))
         }
 
         BragaLocalHelp.answer(texto)?.let { return it.copy(tempoMs = deltaMs(inicio)) }
