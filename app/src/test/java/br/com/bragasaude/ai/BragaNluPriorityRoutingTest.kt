@@ -67,7 +67,8 @@ class BragaNluPriorityRoutingTest {
             "Qual foi minha glicemia nos últimos 14 dias?", "Qual foi minha pressão ontem às 8 horas?",
             "Qual foi minha pressão no mês passado?", "Qual foi minha pressão em 2025?",
             "Qual foi minha pressão na segunda-feira?", "Qual foi minha pressão entre ontem e hoje?",
-            "Qual foi minha pressão desde ontem?", "E anteontem?", "E em setembro?")
+            "Qual foi minha pressão desde ontem?", "Minha pressão semana passada",
+            "Qual foi minha pressão hoje de manhã?", "E no ano 2025?", "E anteontem?", "E em setembro?")
         val session = HealthQuerySession { 1_000L }
         session.advanceTurn("u", "c")
         session.remember(HealthQuery(HealthMetric.PRESSURE), "u", "c")
@@ -82,7 +83,7 @@ class BragaNluPriorityRoutingTest {
         }
         listOf("Qual foi minha pressão ontem?", "Qual foi minha pressão hoje?",
             "Qual foi a média da minha glicemia na semana?", "Quanta água tomei nos últimos 7 dias?",
-            "Qual foi minha pressão nos últimos 30 dias?").forEach { text ->
+            "Qual foi minha pressão nos últimos 30 dias?", "Quanta água tomei hoje com meta de 2000 ml?").forEach { text ->
             assertNotNull(text, HealthQueryResolver.explicit(text))
         }
         assertEquals(BragaRoute.CLOUD, BragaNluEngine.analisar("Por que minha pressão subiu ontem?").route)
@@ -109,6 +110,9 @@ class BragaNluPriorityRoutingTest {
             val pressure = "Pressão 12 por 8"
             assertTrue(BragaActionGate.canParse(pressure, BragaNluEngine.analisar(pressure, channel)))
             assertTrue(parser.parse(pressure) is VoiceHealthIntent.BloodPressure)
+            val slashPressure = "Minha pressão 12/8"
+            assertFalse(HealthQueryResolver.hasUnsupportedPeriod(slashPressure))
+            assertTrue(BragaActionGate.canParse(slashPressure, BragaNluEngine.analisar(slashPressure, channel)))
             val familyQuery = "Como está a pressão do meu pai?"
             val readOnly = BragaActionGate.readOnlyQuery(familyQuery,
                 BragaNluEngine.analisar(familyQuery, channel), parser)
