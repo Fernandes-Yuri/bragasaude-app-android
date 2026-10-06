@@ -41,8 +41,19 @@ fun GroceryListBottomSheet(
     onExportPdf: () -> Unit,
     // Agente B1: itens sugeridos pelo chat; o usuário confirma via botão.
     suggestedItems: List<String> = emptyList(),
-    onAddSuggested: (List<String>) -> Unit = {}
+    onAddSuggested: (List<String>) -> Unit = {},
+    contributionState: br.com.bragasaude.domain.GroceryContributionState = br.com.bragasaude.domain.GroceryContributionState(),
+    communityPrices: List<br.com.bragasaude.domain.CommunityGroceryPrice> = emptyList(),
+    onStartContribution: () -> Unit = {},
+    onContribute: (GroceryListItemEntity, String, String, String, String, String) -> Unit = { _, _, _, _, _, _ -> }
 ) {
+    var reportingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
+    reportingItem?.let { selected ->
+        GroceryPriceContributionSheet(selected, contributionState,
+            onDismiss = { reportingItem = null },
+            onSubmit = { amount, quantity, unit, state, date -> onContribute(selected, amount, quantity, unit, state, date) })
+        return
+    }
     val totalCost = groceryList.filter { it.estimatedPriceBrl > 0.0 }.sumOf { it.estimatedPriceBrl }
     val dailyAvg = if (totalCost > 0.0) totalCost / 7.0 else 0.0
     val checkedCount = groceryList.count { it.isCheckedInPantry }
@@ -74,6 +85,13 @@ fun GroceryListBottomSheet(
                 item {
                     Text("Marque os itens comprados para adicioná-los à despensa.",
                         style = MaterialTheme.typography.bodyMedium)
+                }
+                item {
+                    Text(br.com.bragasaude.domain.GROCERY_PRICE_NOTICE,
+                        style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary)
+                    val missing = groceryList.count { it.estimatedPriceBrl <= 0.0 }
+                    if (missing > 0) Text("$missing itens sem preço informado não entram no total estimado.",
+                        style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary)
                 }
                 if (suggestedItems.isNotEmpty()) {
                     item {
@@ -127,7 +145,17 @@ fun GroceryListBottomSheet(
                             Text(category, style = MaterialTheme.typography.titleMedium, color = BragaEmeraldDark)
                         }
                         items(entries, key = { it.remoteId }) { entry ->
-                            GroceryItemRow(entry) { checked -> onToggleItem(entry.remoteId, checked) }
+                            Column {
+                                GroceryItemRow(entry) { checked -> onToggleItem(entry.remoteId, checked) }
+                                communityPrices.filter { it.foodName.equals(entry.foodName, ignoreCase = true) }.forEach { price ->
+                                    Text(String.format(Locale.getDefault(), "Referência dos participantes: R$ %.2f/%s (%d pessoas)",
+                                        price.average, price.unit, price.contributors),
+                                        style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+                                }
+                                TextButton(onClick = { onStartContribution(); reportingItem = entry },
+                                    modifier = Modifier.heightIn(min = 48.dp)) { Text("Informar quanto paguei") }
+                            }
                         }
                     }
                 }
@@ -184,7 +212,7 @@ fun GroceryItemRow(
                 )
                 Text(
                     text = if (item.estimatedPriceBrl > 0.0) {
-                        String.format(Locale.getDefault(), "R$ %.2f", item.estimatedPriceBrl)
+                        String.format(Locale.getDefault(), "Estimado: R$ %.2f", item.estimatedPriceBrl)
                     } else {
                         "—"
                     },

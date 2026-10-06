@@ -83,6 +83,8 @@ fun NutritionScreen(
 
     var showFoodSelectorDialog by remember { mutableStateOf(false) }
     var showCustomFoodDialog by remember { mutableStateOf(false) }
+    val contributionState by viewModel.contributionState.collectAsState()
+    val communityPrices by viewModel.communityPrices.collectAsState()
     var showGroceryBottomSheet by remember { mutableStateOf(false) }
     // Agente B1: itens sugeridos pelo chat; o usuário confirma via chip.
     var pendingSuggestions by remember(suggestedGroceryItems) { mutableStateOf(suggestedGroceryItems) }
@@ -239,7 +241,7 @@ fun NutritionScreen(
                                     )
                                     Text(
                                         if (groceryList.isEmpty()) "Toque para gerar a lista"
-                                        else "R$ ${String.format(java.util.Locale.getDefault(), "%.2f", totalEstimated)} • $checkedPantry/${groceryList.size} na despensa",
+                                        else "Estimado: R$ ${String.format(java.util.Locale.getDefault(), "%.2f", totalEstimated)} • $checkedPantry/${groceryList.size} na despensa",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = BragaTextSecondary
                                     )
@@ -699,6 +701,10 @@ fun NutritionScreen(
             onToggleItem = { id, isChecked -> viewModel.togglePantryItem(id, isChecked) },
             onGenerateList = { viewModel.generateWeeklyGroceryList() },
             onExportPdf = { viewModel.exportAndShareGroceryPdf(context) },
+            contributionState = contributionState,
+            communityPrices = communityPrices,
+            onStartContribution = { viewModel.resetPriceContribution() },
+            onContribute = { item, amount, quantity, unit, state, date -> viewModel.contributeGroceryPrice(item, amount, quantity, unit, state, date) },
             suggestedItems = pendingSuggestions,
             onAddSuggested = { items ->
                 viewModel.addSuggestedItems(items)

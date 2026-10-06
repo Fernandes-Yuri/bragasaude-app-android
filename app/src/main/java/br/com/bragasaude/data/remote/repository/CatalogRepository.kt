@@ -18,6 +18,33 @@ class CatalogRepository @Inject constructor(
     private val clinicalReferenceSeeder: ClinicalReferenceSeeder,
     private val apiClient: BragaApiClient
 ) {
+    suspend fun contributeGroceryPrice(foodName: String, value: br.com.bragasaude.domain.GroceryPriceContribution) =
+        apiClient.contributeGroceryPrice(foodName, value)
+
+    suspend fun fetchCommunityGroceryPrices() = apiClient.getCommunityGroceryPrices()
+
+    suspend fun fetchGroceryIngredients(includePrices: Boolean = true): br.com.bragasaude.domain.GroceryIngredientCatalog = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val manifest = org.json.JSONObject(context.assets.open("grocery_ingredients.json").bufferedReader().use { it.readText() })
+        val arr = manifest.getJSONArray("ingredients")
+        val prices = if (includePrices) apiClient.getCanonicalGroceryPrices() else emptyMap()
+        fun strings(array: org.json.JSONArray): List<String> = (0 until array.length()).map { array.getString(it) }
+        val ingredients = (0 until arr.length()).map { i ->
+            val item = arr.getJSONObject(i)
+            val reference = prices[item.getString("slug")]
+            val unit = item.getString("unit")
+            br.com.bragasaude.domain.GroceryIngredient(item.getString("slug"), item.getString("name"), unit,
+                item.getInt("step"), item.getInt("minimum"), strings(item.getJSONArray("aliases")), strings(item.getJSONArray("food_ids")),
+                reference?.takeIf { it.unit == unit }?.average,
+                reference?.takeIf { it.unit == unit }?.source ?: "unavailable")
+        }
+        val foods = manifest.getJSONArray("foods")
+        val components = (0 until foods.length()).associate { i ->
+            val food = foods.getJSONObject(i)
+            food.getString("food_id") to strings(food.getJSONArray("shopping_components"))
+        }
+        br.com.bragasaude.domain.GroceryIngredientCatalog(ingredients, components)
+    }
+
     suspend fun fetchGroceryPrices(): Map<String, Double> {
         return try {
             apiClient.getGroceryPrices()

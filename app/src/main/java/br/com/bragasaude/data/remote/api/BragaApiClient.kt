@@ -2129,8 +2129,50 @@ class BragaApiClient @Inject constructor(
     }
 
     /**
-     * GET /api/catalog/grocery-prices — busca tabela de preços médios atualizados via Mercado Livre.
+     * GET /api/catalog/grocery-prices — busca tabela de referências nacionais de preços estimados.
      */
+    suspend fun contributeGroceryPrice(foodName: String, value: br.com.bragasaude.domain.GroceryPriceContribution): ApiResponse = withContext(Dispatchers.IO) {
+        postJsonDetailed("$baseUrl/api/catalog/grocery-price-contributions", JSONObject().apply {
+            put("food_name", foodName)
+            put("amount_paid", value.amountPaid.toPlainString())
+            put("quantity", value.quantity.toPlainString())
+            put("unit", value.unit)
+            put("purchase_date", value.purchaseDate.toString())
+            value.state?.let { put("state", it) }
+        })
+    }
+
+    suspend fun getCommunityGroceryPrices(): List<br.com.bragasaude.domain.CommunityGroceryPrice> = withContext(Dispatchers.IO) {
+        try {
+            val arr = getJson("$baseUrl/api/catalog/grocery-price-contributions/averages")?.optJSONArray("prices")
+                ?: return@withContext emptyList()
+            (0 until arr.length()).mapNotNull { i ->
+                val item = arr.getJSONObject(i)
+                val unit = item.optString("unit")
+                val average = item.optDouble("price_avg", 0.0)
+                val people = item.optInt("contributors", 0)
+                if (unit !in setOf("kg", "L", "un") || !average.isFinite() || average <= 0 || people < 5) null
+                else br.com.bragasaude.domain.CommunityGroceryPrice(item.getString("food_name"), unit, average, people)
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    suspend fun getCanonicalGroceryPrices(): Map<String, CanonicalGroceryPrice> = withContext(Dispatchers.IO) {
+        try {
+            val arr = getJson("$baseUrl/api/catalog/grocery-ingredients")?.optJSONArray("ingredients")
+                ?: return@withContext emptyMap()
+            (0 until arr.length()).mapNotNull { i ->
+                val item = arr.getJSONObject(i)
+                val price = item.optDouble("price_avg", 0.0)
+                val unit = item.optString("unit")
+                if (!price.isFinite() || price <= 0 || unit !in setOf("kg", "L", "un")) null
+                else item.getString("slug") to CanonicalGroceryPrice(unit, price, item.optString("source"))
+            }.toMap()
+        } catch (_: Exception) { emptyMap() }
+    }
+
+    data class CanonicalGroceryPrice(val unit: String, val average: Double, val source: String)
+
     suspend fun getGroceryPrices(): Map<String, Double> = withContext(Dispatchers.IO) {
         try {
             val o = getJson("$baseUrl/api/catalog/grocery-prices") ?: return@withContext emptyMap()
