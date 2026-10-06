@@ -137,7 +137,9 @@ object HealthQueryResolver {
             return HealthQuery(HealthMetric.WATER, HealthPeriod.TODAY, HealthOperation.SUMMARY)
         if (excluded(input) || hasUnsupportedPeriod(text) || BragaLanguageRecovery.clarification(text) != null) return null
         val metric = metrics(input).singleOrNull() ?: return null
-        if (!own.containsMatchIn(input) || (!request.containsMatchIn(input) &&
+        val implicitHistory = period(input) != null && operation(input) != null &&
+            Regex("""\b(?:foi|foram|registrad[oa]s?)\b""").containsMatchIn(input)
+        if ((!own.containsMatchIn(input) && !implicitHistory) || (!request.containsMatchIn(input) &&
                 period(input) == null && !isFollowUp(input))) return null
         val requestedPeriod = period(input) ?: when {
             metric == HealthMetric.WATER -> HealthPeriod.TODAY
