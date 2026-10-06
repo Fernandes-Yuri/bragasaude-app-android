@@ -21,7 +21,8 @@ class BragaNluPriorityRoutingTest {
             val events = hybrid().respond(text, emptyList(), channel).toList()
             val output = (events.single() as BragaHybridEvent.Local).output
             assertEquals(text, BragaRoute.EMERGENCY, output.route)
-            assertTrue(text, output.respostaLocal.orEmpty().contains("192"))
+            val emergencyNumber = if (channel == InputChannel.VOICE) "cento e noventa e dois" else "192"
+            assertTrue(text, output.respostaLocal.orEmpty().contains(emergencyNumber))
             assertFalse(text, BragaActionGate.canParse(text, output))
         }
         listOf("O que significa dor no peito?", "O que é falta de ar?", "O que é dor no peito?",
