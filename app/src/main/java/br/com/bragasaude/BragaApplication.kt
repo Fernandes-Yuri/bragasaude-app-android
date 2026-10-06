@@ -35,6 +35,7 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
 
     override fun onCreate() {
         super.onCreate()
+        if (BuildConfig.DEBUG) br.com.bragasaude.ai.BragaDebugTrace.initialize(this)
         try {
             System.loadLibrary("sqlcipher")
         } catch (e: Throwable) {
