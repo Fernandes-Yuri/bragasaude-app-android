@@ -29,7 +29,10 @@ class BragaHybridOrchestrator internal constructor(
                 userId: String, conversationId: String): NluOutput {
         val local = analyze(speech, channel)
         if (!local.isBloqueioSeguranca && !local.isEmergencia && local.intent != "entrada_linguagem_ambigua") {
-            BragaLocalHelp.answer(speech, session.recentQuery(userId, conversationId))?.let { return it }
+            session.contextualAnswer(speech, userId, conversationId)?.let { return it }
+        }
+        if (!local.isBloqueioSeguranca && !local.isEmergencia && local.intent != "entrada_linguagem_ambigua") {
+            BragaLocalHelp.answer(speech, session.recentTopic(userId, conversationId))?.let { return it }
         }
         if (local.isBloqueioSeguranca || local.isEmergencia || local.delegarParaNuvem ||
             local.intent == "entrada_linguagem_ambigua" || local.intent == "entrada_periodo_nao_suportado" || local.intent == "entrada_explicacao_sem_referencia" ||
@@ -39,19 +42,27 @@ class BragaHybridOrchestrator internal constructor(
     }
 
     suspend fun resolveLocal(output: NluOutput, userId: String, channel: InputChannel,
-                             session: HealthQuerySession? = null, conversationId: String = ""): NluOutput {
+                             session: HealthQuerySession? = null, conversationId: String = "", expectedTurn: Long? = null): NluOutput {
+        var hasData: Boolean? = null
+        var referenceMeasuredAt: Long? = null
+        var referenceZone: String? = null
         val reply = if (BragaHealthMemory.supports(output.intent)) {
-            val query = output.healthQuery
-            if (memory == null) "Não foi possível consultar seus registros locais agora."
-            else if (query == null) memory.answer(output.intent, userId)
+            val query = output.healthQuery ?: HealthQuery.forIntent(output.intent)
+            if (memory == null) { hasData = false; "Não foi possível consultar seus registros locais agora." }
             else {
                 val result = memory.answerResult(query, userId)
+                hasData = result.hasData
+                referenceMeasuredAt = result.referenceMeasuredAtMillis
+                referenceZone = result.referenceZoneId
                 currentCoroutineContext().ensureActive()
-                if (result.hasData) session?.remember(query, userId, conversationId)
+                if (result.hasData) session?.remember(query, userId, conversationId, expectedTurn)
                 result.text
             }
         } else output.respostaLocal.orEmpty()
-        return output.copy(respostaLocal = BragaInputLanguage.forChannel(reply, channel))
+        return output.copy(respostaLocal = BragaInputLanguage.forChannel(reply, channel),
+            hasLocalData = hasData ?: output.hasLocalData,
+            referenceMeasuredAtMillis = referenceMeasuredAt ?: output.referenceMeasuredAtMillis,
+            referenceZoneId = referenceZone ?: output.referenceZoneId)
     }
 
     fun respond(speech: String, history: List<Pair<String, String>>, channel: InputChannel = InputChannel.VOICE,

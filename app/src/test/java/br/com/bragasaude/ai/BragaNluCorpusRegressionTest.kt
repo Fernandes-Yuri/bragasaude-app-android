@@ -65,7 +65,7 @@ class BragaNluCorpusRegressionTest(private val case: Case, private val channel: 
             Case("BASE-22", "Como minha pressão afeta os rins?", "duvida_clinica_complexa", BragaRoute.CLOUD),
             Case("BASE-23", "Por que subiu?", "entrada_variacao_sem_referencia", BragaRoute.CLARIFICATION),
             Case("BASE-24", "Entendi?", "entrada_sem_clareza", BragaRoute.CLARIFICATION),
-            Case("BASE-25", "Não entendi", "entrada_sem_clareza", BragaRoute.CLARIFICATION),
+            Case("BASE-25", "Não entendi", "entrada_explicacao_sem_referencia", BragaRoute.CLARIFICATION),
             Case("BASE-26", "E ontem?", BragaHealthMemory.PRESSURE, BragaRoute.HEALTH_MEMORY,
                 HealthMetric.PRESSURE, HealthPeriod.YESTERDAY, HealthOperation.LAST, recent = pressure),
             local("BASE-27", "Entendi, mas por que subiu?", "explicacao_variacao_pressao").copy(recent = pressure),

@@ -15,7 +15,8 @@ import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
-data class HealthMemoryResult(val text: String, val hasData: Boolean)
+data class HealthMemoryResult(val text: String, val hasData: Boolean,
+    val referenceMeasuredAtMillis: Long? = null, val referenceZoneId: String? = null)
 
 /** Consultas somente no Room. Ausência ou falha local nunca vira fallback para a nuvem. */
 class BragaHealthMemory internal constructor(
@@ -138,7 +139,7 @@ class BragaHealthMemory internal constructor(
             return if (last == null) absent(query, userId) else HealthMemoryResult(
                 "${introduction(userId, query)} sua última pressão ${periodLabel(query.period)} foi " +
                     "${BloodPressureParser.normalizePressure(last.systolicPressure!!)} por ${BloodPressureParser.normalizePressure(last.diastolicPressure!!)} mmHg, " +
-                    "em ${time(last)}, ${elapsed(last, instant)}.", true)
+                    "em ${time(last)}, ${elapsed(last, instant)}.", true, last.measuredAt.time, zone.id)
         }
         val recentScope = averageInterval(query, instant)
         val recent = vitals.getPressureIntervalForMemory(userId, recentScope.startInclusiveMillis, recentScope.endExclusiveMillis)
@@ -199,7 +200,7 @@ class BragaHealthMemory internal constructor(
         if (query.operation == HealthOperation.LAST) {
             return if (last == null) absent(query, userId) else HealthMemoryResult(
                 "${introduction(userId, query)} sua última glicemia ${periodLabel(query.period)} foi de ${last.glucoseLevel} mg/dL, " +
-                    "${typeLabel(last.glucoseType)}, em ${time(last)}, ${elapsed(last, instant)}.", true)
+                    "${typeLabel(last.glucoseType)}, em ${time(last)}, ${elapsed(last, instant)}.", true, last.measuredAt.time, zone.id)
         }
         val recentScope = averageInterval(query, instant)
         val recent = vitals.getGlucoseIntervalForMemory(userId, recentScope.startInclusiveMillis, recentScope.endExclusiveMillis,

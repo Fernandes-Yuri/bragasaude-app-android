@@ -17,7 +17,10 @@ data class NluOutput(
     val isBloqueioSeguranca: Boolean = false,
     val delegarParaNuvem: Boolean = false,
     val tempoMs: Double = 0.0,
-    val healthQuery: HealthQuery? = null
+    val healthQuery: HealthQuery? = null,
+    val hasLocalData: Boolean? = null,
+    val referenceMeasuredAtMillis: Long? = null,
+    val referenceZoneId: String? = null
 ) {
     val route: BragaRoute get() = when {
         isBloqueioSeguranca -> BragaRoute.BLOCKED

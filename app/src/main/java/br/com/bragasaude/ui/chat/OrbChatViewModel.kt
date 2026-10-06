@@ -223,7 +223,7 @@ class OrbChatViewModel @Inject constructor(
                 previousGeneration?.join()
                 currentCoroutineContext().ensureActive()
                 val owner = uid ?: throw CancellationException("Sessão alterada")
-                healthQuerySession.advanceTurn(owner, conversationId)
+                val contextTurn = healthQuerySession.advanceTurn(owner, conversationId)
                 val nluStartedAt = System.nanoTime()
                 val local = hybrid.analyze(text, channel, healthQuerySession, owner, conversationId)
                 val nluMs = (System.nanoTime() - nluStartedAt) / 1_000_000.0
@@ -241,6 +241,7 @@ class OrbChatViewModel @Inject constructor(
                 val useLocal = local.isBloqueioSeguranca || local.isEmergencia ||
                     local.intent == "orientacao_cadastro_medicamento" || BragaHealthMemory.supports(local.intent) ||
                     (!local.delegarParaNuvem && actionReply == null)
+                var deliveredLocal: br.com.bragasaude.ai.NluOutput? = null
                 val reply = if (shortcut != null) {
                     if (shortcut != "EMERGENCIA" && channel == InputChannel.TEXT && nluResponseDelayMs > 0) {
                         cadenceMs = nluResponseDelayMs
@@ -253,7 +254,8 @@ class OrbChatViewModel @Inject constructor(
                     actionReply
                 } else if (useLocal) {
                     val roomStartedAt = System.nanoTime()
-                    val resolved = hybrid.resolveLocal(local, owner, channel, healthQuerySession, conversationId)
+                    val resolved = hybrid.resolveLocal(local, owner, channel, healthQuerySession, conversationId, contextTurn)
+                    deliveredLocal = resolved
                     if (BragaHealthMemory.supports(local.intent)) roomMs = (System.nanoTime() - roomStartedAt) / 1_000_000.0
                     // Delay mínimo no chat de texto para experiência humana e cadenciada
                     if (!local.isEmergencia && !local.isBloqueioSeguranca && channel == InputChannel.TEXT && nluResponseDelayMs > 0) {
@@ -269,6 +271,7 @@ class OrbChatViewModel @Inject constructor(
                     check(local.delegarParaNuvem) { "A entrada precisa de esclarecimento local." }
                     val scope = caregiverScope()
                     if (version != revision) return@launch
+                    healthQuerySession.forgetReferences(owner, conversationId, contextTurn)
                     gateway.open(viewModelScope)
                     val context = listOf("assistant" to GroqDynamicPrompt().build(history.dropLast(1), channel)) + history.takeLast(10)
                     gateway.send(context, actingAs = scope?.first, patientId = scope?.second) { partial ->
@@ -318,6 +321,14 @@ class OrbChatViewModel @Inject constructor(
                     metrics = listOfNotNull(reply.metrics, diagnostic).joinToString("\n"))
                 mutable.update { it.copy(messages = it.messages.map { m -> if (m.id == user.id) m.copy(status = if (local.isBloqueioSeguranca) "blocked" else "received") else m } + answer,
                     isStreaming = false, partialText = "") }
+                if (useLocal && shortcut == null && actionReply == null) {
+                    healthQuerySession.rememberReply(local.copy(respostaLocal = answerText,
+                        hasLocalData = deliveredLocal?.hasLocalData,
+                        referenceMeasuredAtMillis = deliveredLocal?.referenceMeasuredAtMillis,
+                        referenceZoneId = deliveredLocal?.referenceZoneId), owner, conversationId, contextTurn)
+                } else if (local.delegarParaNuvem && shortcut == null && actionReply == null) {
+                    healthQuerySession.rememberExternalReply(answerText, owner, conversationId, contextTurn)
+                } else healthQuerySession.forgetReferences(owner, conversationId, contextTurn)
                 save()
                 if (shortcut != null) confirmAction(answer.id)
             } catch (e: CancellationException) { throw e }

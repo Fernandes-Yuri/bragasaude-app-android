@@ -555,6 +555,7 @@ class VoiceHealthViewModel @Inject constructor(
     private inner class VoiceRecognitionListener(
         private val ticket: Long, private val owner: String, private val turn: Long
     ) : RecognitionListener {
+        private var contextTurn = -1L
         private fun current() = _isLiveMode.value && voiceSession.accepts(ticket) && currentTurn(owner, turn)
         override fun onReadyForSpeech(params: Bundle?) {
             if (!current()) return
@@ -595,7 +596,7 @@ class VoiceHealthViewModel @Inject constructor(
             voiceSession.hasSpeech()
             _liveTranscription.value = bestMatch
             conversationMemory.selectUser(getCurrentUserId())
-            healthQuerySession.advanceTurn(owner, conversationId)
+            contextTurn = healthQuerySession.advanceTurn(owner, conversationId)
             val nlu = hybridOrchestrator.analyze(bestMatch, InputChannel.VOICE, healthQuerySession, owner, conversationId)
             if (nlu.isBloqueioSeguranca) {
                 speechJob?.cancel()
@@ -610,7 +611,9 @@ class VoiceHealthViewModel @Inject constructor(
                 }
                 VoiceSessionCommand.PAUSE -> { pauseConversation(); return }
                 VoiceSessionCommand.REPEAT -> {
-                    speak(conversationMemory.lastResponse.ifBlank { "Ainda não tenho uma resposta nesta conversa para repetir." }, remember = false) { onSpeechFinished() }
+                    // Repetição usa o mesmo contexto limitado e validado do chat.
+                    speechJob?.cancel()
+                    speechJob = viewModelScope.launch { processUserSpeech(bestMatch, nlu) }
                     return
                 }
                 null -> Unit
@@ -631,6 +634,7 @@ class VoiceHealthViewModel @Inject constructor(
         private fun showLocalResponse(output: br.com.bragasaude.ai.NluOutput) {
             if (!currentTurn(owner, turn)) return
             val reply = output.respostaLocal.orEmpty()
+            healthQuerySession.rememberReply(output, owner, conversationId, contextTurn)
             _state.value = VoiceUiState.Saved(reply, isConversational = true)
             if (output.isEmergencia) {
                 _navigationEvent.tryEmit(VoiceNavigationEvent.OpenEmergencyDialog)
@@ -667,12 +671,13 @@ class VoiceHealthViewModel @Inject constructor(
             }
             try {
                 if (BragaHealthMemory.supports(local.intent)) {
-                    val reply = hybridOrchestrator.resolveLocal(local, owner, InputChannel.VOICE, healthQuerySession, conversationId)
+                    val reply = hybridOrchestrator.resolveLocal(local, owner, InputChannel.VOICE, healthQuerySession, conversationId, contextTurn)
                     currentCoroutineContext().ensureActive()
                     if (currentTurn(owner, turn)) showLocalResponse(reply)
                     return
                 }
                 if (local.delegarParaNuvem) {
+                    healthQuerySession.forgetReferences(owner, conversationId, contextTurn)
                     streamHybridResponse(bestMatch, history, owner, local)
                     return
                 }
@@ -680,7 +685,10 @@ class VoiceHealthViewModel @Inject constructor(
                     hydrationConversation.reset()
                     val readOnly = br.com.bragasaude.ai.BragaActionGate.readOnlyQuery(
                         bestMatch, local, parser, currentUserRole, currentCaregiverMode)
-                    if (readOnly != null) handleIntent(bestMatch, readOnly) else showLocalResponse(local)
+                    if (readOnly != null) {
+                        healthQuerySession.forgetReferences(owner, conversationId, contextTurn)
+                        handleIntent(bestMatch, readOnly)
+                    } else showLocalResponse(local)
                     return
                 }
                 // Mantém a preferência confirmada existente, apenas para registro de copos.
@@ -698,12 +706,14 @@ class VoiceHealthViewModel @Inject constructor(
                 )
                 when (hydrationReply) {
                     is HydrationConversation.Reply.Say -> {
+                        healthQuerySession.forgetReferences(owner, conversationId, contextTurn)
                         _state.value = VoiceUiState.Saved(hydrationReply.text, isConversational = true)
                         speak(hydrationReply.text) { onSpeechFinished() }
                         return
                     }
                     is HydrationConversation.Reply.Review -> {
                         val intent = parser.parse("${hydrationReply.amountMl} ml de água", currentUserRole, currentCaregiverMode)
+                        healthQuerySession.forgetReferences(owner, conversationId, contextTurn)
                         handleIntent(bestMatch, intent)
                         return
                     }
@@ -712,6 +722,7 @@ class VoiceHealthViewModel @Inject constructor(
                 // Registros concretos continuam preparados localmente para confirmação.
                 val intent = parser.parse(bestMatch, currentUserRole, currentCaregiverMode)
                 if (intent !is VoiceHealthIntent.Unknown && intent !is VoiceHealthIntent.ConversationalReply) {
+                    healthQuerySession.forgetReferences(owner, conversationId, contextTurn)
                     handleIntent(bestMatch, intent)
                     return
                 }
@@ -794,6 +805,7 @@ class VoiceHealthViewModel @Inject constructor(
                         durationMs = 0L,
                         previewResponse = completed
                     )
+                    healthQuerySession.rememberExternalReply(completed, owner, conversationId, contextTurn)
                     conversationMemory.recordAssistant(completed)
                     _state.value = VoiceUiState.Saved(completed, isConversational = true)
                     _isSpeaking.value = false
