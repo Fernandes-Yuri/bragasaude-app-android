@@ -48,6 +48,47 @@ class NutritionViewModel @Inject constructor(
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
+    private val _contributionState = MutableStateFlow(br.com.bragasaude.domain.GroceryContributionState())
+    val contributionState = _contributionState.asStateFlow()
+    private val _communityPrices = MutableStateFlow<List<br.com.bragasaude.domain.CommunityGroceryPrice>>(emptyList())
+    val communityPrices = _communityPrices.asStateFlow()
+
+    fun resetPriceContribution() {
+        if (!_contributionState.value.submitting) _contributionState.value = br.com.bragasaude.domain.GroceryContributionState()
+    }
+
+    fun contributeGroceryPrice(item: GroceryListItemEntity, amount: String, quantity: String, unit: String, state: String, date: String) {
+        if (_contributionState.value.submitting || _contributionState.value.success) return
+        val value = br.com.bragasaude.domain.GroceryPriceContribution.parse(amount, quantity, unit, state, date)
+        if (value == null) {
+            _contributionState.value = br.com.bragasaude.domain.GroceryContributionState(message = "Confira o valor pago, a quantidade, a unidade, a data e a UF. A compra deve ser dos últimos 90 dias.")
+            return
+        }
+        if (auth.currentUser == null) {
+            _contributionState.value = br.com.bragasaude.domain.GroceryContributionState(message = "Entre na sua conta para enviar uma contribuição.")
+            return
+        }
+        _contributionState.value = br.com.bragasaude.domain.GroceryContributionState(submitting = true)
+        viewModelScope.launch {
+            try {
+                val response = catalogRepository.contributeGroceryPrice(item.foodName, value)
+                val success = response.code in 200..299 && response.body?.optBoolean("success") == true
+                _contributionState.value = br.com.bragasaude.domain.GroceryContributionState(success = success,
+                    message = if (success) "Contribuição recebida. Obrigado por ajudar!" else when (response.code) {
+                        401 -> "Entre na sua conta novamente para contribuir."
+                        429 -> "Limite diário atingido. Você pode contribuir novamente amanhã."
+                        409 -> "Sincronize seu perfil antes de contribuir."
+                        422 -> "Confira os dados informados. A contribuição precisa ser de um alimento do catálogo."
+                        else -> "Não foi possível enviar. Confira sua conexão e tente novamente."
+                    })
+                if (success) _communityPrices.value = catalogRepository.fetchCommunityGroceryPrices()
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) {
+                _contributionState.value = br.com.bragasaude.domain.GroceryContributionState(message = "Não foi possível enviar. Tente novamente depois.")
+            }
+        }
+    }
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
@@ -151,6 +192,7 @@ class NutritionViewModel @Inject constructor(
     }
 
     init {
+        viewModelScope.launch { _communityPrices.value = catalogRepository.fetchCommunityGroceryPrices() }
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
         viewModelScope.launch {

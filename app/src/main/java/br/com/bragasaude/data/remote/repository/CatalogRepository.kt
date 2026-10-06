@@ -18,6 +18,11 @@ class CatalogRepository @Inject constructor(
     private val clinicalReferenceSeeder: ClinicalReferenceSeeder,
     private val apiClient: BragaApiClient
 ) {
+    suspend fun contributeGroceryPrice(foodName: String, value: br.com.bragasaude.domain.GroceryPriceContribution) =
+        apiClient.contributeGroceryPrice(foodName, value)
+
+    suspend fun fetchCommunityGroceryPrices() = apiClient.getCommunityGroceryPrices()
+
     suspend fun fetchGroceryPrices(): Map<String, Double> {
         return try {
             apiClient.getGroceryPrices()

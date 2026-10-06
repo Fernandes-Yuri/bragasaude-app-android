@@ -168,7 +168,10 @@ object GroceryPdfExporter {
         )
         canvas.drawText(costText, 45f, y + 25f, textPaint)
 
-        return y + 75f
+        textPaint.textSize = 9f
+        canvas.drawText("Preços estimados com base em referências nacionais; não são valores exatos.", 30f, y + 55f, textPaint)
+        canvas.drawText("Podem variar conforme região, loja e data da compra.", 30f, y + 68f, textPaint)
+        return y + 90f
     }
 
     private fun drawContinuationHeader(
