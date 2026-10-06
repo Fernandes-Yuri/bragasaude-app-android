@@ -269,7 +269,7 @@ private fun RecipeCard(match: RecipePantryMatch) {
 
             // Ingredientes
             IngredientRow(
-                label = "Disponivel",
+                label = "Na lista de compras",
                 items = match.availableIngredients,
                 color = MaterialTheme.colorScheme.primary
             )

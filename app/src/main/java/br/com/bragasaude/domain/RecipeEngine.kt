@@ -28,7 +28,7 @@ data class RecipePantryMatch(
 /**
  * Motor de Busca e Cruzamento de Receitas com a Despensa.
  *
- * Cruza a lista de alimentos da lista de compras do usuário com o catálogo de 20 receitas,
+ * Cruza a lista de alimentos da lista de compras do usuário com o catálogo de receitas,
  * aplicando filtros clínicos baseados no perfil (diabetes, hipertensão, alergias).
  *
  * **Regra de ouro (D3/D4 / DECISOES.md):** As receitas são sugestões de autocuidado
