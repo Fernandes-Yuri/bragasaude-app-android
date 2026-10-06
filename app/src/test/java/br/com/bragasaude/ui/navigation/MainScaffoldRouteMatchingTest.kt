@@ -64,6 +64,8 @@ class MainScaffoldRouteMatchingTest {
     @Test fun `orbe permanece nos formularios de medidas abertos pelo assistente`() {
         assertTrue(shouldShowAssistantOrb("Screen\$Vitals?type=PRESSURE&initialValue=120/80"))
         assertTrue(shouldShowAssistantOrb("Screen\$HealthReadings?metric=HEART_RATE"))
+        assertTrue(shouldShowAssistantOrb("Screen\$HealthReadings/{metric}?initialValue={initialValue}"))
+        assertTrue(shouldShowAssistantOrb("Screen\$HealthReadings/OXYGEN_SATURATION?initialValue=98"))
         assertTrue(shouldShowAssistantOrb("Screen\$Biometry"))
     }
 
