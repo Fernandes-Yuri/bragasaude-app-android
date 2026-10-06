@@ -13,9 +13,21 @@ internal object BragaLocalHelp {
     private val missing = Regex("""\b(nao aparece|nao apareceu|nao encontro|nao tem)\b""")
     private val request = Regex("""\b(como|onde|por que|porque|posso|pode|quero)\b""")
     private val repair = Regex("""^(?:(?:me )?(?:explica|explique)(?: melhor| de novo)|nao entendi|ainda nao entendi|nao ficou claro)$""")
+    private val clinicalExplanation = Regex("""\b(o que (e|significa|causa)|afeta|interfere|tratamento|remedio|medicamento|pressao alta|pressao baixa)\b""")
+
+    fun hasFollowUpRequest(text: String): Boolean {
+        val normalized = BragaRoutingPolicy.normalize(text).trimEnd('.', '!', '?', ' ')
+        val input = normalized.replace(acknowledgement, "")
+        return input != normalized && (text.contains('?') ||
+            Regex("""\b(como|qual|quais|quanto|onde|quando|por que|porque|o que|posso|devo|quero|explica|explique|ajuda)\b""").containsMatchIn(input))
+    }
 
     private fun operational(input: String): NluOutput? {
         if (!request.containsMatchIn(input)) return null
+        if (exam.containsMatchIn(input) && addExam.containsMatchIn(input) && clinicalExplanation.containsMatchIn(input)) return NluOutput(
+            "entrada_pedido_misto",
+            "Você quer ajuda para anexar o exame ou uma explicação sobre o resultado? Vamos tratar um pedido de cada vez."
+        )
         if (exam.containsMatchIn(input) && addExam.containsMatchIn(input)) return NluOutput(
             "ajuda_anexar_exame",
             "Na área Meus Exames, toque em Adicionar exame. Você pode escolher foto, arquivo ou preenchimento manual. Confira os campos e os valores transcritos antes de salvar. Essa orientação não anexa nem salva um exame por você."
@@ -24,7 +36,7 @@ internal object BragaLocalHelp {
             "ajuda_exame_sem_dados",
             "Na área Meus Exames, confira a busca pelo nome e o filtro de armazenamento. Verifique também se está na conta correta e se concluiu a revisão antes de salvar. Não consigo afirmar que o exame foi perdido só pela mensagem."
         )
-        if (record.containsMatchIn(input) && correction.containsMatchIn(input)) return NluOutput(
+        if (record.containsMatchIn(input) && correction.containsMatchIn(input) && !clinicalExplanation.containsMatchIn(input)) return NluOutput(
             "ajuda_corrigir_registro",
             if (Regex("""\b(agua|hidratacao)\b""").containsMatchIn(input))
                 "Se ainda não salvou, corrija a quantidade na tela antes de confirmar. Na tela de hidratação, Desfazer remove o último registro de água; confira se ele é o registro que deseja remover. Não alterei nenhum dado por esta conversa."

@@ -37,7 +37,8 @@ internal object BragaRoutingPolicy {
     fun emergency(text: String): EmergencyAssessment {
         var contextual = false
         val recurring = recurrence.containsMatchIn(text)
-        val clauses = text.split(Regex("""\b(mas|porem|contudo|e)\b|[.;!?]"""))
+        // O "é" de "o que é" não é a conjunção que separa um novo relato.
+        val clauses = text.split(Regex("""\b(mas|porem|contudo)\b|(?<!que )\be\b|[.;!?]"""))
         for (clause in clauses) {
             for ((pattern, intent) in listOf(chest to "emergencia_dor_peito_avc", fall to "emergencia_queda_trauma")) {
                 for (match in pattern.findAll(clause)) {

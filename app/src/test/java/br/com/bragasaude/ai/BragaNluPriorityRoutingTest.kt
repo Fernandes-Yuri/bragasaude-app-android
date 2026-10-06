@@ -24,7 +24,8 @@ class BragaNluPriorityRoutingTest {
             assertTrue(text, output.respostaLocal.orEmpty().contains("192"))
             assertFalse(text, BragaActionGate.canParse(text, output))
         }
-        listOf("O que significa dor no peito?", "Por que pode ocorrer falta de ar?",
+        listOf("O que significa dor no peito?", "O que é falta de ar?", "O que é dor no peito?",
+            "Por que pode ocorrer falta de ar?",
             "Por que algumas pessoas têm falta de ar?",
             "Se eu tiver dor no peito, o que devo fazer?", "Li a frase dor no peito num livro",
             "Não estou com dor no peito", "Ontem tive dor no peito").forEach { text ->
@@ -43,7 +44,9 @@ class BragaNluPriorityRoutingTest {
             "Minha glicemia está errada, como corrijo?" to "ajuda_corrigir_registro",
             "Obrigado, mas como corrijo minha glicemia?" to "ajuda_corrigir_registro",
             "Como corrijo a pressão que registrei?" to "ajuda_corrigir_registro",
-            "Obrigado, mas me explica melhor" to "entrada_explicacao_sem_referencia")
+            "Obrigado, mas me explica melhor" to "entrada_explicacao_sem_referencia",
+            "Obrigado, como vejo meus passos?" to "entrada_pedido_nao_resolvido",
+            "Como adiciono um exame e o que significa o resultado?" to "entrada_pedido_misto")
         for (channel in InputChannel.entries) expected.forEach { (text, intent) ->
             val output = (hybrid().respond(text, emptyList(), channel).toList().single() as BragaHybridEvent.Local).output
             assertEquals(text, intent, output.intent)
@@ -53,6 +56,7 @@ class BragaNluPriorityRoutingTest {
         }
         assertEquals(BragaRoute.CLOUD, BragaNluEngine.analisar("O que significa meu exame de sangue?").route)
         assertEquals(BragaRoute.CLOUD, BragaNluEngine.analisar("Como minha pressão afeta os rins?").route)
+        assertNotEquals("ajuda_corrigir_registro", BragaNluEngine.analisar("Como corrijo pressão alta com remédio?").intent)
     }
 
     @Test fun `periodo nao suportado nunca se transforma em outra consulta`() {
@@ -60,7 +64,8 @@ class BragaNluPriorityRoutingTest {
             "Qual foi minha glicemia no dia 02/10/2026?", "Qual foi minha pressão semana passada?",
             "Qual foi minha glicemia nos últimos 14 dias?", "Qual foi minha pressão ontem às 8 horas?",
             "Qual foi minha pressão no mês passado?", "Qual foi minha pressão em 2025?",
-            "Qual foi minha pressão na segunda-feira?", "E anteontem?", "E em setembro?")
+            "Qual foi minha pressão na segunda-feira?", "Qual foi minha pressão entre ontem e hoje?",
+            "Qual foi minha pressão desde ontem?", "E anteontem?", "E em setembro?")
         val session = HealthQuerySession { 1_000L }
         session.advanceTurn("u", "c")
         session.remember(HealthQuery(HealthMetric.PRESSURE), "u", "c")
@@ -79,6 +84,7 @@ class BragaNluPriorityRoutingTest {
             assertNotNull(text, HealthQueryResolver.explicit(text))
         }
         assertEquals(BragaRoute.CLOUD, BragaNluEngine.analisar("Por que minha pressão subiu ontem?").route)
+        assertTrue(BragaNluEngine.analisar("Qual a capital de Portugal em 2025?").isBloqueioSeguranca)
     }
 
     @Test fun `perguntas e negacoes nao chegam ao parser de registro nos dois canais`() {

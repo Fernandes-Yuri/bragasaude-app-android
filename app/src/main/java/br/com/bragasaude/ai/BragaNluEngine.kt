@@ -464,6 +464,12 @@ object BragaNluEngine {
             return NluOutput(intent, null, tempoMs = deltaMs(inicio), healthQuery = query)
         }
 
+        if (BragaLocalHelp.hasFollowUpRequest(texto)) return NluOutput(
+            "entrada_pedido_nao_resolvido",
+            "Você quer consultar um registro ou ajuda para usar uma função do aplicativo? Vou considerar seu pedido, além da confirmação ou do agradecimento.",
+            tempoMs = deltaMs(inicio)
+        )
+
         if (REGEX_DUVIDA_PRESSAO.containsMatchIn(limpo)) {
             return NluOutput("duvida_valor_pressao", sortearResposta("duvida_valor_pressao"), tempoMs = deltaMs(inicio))
         }
