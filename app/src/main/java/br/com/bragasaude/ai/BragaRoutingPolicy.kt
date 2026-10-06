@@ -18,7 +18,9 @@ internal object BragaRoutingPolicy {
     private val deniedPrefix = Regex("""\b(nao|sem|nego|negou|nunca|jamais)\b(?:\W+\w+){0,6}\W*$""")
     private val historical = Regex("""\b(ontem|anteontem|semana passada|mes passado|ano passado|ja tive|ja teve|tive|teve|sentia|senti|sentiu|ha \d+ (dias|meses|anos))\b""")
     private val present = Regex("""\b(agora|hoje|estou|esta|tenho|tem|sinto|sente|continua|continuo|ainda|desde|socorro|nao (consigo|consegue))\b""")
-    private val hypothetical = Regex("""\b(se (eu |ele |ela |alguem )?(tiver|sentir)|hipotet\w*|exemplo|no filme|no livro|li a frase|o que (e|significa|causa)|por que|porque|como evitar|como prevenir)\b""")
+    private val hypothetical = Regex("""\b(se (eu |ele |ela |alguem )?(tiver|sentir)|hipotet\w*|exemplo|no filme|no livro|li a frase)\b""")
+    private val educational = Regex("""\b(o que (e|significa|causa)|por que|porque|como evitar|como prevenir)\b""")
+    private val currentReport = Regex("""\b(estou|tenho|sinto|sentindo|agora|socorro|nao (consigo|consegue)|cai|caiu|bati a cabeca|levei um tombo|escorreguei)\b|\b(meu|minha|ele|ela)\b.{0,40}\b(esta|tem|sente)\b""")
 
     // Recorrência atual em qualquer trecho invalida a leitura de relato passado.
     private val recurrence = Regex("""\b(voltou|voltaram|de novo|outra vez|novamente|piorou|piorando|continua|ainda)\b""")
@@ -42,7 +44,9 @@ internal object BragaRoutingPolicy {
                     val prefix = clause.take(match.range.first)
                     val denial = !match.value.startsWith("nao ") && deniedPrefix.containsMatchIn(prefix)
                     val past = historical.containsMatchIn(clause) && !present.containsMatchIn(clause) && !recurring
-                    val example = hypothetical.containsMatchIn(clause)
+                    // Uma pergunta sobre um sintoma presente é relato, não exemplo educativo.
+                    val example = hypothetical.containsMatchIn(clause) ||
+                        (educational.containsMatchIn(clause) && !currentReport.containsMatchIn(clause) && !recurring)
                     if (!denial && !past && !example) return EmergencyAssessment(intent)
                     // Perguntas explicativas continuam na análise clínica, sem disparar alerta por palavra.
                     if (!example) contextual = true

@@ -70,6 +70,18 @@ object HealthQueryResolver {
     private fun excluded(text: String) = otherPerson.containsMatchIn(text) ||
         explanation.containsMatchIn(text) || registration.containsMatchIn(text)
 
+    /** Período solicitado que não cabe no contrato atual nunca vira ALL ou outro intervalo. */
+    fun hasUnsupportedPeriod(text: String): Boolean {
+        val input = normalized(text)
+        if (excluded(input) || (!request.containsMatchIn(input) && !input.startsWith("e "))) return false
+        if (Regex("""\b(anteontem|antes de ontem|amanha|semana passada|mes passado|ano passado|semana que vem|mes que vem|janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|segunda(?: feira)?|terca(?: feira)?|quarta(?: feira)?|quinta(?: feira)?|sexta(?: feira)?|sabado|domingo)\b""").containsMatchIn(input)) return true
+        if (Regex("""\b(?:dia\s+\d{1,2}|\d{1,2}\s+\d{1,2}\s+\d{4}|(?:em|de)\s+\d{4}|(?:as|pelas)\s+\d{1,2}|ha\s+\d+\s+dias)\b""").containsMatchIn(input)) return true
+        // Datas numéricas são verificadas antes de perder a pontuação na normalização.
+        if (Regex("""\b\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?\b""").containsMatchIn(text)) return true
+        return Regex("""\b(?:ultimos?\s+)?(\d+|um|dois|tres|quatro|cinco|seis|sete|oito|nove|dez|quatorze|catorze|quinze|vinte|trinta)\s+dias\b""")
+            .findAll(input).any { it.groupValues[1] !in setOf("7", "sete", "30", "trinta") }
+    }
+
     fun isAmbiguous(text: String): Boolean {
         val input = normalized(text)
         return !excluded(input) && metrics(input).size > 1 && request.containsMatchIn(input)
@@ -77,7 +89,7 @@ object HealthQueryResolver {
 
     fun explicit(text: String): HealthQuery? {
         val input = normalized(text)
-        if (excluded(input)) return null
+        if (excluded(input) || hasUnsupportedPeriod(text)) return null
         val metric = metrics(input).singleOrNull() ?: return null
         if (!own.containsMatchIn(input) || (!request.containsMatchIn(input) &&
                 period(input) == null && !isFollowUp(input))) return null
@@ -89,7 +101,7 @@ object HealthQueryResolver {
 
     fun isFollowUp(text: String): Boolean {
         val input = normalized(text)
-        if (excluded(input) || metrics(input).size > 1 || input.length > 100) return false
+        if (excluded(input) || hasUnsupportedPeriod(text) || metrics(input).size > 1 || input.length > 100) return false
         val hasQueryPart = period(input) != null || operation(input) != null || metrics(input).isNotEmpty() || glucoseType(input) != null
         if (!hasQueryPart) return false
         val remainder = input.replace(Regex("\\b(?:e|a|o|as|os|da|do|das|dos|de|em|no|na|nos|nas|minha|meu|minhas|meus|foi|foram|quanto|quanta|qual|como|ficou|deu|ta|esta|estao|media|resumo|ultimo|ultima|registro|registros|medicao|medicoes|pressao|arterial|glicemia|glicose|acucar|sangue|agua|hidratacao|hoje|ontem|semana|mes|ultimos|ultimas|dias|7|sete|30|trinta|jejum|apos|depois|refeicao|almoco|jantar|pos|prandial|sensor|continuo|aleatoria|casual|capilar)\\b"), "")

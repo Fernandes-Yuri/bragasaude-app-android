@@ -2,10 +2,40 @@ package br.com.bragasaude.ai
 
 /** Respostas de escopo fechado; não executa ações nem infere causas individuais. */
 internal object BragaLocalHelp {
-    private val acknowledgement = Regex("""^(?:(?:entendi|ok|legal|certo|beleza|ta bom)[\s,!.;]+)+(?:mas\s+)?""")
+    private val acknowledgement = Regex("""^(?:(?:entendi|compreendi|entendido|ok|legal|certo|beleza|ta bom|(?:muito )?obrigad[oa]|valeu)[\s,!.;]+)+(?:mas\s+)?""")
     private val variation = Regex("""^(?:por que|porque) (?:(?:a |minha |a minha )?(?:pressao|glicemia|glicose) )?(?:subiu|baixou|caiu|aumentou|diminuiu|varia|variou|mudou|oscila|oscilou)(?: tanto)?$""")
     private val pressure = Regex("""\bpressao\b""")
     private val glucose = Regex("""\b(?:glicemia|glicose)\b""")
+    private val exam = Regex("""\bexames?\b""")
+    private val addExam = Regex("""\b(adiciono|adicionar|adiciona|adicione|anexo|anexar|anexa|anexe|envio|enviar|envia|envi[eo]|cadastro|cadastrar)\b""")
+    private val correction = Regex("""\b(corrijo|corrigir|corrige|corrija|edito|editar|edita|edite)\b""")
+    private val record = Regex("""\b(registro|registros|pressao|glicemia|glicose|agua|hidratacao)\b""")
+    private val missing = Regex("""\b(nao aparece|nao apareceu|nao encontro|nao tem)\b""")
+    private val request = Regex("""\b(como|onde|por que|porque|posso|pode|quero)\b""")
+    private val repair = Regex("""^(?:(?:me )?(?:explica|explique)(?: melhor| de novo)|nao entendi|ainda nao entendi|nao ficou claro)$""")
+
+    private fun operational(input: String): NluOutput? {
+        if (!request.containsMatchIn(input)) return null
+        if (exam.containsMatchIn(input) && addExam.containsMatchIn(input)) return NluOutput(
+            "ajuda_anexar_exame",
+            "Na área Meus Exames, toque em Adicionar exame. Você pode escolher foto, arquivo ou preenchimento manual. Confira os campos e os valores transcritos antes de salvar. Essa orientação não anexa nem salva um exame por você."
+        )
+        if (exam.containsMatchIn(input) && missing.containsMatchIn(input)) return NluOutput(
+            "ajuda_exame_sem_dados",
+            "Na área Meus Exames, confira a busca pelo nome e o filtro de armazenamento. Verifique também se está na conta correta e se concluiu a revisão antes de salvar. Não consigo afirmar que o exame foi perdido só pela mensagem."
+        )
+        if (record.containsMatchIn(input) && correction.containsMatchIn(input)) return NluOutput(
+            "ajuda_corrigir_registro",
+            if (Regex("""\b(agua|hidratacao)\b""").containsMatchIn(input))
+                "Se ainda não salvou, corrija a quantidade na tela antes de confirmar. Na tela de hidratação, Desfazer remove o último registro de água; confira se ele é o registro que deseja remover. Não alterei nenhum dado por esta conversa."
+            else "Se está na confirmação da medição, toque em Corrigir, revise o valor e só então confirme. Para pressão e glicemia já salvas, essa tela não oferece edição de registros anteriores. Não alterei nem substituí seu registro por esta conversa."
+        )
+        if (record.containsMatchIn(input) && missing.containsMatchIn(input)) return NluOutput(
+            "ajuda_registro_sem_dados",
+            "Confira se está na conta correta e se a medição foi salva. Um período sem anotações não terá valores para mostrar. Não consigo afirmar que um registro foi perdido; confira também a tela desses dados."
+        )
+        return null
+    }
 
     private data class Help(val intent: String, val pattern: Regex, val reply: String)
     private val help = listOf(
@@ -27,6 +57,12 @@ internal object BragaLocalHelp {
     fun answer(text: String, recent: HealthQuery? = null): NluOutput? {
         val normalized = BragaRoutingPolicy.normalize(text).trimEnd('.', '!', '?', ' ')
         val input = normalized.replace(acknowledgement, "")
+        operational(input)?.let { return it }
+        // Não descartar a reparação por causa do agradecimento; continuidade completa vem depois.
+        if (input != normalized && repair.matches(input)) return NluOutput(
+            "entrada_explicacao_sem_referencia",
+            "Qual informação você quer que eu explique melhor: uma medição, um registro ou uma função do aplicativo?"
+        )
         help.firstOrNull { it.pattern.matches(input) }?.let {
             return NluOutput(it.intent, it.reply)
         }

@@ -227,10 +227,9 @@ class OrbChatViewModel @Inject constructor(
                 val nluStartedAt = System.nanoTime()
                 val local = hybrid.analyze(text, channel, healthQuerySession, owner, conversationId)
                 val nluMs = (System.nanoTime() - nluStartedAt) / 1_000_000.0
-                val concrete = if (local.isBloqueioSeguranca || local.isEmergencia || local.delegarParaNuvem ||
-                    local.intent in setOf("entrada_consulta_ambigua", "sintoma_contextual") ||
-                    local.intent == "orientacao_cadastro_medicamento" || BragaHealthMemory.supports(local.intent)) null
-                    else voiceParser.parse(value, null, null)
+                val concrete = if (br.com.bragasaude.ai.BragaActionGate.canParse(value, local))
+                    voiceParser.parse(value, null, null) else
+                    br.com.bragasaude.ai.BragaActionGate.readOnlyQuery(value, local, voiceParser)
                 val shortcut = if (local.isBloqueioSeguranca) null else when (value.lowercase()) {
                     "/pressão", "/pressao" -> "REGISTRAR_PRESSAO"
                     "/remédio", "/remedio" -> "LEMBRETES"
