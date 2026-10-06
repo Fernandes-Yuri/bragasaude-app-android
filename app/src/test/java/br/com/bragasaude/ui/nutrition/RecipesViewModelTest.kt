@@ -26,7 +26,7 @@ class RecipesViewModelTest {
             val profile = mockk<ProfileRepository>()
             val auth = mockk<FirebaseAuth>(relaxed = true)
             every { auth.currentUser?.uid } returns "user"
-            val items = listOf("Abacate", "Limão", "Semente de chia").map { name ->
+            val items = listOf("Abacate", "Limão").map { name ->
                 GroceryListItemEntity(name, "user", "2026-10-06", name, name, "Feira",
                     100, 100, "1 un", 0.0, false)
             }
