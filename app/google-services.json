@@ -1,4 +1,4 @@
-﻿{
+{
   "project_info": {
     "project_number": "626274351085",
     "project_id": "braga-saude",
@@ -22,13 +22,29 @@
           }
         },
         {
+          "client_id": "626274351085-emlqhlbdo9k49ljohgfqqf5thb553dhr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "br.com.bragasaude",
+            "certificate_hash": "fa62b0b4097f6211c123d62b3fedd88addbef004"
+          }
+        },
+        {
+          "client_id": "626274351085-vdta5mdu1a73ugvsenjmlbi71kklhc8u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "br.com.bragasaude",
+            "certificate_hash": "bbba159f8b10a21dbf6c7a7f335408ff4bd67c11"
+          }
+        },
+        {
           "client_id": "626274351085-b4q2acgsfuql6pcan2d9q13msiu7go24.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "***REMOVED_OLD_GOOGLE_API_KEY***"
+          "current_key": "AIzaSyCwlBKC0jGyByXsj5xxqGqGpGE7NeBCs8Y"
         }
       ],
       "services": {
