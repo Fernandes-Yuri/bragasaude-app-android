@@ -47,19 +47,27 @@ class RecipeEngineTest {
         val items = recipe.ingredientNames.map(::item)
         assertTrue(engine.findBestRecipes(items, null, "BREAKFAST").any { it.recipe.id == recipe.id })
         assertTrue(engine.findBestRecipes(items, null, "DINNER").isEmpty())
-        assertTrue(engine.findBestRecipes(items, ProfileEntity(userId = "user", hasDiabetes = true))
+        assertFalse(engine.findBestRecipes(items, ProfileEntity(userId = "user", hasDiabetes = true))
             .any { it.recipe.id == recipe.id })
         assertTrue(engine.findBestRecipes(items, ProfileEntity(userId = "user", foodAllergies = listOf("Ovos"))).isEmpty())
     }
 
 
     @Test fun everydayEggRecipeNeedsOnlyEggsAndNoSpecialPreparation() {
-        val recipe = RecipeCatalog.getAll().single { it.id == "recipe_005" }
+        val recipe = RecipeCatalog.getAll().single { it.id == "recipe_021" }
         assertEquals(listOf("Ovos"), recipe.ingredientNames)
         assertEquals("Ovo Cozido", recipe.title)
         assertTrue(engine.findBestRecipes(listOf(item("Ovo Caipira Cozido")), null)
             .any { it.recipe.id == recipe.id })
         assertTrue(RecipeCatalog.getAll().none { it.title.contains("Poch", ignoreCase = true) })
+    }
+
+    @Test fun simpleCrepiocaAndQuinoaRemainAvailableWithCompleteIngredients() {
+        for (id in listOf("recipe_005", "recipe_017")) {
+            val recipe = RecipeCatalog.getAll().single { it.id == id }
+            assertTrue(engine.findBestRecipes(recipe.ingredientNames.map(::item), null)
+                .any { it.recipe.id == id })
+        }
     }
 
     private fun item(name: String) = GroceryListItemEntity(

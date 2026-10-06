@@ -1,7 +1,7 @@
 ﻿package br.com.bragasaude.data.local.model
 
 /**
- * Catálogo de 20 Receitas Tradicionais Brasileiras Acessíveis para Idosos.
+ * Catálogo de 21 Receitas Caseiras Brasileiras Acessíveis para Idosos.
  *
  * Cada receita é uma preparação caseira simples, prática (3 a 4 passos)
  * e saudável, priorizando ingredientes que o idoso já tem na despensa.
@@ -48,6 +48,25 @@ data class HealthyRecipe(
 object RecipeCatalog {
 
     private val ALL = listOf(
+        HealthyRecipe(
+            id = "recipe_021",
+            title = "Ovo Cozido",
+            mealType = "BREAKFAST",
+            prepTimeMinutes = 15,
+            difficulty = "Muito Fácil",
+            ingredientNames = listOf("Ovos"),
+            ingredientFoodIds = listOf("food_ovo"),
+            instructions = listOf(
+                "1. Coloque os ovos em uma panela e cubra com água.",
+                "2. Leve ao fogo. Quando a água ferver, conte 10 minutos.",
+                "3. Desligue o fogo e retire os ovos com uma colher.",
+                "4. Espere esfriar antes de descascar e servir."
+            ),
+            clinicalBenefit = "Fonte de proteína, com preparo simples",
+            isDiabetesSafe = true,
+            isHypertensionSafe = true
+        ),
+
         // ===== CAFÉ DA MANHÃ & LANCHES =====
 
         HealthyRecipe(
@@ -128,20 +147,20 @@ object RecipeCatalog {
 
         HealthyRecipe(
             id = "recipe_005",
-            title = "Ovo Cozido",
+            title = "Crepioca de Ricota e Orégano",
             mealType = "BREAKFAST",
-            prepTimeMinutes = 15,
-            difficulty = "Muito Fácil",
-            ingredientNames = listOf("Ovos"),
-            ingredientFoodIds = listOf("food_ovo"),
+            prepTimeMinutes = 12,
+            difficulty = "Fácil",
+            ingredientNames = listOf("Ovos", "Tapioca", "Ricota", "Orégano"),
+            ingredientFoodIds = listOf("food_ovo", "food_tapioca", "food_ricota", "food_oregano"),
             instructions = listOf(
-                "1. Coloque os ovos em uma panela e cubra com água.",
-                "2. Leve ao fogo. Quando a água ferver, conte 10 minutos.",
-                "3. Desligue o fogo e retire os ovos com uma colher.",
-                "4. Espere esfriar antes de descascar e servir."
+                "1. Misture 1 ovo com 2 colheres de goma de tapioca.",
+                "2. Despeje em uma frigideira quente e antiaderente.",
+                "3. Quando firmar, coloque a ricota esfarelada por cima e orégano.",
+                "4. Dobre ao meio e sirva quente."
             ),
-            clinicalBenefit = "Fonte de proteína, com preparo simples",
-            isDiabetesSafe = true,
+            clinicalBenefit = "Boa proteína e cálcio, preparo simples sem fritura",
+            isDiabetesSafe = false,
             isHypertensionSafe = true
         ),
 
@@ -364,19 +383,19 @@ object RecipeCatalog {
 
         HealthyRecipe(
             id = "recipe_017",
-            title = "Salada de Arroz com Tomate e Pepino",
+            title = "Salada de Quinoa com Legumes",
             mealType = "LUNCH",
             prepTimeMinutes = 20,
             difficulty = "Fácil",
-            ingredientNames = listOf("Arroz integral", "Tomate", "Pepino", "Azeite de oliva", "Limão"),
-            ingredientFoodIds = listOf("food_arroz_integral", "food_tomate", "food_pepino", "food_azeite", "food_limao"),
+            ingredientNames = listOf("Quinoa", "Tomate", "Pepino", "Azeite de oliva", "Limão"),
+            ingredientFoodIds = listOf("food_quinoa", "food_tomate", "food_pepino", "food_azeite", "food_limao"),
             instructions = listOf(
-                "1. Cozinhe o arroz conforme a embalagem e deixe esfriar.",
+                "1. Cozinhe a quinoa conforme a embalagem e deixe esfriar.",
                 "2. Pique o tomate e o pepino em cubos pequenos.",
-                "3. Misture com o arroz e tempere com limão e azeite.",
+                "3. Misture com a quinoa e tempere com limão e azeite.",
                 "4. Sirva fria como salada ou acompanhamento."
             ),
-            clinicalBenefit = "Arroz e legumes, fontes de fibras",
+            clinicalBenefit = "Proteína vegetal completa e rica em fibras",
             isDiabetesSafe = true,
             isHypertensionSafe = true
         ),
