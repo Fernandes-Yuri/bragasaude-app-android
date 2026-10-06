@@ -118,6 +118,25 @@ class BragaExpandedMemoryTest {
         coVerify(exactly = 0) { logs.insert(any()) }
     }
 
+    @Test fun `doses so sao consultadas depois de encontrar medicamento cadastrado na propria conta`() = runTest {
+        val query = HealthQuery(HealthMetric.MEDICATION_DOSES, HealthPeriod.TODAY, medicationName = "losartana")
+        coEvery { medicines.getAllSync("u") } returns emptyList()
+        val missing = memory.answerResult(query, "u")
+        assertFalse(missing.hasData)
+        assertTrue(missing.text.contains("Não encontrei um medicamento"))
+        coEvery { medicines.getAllSync("u") } returns listOf(MedicationEntity("m", "outro", "Losartana"))
+        assertFalse(memory.answerResult(query, "u").hasData)
+        coEvery { medicines.getAllSync("u") } returns listOf(MedicationEntity("m", "u", "Lousartana"))
+        assertFalse(memory.answerResult(query, "u").hasData)
+        coVerify(exactly = 0) { logs.getForMemory(any(), any(), any(), any()) }
+        coEvery { medicines.getAllSync("u") } returns listOf(MedicationEntity("m", "u", "Losartana"))
+        coEvery { logs.getForMemory("u", "m", any(), any()) } returns emptyList()
+        val registered = memory.answerResult(query, "u")
+        assertFalse(registered.hasData)
+        assertTrue(registered.text.contains("Não encontrei registros de dose"))
+        coVerify(exactly = 1) { logs.getForMemory("u", "m", any(), any()) }
+        coVerify(exactly = 0) { logs.insert(any()) }
+    }
     @Test fun `operacoes nao implementadas e login ausente nao inventam dados`() = runTest {
         assertFalse(memory.answerResult(HealthQuery(HealthMetric.HEART_RATE, operation = HealthOperation.AVERAGE), "u").hasData)
         assertFalse(memory.answerResult(HealthQuery(HealthMetric.WEIGHT, operation = HealthOperation.EXTREMES), "u").hasData)

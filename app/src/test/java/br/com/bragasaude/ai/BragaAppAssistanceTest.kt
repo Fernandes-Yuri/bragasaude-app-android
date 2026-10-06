@@ -72,6 +72,7 @@ class BragaAppAssistanceTest {
             "Qual foi minha última saturação ontem?" to HealthQuery(HealthMetric.OXYGEN, HealthPeriod.YESTERDAY),
             "Qual foi meu último peso?" to HealthQuery(HealthMetric.WEIGHT),
             "Quanto de losartana ainda tenho?" to HealthQuery(HealthMetric.MEDICATION_STOCK, medicationName = "losartana"),
+            "Eu já registrei minha dose de losartana hoje?" to HealthQuery(HealthMetric.MEDICATION_DOSES, HealthPeriod.TODAY, medicationName = "losartana"),
             "Já registrei a dose de losartana hoje?" to HealthQuery(HealthMetric.MEDICATION_DOSES, HealthPeriod.TODAY, medicationName = "losartana")
         )
         for (channel in InputChannel.entries) cases.forEach { (text, query) ->

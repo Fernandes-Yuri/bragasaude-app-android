@@ -118,7 +118,7 @@ object HealthQueryResolver {
                 if (name != null && name !in setOf("remedio", "medicamento", "agua"))
                     return HealthQuery(HealthMetric.MEDICATION_STOCK, medicationName = name)
             }
-        Regex("""^(?:ja )?(?:registrei|anotei) (?:a |uma )?dose de (.+?) (hoje|ontem)$""").matchEntire(exact)?.let {
+        Regex("""^(?:eu )?(?:ja )?(?:registrei|anotei) (?:a minha |minha |a |uma )?dose (?:do meu |da minha |de |do |da )(.+?) (hoje|ontem)$""").matchEntire(exact)?.let {
             return HealthQuery(HealthMetric.MEDICATION_DOSES,
                 if (it.groupValues[2] == "hoje") HealthPeriod.TODAY else HealthPeriod.YESTERDAY,
                 medicationName = it.groupValues[1])
