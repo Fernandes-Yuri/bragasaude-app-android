@@ -28,7 +28,7 @@ data class MealTab(
 /**
  * ViewModel do módulo "O Que Cozinhar Hoje?".
  *
- * Coleta os itens da despensa do usuário, aplica o filtro clínico do perfil
+ * Coleta os itens da lista de compras do usuário, aplica o filtro clínico do perfil
  * e cruzar com o catálogo de receitas para sugerir preparações caseiras.
  */
 @HiltViewModel
@@ -72,15 +72,15 @@ class RecipesViewModel @Inject constructor(
     }
 
     /**
-     * Carrega as receitas recomendadas cruzando despensa e perfil.
+     * Carrega as receitas recomendadas cruzando lista de compras e perfil.
      */
     private fun loadRecipes() {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                // Combina despensa e perfil de forma reativa sem aninhamento
+                // Combina lista de compras e perfil de forma reativa sem aninhamento
                 kotlinx.coroutines.flow.combine(
-                    groceryRepository.getPantryItems(currentUserId),
+                    groceryRepository.getGroceryList(currentUserId),
                     profileRepository.getProfile(currentUserId)
                 ) { pantryItems, profile ->
                     pantryItems to profile
@@ -93,7 +93,13 @@ class RecipesViewModel @Inject constructor(
 
                     _isLoading.value = false
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
+                _breakfastRecipes.value = emptyList()
+                _lunchRecipes.value = emptyList()
+                _snackRecipes.value = emptyList()
+                _dinnerRecipes.value = emptyList()
                 android.util.Log.e("RecipesVM", "Erro ao carregar receitas: ${e.message}")
                 _isLoading.value = false
             }

@@ -9,10 +9,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Resultado do cruzamento de uma receita com a despensa do usuário.
+ * Resultado do cruzamento de uma receita com a lista de compras do usuário.
  *
  * @param recipe A receita recomendada.
- * @param availableIngredients Ingredientes que o usuário tem na despensa.
+ * @param availableIngredients Ingredientes que o usuário incluiu na lista de compras.
  * @param missingIngredients Ingredientes que faltam.
  * @param hasAll True se o usuário tem TODOS os ingredientes.
  * @param missingCount Número de ingredientes faltando.
@@ -28,7 +28,7 @@ data class RecipePantryMatch(
 /**
  * Motor de Busca e Cruzamento de Receitas com a Despensa.
  *
- * Cruza a lista de alimentos da despensa do usuário com o catálogo de 20 receitas,
+ * Cruza a lista de alimentos da lista de compras do usuário com o catálogo de 20 receitas,
  * aplicando filtros clínicos baseados no perfil (diabetes, hipertensão, alergias).
  *
  * **Regra de ouro (D3/D4 / DECISOES.md):** As receitas são sugestões de autocuidado
@@ -39,9 +39,9 @@ data class RecipePantryMatch(
 class RecipeEngine @Inject constructor() {
 
     /**
-     * Encontra as melhores receitas para cozinhar com o que o usuário tem em casa.
+     * Encontra as melhores receitas para cozinhar com os alimentos da lista de compras.
      *
-     * @param pantryItems Itens marcados como presentes na despensa (isCheckedInPantry = true).
+     * @param pantryItems Todos os itens da lista de compras, comprados ou ainda não comprados.
      * @param profile Perfil do usuário com condições clínicas e alergias.
      * @param mealType Tipo de refeição desejado (BREAKFAST, LUNCH, SNACK, DINNER) ou vazio para todas.
      * @return Lista de receitas ordenadas por maior número de ingredientes disponíveis.
@@ -73,9 +73,9 @@ class RecipeEngine @Inject constructor() {
             calculateMatch(recipe, pantryNames)
         }
 
-        // Filtra apenas receitas com pelo menos 1 ingrediente disponível
+        // Só recomenda receitas com todos os ingredientes na lista de compras.
         return matches
-            .filter { it.availableIngredients.isNotEmpty() }
+            .filter { it.hasAll && it.availableIngredients.isNotEmpty() }
             .sortedByDescending { it.availableIngredients.size }
     }
 
@@ -112,7 +112,7 @@ class RecipeEngine @Inject constructor() {
     }
 
     /**
-     * Calcula o cruzamento entre uma receita e a despensa do usuário.
+     * Calcula o cruzamento entre uma receita e a lista de compras do usuário.
      */
     private fun calculateMatch(
         recipe: HealthyRecipe,
@@ -122,8 +122,7 @@ class RecipeEngine @Inject constructor() {
         val missing = mutableListOf<String>()
 
         for (ingredient in recipe.ingredientNames) {
-            val normalizedIngredient = normalizeFoodName(ingredient)
-            if (pantryNames.contains(normalizedIngredient) || pantryNames.any { it.contains(normalizedIngredient, ignoreCase = true) }) {
+            if (RecipeIngredientMatcher.acceptedNames(ingredient).any { it in pantryNames }) {
                 available.add(ingredient)
             } else {
                 missing.add(ingredient)
@@ -147,6 +146,7 @@ class RecipeEngine @Inject constructor() {
             .replace(Regex("[\\p{InCombiningDiacriticalMarks}]"), "")
             .lowercase(Locale.ROOT)
             .trim()
+            .replace(Regex("\\s+"), " ")
     }
 
     /**

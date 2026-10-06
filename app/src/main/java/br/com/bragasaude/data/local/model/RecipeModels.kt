@@ -78,7 +78,7 @@ object RecipeCatalog {
             ingredientNames = listOf("Ovos", "Tomate", "Azeite de oliva", "Orégano"),
             ingredientFoodIds = listOf("food_ovo", "food_tomate", "food_azeite", "food_oregano"),
             instructions = listOf(
-                "1. Bata 2 ovos com uma pitada de sal e pimenta.",
+                "1. Bata 2 ovos.",
                 "2. Aqueça 1 colher de azeite em uma frigideira antiaderente.",
                 "3. Despeje os ovos e mexa devagar até começarem a firmar.",
                 "4. Adicione o tomate picado e orégano. Sirva imediatamente."
@@ -109,7 +109,7 @@ object RecipeCatalog {
 
         HealthyRecipe(
             id = "recipe_004",
-            title = "Vitamina de Mamão com Farelo de Aveia",
+            title = "Vitamina de Mamão com Aveia em Flocos",
             mealType = "BREAKFAST",
             prepTimeMinutes = 5,
             difficulty = "Muito Fácil",
@@ -153,8 +153,8 @@ object RecipeCatalog {
             mealType = "LUNCH",
             prepTimeMinutes = 20,
             difficulty = "Fácil",
-            ingredientNames = listOf("Ovos", "Couve", "Queijo minas frescal"),
-            ingredientFoodIds = listOf("food_ovo", "food_couve", "food_queijo_minas"),
+            ingredientNames = listOf("Ovos", "Couve", "Queijo minas frescal", "Azeite de oliva"),
+            ingredientFoodIds = listOf("food_ovo", "food_couve", "food_queijo_minas", "food_azeite"),
             instructions = listOf(
                 "1. Bata 3 ovos e misture com couve picadinha.",
                 "2. Coloque em uma forma untada com um fio de azeite.",
@@ -168,17 +168,17 @@ object RecipeCatalog {
 
         HealthyRecipe(
             id = "recipe_007",
-            title = "Tilápia Grelhada com Crosta de Aveia e Ervas",
+            title = "Tilápia Grelhada com Crosta de Aveia",
             mealType = "LUNCH",
             prepTimeMinutes = 18,
             difficulty = "Fácil",
             ingredientNames = listOf("Tilápia", "Aveia em flocos", "Azeite de oliva", "Limão"),
             ingredientFoodIds = listOf("food_tilapia", "food_aveia", "food_azeite", "food_limao"),
             instructions = listOf(
-                "1. Tempere o filé de tilápia com limão e sal.",
+                "1. Tempere o filé de tilápia com limão.",
                 "2. Passe os flocos de aveia em ambos os lados do peixe.",
                 "3. Aqueça o azeite em uma frigideira e grelhe 4 minutos de cada lado.",
-                "4. Sirva com salada verde."
+                "4. Sirva quente."
             ),
             clinicalBenefit = "Proteína magra rica em ômega-3, com fibras da aveia",
             isDiabetesSafe = true,
@@ -197,7 +197,7 @@ object RecipeCatalog {
                 "1. Cozinhe o peito de frango e desfie com um garfo.",
                 "2. Descasque a abóbora, corte em cubos e refogue no azeite.",
                 "3. Adicione a cúrcuma e o frango desfiado à abóbora.",
-                "4. Misture bem e sirva com arroz integral."
+                "4. Misture bem e sirva quente."
             ),
             clinicalBenefit = "Proteína magra com vitamina A da abóbora e ação antioxidante da cúrcuma",
             isDiabetesSafe = true,
@@ -229,10 +229,10 @@ object RecipeCatalog {
             mealType = "LUNCH",
             prepTimeMinutes = 22,
             difficulty = "Fácil",
-            ingredientNames = listOf("Sardinha", "Tomate", "Cebola", "Azeite de oliva"),
-            ingredientFoodIds = listOf("food_sardinha", "food_tomate", "food_cebola", "food_azeite"),
+            ingredientNames = listOf("Sardinha", "Tomate", "Cebola", "Azeite de oliva", "Limão"),
+            ingredientFoodIds = listOf("food_sardinha", "food_tomate", "food_cebola", "food_azeite", "food_limao"),
             instructions = listOf(
-                "1. Tempere a sardinha com limão e sal.",
+                "1. Tempere a sardinha com limão.",
                 "2. Forre uma assadeira com rodelas de tomate e cebola.",
                 "3. Coloque a sardinha por cima, regue com azeite.",
                 "4. Asse a 200°C por 15 minutos."
@@ -312,7 +312,7 @@ object RecipeCatalog {
             ingredientNames = listOf("Mandioquinha", "Azeite de oliva", "Salsinha"),
             ingredientFoodIds = listOf("food_mandioquinha", "food_azeite", "food_salsinha"),
             instructions = listOf(
-                "1. Descasque a mandioquinha e cozinhe em água salgada até amolecer.",
+                "1. Descasque a mandioquinha e cozinhe em água até amolecer.",
                 "2. Escorra e amasse com um garfo (não precisa ser liso).",
                 "3. Regue com azeite e salsa picada.",
                 "4. Sirva como acompanhamento ou refeição leve."
@@ -328,12 +328,12 @@ object RecipeCatalog {
             mealType = "DINNER",
             prepTimeMinutes = 22,
             difficulty = "Fácil",
-            ingredientNames = listOf("Patinho moído", "Chuchu", "Tomate", "Cúrcuma"),
-            ingredientFoodIds = listOf("food_patinho", "food_chuchu", "food_tomate", "food_cucurma"),
+            ingredientNames = listOf("Patinho moído", "Chuchu", "Tomate", "Cúrcuma", "Azeite de oliva"),
+            ingredientFoodIds = listOf("food_patinho", "food_chuchu", "food_tomate", "food_cucurma", "food_azeite"),
             instructions = listOf(
                 "1. Refogue a carne moída em uma panela com um fio de azeite.",
                 "2. Adicione a cúrcuma e mexa bem.",
-                "3. Descasque o chuchu, corte em cubos e adicione à carne.",
+                "3. Descasque o chuchu, corte em cubos e adicione à carne com o tomate picado.",
                 "4. Cozinhe tampado por 10 minutos até o chuchu amolecer."
             ),
             clinicalBenefit = "Proteína magra com ferro, cúrcuma como antioxidante natural",
@@ -410,7 +410,7 @@ object RecipeCatalog {
             ingredientFoodIds = listOf("food_pao_integral", "food_garaodebico", "food_azeite", "food_limao", "food_alho"),
             instructions = listOf(
                 "1. Bata o grão-de-bico cozido com azeite, limão e alho no liquidificador.",
-                "2. Toque o pão integral.",
+                "2. Torre o pão integral.",
                 "3. Passe a pasta sobre a torrada.",
                 "4. Sirva como lanche rápido."
             ),
