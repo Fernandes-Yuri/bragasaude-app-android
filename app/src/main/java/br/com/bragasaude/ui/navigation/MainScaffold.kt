@@ -164,5 +164,8 @@ internal fun shouldShowAssistantOrb(currentRoute: String?): Boolean =
         Screen.Nutrition(),
         Screen.Hydration(),
         Screen.Steps,
-        Screen.Reminders
+        Screen.Reminders,
+        Screen.Vitals(),
+        Screen.HealthReadings("HEART_RATE"),
+        Screen.Biometry
     ).any { isCurrentRoute(currentRoute, it) }

@@ -38,7 +38,6 @@ import br.com.bragasaude.data.remote.model.RemoteFood
 import br.com.bragasaude.domain.HealthCalculators
 import br.com.bragasaude.ui.components.EmeraldHeaderBanner
 import br.com.bragasaude.ui.home.HomeViewModel
-import br.com.bragasaude.ui.hydration.HydrationViewModel
 import br.com.bragasaude.ui.theme.BragaBackground
 import br.com.bragasaude.ui.theme.BragaCardBorder
 import br.com.bragasaude.ui.theme.BragaCardSurface
@@ -60,14 +59,11 @@ fun NutritionScreen(
     suggestedGroceryItems: List<String> = emptyList(),
     viewModel: NutritionViewModel = hiltViewModel(),
     homeViewModel: HomeViewModel = hiltViewModel(),
-    hydrationViewModel: HydrationViewModel = hiltViewModel(),
     onNavigateToPantryRecipes: () -> Unit = {}
 ) {
     val dailyCal by viewModel.dailyCalories.collectAsState()
     val consumedCal by viewModel.totalCaloriesConsumed.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val currentHydration by hydrationViewModel.currentHydration.collectAsState()
-    val targetHydration by hydrationViewModel.targetHydration.collectAsState()
     val activeAdjustments by viewModel.activeAdjustments.collectAsState()
     val scoreBreakdown by homeViewModel.scoreBreakdown.collectAsState()
     val recommendations = remember(isLoading, activeAdjustments) { viewModel.getRecommendations() }
@@ -168,15 +164,6 @@ fun NutritionScreen(
                             }
                         }
                     }
-                }
-
-                // Card de Progresso Hídrico (padrão 111652)
-                item {
-                    HydrationProgressCard(
-                        currentMl = currentHydration.toInt(),
-                        targetMl = targetHydration.toInt(),
-                        onQuickAdd = { ml -> hydrationViewModel.addWater(ml) }
-                    )
                 }
 
                 // 🍳 Card: O Que Cozinhar Hoje? — Receitas da Minha Despensa
@@ -1023,166 +1010,6 @@ fun PantryRecipesCard(onClick: () -> Unit) {
                 contentDescription = "Ver receitas",
                 tint = BragaEmerald,
                 modifier = Modifier.size(32.dp)
-            )
-        }
-    }
-}
-
-/**
- * Card de progresso hídrico com círculo de progresso e botões rápidos de adição.
- * Padrão visual do wireframe 111652 (Registro Rápido de Água).
- */
-@Composable
-fun HydrationProgressCard(
-    currentMl: Int,
-    targetMl: Int,
-    onQuickAdd: (Int) -> Unit
-) {
-    val safeTarget = if (targetMl > 0) targetMl else 2000
-    val progress = (currentMl.toFloat() / safeTarget).coerceIn(0f, 1f)
-    val percent = (progress * 100).toInt()
-    var showInfoDialog by remember { mutableStateOf(false) }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = BragaCardSurface),
-        border = BorderStroke(1.dp, BragaMintBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = CircleShape,
-                            color = BragaMint,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Default.WaterDrop,
-                                    contentDescription = null,
-                                    tint = BragaEmerald,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    "Hidratação de Hoje",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BragaTextPrimary
-                                )
-                                IconButton(
-                                    onClick = { showInfoDialog = true },
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Info,
-                                        contentDescription = "Informações sobre cálculo de hidratação",
-                                        tint = BragaEmerald,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                "$currentMl / $safeTarget ml • $percent%",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = BragaEmerald
-                            )
-                        }
-                    }
-                }
-                CircularProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.size(56.dp),
-                    color = if (progress >= 1f) Success else BragaEmerald,
-                    trackColor = BragaMint,
-                    strokeWidth = 7.dp
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            // Botões rápidos de adição
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                HydrationQuickButton(label = "+200 ml", sub = "copo", modifier = Modifier.weight(1f), onClick = { onQuickAdd(200) })
-                HydrationQuickButton(label = "+300 ml", sub = "copo grande", modifier = Modifier.weight(1f), onClick = { onQuickAdd(300) })
-                HydrationQuickButton(label = "+500 ml", sub = "garrafa", modifier = Modifier.weight(1f), onClick = { onQuickAdd(500) })
-            }
-        }
-    }
-
-    // Diálogo informativo sobre o cálculo de hidratação
-    if (showInfoDialog) {
-        BragaAlertDialog(
-            onDismissRequest = { showInfoDialog = false },
-            title = {
-                Text(
-                    "Cálculo de Hidratação Personalizado",
-                    fontWeight = FontWeight.Bold,
-                    color = BragaTextPrimary
-                )
-            },
-            text = {
-                Text(
-                    "A recomendação de saúde para adultos e idosos é de 35 ml de água por quilo de peso corporal ao dia (ex: 70 kg × 35 ml = 2.450 ml).\n\nEssa meta garante hidratação celular, bom funcionamento renal e auxilia na estabilidade da pressão arterial.",
-                    color = BragaTextSecondary,
-                    lineHeight = 20.sp
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showInfoDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
-                ) {
-                    Text("Entendido")
-                }
-            },
-            )
-    }
-}
-
-@Composable
-private fun HydrationQuickButton(
-    label: String,
-    sub: String,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = BragaMint,
-        modifier = modifier.clickable { onClick() }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = BragaEmerald
-            )
-            Text(
-                sub,
-                style = MaterialTheme.typography.labelSmall,
-                color = BragaTextSecondary
             )
         }
     }
