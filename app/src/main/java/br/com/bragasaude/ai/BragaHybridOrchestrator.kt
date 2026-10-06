@@ -28,6 +28,9 @@ class BragaHybridOrchestrator internal constructor(
     fun analyze(speech: String, channel: InputChannel, session: HealthQuerySession,
                 userId: String, conversationId: String): NluOutput {
         val local = analyze(speech, channel)
+        if (!local.isBloqueioSeguranca && !local.isEmergencia) {
+            BragaLocalHelp.answer(speech, session.recentQuery(userId, conversationId))?.let { return it }
+        }
         if (local.isBloqueioSeguranca || local.isEmergencia || local.delegarParaNuvem ||
             local.intent == "orientacao_cadastro_medicamento" || HealthQueryResolver.isAmbiguous(speech)) return local
         val query = session.resolve(speech, userId, conversationId) ?: local.healthQuery

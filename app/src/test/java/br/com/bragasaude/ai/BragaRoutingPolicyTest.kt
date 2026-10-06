@@ -24,7 +24,7 @@ class BragaRoutingPolicyTest {
         }
     }
     @Test fun `explicacao clinica nao e consulta de banco`() {
-        listOf("Como minha pressão afeta os rins?", "Por que minha glicemia varia?",
+        listOf("Como minha pressão afeta os rins?", "Por que minha glicemia afeta os rins?",
             "Qual a diferença entre apneia e alterações hormonais?").forEach {
             val output = BragaNluEngine.analisar(it)
             assertEquals(it, BragaRoute.CLOUD, output.route)

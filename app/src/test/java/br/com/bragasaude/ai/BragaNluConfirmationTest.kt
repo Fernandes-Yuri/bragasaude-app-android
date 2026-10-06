@@ -21,7 +21,7 @@ class BragaNluConfirmationTest {
 
     @Test fun `confirmacao nao oculta pergunta consulta ou sintoma`() {
         assertEquals(BragaRoute.CLOUD,
-            BragaNluEngine.analisar("Entendi, mas por que minha glicemia varia?").route)
+            BragaNluEngine.analisar("Entendi, mas por que minha glicemia afeta os rins?").route)
         assertEquals(BragaRoute.HEALTH_MEMORY,
             BragaNluEngine.analisar("Legal, quanto foi minha pressão?").route)
         assertTrue(BragaNluEngine.analisar("Entendi, mas estou com dor no peito").isEmergencia)

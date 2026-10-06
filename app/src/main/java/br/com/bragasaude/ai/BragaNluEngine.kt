@@ -431,6 +431,8 @@ object BragaNluEngine {
             return NluOutput("sintoma_desconforto_moderado", resp, tempoMs = deltaMs(inicio))
         }
 
+        BragaLocalHelp.answer(texto)?.let { return it.copy(tempoMs = deltaMs(inicio)) }
+
         // 2. CADASTRO DE REMÉDIO (DIRETRIZ CLÍNICA)
         if (REGEX_CADASTRO_REMEDIO.containsMatchIn(limpo) || CADASTRO_NORMALIZADO.containsMatchIn(protegido)) {
             val resp = sortearResposta("orientacao_cadastro_medicamento")

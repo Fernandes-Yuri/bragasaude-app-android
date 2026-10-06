@@ -26,6 +26,12 @@ class HealthQuerySession internal constructor(private val nowMillis: () -> Long)
             ?: HealthQueryResolver.explicit(text)
     }
 
+    @Synchronized fun recentQuery(userId: String, conversationId: String): HealthQuery? {
+        bind(userId, conversationId)
+        expire()
+        return context?.query
+    }
+
     /** Chamar apenas se a consulta terminou com dados, no dono e na conversa ainda ativos. */
     @Synchronized fun remember(query: HealthQuery, userId: String, conversationId: String) {
         if (userId.isBlank() || userId == "anonymous") return
