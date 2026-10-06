@@ -79,7 +79,7 @@ object HealthQueryResolver {
         if (metrics(input).isEmpty() && operation(input) == null && !input.startsWith("e ")) return false
         if (Regex("""\b(entre|desde)\b|\b(ontem e hoje|hoje e ontem|semana retrasada|mes retrasado|semana anterior|mes anterior|ano anterior|de manha|pela manha|a tarde|a noite)\b""").containsMatchIn(input)) return true
         if (Regex("""\b(anteontem|antes de ontem|amanha|semana passada|mes passado|ano passado|semana que vem|mes que vem|janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|segunda(?: feira)?|terca(?: feira)?|quarta(?: feira)?|quinta(?: feira)?|sexta(?: feira)?|sabado|domingo)\b""").containsMatchIn(input)) return true
-        if (Regex("""\b(?:dia\s+\d{1,2}|\d{1,2}\s+\d{1,2}\s+\d{4}|(?:em|de)\s+\d{4}|(?:as|pelas)\s+\d{1,2}|ha\s+\d+\s+dias)\b""").containsMatchIn(input)) return true
+        if (Regex("""\b(?:dia\s+\d{1,2}|\d{1,2}\s+\d{1,2}\s+\d{4}|(?:em|de)\s+\d{4}\b(?!\s*(?:ml|mililitros?|mg|litros?))|(?:as|pelas)\s+\d{1,2}|ha\s+\d+\s+dias)\b""").containsMatchIn(input)) return true
         if (Regex("""\b(?:19|20)\d{2}\b(?!\s*(?:ml|mililitros?|mg|litros?))""").containsMatchIn(input)) return true
         // Datas numéricas são verificadas antes de perder a pontuação na normalização.
         if (queryRequest && Regex("""\b\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?\b""").containsMatchIn(text)) return true
