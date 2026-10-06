@@ -22,7 +22,7 @@ fun GroceryPriceContributionSheet(
 ) {
     var amount by remember(item.remoteId) { mutableStateOf("") }
     var quantity by remember(item.remoteId) { mutableStateOf("") }
-    var unit by remember(item.remoteId) { mutableStateOf("g") }
+    var unit by remember(item.remoteId) { mutableStateOf(if (item.purchaseUnitText.endsWith(" L")) "L" else if (item.purchaseUnitText.endsWith(" un")) "un" else "g") }
     var state by remember(item.remoteId) { mutableStateOf("") }
     var date by remember(item.remoteId) { mutableStateOf(LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/uuuu"))) }
     val enabled = !status.submitting && !status.success

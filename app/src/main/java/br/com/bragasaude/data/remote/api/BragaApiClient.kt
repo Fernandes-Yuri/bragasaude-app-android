@@ -2157,6 +2157,22 @@ class BragaApiClient @Inject constructor(
         } catch (_: Exception) { emptyList() }
     }
 
+    suspend fun getCanonicalGroceryPrices(): Map<String, CanonicalGroceryPrice> = withContext(Dispatchers.IO) {
+        try {
+            val arr = getJson("$baseUrl/api/catalog/grocery-ingredients")?.optJSONArray("ingredients")
+                ?: return@withContext emptyMap()
+            (0 until arr.length()).mapNotNull { i ->
+                val item = arr.getJSONObject(i)
+                val price = item.optDouble("price_avg", 0.0)
+                val unit = item.optString("unit")
+                if (!price.isFinite() || price <= 0 || unit !in setOf("kg", "L", "un")) null
+                else item.getString("slug") to CanonicalGroceryPrice(unit, price, item.optString("source"))
+            }.toMap()
+        } catch (_: Exception) { emptyMap() }
+    }
+
+    data class CanonicalGroceryPrice(val unit: String, val average: Double, val source: String)
+
     suspend fun getGroceryPrices(): Map<String, Double> = withContext(Dispatchers.IO) {
         try {
             val o = getJson("$baseUrl/api/catalog/grocery-prices") ?: return@withContext emptyMap()

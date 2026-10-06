@@ -81,7 +81,10 @@ class NutritionViewModel @Inject constructor(
                         422 -> "Confira os dados informados. A contribuição precisa ser de um alimento do catálogo."
                         else -> "Não foi possível enviar. Confira sua conexão e tente novamente."
                     })
-                if (success) _communityPrices.value = catalogRepository.fetchCommunityGroceryPrices()
+                if (success) {
+                    _communityPrices.value = catalogRepository.fetchCommunityGroceryPrices()
+                    groceryRepository.standardizeIngredients(userId, catalogRepository.fetchGroceryIngredients())
+                }
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (_: Exception) {
                 _contributionState.value = br.com.bragasaude.domain.GroceryContributionState(message = "Não foi possível enviar. Tente novamente depois.")
@@ -192,7 +195,11 @@ class NutritionViewModel @Inject constructor(
     }
 
     init {
-        viewModelScope.launch { _communityPrices.value = catalogRepository.fetchCommunityGroceryPrices() }
+        viewModelScope.launch {
+            groceryRepository.standardizeIngredients(userId, catalogRepository.fetchGroceryIngredients(includePrices = false))
+            _communityPrices.value = catalogRepository.fetchCommunityGroceryPrices()
+            groceryRepository.standardizeIngredients(userId, catalogRepository.fetchGroceryIngredients())
+        }
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
         viewModelScope.launch {
@@ -403,7 +410,7 @@ class NutritionViewModel @Inject constructor(
                 val catalog = catalogRepository.getFoodCatalog().first()
                 val dislikes = _dislikedFoodNames.value
 
-                val prices = catalogRepository.fetchGroceryPrices()
+                val ingredients = catalogRepository.fetchGroceryIngredients()
 
                 val newList = WeeklyGroceryEngine.generateWeeklyList(
                     userId = userId,
@@ -412,7 +419,7 @@ class NutritionViewModel @Inject constructor(
                     profile = profileEntity?.toRemote(),
                     catalog = catalog,
                     dislikedFoodNames = dislikes,
-                    priceMap = prices
+                    ingredientCatalog = ingredients
                 )
                 groceryRepository.clearGroceryList(userId)
                 groceryRepository.saveGroceryList(newList)

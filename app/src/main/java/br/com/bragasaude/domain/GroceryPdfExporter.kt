@@ -141,7 +141,7 @@ object GroceryPdfExporter {
 
         textPaint.textSize = 11f
         textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-        canvas.drawText("Planejamento Nutricional com Margem de Segurança (+20%) • Zero Desperdício", 30f, 65f, textPaint)
+        canvas.drawText("Planejamento semanal de alimentos e custos estimados", 30f, 65f, textPaint)
 
         // 2. Resumo e custo estimado
         val y = 115f
@@ -171,7 +171,9 @@ object GroceryPdfExporter {
         textPaint.textSize = 9f
         canvas.drawText("Preços estimados com base em referências nacionais; não são valores exatos.", 30f, y + 55f, textPaint)
         canvas.drawText("Podem variar conforme região, loja e data da compra.", 30f, y + 68f, textPaint)
-        return y + 90f
+        val missing = items.count { it.estimatedPriceBrl <= 0.0 }
+        if (missing > 0) canvas.drawText("Total parcial: $missing itens sem preço não entram na estimativa.", 30f, y + 81f, textPaint)
+        return if (missing > 0) y + 108f else y + 90f
     }
 
     private fun drawContinuationHeader(

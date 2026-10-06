@@ -24,12 +24,13 @@ object WeeklyGroceryEngine {
         profile: RemoteProfile?,
         catalog: List<FoodEntity>,
         dislikedFoodNames: Set<String> = emptySet(),
-        priceMap: Map<String, Double> = emptyMap()
+        ingredientCatalog: GroceryIngredientCatalog
     ): List<GroceryListItemEntity> {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val weekStartDate = dateFormat.format(Date())
 
         val available = catalog.filter { food ->
+            if (ingredientCatalog.forFood(food.remoteId, food.name).isEmpty()) return@filter false
             val clean = food.name.trim().lowercase()
             val notDisliked = !dislikedFoodNames.any { it.trim().lowercase() == clean }
             val allergySafe = NutritionSuggestionEngine.isSafeFromAllergies(
@@ -77,7 +78,7 @@ object WeeklyGroceryEngine {
         val hortifrutiFoods = frutasEscolhidas + folhasEscolhidas + legumesEscolhidos + temperoFresco
 
         hortifrutiFoods.forEach { food ->
-            selectedItems.add(createGroceryItem(userId, weekStartDate, food, CORRIDOR_HORTIFRUTI, priceMap))
+            selectedItems.addAll(createGroceryItems(userId, weekStartDate, food, CORRIDOR_HORTIFRUTI, ingredientCatalog))
         }
 
         // 2. CORREDOR CEREAIS & GRAOS (3 a 4 itens)
@@ -88,7 +89,7 @@ object WeeklyGroceryEngine {
 
         val graosFoods = (aveiaOrCereal + sementes + leguminosa + graoOuRaiz).distinctBy { it.remoteId }
         graosFoods.forEach { food ->
-            selectedItems.add(createGroceryItem(userId, weekStartDate, food, CORRIDOR_GRAOS, priceMap))
+            selectedItems.addAll(createGroceryItems(userId, weekStartDate, food, CORRIDOR_GRAOS, ingredientCatalog))
         }
 
         // 3. CORREDOR PROTEINAS, OVOS & LATICINIOS (3 a 4 itens)
@@ -98,7 +99,7 @@ object WeeklyGroceryEngine {
 
         val proteinasFoods = (ovos + carnesPeixes + laticinios).distinctBy { it.remoteId }
         proteinasFoods.forEach { food ->
-            selectedItems.add(createGroceryItem(userId, weekStartDate, food, CORRIDOR_PROTEINAS, priceMap))
+            selectedItems.addAll(createGroceryItems(userId, weekStartDate, food, CORRIDOR_PROTEINAS, ingredientCatalog))
         }
 
         // 4. CORREDOR MERCEARIA, TEMPEROS & CHAS (2 a 3 itens)
@@ -108,79 +109,24 @@ object WeeklyGroceryEngine {
 
         val merceariaFoods = (azeite + especiaria + chas).distinctBy { it.remoteId }
         merceariaFoods.forEach { food ->
-            selectedItems.add(createGroceryItem(userId, weekStartDate, food, CORRIDOR_MERCEARIA, priceMap))
+            selectedItems.addAll(createGroceryItems(userId, weekStartDate, food, CORRIDOR_MERCEARIA, ingredientCatalog))
         }
 
-        return selectedItems
+        return selectedItems.groupBy { it.foodId }.values.map { entries -> entries.maxBy { it.purchaseWeightGrams } }
     }
 
-    private fun createGroceryItem(
-        userId: String,
-        weekStartDate: String,
-        food: FoodEntity,
-        corridor: String,
-        priceMap: Map<String, Double>
-    ): GroceryListItemEntity {
-        val dailyGrams = if (food.servingSizeGrams > 0) food.servingSizeGrams else 50
-        val daysPerWeek = when (corridor) {
-            CORRIDOR_HORTIFRUTI -> 6
-            CORRIDOR_GRAOS -> 5
-            CORRIDOR_PROTEINAS -> 6
-            else -> 4
-        }
-        val weeklyBaseGrams = dailyGrams * daysPerWeek
-        // Aplica Margem de Seguranca de +20%
-        val purchaseGrams = (weeklyBaseGrams * 1.20).toInt().coerceAtLeast(50)
-
-        val unitText = calculatePackaging(food, purchaseGrams)
-        val foodKey = food.name.trim().lowercase()
-        val price = priceMap[foodKey] ?: priceMap.entries.firstOrNull {
-            foodKey.contains(it.key) || it.key.contains(foodKey)
-        }?.value ?: 0.0
-
-        return GroceryListItemEntity(
-            remoteId = UUID.randomUUID().toString(),
-            userId = userId,
-            weekStartDate = weekStartDate,
-            foodId = food.remoteId,
-            foodName = food.name,
-            category = corridor,
-            suggestedServingWeekGrams = weeklyBaseGrams,
-            purchaseWeightGrams = purchaseGrams,
-            purchaseUnitText = unitText,
-            estimatedPriceBrl = price,
-            isCheckedInPantry = false
-        )
-    }
-
-    private fun calculatePackaging(food: FoodEntity, grams: Int): String {
-        val name = food.name.lowercase()
-
-        return when {
-            name.contains("ovo") -> "1 duzia (12 unidades)"
-            name.contains("banana") -> "1 palma / penca (~850g a 1kg)"
-            name.contains("maca") || name.contains("pera") -> "5 a 6 unidades (~700g)"
-            name.contains("mamao") -> "1 unidade media (~600g)"
-            name.contains("melao") || name.contains("melancia") -> "1 unidade / fatia grande (~1,5kg)"
-            name.contains("couve") || name.contains("alface") || name.contains("rucula") || name.contains("agriao") -> "2 maos frescos"
-            name.contains("brocolis") || name.contains("couve-flor") -> "1 mao grande (~500g)"
-            name.contains("beterraba") || name.contains("cenoura") -> "3 unidades medias (~450g)"
-            name.contains("tomate") -> "4 a 5 unidades (~500g)"
-            name.contains("limao") -> "4 unidades (~300g)"
-            name.contains("alho") -> "1 cabeca media (~50g)"
-            name.contains("aveia") -> "1 pacote (200g a 250g)"
-            name.contains("chia") || name.contains("linhaca") || name.contains("psyllium") -> "1 pacote (150g)"
-            name.contains("castanha") || name.contains("nozes") || name.contains("amendoa") -> "100g a granel (~10 un)"
-            name.contains("feijao") || name.contains("arroz") -> "1 pacote (1kg)"
-            name.contains("lentilha") || name.contains("grao-de-bico") -> "1 pacote (500g)"
-            name.contains("frango") || name.contains("patinho") -> "Bandeja de 500g a 600g"
-            name.contains("sardinha") || name.contains("tilapia") || name.contains("pescada") -> "Bandeja de 500g de files"
-            name.contains("ricota") || name.contains("minas") || name.contains("iogurte") -> "1 embalagem (250g a 500g)"
-            name.contains("azeite") -> "1 garrafa (500ml)"
-            name.contains("canela") || name.contains("curcuma") || name.contains("gengibre") || name.contains("paprica") -> "1 pacote / frasco (50g)"
-            name.contains("cha") -> "1 caixa (10 a 15 saches) ou 50g erva"
-            grams >= 1000 -> "${String.format(Locale.getDefault(), "%.1f", grams / 1000.0)}kg"
-            else -> "${grams}g (~porcao semanal)"
+    private fun createGroceryItems(userId: String, weekStartDate: String, food: FoodEntity,
+                                   corridor: String, ingredientCatalog: GroceryIngredientCatalog): List<GroceryListItemEntity> {
+        val dailyGrams = food.servingSizeGrams.takeIf { it > 0 } ?: 50
+        val days = when (corridor) { CORRIDOR_HORTIFRUTI -> 6; CORRIDOR_GRAOS -> 5; CORRIDOR_PROTEINAS -> 6; else -> 4 }
+        val plannedGrams = (dailyGrams * days * 1.20).toInt().coerceAtLeast(50)
+        val ingredients = ingredientCatalog.forFood(food.remoteId, food.name)
+        return ingredients.map { ingredient ->
+            val amount = GroceryPurchasePlanner.quantity(ingredient, if (ingredients.size == 1) plannedGrams else ingredient.minimum)
+            GroceryListItemEntity(UUID.randomUUID().toString(), userId, weekStartDate,
+                ingredient.slug, ingredient.name, corridor, dailyGrams * days,
+                if (ingredient.unit == "kg") amount else 0,
+                GroceryPurchasePlanner.text(ingredient, amount), GroceryPurchasePlanner.cost(ingredient, amount))
         }
     }
 }

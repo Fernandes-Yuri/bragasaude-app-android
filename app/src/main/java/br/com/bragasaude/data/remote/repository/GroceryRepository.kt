@@ -20,6 +20,10 @@ class GroceryRepository @Inject constructor(
     fun getPantryItems(userId: String): Flow<List<GroceryListItemEntity>> =
         groceryListDao.getPantryItems(userId)
 
+    suspend fun standardizeIngredients(userId: String, catalog: br.com.bragasaude.domain.GroceryIngredientCatalog) {
+        groceryListDao.rewriteGroceryList(userId) { br.com.bragasaude.domain.GroceryPurchasePlanner.canonicalize(it, catalog) }
+    }
+
     suspend fun saveGroceryList(items: List<GroceryListItemEntity>) {
         groceryListDao.insertAll(items)
     }

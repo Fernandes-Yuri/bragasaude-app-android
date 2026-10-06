@@ -786,6 +786,19 @@ interface GroceryListDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<GroceryListItemEntity>)
 
+    @Query("SELECT * FROM grocery_list_local WHERE userId = :userId ORDER BY category ASC, foodName ASC")
+    suspend fun getGrocerySnapshot(userId: String): List<GroceryListItemEntity>
+
+    @androidx.room.Transaction
+    suspend fun rewriteGroceryList(userId: String, transform: (List<GroceryListItemEntity>) -> List<GroceryListItemEntity>) {
+        val existing = getGrocerySnapshot(userId)
+        val updated = transform(existing)
+        if (updated != existing) {
+            clearGroceryList(userId)
+            insertAll(updated)
+        }
+    }
+
     /** Lista completa do usuario, ordenada por categoria e nome. */
     @Query("SELECT * FROM grocery_list_local WHERE userId = :userId ORDER BY category ASC, foodName ASC")
     fun getGroceryList(userId: String): Flow<List<GroceryListItemEntity>>
