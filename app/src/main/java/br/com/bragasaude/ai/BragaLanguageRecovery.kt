@@ -12,7 +12,7 @@ internal object BragaLanguageRecovery {
         "jejun" to "jejum", "remedo" to "remedio", "medicmento" to "medicamento",
         "relatario" to "relatorio", "historco" to "historico", "hidrataçao" to "hidratacao",
         "ezame" to "exame", "ezames" to "exames", "obrigdo" to "obrigado",
-        "socoro" to "socorro", "respiraçao" to "respiracao"
+        "socoro" to "socorro", "respiraçao" to "respiracao", "naum" to "nao"
     ).mapKeys { fold(it.key) }
     private val words = Regex("""[\p{L}]+""")
     private fun fold(text: String) = Normalizer.normalize(text.lowercase(Locale.ROOT), Normalizer.Form.NFD)
@@ -39,6 +39,11 @@ internal object BragaLanguageRecovery {
         val numeric = "(?:\\d+(?:[.,]\\d+)?|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|quinze|vinte|trinta|quarenta|cinquenta|cem|cento|duzentos|quinhentos)"
         if (measurement && Regex("""\b$numeric\s+(?:ou|quer dizer)\s+$numeric\b""").containsMatchIn(input))
             return "Qual é o valor correto? Repita a medida e a unidade antes de preparar o registro."
+        if (measurement && Regex("""\b(?:ml|mililitros?|litros?|litro|l)\s+ou\s+(?:$numeric\s+)?(?:ml|mililitros?|litros?|litro|l)\b""").containsMatchIn(input))
+            return "Confirme a unidade da quantidade: mililitros ou litros?"
+        if (Regex("""\bpressao\b""").containsMatchIn(input) &&
+            Regex("""\b(?:1\d{2}|2\d{2})\s+(?:por|/)\s+[1-9]\b|\b1[0-9]\s+(?:por|/)\s+[5-9][0-9]\b""").containsMatchIn(input))
+            return "Confirme a escala dos dois valores da pressão. Repita, por exemplo, 12 por 8 ou 120 por 80."
         if (Regex("""\b(tomei|tomar|remedio|medicamento|comprimido)\b""").containsMatchIn(input) &&
             Regex("""\b(?:ou|acho que|nao sei qual)\b""").containsMatchIn(input))
             return "Confirme o nome exato do medicamento na sua lista ou na embalagem. Não vou escolher nem corrigir o nome por aproximação."
@@ -46,7 +51,7 @@ internal object BragaLanguageRecovery {
             Regex("""\bagua\b""").containsMatchIn(input) && Regex("""\b$numeric\b""").containsMatchIn(input) &&
             !Regex("""\b(ml|mililitros?|litros?|litro|l|copos?|garrafas?|canecas?)\b""").containsMatchIn(input))
             return "Qual é a unidade dessa quantidade de água: mililitros, litros ou copos?"
-        if (Regex("""\b(?:naum|num|n)\s+(?:tomei|bebi|anota|anote|registra|registre|entendi|intendi)\b""").containsMatchIn(input))
+        if (Regex("""\b(?:naum|num|n)\s+(?:tomei|bebi|anota|anote|registra|registre|entendi|intendi|tenho|sinto)\b""").containsMatchIn(fold(text)))
             return "Não ficou claro se você está negando essa informação. Repita a frase com ou sem a palavra não."
         return null
     }
