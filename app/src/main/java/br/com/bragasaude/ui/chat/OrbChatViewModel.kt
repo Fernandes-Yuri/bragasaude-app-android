@@ -292,7 +292,7 @@ class OrbChatViewModel @Inject constructor(
                         detail = "historyTurns=${history.dropLast(1).size}", owner = owner, conversation = conversationId, turn = contextTurn)
                     gateway.open(viewModelScope)
                     val context = listOf("assistant" to GroqDynamicPrompt().build(history.dropLast(1), channel, local)) + history.takeLast(10)
-                    gateway.send(context, actingAs = scope?.first, patientId = scope?.second) { partial ->
+                    gateway.sendRemote(context, actingAs = scope?.first, patientId = scope?.second) { partial ->
                         if (version == revision) {
                             if (partial.isNotBlank() && firstTextMs == null) firstTextMs = elapsedMs()
                             mutable.update { it.copy(partialText = BragaInputLanguage.forChannel(partial, channel)) }
