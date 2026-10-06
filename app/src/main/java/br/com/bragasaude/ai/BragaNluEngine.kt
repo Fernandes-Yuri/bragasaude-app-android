@@ -20,7 +20,8 @@ data class NluOutput(
     val healthQuery: HealthQuery? = null,
     val hasLocalData: Boolean? = null,
     val referenceMeasuredAtMillis: Long? = null,
-    val referenceZoneId: String? = null
+    val referenceZoneId: String? = null,
+    val fallbackFromIntent: String? = null
 ) {
     val route: BragaRoute get() = when {
         isBloqueioSeguranca -> BragaRoute.BLOCKED
@@ -425,6 +426,12 @@ object BragaNluEngine {
         emergency.intent?.let { intent ->
             return NluOutput(intent, sortearResposta(intent), isEmergencia = true, tempoMs = deltaMs(inicio))
         }
+        if (Regex("""^(?:eu )?(?:to|tou|estou) (?:passando mal|me sentindo mal)(?: agora)?[.!? ]*$""").matches(protegido)) return NluOutput(
+            "sintoma_mal_estar_atual",
+            // Ministério da Saúde: gov.br/saude/pt-br/assuntos/saude-de-a-a-z/i/infarto
+            "O que você está sentindo agora? Se houver dor no peito, falta de ar ou sensação de desmaio, ligue para o SAMU 192 e peça ajuda a alguém próximo.",
+            tempoMs = deltaMs(inicio)
+        )
         if (emergency.contextualMention && !BragaRoutingPolicy.complexHealthQuestion(protegido) &&
             HealthQueryResolver.explicit(texto) == null) {
             return NluOutput("sintoma_contextual", sortearResposta("sintoma_contextual"), tempoMs = deltaMs(inicio))

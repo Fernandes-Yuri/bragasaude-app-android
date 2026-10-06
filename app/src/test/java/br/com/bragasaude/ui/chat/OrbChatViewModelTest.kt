@@ -193,13 +193,27 @@ class OrbChatViewModelTest {
         coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
     }
 
-    @Test fun unknownAndOffTopicInputsStayLocal() = runTest(dispatcher) {
-        listOf("Quem ganhou o jogo?", "me explica melhor", "Não estou com dor no peito").forEach {
+    @Test fun blockedAndContextualSymptomsStayLocal() = runTest(dispatcher) {
+        listOf("Quem ganhou o jogo?", "Não estou com dor no peito").forEach {
             vm.sendMessage(it); runCurrent()
             assertFalse(vm.state.value.isStreaming)
         }
         verify(exactly = 0) { gateway.open(any()) }
         coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+    }
+
+    @Test fun unresolvedFollowUpUsesGatewayContextAndIgnoresRemoteAction() = runTest(dispatcher) {
+        coEvery { gateway.send(any(), any(), any(), any()) } returns OrbReply(
+            """{"fala":"Vou esclarecer a explicação anterior.","acao":"REGISTRAR_PRESSAO","parametros":{"sistolica":190}}""")
+        vm.sendMessage("Por que minha pressão subiu?"); runCurrent()
+        val previous = vm.state.value.messages.last().text
+        vm.sendMessage("tem certeza disso?"); runCurrent()
+        assertEquals("Vou esclarecer a explicação anterior.", vm.state.value.messages.last().text)
+        assertNull(vm.state.value.messages.last().action)
+        coVerify(exactly = 1) { gateway.send(match { messages ->
+            messages.any { it.second.contains(previous.take(100)) } &&
+                messages.any { it.second.contains("entrada_sem_clareza") }
+        }, any(), any(), any()) }
     }
 
     @Test fun clinicalQuestionWithPersonalMetricDoesNotReadHistory() = runTest(dispatcher) {

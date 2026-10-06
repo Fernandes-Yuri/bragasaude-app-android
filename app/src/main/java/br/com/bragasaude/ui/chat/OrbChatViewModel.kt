@@ -211,7 +211,7 @@ class OrbChatViewModel @Inject constructor(
         save()
         val version = ++revision
         val history = state.value.messages.filter { it.status !in listOf("cancelled", "error", "blocked") }
-            .takeLast(30).map { it.role to (it.rawContent ?: it.text) }
+            .takeLast(30).map { it.role to it.text }
         val previousGeneration = generation
         generation = viewModelScope.launch {
             val startedAt = System.nanoTime()
@@ -227,13 +227,13 @@ class OrbChatViewModel @Inject constructor(
                 br.com.bragasaude.ai.BragaDebugTrace.event("RECEIVED", channel, input = value,
                     owner = owner, conversation = conversationId, turn = contextTurn)
                 val nluStartedAt = System.nanoTime()
-                val local = hybrid.analyze(text, channel, healthQuerySession, owner, conversationId)
+                var local = hybrid.analyze(text, channel, healthQuerySession, owner, conversationId)
                 val nluMs = (System.nanoTime() - nluStartedAt) / 1_000_000.0
                 br.com.bragasaude.ai.BragaDebugTrace.event("DECISION", channel, input = value, output = local,
                     owner = owner, conversation = conversationId, turn = contextTurn)
                 val concrete = if (br.com.bragasaude.ai.BragaActionGate.canParse(value, local))
                     voiceParser.parse(value, null, null) else
-                    br.com.bragasaude.ai.BragaActionGate.readOnlyQuery(value, local, voiceParser)
+                    br.com.bragasaude.ai.BragaActionGate.readOnlyIntent(value, local, voiceParser)
                 br.com.bragasaude.ai.BragaDebugTrace.event("PARSE", channel, input = value,
                     detail = "parser=${concrete?.javaClass?.simpleName ?: "NONE"}",
                     owner = owner, conversation = conversationId, turn = contextTurn)
@@ -245,6 +245,15 @@ class OrbChatViewModel @Inject constructor(
                     else -> null
                 }
                 val actionReply = if (concrete != null) BragaChatActions.reply(concrete) else null
+                if (concrete is br.com.bragasaude.domain.VoiceHealthIntent.ConversationalReply &&
+                    local.route == br.com.bragasaude.ai.BragaRoute.CLARIFICATION) {
+                    local = br.com.bragasaude.ai.NluOutput("conversa_parser_local", concrete.message)
+                }
+                local = br.com.bragasaude.ai.BragaCloudFallback.afterLocal(value, local,
+                    handledLocally = actionReply != null || shortcut != null)
+                if (local.fallbackFromIntent != null) br.com.bragasaude.ai.BragaDebugTrace.event(
+                    "FALLBACK", channel, input = value, output = local, detail = "parser=NONE; local_exhausted",
+                    owner = owner, conversation = conversationId, turn = contextTurn)
                 val useLocal = local.isBloqueioSeguranca || local.isEmergencia ||
                     local.intent == "orientacao_cadastro_medicamento" || BragaHealthMemory.supports(local.intent) ||
                     (!local.delegarParaNuvem && actionReply == null)
@@ -279,8 +288,10 @@ class OrbChatViewModel @Inject constructor(
                     val scope = caregiverScope()
                     if (version != revision) return@launch
                     healthQuerySession.forgetReferences(owner, conversationId, contextTurn)
+                    br.com.bragasaude.ai.BragaDebugTrace.event("CLOUD_REQUEST", channel, input = value, output = local,
+                        detail = "historyTurns=${history.dropLast(1).size}", owner = owner, conversation = conversationId, turn = contextTurn)
                     gateway.open(viewModelScope)
-                    val context = listOf("assistant" to GroqDynamicPrompt().build(history.dropLast(1), channel)) + history.takeLast(10)
+                    val context = listOf("assistant" to GroqDynamicPrompt().build(history.dropLast(1), channel, local)) + history.takeLast(10)
                     gateway.send(context, actingAs = scope?.first, patientId = scope?.second) { partial ->
                         if (version == revision) {
                             if (partial.isNotBlank() && firstTextMs == null) firstTextMs = elapsedMs()
@@ -294,6 +305,8 @@ class OrbChatViewModel @Inject constructor(
                 val rawParams = parsed.optJSONObject("parametros") ?: JSONObject()
                 val (action, finalParams) = if (shortcut != null) {
                     shortcut to rawParams
+                } else if (local.fallbackFromIntent != null) {
+                    null to JSONObject()
                 } else {
                     resolveHealthAction(value, rawAction, rawParams)
                 }

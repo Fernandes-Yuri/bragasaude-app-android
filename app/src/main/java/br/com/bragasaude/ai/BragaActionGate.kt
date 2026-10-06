@@ -12,7 +12,8 @@ internal object BragaActionGate {
         if (output.isBloqueioSeguranca || output.isEmergencia || output.delegarParaNuvem ||
             BragaHealthMemory.supports(output.intent) || output.intent.startsWith("ajuda_") ||
             (output.intent.startsWith("entrada_") && output.intent != "entrada_sem_clareza") ||
-            output.intent == "orientacao_cadastro_medicamento" || output.intent == "sintoma_contextual") return false
+            output.intent == "orientacao_cadastro_medicamento" || output.intent == "sintoma_contextual" ||
+            output.intent == "sintoma_mal_estar_atual") return false
         val normalized = BragaRoutingPolicy.normalize(text).trimEnd('.', '!', '?', ' ')
         // Respostas curtas pertencem à conversa de hidratação pendente; não contêm um novo registro.
         if (normalized in setOf("nao", "nao sei", "nao lembro", "nao quero", "nao quero mais")) return true
@@ -21,10 +22,16 @@ internal object BragaActionGate {
 
     /** Preserva as consultas legadas do parser, sem liberar sua saída de registro para perguntas. */
     fun readOnlyQuery(text: String, output: NluOutput, parser: VoiceHealthParser,
-                      role: String? = null, caregiverMode: String? = null): VoiceHealthIntent.QueryPatientStatus? {
+                      role: String? = null, caregiverMode: String? = null): VoiceHealthIntent.QueryPatientStatus? =
+        readOnlyIntent(text, output, parser, role, caregiverMode) as? VoiceHealthIntent.QueryPatientStatus
+
+    fun readOnlyIntent(text: String, output: NluOutput, parser: VoiceHealthParser,
+                       role: String? = null, caregiverMode: String? = null): VoiceHealthIntent? {
         if (output.intent !in setOf("entrada_sem_clareza", "duvida_valor_pressao",
                 "duvida_valor_glicemia", "duvida_hidratacao_agua") ||
             negation.containsMatchIn(BragaRoutingPolicy.normalize(text))) return null
-        return parser.parse(text, role, caregiverMode) as? VoiceHealthIntent.QueryPatientStatus
+        return parser.parse(text, role, caregiverMode).takeIf {
+            it is VoiceHealthIntent.QueryPatientStatus || it is VoiceHealthIntent.ConversationalReply
+        }
     }
 }
