@@ -4,21 +4,27 @@ import java.text.Normalizer
 import java.time.Instant
 import java.time.ZoneId
 
-enum class HealthMetric { PRESSURE, GLUCOSE, WATER }
+enum class HealthMetric { PRESSURE, GLUCOSE, WATER, HEART_RATE, OXYGEN, WEIGHT, MEDICATION_STOCK, MEDICATION_DOSES }
 enum class HealthPeriod { TODAY, YESTERDAY, LAST_7_DAYS, LAST_30_DAYS, ALL }
-enum class HealthOperation { LAST, SUMMARY, AVERAGE }
+enum class HealthOperation { LAST, SUMMARY, AVERAGE, EXTREMES, COMPARE_YESTERDAY, AGE }
 
 /** Valores vêm sempre do Room; este objeto guarda somente a intenção da consulta. */
 data class HealthQuery(
     val metric: HealthMetric,
     val period: HealthPeriod = HealthPeriod.ALL,
     val operation: HealthOperation = HealthOperation.LAST,
-    val glucoseType: String? = null
+    val glucoseType: String? = null,
+    val medicationName: String? = null
 ) {
     val intent: String get() = when (metric) {
         HealthMetric.PRESSURE -> BragaHealthMemory.PRESSURE
         HealthMetric.GLUCOSE -> BragaHealthMemory.GLUCOSE
         HealthMetric.WATER -> BragaHealthMemory.WATER
+        HealthMetric.HEART_RATE -> BragaHealthMemory.HEART_RATE
+        HealthMetric.OXYGEN -> BragaHealthMemory.OXYGEN
+        HealthMetric.WEIGHT -> BragaHealthMemory.WEIGHT
+        HealthMetric.MEDICATION_STOCK -> BragaHealthMemory.MEDICATION_STOCK
+        HealthMetric.MEDICATION_DOSES -> BragaHealthMemory.MEDICATION_DOSES
     }
 
     companion object {
@@ -26,6 +32,11 @@ data class HealthQuery(
             BragaHealthMemory.PRESSURE -> HealthQuery(HealthMetric.PRESSURE, operation = HealthOperation.SUMMARY)
             BragaHealthMemory.GLUCOSE -> HealthQuery(HealthMetric.GLUCOSE, operation = HealthOperation.SUMMARY)
             BragaHealthMemory.WATER -> HealthQuery(HealthMetric.WATER, HealthPeriod.TODAY, HealthOperation.SUMMARY)
+            BragaHealthMemory.HEART_RATE -> HealthQuery(HealthMetric.HEART_RATE)
+            BragaHealthMemory.OXYGEN -> HealthQuery(HealthMetric.OXYGEN)
+            BragaHealthMemory.WEIGHT -> HealthQuery(HealthMetric.WEIGHT)
+            BragaHealthMemory.MEDICATION_STOCK -> HealthQuery(HealthMetric.MEDICATION_STOCK)
+            BragaHealthMemory.MEDICATION_DOSES -> HealthQuery(HealthMetric.MEDICATION_DOSES, HealthPeriod.TODAY)
             else -> throw IllegalArgumentException("Intenção sem consulta de saúde local")
         }
     }
@@ -66,6 +77,9 @@ object HealthQueryResolver {
         if (Regex("\\b(?:pressao|press[aã]o arterial)\\b").containsMatchIn(text)) add(HealthMetric.PRESSURE)
         if (Regex("\\b(?:glicemia|glicose|acucar no sangue)\\b").containsMatchIn(text)) add(HealthMetric.GLUCOSE)
         if (Regex("\\b(?:agua|hidratacao)\\b").containsMatchIn(text)) add(HealthMetric.WATER)
+        if (Regex("""\b(batimentos?|frequencia cardiaca|pulso)\b""").containsMatchIn(text)) add(HealthMetric.HEART_RATE)
+        if (Regex("""\b(saturacao|spo2|oxigenio)\b""").containsMatchIn(text)) add(HealthMetric.OXYGEN)
+        if (Regex("""\bpeso\b""").containsMatchIn(text)) add(HealthMetric.WEIGHT)
     }
     private fun excluded(text: String) = otherPerson.containsMatchIn(text) ||
         explanation.containsMatchIn(text) || registration.containsMatchIn(text)
@@ -94,12 +108,43 @@ object HealthQueryResolver {
 
     fun explicit(text: String): HealthQuery? {
         val input = normalized(text)
+        if (otherPerson.containsMatchIn(input) || BragaLanguageRecovery.clarification(text) != null) return null
+        // Medicamentos usam o nome original normalizado, sem aliases ou aproximação.
+        val exact = Normalizer.normalize(text.lowercase(java.util.Locale.ROOT), Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "").replace(Regex("\\s+"), " ").trim().trimEnd('?', '.', '!')
+        Regex("""^(?:quanto (?:de |do )?|quantas unidades de )(.+?) (?:eu )?ainda tenho$|^quanto tenho de (.+)$""")
+            .matchEntire(exact)?.let { match ->
+                val name = match.groupValues.drop(1).firstOrNull { it.isNotBlank() }
+                if (name != null && name !in setOf("remedio", "medicamento", "agua"))
+                    return HealthQuery(HealthMetric.MEDICATION_STOCK, medicationName = name)
+            }
+        Regex("""^(?:ja )?(?:registrei|anotei) (?:a |uma )?dose de (.+?) (hoje|ontem)$""").matchEntire(exact)?.let {
+            return HealthQuery(HealthMetric.MEDICATION_DOSES,
+                if (it.groupValues[2] == "hoje") HealthPeriod.TODAY else HealthPeriod.YESTERDAY,
+                medicationName = it.groupValues[1])
+        }
+        Regex("""^(?:minha |a minha )(pressao|glicemia|glicose) (?:aumentou|subiu|baixou|caiu|diminuiu|mudou) (?:em relacao a|comparada com) ontem$""")
+            .matchEntire(input)?.let {
+                return HealthQuery(if (it.groupValues[1] == "pressao") HealthMetric.PRESSURE else HealthMetric.GLUCOSE,
+                    HealthPeriod.TODAY, HealthOperation.COMPARE_YESTERDAY)
+            }
+        Regex("""^ha quantos dias (?:eu )?nao (?:registro|anoto) (?:minha |a )?(pressao|glicemia|glicose)$""")
+            .matchEntire(input)?.let {
+                return HealthQuery(if (it.groupValues[1] == "pressao") HealthMetric.PRESSURE else HealthMetric.GLUCOSE,
+                    operation = HealthOperation.AGE)
+            }
+        if (Regex("""^(?:qual (?:e )?(?:a )?minha meta de (?:agua|hidratacao)(?: e quanto falta)?|quanto falta (?:de agua|para (?:a |minha |a minha )?meta de agua))(?: hoje)?$""").matches(input))
+            return HealthQuery(HealthMetric.WATER, HealthPeriod.TODAY, HealthOperation.SUMMARY)
         if (excluded(input) || hasUnsupportedPeriod(text) || BragaLanguageRecovery.clarification(text) != null) return null
         val metric = metrics(input).singleOrNull() ?: return null
         if (!own.containsMatchIn(input) || (!request.containsMatchIn(input) &&
                 period(input) == null && !isFollowUp(input))) return null
-        val requestedPeriod = period(input) ?: if (metric == HealthMetric.WATER) HealthPeriod.TODAY else HealthPeriod.ALL
-        val operation = operation(input) ?: if (requestedPeriod == HealthPeriod.ALL || metric == HealthMetric.WATER)
+        val requestedPeriod = period(input) ?: when {
+            metric == HealthMetric.WATER -> HealthPeriod.TODAY
+            operation(input) == HealthOperation.EXTREMES -> HealthPeriod.LAST_30_DAYS
+            else -> HealthPeriod.ALL
+        }
+        val operation = operation(input) ?: if ((requestedPeriod == HealthPeriod.ALL && metric in setOf(HealthMetric.PRESSURE, HealthMetric.GLUCOSE)) || metric == HealthMetric.WATER)
             HealthOperation.SUMMARY else HealthOperation.LAST
         return HealthQuery(metric, requestedPeriod, operation, if (metric == HealthMetric.GLUCOSE) glucoseType(input) else null)
     }
@@ -109,7 +154,7 @@ object HealthQueryResolver {
         if (excluded(input) || hasUnsupportedPeriod(text) || BragaLanguageRecovery.clarification(text) != null || metrics(input).size > 1 || input.length > 100) return false
         val hasQueryPart = period(input) != null || operation(input) != null || metrics(input).isNotEmpty() || glucoseType(input) != null
         if (!hasQueryPart) return false
-        val remainder = input.replace(Regex("\\b(?:e|a|o|as|os|da|do|das|dos|de|em|no|na|nos|nas|minha|meu|minhas|meus|foi|foram|quanto|quanta|qual|como|ficou|deu|ta|esta|estao|media|resumo|ultimo|ultima|registro|registros|medicao|medicoes|pressao|arterial|glicemia|glicose|acucar|sangue|agua|hidratacao|hoje|ontem|semana|mes|ultimos|ultimas|dias|7|sete|30|trinta|jejum|apos|depois|refeicao|almoco|jantar|pos|prandial|sensor|continuo|aleatoria|casual|capilar)\\b"), "")
+        val remainder = input.replace(Regex("\\b(?:e|a|o|as|os|da|do|das|dos|de|em|no|na|nos|nas|minha|meu|minhas|meus|foi|foram|quanto|quanta|qual|como|ficou|deu|ta|esta|estao|media|resumo|ultimo|ultima|registro|registros|medicao|medicoes|pressao|arterial|glicemia|glicose|acucar|sangue|agua|hidratacao|hoje|ontem|semana|mes|ultimos|ultimas|dias|7|sete|30|trinta|jejum|apos|depois|refeicao|almoco|jantar|pos|prandial|sensor|continuo|aleatoria|casual|capilar|batimento|batimentos|frequencia|cardiaca|pulso|saturacao|spo2|oxigenio|peso|maior|menor|maxima|minima|maximo|minimo)\\b"), "")
             .replace(" ", "")
         return remainder.isEmpty() && (input.startsWith("e ") || metrics(input).isEmpty() || !request.containsMatchIn(input))
     }
@@ -120,7 +165,8 @@ object HealthQueryResolver {
         val metric = metrics(input).singleOrNull() ?: previous.metric
         val type = if (metric != HealthMetric.GLUCOSE) null else glucoseType(input)
             ?: previous.glucoseType.takeIf { previous.metric == HealthMetric.GLUCOSE }
-        return HealthQuery(metric, period(input) ?: previous.period, operation(input) ?: previous.operation, type)
+        return HealthQuery(metric, period(input) ?: previous.period, operation(input) ?: previous.operation, type,
+            previous.medicationName.takeIf { metric == previous.metric })
     }
 
     private fun period(text: String): HealthPeriod? = when {
@@ -132,6 +178,7 @@ object HealthQueryResolver {
         else -> null
     }
     private fun operation(text: String): HealthOperation? = when {
+        Regex("""\b(maior|menor|maxima|minima|maximo|minimo)\b""").containsMatchIn(text) -> HealthOperation.EXTREMES
         Regex("\\bmedia\\b").containsMatchIn(text) -> HealthOperation.AVERAGE
         Regex("\\b(?:ultimo|ultima)\\b").containsMatchIn(text) -> HealthOperation.LAST
         Regex("\\b(?:resumo|historico)\\b").containsMatchIn(text) -> HealthOperation.SUMMARY

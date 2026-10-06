@@ -60,10 +60,14 @@ internal object BragaContextualHelp {
                     "ajuda_registro_sem_dados" -> "Confira a conta e se salvou a medição. Um período sem anotações não mostra valores. Confira também a tela desses dados. Esta mensagem não permite afirmar que um registro foi perdido."
                     "ajuda_exame_sem_dados" -> "Em Meus Exames, confira a busca e o filtro de armazenamento. Verifique a conta e se concluiu a revisão e o salvamento. Esta mensagem não permite afirmar que o exame foi perdido."
                     "ajuda_historico_app" -> "Peça sua última pressão, a glicemia de ontem ou quanto bebeu de água hoje. Para um PDF, abra Dados e Relatórios e toque em Baixar Relatório em PDF."
-                    BragaHealthMemory.PRESSURE, BragaHealthMemory.GLUCOSE, BragaHealthMemory.WATER -> if (previous.hasLocalData == true)
+                    BragaHealthMemory.PRESSURE, BragaHealthMemory.GLUCOSE, BragaHealthMemory.WATER,
+                    BragaHealthMemory.HEART_RATE, BragaHealthMemory.OXYGEN, BragaHealthMemory.WEIGHT,
+                    BragaHealthMemory.MEDICATION_STOCK, BragaHealthMemory.MEDICATION_DOSES -> if (previous.hasLocalData == true)
                         "Eu mostrei o resultado da consulta aos seus registros no aplicativo. Isso não explica a causa de uma mudança. Você quer que eu esclareça os valores, o período ou como consultar esses registros?"
                         else "Não consegui apresentar registros nessa consulta. Você quer esclarecer o período consultado ou como conferir os dados na tela do aplicativo?"
-                    else -> return clarify("Qual parte da resposta você quer esclarecer: uma medição, um registro ou uma função do aplicativo?")
+                    else -> if (BragaAppHelp.supports(previous.intent))
+                        "Vamos por partes:\n" + text.split(Regex("""(?<=[.!?])\s+(?=\p{Lu})""")).joinToString("\n")
+                        else return clarify("Qual parte da resposta você quer esclarecer: uma medição, um registro ou uma função do aplicativo?")
                 }
                 NluOutput("ajuda_reformulacao_contextual", simple)
             }

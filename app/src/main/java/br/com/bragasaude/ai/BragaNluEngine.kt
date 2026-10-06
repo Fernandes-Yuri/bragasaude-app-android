@@ -463,11 +463,7 @@ object BragaNluEngine {
             "entrada_consulta_ambigua", BragaInputLanguage.clarification(channel), tempoMs = deltaMs(inicio)
         )
         HealthQueryResolver.explicit(texto)?.let { query ->
-            val intent = when (query.metric) {
-                HealthMetric.PRESSURE -> BragaHealthMemory.PRESSURE
-                HealthMetric.GLUCOSE -> BragaHealthMemory.GLUCOSE
-                HealthMetric.WATER -> BragaHealthMemory.WATER
-            }
+            val intent = query.intent
             return NluOutput(intent, null, tempoMs = deltaMs(inicio), healthQuery = query)
         }
 

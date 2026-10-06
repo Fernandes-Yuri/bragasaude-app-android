@@ -58,6 +58,9 @@ interface VitalSignDao {
     @Query("SELECT COALESCE(SUM(hydrationMl), 0) AS totalMl, COUNT(*) AS recordCount FROM vital_signs_local WHERE userId = :userId AND hydrationMl > 0 AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis")
     suspend fun getHydrationSummaryForMemory(userId: String, startInclusiveMillis: Long, endExclusiveMillis: Long): HydrationMemoryAggregate
 
+    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis AND ((:metric = 'HEART_RATE' AND heartRate > 0) OR (:metric = 'OXYGEN' AND oxygenSaturation BETWEEN 1 AND 100)) ORDER BY measuredAt DESC, localId DESC LIMIT 1")
+    suspend fun getLatestAuxiliaryForMemory(userId: String, metric: String, startInclusiveMillis: Long, endExclusiveMillis: Long): VitalSignEntity?
+
     @Query("SELECT * FROM vital_signs_local WHERE pendingSync = 1")
     suspend fun getPendingSync(): List<VitalSignEntity>
 
@@ -175,6 +178,8 @@ interface MealRuleDao {
 
 @Dao
 interface BiometryDao {
+    @Query("SELECT * FROM biometry_local WHERE userId = :userId AND weight > 0 AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis ORDER BY measuredAt DESC, localId DESC LIMIT 1")
+    suspend fun getLatestWeightForMemory(userId: String, startInclusiveMillis: Long, endExclusiveMillis: Long): BiometryEntity?
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(biometry: BiometryEntity)
 
@@ -292,6 +297,8 @@ interface MedicationDao {
 
 @Dao
 interface MedicationLogDao {
+    @Query("SELECT * FROM medication_logs_local WHERE userId = :userId AND medicationId = :medId AND unitsTaken > 0 AND takenAt >= :startInclusiveMillis AND takenAt < :endExclusiveMillis ORDER BY takenAt DESC, id DESC")
+    suspend fun getForMemory(userId: String, medId: String, startInclusiveMillis: Long, endExclusiveMillis: Long): List<MedicationLogEntity>
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertOnce(log: MedicationLogEntity): Long
 
