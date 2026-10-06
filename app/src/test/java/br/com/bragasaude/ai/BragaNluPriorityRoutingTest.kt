@@ -88,6 +88,7 @@ class BragaNluPriorityRoutingTest {
         }
         assertEquals(BragaRoute.CLOUD, BragaNluEngine.analisar("Por que minha pressão subiu ontem?").route)
         assertTrue(BragaNluEngine.analisar("Qual a capital de Portugal em 2025?").isBloqueioSeguranca)
+        assertTrue(BragaNluEngine.analisar("Qual foi o último jogo em 2025?").isBloqueioSeguranca)
     }
 
     @Test fun `perguntas e negacoes nao chegam ao parser de registro nos dois canais`() {
