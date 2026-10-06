@@ -15,7 +15,7 @@ internal object BragaActionGate {
             output.intent == "orientacao_cadastro_medicamento" || output.intent == "sintoma_contextual") return false
         val normalized = BragaRoutingPolicy.normalize(text).trimEnd('.', '!', '?', ' ')
         // Respostas curtas pertencem à conversa de hidratação pendente; não contêm um novo registro.
-        if (normalized in setOf("nao", "nao sei", "nao lembro")) return true
+        if (normalized in setOf("nao", "nao sei", "nao lembro", "nao quero", "nao quero mais")) return true
         return !text.contains('?') && !question.containsMatchIn(normalized) && !negation.containsMatchIn(normalized)
     }
 

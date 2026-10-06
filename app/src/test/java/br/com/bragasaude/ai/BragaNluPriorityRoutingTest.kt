@@ -2,6 +2,7 @@ package br.com.bragasaude.ai
 
 import br.com.bragasaude.domain.VoiceHealthIntent
 import br.com.bragasaude.domain.VoiceHealthParser
+import br.com.bragasaude.domain.HydrationConversation
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -114,5 +115,15 @@ class BragaNluPriorityRoutingTest {
             assertNotNull(readOnly)
             assertEquals("pai", readOnly!!.targetName)
         }
+    }
+
+    @Test fun `negacao curta pode cancelar rascunho de agua sem preparar consumo`() {
+        val draft = HydrationConversation()
+        assertTrue(draft.respond("bebi dois copos de água", "u") is HydrationConversation.Reply.Say)
+        val text = "não quero mais"
+        assertTrue(BragaActionGate.canParse(text, BragaNluEngine.analisar(text)))
+        val reply = draft.respond(text, "u") as HydrationConversation.Reply.Say
+        assertTrue(reply.text.contains("Nada foi salvo"))
+        assertFalse(VoiceHealthParser().parse(text) is VoiceHealthIntent.Hydration)
     }
 }
