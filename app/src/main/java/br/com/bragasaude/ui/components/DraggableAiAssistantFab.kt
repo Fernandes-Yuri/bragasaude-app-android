@@ -428,7 +428,7 @@ fun DraggableAiAssistantFab(
 
         val isModalOpen = LocalBragaModalState.current.isOpen
         val isKeyboardOpen = WindowInsets.isImeVisible
-        val shouldHideOrbVisuals = (isModalOpen || isKeyboardOpen) && !showVoiceOnboarding && !showEmergencyDialog
+        val shouldHideOrbVisuals = (isModalOpen || isKeyboardOpen) && !isLiveMode && !showVoiceOnboarding && !showEmergencyDialog
         LaunchedEffect(shouldHideOrbVisuals) {
             if (shouldHideOrbVisuals) viewModel.onHostStopped()
         }
