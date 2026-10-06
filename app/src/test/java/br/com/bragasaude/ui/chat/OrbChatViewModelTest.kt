@@ -245,12 +245,16 @@ class OrbChatViewModelTest {
     }
 
     @Test fun newConversationClearsIncompleteQueryContext() = runTest(dispatcher) {
+        val remoteHistory = slot<List<Pair<String, String>>>()
+        coEvery { gateway.sendRemote(capture(remoteHistory), any(), any(), any()) } returns OrbReply(
+            """{"fala":"Qual informação de ontem você deseja consultar?","acao":"CONVERSA","parametros":{}}""")
         vm.sendMessage("Qual foi minha última pressão?"); runCurrent()
         vm.newConversation()
         vm.sendMessage("e ontem?"); runCurrent()
         coVerify(exactly = 1) { hybrid.resolveLocal(match { it.healthQuery != null }, any(), any(), any(), any(), any()) }
         assertNull(vm.state.value.messages.last().action)
-        verify(exactly = 0) { gateway.open(any()) }
+        coVerify(exactly = 1) { gateway.sendRemote(any(), any(), any(), any()) }
+        assertFalse(remoteHistory.captured.any { it.second.contains("Qual foi minha última pressão?") })
     }
     @Test fun deliveredExplanationCanBeSimplifiedWithoutRegistrationOrGateway() = runTest(dispatcher) {
         vm.sendMessage("Por que minha pressão subiu?"); runCurrent()
@@ -266,16 +270,21 @@ class OrbChatViewModelTest {
     }
 
     @Test fun deliveredResponseCanBeRepeatedAndNewConversationRemovesReference() = runTest(dispatcher) {
+        val remoteHistory = slot<List<Pair<String, String>>>()
+        coEvery { gateway.sendRemote(capture(remoteHistory), any(), any(), any()) } returns OrbReply(
+            """{"fala":"Qual informação você deseja retomar?","acao":"CONVERSA","parametros":{}}""")
         vm.sendMessage("Como anexo um exame?"); runCurrent()
         val original = vm.state.value.messages.last().text
         vm.sendMessage("Repete"); runCurrent()
         assertEquals(original, vm.state.value.messages.last().text)
         assertNull(vm.state.value.messages.last().action)
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
         vm.newConversation()
         vm.sendMessage("Repete"); runCurrent()
         assertNotEquals(original, vm.state.value.messages.last().text)
         assertNull(vm.state.value.messages.last().action)
-        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
+        coVerify(exactly = 1) { gateway.sendRemote(any(), any(), any(), any()) }
+        assertFalse(remoteHistory.captured.any { it.second.contains(original.take(100)) })
     }
 
 }
