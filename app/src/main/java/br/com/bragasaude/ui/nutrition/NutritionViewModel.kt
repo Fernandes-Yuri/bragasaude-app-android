@@ -104,7 +104,8 @@ class NutritionViewModel @Inject constructor(
                     (profile?.hasHypertension != true || food.isHypertensionSafe)
             } || (related.isEmpty() && ingredient.foodIds.isEmpty() &&
                 NutritionSuggestionEngine.isSafeFromAllergies(FoodEntity(ingredient.slug, ingredient.name),
-                    profile?.foodAllergies.orEmpty(), profile?.customFoodRestrictions))
+                    profile?.foodAllergies.orEmpty(), profile?.customFoodRestrictions) &&
+                (profile?.hasDiabetes != true || ingredient.slug != "tapioca"))
         }.sortedBy { it.name }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -166,7 +167,8 @@ class NutritionViewModel @Inject constructor(
         val vitals: List<VitalSignEntity>,
         val profile: ProfileEntity?,
         val loggedFoods: Set<String>,
-        val pantryFoods: Set<String>
+        val pantryFoods: Set<String>,
+        val pantryIngredientIds: Set<String>
     )
 
     private val clinicalDataFlow = combine(
@@ -181,7 +183,8 @@ class NutritionViewModel @Inject constructor(
             vitals = vitals,
             profile = profileEntity,
             loggedFoods = todayMeals.map { it.foodName }.toSet(),
-            pantryFoods = pantryList.map { it.foodName }.toSet()
+            pantryFoods = pantryList.map { it.foodName }.toSet(),
+            pantryIngredientIds = pantryList.map { it.foodId }.toSet()
         )
     }.distinctUntilChanged()
 
@@ -189,8 +192,13 @@ class NutritionViewModel @Inject constructor(
         clinicalDataFlow,
         catalogRepository.getFoodCatalog().distinctUntilChanged(),
         _selectedMealTab,
-        _dislikedFoodNames
-    ) { snapshot, catalog, currentTab, dislikes ->
+        _dislikedFoodNames,
+        _groceryIngredients
+    ) { snapshot, catalog, currentTab, dislikes, ingredients ->
+        val pantryFoodNames = snapshot.pantryFoods + catalog.filter { food ->
+            val components = ingredients?.forFood(food.remoteId, food.name).orEmpty()
+            components.isNotEmpty() && components.all { it.slug in snapshot.pantryIngredientIds }
+        }.map { it.name }
         NutritionSuggestionEngine.generateSuggestions(
             exams = snapshot.exams,
             vitals = snapshot.vitals,
@@ -199,7 +207,7 @@ class NutritionViewModel @Inject constructor(
             selectedMealType = currentTab,
             dislikedFoodNames = dislikes,
             loggedFoodNamesToday = snapshot.loggedFoods,
-            pantryFoodNames = snapshot.pantryFoods
+            pantryFoodNames = pantryFoodNames
         )
     }.distinctUntilChanged()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

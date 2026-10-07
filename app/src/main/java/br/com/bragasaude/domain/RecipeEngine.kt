@@ -74,7 +74,7 @@ class RecipeEngine @Inject constructor() {
             calculateMatch(recipe, pantryNames)
         }
 
-        // Só recomenda receitas com todos os ingredientes na lista de compras.
+        // Sugestões incompletas são opcionais; receitas completas aparecem primeiro.
         return matches
             .filter { it.availableIngredients.isNotEmpty() && (includeMissing || it.hasAll) }
             .sortedWith(compareByDescending<RecipePantryMatch> { it.hasAll }

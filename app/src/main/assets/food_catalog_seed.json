@@ -2307,33 +2307,6 @@
     ]
   },
   {
-    "remoteId": "food_148",
-    "name": "Omelete de Claras com Ervas",
-    "category": "Ovos & Proteínas",
-    "kcal": 52,
-    "carbsG": 0.7,
-    "proteinG": 11,
-    "fatG": 0.2,
-    "fiberG": 0,
-    "isDiabetesSafe": true,
-    "isHypertensionSafe": true,
-    "status": "RECOMENDADO",
-    "functionalTags": [
-      "proteina_pura",
-      "zero_gordura",
-      "baixo_sodio"
-    ],
-    "healthBenefits": "Altíssima concentração proteica sem calorias adicionais.",
-    "consumptionTip": "2 claras batidas com orégano no jantar.",
-    "servingSizeGrams": 65,
-    "servingUnit": "2 claras com ervas (65g)",
-    "minServingGrams": 30,
-    "maxServingGrams": 130,
-    "suitableMeals": [
-      "Jantar"
-    ]
-  },
-  {
     "remoteId": "food_149",
     "name": "Peito de Frango Grelhado em Tiras",
     "category": "Carnes & Aves",

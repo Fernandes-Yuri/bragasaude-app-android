@@ -1381,19 +1381,6 @@
       ]
     },
     {
-      "slug": "claras-de-ovo",
-      "name": "Claras de Ovo",
-      "unit": "kg",
-      "step": 1,
-      "minimum": 50,
-      "aliases": [
-        "Omelete de Claras com Ervas"
-      ],
-      "food_ids": [
-        "food_148"
-      ]
-    },
-    {
       "slug": "paleta-bovina",
       "name": "Paleta Bovina",
       "unit": "kg",
@@ -2463,20 +2450,6 @@
       "preparation_components": [],
       "shopping_components": [
         "nabo-branco"
-      ]
-    },
-    {
-      "food_id": "food_148",
-      "food_name": "Omelete de Claras com Ervas",
-      "preparation": "omelete",
-      "ingredient_slug": "claras-de-ovo",
-      "shopping_enabled": true,
-      "preparation_components": [
-        "Claras de Ovo",
-        "Ervas a definir"
-      ],
-      "shopping_components": [
-        "claras-de-ovo"
       ]
     },
     {

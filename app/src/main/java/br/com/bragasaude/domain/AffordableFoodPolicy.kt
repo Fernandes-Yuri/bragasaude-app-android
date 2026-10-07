@@ -5,6 +5,7 @@ import br.com.bragasaude.data.local.FoodEntity
 /** Impede que catálogos antigos voltem às sugestões durante a atualização. */
 object AffordableFoodPolicy {
     val replacements: Map<String, String> = mapOf(
+        "food_148" to "food_146",
         "food_043" to "food_042",
         "food_175" to "food_174",
         "food_176" to "food_174",
