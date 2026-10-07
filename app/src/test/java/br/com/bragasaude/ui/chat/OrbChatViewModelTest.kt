@@ -44,6 +44,7 @@ class OrbChatViewModelTest {
                     hasLocalData = if (it.healthQuery != null) true else null)
             }
         }
+        }
         vm = OrbChatViewModel(gateway, store, auth, mockk<NeuralAudioPlayer>(relaxed = true),
             mockk<NotificationClient>(relaxed = true), mockk<ProfileDao>(relaxed = true),
             mockk<FamilyBridgeRepository>(relaxed = true), hybrid = hybrid)
@@ -309,5 +310,35 @@ class OrbChatViewModelTest {
         assertFalse(answer.text.contains("Já deixei"))
         assertEquals("{}", answer.parameters)
         coVerify(exactly = 1) { gateway.sendRemote(any(), any(), any(), any()) }
+    }
+
+    @Test fun textCadenceAppliesOnlyToTextChannel() {
+        vm.nluResponseDelayMs = 500L
+        assertEquals(500L, vm.textCadenceMs(InputChannel.TEXT, false, false))
+        assertEquals(0L, vm.textCadenceMs(InputChannel.VOICE, false, false))
+        assertEquals(0L, vm.textCadenceMs(InputChannel.TEXT, true, false))
+        assertEquals(0L, vm.textCadenceMs(InputChannel.TEXT, false, true))
+    }
+
+    @Test fun voiceLocalReplyHasNoCadenceDelay() = runTest(dispatcher) {
+        vm.nluResponseDelayMs = 500L
+        vm.updateVoiceInput("não bebi 500 ml de água")
+        vm.sendInput(vm.state.value.input)
+        runCurrent()
+        assertFalse(vm.state.value.isStreaming)
+        assertTrue(vm.state.value.messages.last().metrics!!.contains("\"cadenceMs\":0"))
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
+    }
+
+    @Test fun textLocalReplyKeepsCadenceDelay() = runTest(dispatcher) {
+        vm.nluResponseDelayMs = 500L
+        vm.sendMessage("não bebi 500 ml de água")
+        runCurrent()
+        assertTrue(vm.state.value.isStreaming)
+        advanceTimeBy(500L)
+        runCurrent()
+        assertFalse(vm.state.value.isStreaming)
+        assertTrue(vm.state.value.messages.last().metrics!!.contains("\"cadenceMs\":500"))
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
     }
 }

@@ -81,6 +81,11 @@ class OrbChatViewModel @Inject constructor(
     private var inputChannel = InputChannel.TEXT
     private val healthQuerySession = HealthQuerySession()
     var nluResponseDelayMs: Long = 500L
+    internal fun textCadenceMs(channel: InputChannel, isEmergencia: Boolean, isBloqueio: Boolean): Long {
+        // Cadência apenas no chat de texto. A voz usa o tempo do Piper e não recebe atraso extra.
+        if (channel != InputChannel.TEXT || isEmergencia || isBloqueio || nluResponseDelayMs <= 0) return 0L
+        return nluResponseDelayMs
+    }
     private val authListener = FirebaseAuth.AuthStateListener {
         val next = it.currentUser?.uid
         if (uid != next) {
@@ -259,8 +264,9 @@ class OrbChatViewModel @Inject constructor(
                     (!local.delegarParaNuvem && actionReply == null)
                 var deliveredLocal: br.com.bragasaude.ai.NluOutput? = null
                 val reply = if (shortcut != null) {
-                    if (shortcut != "EMERGENCIA" && channel == InputChannel.TEXT && nluResponseDelayMs > 0) {
-                        cadenceMs = nluResponseDelayMs
+                    val cadence = if (shortcut != "EMERGENCIA") textCadenceMs(channel, false, false) else 0L
+                    if (cadence > 0) {
+                        cadenceMs = cadence
                         delay(cadenceMs)
                     }
                     OrbReply(JSONObject().put("fala", "Abrir ${actionLabel(shortcut)}.")
@@ -273,9 +279,10 @@ class OrbChatViewModel @Inject constructor(
                     val resolved = hybrid.resolveLocal(local, owner, channel, healthQuerySession, conversationId, contextTurn)
                     deliveredLocal = resolved
                     if (BragaHealthMemory.supports(local.intent)) roomMs = (System.nanoTime() - roomStartedAt) / 1_000_000.0
-                    // Delay mínimo no chat de texto para experiência humana e cadenciada
-                    if (!local.isEmergencia && !local.isBloqueioSeguranca && channel == InputChannel.TEXT && nluResponseDelayMs > 0) {
-                        cadenceMs = nluResponseDelayMs
+                    // Cadência mínima só no chat de texto para experiência humana; voz usa o Piper.
+                    val cadence = textCadenceMs(channel, local.isEmergencia, local.isBloqueioSeguranca)
+                    if (cadence > 0) {
+                        cadenceMs = cadence
                         delay(cadenceMs)
                     }
                     if (auth.currentUser?.uid != owner || uid != owner || version != revision) return@launch
