@@ -324,6 +324,8 @@ class VoiceHealthViewModel @Inject constructor(
 
     fun speak(text: String, isMale: Boolean = true, remember: Boolean = true, onDone: (() -> Unit)? = null) {
         selectSessionOwner()
+        br.com.bragasaude.ai.BragaDebugTrace.event("SPEECH_REQUEST", InputChannel.VOICE, reply = text,
+            owner = sessionOwner, conversation = conversationId)
         stopSpeaking()
         val sanitized = br.com.bragasaude.util.PortuguesePhoneticHelper.cleanTextForTts(text)
         if (sanitized.isBlank()) { onDone?.invoke(); return }
@@ -573,6 +575,8 @@ class VoiceHealthViewModel @Inject constructor(
         override fun onError(error: Int) {
             if (!current()) return
             android.util.Log.w("VoiceHealthVM", "VoiceRecognitionListener.onError code=$error isLiveMode=${_isLiveMode.value}")
+            br.com.bragasaude.ai.BragaDebugTrace.event("ASR_ERROR", InputChannel.VOICE, detail = "code=$error",
+                owner = owner, conversation = conversationId, turn = contextTurn)
             if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || error == SpeechRecognizer.ERROR_NO_MATCH) {
                 if (voiceSession.consume(ticket)) handleSilence()
                 return
@@ -590,6 +594,8 @@ class VoiceHealthViewModel @Inject constructor(
             
             
             if (bestMatch.isNullOrBlank()) {
+                br.com.bragasaude.ai.BragaDebugTrace.event("ASR_EMPTY", InputChannel.VOICE,
+                    owner = owner, conversation = conversationId, turn = contextTurn)
                 handleSilence()
                 return
             }
@@ -597,7 +603,12 @@ class VoiceHealthViewModel @Inject constructor(
             _liveTranscription.value = bestMatch
             conversationMemory.selectUser(getCurrentUserId())
             contextTurn = healthQuerySession.advanceTurn(owner, conversationId)
+            br.com.bragasaude.ai.BragaDebugTrace.event("ASR_FINAL", InputChannel.VOICE, input = bestMatch,
+                detail = "alternatives=" + matches.orEmpty().take(3).joinToString(" / "),
+                owner = owner, conversation = conversationId, turn = contextTurn)
             val nlu = hybridOrchestrator.analyze(bestMatch, InputChannel.VOICE, healthQuerySession, owner, conversationId)
+            br.com.bragasaude.ai.BragaDebugTrace.event("DECISION", InputChannel.VOICE, input = bestMatch, output = nlu,
+                owner = owner, conversation = conversationId, turn = contextTurn)
             if (nlu.isBloqueioSeguranca) {
                 speechJob?.cancel()
                 speechJob = viewModelScope.launch { processUserSpeech(bestMatch, nlu) }
@@ -605,11 +616,17 @@ class VoiceHealthViewModel @Inject constructor(
             }
             when (VoiceSessionCommand.parse(bestMatch)) {
                 VoiceSessionCommand.CLOSE -> {
+                    br.com.bragasaude.ai.BragaDebugTrace.event("SESSION_COMMAND", InputChannel.VOICE,
+                        input = bestMatch, detail = "CLOSE", owner = owner, conversation = conversationId, turn = contextTurn)
                     stopLiveMode()
                     viewModelScope.launch { _closeEvent.emit(Unit) }
                     return
                 }
-                VoiceSessionCommand.PAUSE -> { pauseConversation(); return }
+                VoiceSessionCommand.PAUSE -> {
+                    br.com.bragasaude.ai.BragaDebugTrace.event("SESSION_COMMAND", InputChannel.VOICE,
+                        input = bestMatch, detail = "PAUSE", owner = owner, conversation = conversationId, turn = contextTurn)
+                    pauseConversation(); return
+                }
                 VoiceSessionCommand.REPEAT -> {
                     // Repetição usa o mesmo contexto limitado e validado do chat.
                     speechJob?.cancel()
@@ -636,6 +653,8 @@ class VoiceHealthViewModel @Inject constructor(
             val reply = output.respostaLocal.orEmpty()
             healthQuerySession.rememberReply(output, owner, conversationId, contextTurn)
             _state.value = VoiceUiState.Saved(reply, isConversational = true)
+            br.com.bragasaude.ai.BragaDebugTrace.event("DELIVERED", InputChannel.VOICE, input = _liveTranscription.value,
+                output = output, reply = reply, owner = owner, conversation = conversationId, turn = contextTurn)
             if (output.isEmergencia) {
                 _navigationEvent.tryEmit(VoiceNavigationEvent.OpenEmergencyDialog)
             }
@@ -741,7 +760,9 @@ class VoiceHealthViewModel @Inject constructor(
                 streamHybridResponse(bestMatch, history, owner, local)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                br.com.bragasaude.ai.BragaDebugTrace.event("ERROR", InputChannel.VOICE, input = bestMatch,
+                    detail = e.javaClass.simpleName, owner = owner, conversation = conversationId, turn = contextTurn)
                 currentCoroutineContext().ensureActive()
                 if (!currentTurn(owner, turn)) return
                 stopSpeaking()
@@ -808,6 +829,9 @@ class VoiceHealthViewModel @Inject constructor(
                     healthQuerySession.rememberExternalReply(completed, owner, conversationId, contextTurn)
                     conversationMemory.recordAssistant(completed)
                     _state.value = VoiceUiState.Saved(completed, isConversational = true)
+                    br.com.bragasaude.ai.BragaDebugTrace.event("DELIVERED", InputChannel.VOICE, input = speech,
+                        output = decision, reply = completed, owner = owner,
+                        conversation = conversationId, turn = contextTurn)
                     _isSpeaking.value = false
                     abandonPlaybackFocus()
                     onSpeechFinished()
@@ -899,6 +923,8 @@ class VoiceHealthViewModel @Inject constructor(
 
         private fun handleIntent(bestMatch: String, intent: VoiceHealthIntent) {
             if (!currentTurn(owner, turn)) return
+            br.com.bragasaude.ai.BragaDebugTrace.event("ACTION_PREPARED", InputChannel.VOICE, input = bestMatch,
+                detail = intent.javaClass.simpleName, owner = owner, conversation = conversationId, turn = contextTurn)
             when (intent) {
                 is VoiceHealthIntent.BloodPressure -> {
                     val systolic = intent.systolic

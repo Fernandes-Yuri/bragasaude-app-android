@@ -78,6 +78,8 @@ object BragaRoutingLogger {
 
         val updated = (listOf(entry) + _logs.value).take(MAX_LOGS)
         _logs.value = updated
+        BragaDebugTrace.event("COMPLETED", channel, input = entry.input,
+            reply = entry.previewResponse, detail = "decision=$decision; intent=$intent; reason=$reason; durationMs=$durationMs; timing=$timing")
 
         // Logcat com tag dedicada: detalhes completos de mensagem apenas em builds DEBUG de desenvolvimento
         if (BuildConfig.DEBUG) {
