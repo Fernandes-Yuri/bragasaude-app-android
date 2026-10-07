@@ -157,6 +157,15 @@ interface FoodDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(foods: List<FoodEntity>)
 
+    @Query("DELETE FROM food_catalog_local WHERE remoteId IN (:ids) AND (status IS NULL OR status != 'custom')")
+    suspend fun removeRetiredFoods(ids: List<String>)
+
+    @androidx.room.Transaction
+    suspend fun refreshBundledCatalog(foods: List<FoodEntity>, retiredIds: List<String>) {
+        removeRetiredFoods(retiredIds)
+        insertAll(foods)
+    }
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(food: FoodEntity)
 

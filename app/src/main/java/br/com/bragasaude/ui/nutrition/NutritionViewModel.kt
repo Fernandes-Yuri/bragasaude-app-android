@@ -77,7 +77,9 @@ class NutritionViewModel @Inject constructor(
                     })
                 if (success) {
                     _communityPrices.value = catalogRepository.fetchCommunityGroceryPrices()
-                    groceryRepository.standardizeIngredients(userId, catalogRepository.fetchGroceryIngredients())
+                    val priced = catalogRepository.fetchGroceryIngredients()
+                    _groceryIngredients.value = priced
+                    groceryRepository.standardizeIngredients(userId, priced)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (_: Exception) {
@@ -86,11 +88,48 @@ class NutritionViewModel @Inject constructor(
         }
     }
 
+    private val _profile = MutableStateFlow<RemoteProfile?>(null)
+    val profile = _profile.asStateFlow()
+
+    private val _groceryIngredients = MutableStateFlow<br.com.bragasaude.domain.GroceryIngredientCatalog?>(null)
+    val manualIngredients: StateFlow<List<br.com.bragasaude.domain.GroceryIngredient>> = combine(
+        _groceryIngredients, catalogRepository.getFoodCatalog(), _profile
+    ) { manifest, foods, profile ->
+        manifest?.ingredients.orEmpty().filter { ingredient ->
+            val related = foods.filter { it.remoteId in ingredient.foodIds }
+            related.any { food ->
+                br.com.bragasaude.domain.AffordableFoodPolicy.isEligible(food) &&
+                    NutritionSuggestionEngine.isSafeFromAllergies(food, profile?.foodAllergies.orEmpty(), profile?.customFoodRestrictions) &&
+                    (profile?.hasDiabetes != true || food.isDiabetesSafe) &&
+                    (profile?.hasHypertension != true || food.isHypertensionSafe)
+            } || (related.isEmpty() && ingredient.foodIds.isEmpty() &&
+                NutritionSuggestionEngine.isSafeFromAllergies(FoodEntity(ingredient.slug, ingredient.name),
+                    profile?.foodAllergies.orEmpty(), profile?.customFoodRestrictions))
+        }.sortedBy { it.name }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _groceryMessage = MutableStateFlow<String?>(null)
+    val groceryMessage = _groceryMessage.asStateFlow()
+
+    fun saveManualItem(slug: String, amountText: String, replacingId: String? = null) {
+        val ingredient = manualIngredients.value.firstOrNull { it.slug == slug } ?: return
+        val amount = br.com.bragasaude.domain.GroceryPurchasePlanner.parseAmount(amountText, ingredient.unit) ?: return
+        viewModelScope.launch {
+            try {
+                groceryRepository.putManualItem(userId, ingredient, amount, "Minha lista", replacingId)
+                _groceryMessage.value = "Item salvo. Confira a quantidade e marque como comprado somente quando estiver na despensa."
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { _groceryMessage.value = "Não foi possível salvar o item. Tente novamente." }
+        }
+    }
+
+    fun removeGroceryItem(id: String) {
+        viewModelScope.launch { groceryRepository.removeItem(userId, id) }
+    }
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
-    private val _profile = MutableStateFlow<RemoteProfile?>(null)
-    val profile = _profile.asStateFlow()
 
     private val _mealRules = MutableStateFlow<List<RemoteMealRule>>(emptyList())
     private val _foodCatalog = MutableStateFlow<List<RemoteFood>>(emptyList())
@@ -190,9 +229,13 @@ class NutritionViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            groceryRepository.standardizeIngredients(userId, catalogRepository.fetchGroceryIngredients(includePrices = false))
+            val offline = catalogRepository.fetchGroceryIngredients(includePrices = false)
+            _groceryIngredients.value = offline
+            groceryRepository.standardizeIngredients(userId, offline)
             _communityPrices.value = catalogRepository.fetchCommunityGroceryPrices()
-            groceryRepository.standardizeIngredients(userId, catalogRepository.fetchGroceryIngredients())
+            val priced = catalogRepository.fetchGroceryIngredients()
+            _groceryIngredients.value = priced
+            groceryRepository.standardizeIngredients(userId, priced)
         }
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
@@ -392,8 +435,8 @@ class NutritionViewModel @Inject constructor(
                     dislikedFoodNames = dislikes,
                     ingredientCatalog = ingredients
                 )
-                groceryRepository.clearGroceryList(userId)
-                groceryRepository.saveGroceryList(newList)
+                if (newList.isNotEmpty()) groceryRepository.replaceList(userId, newList)
+                else _groceryMessage.value = "Não foi possível gerar uma lista compatível com seu perfil. Você pode montar sua lista."
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
@@ -418,10 +461,17 @@ class NutritionViewModel @Inject constructor(
         if (clean.isEmpty()) return
         viewModelScope.launch {
             try {
-                val existing = groceryList.value.map { it.foodName.lowercase() }.toSet()
-                clean.filter { it.lowercase() !in existing }.forEach { name ->
-                    groceryRepository.addItem(userId, name)
+                val candidates = manualIngredients.value
+                clean.forEach { name ->
+                    val key = br.com.bragasaude.domain.groceryNameKey(name)
+                    val ingredient = candidates.firstOrNull { item ->
+                        br.com.bragasaude.domain.groceryNameKey(item.name) == key || item.aliases.any { br.com.bragasaude.domain.groceryNameKey(it) == key }
+                    }
+                    if (ingredient != null && groceryList.value.none { it.foodId == ingredient.slug }) {
+                        groceryRepository.putManualItem(userId, ingredient, ingredient.minimum, "Minha lista")
+                    }
                 }
+
             } catch (e: Exception) {
                 e.printStackTrace()
             }

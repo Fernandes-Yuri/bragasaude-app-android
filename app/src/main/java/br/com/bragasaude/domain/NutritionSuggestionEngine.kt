@@ -66,7 +66,9 @@ object NutritionSuggestionEngine {
             val notLoggedToday = !loggedFoodNamesToday.any { it.trim().lowercase() == nameClean }
             val matchesMeal = food.suitableMeals.isEmpty() || food.suitableMeals.contains(selectedMealType)
             val allergySafe = isSafeFromAllergies(food, profile?.foodAllergies ?: emptyList(), profile?.customFoodRestrictions)
-            notDisliked && notLoggedToday && matchesMeal && allergySafe
+            AffordableFoodPolicy.isEligible(food) && notDisliked && notLoggedToday && matchesMeal && allergySafe &&
+                (profile?.hasDiabetes != true || food.isDiabetesSafe) &&
+                (profile?.hasHypertension != true || food.isHypertensionSafe)
         }
 
         // 1. ANÁLISE DE GLICOSE / HbA1c
@@ -331,7 +333,7 @@ object NutritionSuggestionEngine {
 
         // 2. Alergia a Glúten / Celíaco
         if (allergies.any { it.contains("Glúten", ignoreCase = true) || it.contains("Celíaco", ignoreCase = true) }) {
-            if (nameLower.contains("trigo") || nameLower.contains("cevadinha") ||
+            if (nameLower.contains("trigo") || nameLower.contains("pão") || nameLower.contains("cevadinha") || nameLower.contains("aveia") ||
                 (nameLower.contains("macarrão") && !nameLower.contains("arroz") && !nameLower.contains("grão-de-bico"))
             ) {
                 return false
@@ -346,7 +348,7 @@ object NutritionSuggestionEngine {
         }
 
         // 4. Alergia a Oleaginosas / Amendoim / Castanhas
-        if (allergies.any { it.contains("Castanha", ignoreCase = true) || it.contains("Amendoim", ignoreCase = true) }) {
+        if (allergies.any { it.contains("Oleaginosa", ignoreCase = true) || it.contains("Castanha", ignoreCase = true) || it.contains("Amendoim", ignoreCase = true) }) {
             if (catLower.contains("oleaginosas") || nameLower.contains("amendoim") ||
                 nameLower.contains("castanha") || nameLower.contains("nozes") ||
                 nameLower.contains("amêndoa") || nameLower.contains("macadâmia")
@@ -373,6 +375,8 @@ object NutritionSuggestionEngine {
                 return false
             }
         }
+
+        if (allergies.any { it.contains("Soja", ignoreCase = true) } && nameLower.contains("soja")) return false
 
         // 7. Restrições personalizadas em texto livre
         if (!customRestrictions.isNullOrBlank()) {
