@@ -32,7 +32,9 @@ internal fun ManualGroceryItemSheet(
             }
         }.orEmpty())
     }
-    val valid = selected?.let { GroceryPurchasePlanner.parseAmount(amount, it.unit) } != null
+    val valid = selected?.let { ingredient: GroceryIngredient ->
+        GroceryPurchasePlanner.parseAmount(amount, ingredient.unit) != null
+    } == true
     BragaFormSheet(
         onDismissRequest = onDismiss,
         title = { Text(if (editing == null) "Montar minha lista" else "Editar item") },
