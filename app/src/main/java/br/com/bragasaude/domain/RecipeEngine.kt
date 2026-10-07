@@ -49,7 +49,8 @@ class RecipeEngine @Inject constructor() {
     fun findBestRecipes(
         pantryItems: List<GroceryListItemEntity>,
         profile: ProfileEntity?,
-        mealType: String? = null
+        mealType: String? = null,
+        includeMissing: Boolean = false
     ): List<RecipePantryMatch> {
         // Extrai nomes de alimentos da despensa (normalizados para comparação case-insensitive)
         val pantryNames = pantryItems
@@ -73,13 +74,14 @@ class RecipeEngine @Inject constructor() {
             calculateMatch(recipe, pantryNames)
         }
 
-        // Recomenda receitas completas primeiro, seguidas por sugestões com menos ingredientes faltando
+        // Sugestões incompletas são opcionais (quando o usuário montou sua própria lista); receitas completas aparecem primeiro.
         return matches
-            .filter { it.availableIngredients.isNotEmpty() }
+            .filter { it.availableIngredients.isNotEmpty() && (includeMissing || it.hasAll) }
             .sortedWith(
                 compareByDescending<RecipePantryMatch> { it.hasAll }
+                    .thenByDescending { it.availableIngredients.size.toDouble() / it.recipe.ingredientNames.size }
                     .thenBy { it.missingCount }
-                    .thenByDescending { it.availableIngredients.size }
+                    .thenBy { it.recipe.id }
             )
     }
 
