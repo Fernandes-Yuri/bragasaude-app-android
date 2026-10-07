@@ -335,7 +335,6 @@ class OrbChatViewModelTest {
             telemetry.logAiConversation(any(), any(), any(), any(), any(), any())
         }
     }
-}
 
     @Test fun textCadenceAppliesOnlyToTextChannel() {
         vm.nluResponseDelayMs = 500L
