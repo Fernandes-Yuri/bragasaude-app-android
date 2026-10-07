@@ -30,7 +30,9 @@ internal object BragaRemoteContract {
         // Aplica a mesma regra a todas as delegações e aos dois transportes.
         // Emergência real já tem atendimento local prioritário; preserva a orientação caso chegue aqui.
         val localReply = BragaTurnMeaning.localReply(text)
-        if (localReply != null || action != "CONVERSA") {
+        val executionClaim = Regex("""(?:^|[.!?,])\s*(?:ja\s+)?(?:eu\s+)?(?:abri|salvei|registrei|anotei|avisei|enviei|agendei|deixei as opcoes)\b""")
+            .containsMatchIn(BragaRoutingPolicy.normalize(envelope.optString("fala")))
+        if (localReply != null || action != "CONVERSA" || executionClaim) {
             val emergency = BragaRoutingPolicy.emergency(BragaRoutingPolicy.normalize(text)).intent != null
             val fala = if (emergency) "Acione o SAMU 192 ou procure atendimento imediato."
                 else localReply ?: "Posso explicar sua dúvida sem abrir opções ou preparar registros. Qual detalhe deseja entender?"

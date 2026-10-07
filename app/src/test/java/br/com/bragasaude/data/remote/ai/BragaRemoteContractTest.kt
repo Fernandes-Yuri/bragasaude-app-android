@@ -37,4 +37,12 @@ class BragaRemoteContractTest {
         assertEquals(500, mention.getInt("quantity_ml"))
         assertEquals("denial", mention.getString("modality"))
     }
+    @Test fun conversationCannotAnnounceUnexecutedActions() {
+        for (fala in listOf("Já abri as opções de socorro.", "Salvei 500 ml de água.", "Entendi, já avisei seus contatos.")) {
+            val content = JSONObject().put("fala", fala).put("acao", "CONVERSA").put("parametros", JSONObject()).toString()
+            val safe = JSONObject(BragaRemoteContract.validate("o que significa dor no peito?", content))
+            assertNotEquals(fala, safe.getString("fala"))
+            assertEquals("CONVERSA", safe.getString("acao"))
+        }
+    }
 }
