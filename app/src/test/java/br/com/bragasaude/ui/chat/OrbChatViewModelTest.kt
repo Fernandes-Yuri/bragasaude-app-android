@@ -44,7 +44,6 @@ class OrbChatViewModelTest {
                     hasLocalData = if (it.healthQuery != null) true else null)
             }
         }
-        }
         vm = OrbChatViewModel(gateway, store, auth, mockk<NeuralAudioPlayer>(relaxed = true),
             mockk<NotificationClient>(relaxed = true), mockk<ProfileDao>(relaxed = true),
             mockk<FamilyBridgeRepository>(relaxed = true), hybrid = hybrid)
