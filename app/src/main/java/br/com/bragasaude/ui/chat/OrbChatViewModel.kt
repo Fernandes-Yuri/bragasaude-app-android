@@ -230,19 +230,12 @@ class OrbChatViewModel @Inject constructor(
                 currentCoroutineContext().ensureActive()
                 val owner = uid ?: throw CancellationException("Sessão alterada")
                 val contextTurn = healthQuerySession.advanceTurn(owner, conversationId)
-                br.com.bragasaude.ai.BragaDebugTrace.event("RECEIVED", channel, input = value,
-                    owner = owner, conversation = conversationId, turn = contextTurn)
                 val nluStartedAt = System.nanoTime()
                 var local = hybrid.analyze(text, channel, healthQuerySession, owner, conversationId)
                 val nluMs = (System.nanoTime() - nluStartedAt) / 1_000_000.0
-                br.com.bragasaude.ai.BragaDebugTrace.event("DECISION", channel, input = value, output = local,
-                    owner = owner, conversation = conversationId, turn = contextTurn)
                 val concrete = if (br.com.bragasaude.ai.BragaActionGate.canParse(value, local))
                     voiceParser.parse(value, null, null) else
                     br.com.bragasaude.ai.BragaActionGate.readOnlyIntent(value, local, voiceParser)
-                br.com.bragasaude.ai.BragaDebugTrace.event("PARSE", channel, input = value,
-                    detail = "parser=${concrete?.javaClass?.simpleName ?: "NONE"}",
-                    owner = owner, conversation = conversationId, turn = contextTurn)
                 val shortcut = if (local.isBloqueioSeguranca) null else when (value.lowercase()) {
                     "/pressão", "/pressao" -> "REGISTRAR_PRESSAO"
                     "/remédio", "/remedio" -> "LEMBRETES"
@@ -257,9 +250,6 @@ class OrbChatViewModel @Inject constructor(
                 }
                 local = br.com.bragasaude.ai.BragaCloudFallback.afterLocal(value, local,
                     handledLocally = actionReply != null || shortcut != null)
-                if (local.fallbackFromIntent != null) br.com.bragasaude.ai.BragaDebugTrace.event(
-                    "FALLBACK", channel, input = value, output = local, detail = "parser=NONE; local_exhausted",
-                    owner = owner, conversation = conversationId, turn = contextTurn)
                 val useLocal = local.isBloqueioSeguranca || local.isEmergencia ||
                     local.intent == "orientacao_cadastro_medicamento" || BragaHealthMemory.supports(local.intent) ||
                     (!local.delegarParaNuvem && actionReply == null)
@@ -296,8 +286,6 @@ class OrbChatViewModel @Inject constructor(
                     val scope = caregiverScope()
                     if (version != revision) return@launch
                     healthQuerySession.forgetReferences(owner, conversationId, contextTurn)
-                    br.com.bragasaude.ai.BragaDebugTrace.event("CLOUD_REQUEST", channel, input = value, output = local,
-                        detail = "historyTurns=${history.dropLast(1).size}", owner = owner, conversation = conversationId, turn = contextTurn)
                     gateway.open(viewModelScope)
                     val context = listOf("assistant" to GroqDynamicPrompt().build(history.dropLast(1), channel, local)) + history.takeLast(10)
                     gateway.sendRemote(context, actingAs = scope?.first, patientId = scope?.second) { partial ->
@@ -350,9 +338,6 @@ class OrbChatViewModel @Inject constructor(
                     metrics = listOfNotNull(reply.metrics, diagnostic).joinToString("\n"))
                 mutable.update { it.copy(messages = it.messages.map { m -> if (m.id == user.id) m.copy(status = if (local.isBloqueioSeguranca) "blocked" else "received") else m } + answer,
                     isStreaming = false, partialText = "") }
-                br.com.bragasaude.ai.BragaDebugTrace.event("DELIVERED", channel, input = value,
-                    output = deliveredLocal ?: local, reply = answerText, detail = "action=$action; local=$useLocal",
-                    owner = owner, conversation = conversationId, turn = contextTurn)
                 if (useLocal && shortcut == null && actionReply == null) {
                     healthQuerySession.rememberReply(local.copy(respostaLocal = answerText,
                         hasLocalData = deliveredLocal?.hasLocalData,
@@ -376,10 +361,8 @@ class OrbChatViewModel @Inject constructor(
                 save()
                 if (shortcut != null) confirmAction(answer.id)
             } catch (e: CancellationException) {
-                br.com.bragasaude.ai.BragaDebugTrace.event("CANCELLED", channel, input = value, detail = "version=$version")
                 throw e
             } catch (e: Exception) {
-                br.com.bragasaude.ai.BragaDebugTrace.event("ERROR", channel, input = value, detail = e.javaClass.simpleName)
                 if (version == revision) {
                     mutable.update { it.copy(isStreaming = false, partialText = "", error = BragaInputLanguage.forChannel(e.message ?: "Falha ao obter resposta.", channel),
                         messages = it.messages.map { m -> if (m.id == user.id) m.copy(status = "error") else m }) }
