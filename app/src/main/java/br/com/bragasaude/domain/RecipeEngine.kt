@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.local.GroceryListItemEntity
 import br.com.bragasaude.data.local.ProfileEntity
@@ -49,7 +49,8 @@ class RecipeEngine @Inject constructor() {
     fun findBestRecipes(
         pantryItems: List<GroceryListItemEntity>,
         profile: ProfileEntity?,
-        mealType: String? = null
+        mealType: String? = null,
+        includeMissing: Boolean = false
     ): List<RecipePantryMatch> {
         // Extrai nomes de alimentos da despensa (normalizados para comparação case-insensitive)
         val pantryNames = pantryItems
@@ -73,10 +74,13 @@ class RecipeEngine @Inject constructor() {
             calculateMatch(recipe, pantryNames)
         }
 
-        // Só recomenda receitas com todos os ingredientes na lista de compras.
+        // Sugestões incompletas são opcionais; receitas completas aparecem primeiro.
         return matches
-            .filter { it.hasAll && it.availableIngredients.isNotEmpty() }
-            .sortedByDescending { it.availableIngredients.size }
+            .filter { it.availableIngredients.isNotEmpty() && (includeMissing || it.hasAll) }
+            .sortedWith(compareByDescending<RecipePantryMatch> { it.hasAll }
+                .thenByDescending { it.availableIngredients.size.toDouble() / it.recipe.ingredientNames.size }
+                .thenBy { it.missingCount }
+                .thenBy { it.recipe.id })
     }
 
     /**
@@ -96,17 +100,13 @@ class RecipeEngine @Inject constructor() {
         // Filtro por hipertensão
         if (profile.hasHypertension && !recipe.isHypertensionSafe) return false
 
-        // Filtro por alergias alimentares
-        val allergies = profile.foodAllergies
-        if (allergies.isNotEmpty()) {
-            val normalizedAllergies = allergies.map { normalizeFoodName(it) }.toSet()
-            val recipeIngredients = recipe.ingredientNames.map { normalizeFoodName(it) }.toSet()
-
-            // Se alguma alergia coincide com ingrediente da receita, não é segura
-            if (recipeIngredients.intersect(normalizedAllergies).isNotEmpty()) {
-                return false
-            }
+        // Inclui os ingredientes faltantes: jamais sugerir uma receita insegura para completá-la depois.
+        val safe = recipe.ingredientNames.all { name ->
+            val ingredient = br.com.bragasaude.data.local.FoodEntity(remoteId = name, name = name)
+            NutritionSuggestionEngine.isSafeFromAllergies(ingredient, profile.foodAllergies, profile.customFoodRestrictions) &&
+                profile.foodAllergies.none { allergy -> normalizeFoodName(name).contains(normalizeFoodName(allergy)) }
         }
+        if (!safe) return false
 
         return true
     }

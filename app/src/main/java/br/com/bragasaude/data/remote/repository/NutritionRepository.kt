@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.repository
+package br.com.bragasaude.data.remote.repository
 
 import br.com.bragasaude.data.local.FoodDao
 import br.com.bragasaude.data.local.FoodEntity
@@ -61,7 +61,9 @@ class NutritionRepository @Inject constructor(
                     true
                 }
 
-                isNotMedication && isDiabetesSafe && isHypertensionSafe
+                isNotMedication && isDiabetesSafe && isHypertensionSafe &&
+                    br.com.bragasaude.domain.AffordableFoodPolicy.isEligible(food) &&
+                    br.com.bragasaude.domain.NutritionSuggestionEngine.isSafeFromAllergies(food, profile?.foodAllergies.orEmpty(), profile?.customFoodRestrictions)
             }
         }
     }

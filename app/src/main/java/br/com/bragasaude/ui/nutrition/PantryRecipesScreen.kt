@@ -115,7 +115,7 @@ fun PantryRecipesScreen(
         topBar = {
             EmeraldHeaderBanner(
                 title = "Receitas da sua lista",
-                subtitle = "Sugestões com os alimentos da sua lista de compras",
+                subtitle = "Veja o que está na lista e o que falta para cada receita",
                 onBack = onBack
             )
         }
@@ -181,6 +181,10 @@ fun PantryRecipesScreen(
                             contentPadding = PaddingValues(vertical = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
+                            item {
+                                Text("Confira os ingredientes, as quantidades e o que já foi comprado antes de cozinhar. As sugestões são de autocuidado alimentar.", style = MaterialTheme.typography.bodyMedium)
+                                Text(androidx.compose.ui.res.stringResource(br.com.bragasaude.R.string.disclaimer_not_medical), style = MaterialTheme.typography.bodySmall)
+                            }
                             items(recipes, key = { it.recipe.id }) { match ->
                                 RecipeCard(match = match)
                             }
@@ -263,7 +267,7 @@ private fun RecipeCard(match: RecipePantryMatch) {
             Spacer(Modifier.height(14.dp))
 
             // Selo de despensa (zero emojis)
-            PantryBadge()
+            PantryBadge(match)
 
             Spacer(Modifier.height(14.dp))
 
@@ -281,6 +285,8 @@ private fun RecipeCard(match: RecipePantryMatch) {
                     items = match.missingIngredients,
                     color = MaterialTheme.colorScheme.error
                 )
+                Text("Complete os ingredientes antes de preparar. Confira também as quantidades e o que já foi comprado.",
+                    style = MaterialTheme.typography.bodySmall)
             }
 
             Spacer(Modifier.height(18.dp))
@@ -576,13 +582,13 @@ private data class PantryBadgeConfig(
  * Zero emojis — icones vetoriais CheckCircle, Info, ShoppingCart.
  */
 @Composable
-private fun PantryBadge() {
+private fun PantryBadge(match: RecipePantryMatch) {
     val config = PantryBadgeConfig(
-        backgroundColor = Color(0xFFE8F5E9),
+        backgroundColor = if (match.hasAll) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.errorContainer,
         borderColor = Color(0xFF4CAF50).copy(alpha = 0.4f),
-        textColor = Color(0xFF2E7D32),
-        text = "Todos os ingredientes estão na sua lista",
-        icon = Icons.Default.CheckCircle
+        textColor = if (match.hasAll) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onErrorContainer,
+        text = if (match.hasAll) "Todos os ingredientes estão na sua lista" else "Faltam ${match.missingCount} ingredientes na lista",
+        icon = if (match.hasAll) Icons.Default.CheckCircle else Icons.Default.ShoppingCart
     )
 
     Surface(
@@ -647,7 +653,7 @@ private fun EmptyRecipesView(mealType: String) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Não há receitas com todos os ingredientes na sua lista de compras.",
+            text = "Inclua alimentos na lista para encontrar receitas relacionadas. As sugestões respeitam as restrições do seu perfil e mostram os ingredientes faltantes.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

@@ -23,6 +23,15 @@ data class GroceryIngredientCatalog(val ingredients: List<GroceryIngredient>, va
 }
 
 object GroceryPurchasePlanner {
+    /** Quantidade digitada em kg, L ou unidades; não converte peso de ovos nem rendimento de cozimento. */
+    fun parseAmount(value: String, unit: String): Int? {
+        if (unit !in setOf("kg", "L", "un")) return null
+        val number = value.trim().replace(',', '.').toBigDecimalOrNull() ?: return null
+        if (number.signum() <= 0 || number > java.math.BigDecimal("1000")) return null
+        val scaled = if (unit in setOf("kg", "L")) number.multiply(java.math.BigDecimal("1000")) else number
+        return try { scaled.intValueExact().takeIf { it > 0 } } catch (_: ArithmeticException) { null }
+    }
+
     fun quantity(item: GroceryIngredient, requestedGrams: Int): Int = when (item.unit) {
         "kg" -> (ceil(maxOf(requestedGrams, item.minimum).toDouble() / item.step) * item.step).toInt()
         // Litros e unidades são planejados por embalagem; não inferimos densidade ou peso de um ovo.

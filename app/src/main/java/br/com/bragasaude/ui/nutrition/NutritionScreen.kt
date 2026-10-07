@@ -71,6 +71,9 @@ fun NutritionScreen(
     val suggestionGroups by viewModel.functionalSuggestionGroups.collectAsState()
     val selectedMealTab by viewModel.selectedMealTab.collectAsState()
     val groceryList by viewModel.groceryList.collectAsState()
+    val manualIngredients by viewModel.manualIngredients.collectAsState()
+    val groceryMessage by viewModel.groceryMessage.collectAsState()
+    val groceryLoading by viewModel.isLoading.collectAsState()
 
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
@@ -99,9 +102,6 @@ fun NutritionScreen(
 
     LaunchedEffect(searchFood, openGroceryList) {
         if (openGroceryList) {
-            if (groceryList.isEmpty()) {
-                viewModel.generateWeeklyGroceryList()
-            }
             showGroceryBottomSheet = true
         } else if (!searchFood.isNullOrBlank()) {
             viewModel.onSearchQueryChanged(searchFood)
@@ -184,9 +184,6 @@ fun NutritionScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                if (groceryList.isEmpty()) {
-                                    viewModel.generateWeeklyGroceryList()
-                                }
                                 showGroceryBottomSheet = true
                             },
                         shape = RoundedCornerShape(22.dp),
@@ -227,7 +224,7 @@ fun NutritionScreen(
                                         color = BragaEmeraldDark
                                     )
                                     Text(
-                                        if (groceryList.isEmpty()) "Toque para gerar a lista"
+                                        if (groceryList.isEmpty()) "Monte sua lista ou gere uma sugestão"
                                         else "Estimado: R$ ${String.format(java.util.Locale.getDefault(), "%.2f", totalEstimated)} • $checkedPantry/${groceryList.size} na despensa",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = BragaTextSecondary
@@ -684,6 +681,11 @@ fun NutritionScreen(
         val context = LocalContext.current
         GroceryListBottomSheet(
             groceryList = groceryList,
+            manualIngredients = manualIngredients,
+            message = groceryMessage,
+            isLoading = groceryLoading,
+            onSaveManualItem = { slug, amount, id -> viewModel.saveManualItem(slug, amount, id) },
+            onRemoveItem = { id -> viewModel.removeGroceryItem(id) },
             onDismiss = { showGroceryBottomSheet = false },
             onToggleItem = { id, isChecked -> viewModel.togglePantryItem(id, isChecked) },
             onGenerateList = { viewModel.generateWeeklyGroceryList() },

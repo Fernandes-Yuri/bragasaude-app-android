@@ -86,10 +86,10 @@ class RecipesViewModel @Inject constructor(
                     pantryItems to profile
                 }.collectLatest { (pantryItems, profile) ->
                     // Calcula receitas para cada tipo de refeição
-                    _breakfastRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "BREAKFAST")
-                    _lunchRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "LUNCH")
-                    _snackRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "SNACK")
-                    _dinnerRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "DINNER")
+                    _breakfastRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "BREAKFAST", includeMissing = true)
+                    _lunchRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "LUNCH", includeMissing = true)
+                    _snackRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "SNACK", includeMissing = true)
+                    _dinnerRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "DINNER", includeMissing = true)
 
                     _isLoading.value = false
                 }

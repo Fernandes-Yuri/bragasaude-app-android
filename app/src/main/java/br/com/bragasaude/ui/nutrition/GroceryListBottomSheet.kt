@@ -39,6 +39,11 @@ fun GroceryListBottomSheet(
     onToggleItem: (String, Boolean) -> Unit,
     onGenerateList: () -> Unit,
     onExportPdf: () -> Unit,
+    manualIngredients: List<br.com.bragasaude.domain.GroceryIngredient> = emptyList(),
+    message: String? = null,
+    isLoading: Boolean = false,
+    onSaveManualItem: (String, String, String?) -> Unit = { _, _, _ -> },
+    onRemoveItem: (String) -> Unit = {},
     // Agente B1: itens sugeridos pelo chat; o usuário confirma via botão.
     suggestedItems: List<String> = emptyList(),
     onAddSuggested: (List<String>) -> Unit = {},
@@ -47,6 +52,28 @@ fun GroceryListBottomSheet(
     onStartContribution: () -> Unit = {},
     onContribute: (GroceryListItemEntity, String, String, String, String, String) -> Unit = { _, _, _, _, _, _ -> }
 ) {
+    var showManual by remember { mutableStateOf(false) }
+    var editingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
+    var confirmRegenerate by remember { mutableStateOf(false) }
+    var removingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
+    if (showManual) {
+        ManualGroceryItemSheet(manualIngredients, editingItem,
+            onDismiss = { showManual = false; editingItem = null }, onSave = onSaveManualItem)
+        return
+    }
+    if (confirmRegenerate) br.com.bragasaude.ui.components.BragaAlertDialog(
+        onDismissRequest = { confirmRegenerate = false },
+        title = { Text("Gerar nova lista aleatória?") },
+        text = { Text("A lista atual e suas marcações de compra serão substituídas. Você também pode continuar editando os itens da sua lista.") },
+        confirmButton = { TextButton(onClick = { confirmRegenerate = false; onGenerateList() }) { Text("Substituir lista") } },
+        dismissButton = { TextButton(onClick = { confirmRegenerate = false }) { Text("Manter lista atual") } }
+    )
+    removingItem?.let { item -> br.com.bragasaude.ui.components.BragaAlertDialog(
+        onDismissRequest = { removingItem = null }, title = { Text("Remover ${item.foodName}?") },
+        text = { Text("As sugestões de receitas serão atualizadas e mostrarão este ingrediente como faltante quando necessário.") },
+        confirmButton = { TextButton(onClick = { onRemoveItem(item.remoteId); removingItem = null }) { Text("Remover") } },
+        dismissButton = { TextButton(onClick = { removingItem = null }) { Text("Manter item") } }
+    ) }
     var reportingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     reportingItem?.let { selected ->
         GroceryPriceContributionSheet(selected, contributionState,
@@ -73,17 +100,17 @@ fun GroceryListBottomSheet(
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = onGenerateList, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+            OutlinedButton(onClick = { if (groceryList.isEmpty()) onGenerateList() else confirmRegenerate = true }, enabled = !isLoading, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                 Icon(Icons.Default.Refresh, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text(if (groceryList.isEmpty()) "Gerar lista de compras" else "Gerar nova lista",
+                Text(if (isLoading) "Gerando lista..." else if (groceryList.isEmpty()) "Gerar lista aleatória" else "Gerar nova lista aleatória",
                     style = MaterialTheme.typography.bodyMedium)
             }
         },
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 item {
-                    Text("Marque os itens comprados para adicioná-los à despensa.",
+                    Text("Preencha nomes e quantidades corretamente: as receitas e outras sugestões de alimentação dependem desta lista. Marque como comprado apenas o que já está na sua despensa. Ter todos os itens na lista não garante que foram comprados nem que a quantidade basta para a receita.",
                         style = MaterialTheme.typography.bodyMedium)
                 }
                 item {
@@ -92,6 +119,13 @@ fun GroceryListBottomSheet(
                     val missing = groceryList.count { it.estimatedPriceBrl <= 0.0 }
                     if (missing > 0) Text("$missing itens sem preço informado não entram no total estimado.",
                         style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary)
+                }
+                item {
+                    OutlinedButton(onClick = { editingItem = null; showManual = true }, enabled = !isLoading,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text(if (groceryList.isEmpty()) "Montar minha lista" else "Adicionar alimento")
+                    }
+                    message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 }
                 if (suggestedItems.isNotEmpty()) {
                     item {
@@ -119,7 +153,7 @@ fun GroceryListBottomSheet(
                             verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Icon(Icons.Default.ShoppingCart, contentDescription = null, tint = BragaEmerald, modifier = Modifier.size(48.dp))
                             Text("Sua lista começa aqui", style = MaterialTheme.typography.titleMedium)
-                            Text("Gere uma lista para organizar as compras da semana.", style = MaterialTheme.typography.bodyMedium)
+                            Text("Monte sua lista com os alimentos que deseja comprar ou gere uma sugestão aleatória para a semana.", style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 } else {
@@ -152,6 +186,10 @@ fun GroceryListBottomSheet(
                                         price.average, price.unit, price.contributors),
                                         style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary,
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+                                }
+                                Row {
+                                    TextButton(onClick = { editingItem = entry; showManual = true }, enabled = !isLoading) { Text("Editar") }
+                                    TextButton(onClick = { removingItem = entry }, enabled = !isLoading) { Text("Remover") }
                                 }
                                 TextButton(onClick = { onStartContribution(); reportingItem = entry },
                                     modifier = Modifier.heightIn(min = 48.dp)) { Text("Informar quanto paguei") }
