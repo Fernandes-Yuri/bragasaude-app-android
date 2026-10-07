@@ -175,11 +175,12 @@ class NutritionSuggestionEngineTest {
             )
         )
 
+        val userCatalog = listOf(sampleFoods[0], sampleFoods[1])
         val result = NutritionSuggestionEngine.generateSuggestions(
             exams = exams,
             vitals = emptyList(),
             profile = RemoteProfile(id = "u1"),
-            catalog = sampleFoods,
+            catalog = userCatalog,
             selectedMealType = "Café da Manhã",
             pantryFoodNames = setOf("Aveia em Flocos"),
             groceryFoodNames = setOf("Maçã com Casca")
