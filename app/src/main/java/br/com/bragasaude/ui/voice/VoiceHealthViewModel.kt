@@ -676,6 +676,13 @@ class VoiceHealthViewModel @Inject constructor(
                     streamHybridResponse(bestMatch, history, owner, local)
                     return
                 }
+                if (!br.com.bragasaude.ai.BragaActionGate.canParse(bestMatch, local)) {
+                    hydrationConversation.reset()
+                    val readOnly = br.com.bragasaude.ai.BragaActionGate.readOnlyQuery(
+                        bestMatch, local, parser, currentUserRole, currentCaregiverMode)
+                    if (readOnly != null) handleIntent(bestMatch, readOnly) else showLocalResponse(local)
+                    return
+                }
                 // Mantém a preferência confirmada existente, apenas para registro de copos.
                 // A muralha e as emergências já retornaram antes desta consulta ao gateway.
                 val cupPreference = if (Regex("(?i)\\bcopos?\\b").containsMatchIn(bestMatch) &&

@@ -432,6 +432,11 @@ object BragaNluEngine {
         }
 
         BragaLocalHelp.answer(texto)?.let { return it.copy(tempoMs = deltaMs(inicio)) }
+        if (!BragaRoutingPolicy.outsideScope(protegido) && HealthQueryResolver.hasUnsupportedPeriod(texto)) return NluOutput(
+            "entrada_periodo_nao_suportado",
+            "Ainda não consigo consultar esse período ou horário específico. Você quer consultar hoje, ontem, os últimos 7 dias ou os últimos 30 dias?",
+            tempoMs = deltaMs(inicio)
+        )
 
         // 2. CADASTRO DE REMÉDIO (DIRETRIZ CLÍNICA)
         if (REGEX_CADASTRO_REMEDIO.containsMatchIn(limpo) || CADASTRO_NORMALIZADO.containsMatchIn(protegido)) {
@@ -458,6 +463,12 @@ object BragaNluEngine {
             }
             return NluOutput(intent, null, tempoMs = deltaMs(inicio), healthQuery = query)
         }
+
+        if (BragaLocalHelp.hasFollowUpRequest(texto)) return NluOutput(
+            "entrada_pedido_nao_resolvido",
+            "Você quer consultar um registro ou ajuda para usar uma função do aplicativo? Vou considerar seu pedido, além da confirmação ou do agradecimento.",
+            tempoMs = deltaMs(inicio)
+        )
 
         if (REGEX_DUVIDA_PRESSAO.containsMatchIn(limpo)) {
             return NluOutput("duvida_valor_pressao", sortearResposta("duvida_valor_pressao"), tempoMs = deltaMs(inicio))
