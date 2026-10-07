@@ -41,6 +41,7 @@ internal object BragaTurnMeaning {
     }
 
     fun localReply(text: String): String? {
+        if (BragaLanguageRecovery.clarification(text) != null) return null
         if (BragaRoutingPolicy.complexHealthQuestion(BragaRoutingPolicy.normalize(text))) return null
         val mentions = beverages(text)
         if (mentions.isEmpty()) return null

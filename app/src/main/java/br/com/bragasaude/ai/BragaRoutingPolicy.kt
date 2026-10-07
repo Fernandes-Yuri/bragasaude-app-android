@@ -40,7 +40,7 @@ internal object BragaRoutingPolicy {
         for ((index, clause) in clauses.withIndex()) {
             val recurring = recurrence.containsMatchIn(clause)
             val resumed = clauses.drop(index + 1).any {
-                Regex("""\s*(?:(?:agora|hoje)\s+)?(?:voltou|voltaram|continua|piorou)\s*""").matches(it)
+                Regex("""^\s*(?:(?:agora|hoje)\s+)?(?:voltou|voltaram|continua|piorou)\b""").containsMatchIn(it)
             }
             for ((pattern, intent) in listOf(chest to "emergencia_dor_peito_avc", fall to "emergencia_queda_trauma")) {
                 for (match in pattern.findAll(clause)) {
