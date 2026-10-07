@@ -9,7 +9,7 @@ internal object BragaActionGate {
     private val negation = Regex("""\b(nao|nunca|jamais)\b""")
 
     fun canParse(text: String, output: NluOutput): Boolean {
-        if (output.isBloqueioSeguranca || output.isEmergencia || output.delegarParaNuvem ||
+        if (output.intent == "conversa_bebida_sem_registro" || output.isBloqueioSeguranca || output.isEmergencia || output.delegarParaNuvem ||
             BragaHealthMemory.supports(output.intent) || output.intent.startsWith("ajuda_") ||
             (output.intent.startsWith("entrada_") && output.intent != "entrada_sem_clareza") ||
             output.intent == "orientacao_cadastro_medicamento" || output.intent == "sintoma_contextual" ||

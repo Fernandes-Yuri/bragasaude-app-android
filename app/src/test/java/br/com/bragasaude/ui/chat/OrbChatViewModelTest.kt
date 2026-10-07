@@ -5,6 +5,7 @@ import br.com.bragasaude.ai.*
 import br.com.bragasaude.data.remote.ai.*
 import br.com.bragasaude.data.remote.repository.FamilyBridgeRepository
 import br.com.bragasaude.data.remote.service.NotificationClient
+import br.com.bragasaude.data.remote.service.TelemetryService
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import io.mockk.*
@@ -20,6 +21,7 @@ class OrbChatViewModelTest {
     private lateinit var gateway: OrbChatGateway
     private lateinit var vm: OrbChatViewModel
     private lateinit var hybrid: BragaHybridOrchestrator
+    private lateinit var telemetry: br.com.bragasaude.data.remote.service.TelemetryService
     private val reply = OrbReply("""{"fala":"Confira os valores","acao":"REGISTRAR_PRESSAO","parametros":{"sistolica":120,"diastolica":80}}""")
 
     @Before fun setup() {
@@ -46,7 +48,8 @@ class OrbChatViewModelTest {
         }
         vm = OrbChatViewModel(gateway, store, auth, mockk<NeuralAudioPlayer>(relaxed = true),
             mockk<NotificationClient>(relaxed = true), mockk<ProfileDao>(relaxed = true),
-            mockk<FamilyBridgeRepository>(relaxed = true), hybrid = hybrid)
+            mockk<FamilyBridgeRepository>(relaxed = true), hybrid = hybrid,
+            telemetry = mockk<TelemetryService>(relaxed = true).also { telemetry = it })
         vm.nluResponseDelayMs = 0L
     }
     @After fun tearDown() { vm.leaveScreen(); Dispatchers.resetMain() }
@@ -208,7 +211,8 @@ class OrbChatViewModelTest {
         vm.sendMessage("Por que minha pressão subiu?"); runCurrent()
         val previous = vm.state.value.messages.last().text
         vm.sendMessage("tem certeza disso?"); runCurrent()
-        assertEquals("Vou esclarecer a explicação anterior.", vm.state.value.messages.last().text)
+        assertFalse(vm.state.value.messages.last().text.contains("Vou esclarecer"))
+        assertTrue(vm.state.value.messages.last().text.contains("sem abrir opções"))
         assertNull(vm.state.value.messages.last().action)
         coVerify(exactly = 1) { gateway.sendRemote(match { messages ->
             messages.any { it.second.contains(previous.take(100)) } &&
@@ -287,4 +291,78 @@ class OrbChatViewModelTest {
         assertFalse(remoteHistory.captured.any { it.second.contains(original.take(100)) })
     }
 
+    @Test fun negatedAndNonWaterConsumptionStayLocalWithoutCards() = runTest(dispatcher) {
+        for (text in listOf("não bebi 500 ml de água", "não anota 500 ml de água", "bebi 500 ml de suco")) {
+            vm.newConversation()
+            vm.sendMessage(text); runCurrent()
+            val answer = vm.state.value.messages.last()
+            assertNull(answer.action)
+            assertFalse(answer.text.contains("Boa!"))
+            assertFalse(answer.text.contains("500 ml de água"))
+        }
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
+    }
+
+    @Test fun clinicalDelegationRejectsRemoteEmergencyAndItsAnnouncement() = runTest(dispatcher) {
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } returns OrbReply(
+            """{"fala":"Já deixei as opções de socorro na sua tela.","acao":"EMERGENCIA","parametros":{}}""")
+        vm.sendMessage("o que significa dor no peito?"); runCurrent()
+        val answer = vm.state.value.messages.last()
+        assertNull(answer.action)
+        assertFalse(answer.text.contains("Já deixei"))
+        assertEquals("{}", answer.parameters)
+        coVerify(exactly = 1) { gateway.sendRemote(any(), any(), any(), any()) }
+    }
+
+    @Test fun cloudTurnIsRecordedForLocalCoverage() = runTest(dispatcher) {
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } returns OrbReply(
+            """{"fala":"Converse com seu profissional de saúde.","acao":"CONVERSA","parametros":{}}""")
+        vm.sendMessage("Como minha pressão afeta os rins?")
+        runCurrent()
+        verify(timeout = 5000) {
+            telemetry.logAiConversation(
+                "owner", "Como minha pressão afeta os rins?",
+                "Converse com seu profissional de saúde.",
+                match { it.contains("duvida_clinica_complexa") },
+                false, match { it.contains("\"channel\":\"TEXT\"") && it.contains("\"local\":false") })
+        }
+    }
+
+    @Test fun localTurnIsNotRecorded() = runTest(dispatcher) {
+        vm.sendMessage("não bebi 500 ml de água")
+        runCurrent()
+        verify(timeout = 2000, exactly = 0) {
+            telemetry.logAiConversation(any(), any(), any(), any(), any(), any())
+        }
+    }
+
+    @Test fun textCadenceAppliesOnlyToTextChannel() {
+        vm.nluResponseDelayMs = 500L
+        assertEquals(500L, vm.textCadenceMs(InputChannel.TEXT, false, false))
+        assertEquals(0L, vm.textCadenceMs(InputChannel.VOICE, false, false))
+        assertEquals(0L, vm.textCadenceMs(InputChannel.TEXT, true, false))
+        assertEquals(0L, vm.textCadenceMs(InputChannel.TEXT, false, true))
+    }
+
+    @Test fun voiceLocalReplyHasNoCadenceDelay() = runTest(dispatcher) {
+        vm.nluResponseDelayMs = 500L
+        vm.updateVoiceInput("não bebi 500 ml de água")
+        vm.sendInput(vm.state.value.input)
+        runCurrent()
+        assertFalse(vm.state.value.isStreaming)
+        assertTrue(vm.state.value.messages.last().metrics!!.contains("\"cadenceMs\":0"))
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
+    }
+
+    @Test fun textLocalReplyKeepsCadenceDelay() = runTest(dispatcher) {
+        vm.nluResponseDelayMs = 500L
+        vm.sendMessage("não bebi 500 ml de água")
+        runCurrent()
+        assertTrue(vm.state.value.isStreaming)
+        advanceTimeBy(500L)
+        runCurrent()
+        assertFalse(vm.state.value.isStreaming)
+        assertTrue(vm.state.value.messages.last().metrics!!.contains("\"cadenceMs\":500"))
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
+    }
 }

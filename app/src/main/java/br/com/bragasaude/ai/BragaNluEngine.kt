@@ -445,6 +445,10 @@ object BragaNluEngine {
             return NluOutput("entrada_linguagem_ambigua", reply, tempoMs = deltaMs(inicio))
         }
 
+        BragaTurnMeaning.localReply(texto)?.let { reply ->
+            return NluOutput("conversa_bebida_sem_registro", reply, tempoMs = deltaMs(inicio))
+        }
+
         BragaLocalHelp.answer(texto)?.let { return it.copy(tempoMs = deltaMs(inicio)) }
         if (!BragaRoutingPolicy.outsideScope(protegido) && HealthQueryResolver.hasUnsupportedPeriod(texto)) return NluOutput(
             "entrada_periodo_nao_suportado",

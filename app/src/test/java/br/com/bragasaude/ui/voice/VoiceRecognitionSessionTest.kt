@@ -7,6 +7,7 @@ import android.speech.RecognitionListener
 import android.speech.SpeechRecognizer
 import br.com.bragasaude.ai.*
 import br.com.bragasaude.data.remote.ai.NeuralAudioPlayer
+import br.com.bragasaude.data.remote.service.TelemetryService
 import br.com.bragasaude.domain.VoiceHealthIntent
 import br.com.bragasaude.domain.VoiceHealthParser
 import br.com.bragasaude.ui.util.OnDeviceRecognitionUnavailable
@@ -48,6 +49,35 @@ class VoiceRecognitionSessionTest {
         assertTrue((vm.state.value as VoiceUiState.Saved).summary.contains("SAMU 192"))
     }
 
+    @Test fun `cloud voice answer is recorded for local coverage`() = runTest(dispatcher) {
+        every { hybrid.analyze(any(), InputChannel.VOICE, any(), any(), any()) } returns
+            NluOutput("entrada_sem_clareza", "Repita")
+        every { hybrid.respond(any(), any(), any(), any(), any()) } returns
+            kotlinx.coroutines.flow.flowOf(BragaHybridEvent.Completed("Resposta contextual da API"))
+        vm.startListening(context)
+        runCurrent()
+        listeners.single().onResults(result("tem certeza disso"))
+        runCurrent()
+        verify(timeout = 5000) {
+            telemetry.logAiConversation(
+                "conta-a", "tem certeza disso", "Resposta contextual da API",
+                match { it.contains("entrada_sem_clareza") },
+                false, match { it.contains("\"channel\":\"VOICE\"") && it.contains("\"local\":false") })
+        }
+    }
+
+    @Test fun `local voice answer is not recorded`() = runTest(dispatcher) {
+        every { hybrid.analyze(any(), InputChannel.VOICE, any(), any(), any()) } returns
+            BragaNluEngine.analisar("não consigo respirar")
+        vm.startListening(context)
+        runCurrent()
+        listeners.single().onResults(result("não consigo respirar"))
+        runCurrent()
+        verify(timeout = 2000, exactly = 0) {
+            telemetry.logAiConversation(any(), any(), any(), any(), any(), any())
+        }
+    }
+
     private val dispatcher = StandardTestDispatcher()
     private val listeners = mutableListOf<RecognitionListener>()
     private lateinit var recognizer: SpeechRecognizer
@@ -59,6 +89,7 @@ class VoiceRecognitionSessionTest {
     private lateinit var focus: VoicePlaybackFocus
     private lateinit var hybrid: BragaHybridOrchestrator
     private lateinit var parser: VoiceHealthParser
+    private lateinit var telemetry: TelemetryService
     private lateinit var vm: VoiceHealthViewModel
 
     @Before fun setup() {
@@ -86,7 +117,7 @@ class VoiceRecognitionSessionTest {
             NluOutput("saudacao", "Olá, como posso ajudar?")
         parser = mockk(relaxed = true)
         every { parser.parse(any(), any(), any()) } returns VoiceHealthIntent.Unknown("fala", "detalhe")
-        vm = VoiceHealthViewModel(parser, mockk(relaxed = true), mockk(relaxed = true),
+        vm = VoiceHealthViewModel(parser, mockk(relaxed = true), mockk<TelemetryService>(relaxed = true).also { telemetry = it },
             mockk(relaxed = true), auth, mockk(relaxed = true), player, mockk(relaxed = true),
             mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), hybrid, focus)
     }

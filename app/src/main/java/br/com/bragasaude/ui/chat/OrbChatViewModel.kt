@@ -63,7 +63,8 @@ class OrbChatViewModel @Inject constructor(
     private val profiles: ProfileDao,
     private val familyRepository: FamilyBridgeRepository,
     private val voiceParser: VoiceHealthParser = VoiceHealthParser(),
-    private val hybrid: BragaHybridOrchestrator
+    private val hybrid: BragaHybridOrchestrator,
+    private val telemetry: br.com.bragasaude.data.remote.service.TelemetryService? = null
 ) : ViewModel() {
     private val mutable = MutableStateFlow(OrbChatUiState())
     val state: StateFlow<OrbChatUiState> = mutable.asStateFlow()
@@ -81,6 +82,11 @@ class OrbChatViewModel @Inject constructor(
     private var inputChannel = InputChannel.TEXT
     private val healthQuerySession = HealthQuerySession()
     var nluResponseDelayMs: Long = 500L
+    internal fun textCadenceMs(channel: InputChannel, isEmergencia: Boolean, isBloqueio: Boolean): Long {
+        // Cadência apenas no chat de texto. A voz usa o tempo do Piper e não recebe atraso extra.
+        if (channel != InputChannel.TEXT || isEmergencia || isBloqueio || nluResponseDelayMs <= 0) return 0L
+        return nluResponseDelayMs
+    }
     private val authListener = FirebaseAuth.AuthStateListener {
         val next = it.currentUser?.uid
         if (uid != next) {
@@ -259,8 +265,9 @@ class OrbChatViewModel @Inject constructor(
                     (!local.delegarParaNuvem && actionReply == null)
                 var deliveredLocal: br.com.bragasaude.ai.NluOutput? = null
                 val reply = if (shortcut != null) {
-                    if (shortcut != "EMERGENCIA" && channel == InputChannel.TEXT && nluResponseDelayMs > 0) {
-                        cadenceMs = nluResponseDelayMs
+                    val cadence = if (shortcut != "EMERGENCIA") textCadenceMs(channel, false, false) else 0L
+                    if (cadence > 0) {
+                        cadenceMs = cadence
                         delay(cadenceMs)
                     }
                     OrbReply(JSONObject().put("fala", "Abrir ${actionLabel(shortcut)}.")
@@ -273,9 +280,10 @@ class OrbChatViewModel @Inject constructor(
                     val resolved = hybrid.resolveLocal(local, owner, channel, healthQuerySession, conversationId, contextTurn)
                     deliveredLocal = resolved
                     if (BragaHealthMemory.supports(local.intent)) roomMs = (System.nanoTime() - roomStartedAt) / 1_000_000.0
-                    // Delay mínimo no chat de texto para experiência humana e cadenciada
-                    if (!local.isEmergencia && !local.isBloqueioSeguranca && channel == InputChannel.TEXT && nluResponseDelayMs > 0) {
-                        cadenceMs = nluResponseDelayMs
+                    // Cadência mínima só no chat de texto para experiência humana; voz usa o Piper.
+                    val cadence = textCadenceMs(channel, local.isEmergencia, local.isBloqueioSeguranca)
+                    if (cadence > 0) {
+                        cadenceMs = cadence
                         delay(cadenceMs)
                     }
                     if (auth.currentUser?.uid != owner || uid != owner || version != revision) return@launch
@@ -300,12 +308,13 @@ class OrbChatViewModel @Inject constructor(
                     }
                 }
                 if (version != revision) return@launch
-                val parsed = JSONObject(reply.content)
+                val safeContent = if (local.delegarParaNuvem) BragaRemoteContract.validate(value, reply.content) else reply.content
+                val parsed = JSONObject(safeContent)
                 val rawAction = parsed.optString("acao", "CONVERSA").takeUnless { it == "CONVERSA" }
                 val rawParams = parsed.optJSONObject("parametros") ?: JSONObject()
                 val (action, finalParams) = if (shortcut != null) {
                     shortcut to rawParams
-                } else if (local.fallbackFromIntent != null) {
+                } else if (local.delegarParaNuvem) {
                     null to JSONObject()
                 } else {
                     resolveHealthAction(value, rawAction, rawParams)
@@ -336,8 +345,8 @@ class OrbChatViewModel @Inject constructor(
 
                 val answer = ChatMessage(role = "assistant", text = answerText, status = "received",
                     action = action, parameters = finalParams.toString(),
-                    rawContent = if (channel == InputChannel.TEXT) JSONObject(reply.content)
-                        .put("fala", answerText).toString() else reply.content,
+                    rawContent = if (channel == InputChannel.TEXT) JSONObject(safeContent)
+                        .put("fala", answerText).toString() else safeContent,
                     metrics = listOfNotNull(reply.metrics, diagnostic).joinToString("\n"))
                 mutable.update { it.copy(messages = it.messages.map { m -> if (m.id == user.id) m.copy(status = if (local.isBloqueioSeguranca) "blocked" else "received") else m } + answer,
                     isStreaming = false, partialText = "") }
@@ -351,6 +360,18 @@ class OrbChatViewModel @Inject constructor(
                         referenceZoneId = deliveredLocal?.referenceZoneId), owner, conversationId, contextTurn)
                 } else if (local.delegarParaNuvem && shortcut == null && actionReply == null) {
                     healthQuerySession.rememberExternalReply(answerText, owner, conversationId, contextTurn)
+                    // Amostra da nuvem para ampliar a cobertura local e mitigar custo.
+                    // Só turnos entregues pela nuvem; tabela e sync já existem no pipeline de auditoria.
+                    telemetry?.logAiConversation(
+                        userId = owner,
+                        userPrompt = value.take(2000),
+                        aiResponse = answerText.take(2000),
+                        detectedIntent = listOfNotNull(local.fallbackFromIntent, local.intent).joinToString(">"),
+                        rawPayload = JSONObject()
+                            .put("channel", channel.name).put("route", local.route.name)
+                            .put("durationMs", elapsedMs).put("validatedAction", action)
+                            .put("remoteAction", rawAction).put("local", false).toString()
+                    )
                 } else healthQuerySession.forgetReferences(owner, conversationId, contextTurn)
                 save()
                 if (shortcut != null) confirmAction(answer.id)

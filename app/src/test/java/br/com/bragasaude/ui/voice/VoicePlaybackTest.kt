@@ -82,4 +82,24 @@ class VoicePlaybackTest {
         assertFalse(vm.isSpeaking.value)
         assertFalse(vm.isLiveMode.value)
     }
+
+    @Test fun `navegacao por voz aguarda a sintese antes de abrir a tela`() = runTest(dispatcher) {
+        val eventos = mutableListOf<VoiceNavigationEvent>()
+        val coleta = launch { vm.navigationEvent.collect { eventos.add(it) } }
+        runCurrent()
+        vm.navigateForVoice(VoiceNavigationEvent.NavigateToVitals("PRESSURE", "120/80"))
+        runCurrent()
+        assertTrue(eventos.isEmpty())
+        advanceTimeBy(VoiceHealthViewModel.VOICE_NAV_DELAY_MS - 1)
+        runCurrent()
+        assertTrue(eventos.isEmpty())
+        advanceTimeBy(1L)
+        runCurrent()
+        assertEquals(1, eventos.size)
+        coleta.cancel()
+    }
+
+    @Test fun `atraso da navegacao por voz fica abaixo do tempo de sintese`() {
+        assertTrue(VoiceHealthViewModel.VOICE_NAV_DELAY_MS in 100L..600L)
+    }
 }

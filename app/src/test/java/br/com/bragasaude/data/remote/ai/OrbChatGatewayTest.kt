@@ -62,4 +62,32 @@ class OrbChatGatewayTest {
             } finally { gateway.close() }
         }
     }
+    @Test fun bothTransportsRejectEducationalEmergencyAndSuppressUnvalidatedPartials() = runTest {
+        for (useSocket in listOf(true, false)) {
+            val received = """{"fala":"Já abri as opções de socorro.","acao":"EMERGENCIA","parametros":{}}"""
+            val rest = mockk<BragaLocalAiClient>()
+            every { rest.serverBaseUrl } returns "http://localhost"
+            coEvery { rest.interpretSpeech(any(), false, any(), any(), any(), any()) } returns
+                BragaAiResult("EMERGENCIA", "Já abri as opções de socorro.", rawResponse = received)
+            val socket = mockk<OrbWebSocket>()
+            val session = mockk<OrbWebSocket.Session>(relaxed = true)
+            every { session.state } returns MutableStateFlow(OrbConnectionState.CONNECTED)
+            coEvery { session.chat(any(), any(), any(), any()) } coAnswers {
+                arg<(String) -> Unit>(3)("Já abri as opções de socorro.")
+                OrbReply(received)
+            }
+            every { socket.openSession(any(), any(), any()) } returns session
+            val auth = mockk<AuthService>()
+            every { auth.currentUserId } returns "owner"
+            val gateway = OrbChatGateway(socket, rest, auth)
+            val partials = mutableListOf<String>()
+            if (useSocket) gateway.open(backgroundScope)
+            try {
+                val reply = gateway.sendRemote(listOf("user" to "o que significa dor no peito?"), onPartial = { partials.add(it) })
+                assertTrue(reply.content.contains("CONVERSA"))
+                assertFalse(reply.content.contains("Já abri"))
+                assertTrue(partials.all { it.isBlank() })
+            } finally { gateway.close() }
+        }
+    }
 }

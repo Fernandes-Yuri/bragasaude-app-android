@@ -19,7 +19,7 @@ internal object BragaRoutingPolicy {
     private val educational = Regex("""\b(o que (e|significa|causa)|por que|porque|como evitar|como prevenir)\b""")
     private val currentReport = Regex("""\b(estou|tenho|sinto|sentindo|agora|socorro|nao (consigo|consegue)|cai|caiu|bati a cabeca|levei um tombo|escorreguei)\b|\b(meu|minha|ele|ela)\b.{0,40}\b(esta|tem|sente)\b""")
 
-    // Recorrência atual em qualquer trecho invalida a leitura de relato passado.
+    // Recorrência pertence ao relato da mesma oração ou a uma retomada explícita.
     private val recurrence = Regex("""\b(voltou|voltaram|de novo|outra vez|novamente|piorou|piorando|continua|ainda)\b""")
 
     fun inHealthScope(text: String) = health.containsMatchIn(text) && !unrelated.containsMatchIn(text)
@@ -35,15 +35,18 @@ internal object BragaRoutingPolicy {
 
     fun emergency(text: String): EmergencyAssessment {
         var contextual = false
-        val recurring = recurrence.containsMatchIn(text)
         // O "é" de "o que é" não é a conjunção que separa um novo relato.
-        val clauses = text.split(Regex("""\b(mas|porem|contudo)\b|(?<!que )\be\b|[.;!?]"""))
-        for (clause in clauses) {
+        val clauses = text.split(Regex("""\b(mas|porem|contudo)\b|(?<!que )\be\b|[.;!?]|,\s*(?=(?:eu|ele|ela|meu|minha|nao|estou|tenho|sinto|bebi|tomei|agora)\b)"""))
+        for ((index, clause) in clauses.withIndex()) {
+            val recurring = recurrence.containsMatchIn(clause)
+            val resumed = clauses.drop(index + 1).any {
+                Regex("""^\s*(?:(?:agora|hoje)\s+)?(?:voltou|voltaram|continua|piorou)\b""").containsMatchIn(it)
+            }
             for ((pattern, intent) in listOf(chest to "emergencia_dor_peito_avc", fall to "emergencia_queda_trauma")) {
                 for (match in pattern.findAll(clause)) {
                     val prefix = clause.take(match.range.first)
                     val denial = !match.value.startsWith("nao ") && deniedPrefix.containsMatchIn(prefix)
-                    val past = historical.containsMatchIn(clause) && !present.containsMatchIn(clause) && !recurring
+                    val past = historical.containsMatchIn(clause) && !present.containsMatchIn(clause) && !recurring && !resumed
                     // Uma pergunta sobre um sintoma presente é relato, não exemplo educativo.
                     val example = hypothetical.containsMatchIn(clause) ||
                         (educational.containsMatchIn(clause) && !currentReport.containsMatchIn(clause) && !recurring)
