@@ -38,4 +38,15 @@ class BragaTurnMeaningTest {
         assertFalse(BragaNluEngine.analisar("o que significa dor no peito?", InputChannel.TEXT).isEmergencia)
         assertFalse(BragaNluEngine.analisar("não estou com dor no peito", InputChannel.TEXT).isEmergencia)
     }
+    @Test fun negationAndRecurrenceDoNotLeakIntoOtherClauses() {
+        assertTrue(BragaNluEngine.analisar("não tenho dor no peito, estou com falta de ar", InputChannel.TEXT).isEmergencia)
+        assertFalse(BragaNluEngine.analisar("o que significa dor no peito? Minha dor de cabeça voltou", InputChannel.TEXT).isEmergencia)
+        val mentions = BragaTurnMeaning.beverages("não bebi 500 ml de água, bebi 250 ml de suco")
+        assertEquals(2, mentions.size)
+        assertTrue(mentions[0].negated)
+        assertFalse(mentions[1].negated)
+        assertEquals("suco", mentions[1].entity)
+        assertEquals(250, mentions[1].quantityMl)
+        assertNull(BragaTurnMeaning.localReply("não bebi água, mas por que minha pressão subiu?"))
+    }
 }

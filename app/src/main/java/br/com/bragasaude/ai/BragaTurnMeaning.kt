@@ -3,7 +3,7 @@ package br.com.bragasaude.ai
 /** Entidades e modalidade da entrada; não autoriza persistência. */
 internal object BragaTurnMeaning {
     data class Beverage(val entity: String?, val quantityMl: Int?, val negated: Boolean, val modality: String)
-    private val clauses = Regex("""\b(mas|porem|contudo)\b|(?<!que )\be\b|[;!?]|\.(?!\d)""")
+    private val clauses = Regex("""\b(mas|porem|contudo)\b|(?<!que )\be\b|[;!?]|\.(?!\d)|,\s*(?=(?:eu|ele|ela|meu|minha|nao|estou|tenho|sinto|bebi|tomei|agora)\b)""")
     private val verb = Regex("""\b(bebi|bebeu|tomei|tomou|bebendo|tomando|anot\w*|registr\w*|adicion\w*)\b""")
     private val drink = Regex("""\b(agua|h2o|suco|cha|cafe|leite|refrigerante|cerveja|vinho|bebida)\b""")
     private val quantity = Regex("""(\d+(?:[.,]\d+)?)\s*(mililitros?|ml|litros?|l|copos?|garrafinhas?|garrafas?|xicaras?|canecas?)\b""")
@@ -41,6 +41,7 @@ internal object BragaTurnMeaning {
     }
 
     fun localReply(text: String): String? {
+        if (BragaRoutingPolicy.complexHealthQuestion(BragaRoutingPolicy.normalize(text))) return null
         val mentions = beverages(text)
         if (mentions.isEmpty()) return null
         if (mentions.size > 1) return "Você mencionou mais de uma informação sobre bebidas. Qual delas deseja tratar primeiro?"
