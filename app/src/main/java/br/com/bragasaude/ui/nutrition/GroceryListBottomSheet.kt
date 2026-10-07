@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -100,7 +101,7 @@ fun GroceryListBottomSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
         ) {
-            // 1. Cabeçalho Principal (Título + Contador de itens + Botão fechar)
+            // 1. Cabeçalho Principal (Título + Contador de itens + Compartilhar PDF + Botão fechar)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -122,37 +123,50 @@ fun GroceryListBottomSheet(
                         color = BragaTextSecondary
                     )
                 }
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Fechar lista de compras",
-                        tint = BragaTextSecondary
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (groceryList.isNotEmpty()) {
+                        IconButton(onClick = onExportPdf) {
+                            Icon(
+                                Icons.Default.Share,
+                                contentDescription = "Compartilhar lista em PDF",
+                                tint = BragaEmeraldDark
+                            )
+                        }
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Fechar lista de compras",
+                            tint = BragaTextSecondary
+                        )
+                    }
                 }
             }
 
-            // 2. Barra de Ações Rápidas em Destaque (Sempre Visível no Topo)
+            // 2. Barra de Ações Rápidas (Proporcionais 1:1, Sem Quebra de Linha e com Estrelinhas de IA)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(
                     onClick = { isCreatingManual = true },
                     modifier = Modifier
-                        .weight(1.3f)
-                        .heightIn(min = 48.dp),
+                        .weight(1f)
+                        .height(46.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        "Adicionar alimento",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
+                        "Adicionar",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
                     )
                 }
 
@@ -160,29 +174,26 @@ fun GroceryListBottomSheet(
                     onClick = onGenerateList,
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 48.dp),
+                        .height(46.dp),
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, BragaMintBorder)
+                    border = BorderStroke(1.dp, BragaMintBorder),
+                    colors = ButtonDefaults.outlinedButtonColors(containerColor = BragaMintSurface.copy(alpha = 0.5f)),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        if (groceryList.isEmpty()) "Gerar auto" else "Regenerar",
-                        style = MaterialTheme.typography.bodyMedium
+                    Icon(
+                        Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = BragaEmeraldDark,
+                        modifier = Modifier.size(18.dp)
                     )
-                }
-
-                if (groceryList.isNotEmpty()) {
-                    IconButton(
-                        onClick = onExportPdf,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Share,
-                            contentDescription = "Compartilhar lista em PDF",
-                            tint = BragaEmeraldDark
-                        )
-                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "Sugerir com IA",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = BragaEmeraldDark,
+                        maxLines = 1
+                    )
                 }
             }
 
@@ -325,9 +336,9 @@ fun GroceryListBottomSheet(
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                                     border = BorderStroke(1.dp, BragaMintBorder)
                                 ) {
-                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = BragaEmeraldDark, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(8.dp))
-                                    Text("Gerar lista semanal automática")
+                                    Text("Sugerir lista semanal com IA")
                                 }
                             }
                         }
