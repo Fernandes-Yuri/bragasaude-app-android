@@ -810,18 +810,6 @@ fun FunctionalSuggestionGroupCard(
                     )
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
-                ) {
-                    Text(
-                        group.observedMarker,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                }
             }
 
             Text(
