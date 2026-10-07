@@ -41,9 +41,11 @@ class OrbChatGateway @Inject constructor(
     suspend fun sendRemote(history: List<Pair<String, String>>,
                            actingAs: String? = null, patientId: String? = null,
                            onPartial: (String) -> Unit): OrbReply {
+        val userText = history.lastOrNull { it.first == "user" }?.second.orEmpty()
         try {
-            return session?.chat(history, actingAs, patientId, onPartial)
+            val received = session?.chat(history, actingAs, patientId) { }
                 ?: throw IOException("Sem conexão")
+            return received.copy(content = BragaRemoteContract.validate(userText, received.content))
         } catch (e: OrbRejectedException) {
             throw e
         } catch (_: TimeoutCancellationException) {
@@ -57,17 +59,17 @@ class OrbChatGateway @Inject constructor(
         // AUD-AN05: history.last() crashava com NoSuchElementException se o
         // histórico estiver vazio (primeira fala após login/limpeza). A própria
         // linha 35 já usa lastOrNull; aqui era inconsistente.
-        val lastMessage = history.lastOrNull()?.second.orEmpty()
+        val lastMessage = userText
         val result = rest.interpretSpeech(lastMessage, preferWebSocket = false,
                                           history = history,
                                           actingAs = actingAs, patientId = patientId,
-                                          onPartial = onPartial)
+                                          onPartial = {})
             ?: throw IOException("Não foi possível obter resposta. Tente novamente.")
         val raw = result.rawResponse
         val structured = try { JSONObject(raw ?: "").has("fala") } catch (_: Exception) { false }
         val content = if (structured) raw!! else JSONObject().put("fala", result.fala)
-            .put("acao", "CONVERSA").put("parametros", JSONObject()).toString()
-        return OrbReply(content, "Resposta via REST")
+            .put("acao", result.tipo).put("parametros", JSONObject()).toString()
+        return OrbReply(BragaRemoteContract.validate(userText, content), "Resposta via REST")
     }
 
     /**

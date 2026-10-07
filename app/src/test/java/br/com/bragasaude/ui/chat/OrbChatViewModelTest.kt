@@ -208,7 +208,8 @@ class OrbChatViewModelTest {
         vm.sendMessage("Por que minha pressão subiu?"); runCurrent()
         val previous = vm.state.value.messages.last().text
         vm.sendMessage("tem certeza disso?"); runCurrent()
-        assertEquals("Vou esclarecer a explicação anterior.", vm.state.value.messages.last().text)
+        assertFalse(vm.state.value.messages.last().text.contains("Vou esclarecer"))
+        assertTrue(vm.state.value.messages.last().text.contains("sem abrir opções"))
         assertNull(vm.state.value.messages.last().action)
         coVerify(exactly = 1) { gateway.sendRemote(match { messages ->
             messages.any { it.second.contains(previous.take(100)) } &&
@@ -287,4 +288,26 @@ class OrbChatViewModelTest {
         assertFalse(remoteHistory.captured.any { it.second.contains(original.take(100)) })
     }
 
+    @Test fun negatedAndNonWaterConsumptionStayLocalWithoutCards() = runTest(dispatcher) {
+        for (text in listOf("não bebi 500 ml de água", "não anota 500 ml de água", "bebi 500 ml de suco")) {
+            vm.newConversation()
+            vm.sendMessage(text); runCurrent()
+            val answer = vm.state.value.messages.last()
+            assertNull(answer.action)
+            assertFalse(answer.text.contains("Boa!"))
+            assertFalse(answer.text.contains("500 ml de água"))
+        }
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
+    }
+
+    @Test fun clinicalDelegationRejectsRemoteEmergencyAndItsAnnouncement() = runTest(dispatcher) {
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } returns OrbReply(
+            """{"fala":"Já deixei as opções de socorro na sua tela.","acao":"EMERGENCIA","parametros":{}}""")
+        vm.sendMessage("o que significa dor no peito?"); runCurrent()
+        val answer = vm.state.value.messages.last()
+        assertNull(answer.action)
+        assertFalse(answer.text.contains("Já deixei"))
+        assertEquals("{}", answer.parameters)
+        coVerify(exactly = 1) { gateway.sendRemote(any(), any(), any(), any()) }
+    }
 }

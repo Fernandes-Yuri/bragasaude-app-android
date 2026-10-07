@@ -230,6 +230,7 @@ class OrbWebSocket @Inject constructor() {
                 messages.takeLast(30).forEach { (role, content) -> history.put(JSONObject().put("role", role).put("content", content)) }
                 val payload = JSONObject().put("type", "chat").put("id", id).put("messages", history)
                     .put("max_tokens", 512).put("temperature", 0.1)
+                    .put("nlu_context", BragaRemoteContract.context(messages.lastOrNull { it.first == "user" }?.second.orEmpty()))
                 // D50/D51: escopo de papel — modo cuidador agenda consulta por voz
                 if (actingAs == "caregiver" && !patientId.isNullOrBlank()) {
                     payload.put("acting_as", "caregiver").put("patient_id", patientId)

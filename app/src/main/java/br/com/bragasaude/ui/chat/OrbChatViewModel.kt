@@ -300,12 +300,13 @@ class OrbChatViewModel @Inject constructor(
                     }
                 }
                 if (version != revision) return@launch
-                val parsed = JSONObject(reply.content)
+                val safeContent = if (local.delegarParaNuvem) BragaRemoteContract.validate(value, reply.content) else reply.content
+                val parsed = JSONObject(safeContent)
                 val rawAction = parsed.optString("acao", "CONVERSA").takeUnless { it == "CONVERSA" }
                 val rawParams = parsed.optJSONObject("parametros") ?: JSONObject()
                 val (action, finalParams) = if (shortcut != null) {
                     shortcut to rawParams
-                } else if (local.fallbackFromIntent != null) {
+                } else if (local.delegarParaNuvem) {
                     null to JSONObject()
                 } else {
                     resolveHealthAction(value, rawAction, rawParams)
@@ -336,8 +337,8 @@ class OrbChatViewModel @Inject constructor(
 
                 val answer = ChatMessage(role = "assistant", text = answerText, status = "received",
                     action = action, parameters = finalParams.toString(),
-                    rawContent = if (channel == InputChannel.TEXT) JSONObject(reply.content)
-                        .put("fala", answerText).toString() else reply.content,
+                    rawContent = if (channel == InputChannel.TEXT) JSONObject(safeContent)
+                        .put("fala", answerText).toString() else safeContent,
                     metrics = listOfNotNull(reply.metrics, diagnostic).joinToString("\n"))
                 mutable.update { it.copy(messages = it.messages.map { m -> if (m.id == user.id) m.copy(status = if (local.isBloqueioSeguranca) "blocked" else "received") else m } + answer,
                     isStreaming = false, partialText = "") }

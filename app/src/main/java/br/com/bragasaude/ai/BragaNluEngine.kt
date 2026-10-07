@@ -432,6 +432,9 @@ object BragaNluEngine {
             "O que você está sentindo agora? Se houver dor no peito, falta de ar ou sensação de desmaio, ligue para o SAMU 192 e peça ajuda a alguém próximo.",
             tempoMs = deltaMs(inicio)
         )
+        BragaTurnMeaning.localReply(texto)?.let { reply ->
+            return NluOutput("conversa_bebida_sem_registro", reply, tempoMs = deltaMs(inicio))
+        }
         if (emergency.contextualMention && !BragaRoutingPolicy.complexHealthQuestion(protegido) &&
             HealthQueryResolver.explicit(texto) == null) {
             return NluOutput("sintoma_contextual", sortearResposta("sintoma_contextual"), tempoMs = deltaMs(inicio))
