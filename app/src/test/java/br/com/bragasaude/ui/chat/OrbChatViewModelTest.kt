@@ -33,16 +33,15 @@ class OrbChatViewModelTest {
         every { user.uid } returns "owner"
         every { auth.currentUser } returns user
         hybrid = mockk()
+        val analyzer = BragaHybridOrchestrator(GroqStreamSource { _, _ -> error("O analisador local não usa transporte") }, GroqDynamicPrompt())
         every { hybrid.analyze(any(), any(), any(), any(), any()) } answers {
-            val local = BragaNluEngine.analisar(firstArg(), secondArg())
-            val query = if (!local.isBloqueioSeguranca && !local.isEmergencia && !local.delegarParaNuvem)
-                thirdArg<HealthQuerySession>().resolve(firstArg(), arg(3), arg(4)) ?: local.healthQuery else null
-            if (query == null) local else local.copy(intent = query.intent, healthQuery = query)
+            analyzer.analyze(firstArg(), secondArg(), thirdArg(), arg(3), arg(4))
         }
-        coEvery { hybrid.resolveLocal(any(), any(), any(), any(), any()) } answers {
+        coEvery { hybrid.resolveLocal(any(), any(), any(), any(), any(), any()) } answers {
             firstArg<NluOutput>().let {
-                it.healthQuery?.let { query -> arg<HealthQuerySession>(3).remember(query, secondArg(), arg(4)) }
-                it.copy(respostaLocal = it.respostaLocal ?: "Seu último registro local foi consultado.")
+                it.healthQuery?.let { query -> arg<HealthQuerySession>(3).remember(query, secondArg(), arg(4), arg(5)) }
+                it.copy(respostaLocal = it.respostaLocal ?: "Seu último registro local foi consultado.",
+                    hasLocalData = if (it.healthQuery != null) true else null)
             }
         }
         vm = OrbChatViewModel(gateway, store, auth, mockk<NeuralAudioPlayer>(relaxed = true),
@@ -149,12 +148,12 @@ class OrbChatViewModelTest {
         vm.updateVoiceInput("quanto foi minha pressão")
         vm.sendInput(vm.state.value.input)
         runCurrent()
-        coVerify { hybrid.resolveLocal(any(), "owner", InputChannel.VOICE, any(), any()) }
+        coVerify { hybrid.resolveLocal(any(), "owner", InputChannel.VOICE, any(), any(), any()) }
         vm.updateVoiceInput("quanto foi minha pressão")
         vm.updateInput("quanto foi minha pressão hoje")
         vm.sendInput(vm.state.value.input)
         runCurrent()
-        coVerify { hybrid.resolveLocal(any(), "owner", InputChannel.TEXT, any(), any()) }
+        coVerify { hybrid.resolveLocal(any(), "owner", InputChannel.TEXT, any(), any(), any()) }
     }
 
     @Test fun blockedTranscriptIsNotReplayedToCloud() = runTest(dispatcher) {
@@ -209,7 +208,7 @@ class OrbChatViewModelTest {
         vm.sendMessage("Como minha pressão afeta os rins?")
         runCurrent()
         coVerify(exactly = 1) { gateway.send(any(), any(), any(), any()) }
-        coVerify(exactly = 0) { hybrid.resolveLocal(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { hybrid.resolveLocal(any(), any(), any(), any(), any(), any()) }
     }
 
     @Test fun registrationCardIsPreparedWithoutGateway() = runTest(dispatcher) {
@@ -225,8 +224,8 @@ class OrbChatViewModelTest {
             vm.sendMessage(it); runCurrent()
             assertFalse(vm.state.value.isStreaming)
         }
-        coVerify { hybrid.resolveLocal(match { it.healthQuery?.period == HealthPeriod.YESTERDAY }, "owner", InputChannel.TEXT, any(), any()) }
-        coVerify { hybrid.resolveLocal(match { it.healthQuery?.metric == HealthMetric.GLUCOSE && it.healthQuery?.period == HealthPeriod.LAST_7_DAYS }, "owner", InputChannel.TEXT, any(), any()) }
+        coVerify { hybrid.resolveLocal(match { it.healthQuery?.period == HealthPeriod.YESTERDAY }, "owner", InputChannel.TEXT, any(), any(), any()) }
+        coVerify { hybrid.resolveLocal(match { it.healthQuery?.metric == HealthMetric.GLUCOSE && it.healthQuery?.period == HealthPeriod.LAST_7_DAYS }, "owner", InputChannel.TEXT, any(), any(), any()) }
         verify(exactly = 0) { gateway.open(any()) }
         coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
     }
@@ -235,8 +234,34 @@ class OrbChatViewModelTest {
         vm.sendMessage("Qual foi minha última pressão?"); runCurrent()
         vm.newConversation()
         vm.sendMessage("e ontem?"); runCurrent()
-        coVerify(exactly = 1) { hybrid.resolveLocal(match { it.healthQuery != null }, any(), any(), any(), any()) }
+        coVerify(exactly = 1) { hybrid.resolveLocal(match { it.healthQuery != null }, any(), any(), any(), any(), any()) }
         assertNull(vm.state.value.messages.last().action)
         verify(exactly = 0) { gateway.open(any()) }
     }
+    @Test fun deliveredExplanationCanBeSimplifiedWithoutRegistrationOrGateway() = runTest(dispatcher) {
+        vm.sendMessage("Por que minha pressão subiu?"); runCurrent()
+        val original = vm.state.value.messages.last().text
+        vm.sendMessage("Entendi"); runCurrent()
+        vm.sendMessage("Obrigado, mas me explica melhor"); runCurrent()
+        val answer = vm.state.value.messages.last()
+        assertNotEquals(original, answer.text)
+        assertTrue(answer.text.contains("não mostra a causa"))
+        assertTrue(answer.text.contains("Não altere"))
+        assertNull(answer.action)
+        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+    }
+
+    @Test fun deliveredResponseCanBeRepeatedAndNewConversationRemovesReference() = runTest(dispatcher) {
+        vm.sendMessage("Como anexo um exame?"); runCurrent()
+        val original = vm.state.value.messages.last().text
+        vm.sendMessage("Repete"); runCurrent()
+        assertEquals(original, vm.state.value.messages.last().text)
+        assertNull(vm.state.value.messages.last().action)
+        vm.newConversation()
+        vm.sendMessage("Repete"); runCurrent()
+        assertNotEquals(original, vm.state.value.messages.last().text)
+        assertNull(vm.state.value.messages.last().action)
+        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+    }
+
 }

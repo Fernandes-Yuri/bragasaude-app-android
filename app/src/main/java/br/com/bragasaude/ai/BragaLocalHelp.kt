@@ -2,8 +2,8 @@ package br.com.bragasaude.ai
 
 /** Respostas de escopo fechado; não executa ações nem infere causas individuais. */
 internal object BragaLocalHelp {
-    private val acknowledgement = Regex("""^(?:(?:entendi|compreendi|entendido|ok|legal|certo|beleza|ta bom|(?:muito )?obrigad[oa]|valeu)[\s,!.;]+)+(?:mas\s+)?""")
-    private val variation = Regex("""^(?:por que|porque) (?:(?:a |minha |a minha )?(?:pressao|glicemia|glicose) )?(?:subiu|baixou|caiu|aumentou|diminuiu|varia|variou|mudou|oscila|oscilou)(?: tanto)?$""")
+    private val acknowledgement = Regex("""^(?:(?:entendi|compreendi|entendido|ok|legal|certo|beleza|ta bom|(?:muito )?obrigad[oa]|valeu)[\s,!.;]+)+(?:mas\s+|so que\s+)?""")
+    private val variation = Regex("""^(?:por que|porque) (?:(?:ela |ele |isso )|(?:a |minha |a minha )?(?:pressao|glicemia|glicose) )?(?:subiu|baixou|caiu|aumentou|diminuiu|varia|variou|mudou|oscila|oscilou)(?: tanto)?$""")
     private val pressure = Regex("""\bpressao\b""")
     private val glucose = Regex("""\b(?:glicemia|glicose)\b""")
     private val exam = Regex("""\bexames?\b""")
