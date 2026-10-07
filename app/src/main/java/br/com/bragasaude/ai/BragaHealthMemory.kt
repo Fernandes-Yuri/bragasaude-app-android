@@ -3,6 +3,9 @@ package br.com.bragasaude.ai
 import br.com.bragasaude.data.local.ProfileDao
 import br.com.bragasaude.data.local.VitalSignDao
 import br.com.bragasaude.data.local.VitalSignEntity
+import br.com.bragasaude.data.local.BiometryDao
+import br.com.bragasaude.data.local.MedicationDao
+import br.com.bragasaude.data.local.MedicationLogDao
 import br.com.bragasaude.domain.util.BloodPressureParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -23,17 +26,26 @@ class BragaHealthMemory internal constructor(
     private val vitals: VitalSignDao,
     private val profiles: ProfileDao,
     private val now: () -> Instant,
-    private val zone: ZoneId
+    private val zone: ZoneId,
+    private val biometry: BiometryDao? = null,
+    private val medications: MedicationDao? = null,
+    private val medicationLogs: MedicationLogDao? = null
 ) {
-    @Inject constructor(vitals: VitalSignDao, profiles: ProfileDao) : this(
-        vitals, profiles, { Instant.now() }, ZoneId.systemDefault()
+    @Inject constructor(vitals: VitalSignDao, profiles: ProfileDao, biometry: BiometryDao,
+                        medications: MedicationDao, medicationLogs: MedicationLogDao) : this(
+        vitals, profiles, { Instant.now() }, ZoneId.systemDefault(), biometry, medications, medicationLogs
     )
 
     companion object {
         const val PRESSURE = "consulta_historico_pressao"
         const val GLUCOSE = "consulta_historico_glicemia"
         const val WATER = "consulta_historico_hidratacao"
-        fun supports(intent: String) = intent in setOf(PRESSURE, GLUCOSE, WATER)
+        const val HEART_RATE = "consulta_historico_batimentos"
+        const val OXYGEN = "consulta_historico_saturacao"
+        const val WEIGHT = "consulta_historico_peso"
+        const val MEDICATION_STOCK = "consulta_estoque_medicamento"
+        const val MEDICATION_DOSES = "consulta_doses_medicamento"
+        fun supports(intent: String) = intent in setOf(PRESSURE, GLUCOSE, WATER, HEART_RATE, OXYGEN, WEIGHT, MEDICATION_STOCK, MEDICATION_DOSES)
     }
 
     private var owner: String? = null
@@ -67,6 +79,9 @@ class BragaHealthMemory internal constructor(
                 HealthMetric.PRESSURE -> pressure(query, userId, instant)
                 HealthMetric.GLUCOSE -> glucose(query, userId, instant)
                 HealthMetric.WATER -> water(query, userId, instant)
+                HealthMetric.HEART_RATE, HealthMetric.OXYGEN -> auxiliary(query, userId, instant)
+                HealthMetric.WEIGHT -> weight(query, userId, instant)
+                HealthMetric.MEDICATION_STOCK, HealthMetric.MEDICATION_DOSES -> medication(query, userId, instant)
             }
         } catch (e: CancellationException) {
             throw e
@@ -120,6 +135,10 @@ class BragaHealthMemory internal constructor(
             HealthMetric.PRESSURE -> "pressão"
             HealthMetric.GLUCOSE -> "glicemia${query.glucoseType?.let { " (${typeLabel(it)})" } ?: ""}"
             HealthMetric.WATER -> "água"
+            HealthMetric.HEART_RATE -> "batimentos"
+            HealthMetric.OXYGEN -> "saturação"
+            HealthMetric.WEIGHT -> "peso"
+            HealthMetric.MEDICATION_STOCK, HealthMetric.MEDICATION_DOSES -> "medicamento"
         }
         val period = periodLabel(query.period)
         val text = variant(userId, "absent:${query.intent}", listOf(
@@ -132,14 +151,23 @@ class BragaHealthMemory internal constructor(
     }
 
     private suspend fun pressure(query: HealthQuery, userId: String, instant: Instant): HealthMemoryResult {
+        if (query.operation == HealthOperation.COMPARE_YESTERDAY) return compareYesterday(query, userId, instant)
         val scope = interval(query, instant)
         val last = vitals.getLatestPressureForMemory(userId, scope.startInclusiveMillis, scope.endExclusiveMillis)
             ?.takeIf { valid(it, userId, scope) && (it.systolicPressure ?: 0) > 0 && (it.diastolicPressure ?: 0) > 0 }
-        if (query.operation == HealthOperation.LAST) {
+        if (query.operation in setOf(HealthOperation.LAST, HealthOperation.AGE)) {
             return if (last == null) absent(query, userId) else HealthMemoryResult(
                 "${introduction(userId, query)} sua última pressão ${periodLabel(query.period)} foi " +
                     "${BloodPressureParser.normalizePressure(last.systolicPressure!!)} por ${BloodPressureParser.normalizePressure(last.diastolicPressure!!)} mmHg, " +
-                    "em ${time(last)}, ${elapsed(last, instant)}.", true, last.measuredAt.time, zone.id)
+                    "em ${time(last)}, ${elapsed(last, instant)}.${ageSuffix(query, last, instant)}", true, last.measuredAt.time, zone.id)
+        }
+        if (query.operation == HealthOperation.EXTREMES) {
+            val rows = vitals.getPressureIntervalForMemory(userId, scope.startInclusiveMillis, scope.endExclusiveMillis)
+                .filter { valid(it, userId, scope) && (it.systolicPressure ?: 0) > 0 && (it.diastolicPressure ?: 0) > 0 }
+            if (rows.isEmpty()) return absent(query, userId)
+            val systolic = rows.map { BloodPressureParser.normalizePressure(it.systolicPressure!!) }
+            val diastolic = rows.map { BloodPressureParser.normalizePressure(it.diastolicPressure!!) }
+            return HealthMemoryResult("Nos ${rows.size} registros de pressão ${periodLabel(query.period)}, a sistólica variou de ${systolic.min()} a ${systolic.max()} mmHg e a diastólica de ${diastolic.min()} a ${diastolic.max()} mmHg. Os limites são independentes e não formam uma medição única. Isso não determina diagnóstico.", true)
         }
         val recentScope = averageInterval(query, instant)
         val recent = vitals.getPressureIntervalForMemory(userId, recentScope.startInclusiveMillis, recentScope.endExclusiveMillis)
@@ -191,16 +219,22 @@ class BragaHealthMemory internal constructor(
     }
 
     private suspend fun glucose(query: HealthQuery, userId: String, instant: Instant): HealthMemoryResult {
+        if (query.operation == HealthOperation.COMPARE_YESTERDAY) return compareYesterday(query, userId, instant)
         val scope = interval(query, instant)
         val types = aliases(query.glucoseType)
         fun matches(record: VitalSignEntity?, interval: HealthQueryInterval): Boolean = valid(record, userId, interval) &&
             (record?.glucoseLevel ?: 0) > 0 && (query.glucoseType == null || canonicalType(record?.glucoseType) == canonicalType(query.glucoseType))
         val last = vitals.getLatestGlucoseForMemory(userId, scope.startInclusiveMillis, scope.endExclusiveMillis,
             query.glucoseType != null, types)?.takeIf { matches(it, scope) }
-        if (query.operation == HealthOperation.LAST) {
+        if (query.operation in setOf(HealthOperation.LAST, HealthOperation.AGE)) {
             return if (last == null) absent(query, userId) else HealthMemoryResult(
                 "${introduction(userId, query)} sua última glicemia ${periodLabel(query.period)} foi de ${last.glucoseLevel} mg/dL, " +
-                    "${typeLabel(last.glucoseType)}, em ${time(last)}, ${elapsed(last, instant)}.", true, last.measuredAt.time, zone.id)
+                    "${typeLabel(last.glucoseType)}, em ${time(last)}, ${elapsed(last, instant)}.${ageSuffix(query, last, instant)}", true, last.measuredAt.time, zone.id)
+        }
+        if (query.operation == HealthOperation.EXTREMES) {
+            val rows = vitals.getGlucoseIntervalForMemory(userId, scope.startInclusiveMillis, scope.endExclusiveMillis, query.glucoseType != null, types).filter { matches(it, scope) }
+            if (rows.isEmpty()) return absent(query, userId)
+            return HealthMemoryResult("Nos ${rows.size} registros de glicemia ${periodLabel(query.period)}, o menor valor foi ${rows.minOf { it.glucoseLevel!! }} mg/dL e o maior foi ${rows.maxOf { it.glucoseLevel!! }} mg/dL. ${if (query.glucoseType == null) "Tipos de medição podem ser diferentes." else typeLabel(query.glucoseType)} Isso descreve as anotações, não um diagnóstico.", true)
         }
         val recentScope = averageInterval(query, instant)
         val recent = vitals.getGlucoseIntervalForMemory(userId, recentScope.startInclusiveMillis, recentScope.endExclusiveMillis,
@@ -222,6 +256,7 @@ class BragaHealthMemory internal constructor(
     }
 
     private suspend fun water(query: HealthQuery, userId: String, instant: Instant): HealthMemoryResult {
+        if (query.operation !in setOf(HealthOperation.LAST, HealthOperation.SUMMARY, HealthOperation.AVERAGE)) return unsupported("Para água, posso consultar o último registro, o total ou a média do período. Qual dessas consultas você deseja?")
         val effective = if (query.operation == HealthOperation.AVERAGE && query.period == HealthPeriod.ALL)
             query.copy(period = HealthPeriod.LAST_30_DAYS) else query
         val scope = interval(effective, instant)
@@ -267,5 +302,89 @@ class BragaHealthMemory internal constructor(
         return HealthMemoryResult("$intro você registrou $total ml de água hoje, em $count registros: $progress% da $goalLabel $goal ml. " +
             "Faltam $remaining ml para esse valor nas anotações. $reference " +
             "Se você recebeu orientação para restringir líquidos, siga essa orientação. O total registrado pode não incluir toda a água consumida.", true)
+    }
+
+    private fun ageSuffix(query: HealthQuery, record: VitalSignEntity, instant: Instant): String =
+        if (query.operation != HealthOperation.AGE) "" else
+            " Passaram ${Duration.between(record.measuredAt.toInstant(), instant).toDays()} dias completos desde esse registro. Isso descreve as anotações no app, não medições feitas fora dele."
+
+    private fun unsupported(reply: String) = HealthMemoryResult(reply, false)
+
+    private suspend fun auxiliary(query: HealthQuery, user: String, instant: Instant): HealthMemoryResult {
+        if (query.operation !in setOf(HealthOperation.LAST, HealthOperation.AGE)) return unsupported("Para batimentos e saturação, esta consulta local apresenta a última leitura do período. Peça a última leitura e informe o período desejado.")
+        val scope = interval(query, instant)
+        val last = vitals.getLatestAuxiliaryForMemory(user, query.metric.name, scope.startInclusiveMillis, scope.endExclusiveMillis)
+            ?.takeIf { valid(it, user, scope) && if (query.metric == HealthMetric.HEART_RATE) (it.heartRate ?: 0) > 0 else (it.oxygenSaturation ?: 0) in 1..100 }
+            ?: return absent(query, user)
+        val value = if (query.metric == HealthMetric.HEART_RATE) "${last.heartRate} bpm" else "${last.oxygenSaturation}%"
+        val metric = if (query.metric == HealthMetric.HEART_RATE) "frequência cardíaca" else "saturação de oxigênio"
+        return HealthMemoryResult("Sua última leitura de $metric ${periodLabel(query.period)} foi $value, em ${time(last)}, ${elapsed(last, instant)}.${ageSuffix(query, last, instant)} Essa leitura registrada não determina diagnóstico.", true, last.measuredAt.time, zone.id)
+    }
+
+    private suspend fun weight(query: HealthQuery, user: String, instant: Instant): HealthMemoryResult {
+        if (query.operation != HealthOperation.LAST) return unsupported("Esta consulta de peso apresenta a última medição registrada no período. Peça seu último peso e informe o período desejado.")
+        val dao = biometry ?: return unsupported("Não foi possível consultar as medições locais de peso agora.")
+        val scope = interval(query, instant)
+        val last = dao.getLatestWeightForMemory(user, scope.startInclusiveMillis, scope.endExclusiveMillis)
+            ?.takeIf { it.userId == user && it.weight.isFinite() && it.weight > 0 && it.measuredAt.time >= scope.startInclusiveMillis && it.measuredAt.time < scope.endExclusiveMillis }
+            ?: return absent(query, user)
+        val date = DateTimeFormatter.ofPattern("dd/MM/yyyy 'às' HH:mm", Locale("pt", "BR")).format(last.measuredAt.toInstant().atZone(zone))
+        return HealthMemoryResult("Seu último peso registrado ${periodLabel(query.period)} foi ${last.weight} kg, em $date. Esse valor vem de uma medição salva, não de uma estimativa pela conversa.", true, last.measuredAt.time, zone.id)
+    }
+
+    private suspend fun medication(query: HealthQuery, user: String, instant: Instant): HealthMemoryResult {
+        if (query.operation !in setOf(HealthOperation.LAST, HealthOperation.SUMMARY)) return unsupported("Para medicamentos, posso consultar o estoque atual ou os registros de dose do período. Qual dessas consultas você deseja?")
+        val name = query.medicationName ?: return unsupported("Qual é o nome exato do medicamento cadastrado em Remédios?")
+        fun exact(value: String) = java.text.Normalizer.normalize(value.lowercase(Locale.ROOT), java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "").replace(Regex("\\s+"), " ").trim()
+        val dao = medications ?: return unsupported("Não foi possível consultar seus medicamentos locais agora.")
+        val matches = dao.getAllSync(user).filter { it.userId == user && exact(it.name) == exact(name) }
+        if (matches.isEmpty()) return unsupported("Não encontrei um medicamento com esse nome exato na sua conta. Confira o nome cadastrado em Remédios; não escolho nomes por aproximação.")
+        if (matches.size != 1) return unsupported("Há mais de um cadastro com esse nome. Confira o medicamento e a dosagem em Remédios; não vou escolher um deles automaticamente.")
+        val medicine = matches.single()
+        if (query.metric == HealthMetric.MEDICATION_STOCK) {
+            if (query.period != HealthPeriod.ALL) return unsupported("O estoque local informa a quantidade atualmente cadastrada, não um histórico por dia. Você quer conferir o estoque atual?")
+            if (medicine.currentUnits < 0 || (medicine.currentUnits == 0 && medicine.totalUnits == 0 && medicine.lastRestockDate == null))
+                return unsupported("Não encontrei uma quantidade de estoque válida cadastrada para ${medicine.name}. Confira a tela de estoque; não posso afirmar que o medicamento acabou.")
+            return HealthMemoryResult("O estoque cadastrado de ${medicine.name} está em ${medicine.currentUnits} unidades. É o valor anotado no app; confira também a embalagem. Não alterei estoque nem registrei dose.", true)
+        }
+        val logs = medicationLogs ?: return unsupported("Não foi possível consultar os registros locais de dose agora.")
+        val scope = interval(query, instant)
+        val rows = logs.getForMemory(user, medicine.id, scope.startInclusiveMillis, scope.endExclusiveMillis)
+            .filter { it.userId == user && it.medicationId == medicine.id && it.unitsTaken > 0 && it.takenAt.time >= scope.startInclusiveMillis && it.takenAt.time < scope.endExclusiveMillis }
+            .distinctBy { it.id }
+        if (rows.isEmpty()) return unsupported("Não encontrei registros de dose de ${medicine.name} ${periodLabel(query.period)}. A ausência de anotação não confirma que você não tomou o medicamento. Confira os registros e sua receita antes de decidir sobre uma dose.")
+        val last = rows.maxBy { it.takenAt.time }
+        val date = DateTimeFormatter.ofPattern("dd/MM/yyyy 'às' HH:mm", Locale("pt", "BR")).format(last.takenAt.toInstant().atZone(zone))
+        return HealthMemoryResult("Encontrei ${rows.size} ${if (rows.size == 1) "registro" else "registros"} de dose de ${medicine.name} ${periodLabel(query.period)}. O mais recente foi anotado em $date. Isso não confirma que todas as doses previstas foram tomadas. Não registrei uma nova dose.", true)
+    }
+
+    private suspend fun compareYesterday(query: HealthQuery, user: String, instant: Instant): HealthMemoryResult {
+        if (query.period !in setOf(HealthPeriod.TODAY, HealthPeriod.ALL)) return unsupported("Esta comparação usa as últimas medições de hoje e ontem. Você deseja essa comparação ou a última medição do período informado?")
+        suspend fun read(period: HealthPeriod): VitalSignEntity? {
+            val scope = interval(query.copy(period = period), instant)
+            return (if (query.metric == HealthMetric.PRESSURE) vitals.getLatestPressureForMemory(user, scope.startInclusiveMillis, scope.endExclusiveMillis)
+                else vitals.getLatestGlucoseForMemory(user, scope.startInclusiveMillis, scope.endExclusiveMillis, query.glucoseType != null, aliases(query.glucoseType)))
+                ?.takeIf { valid(it, user, scope) && if (query.metric == HealthMetric.PRESSURE)
+                    (it.systolicPressure ?: 0) > 0 && (it.diastolicPressure ?: 0) > 0
+                    else (it.glucoseLevel ?: 0) > 0 && (query.glucoseType == null || canonicalType(it.glucoseType) == canonicalType(query.glucoseType)) }
+        }
+        val today = read(HealthPeriod.TODAY)
+        val yesterday = read(HealthPeriod.YESTERDAY)
+        if (today == null || yesterday == null) return unsupported("Não consigo comparar as últimas medições de hoje e ontem: não encontrei registros válidos ${if (today == null && yesterday == null) "nos dois dias" else if (today == null) "hoje" else "ontem"}. Ausência de anotação não equivale a valor zero.")
+        fun signed(value: Int) = if (value > 0) "+$value" else "$value"
+        val text = if (query.metric == HealthMetric.PRESSURE) {
+            val sys = BloodPressureParser.normalizePressure(today.systolicPressure!!)
+            val dia = BloodPressureParser.normalizePressure(today.diastolicPressure!!)
+            val oldSys = BloodPressureParser.normalizePressure(yesterday.systolicPressure!!)
+            val oldDia = BloodPressureParser.normalizePressure(yesterday.diastolicPressure!!)
+            "Hoje: $sys por $dia mmHg, em ${time(today)}. Ontem: $oldSys por $oldDia mmHg, em ${time(yesterday)}. Diferença registrada: sistólica ${signed(sys - oldSys)} mmHg; diastólica ${signed(dia - oldDia)} mmHg."
+        } else {
+            val values = "Hoje: ${today.glucoseLevel} mg/dL (${typeLabel(today.glucoseType)}), em ${time(today)}. Ontem: ${yesterday.glucoseLevel} mg/dL (${typeLabel(yesterday.glucoseType)}), em ${time(yesterday)}."
+            if (canonicalType(today.glucoseType) !in setOf("fasting", "post_prandial", "random") || canonicalType(today.glucoseType) != canonicalType(yesterday.glucoseType))
+                "$values Os contextos são diferentes ou não estão identificados; não comparo os valores automaticamente."
+            else "$values Diferença registrada: ${signed(today.glucoseLevel!! - yesterday.glucoseLevel!!)} mg/dL."
+        }
+        return HealthMemoryResult("$text Essa comparação descreve registros, não identifica causa nem determina diagnóstico.", true)
     }
 }

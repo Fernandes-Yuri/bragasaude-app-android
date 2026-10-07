@@ -69,6 +69,12 @@ internal object BragaLocalHelp {
     fun answer(text: String, recent: HealthQuery? = null): NluOutput? {
         val normalized = BragaRoutingPolicy.normalize(text).trimEnd('.', '!', '?', ' ')
         val input = normalized.replace(acknowledgement, "")
+        BragaAppHelp.answer(input)?.let { return it }
+        if (Regex("""^(?:quanto (?:remedio|medicamento) ainda tenho|(?:ja )?registrei (?:a |uma )?dose (?:do meu remedio |do remedio )?(?:de )?(?:hoje|ontem))$""").matches(input)) return NluOutput(
+            "entrada_medicamento_sem_nome", "Qual é o nome exato do medicamento cadastrado em Remédios? Preciso identificar o medicamento para consultar estoque ou registros de dose.")
+        if (Regex("""^(?:qual (?:e )?(?:a )?minha meta(?: e quanto falta)?|quanto falta para (?:a |minha )?meta)$""").matches(input)) return if (recent?.metric == HealthMetric.WATER)
+            NluOutput(BragaHealthMemory.WATER, null, healthQuery = HealthQuery(HealthMetric.WATER, HealthPeriod.TODAY, HealthOperation.SUMMARY))
+            else NluOutput("entrada_meta_ambigua", "Você quer consultar a meta de água ou a meta de passos? Diga qual meta deseja conferir.")
         operational(input)?.let { return it }
         // Não descartar a reparação por causa do agradecimento; continuidade completa vem depois.
         if (input != normalized && repair.matches(input)) return NluOutput(

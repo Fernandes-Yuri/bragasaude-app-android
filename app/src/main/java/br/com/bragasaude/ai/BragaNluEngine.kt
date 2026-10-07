@@ -445,8 +445,10 @@ object BragaNluEngine {
             tempoMs = deltaMs(inicio)
         )
 
+        val explicitQuery = HealthQueryResolver.explicit(texto)
+        // Uma consulta delimitada a doses já anotadas não é pedido de cadastro.
         // 2. CADASTRO DE REMÉDIO (DIRETRIZ CLÍNICA)
-        if (REGEX_CADASTRO_REMEDIO.containsMatchIn(limpo) || CADASTRO_NORMALIZADO.containsMatchIn(protegido)) {
+        if (explicitQuery == null && (REGEX_CADASTRO_REMEDIO.containsMatchIn(limpo) || CADASTRO_NORMALIZADO.containsMatchIn(protegido))) {
             val resp = sortearResposta("orientacao_cadastro_medicamento")
             return NluOutput("orientacao_cadastro_medicamento", resp, tempoMs = deltaMs(inicio))
         }
@@ -462,12 +464,8 @@ object BragaNluEngine {
         if (HealthQueryResolver.isAmbiguous(texto)) return NluOutput(
             "entrada_consulta_ambigua", BragaInputLanguage.clarification(channel), tempoMs = deltaMs(inicio)
         )
-        HealthQueryResolver.explicit(texto)?.let { query ->
-            val intent = when (query.metric) {
-                HealthMetric.PRESSURE -> BragaHealthMemory.PRESSURE
-                HealthMetric.GLUCOSE -> BragaHealthMemory.GLUCOSE
-                HealthMetric.WATER -> BragaHealthMemory.WATER
-            }
+        explicitQuery?.let { query ->
+            val intent = query.intent
             return NluOutput(intent, null, tempoMs = deltaMs(inicio), healthQuery = query)
         }
 

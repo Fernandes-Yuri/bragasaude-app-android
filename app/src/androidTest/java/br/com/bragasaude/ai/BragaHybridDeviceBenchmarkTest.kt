@@ -79,7 +79,7 @@ class BragaHybridDeviceBenchmarkTest {
             val hybrid = BragaHybridOrchestrator(GroqStreamSource { _, _ ->
                 simulatedCloudCalls++
                 flowOf("Resposta simulada para validar o roteamento, sem chamada externa.")
-            }, GroqDynamicPrompt(), BragaHealthMemory(db.vitalSignDao(), db.profileDao()))
+            }, GroqDynamicPrompt(), BragaHealthMemory(db.vitalSignDao(), db.profileDao(), db.biometryDao(), db.medicationDao(), db.medicationLogDao()))
             repeat(3) { corpus.forEach { BragaNluEngine.analisar(it.text) } }
             val report = JSONObject().put("utterances", corpus.size).put("realExternalCalls", 0)
                 .put("groqTokens", 0).put("groqCostBRL", 0).put("transport", "simulado")
