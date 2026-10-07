@@ -99,8 +99,6 @@ class VoiceHealthViewModel @Inject constructor(
 
     private var currentUserRole: String? = null
     private var currentCaregiverMode: String? = null
-    private var currentUserGender: String? = null
-    private var currentUserName: String? = null
     
     private fun getCurrentUserId(): String {
         return auth.currentUser?.uid ?: "anonymous"
@@ -172,8 +170,6 @@ class VoiceHealthViewModel @Inject constructor(
                 if (owner != sessionOwner || owner != getCurrentUserId()) return@launch
                 currentUserRole = profile?.userRole
                 currentCaregiverMode = profile?.caregiverMode
-                currentUserGender = profile?.gender
-                currentUserName = profile?.fullName
             } catch (_: kotlinx.coroutines.CancellationException) {
                 throw kotlinx.coroutines.CancellationException("Carregamento de perfil cancelado")
             } catch (e: Exception) {
@@ -189,8 +185,6 @@ class VoiceHealthViewModel @Inject constructor(
         sessionOwner = owner
         currentUserRole = null
         currentCaregiverMode = null
-        currentUserGender = null
-        currentUserName = null
         loadSessionProfile(owner)
     }
 
