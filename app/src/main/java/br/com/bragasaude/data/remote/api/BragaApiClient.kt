@@ -844,29 +844,6 @@ class BragaApiClient @Inject constructor(
         }
     }
 
-    // ==================== LIGA SAUDÁVEL ====================
-
-    suspend fun syncLeagueMembership(m: LeagueMembershipEntity): String? = withContext(Dispatchers.IO) {
-        try {
-            val json = JSONObject().apply {
-                put("id", m.id)
-                put("userId", m.userId)
-                if (m.userName != null) put("userName", m.userName)
-                put("userLevel", m.userLevel)
-                put("userStreak", m.userStreak)
-                put("leagueCycleId", m.leagueCycleId)
-                put("xpEarned", m.xpEarned)
-                if (m.rankAtClose != null) put("rankAtClose", m.rankAtClose)
-                if (m.outcome != null) put("outcome", m.outcome)
-            }
-            val res = postJson("$baseUrl/api/sync/league-membership", json)
-            return@withContext res?.optString("id", null)
-        } catch (e: Exception) {
-            Log.w(TAG, "Falha ao sincronizar membership de liga: ${e.message}")
-            return@withContext null
-        }
-    }
-
     // ==================== AUDITORIA ====================
 
     suspend fun syncAuditLog(log: AuditLogEntity): String? = withContext(Dispatchers.IO) {
