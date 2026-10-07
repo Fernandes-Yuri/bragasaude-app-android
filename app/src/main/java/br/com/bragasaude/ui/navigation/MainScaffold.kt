@@ -13,8 +13,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.ui.components.DraggableAiAssistantFab
 import br.com.bragasaude.ui.util.Screen
+import br.com.bragasaude.ui.voice.VoiceHealthViewModel
 import br.com.bragasaude.util.AppPreferences
 
 /**
@@ -27,11 +29,13 @@ fun MainScaffold(
     navController: NavHostController,
     startDestination: Screen,
     userRole: String?,
-    caregiverMode: String?
+    caregiverMode: String?,
+    voiceViewModel: VoiceHealthViewModel = hiltViewModel()
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val appContext = LocalContext.current.applicationContext
+    val isVoiceSessionActive by voiceViewModel.isSessionActive.collectAsState()
 
     // ==================== Itens de navegação por papel ====================
     val patientNavItems = listOf(
@@ -109,13 +113,15 @@ fun MainScaffold(
             )
         }
 
-        // Presente nas visões gerais; formulários e telas de foco ficam livres.
-        if (shouldShowAssistantOrb(currentRoute) &&
+        // Presente nas visões gerais ou acompanhando o usuário enquanto a sessão de voz estiver ativa.
+        val showOrb = (shouldShowAssistantOrb(currentRoute) || isVoiceSessionActive) &&
             AppPreferences.isVoiceAssistantEnabled(appContext)
-        ) {
+
+        if (showOrb) {
             DraggableAiAssistantFab(
                 onNavigate = { screen -> navController.navigate(screen) },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                viewModel = voiceViewModel
             )
         }
     }

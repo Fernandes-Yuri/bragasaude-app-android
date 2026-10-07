@@ -229,7 +229,6 @@ fun DraggableAiAssistantFab(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            viewModel.onHostStopped()
         }
     }
 

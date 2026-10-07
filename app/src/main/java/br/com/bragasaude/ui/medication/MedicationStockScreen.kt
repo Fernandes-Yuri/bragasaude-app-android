@@ -272,13 +272,39 @@ fun MedicationStockScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
                 },
-                actions = {},
+                actions = {
+                    IconButton(
+                        onClick = { showAddChoice = true },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "Adicionar Medicamento",
+                            tint = Color.White
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BragaEmerald,
                     titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White
+                    navigationIconContentColor = Color.White,
+                    actionIconContentColor = Color.White
                 )
             )
+        },
+        floatingActionButton = {
+            if (ui.isAuthenticated) {
+                FloatingActionButton(
+                    onClick = { showAddChoice = true },
+                    containerColor = BragaEmerald,
+                    contentColor = Color.White
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = "Adicionar Medicamento"
+                    )
+                }
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = BragaBackground

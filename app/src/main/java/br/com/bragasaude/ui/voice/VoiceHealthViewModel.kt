@@ -30,9 +30,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.coroutineScope
@@ -111,9 +114,16 @@ class VoiceHealthViewModel @Inject constructor(
     private var speechJob: kotlinx.coroutines.Job? = null
     private val hydrationConversation = HydrationConversation()
 
-    // Modo Live Streaming Contínuo (ChatGPT / Gemini Live style)
     private val _isLiveMode = MutableStateFlow(false)
     val isLiveMode: StateFlow<Boolean> = _isLiveMode.asStateFlow()
+
+    val isSessionActive: StateFlow<Boolean> = combine(
+        _isLiveMode,
+        _state,
+        _isSpeaking
+    ) { live, uiState, speaking ->
+        live || uiState !is VoiceUiState.Idle || speaking
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _events = MutableSharedFlow<VoiceEvent>()
     val events: SharedFlow<VoiceEvent> = _events.asSharedFlow()
