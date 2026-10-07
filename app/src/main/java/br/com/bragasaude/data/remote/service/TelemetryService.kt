@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.service
+package br.com.bragasaude.data.remote.service
 
 import android.util.JsonWriter
 import br.com.bragasaude.data.local.AuditLogDao
@@ -121,17 +121,6 @@ class TelemetryService @Inject constructor(
         logEvent(userId, "SOCIAL_FEED", action, metadata)
     }
     
-    /**
-     * Registra conquista de meta alcançada.
-     */
-    fun logGoalAchieved(userId: String, goalType: String, goalName: String, xpGranted: Int) {
-        val metadata = JSONObject().apply {
-            put("goalType", goalType)
-            put("goalName", goalName)
-            put("xpGranted", xpGranted)
-        }
-        logEvent(userId, "GOAL_ACHIEVED", "COMPLETE", metadata)
-    }
     
     /**
      * Busca logs pendentes de sincronização.

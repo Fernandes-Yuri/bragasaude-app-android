@@ -5,9 +5,6 @@ import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.remote.model.RemoteMedication
 import br.com.bragasaude.data.remote.repository.MedicationRepository
 import br.com.bragasaude.data.util.toRemote
-import br.com.bragasaude.domain.GamificationActionType
-import br.com.bragasaude.domain.GamificationEngine
-import br.com.bragasaude.domain.XpGrantService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.*
@@ -25,7 +22,6 @@ data class MedicationReminder(val first: RemoteMedication, val second: Boolean, 
 @HiltViewModel
 class RemindersViewModel @Inject constructor(
     private val repository: MedicationRepository,
-    private val xpGrantService: XpGrantService,
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
@@ -122,22 +118,6 @@ class RemindersViewModel @Inject constructor(
             try {
                 val res = repository.takeDose(userId, medId, time, actorId = userId)
                 if (res is br.com.bragasaude.data.remote.api.BragaApiClient.TakeMedicationResult.Failure) return@launch
-
-                // FASE 3 — XP quando a medicação é tomada dentro da janela de tolerância (±60 min)
-                val med = medications.value.firstOrNull { it.first.id == medId }?.first
-                val scheduleTime = time
-                val now = Calendar.getInstance()
-                val onTime = GamificationEngine.isMedicationOnTime(
-                    scheduledTimeStr = scheduleTime,
-                    takenHour = now.get(Calendar.HOUR_OF_DAY),
-                    takenMinute = now.get(Calendar.MINUTE)
-                )
-                xpGrantService.grantXp(
-                    userId = userId,
-                    action = GamificationActionType.MEDICATION_TAKEN_ON_TIME,
-                    isActionValid = onTime,
-                    invalidReason = "Remédio tomado fora da janela de 1 hora — registrado mesmo assim."
-                )
             } catch (e: Exception) {
                 e.printStackTrace()
             }

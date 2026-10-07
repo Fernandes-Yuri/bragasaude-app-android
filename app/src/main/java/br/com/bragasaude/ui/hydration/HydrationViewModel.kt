@@ -9,10 +9,7 @@ import br.com.bragasaude.data.remote.model.RemoteVitalSign
 import br.com.bragasaude.data.remote.repository.ProfileRepository
 import br.com.bragasaude.data.remote.repository.VitalsRepository
 import br.com.bragasaude.data.util.toRemote
-import br.com.bragasaude.domain.GamificationActionType
-import br.com.bragasaude.domain.GamificationEngine
 import br.com.bragasaude.domain.HealthEngine
-import br.com.bragasaude.domain.XpGrantService
 import br.com.bragasaude.ui.util.NotificationHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.google.firebase.auth.FirebaseAuth
@@ -34,7 +31,6 @@ class HydrationViewModel @Inject constructor(
     private val repository: VitalsRepository,
     private val profileRepository: ProfileRepository,
     private val healthEngine: HealthEngine,
-    private val xpGrantService: XpGrantService,
     private val auth: FirebaseAuth,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -228,19 +224,7 @@ class HydrationViewModel @Inject constructor(
                 val analysis = healthEngine.analyzeVitals(userId, listOf(newVital))
                 analysis.newMilestones.firstOrNull()?.let { 
                     _milestoneAlert.emit(it.title)
-                    // FASE 3 — XP de marco conquistado (anti-farming limita a 1 por dia)
-                    xpGrantService.grantXp(
-                        userId = userId,
-                        action = GamificationActionType.MILESTONE_ACHIEVED,
-                        isActionValid = true,
-                        invalidReason = ""
-                    )
                 }
-
-                // FASE 3 — XP quando a meta diária de hidratação é atingida
-                // (o Flow do banco ainda pode não ter atualizado, então somamos manualmente)
-                val totalToday = repository.getDailyHydration(userId).first()
-                xpGrantService.grantHydrationProgressXp(userId, totalToday, _targetHydration.value.toInt())
             } catch (e: Exception) {
                 e.printStackTrace()
             }

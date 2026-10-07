@@ -10,7 +10,6 @@ import br.com.bragasaude.data.util.DailyMetrics
 import br.com.bragasaude.data.util.MovementManager
 import br.com.bragasaude.data.util.ActivityState
 import br.com.bragasaude.data.util.toRemote
-import br.com.bragasaude.domain.XpGrantService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.*
@@ -62,7 +61,6 @@ class StepsViewModel @Inject constructor(
     private val activityRepository: ActivityRepository,
     private val profileRepository: br.com.bragasaude.data.remote.repository.ProfileRepository,
     private val healthConnectManager: br.com.bragasaude.data.util.HealthConnectManager,
-    private val xpGrantService: XpGrantService,
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
@@ -261,9 +259,6 @@ class StepsViewModel @Inject constructor(
         history.sumOf { it.points }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    /** Trava local: evita chamar o serviço a cada passo após a meta já ter sido atingida. */
-    private val stepGoalAwardAttempted = java.util.concurrent.atomic.AtomicBoolean(false)
-
     fun selectMetric(metric: ActivityMetricType) {
         _selectedMetric.value = metric
     }
@@ -296,21 +291,6 @@ class StepsViewModel @Inject constructor(
 
         // Sincroniza dados com Health Connect se disponível
         syncHealthConnect()
-
-        // FASE 3 — XP quando a meta diária de passos é atingida (com anti-fraude de confiabilidade)
-        viewModelScope.launch {
-            combine(currentSteps, targetSteps) { steps: Int, goal: Int -> steps to goal }.collect { (steps, goal) ->
-                if (goal > 0 && steps >= goal && stepGoalAwardAttempted.compareAndSet(false, true)) {
-                    val uid = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
-                    xpGrantService.grantStepGoalXp(
-                        userId = uid,
-                        stepsTaken = steps,
-                        stepGoal = goal,
-                        reliabilityScore = movementManager.currentReliability.value
-                    )
-                }
-            }
-        }
     }
 
     fun syncHealthConnect() {

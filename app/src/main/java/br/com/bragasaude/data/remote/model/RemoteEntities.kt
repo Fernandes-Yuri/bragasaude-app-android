@@ -255,28 +255,6 @@ data class RemoteFeedback(
 )
 
 @Serializable
-data class RemoteLeagueCycle(
-    val id: String,
-    val level: Int,
-    @SerialName("week_start_date") val weekStartDate: String,
-    @SerialName("week_end_date") val weekEndDate: String,
-    val status: String = "active"
-)
-
-@Serializable
-data class RemoteLeagueMembership(
-    val id: String,
-    @SerialName("user_id") val userId: String,
-    @SerialName("user_name") val userName: String? = null,
-    @SerialName("user_level") val userLevel: Int = 1,
-    @SerialName("user_streak") val userStreak: Int = 0,
-    @SerialName("league_cycle_id") val leagueCycleId: String,
-    @SerialName("xp_earned") val xpEarned: Int = 0,
-    @SerialName("rank_at_close") val rankAtClose: Int? = null,
-    val outcome: String? = null
-)
-
-@Serializable
 data class RemoteSocialPost(
     @SerialName("photo_url") val userAvatarUrl: String? = null,
     @SerialName("avatar_identifier") val userAvatarIdentifier: String? = null,

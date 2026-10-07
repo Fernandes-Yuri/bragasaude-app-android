@@ -14,12 +14,7 @@ import br.com.bragasaude.data.remote.repository.NutritionRepository
 import br.com.bragasaude.data.remote.repository.ProfileRepository
 import br.com.bragasaude.data.remote.repository.GroceryRepository
 import br.com.bragasaude.data.util.toRemote
-import br.com.bragasaude.domain.GamificationActionType
-import br.com.bragasaude.domain.GamificationEngine
 import br.com.bragasaude.domain.HealthCalculators
-import br.com.bragasaude.domain.MealHealthFlags
-import br.com.bragasaude.domain.ProfileHealthFlags
-import br.com.bragasaude.domain.XpGrantService
 import br.com.bragasaude.domain.WeeklyGroceryEngine
 import br.com.bragasaude.domain.GroceryPdfExporter
 import android.content.Context
@@ -44,7 +39,6 @@ class NutritionViewModel @Inject constructor(
     private val examsRepository: ExamsRepository,
     private val vitalsRepository: VitalsRepository,
     private val groceryRepository: GroceryRepository,
-    private val xpGrantService: XpGrantService,
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
@@ -293,29 +287,6 @@ class NutritionViewModel @Inject constructor(
             kcal = calculatedKcal
         )
         nutritionRepository.logMeal(item)
-
-        // FASE 3 — XP quando a refeição é compatível com as condições clínicas do usuário
-        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
-        val profile = _profile.value
-        val mealFlags = MealHealthFlags(
-            isDiabetesSafe = food.isDiabetesSafe,
-            isHypertensionSafe = food.isHypertensionSafe,
-            isThyroidSafe = food.isThyroidSafe
-        )
-        val profileFlags = ProfileHealthFlags(
-            hasDiabetes = profile?.hasDiabetes == true,
-            hasHypertension = profile?.hasHypertension == true,
-            hasThyroidIssue = profile?.hasThyroidIssue == true
-        )
-        val isSafe = GamificationEngine.isMealSafeForProfile(mealFlags, profileFlags)
-        viewModelScope.launch {
-            xpGrantService.grantXp(
-                userId = userId,
-                action = GamificationActionType.SAFE_MEAL_RECORDED,
-                isActionValid = isSafe,
-                invalidReason = "Refeição registrada, mas fora do plano para suas condições"
-            )
-        }
     }
 
     fun removeLoggedMeal(itemId: String) {

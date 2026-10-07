@@ -310,46 +310,6 @@ fun ExamItemEntity.toRemote() = RemoteExamItem(
 // AUD-AN40: mappers de DailyMetrics REMOVIDOS — mortos junto com a
 // RemoteDailyMetrics. O parse real e manual em BragaApiClient.
 
-fun RemoteLeagueCycle.toEntity() = LeagueCycleEntity(
-    id = id,
-    level = level,
-    weekStartDate = weekStartDate,
-    weekEndDate = weekEndDate,
-    status = status
-)
-
-fun LeagueCycleEntity.toRemote() = RemoteLeagueCycle(
-    id = id,
-    level = level,
-    weekStartDate = weekStartDate,
-    weekEndDate = weekEndDate,
-    status = status
-)
-
-fun RemoteLeagueMembership.toEntity() = LeagueMembershipEntity(
-    id = id,
-    userId = userId,
-    userName = userName,
-    userLevel = userLevel,
-    userStreak = userStreak,
-    leagueCycleId = leagueCycleId,
-    xpEarned = xpEarned,
-    rankAtClose = rankAtClose,
-    outcome = outcome
-)
-
-fun LeagueMembershipEntity.toRemote() = RemoteLeagueMembership(
-    id = id,
-    userId = userId,
-    userName = userName,
-    userLevel = userLevel,
-    userStreak = userStreak,
-    leagueCycleId = leagueCycleId,
-    xpEarned = xpEarned,
-    rankAtClose = rankAtClose,
-    outcome = outcome
-)
-
 fun RemoteSocialPost.toEntity() = SocialPostEntity(
     userAvatarUrl = userAvatarUrl,
     userAvatarIdentifier = userAvatarIdentifier,
