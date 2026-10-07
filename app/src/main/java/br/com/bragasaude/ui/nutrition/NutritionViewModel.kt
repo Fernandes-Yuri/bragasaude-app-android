@@ -166,7 +166,8 @@ class NutritionViewModel @Inject constructor(
         val vitals: List<VitalSignEntity>,
         val profile: ProfileEntity?,
         val loggedFoods: Set<String>,
-        val pantryFoods: Set<String>
+        val pantryFoods: Set<String>,
+        val groceryList: List<GroceryListItemEntity>
     )
 
     private val clinicalDataFlow = combine(
@@ -174,14 +175,15 @@ class NutritionViewModel @Inject constructor(
         vitalsRepository.getVitalSigns(userId),
         profileRepository.getProfile(userId),
         nutritionRepository.todayLoggedMeals,
-        groceryRepository.getPantryItems(userId)
-    ) { exams, vitals, profileEntity, todayMeals, pantryList ->
+        groceryRepository.getGroceryList(userId)
+    ) { exams, vitals, profileEntity, todayMeals, allGroceryList ->
         ClinicalSnapshot(
             exams = exams,
             vitals = vitals,
             profile = profileEntity,
             loggedFoods = todayMeals.map { it.foodName }.toSet(),
-            pantryFoods = pantryList.map { it.foodName }.toSet()
+            pantryFoods = allGroceryList.filter { it.isCheckedInPantry }.map { it.foodName }.toSet(),
+            groceryList = allGroceryList
         )
     }.distinctUntilChanged()
 
@@ -191,16 +193,35 @@ class NutritionViewModel @Inject constructor(
         _selectedMealTab,
         _dislikedFoodNames
     ) { snapshot, catalog, currentTab, dislikes ->
-        NutritionSuggestionEngine.generateSuggestions(
-            exams = snapshot.exams,
-            vitals = snapshot.vitals,
-            profile = snapshot.profile?.toRemote(),
-            catalog = catalog,
-            selectedMealType = currentTab,
-            dislikedFoodNames = dislikes,
-            loggedFoodNamesToday = snapshot.loggedFoods,
-            pantryFoodNames = snapshot.pantryFoods
-        )
+        if (snapshot.groceryList.isEmpty()) {
+            emptyList()
+        } else {
+            val groceryNames = snapshot.groceryList.map { it.foodName.trim().lowercase() }.toSet()
+            val groceryFoodIds = snapshot.groceryList.map { it.foodId }.filter { it.isNotBlank() }.toSet()
+            val pantryNames = snapshot.pantryFoods.map { it.trim().lowercase() }.toSet()
+            val toBuyNames = groceryNames - pantryNames
+
+            val userCatalog = catalog.filter { food ->
+                (food.remoteId in groceryFoodIds) ||
+                (food.name.trim().lowercase() in groceryNames) ||
+                groceryNames.any { gName ->
+                    val fName = food.name.trim().lowercase()
+                    fName.contains(gName) || gName.contains(fName)
+                }
+            }
+
+            NutritionSuggestionEngine.generateSuggestions(
+                exams = snapshot.exams,
+                vitals = snapshot.vitals,
+                profile = snapshot.profile?.toRemote(),
+                catalog = userCatalog,
+                selectedMealType = currentTab,
+                dislikedFoodNames = dislikes,
+                loggedFoodNamesToday = snapshot.loggedFoods,
+                pantryFoodNames = snapshot.pantryFoods,
+                groceryFoodNames = toBuyNames
+            )
+        }
     }.distinctUntilChanged()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

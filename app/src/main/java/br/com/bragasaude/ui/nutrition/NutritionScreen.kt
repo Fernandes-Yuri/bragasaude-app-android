@@ -431,8 +431,122 @@ fun NutritionScreen(
                     }
                 }
 
-                // Sugestões de Bem-Estar do Cérebro Nutricional
-                if (suggestionGroups.isNotEmpty()) {
+                // Sugestões do Plano Alimentar Ancoradas Exclusivamente na Lista de Compras
+                if (groceryList.isEmpty()) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                            border = BorderStroke(1.dp, BragaMintBorder)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = BragaMint,
+                                    modifier = Modifier.size(54.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Default.ShoppingCart,
+                                            contentDescription = null,
+                                            tint = BragaEmerald,
+                                            modifier = Modifier.size(26.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    text = "Monte sua lista para ver seu plano alimentar",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BragaTextPrimary,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = "O seu plano alimentar é montado exclusivamente a partir dos alimentos que você planejou na sua lista de compras ou tem na sua despensa.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = BragaTextSecondary,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                Button(
+                                    onClick = {
+                                        if (groceryList.isEmpty()) {
+                                            viewModel.generateWeeklyGroceryList()
+                                        }
+                                        showGroceryBottomSheet = true
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                                    modifier = Modifier.heightIn(min = 48.dp)
+                                ) {
+                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Montar ou Sugerir Lista com IA", fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+                    }
+                } else if (suggestionGroups.isEmpty()) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = BragaCardSurface),
+                            border = BorderStroke(1.dp, BragaCardBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = BragaMint,
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Default.Info,
+                                            contentDescription = null,
+                                            tint = BragaEmerald,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Sem opções na lista para o $selectedMealTab",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BragaTextPrimary
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        "Os alimentos da sua lista atual atendem a outras refeições. Que tal adicionar opções para o seu $selectedMealTab?",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BragaTextSecondary
+                                    )
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                TextButton(
+                                    onClick = { showGroceryBottomSheet = true }
+                                ) {
+                                    Text("Ver Lista", color = BragaEmerald, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                } else {
                     item {
                         Column(modifier = Modifier.padding(top = 4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -444,14 +558,14 @@ fun NutritionScreen(
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    "Sugestões de Bem-Estar para o $selectedMealTab",
+                                    "Sugestões da sua Lista para o $selectedMealTab",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onBackground
                                 )
                             }
                             Text(
-                                "Opções naturais e funcionais ideais para o seu $selectedMealTab",
+                                "Alimentos planejados na sua lista de compras ou presentes na sua despensa",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline
                             )
