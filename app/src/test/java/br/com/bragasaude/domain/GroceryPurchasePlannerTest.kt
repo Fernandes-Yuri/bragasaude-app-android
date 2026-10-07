@@ -15,6 +15,7 @@ class GroceryPurchasePlannerTest {
         for (value in listOf("", "0", "-1", "NaN", "Infinity", "1001", "0,0001"))
             assertNull(GroceryPurchasePlanner.parseAmount(value, "kg"))
         assertNull(GroceryPurchasePlanner.parseAmount("1,5", "un"))
+        assertNull(GroceryPurchasePlanner.parseAmount("1", "pacote"))
     }
 
     @Test fun projectsMassVolumeAndCountUsingOnlyTheirOwnUnit() {

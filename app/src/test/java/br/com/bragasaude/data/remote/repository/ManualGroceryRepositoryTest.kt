@@ -38,7 +38,7 @@ class ManualGroceryRepositoryTest {
         assertFalse(rows.single().isCheckedInPantry)
         repository.removeItem("u", rows.single().remoteId)
         assertTrue(rows.isEmpty())
-        coVerify(exactly = 5) { dao.rewriteGroceryList("u", any()) }
+        coVerify(exactly = 4) { dao.rewriteGroceryList("u", any()) }
     }
 
     @Test fun replacingWithAnExistingIngredientDoesNotDuplicateItAndUnknownPricesStayUnknown() = runTest {
