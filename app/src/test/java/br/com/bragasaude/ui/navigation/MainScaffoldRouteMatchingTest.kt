@@ -53,12 +53,20 @@ class MainScaffoldRouteMatchingTest {
     }
 
     @Test fun `orbe fica oculta em exames formularios conversas e telas administrativas`() {
-        listOf("Exams", "Vitals", "HealthReadings", "Biometry", "AddData", "ProfileEdit",
+        listOf("Exams", "AddData", "ProfileEdit",
             "CaregiverRegistration", "FamilyConnect", "FamilyChat", "DoctorMode", "Settings",
             "TermsOfUse", "PrivacyPolicy", "Feedback", "MedicationStock", "BarcodeScanner",
             "SocialFeed", "OrbChat").forEach { name ->
             assertFalse(name, shouldShowAssistantOrb("Screen\$$name"))
         }
+    }
+
+    @Test fun `orbe permanece nos formularios de medidas abertos pelo assistente`() {
+        assertTrue(shouldShowAssistantOrb("Screen\$Vitals?type=PRESSURE&initialValue=120/80"))
+        assertTrue(shouldShowAssistantOrb("Screen\$HealthReadings?metric=HEART_RATE"))
+        assertTrue(shouldShowAssistantOrb("Screen\$HealthReadings/{metric}?initialValue={initialValue}"))
+        assertTrue(shouldShowAssistantOrb("Screen\$HealthReadings/OXYGEN_SATURATION?initialValue=98"))
+        assertTrue(shouldShowAssistantOrb("Screen\$Biometry"))
     }
 
     @Test fun `rota desconhecida nao cria sobreposicao por padrao`() {

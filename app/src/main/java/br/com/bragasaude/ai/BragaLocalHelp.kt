@@ -2,7 +2,6 @@ package br.com.bragasaude.ai
 
 /** Respostas de escopo fechado; não executa ações nem infere causas individuais. */
 internal object BragaLocalHelp {
-    private val acknowledgement = Regex("""^(?:(?:entendi|compreendi|entendido|ok|legal|certo|beleza|ta bom|(?:muito )?obrigad[oa]|valeu)[\s,!.;]+)+(?:mas\s+|so que\s+)?""")
     private val variation = Regex("""^(?:por que|porque) (?:(?:ela |ele |isso )|(?:a |minha |a minha )?(?:pressao|glicemia|glicose) )?(?:subiu|baixou|caiu|aumentou|diminuiu|varia|variou|mudou|oscila|oscilou)(?: tanto)?$""")
     private val pressure = Regex("""\bpressao\b""")
     private val glucose = Regex("""\b(?:glicemia|glicose)\b""")
@@ -17,7 +16,7 @@ internal object BragaLocalHelp {
 
     fun hasFollowUpRequest(text: String): Boolean {
         val normalized = BragaRoutingPolicy.normalize(text).trimEnd('.', '!', '?', ' ')
-        val input = normalized.replace(acknowledgement, "")
+        val input = BragaDialogueRequest.main(text)
         return input != normalized && (text.contains('?') ||
             Regex("""\b(como|qual|quais|quanto|onde|quando|por que|porque|o que|posso|devo|quero|explica|explique|ajuda)\b""").containsMatchIn(input))
     }
@@ -68,8 +67,12 @@ internal object BragaLocalHelp {
 
     fun answer(text: String, recent: HealthQuery? = null): NluOutput? {
         val normalized = BragaRoutingPolicy.normalize(text).trimEnd('.', '!', '?', ' ')
-        val input = normalized.replace(acknowledgement, "")
+        val input = BragaDialogueRequest.main(text)
         BragaAppHelp.answer(input)?.let { return it }
+        if (Regex("""^(?:lembrete de (?:remedio|medicamento)|como (?:criar|configurar) (?:um )?lembrete de (?:remedio|medicamento))$""").matches(input)) return NluOutput(
+            "ajuda_horario_remedio", "Abra Remédios no menu superior para conferir o medicamento cadastrado e seus horários. Os avisos da rotina aparecem em Lembretes. Mantenha os horários orientados na sua receita.")
+        if (text.contains('?') && Regex("""^(?:eu )?(?:ja )?tomei (?:o )?(?:meu )?(?:remedio|medicamento) (?:hoje|ontem)$""").matches(input)) return NluOutput(
+            "entrada_medicamento_sem_nome", "Qual é o nome exato do medicamento cadastrado em Remédios? Posso consultar as doses registradas; uma anotação não confirma, por si só, que o medicamento foi tomado.")
         if (Regex("""^(?:quanto (?:remedio|medicamento) ainda tenho|(?:ja )?registrei (?:a |uma )?dose (?:do meu remedio |do remedio )?(?:de )?(?:hoje|ontem))$""").matches(input)) return NluOutput(
             "entrada_medicamento_sem_nome", "Qual é o nome exato do medicamento cadastrado em Remédios? Preciso identificar o medicamento para consultar estoque ou registros de dose.")
         if (Regex("""^(?:qual (?:e )?(?:a )?minha meta(?: e quanto falta)?|quanto falta para (?:a |minha )?meta)$""").matches(input)) return if (recent?.metric == HealthMetric.WATER)

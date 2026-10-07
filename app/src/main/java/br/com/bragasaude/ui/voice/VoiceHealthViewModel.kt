@@ -217,7 +217,11 @@ class VoiceHealthViewModel @Inject constructor(
     }
 
     /** A tela/app deixou de estar visível: não manter microfone, fila ou retomada automática. */
-    fun onHostStopped() = cancel()
+    fun onHostStopped() {
+        br.com.bragasaude.ai.BragaDebugTrace.event("VOICE_HOST_STOPPED", InputChannel.VOICE,
+            detail = "state=${_state.value}; live=${_isLiveMode.value}")
+        cancel()
+    }
 
     private fun requestPlaybackFocus(): Boolean {
         val context = currentContext ?: return true
@@ -409,6 +413,7 @@ class VoiceHealthViewModel @Inject constructor(
         _audioRmsDb.value = -2f
         _liveTranscription.value = ""
         _state.value = VoiceUiState.Listening
+        br.com.bragasaude.ai.BragaDebugTrace.event("VOICE_LISTENING", InputChannel.VOICE)
 
         recognitionJob = viewModelScope.launch(Dispatchers.Main) {
             try {
@@ -562,6 +567,7 @@ class VoiceHealthViewModel @Inject constructor(
         override fun onReadyForSpeech(params: Bundle?) {
             if (!current()) return
             _state.value = VoiceUiState.Listening
+        br.com.bragasaude.ai.BragaDebugTrace.event("VOICE_LISTENING", InputChannel.VOICE)
         }
 
         override fun onBeginningOfSpeech() {}

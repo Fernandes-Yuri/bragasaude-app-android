@@ -7,9 +7,8 @@ import java.time.ZoneId
 /** Continuidade de respostas locais; nunca executa a ação citada na resposta. */
 internal object BragaContextualHelp {
     enum class Request { SIMPLIFY, REPEAT, LAST_PART, DATE }
-    private val prefix = Regex("""^(?:(?:entendi|compreendi|entendido|ok|legal|certo|beleza|ta bom|(?:muito )?obrigad[oa]|valeu)[\s,!.;]+)+(?:mas\s+|so que\s+)?""")
     fun request(text: String): Request? {
-        val input = BragaRoutingPolicy.normalize(text).replace(prefix, "").trimEnd('.', '!', '?', ' ')
+        val input = BragaDialogueRequest.main(text)
             .removePrefix("por favor ").removeSuffix(" por favor").trim()
         if (VoiceSessionCommand.parse(text) == VoiceSessionCommand.REPEAT) {
             return if (Regex("""\b(ultima (?:parte|frase)|o final)\b""").containsMatchIn(input)) Request.LAST_PART else Request.REPEAT
