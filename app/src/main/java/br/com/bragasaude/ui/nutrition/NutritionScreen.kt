@@ -71,6 +71,8 @@ fun NutritionScreen(
     val suggestionGroups by viewModel.functionalSuggestionGroups.collectAsState()
     val selectedMealTab by viewModel.selectedMealTab.collectAsState()
     val groceryList by viewModel.groceryList.collectAsState()
+    val manualIngredients by viewModel.manualIngredients.collectAsState()
+    val groceryMessage by viewModel.groceryMessage.collectAsState()
 
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
@@ -684,9 +686,13 @@ fun NutritionScreen(
         val context = LocalContext.current
         GroceryListBottomSheet(
             groceryList = groceryList,
+            manualIngredients = manualIngredients,
             onDismiss = { showGroceryBottomSheet = false },
             onToggleItem = { id, isChecked -> viewModel.togglePantryItem(id, isChecked) },
             onGenerateList = { viewModel.generateWeeklyGroceryList() },
+            onSaveManualItem = { slug, amount, repId -> viewModel.saveManualItem(slug, amount, repId) },
+            onRemoveItem = { id -> viewModel.removeGroceryItem(id) },
+            groceryMessage = groceryMessage,
             onExportPdf = { viewModel.exportAndShareGroceryPdf(context) },
             contributionState = contributionState,
             communityPrices = communityPrices,

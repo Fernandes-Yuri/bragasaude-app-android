@@ -2798,7 +2798,7 @@
   "foods": [
     {
       "food_id": "food_187",
-      "food_name": "Óleo de Abacate Extravirgem",
+      "food_name": "Óleo de Soja Culinário",
       "preparation": "produto",
       "ingredient_slug": "oleo-de-abacate-extravirgem",
       "shopping_enabled": true,
@@ -2859,7 +2859,7 @@
     },
     {
       "food_id": "food_043",
-      "food_name": "Abacate Hass (Avocado)",
+      "food_name": "Abacate Manteiga Nacional",
       "preparation": "produto",
       "ingredient_slug": "abacate-hass-avocado",
       "shopping_enabled": true,
@@ -2914,7 +2914,7 @@
     },
     {
       "food_id": "food_051",
-      "food_name": "Acerola Fresca",
+      "food_name": "Tangerina / Mexerica Ponkan",
       "preparation": "produto",
       "ingredient_slug": "acerola-fresca",
       "shopping_enabled": true,
@@ -2936,7 +2936,7 @@
     },
     {
       "food_id": "food_118",
-      "food_name": "Alcachofra Cozida (Coração)",
+      "food_name": "Abobrinha Refogada em Cubos",
       "preparation": "cozido",
       "ingredient_slug": "alcachofra-coracao",
       "shopping_enabled": true,
@@ -2947,7 +2947,7 @@
     },
     {
       "food_id": "food_154",
-      "food_name": "Alcatra Bovina Magra Grelhada",
+      "food_name": "Acém Bovino Cozido com Legumes",
       "preparation": "grelhado",
       "ingredient_slug": "alcatra-bovina-magra",
       "shopping_enabled": true,
@@ -3013,7 +3013,7 @@
     },
     {
       "food_id": "food_080",
-      "food_name": "Alho-Poró Fatiado Refogado",
+      "food_name": "Cebola Branca Picada Refogada",
       "preparation": "refogado",
       "ingredient_slug": "alho-poro",
       "shopping_enabled": true,
@@ -3035,7 +3035,7 @@
     },
     {
       "food_id": "food_022",
-      "food_name": "Amêndoas Cruas sem Sal",
+      "food_name": "Amendoim Cozido Tradicional",
       "preparation": "produto",
       "ingredient_slug": "amendoas-cruas-sem-sal",
       "shopping_enabled": true,
@@ -3046,7 +3046,7 @@
     },
     {
       "food_id": "food_015",
-      "food_name": "Amaranto em Flocos",
+      "food_name": "Farinha de Aveia Fina",
       "preparation": "produto",
       "ingredient_slug": "amaranto-em-flocos",
       "shopping_enabled": true,
@@ -3057,7 +3057,7 @@
     },
     {
       "food_id": "food_138",
-      "food_name": "Amaranto em Grãos Cozido",
+      "food_name": "Cuscuz Nordestino Tradicional",
       "preparation": "cozido",
       "ingredient_slug": "amaranto-em-graos",
       "shopping_enabled": true,
@@ -3068,7 +3068,7 @@
     },
     {
       "food_id": "food_049",
-      "food_name": "Ameixa Fresca Roxa",
+      "food_name": "Banana-Nanica",
       "preparation": "produto",
       "ingredient_slug": "ameixa-fresca-roxa",
       "shopping_enabled": true,
@@ -3090,7 +3090,7 @@
     },
     {
       "food_id": "food_054",
-      "food_name": "Amora Preta Silvestre",
+      "food_name": "Melancia em Fatias",
       "preparation": "produto",
       "ingredient_slug": "amora-preta-silvestre",
       "shopping_enabled": true,
@@ -3112,7 +3112,7 @@
     },
     {
       "food_id": "food_135",
-      "food_name": "Arroz Negro Integral",
+      "food_name": "Arroz Branco Agulhinha Cozido",
       "preparation": "produto",
       "ingredient_slug": "arroz-negro-integral",
       "shopping_enabled": true,
@@ -3134,7 +3134,7 @@
     },
     {
       "food_id": "food_134",
-      "food_name": "Arroz Vermelho Integral",
+      "food_name": "Arroz Parboilizado Tradicional",
       "preparation": "produto",
       "ingredient_slug": "arroz-vermelho-integral",
       "shopping_enabled": true,
@@ -3145,7 +3145,7 @@
     },
     {
       "food_id": "food_117",
-      "food_name": "Aspargos Frescos Grelhados",
+      "food_name": "Couve Manteiga Refogada no Alho",
       "preparation": "grelhado",
       "ingredient_slug": "aspargos-frescos",
       "shopping_enabled": true,
@@ -3156,7 +3156,7 @@
     },
     {
       "food_id": "food_159",
-      "food_name": "Atum em Conserva ao Natural (Água)",
+      "food_name": "Sardinha Fresca no Forno com Ervas",
       "preparation": "produto",
       "ingredient_slug": "atum-em-conserva-ao-natural-agua",
       "shopping_enabled": true,
@@ -3167,7 +3167,7 @@
     },
     {
       "food_id": "food_160",
-      "food_name": "Atum Fresco Grelhado",
+      "food_name": "Sardinha Cozida com Cebola e Tomate",
       "preparation": "grelhado",
       "ingredient_slug": "atum-fresco",
       "shopping_enabled": true,
@@ -3200,7 +3200,7 @@
     },
     {
       "food_id": "food_186",
-      "food_name": "Azeite de Oliva Extravirgem",
+      "food_name": "Óleo de Soja para Refogados",
       "preparation": "produto",
       "ingredient_slug": "azeite-de-oliva-extravirgem",
       "shopping_enabled": true,
@@ -3211,7 +3211,7 @@
     },
     {
       "food_id": "food_189",
-      "food_name": "Azeitona Preta Natural",
+      "food_name": "Amendoim com Alho Tostado",
       "preparation": "produto",
       "ingredient_slug": "azeitona-preta-natural",
       "shopping_enabled": true,
@@ -3222,7 +3222,7 @@
     },
     {
       "food_id": "food_188",
-      "food_name": "Azeitona Verde em Conserva sem Caroço",
+      "food_name": "Amendoim Torrado sem Sal com Casca",
       "preparation": "produto",
       "ingredient_slug": "azeitona-verde-em-conserva-sem-caroco",
       "shopping_enabled": true,
@@ -3233,7 +3233,7 @@
     },
     {
       "food_id": "food_166",
-      "food_name": "Bacalhau Dessalgado Cozido",
+      "food_name": "Peito de Frango Desfiado com Milho",
       "preparation": "cozido",
       "ingredient_slug": "bacalhau-dessalgado",
       "shopping_enabled": true,
@@ -3288,7 +3288,7 @@
     },
     {
       "food_id": "food_175",
-      "food_name": "Bebida Vegetal de Amêndoas sem Açúcar",
+      "food_name": "Leite Desnatado Fortificado",
       "preparation": "produto",
       "ingredient_slug": "bebida-vegetal-de-amendoas-sem-acucar",
       "shopping_enabled": true,
@@ -3299,7 +3299,7 @@
     },
     {
       "food_id": "food_176",
-      "food_name": "Bebida Vegetal de Aveia sem Açúcar",
+      "food_name": "Leite Integral Pasteurizado",
       "preparation": "produto",
       "ingredient_slug": "bebida-vegetal-de-aveia-sem-acucar",
       "shopping_enabled": true,
@@ -3376,7 +3376,7 @@
     },
     {
       "food_id": "food_079",
-      "food_name": "Broto de Alfafa Fresco",
+      "food_name": "Acelga Fatiada Refogada",
       "preparation": "produto",
       "ingredient_slug": "broto-de-alfafa-fresco",
       "shopping_enabled": true,
@@ -3387,7 +3387,7 @@
     },
     {
       "food_id": "food_120",
-      "food_name": "Broto de Bambu Cozido",
+      "food_name": "Chuchu Refogado com Ervas",
       "preparation": "cozido",
       "ingredient_slug": "broto-de-bambu",
       "shopping_enabled": true,
@@ -3398,7 +3398,7 @@
     },
     {
       "food_id": "food_078",
-      "food_name": "Broto de Feijão (Moyashi)",
+      "food_name": "Repolho Verde Fatiado Refogado",
       "preparation": "produto",
       "ingredient_slug": "broto-de-feijao-moyashi",
       "shopping_enabled": true,
@@ -3423,7 +3423,7 @@
     },
     {
       "food_id": "food_211",
-      "food_name": "Cacau Puro em Pó 100% (sem açúcar)",
+      "food_name": "Amendoim Torrado Moído sem Açúcar",
       "preparation": "produto",
       "ingredient_slug": "cacau-puro-em-po-100-sem-acucar",
       "shopping_enabled": true,
@@ -3434,7 +3434,7 @@
     },
     {
       "food_id": "food_050",
-      "food_name": "Caju Fresco",
+      "food_name": "Laranja-Lima Doce",
       "preparation": "produto",
       "ingredient_slug": "caju-fresco",
       "shopping_enabled": true,
@@ -3445,7 +3445,7 @@
     },
     {
       "food_id": "food_167",
-      "food_name": "Camarão Grelhado com Alho e Azeite",
+      "food_name": "Peito de Frango em Cubos Grelhado",
       "preparation": "grelhado",
       "ingredient_slug": "camarao",
       "shopping_enabled": true,
@@ -3460,7 +3460,7 @@
     },
     {
       "food_id": "food_190",
-      "food_name": "Canela em Pó do Ceilão",
+      "food_name": "Canela em Pó Nacional",
       "preparation": "produto",
       "ingredient_slug": "canela-em-po-do-ceilao",
       "shopping_enabled": true,
@@ -3471,7 +3471,7 @@
     },
     {
       "food_id": "food_191",
-      "food_name": "Canela em Pau para Infusão",
+      "food_name": "Canela em Pau Nacional",
       "preparation": "produto",
       "ingredient_slug": "canela-em-pau-para-infusao",
       "shopping_enabled": true,
@@ -3515,7 +3515,7 @@
     },
     {
       "food_id": "food_057",
-      "food_name": "Carambola Doce",
+      "food_name": "Abacaxi Pérola em Fatias",
       "preparation": "produto",
       "ingredient_slug": "carambola-doce",
       "shopping_enabled": true,
@@ -3526,7 +3526,7 @@
     },
     {
       "food_id": "food_218",
-      "food_name": "Cardamomo em Grãos Triturado",
+      "food_name": "Gengibre Fresco Fatiado",
       "preparation": "produto",
       "ingredient_slug": "cardamomo-em-graos-triturado",
       "shopping_enabled": true,
@@ -3548,7 +3548,7 @@
     },
     {
       "food_id": "food_020",
-      "food_name": "Castanha de Caju sem Sal",
+      "food_name": "Amendoim Torrado sem Pele e sem Sal",
       "preparation": "produto",
       "ingredient_slug": "castanha-de-caju-sem-sal",
       "shopping_enabled": true,
@@ -3559,7 +3559,7 @@
     },
     {
       "food_id": "food_019",
-      "food_name": "Castanha-do-Pará",
+      "food_name": "Amendoim Torrado com Pele",
       "preparation": "produto",
       "ingredient_slug": "castanha-do-para",
       "shopping_enabled": true,
@@ -3614,7 +3614,7 @@
     },
     {
       "food_id": "food_140",
-      "food_name": "Cevadinha em Grãos Cozida",
+      "food_name": "Arroz com Feijão Tradicional",
       "preparation": "cozido",
       "ingredient_slug": "cevadinha-em-graos",
       "shopping_enabled": true,
@@ -3636,7 +3636,7 @@
     },
     {
       "food_id": "food_200",
-      "food_name": "Chá de Camomila Flor",
+      "food_name": "Chá de Camomila Comum",
       "preparation": "produto",
       "ingredient_slug": "cha-de-camomila-flor",
       "shopping_enabled": true,
@@ -3647,7 +3647,7 @@
     },
     {
       "food_id": "food_207",
-      "food_name": "Chá de Cavalinha",
+      "food_name": "Chá de Capim-Santo / Cidreira",
       "preparation": "produto",
       "ingredient_slug": "cha-de-cavalinha",
       "shopping_enabled": true,
@@ -3658,7 +3658,7 @@
     },
     {
       "food_id": "food_219",
-      "food_name": "Chá de Dente-de-Leão Raiz",
+      "food_name": "Chá de Hortelã da Horta",
       "preparation": "produto",
       "ingredient_slug": "cha-de-dente-de-leao-raiz",
       "shopping_enabled": true,
@@ -3669,7 +3669,7 @@
     },
     {
       "food_id": "food_201",
-      "food_name": "Chá de Erva-Cidreira / Melissa",
+      "food_name": "Chá de Erva-Cidreira da Horta",
       "preparation": "produto",
       "ingredient_slug": "cha-de-erva-cidreira-melissa",
       "shopping_enabled": true,
@@ -3680,7 +3680,7 @@
     },
     {
       "food_id": "food_205",
-      "food_name": "Chá de Erva-Doce / Funcho",
+      "food_name": "Chá de Hortelã com Limão",
       "preparation": "produto",
       "ingredient_slug": "cha-de-erva-doce-funcho",
       "shopping_enabled": true,
@@ -3705,7 +3705,7 @@
     },
     {
       "food_id": "food_204",
-      "food_name": "Chá de Hibisco Flor (Cálice)",
+      "food_name": "Chá de Erva-Doce Simples",
       "preparation": "produto",
       "ingredient_slug": "cha-de-hibisco-flor-calice",
       "shopping_enabled": true,
@@ -3727,7 +3727,7 @@
     },
     {
       "food_id": "food_217",
-      "food_name": "Chá de Melissa Fresca com Casca de Maçã",
+      "food_name": "Chá de Cidreira com Limão",
       "preparation": "infusão",
       "ingredient_slug": "melissa-fresca",
       "shopping_enabled": false,
@@ -3742,7 +3742,7 @@
     },
     {
       "food_id": "food_199",
-      "food_name": "Chá Verde em Folhas (Camellia sinensis)",
+      "food_name": "Chá de Hortelã com Ervas",
       "preparation": "produto",
       "ingredient_slug": "cha-verde-em-folhas-camellia-sinensis",
       "shopping_enabled": true,
@@ -3753,7 +3753,7 @@
     },
     {
       "food_id": "food_213",
-      "food_name": "Chocolate Amargo 70% Cacau",
+      "food_name": "Banana Assada com Canela",
       "preparation": "produto",
       "ingredient_slug": "chocolate-amargo-70-cacau",
       "shopping_enabled": true,
@@ -3764,7 +3764,7 @@
     },
     {
       "food_id": "food_212",
-      "food_name": "Chocolate Amargo 85% Cacau",
+      "food_name": "Amendoim Doce com Canela sem Açúcar",
       "preparation": "produto",
       "ingredient_slug": "chocolate-amargo-85-cacau",
       "shopping_enabled": true,
@@ -3786,7 +3786,7 @@
     },
     {
       "food_id": "food_170",
-      "food_name": "Coalhada Fresca sem Açúcar",
+      "food_name": "Iogurte Natural Integral Caseiro",
       "preparation": "produto",
       "ingredient_slug": "coalhada-fresca-sem-acucar",
       "shopping_enabled": true,
@@ -3797,7 +3797,7 @@
     },
     {
       "food_id": "food_119",
-      "food_name": "Couve de Bruxelas no Vapor",
+      "food_name": "Repolho Roxo Refogado",
       "preparation": "cozido no vapor",
       "ingredient_slug": "couve-de-bruxelas",
       "shopping_enabled": true,
@@ -3841,7 +3841,7 @@
     },
     {
       "food_id": "food_216",
-      "food_name": "Erva-Doce em Sementes (Funcho Seco)",
+      "food_name": "Erva-Doce Comum em Grãos",
       "preparation": "produto",
       "ingredient_slug": "erva-doce-em-sementes-funcho-seco",
       "shopping_enabled": true,
@@ -3852,7 +3852,7 @@
     },
     {
       "food_id": "food_115",
-      "food_name": "Ervilha Fresca em Vagem (Torta)",
+      "food_name": "Sopa de Ervilha Seca Caseira",
       "preparation": "produto",
       "ingredient_slug": "ervilha-fresca-em-vagem-torta",
       "shopping_enabled": true,
@@ -3918,7 +3918,7 @@
     },
     {
       "food_id": "food_011",
-      "food_name": "Farinha de Banana Verde",
+      "food_name": "Farinha de Mandioca Torrada",
       "preparation": "produto",
       "ingredient_slug": "farinha-de-banana-verde",
       "shopping_enabled": true,
@@ -3929,7 +3929,7 @@
     },
     {
       "food_id": "food_012",
-      "food_name": "Farinha de Maracujá",
+      "food_name": "Farinha de Milho em Flocos",
       "preparation": "produto",
       "ingredient_slug": "farinha-de-maracuja",
       "shopping_enabled": true,
@@ -3940,7 +3940,7 @@
     },
     {
       "food_id": "food_131",
-      "food_name": "Fava Cozida com Ervas",
+      "food_name": "Feijão Preto com Louro",
       "preparation": "cozido",
       "ingredient_slug": "fava",
       "shopping_enabled": true,
@@ -3954,7 +3954,7 @@
     },
     {
       "food_id": "food_124",
-      "food_name": "Feijão Branco Cozido",
+      "food_name": "Feijão Carioca Cozido Tradicional",
       "preparation": "cozido",
       "ingredient_slug": "feijao-branco",
       "shopping_enabled": true,
@@ -3998,7 +3998,7 @@
     },
     {
       "food_id": "food_125",
-      "food_name": "Feijão Vermelho Cozido",
+      "food_name": "Feijão Preto Cozido Simples",
       "preparation": "cozido",
       "ingredient_slug": "feijao-vermelho",
       "shopping_enabled": true,
@@ -4009,7 +4009,7 @@
     },
     {
       "food_id": "food_056",
-      "food_name": "Figo Roxo Fresco",
+      "food_name": "Mamão Papaia Maduro",
       "preparation": "produto",
       "ingredient_slug": "figo-roxo-fresco",
       "shopping_enabled": true,
@@ -4020,7 +4020,7 @@
     },
     {
       "food_id": "food_182",
-      "food_name": "Filé de Badejo Grelhado",
+      "food_name": "Filé de Frango Empanado no Forno",
       "preparation": "grelhado",
       "ingredient_slug": "file-de-badejo",
       "shopping_enabled": true,
@@ -4031,7 +4031,7 @@
     },
     {
       "food_id": "food_153",
-      "food_name": "Filé Mignon Bovino Grelhado",
+      "food_name": "Músculo Bovino Cozido na Panela",
       "preparation": "grelhado",
       "ingredient_slug": "file-mignon-bovino",
       "shopping_enabled": true,
@@ -4067,7 +4067,7 @@
     },
     {
       "food_id": "food_014",
-      "food_name": "Gérmen de Trigo Tostado",
+      "food_name": "Fibra de Trigo Tostada",
       "preparation": "produto",
       "ingredient_slug": "germen-de-trigo-tostado",
       "shopping_enabled": true,
@@ -4089,7 +4089,7 @@
     },
     {
       "food_id": "food_009",
-      "food_name": "Gergelim Branco Integral",
+      "food_name": "Gergelim Branco Nacional",
       "preparation": "produto",
       "ingredient_slug": "gergelim-branco-integral",
       "shopping_enabled": true,
@@ -4100,7 +4100,7 @@
     },
     {
       "food_id": "food_010",
-      "food_name": "Gergelim Preto",
+      "food_name": "Paçoca Caseira sem Açúcar (Amendoim)",
       "preparation": "produto",
       "ingredient_slug": "gergelim-preto",
       "shopping_enabled": true,
@@ -4133,7 +4133,7 @@
     },
     {
       "food_id": "food_128",
-      "food_name": "Grão-de-Bico Cozido",
+      "food_name": "Feijão Branco Cozido",
       "preparation": "cozido",
       "ingredient_slug": "grao-de-bico",
       "shopping_enabled": true,
@@ -4144,7 +4144,7 @@
     },
     {
       "food_id": "food_017",
-      "food_name": "Granola Artesanal sem Açúcar",
+      "food_name": "Granola Caseira de Aveia e Amendoim",
       "preparation": "produto",
       "ingredient_slug": "granola-artesanal-sem-acucar",
       "shopping_enabled": true,
@@ -4199,7 +4199,7 @@
     },
     {
       "food_id": "food_185",
-      "food_name": "Iogurte Tipo Grego Zero Gordura sem Açúcar",
+      "food_name": "Iogurte Natural Batido Simples",
       "preparation": "produto",
       "ingredient_slug": "iogurte-tipo-grego-zero-gordura-sem-acucar",
       "shopping_enabled": true,
@@ -4210,7 +4210,7 @@
     },
     {
       "food_id": "food_052",
-      "food_name": "Jabuticaba Fresca",
+      "food_name": "Goiaba Branca em Fatias",
       "preparation": "produto",
       "ingredient_slug": "jabuticaba-fresca",
       "shopping_enabled": true,
@@ -4243,7 +4243,7 @@
     },
     {
       "food_id": "food_048",
-      "food_name": "Kiwi Verde",
+      "food_name": "Laranja-Pêra com Bagaço",
       "preparation": "produto",
       "ingredient_slug": "kiwi-verde",
       "shopping_enabled": true,
@@ -4287,7 +4287,7 @@
     },
     {
       "food_id": "food_126",
-      "food_name": "Lentilha Marrom Cozida",
+      "food_name": "Feijão Fradinho Temperado",
       "preparation": "cozido",
       "ingredient_slug": "lentilha-marrom",
       "shopping_enabled": true,
@@ -4298,7 +4298,7 @@
     },
     {
       "food_id": "food_127",
-      "food_name": "Lentilha Rosa / Laranja Cozida",
+      "food_name": "Feijão Vermelho Cozido",
       "preparation": "cozido",
       "ingredient_slug": "lentilha-rosa-laranja",
       "shopping_enabled": true,
@@ -4320,7 +4320,7 @@
     },
     {
       "food_id": "food_003",
-      "food_name": "Linhaça Dourada Moída",
+      "food_name": "Farinha de Linhaça Marrom",
       "preparation": "produto",
       "ingredient_slug": "linhaca-dourada-moida",
       "shopping_enabled": true,
@@ -4364,7 +4364,7 @@
     },
     {
       "food_id": "food_183",
-      "food_name": "Lula Cozida em Anéis com Ervas",
+      "food_name": "Sobrecoxa de Frango Cozida sem Pele",
       "preparation": "cozido",
       "ingredient_slug": "lula",
       "shopping_enabled": true,
@@ -4400,7 +4400,7 @@
     },
     {
       "food_id": "food_025",
-      "food_name": "Macadâmia Crua",
+      "food_name": "Amendoim Granulado Torrado",
       "preparation": "produto",
       "ingredient_slug": "macadamia-crua",
       "shopping_enabled": true,
@@ -4524,7 +4524,7 @@
     },
     {
       "food_id": "food_144",
-      "food_name": "Massa de Arroz Integral Cozida",
+      "food_name": "Cuscuz de Milho Cozido no Vapor",
       "preparation": "cozido",
       "ingredient_slug": "massa-de-arroz-integral",
       "shopping_enabled": true,
@@ -4535,7 +4535,7 @@
     },
     {
       "food_id": "food_145",
-      "food_name": "Massa de Grão-de-Bico Cozida",
+      "food_name": "Macarrão Espaguete Cozido Simples",
       "preparation": "cozido",
       "ingredient_slug": "massa-de-grao-de-bico",
       "shopping_enabled": true,
@@ -4568,7 +4568,7 @@
     },
     {
       "food_id": "food_164",
-      "food_name": "Merluza Assada com Tomate e Ervas",
+      "food_name": "Filé de Merluza Assado Simples",
       "preparation": "assado",
       "ingredient_slug": "merluza",
       "shopping_enabled": true,
@@ -4594,7 +4594,7 @@
     },
     {
       "food_id": "food_137",
-      "food_name": "Milheto em Grãos Cozido",
+      "food_name": "Polenta Cremosa de Milho",
       "preparation": "cozido",
       "ingredient_slug": "milheto-em-graos",
       "shopping_enabled": true,
@@ -4616,7 +4616,7 @@
     },
     {
       "food_id": "food_055",
-      "food_name": "Mirtilo (Blueberry) Fresco",
+      "food_name": "Mamão Formosa em Cubos",
       "preparation": "produto",
       "ingredient_slug": "mirtilo-blueberry-fresco",
       "shopping_enabled": true,
@@ -4627,7 +4627,7 @@
     },
     {
       "food_id": "food_044",
-      "food_name": "Morango Fresco",
+      "food_name": "Goiaba Vermelha Fresca",
       "preparation": "produto",
       "ingredient_slug": "morango-fresco",
       "shopping_enabled": true,
@@ -4638,7 +4638,7 @@
     },
     {
       "food_id": "food_214",
-      "food_name": "Mostarda em Grãos Artesanal (sem açúcar)",
+      "food_name": "Alho Refogado com Cebola",
       "preparation": "produto",
       "ingredient_slug": "mostarda-em-graos-artesanal-sem-acucar",
       "shopping_enabled": true,
@@ -4660,7 +4660,7 @@
     },
     {
       "food_id": "food_021",
-      "food_name": "Nozes Chilenas",
+      "food_name": "Xerém de Amendoim Torrado",
       "preparation": "produto",
       "ingredient_slug": "nozes-chilenas",
       "shopping_enabled": true,
@@ -4671,7 +4671,7 @@
     },
     {
       "food_id": "food_196",
-      "food_name": "Noz-Moscada Ralada na Hora",
+      "food_name": "Alho Fresco Picadinho",
       "preparation": "produto",
       "ingredient_slug": "noz-moscada-ralada-na-hora",
       "shopping_enabled": true,
@@ -4682,7 +4682,7 @@
     },
     {
       "food_id": "food_148",
-      "food_name": "Omelete de Claras com Ervas",
+      "food_name": "Omelete Simples com Ervas",
       "preparation": "omelete",
       "ingredient_slug": "claras-de-ovo",
       "shopping_enabled": true,
@@ -4707,7 +4707,7 @@
     },
     {
       "food_id": "food_146",
-      "food_name": "Ovo Caipira Cozido",
+      "food_name": "Ovo Cozido",
       "preparation": "cozido",
       "ingredient_slug": "ovo-caipira",
       "shopping_enabled": true,
@@ -4718,7 +4718,7 @@
     },
     {
       "food_id": "food_147",
-      "food_name": "Ovo Caipira Mexido no Azeite",
+      "food_name": "Ovo Mexido no Óleo de Soja",
       "preparation": "mexido",
       "ingredient_slug": "ovo-caipira",
       "shopping_enabled": true,
@@ -4732,7 +4732,7 @@
     },
     {
       "food_id": "food_181",
-      "food_name": "Ovo Caipira Pochê",
+      "food_name": "Ovo Poché Simples",
       "preparation": "pochê",
       "ingredient_slug": "ovo-caipira",
       "shopping_enabled": true,
@@ -4743,7 +4743,7 @@
     },
     {
       "food_id": "food_198",
-      "food_name": "Páprica Defumada",
+      "food_name": "Colorau / Urucum em Pó",
       "preparation": "produto",
       "ingredient_slug": "paprica-defumada",
       "shopping_enabled": true,
@@ -4765,7 +4765,7 @@
     },
     {
       "food_id": "food_112",
-      "food_name": "Palmito Pupunha Fresco Cozido",
+      "food_name": "Chuchu Refogado Simples",
       "preparation": "cozido",
       "ingredient_slug": "palmito-pupunha-fresco",
       "shopping_enabled": true,
@@ -4776,7 +4776,7 @@
     },
     {
       "food_id": "food_024",
-      "food_name": "Pasta de Amendoim Integral 100%",
+      "food_name": "Pasta de Amendoim Caseira 100%",
       "preparation": "produto",
       "ingredient_slug": "pasta-de-amendoim-integral-100",
       "shopping_enabled": true,
@@ -4787,7 +4787,7 @@
     },
     {
       "food_id": "food_152",
-      "food_name": "Patinho Bovino Moído Magro",
+      "food_name": "Músculo Bovino Moído Refogado",
       "preparation": "produto",
       "ingredient_slug": "patinho-bovino-moido-magro",
       "shopping_enabled": true,
@@ -4820,7 +4820,7 @@
     },
     {
       "food_id": "food_030",
-      "food_name": "Pera Williams",
+      "food_name": "Maçã Nacional Pequena",
       "preparation": "produto",
       "ingredient_slug": "pera-williams",
       "shopping_enabled": true,
@@ -4842,7 +4842,7 @@
     },
     {
       "food_id": "food_099",
-      "food_name": "Pimentão Amarelo Fatiado",
+      "food_name": "Pimentão Verde em Tiras",
       "preparation": "produto",
       "ingredient_slug": "pimentao-amarelo",
       "shopping_enabled": true,
@@ -4853,7 +4853,7 @@
     },
     {
       "food_id": "food_100",
-      "food_name": "Pimentão Vermelho",
+      "food_name": "Cenoura Ralada com Tomate",
       "preparation": "produto",
       "ingredient_slug": "pimentao-vermelho",
       "shopping_enabled": true,
@@ -4897,7 +4897,7 @@
     },
     {
       "food_id": "food_013",
-      "food_name": "Psyllium Puro em Pó",
+      "food_name": "Farelo de Aveia Grosso",
       "preparation": "produto",
       "ingredient_slug": "psyllium-puro-em-po",
       "shopping_enabled": true,
@@ -4908,7 +4908,7 @@
     },
     {
       "food_id": "food_173",
-      "food_name": "Queijo Cottage",
+      "food_name": "Ricota Fresca Amassada",
       "preparation": "produto",
       "ingredient_slug": "queijo-cottage",
       "shopping_enabled": true,
@@ -4919,7 +4919,7 @@
     },
     {
       "food_id": "food_179",
-      "food_name": "Queijo Meia Cura em Dose Controlada",
+      "food_name": "Queijo Branco Frescal Simples",
       "preparation": "produto",
       "ingredient_slug": "queijo-meia-cura-em-dose-controlada",
       "shopping_enabled": true,
@@ -4930,7 +4930,7 @@
     },
     {
       "food_id": "food_171",
-      "food_name": "Queijo Minas Frescal Light",
+      "food_name": "Queijo Minas Padrão em Fatia",
       "preparation": "produto",
       "ingredient_slug": "queijo-minas-frescal-light",
       "shopping_enabled": true,
@@ -4963,7 +4963,7 @@
     },
     {
       "food_id": "food_016",
-      "food_name": "Quinoa em Flocos",
+      "food_name": "Farinha de Aveia Integral",
       "preparation": "produto",
       "ingredient_slug": "quinoa-em-flocos",
       "shopping_enabled": true,
@@ -4974,7 +4974,7 @@
     },
     {
       "food_id": "food_136",
-      "food_name": "Quinoa em Grãos Cozida",
+      "food_name": "Arroz Integral Agulhinha Cozido",
       "preparation": "cozido",
       "ingredient_slug": "quinoa-em-graos",
       "shopping_enabled": true,
@@ -4996,7 +4996,7 @@
     },
     {
       "food_id": "food_065",
-      "food_name": "Rúcula Selvagem",
+      "food_name": "Folhas de Mostarda Refogadas",
       "preparation": "produto",
       "ingredient_slug": "rucula-selvagem",
       "shopping_enabled": true,
@@ -5029,7 +5029,7 @@
     },
     {
       "food_id": "food_161",
-      "food_name": "Salmão Grelhado com Limão",
+      "food_name": "Filé de Frango Grelhado Simples",
       "preparation": "grelhado",
       "ingredient_slug": "salmao",
       "shopping_enabled": true,
@@ -5043,7 +5043,7 @@
     },
     {
       "food_id": "food_158",
-      "food_name": "Sardinha em Conserva ao Molho de Tomate",
+      "food_name": "Sardinha Fresca Assada com Tomate",
       "preparation": "produto",
       "ingredient_slug": "sardinha-em-conserva-ao-molho-de-tomate",
       "shopping_enabled": true,
@@ -5065,7 +5065,7 @@
     },
     {
       "food_id": "food_002",
-      "food_name": "Semente de Chia",
+      "food_name": "Linhaça Marrom Triturada",
       "preparation": "produto",
       "ingredient_slug": "semente-de-chia",
       "shopping_enabled": true,
@@ -5076,7 +5076,7 @@
     },
     {
       "food_id": "food_007",
-      "food_name": "Sementes de Abóbora Tostadas",
+      "food_name": "Semente de Girassol com Casca",
       "preparation": "produto",
       "ingredient_slug": "sementes-de-abobora-tostadas",
       "shopping_enabled": true,
@@ -5087,7 +5087,7 @@
     },
     {
       "food_id": "food_008",
-      "food_name": "Sementes de Girassol Descascadas",
+      "food_name": "Amendoim Cru com Casca",
       "preparation": "produto",
       "ingredient_slug": "sementes-de-girassol-descascadas",
       "shopping_enabled": true,
@@ -5109,7 +5109,7 @@
     },
     {
       "food_id": "food_130",
-      "food_name": "Soja Verde em Grãos (Edamame)",
+      "food_name": "Feijão Carioca Grosso",
       "preparation": "produto",
       "ingredient_slug": "soja-verde-em-graos-edamame",
       "shopping_enabled": true,
@@ -5153,7 +5153,7 @@
     },
     {
       "food_id": "food_162",
-      "food_name": "Tilápia / Saint Peter Grelhada",
+      "food_name": "Sardinha Fresca Grelhada na Frigideira",
       "preparation": "grelhado",
       "ingredient_slug": "tilapia-saint-peter",
       "shopping_enabled": true,
@@ -5164,7 +5164,7 @@
     },
     {
       "food_id": "food_177",
-      "food_name": "Tofu Firme Orgânico Grelhado",
+      "food_name": "Ovo Poché no Vapor",
       "preparation": "grelhado",
       "ingredient_slug": "tofu-firme-organico",
       "shopping_enabled": true,
@@ -5175,7 +5175,7 @@
     },
     {
       "food_id": "food_091",
-      "food_name": "Tomate Cereja Doce",
+      "food_name": "Tomate Italiano Maduro",
       "preparation": "produto",
       "ingredient_slug": "tomate-cereja-doce",
       "shopping_enabled": true,
@@ -5197,7 +5197,7 @@
     },
     {
       "food_id": "food_084",
-      "food_name": "Tomilho Seco / Fresco",
+      "food_name": "Manjericão Fresco da Horta",
       "preparation": "produto",
       "ingredient_slug": "tomilho-seco-fresco",
       "shopping_enabled": true,
@@ -5208,7 +5208,7 @@
     },
     {
       "food_id": "food_139",
-      "food_name": "Trigo em Grão Integral Cozido",
+      "food_name": "Arroz com Cenoura Cozido",
       "preparation": "cozido",
       "ingredient_slug": "trigo-em-grao-integral",
       "shopping_enabled": true,
@@ -5219,7 +5219,7 @@
     },
     {
       "food_id": "food_046",
-      "food_name": "Uva Crimson sem Semente",
+      "food_name": "Banana-Prata Madura",
       "preparation": "produto",
       "ingredient_slug": "uva-crimson-sem-semente",
       "shopping_enabled": true,
@@ -5252,7 +5252,7 @@
     },
     {
       "food_id": "food_208",
-      "food_name": "Vinagre de Maçã Orgânico Não Filtrado",
+      "food_name": "Vinagre de Álcool / Limão Tahiti",
       "preparation": "produto",
       "ingredient_slug": "vinagre-de-maca-organico-nao-filtrado",
       "shopping_enabled": true,

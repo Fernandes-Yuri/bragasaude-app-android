@@ -92,6 +92,41 @@ class NutritionViewModel @Inject constructor(
     private val _profile = MutableStateFlow<RemoteProfile?>(null)
     val profile = _profile.asStateFlow()
 
+    private val _groceryIngredients = MutableStateFlow<br.com.bragasaude.domain.GroceryIngredientCatalog?>(null)
+    val manualIngredients: StateFlow<List<br.com.bragasaude.domain.GroceryIngredient>> = combine(
+        _groceryIngredients, catalogRepository.getFoodCatalog(), _profile
+    ) { manifest, foods, profile ->
+        manifest?.ingredients.orEmpty().filter { ingredient ->
+            val related = foods.filter { it.remoteId in ingredient.foodIds }
+            related.any { food ->
+                NutritionSuggestionEngine.isSafeFromAllergies(food, profile?.foodAllergies.orEmpty(), profile?.customFoodRestrictions) &&
+                    (profile?.hasDiabetes != true || food.isDiabetesSafe) &&
+                    (profile?.hasHypertension != true || food.isHypertensionSafe)
+            } || (related.isEmpty() && ingredient.foodIds.isEmpty() &&
+                NutritionSuggestionEngine.isSafeFromAllergies(FoodEntity(ingredient.slug, ingredient.name),
+                    profile?.foodAllergies.orEmpty(), profile?.customFoodRestrictions))
+        }.sortedBy { it.name }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _groceryMessage = MutableStateFlow<String?>(null)
+    val groceryMessage = _groceryMessage.asStateFlow()
+
+    fun saveManualItem(slug: String, amountText: String, replacingId: String? = null) {
+        val ingredient = manualIngredients.value.firstOrNull { it.slug == slug } ?: return
+        val amount = br.com.bragasaude.domain.GroceryPurchasePlanner.parseAmount(amountText, ingredient.unit) ?: return
+        viewModelScope.launch {
+            try {
+                groceryRepository.putManualItem(userId, ingredient, amount, "Minha lista", replacingId)
+                _groceryMessage.value = "Item salvo. Marque como comprado quando estiver na despensa."
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { _groceryMessage.value = "Não foi possível salvar o item. Tente novamente." }
+        }
+    }
+
+    fun removeGroceryItem(id: String) {
+        viewModelScope.launch { groceryRepository.removeItem(userId, id) }
+    }
+
     private val _mealRules = MutableStateFlow<List<RemoteMealRule>>(emptyList())
     private val _foodCatalog = MutableStateFlow<List<RemoteFood>>(emptyList())
     private val _latestExamItems = MutableStateFlow<List<RemoteExamItem>>(emptyList())
@@ -190,9 +225,13 @@ class NutritionViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            groceryRepository.standardizeIngredients(userId, catalogRepository.fetchGroceryIngredients(includePrices = false))
+            val offline = catalogRepository.fetchGroceryIngredients(includePrices = false)
+            _groceryIngredients.value = offline
+            groceryRepository.standardizeIngredients(userId, offline)
             _communityPrices.value = catalogRepository.fetchCommunityGroceryPrices()
-            groceryRepository.standardizeIngredients(userId, catalogRepository.fetchGroceryIngredients())
+            val priced = catalogRepository.fetchGroceryIngredients()
+            _groceryIngredients.value = priced
+            groceryRepository.standardizeIngredients(userId, priced)
         }
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
@@ -392,8 +431,11 @@ class NutritionViewModel @Inject constructor(
                     dislikedFoodNames = dislikes,
                     ingredientCatalog = ingredients
                 )
-                groceryRepository.clearGroceryList(userId)
-                groceryRepository.saveGroceryList(newList)
+                if (newList.isNotEmpty()) {
+                    groceryRepository.replaceList(userId, newList)
+                } else {
+                    _groceryMessage.value = "Não foi possível gerar uma lista para o seu perfil. Você pode montar sua lista manualmente."
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {

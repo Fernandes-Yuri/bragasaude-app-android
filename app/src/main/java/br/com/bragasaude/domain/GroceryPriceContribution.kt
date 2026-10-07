@@ -5,7 +5,8 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.ResolverStyle
 
-const val GROCERY_PRICE_NOTICE = "Preços estimados com base em referências nacionais. O valor pago pode variar conforme região, loja e data. Use como referência para planejar a semana."
+const val GROCERY_PRICE_NOTICE = "Preços estimados com base em média nacional de referência (IPCA/DIEESE). Não garantimos preços e não se trata de oferta comercial. Mantenha sua lista preenchida corretamente para habilitar o motor de receitas sugeridas e planejamento alimentar."
+
 
 data class GroceryPriceContribution(
     val amountPaid: BigDecimal,

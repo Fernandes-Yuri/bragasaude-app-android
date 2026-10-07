@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.local.GroceryListItemEntity
 import br.com.bragasaude.data.local.ProfileEntity
@@ -73,10 +73,14 @@ class RecipeEngine @Inject constructor() {
             calculateMatch(recipe, pantryNames)
         }
 
-        // Só recomenda receitas com todos os ingredientes na lista de compras.
+        // Recomenda receitas completas primeiro, seguidas por sugestões com menos ingredientes faltando
         return matches
-            .filter { it.hasAll && it.availableIngredients.isNotEmpty() }
-            .sortedByDescending { it.availableIngredients.size }
+            .filter { it.availableIngredients.isNotEmpty() }
+            .sortedWith(
+                compareByDescending<RecipePantryMatch> { it.hasAll }
+                    .thenBy { it.missingCount }
+                    .thenByDescending { it.availableIngredients.size }
+            )
     }
 
     /**
