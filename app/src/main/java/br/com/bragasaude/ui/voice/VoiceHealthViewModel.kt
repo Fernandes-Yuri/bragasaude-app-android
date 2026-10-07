@@ -165,6 +165,14 @@ class VoiceHealthViewModel @Inject constructor(
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
+    val isSessionActive: StateFlow<Boolean> = combine(
+        _isLiveMode,
+        _state,
+        _isSpeaking
+    ) { live, uiState, speaking ->
+        live || uiState !is VoiceUiState.Idle || speaking
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     private val _closeEvent = MutableSharedFlow<Unit>()
     val closeEvent: SharedFlow<Unit> = _closeEvent.asSharedFlow()
 
