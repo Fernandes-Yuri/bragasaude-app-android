@@ -127,6 +127,10 @@ class NutritionViewModel @Inject constructor(
         viewModelScope.launch { groceryRepository.removeItem(userId, id) }
     }
 
+    fun clearGroceryList() {
+        viewModelScope.launch { groceryRepository.clearGroceryList(userId) }
+    }
+
     private val _mealRules = MutableStateFlow<List<RemoteMealRule>>(emptyList())
     private val _foodCatalog = MutableStateFlow<List<RemoteFood>>(emptyList())
     private val _latestExamItems = MutableStateFlow<List<RemoteExamItem>>(emptyList())

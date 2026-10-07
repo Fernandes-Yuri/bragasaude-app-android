@@ -692,6 +692,7 @@ fun NutritionScreen(
             onGenerateList = { viewModel.generateWeeklyGroceryList() },
             onSaveManualItem = { slug, amount, repId -> viewModel.saveManualItem(slug, amount, repId) },
             onRemoveItem = { id -> viewModel.removeGroceryItem(id) },
+            onClearList = { viewModel.clearGroceryList() },
             groceryMessage = groceryMessage,
             onExportPdf = { viewModel.exportAndShareGroceryPdf(context) },
             contributionState = contributionState,
