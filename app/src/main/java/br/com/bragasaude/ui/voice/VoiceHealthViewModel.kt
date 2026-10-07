@@ -123,6 +123,29 @@ class VoiceHealthViewModel @Inject constructor(
     private val _navigationEvent = MutableSharedFlow<VoiceNavigationEvent>(extraBufferCapacity = 1)
     val navigationEvent: SharedFlow<VoiceNavigationEvent> = _navigationEvent.asSharedFlow()
 
+    companion object {
+        /**
+         * Abertura de tela via voz aguarda a síntese do Piper alcançar a fala.
+         * Medido no SM-A175F: SPEECH_REQUEST até AudioTrack ~630 ms em frase curta;
+         * instruções longas passam de 800 ms. Com 400 ms a tela surge instantes
+         * antes da voz, sem custo extra no tempo total. Emergência não espera.
+         */
+        const val VOICE_NAV_DELAY_MS = 400L
+    }
+
+    /** Emite a navegação da voz após [VOICE_NAV_DELAY_MS], salvo troca de turno. */
+    internal fun navigateForVoice(event: VoiceNavigationEvent) {
+        val navOwner = sessionOwner
+        val navTurn = conversationGeneration
+        viewModelScope.launch {
+            delay(VOICE_NAV_DELAY_MS)
+            if (!currentTurn(navOwner, navTurn)) return@launch
+            _navigationEvent.tryEmit(event)
+            br.com.bragasaude.ai.BragaDebugTrace.event("VOICE_NAVIGATE", InputChannel.VOICE,
+                detail = event.javaClass.simpleName, owner = navOwner, conversation = conversationId)
+        }
+    }
+
     // Nível de áudio em dB vindo do SpeechRecognizer (alimenta o Orb audio-reativo)
     private val _audioRmsDb = MutableStateFlow(-2f)
     val audioRmsDb: StateFlow<Float> = _audioRmsDb.asStateFlow()
@@ -518,7 +541,7 @@ class VoiceHealthViewModel @Inject constructor(
         when (option.actionType) {
             ClarificationActionType.LOG_HYDRATION_CUPS -> {
                 val ml = Regex("(\\d+)\\s*ml").find(option.label)?.groupValues?.get(1)?.toIntOrNull() ?: 1000
-                _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToHydration(addMl = ml, openCustomDialog = true))
+                navigateForVoice(VoiceNavigationEvent.NavigateToHydration(addMl = ml, openCustomDialog = true))
                 _state.value = VoiceUiState.Saved(summary = "Água ${ml}ml", isConversational = false)
                 speak("Já preparei a anotação de mais $ml ml de água para você. É só tocar em Adicionar para confirmar!") {
                     onSpeechFinished()
@@ -526,7 +549,7 @@ class VoiceHealthViewModel @Inject constructor(
             }
             ClarificationActionType.LOG_HYDRATION_FULL -> {
                 val ml = Regex("(\\d+)\\s*ml").find(option.label)?.groupValues?.get(1)?.toIntOrNull() ?: 2000
-                _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToHydration(addMl = ml, openCustomDialog = true))
+                navigateForVoice(VoiceNavigationEvent.NavigateToHydration(addMl = ml, openCustomDialog = true))
                 _state.value = VoiceUiState.Saved(summary = "Água ${ml}ml", isConversational = false)
                 speak("Já preparei a anotação de mais $ml ml de água para você. É só tocar em Adicionar para confirmar!") {
                     onSpeechFinished()
@@ -663,6 +686,7 @@ class VoiceHealthViewModel @Inject constructor(
                 output = output, reply = reply, owner = owner, conversation = conversationId, turn = contextTurn)
             if (output.isEmergencia) {
                 _navigationEvent.tryEmit(VoiceNavigationEvent.OpenEmergencyDialog)
+                // Emergência abre na hora; a voz alcança logo depois sem espera.
             }
             val reason = output.routingReason
             br.com.bragasaude.ai.BragaRoutingLogger.record(
@@ -770,7 +794,7 @@ class VoiceHealthViewModel @Inject constructor(
                 }
                 if (currentUserRole != "CAREGIVER" || currentCaregiverMode == "HYBRID") {
                     br.com.bragasaude.domain.HealthReadingInput.spoken(bestMatch)?.let { draft ->
-                        _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToVitals(draft.metric,
+                        navigateForVoice(VoiceNavigationEvent.NavigateToVitals(draft.metric,
                             if (draft.metric == "HEART_RATE") draft.value.toInt().toString() else draft.value.toString()))
                         speak("Confira o valor na tela e toque em salvar para registrar a medição.") { onSpeechFinished() }
                         return
@@ -957,7 +981,7 @@ class VoiceHealthViewModel @Inject constructor(
                     val diaFmt = if (diastolic > 20) diastolic / 10 else diastolic
                     telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", bestMatch, "BloodPressure")
                     
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToVitals("PRESSURE", "$systolic/$diastolic"))
+                    navigateForVoice(VoiceNavigationEvent.NavigateToVitals("PRESSURE", "$systolic/$diastolic"))
                     _state.value = VoiceUiState.Saved(summary = "Pressão $systolic/$diastolic", isConversational = false)
                     
                     // Alerta Clínico para Cuidadores se pressão fora de faixa
@@ -983,7 +1007,7 @@ class VoiceHealthViewModel @Inject constructor(
                     val glyc = intent.glucoseMgDl
                     telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", bestMatch, "Glucose")
                     
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToVitals("GLUCOSE", "$glyc"))
+                    navigateForVoice(VoiceNavigationEvent.NavigateToVitals("GLUCOSE", "$glyc"))
                     _state.value = VoiceUiState.Saved(summary = "Glicemia $glyc", isConversational = false)
 
                     // Alerta Clínico para Cuidadores se glicemia fora de faixa
@@ -1008,7 +1032,7 @@ class VoiceHealthViewModel @Inject constructor(
                     val ml = intent.amountMl
                     telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", bestMatch, "Hydration")
                     
-                    _navigationEvent.tryEmit(VoiceNavigationEvent.NavigateToHydration(addMl = ml, openCustomDialog = true))
+                    navigateForVoice(VoiceNavigationEvent.NavigateToHydration(addMl = ml, openCustomDialog = true))
                     _state.value = VoiceUiState.Saved(summary = "Água ${ml}ml", isConversational = false)
                     val spokenPrompt = "Preparei $ml ml de água na tela. Toque em Adicionar para confirmar."
                     speak(spokenPrompt) {
