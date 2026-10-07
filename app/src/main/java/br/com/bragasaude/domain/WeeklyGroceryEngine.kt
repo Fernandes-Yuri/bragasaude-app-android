@@ -38,9 +38,7 @@ object WeeklyGroceryEngine {
                 profile?.foodAllergies ?: emptyList(),
                 profile?.customFoodRestrictions
             )
-            AffordableFoodPolicy.isEligible(food) && notDisliked && allergySafe &&
-                (profile?.hasDiabetes != true || food.isDiabetesSafe) &&
-                (profile?.hasHypertension != true || food.isHypertensionSafe)
+            notDisliked && allergySafe
         }
 
         // Determina marcadores clinicos
@@ -87,7 +85,7 @@ object WeeklyGroceryEngine {
         val aveiaOrCereal = available.filter { it.name.contains("Aveia", ignoreCase = true) || it.name.contains("Quinoa", ignoreCase = true) }.shuffled().take(1)
         val sementes = available.filter { it.category?.contains("Sementes", ignoreCase = true) == true || it.category?.contains("Oleaginosas", ignoreCase = true) == true }.shuffled().take(1)
         val leguminosa = available.filter { it.category?.contains("Leguminosas", ignoreCase = true) == true }.shuffled().take(1)
-        val graoOuRaiz = available.filter { groceryNameKey(it.category.orEmpty()).contains("graos") || groceryNameKey(it.category.orEmpty()).contains("tuberculos") }.shuffled().take(1)
+        val graoOuRaiz = available.filter { it.category?.contains("Graos", ignoreCase = true) == true || it.category?.contains("Tuberculos", ignoreCase = true) == true }.shuffled().take(1)
 
         val graosFoods = (aveiaOrCereal + sementes + leguminosa + graoOuRaiz).distinctBy { it.remoteId }
         graosFoods.forEach { food ->
@@ -97,7 +95,7 @@ object WeeklyGroceryEngine {
         // 3. CORREDOR PROTEINAS, OVOS & LATICINIOS (3 a 4 itens)
         val ovos = available.filter { it.name.contains("Ovo", ignoreCase = true) }.take(1)
         val carnesPeixes = available.filter { it.category?.contains("Peixes", ignoreCase = true) == true || it.category?.contains("Carnes", ignoreCase = true) == true }.shuffled().take(2)
-        val laticinios = available.filter { groceryNameKey(it.category.orEmpty()).contains("laticinios") || it.category?.contains("Queijo", ignoreCase = true) == true }.shuffled().take(1)
+        val laticinios = available.filter { it.category?.contains("Laticinios", ignoreCase = true) == true || it.category?.contains("Queijo", ignoreCase = true) == true }.shuffled().take(1)
 
         val proteinasFoods = (ovos + carnesPeixes + laticinios).distinctBy { it.remoteId }
         proteinasFoods.forEach { food ->
@@ -107,7 +105,7 @@ object WeeklyGroceryEngine {
         // 4. CORREDOR MERCEARIA, TEMPEROS & CHAS (2 a 3 itens)
         val azeite = available.filter { it.name.contains("Azeite", ignoreCase = true) || it.category?.contains("Gorduras", ignoreCase = true) == true }.take(1)
         val especiaria = available.filter { it.category?.contains("Especiarias", ignoreCase = true) == true || it.category?.contains("Temperos", ignoreCase = true) == true }.shuffled().take(1)
-        val chas = available.filter { groceryNameKey(it.category.orEmpty()).contains("chas") }.shuffled().take(1)
+        val chas = available.filter { it.category?.contains("Chas", ignoreCase = true) == true }.shuffled().take(1)
 
         val merceariaFoods = (azeite + especiaria + chas).distinctBy { it.remoteId }
         merceariaFoods.forEach { food ->

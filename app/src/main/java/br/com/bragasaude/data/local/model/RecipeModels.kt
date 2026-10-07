@@ -1,4 +1,4 @@
-package br.com.bragasaude.data.local.model
+﻿package br.com.bragasaude.data.local.model
 
 /**
  * Catálogo de 21 Receitas Caseiras Brasileiras Acessíveis para Idosos.
@@ -55,7 +55,7 @@ object RecipeCatalog {
             prepTimeMinutes = 15,
             difficulty = "Muito Fácil",
             ingredientNames = listOf("Ovos"),
-            ingredientFoodIds = listOf("food_146"),
+            ingredientFoodIds = listOf("food_ovo"),
             instructions = listOf(
                 "1. Coloque os ovos em uma panela e cubra com água.",
                 "2. Leve ao fogo. Quando a água ferver, conte 10 minutos.",
@@ -71,17 +71,17 @@ object RecipeCatalog {
 
         HealthyRecipe(
             id = "recipe_001",
-            title = "Mingau de Aveia com Banana e Gengibre",
+            title = "Mingau de Aveia com Banana e Canela",
             mealType = "BREAKFAST",
             prepTimeMinutes = 15,
             difficulty = "Muito Fácil",
-            ingredientNames = listOf("Aveia em flocos", "Banana", "Leite", "Gengibre"),
-            ingredientFoodIds = listOf("food_004", "food_026", "food_174", "food_193"),
+            ingredientNames = listOf("Aveia em flocos", "Banana", "Leite", "Canela em pó"),
+            ingredientFoodIds = listOf("food_aveia", "food_banana", "food_leite", "food_canela"),
             instructions = listOf(
                 "1. Em uma panela, misture 3 colheres de aveia com 1 xícara de leite.",
                 "2. Leve ao fogo baixo, mexendo até engrossar (cerca de 5 minutos).",
                 "3. Descasque e amasse a banana. Misture ao mingau.",
-                "4. Finalize com uma pitada de gengibre ralado e sirva morno."
+                "4. Finalize com canela por cima e sirva morno."
             ),
             clinicalBenefit = "Rico em fibras solúveis e potássio, sem adição de açúcar",
             isDiabetesSafe = true,
@@ -94,11 +94,11 @@ object RecipeCatalog {
             mealType = "BREAKFAST",
             prepTimeMinutes = 10,
             difficulty = "Muito Fácil",
-            ingredientNames = listOf("Ovos", "Tomate", "Óleo de soja", "Orégano"),
-            ingredientFoodIds = listOf("food_146", "food_090", "food_221", "food_085"),
+            ingredientNames = listOf("Ovos", "Tomate", "Azeite de oliva", "Orégano"),
+            ingredientFoodIds = listOf("food_ovo", "food_tomate", "food_azeite", "food_oregano"),
             instructions = listOf(
                 "1. Bata 2 ovos.",
-                "2. Aqueça 1 colher de chá de óleo de soja em uma frigideira antiaderente.",
+                "2. Aqueça 1 colher de azeite em uma frigideira antiaderente.",
                 "3. Despeje os ovos e mexa devagar até começarem a firmar.",
                 "4. Adicione o tomate picado e orégano. Sirva imediatamente."
             ),
@@ -114,7 +114,7 @@ object RecipeCatalog {
             prepTimeMinutes = 5,
             difficulty = "Muito Fácil",
             ingredientNames = listOf("Abacate", "Limão"),
-            ingredientFoodIds = listOf("food_042", "food_209"),
+            ingredientFoodIds = listOf("food_abacate", "food_limao"),
             instructions = listOf(
                 "1. Abra o abacate ao meio e retire a polpa com uma colher.",
                 "2. Esprema meio limão sobre a polpa e amasse levemente.",
@@ -133,7 +133,7 @@ object RecipeCatalog {
             prepTimeMinutes = 5,
             difficulty = "Muito Fácil",
             ingredientNames = listOf("Mamão", "Leite", "Aveia em flocos"),
-            ingredientFoodIds = listOf("food_031", "food_174", "food_004"),
+            ingredientFoodIds = listOf("food_mamao", "food_leite", "food_aveia"),
             instructions = listOf(
                 "1. Corte o mamão ao meio, retire as sementes e coloque no liquidificador.",
                 "2. Adicione 1 xícara de leite e 2 colheres de aveia.",
@@ -152,7 +152,7 @@ object RecipeCatalog {
             prepTimeMinutes = 12,
             difficulty = "Fácil",
             ingredientNames = listOf("Ovos", "Tapioca", "Ricota", "Orégano"),
-            ingredientFoodIds = listOf("food_146", "tapioca", "food_172", "food_085"),
+            ingredientFoodIds = listOf("food_ovo", "food_tapioca", "food_ricota", "food_oregano"),
             instructions = listOf(
                 "1. Misture 1 ovo com 2 colheres de goma de tapioca.",
                 "2. Despeje em uma frigideira quente e antiaderente.",
@@ -168,16 +168,16 @@ object RecipeCatalog {
 
         HealthyRecipe(
             id = "recipe_006",
-            title = "Omelete de Forno com Couve e Ricota",
+            title = "Omelete de Forno com Couve e Queijo Minas",
             mealType = "LUNCH",
             prepTimeMinutes = 20,
             difficulty = "Fácil",
-            ingredientNames = listOf("Ovos", "Couve", "Ricota", "Óleo de soja"),
-            ingredientFoodIds = listOf("food_146", "food_061", "food_172", "food_221"),
+            ingredientNames = listOf("Ovos", "Couve", "Queijo minas frescal", "Azeite de oliva"),
+            ingredientFoodIds = listOf("food_ovo", "food_couve", "food_queijo_minas", "food_azeite"),
             instructions = listOf(
                 "1. Bata 3 ovos e misture com couve picadinha.",
-                "2. Coloque em uma forma untada com um fio de óleo de soja.",
-                "3. Fatie o ricota e disponha por cima.",
+                "2. Coloque em uma forma untada com um fio de azeite.",
+                "3. Fatie o queijo minas e disponha por cima.",
                 "4. Asse a 180°C por 15 minutos ou até dourar."
             ),
             clinicalBenefit = "Rico em proteínas e cálcio, com fibras da couve",
@@ -191,11 +191,11 @@ object RecipeCatalog {
             mealType = "LUNCH",
             prepTimeMinutes = 18,
             difficulty = "Fácil",
-            ingredientNames = listOf("Sardinha", "Óleo de soja", "Limão"),
-            ingredientFoodIds = listOf("food_157", "food_221", "food_209"),
+            ingredientNames = listOf("Tilápia", "Azeite de oliva", "Limão"),
+            ingredientFoodIds = listOf("food_tilapia", "food_azeite", "food_limao"),
             instructions = listOf(
-                "1. Use sardinha limpa e sem espinhas e tempere com limão.",
-                "2. Aqueça o óleo de soja em uma frigideira.",
+                "1. Tempere o filé de tilápia com limão.",
+                "2. Aqueça o azeite em uma frigideira.",
                 "3. Coloque o peixe e cozinhe dos dois lados até ficar opaco por dentro e se separar facilmente com um garfo.",
                 "4. Sirva quente."
             ),
@@ -210,11 +210,11 @@ object RecipeCatalog {
             mealType = "LUNCH",
             prepTimeMinutes = 25,
             difficulty = "Fácil",
-            ingredientNames = listOf("Peito de frango", "Abóbora cabotiá", "Óleo de soja"),
-            ingredientFoodIds = listOf("food_149", "food_104", "food_221"),
+            ingredientNames = listOf("Peito de frango", "Abóbora cabotiá", "Azeite de oliva"),
+            ingredientFoodIds = listOf("food_frango", "food_abobora", "food_azeite"),
             instructions = listOf(
                 "1. Cozinhe o peito de frango e desfie com um garfo.",
-                "2. Descasque a abóbora, corte em cubos e refogue no óleo de soja.",
+                "2. Descasque a abóbora, corte em cubos e refogue no azeite.",
                 "3. Adicione o frango desfiado à abóbora.",
                 "4. Misture bem e sirva quente."
             ),
@@ -229,15 +229,15 @@ object RecipeCatalog {
             mealType = "LUNCH",
             prepTimeMinutes = 30,
             difficulty = "Fácil",
-            ingredientNames = listOf("Feijão carioca", "Cenoura", "Louro", "Óleo de soja"),
-            ingredientFoodIds = listOf("food_121", "food_088", "food_215", "food_221"),
+            ingredientNames = listOf("Feijão carioca", "Cenoura", "Louro", "Azeite de oliva"),
+            ingredientFoodIds = listOf("food_feijao_carioca", "food_cenoura", "food_louro", "food_azeite"),
             instructions = listOf(
                 "1. Cozinhe o feijão com uma folha de louro até ficar macio.",
-                "2. Rale a cenoura e refogue no óleo de soja por 3 minutos.",
+                "2. Rale a cenoura e refogue no azeite por 3 minutos.",
                 "3. Adicione o feijão cozido (com o caldo) à cenoura.",
                 "4. Amasse alguns grãos para engrossar e sirva quente."
             ),
-            clinicalBenefit = "Fonte de fibras, com feijão e cenoura",
+            clinicalBenefit = "Rico em fibras, ferro e vitamina A, combinação completa de aminoácidos",
             isDiabetesSafe = true,
             isHypertensionSafe = true
         ),
@@ -248,12 +248,12 @@ object RecipeCatalog {
             mealType = "LUNCH",
             prepTimeMinutes = 22,
             difficulty = "Fácil",
-            ingredientNames = listOf("Sardinha", "Tomate", "Cebola", "Óleo de soja", "Limão"),
-            ingredientFoodIds = listOf("food_157", "food_090", "food_101", "food_221", "food_209"),
+            ingredientNames = listOf("Sardinha", "Tomate", "Cebola", "Azeite de oliva", "Limão"),
+            ingredientFoodIds = listOf("food_sardinha", "food_tomate", "food_cebola", "food_azeite", "food_limao"),
             instructions = listOf(
                 "1. Tempere a sardinha com limão.",
                 "2. Forre uma assadeira com rodelas de tomate e cebola.",
-                "3. Coloque a sardinha por cima, regue com óleo de soja.",
+                "3. Coloque a sardinha por cima, regue com azeite.",
                 "4. Asse a 200°C por 15 minutos."
             ),
             clinicalBenefit = "Excelente fonte de ômega-3 e cálcio, preparo sem fritura",
@@ -265,16 +265,16 @@ object RecipeCatalog {
 
         HealthyRecipe(
             id = "recipe_011",
-            title = "Salada de Feijão com Tomate",
+            title = "Salada de Grão-de-Bico com Tomate",
             mealType = "SNACK",
             prepTimeMinutes = 10,
             difficulty = "Muito Fácil",
-            ingredientNames = listOf("Feijão carioca", "Tomate", "Salsinha", "Óleo de soja"),
-            ingredientFoodIds = listOf("food_121", "food_090", "salsinha", "food_221"),
+            ingredientNames = listOf("Grão-de-bico", "Tomate", "Salsinha", "Azeite de oliva"),
+            ingredientFoodIds = listOf("food_garaodebico", "food_tomate", "food_salsinha", "food_azeite"),
             instructions = listOf(
-                "1. Escorra o feijão carioca cozido.",
+                "1. Escorra o grão-de-bico cozido.",
                 "2. Pique o tomate e a salsinha bem fininhos.",
-                "3. Misture tudo em uma tigela e regue com óleo de soja.",
+                "3. Misture tudo em uma tigela e regue com azeite.",
                 "4. Sirva em temperatura ambiente ou levemente morno."
             ),
             clinicalBenefit = "Rico em fibras e proteína vegetal, sem sódio adicionado",
@@ -291,9 +291,9 @@ object RecipeCatalog {
             prepTimeMinutes = 30,
             difficulty = "Fácil",
             ingredientNames = listOf("Chuchu", "Abobrinha", "Cenoura", "Peito de frango", "Louro"),
-            ingredientFoodIds = listOf("food_094", "food_092", "food_088", "food_149", "food_215"),
+            ingredientFoodIds = listOf("food_chuchu", "food_abobrinha", "food_cenoura", "food_frango", "food_louro"),
             instructions = listOf(
-                "1. Cozinhe o frango em água com louro até ficar completamente cozido, sem partes rosadas.",
+                "1. Cozinhe o frango em água com louro por 15 minutos.",
                 "2. Adicione os legumes picados (chuchu, abobrinha, cenoura).",
                 "3. Cozinhe até os legumes ficarem macios.",
                 "4. Desfie o frango, misture à sopa e sirva quente."
@@ -307,14 +307,14 @@ object RecipeCatalog {
             id = "recipe_013",
             title = "Arroz Integral com Brócolis ao Alho",
             mealType = "DINNER",
-            prepTimeMinutes = 40,
+            prepTimeMinutes = 25,
             difficulty = "Fácil",
-            ingredientNames = listOf("Arroz integral", "Brócolis", "Alho", "Óleo de soja"),
-            ingredientFoodIds = listOf("food_132", "food_073", "food_103", "food_221"),
+            ingredientNames = listOf("Arroz integral", "Brócolis", "Alho", "Azeite de oliva"),
+            ingredientFoodIds = listOf("food_arroz_integral", "food_brocolis", "food_alho", "food_azeite"),
             instructions = listOf(
                 "1. Cozinhe o arroz integral conforme a embalagem.",
                 "2. Cozinhe o brócolis no vapor por 5 minutos.",
-                "3. Refogue o alho fatiado no óleo de soja até dourar.",
+                "3. Refogue o alho fatiado no azeite até dourar.",
                 "4. Misture o brócolis ao arroz e regue com o alho dourado."
             ),
             clinicalBenefit = "Rico em fibras e antioxidantes, combinação completa de nutrientes",
@@ -324,16 +324,16 @@ object RecipeCatalog {
 
         HealthyRecipe(
             id = "recipe_014",
-            title = "Mandioca Amassada com Salsinha",
+            title = "Mandioquinha Amassada com Azeite",
             mealType = "DINNER",
-            prepTimeMinutes = 40,
+            prepTimeMinutes = 20,
             difficulty = "Muito Fácil",
-            ingredientNames = listOf("Mandioca", "Óleo de soja", "Salsinha"),
-            ingredientFoodIds = listOf("food_111", "food_221", "salsinha"),
+            ingredientNames = listOf("Mandioquinha", "Azeite de oliva", "Salsinha"),
+            ingredientFoodIds = listOf("food_mandioquinha", "food_azeite", "food_salsinha"),
             instructions = listOf(
-                "1. Use mandioca de mesa (aipim), descasque e cozinhe em água até ficar bem macia. Descarte a água.",
+                "1. Descasque a mandioquinha e cozinhe em água até amolecer.",
                 "2. Escorra e amasse com um garfo (não precisa ser liso).",
-                "3. Regue com óleo de soja e salsa picada.",
+                "3. Regue com azeite e salsa picada.",
                 "4. Sirva como acompanhamento ou refeição leve."
             ),
             clinicalBenefit = "Fonte de carboidrato complexo e potássio, preparo sem leite",
@@ -347,10 +347,10 @@ object RecipeCatalog {
             mealType = "DINNER",
             prepTimeMinutes = 22,
             difficulty = "Fácil",
-            ingredientNames = listOf("Músculo bovino moído", "Chuchu", "Tomate", "Óleo de soja"),
-            ingredientFoodIds = listOf("food_180", "food_094", "food_090", "food_221"),
+            ingredientNames = listOf("Patinho moído", "Chuchu", "Tomate", "Azeite de oliva"),
+            ingredientFoodIds = listOf("food_patinho", "food_chuchu", "food_tomate", "food_azeite"),
             instructions = listOf(
-                "1. Refogue a carne moída em uma panela com um fio de óleo de soja.",
+                "1. Refogue a carne moída em uma panela com um fio de azeite.",
                 "2. Mexa a carne até perder a cor rosada.",
                 "3. Descasque o chuchu, corte em cubos e adicione à carne com o tomate picado.",
                 "4. Cozinhe tampado por 10 minutos até o chuchu amolecer."
@@ -368,13 +368,13 @@ object RecipeCatalog {
             mealType = "BREAKFAST",
             prepTimeMinutes = 12,
             difficulty = "Muito Fácil",
-            ingredientNames = listOf("Banana", "Ovos", "Aveia em flocos", "Gengibre"),
-            ingredientFoodIds = listOf("food_026", "food_146", "food_004", "food_193"),
+            ingredientNames = listOf("Banana", "Ovos", "Aveia em flocos", "Canela em pó"),
+            ingredientFoodIds = listOf("food_banana", "food_ovo", "food_aveia", "food_canela"),
             instructions = listOf(
                 "1. Amasse 1 banana e misture com 1 ovo e 2 colheres de aveia.",
                 "2. Aqueça uma frigideira antiaderente.",
                 "3. Despeje a massa e doure dos dois lados.",
-                "4. Finalize com uma pitada de gengibre ralado e sirva."
+                "4. Finalize com canela e sirva."
             ),
             clinicalBenefit = "Sem açúcar, rica em fibras e potássio",
             isDiabetesSafe = true,
@@ -383,19 +383,19 @@ object RecipeCatalog {
 
         HealthyRecipe(
             id = "recipe_017",
-            title = "Salada de Arroz Integral com Legumes",
+            title = "Salada de Quinoa com Legumes",
             mealType = "LUNCH",
-            prepTimeMinutes = 40,
+            prepTimeMinutes = 20,
             difficulty = "Fácil",
-            ingredientNames = listOf("Arroz integral", "Tomate", "Pepino", "Óleo de soja", "Limão"),
-            ingredientFoodIds = listOf("food_132", "food_090", "food_098", "food_221", "food_209"),
+            ingredientNames = listOf("Quinoa", "Tomate", "Pepino", "Azeite de oliva", "Limão"),
+            ingredientFoodIds = listOf("food_quinoa", "food_tomate", "food_pepino", "food_azeite", "food_limao"),
             instructions = listOf(
-                "1. Cozinhe o arroz integral conforme a embalagem e deixe esfriar.",
+                "1. Cozinhe a quinoa conforme a embalagem e deixe esfriar.",
                 "2. Pique o tomate e o pepino em cubos pequenos.",
-                "3. Misture com o arroz integral e tempere com limão e óleo de soja.",
+                "3. Misture com a quinoa e tempere com limão e azeite.",
                 "4. Sirva fria como salada ou acompanhamento."
             ),
-            clinicalBenefit = "Arroz integral e legumes: fonte de fibras",
+            clinicalBenefit = "Proteína vegetal completa e rica em fibras",
             isDiabetesSafe = true,
             isHypertensionSafe = true
         ),
@@ -406,11 +406,11 @@ object RecipeCatalog {
             mealType = "DINNER",
             prepTimeMinutes = 25,
             difficulty = "Fácil",
-            ingredientNames = listOf("Abóbora cabotiá", "Cebola", "Óleo de soja"),
-            ingredientFoodIds = listOf("food_104", "food_101", "food_221"),
+            ingredientNames = listOf("Abóbora cabotiá", "Cebola", "Azeite de oliva"),
+            ingredientFoodIds = listOf("food_abobora", "food_cebola", "food_azeite"),
             instructions = listOf(
                 "1. Descasque e corte a abóbora em cubos.",
-                "2. Refogue a cebola no óleo de soja e adicione a abóbora.",
+                "2. Refogue a cebola no azeite e adicione a abóbora.",
                 "3. Cubra com água e cozinhe até a abóbora amolecer.",
                 "4. Bata no liquidificador até ficar cremoso e sirva."
             ),
@@ -421,14 +421,14 @@ object RecipeCatalog {
 
         HealthyRecipe(
             id = "recipe_019",
-            title = "Torrada Integral com Pasta de Feijão",
+            title = "Torrada Integral com Pasta de Grão-de-Bico",
             mealType = "SNACK",
             prepTimeMinutes = 8,
             difficulty = "Muito Fácil",
-            ingredientNames = listOf("Pão integral", "Feijão carioca", "Óleo de soja", "Limão", "Alho"),
-            ingredientFoodIds = listOf("pao-integral", "food_121", "food_221", "food_209", "food_103"),
+            ingredientNames = listOf("Pão integral", "Grão-de-bico", "Azeite de oliva", "Limão", "Alho"),
+            ingredientFoodIds = listOf("food_pao_integral", "food_garaodebico", "food_azeite", "food_limao", "food_alho"),
             instructions = listOf(
-                "1. Bata o feijão carioca cozido com óleo de soja, limão e alho no liquidificador.",
+                "1. Bata o grão-de-bico cozido com azeite, limão e alho no liquidificador.",
                 "2. Torre o pão integral.",
                 "3. Passe a pasta sobre a torrada.",
                 "4. Sirva como lanche rápido."
@@ -444,11 +444,11 @@ object RecipeCatalog {
             mealType = "DINNER",
             prepTimeMinutes = 20,
             difficulty = "Fácil",
-            ingredientNames = listOf("Macarrão integral", "Tomate", "Alho", "Óleo de soja", "Manjericão"),
-            ingredientFoodIds = listOf("food_143", "food_090", "food_103", "food_221", "food_081"),
+            ingredientNames = listOf("Macarrão integral", "Tomate", "Alho", "Azeite de oliva", "Manjericão"),
+            ingredientFoodIds = listOf("food_macarrao_integral", "food_tomate", "food_alho", "food_azeite", "food_manjericao"),
             instructions = listOf(
                 "1. Cozinhe o macarrão integral conforme a embalagem.",
-                "2. Refogue o alho no óleo de soja, adicione tomates picados.",
+                "2. Refogue o alho no azeite, adicione tomates picados.",
                 "3. Cozinhe o molho por 10 minutos até encorpar.",
                 "4. Misture com o macarrão e finalize com manjericão."
             ),

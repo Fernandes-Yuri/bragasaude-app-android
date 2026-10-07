@@ -57,10 +57,18 @@ class CatalogRepository @Inject constructor(
         try {
             clinicalReferenceSeeder.seedIfNeeded()
             
-            val jsonString = context.assets.open("food_catalog_seed.json").bufferedReader().use { it.readText() }
-            val foods = Json { ignoreUnknownKeys = true }.decodeFromString<List<FoodEntity>>(jsonString)
-            if (foods.isNotEmpty()) {
-                foodDao.refreshBundledCatalog(foods, br.com.bragasaude.domain.AffordableFoodPolicy.replacements.keys.toList())
+            val currentCatalog = foodDao.getCatalog().first()
+            if (currentCatalog.size < 100) {
+                val jsonString = context.assets.open("food_catalog_seed.json").bufferedReader().use { it.readText() }
+                val json = Json {
+                    ignoreUnknownKeys = true
+                    isLenient = true
+                    coerceInputValues = true
+                }
+                val foods = json.decodeFromString<List<FoodEntity>>(jsonString)
+                if (foods.isNotEmpty()) {
+                    foodDao.insertAll(foods)
+                }
             }
         } catch (e: Exception) {
             android.util.Log.e("CatalogRepo", "Erro ao semear catálogo de alimentos: ${e.message}")

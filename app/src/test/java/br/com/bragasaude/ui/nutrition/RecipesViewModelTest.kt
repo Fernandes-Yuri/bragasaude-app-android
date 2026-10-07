@@ -18,7 +18,7 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RecipesViewModelTest {
-    @Test fun removingAnUncheckedItemImmediatelyShowsItAsMissing() = runTest {
+    @Test fun removingAnUncheckedShoppingItemImmediatelyRemovesDependentRecipes() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         var vm: RecipesViewModel? = null
         try {
@@ -39,9 +39,7 @@ class RecipesViewModelTest {
             assertTrue(model.snackRecipes.value.any { it.recipe.id == "recipe_003" })
             list.value = items.dropLast(1)
             advanceUntilIdle()
-            val partial = model.snackRecipes.value.single { it.recipe.id == "recipe_003" }
-            assertFalse(partial.hasAll)
-            assertEquals(listOf("Limão"), partial.missingIngredients)
+            assertTrue(model.snackRecipes.value.isEmpty())
             list.value = items
             advanceUntilIdle()
             assertTrue(model.snackRecipes.value.any { it.recipe.id == "recipe_003" })

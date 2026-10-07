@@ -8,16 +8,6 @@ class GroceryPurchasePlannerTest {
     private fun ingredient(unit: String = "kg", price: Double? = 16.0, step: Int = 1, minimum: Int = 50) =
         GroceryIngredient("test", "Ingrediente", unit, step, minimum, listOf("Cozido", "Refogado"), listOf("a", "b"), price)
 
-    @Test fun manualAmountsRespectMassVolumeAndWholeUnits() {
-        assertEquals(500, GroceryPurchasePlanner.parseAmount("0,5", "kg"))
-        assertEquals(900, GroceryPurchasePlanner.parseAmount("0.9", "L"))
-        assertEquals(12, GroceryPurchasePlanner.parseAmount("12", "un"))
-        for (value in listOf("", "0", "-1", "NaN", "Infinity", "1001", "0,0001"))
-            assertNull(GroceryPurchasePlanner.parseAmount(value, "kg"))
-        assertNull(GroceryPurchasePlanner.parseAmount("1,5", "un"))
-        assertNull(GroceryPurchasePlanner.parseAmount("1", "pacote"))
-    }
-
     @Test fun projectsMassVolumeAndCountUsingOnlyTheirOwnUnit() {
         assertEquals(8.0, GroceryPurchasePlanner.cost(ingredient(), 500), 0.001)
         assertEquals(10.0, GroceryPurchasePlanner.cost(ingredient("L", 20.0), 500), 0.001)

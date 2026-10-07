@@ -34,7 +34,7 @@ class RecipeEngineTest {
         }
         for ((ingredient, wrong) in listOf("Banana" to "Farinha de Banana Verde",
             "Couve" to "Couve-Flor no Vapor", "Alho" to "Alho-Poró Fatiado Refogado",
-            "Arroz integral" to "Quinoa em Flocos", "Limão" to "Chá de Gengibre com Casca de Limão")) {
+            "Quinoa" to "Quinoa em Flocos", "Limão" to "Chá de Gengibre com Casca de Limão")) {
             for (recipe in RecipeCatalog.getAll().filter { ingredient in it.ingredientNames }) {
                 val items = recipe.ingredientNames.map { item(if (it == ingredient) wrong else it) }
                 assertFalse(engine.findBestRecipes(items, null).any { it.recipe.id == recipe.id })
@@ -62,7 +62,7 @@ class RecipeEngineTest {
         assertTrue(RecipeCatalog.getAll().none { it.title.contains("Poch", ignoreCase = true) })
     }
 
-    @Test fun simpleCrepiocaAndRiceRemainAvailableWithCompleteIngredients() {
+    @Test fun simpleCrepiocaAndQuinoaRemainAvailableWithCompleteIngredients() {
         for (id in listOf("recipe_005", "recipe_017")) {
             val recipe = RecipeCatalog.getAll().single { it.id == id }
             assertTrue(engine.findBestRecipes(recipe.ingredientNames.map(::item), null)
