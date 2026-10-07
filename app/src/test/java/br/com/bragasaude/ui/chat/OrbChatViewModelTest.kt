@@ -5,6 +5,7 @@ import br.com.bragasaude.ai.*
 import br.com.bragasaude.data.remote.ai.*
 import br.com.bragasaude.data.remote.repository.FamilyBridgeRepository
 import br.com.bragasaude.data.remote.service.NotificationClient
+import br.com.bragasaude.data.remote.service.TelemetryService
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import io.mockk.*
@@ -20,6 +21,7 @@ class OrbChatViewModelTest {
     private lateinit var gateway: OrbChatGateway
     private lateinit var vm: OrbChatViewModel
     private lateinit var hybrid: BragaHybridOrchestrator
+    private lateinit var telemetry: br.com.bragasaude.data.remote.service.TelemetryService
     private val reply = OrbReply("""{"fala":"Confira os valores","acao":"REGISTRAR_PRESSAO","parametros":{"sistolica":120,"diastolica":80}}""")
 
     @Before fun setup() {
@@ -46,7 +48,8 @@ class OrbChatViewModelTest {
         }
         vm = OrbChatViewModel(gateway, store, auth, mockk<NeuralAudioPlayer>(relaxed = true),
             mockk<NotificationClient>(relaxed = true), mockk<ProfileDao>(relaxed = true),
-            mockk<FamilyBridgeRepository>(relaxed = true), hybrid = hybrid)
+            mockk<FamilyBridgeRepository>(relaxed = true), hybrid = hybrid,
+            telemetry = mockk<TelemetryService>(relaxed = true).also { telemetry = it })
         vm.nluResponseDelayMs = 0L
     }
     @After fun tearDown() { vm.leaveScreen(); Dispatchers.resetMain() }
@@ -310,6 +313,29 @@ class OrbChatViewModelTest {
         assertEquals("{}", answer.parameters)
         coVerify(exactly = 1) { gateway.sendRemote(any(), any(), any(), any()) }
     }
+
+    @Test fun cloudTurnIsRecordedForLocalCoverage() = runTest(dispatcher) {
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } returns OrbReply(
+            """{"fala":"Converse com seu profissional de saúde.","acao":"CONVERSA","parametros":{}}""")
+        vm.sendMessage("Como minha pressão afeta os rins?")
+        runCurrent()
+        verify(timeout = 5000) {
+            telemetry.logAiConversation(
+                "owner", "Como minha pressão afeta os rins?",
+                "Converse com seu profissional de saúde.",
+                match { it.contains("duvida_clinica_complexa") },
+                false, match { it.contains("\"channel\":\"TEXT\"") && it.contains("\"local\":false") })
+        }
+    }
+
+    @Test fun localTurnIsNotRecorded() = runTest(dispatcher) {
+        vm.sendMessage("não bebi 500 ml de água")
+        runCurrent()
+        verify(timeout = 2000, exactly = 0) {
+            telemetry.logAiConversation(any(), any(), any(), any(), any(), any())
+        }
+    }
+}
 
     @Test fun textCadenceAppliesOnlyToTextChannel() {
         vm.nluResponseDelayMs = 500L

@@ -63,7 +63,8 @@ class OrbChatViewModel @Inject constructor(
     private val profiles: ProfileDao,
     private val familyRepository: FamilyBridgeRepository,
     private val voiceParser: VoiceHealthParser = VoiceHealthParser(),
-    private val hybrid: BragaHybridOrchestrator
+    private val hybrid: BragaHybridOrchestrator,
+    private val telemetry: br.com.bragasaude.data.remote.service.TelemetryService? = null
 ) : ViewModel() {
     private val mutable = MutableStateFlow(OrbChatUiState())
     val state: StateFlow<OrbChatUiState> = mutable.asStateFlow()
@@ -359,6 +360,18 @@ class OrbChatViewModel @Inject constructor(
                         referenceZoneId = deliveredLocal?.referenceZoneId), owner, conversationId, contextTurn)
                 } else if (local.delegarParaNuvem && shortcut == null && actionReply == null) {
                     healthQuerySession.rememberExternalReply(answerText, owner, conversationId, contextTurn)
+                    // Amostra da nuvem para ampliar a cobertura local e mitigar custo.
+                    // Só turnos entregues pela nuvem; tabela e sync já existem no pipeline de auditoria.
+                    telemetry?.logAiConversation(
+                        userId = owner,
+                        userPrompt = value.take(2000),
+                        aiResponse = answerText.take(2000),
+                        detectedIntent = listOfNotNull(local.fallbackFromIntent, local.intent).joinToString(">"),
+                        rawPayload = JSONObject()
+                            .put("channel", channel.name).put("route", local.route.name)
+                            .put("durationMs", elapsedMs).put("validatedAction", action)
+                            .put("remoteAction", rawAction).put("local", false).toString()
+                    )
                 } else healthQuerySession.forgetReferences(owner, conversationId, contextTurn)
                 save()
                 if (shortcut != null) confirmAction(answer.id)

@@ -876,6 +876,16 @@ class VoiceHealthViewModel @Inject constructor(
                     )
                     healthQuerySession.rememberExternalReply(completed, owner, conversationId, contextTurn)
                     conversationMemory.recordAssistant(completed)
+                    // Amostra da nuvem para ampliar a cobertura local e mitigar custo.
+                    telemetryService.logAiConversation(
+                        userId = owner,
+                        userPrompt = speech.take(2000),
+                        aiResponse = completed.take(2000),
+                        detectedIntent = listOfNotNull(decision.fallbackFromIntent, decision.intent).joinToString(">"),
+                        rawPayload = org.json.JSONObject()
+                            .put("channel", "VOICE").put("route", decision.route.name)
+                            .put("remoteAction", "CONVERSA").put("local", false).toString()
+                    )
                     _state.value = VoiceUiState.Saved(completed, isConversational = true)
                     br.com.bragasaude.ai.BragaDebugTrace.event("DELIVERED", InputChannel.VOICE, input = speech,
                         output = decision, reply = completed, owner = owner,
