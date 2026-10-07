@@ -615,7 +615,7 @@ class VoiceHealthViewModel @Inject constructor(
             val nlu = hybridOrchestrator.analyze(bestMatch, InputChannel.VOICE, healthQuerySession, owner, conversationId)
             br.com.bragasaude.ai.BragaDebugTrace.event("DECISION", InputChannel.VOICE, input = bestMatch, output = nlu,
                 owner = owner, conversation = conversationId, turn = contextTurn)
-            if (nlu.isBloqueioSeguranca) {
+            if (nlu.isBloqueioSeguranca || nlu.isEmergencia) {
                 speechJob?.cancel()
                 speechJob = viewModelScope.launch { processUserSpeech(bestMatch, nlu) }
                 return
@@ -689,7 +689,7 @@ class VoiceHealthViewModel @Inject constructor(
             val history = conversationMemory.snapshot()
             conversationMemory.recordUser(bestMatch)
             if (local.isEmergencia || local.intent == "orientacao_cadastro_medicamento" ||
-                local.intent == "entrada_consulta_ambigua" || local.intent == "sintoma_contextual") {
+                local.intent == "sintoma_mal_estar_atual" || local.intent == "sintoma_contextual") {
                 hydrationConversation.reset()
                 showLocalResponse(local)
                 return
@@ -708,12 +708,20 @@ class VoiceHealthViewModel @Inject constructor(
                 }
                 if (!br.com.bragasaude.ai.BragaActionGate.canParse(bestMatch, local)) {
                     hydrationConversation.reset()
-                    val readOnly = br.com.bragasaude.ai.BragaActionGate.readOnlyQuery(
+                    val readOnly = br.com.bragasaude.ai.BragaActionGate.readOnlyIntent(
                         bestMatch, local, parser, currentUserRole, currentCaregiverMode)
                     if (readOnly != null) {
                         healthQuerySession.forgetReferences(owner, conversationId, contextTurn)
                         handleIntent(bestMatch, readOnly)
-                    } else showLocalResponse(local)
+                    } else {
+                        val fallback = br.com.bragasaude.ai.BragaCloudFallback.afterLocal(bestMatch, local)
+                        if (fallback.delegarParaNuvem) {
+                            br.com.bragasaude.ai.BragaDebugTrace.event("FALLBACK", InputChannel.VOICE,
+                                input = bestMatch, output = fallback, detail = "readOnly=NONE; local_exhausted",
+                                owner = owner, conversation = conversationId, turn = contextTurn)
+                            streamHybridResponse(bestMatch, history, owner, fallback)
+                        } else showLocalResponse(local)
+                    }
                     return
                 }
                 // Mantém a preferência confirmada existente, apenas para registro de copos.
@@ -751,7 +759,12 @@ class VoiceHealthViewModel @Inject constructor(
                     handleIntent(bestMatch, intent)
                     return
                 }
-                if (!local.delegarParaNuvem) {
+                if (intent is VoiceHealthIntent.ConversationalReply && local.route == br.com.bragasaude.ai.BragaRoute.CLARIFICATION) {
+                    showLocalResponse(br.com.bragasaude.ai.NluOutput("conversa_parser_local", intent.message))
+                    return
+                }
+                val fallback = br.com.bragasaude.ai.BragaCloudFallback.afterLocal(bestMatch, local)
+                if (!fallback.delegarParaNuvem) {
                     showLocalResponse(local)
                     return
                 }
@@ -763,7 +776,10 @@ class VoiceHealthViewModel @Inject constructor(
                         return
                     }
                 }
-                streamHybridResponse(bestMatch, history, owner, local)
+                br.com.bragasaude.ai.BragaDebugTrace.event("FALLBACK", InputChannel.VOICE,
+                    input = bestMatch, output = fallback, detail = "parser=${intent.javaClass.simpleName}; local_exhausted",
+                    owner = owner, conversation = conversationId, turn = contextTurn)
+                streamHybridResponse(bestMatch, history, owner, fallback)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -805,6 +821,8 @@ class VoiceHealthViewModel @Inject constructor(
             }
             playbackJob = player
             try {
+                br.com.bragasaude.ai.BragaDebugTrace.event("CLOUD_REQUEST", InputChannel.VOICE,
+                    input = speech, output = decision, detail = "historyTurns=${history.size}", owner = owner, conversation = conversationId, turn = contextTurn)
                 hybridOrchestrator.respond(speech, history, InputChannel.VOICE, owner, decision).collect { event ->
                     currentCoroutineContext().ensureActive()
                     if (!currentTurn(owner, turn) || generation != speechGeneration) throw kotlinx.coroutines.CancellationException("Sessão alterada")

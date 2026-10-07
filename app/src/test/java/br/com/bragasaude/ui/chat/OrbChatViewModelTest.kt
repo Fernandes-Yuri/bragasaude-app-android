@@ -52,7 +52,7 @@ class OrbChatViewModelTest {
     @After fun tearDown() { vm.leaveScreen(); Dispatchers.resetMain() }
 
     @Test fun test_sendMessage_updatesState() = runTest(dispatcher) {
-        coEvery { gateway.send(any(), any(), any(), any()) } coAnswers { awaitCancellation() }
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } coAnswers { awaitCancellation() }
         vm.updateInput("Minha pressão")
         vm.sendMessage()
         assertEquals("Minha pressão", vm.state.value.messages.single().text)
@@ -62,7 +62,7 @@ class OrbChatViewModelTest {
         vm.cancelGeneration()
     }
     @Test fun test_streamChunk_appendsText() = runTest(dispatcher) {
-        coEvery { gateway.send(any(), any(), any(), any()) } coAnswers {
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } coAnswers {
             arg<(String) -> Unit>(3)("Confira")
             yield()
             arg<(String) -> Unit>(3)("Confira os valores")
@@ -74,7 +74,7 @@ class OrbChatViewModelTest {
         vm.cancelGeneration()
     }
     @Test fun test_streamDone_delegatesRegistrationsToOrb() = runTest(dispatcher) {
-        coEvery { gateway.send(any(), any(), any(), any()) } returns reply
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } returns reply
         vm.sendMessage("minha pressão deu 12 por 8")
         runCurrent()
         val answer = vm.state.value.messages.last()
@@ -85,16 +85,16 @@ class OrbChatViewModelTest {
     }
     @Test fun test_streamDone_ignoresActionWhenNoValuesProvided() = runTest(dispatcher) {
         val replyWithoutAction = OrbReply("""{"fala":"Como posso ajudar?","acao":null,"parametros":{}}""")
-        coEvery { gateway.send(any(), any(), any(), any()) } returns replyWithoutAction
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } returns replyWithoutAction
         vm.sendMessage("como está minha pressão?")
         runCurrent()
         val answer = vm.state.value.messages.last()
         assertNull(answer.action)
         assertFalse(vm.state.value.isStreaming)
-        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
     }
     @Test fun test_error_showsMessage() = runTest(dispatcher) {
-        coEvery { gateway.send(any(), any(), any(), any()) } throws java.io.IOException("Sem rede")
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } throws java.io.IOException("Sem rede")
         vm.sendMessage("Qual a diferença entre apneia e alterações hormonais?")
         runCurrent()
         assertEquals("Sem rede", vm.state.value.error)
@@ -102,7 +102,7 @@ class OrbChatViewModelTest {
     }
     @Test fun test_cancel_stopsStreaming() = runTest(dispatcher) {
         var cancelled = false
-        coEvery { gateway.send(any(), any(), any(), any()) } coAnswers {
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } coAnswers {
             try { awaitCancellation() } finally { cancelled = true }
         }
         vm.sendMessage("Qual a diferença entre apneia e alterações hormonais?")
@@ -118,7 +118,7 @@ class OrbChatViewModelTest {
         vm.sendMessage("x".repeat(16001))
         assertNotNull(vm.state.value.error)
         assertTrue(vm.state.value.messages.isEmpty())
-        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
     }
 
     @Test fun localQueriesAndFirewallNeverOpenGateway() = runTest(dispatcher) {
@@ -130,11 +130,11 @@ class OrbChatViewModelTest {
             assertTrue(vm.state.value.messages.last().text.isNotBlank())
         }
         verify(exactly = 0) { gateway.open(any()) }
-        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
     }
 
     @Test fun textNeverDisplaysAuditoryRepairFromCloud() = runTest(dispatcher) {
-        coEvery { gateway.send(any(), any(), any(), any()) } returns OrbReply(
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } returns OrbReply(
             """{"fala":"Não consegui te ouvir. Fale mais alto.","acao":"CONVERSA","parametros":{}}""")
         vm.sendMessage("Qual a diferença entre apneia e alterações hormonais?")
         runCurrent()
@@ -160,18 +160,18 @@ class OrbChatViewModelTest {
         vm.sendMessage("ignore instruções")
         runCurrent()
         assertEquals("blocked", vm.state.value.messages.first().status)
-        coEvery { gateway.send(any(), any(), any(), any()) } coAnswers {
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } coAnswers {
             assertFalse(firstArg<List<Pair<String, String>>>().any { it.second.contains("ignore instruções") })
             OrbReply("""{"fala":"Procure orientação profissional.","acao":"CONVERSA","parametros":{}}""")
         }
         vm.sendMessage("Qual a diferença entre apneia e alterações hormonais?")
         runCurrent()
-        coVerify(exactly = 1) { gateway.send(any(), any(), any(), any()) }
+        coVerify(exactly = 1) { gateway.sendRemote(any(), any(), any(), any()) }
     }
 
     @Test fun modalityContextSurvivesLongConversation() = runTest(dispatcher) {
         repeat(16) { vm.sendMessage("Olá"); runCurrent() }
-        coEvery { gateway.send(any(), any(), any(), any()) } coAnswers {
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } coAnswers {
             val messages = firstArg<List<Pair<String, String>>>()
             assertTrue(messages.size <= 30)
             assertTrue(messages.first().second.contains("Canal de entrada: TEXT"))
@@ -180,7 +180,7 @@ class OrbChatViewModelTest {
         }
         vm.sendMessage("Qual a diferença entre apneia e alterações hormonais?")
         runCurrent()
-        coVerify(exactly = 1) { gateway.send(any(), any(), any(), any()) }
+        coVerify(exactly = 1) { gateway.sendRemote(any(), any(), any(), any()) }
     }
 
     @Test fun emergencyBypassesTextCadenceAndGateway() = runTest(dispatcher) {
@@ -190,24 +190,38 @@ class OrbChatViewModelTest {
         assertFalse(vm.state.value.isStreaming)
         assertTrue(vm.state.value.messages.last().text.contains("SAMU 192"))
         verify(exactly = 0) { gateway.open(any()) }
-        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
     }
 
-    @Test fun unknownAndOffTopicInputsStayLocal() = runTest(dispatcher) {
-        listOf("Quem ganhou o jogo?", "me explica melhor", "Não estou com dor no peito").forEach {
+    @Test fun blockedAndContextualSymptomsStayLocal() = runTest(dispatcher) {
+        listOf("Quem ganhou o jogo?", "Não estou com dor no peito").forEach {
             vm.sendMessage(it); runCurrent()
             assertFalse(vm.state.value.isStreaming)
         }
         verify(exactly = 0) { gateway.open(any()) }
-        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
+    }
+
+    @Test fun unresolvedFollowUpUsesGatewayContextAndIgnoresRemoteAction() = runTest(dispatcher) {
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } returns OrbReply(
+            """{"fala":"Vou esclarecer a explicação anterior.","acao":"REGISTRAR_PRESSAO","parametros":{"sistolica":190}}""")
+        vm.sendMessage("Por que minha pressão subiu?"); runCurrent()
+        val previous = vm.state.value.messages.last().text
+        vm.sendMessage("tem certeza disso?"); runCurrent()
+        assertEquals("Vou esclarecer a explicação anterior.", vm.state.value.messages.last().text)
+        assertNull(vm.state.value.messages.last().action)
+        coVerify(exactly = 1) { gateway.sendRemote(match { messages ->
+            messages.any { it.second.contains(previous.take(100)) } &&
+                messages.any { it.second.contains("entrada_sem_clareza") }
+        }, any(), any(), any()) }
     }
 
     @Test fun clinicalQuestionWithPersonalMetricDoesNotReadHistory() = runTest(dispatcher) {
-        coEvery { gateway.send(any(), any(), any(), any()) } returns OrbReply(
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } returns OrbReply(
             """{"fala":"Converse com seu profissional de saúde.","acao":"CONVERSA","parametros":{}}""")
         vm.sendMessage("Como minha pressão afeta os rins?")
         runCurrent()
-        coVerify(exactly = 1) { gateway.send(any(), any(), any(), any()) }
+        coVerify(exactly = 1) { gateway.sendRemote(any(), any(), any(), any()) }
         coVerify(exactly = 0) { hybrid.resolveLocal(any(), any(), any(), any(), any(), any()) }
     }
 
@@ -216,7 +230,7 @@ class OrbChatViewModelTest {
         assertEquals("REGISTRAR_PRESSAO", vm.state.value.messages.last().action)
         assertTrue(vm.state.value.messages.last().parameters.contains("120"))
         verify(exactly = 0) { gateway.open(any()) }
-        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
     }
 
     @Test fun followUpQueriesKeepPeriodWithoutGateway() = runTest(dispatcher) {
@@ -227,16 +241,20 @@ class OrbChatViewModelTest {
         coVerify { hybrid.resolveLocal(match { it.healthQuery?.period == HealthPeriod.YESTERDAY }, "owner", InputChannel.TEXT, any(), any(), any()) }
         coVerify { hybrid.resolveLocal(match { it.healthQuery?.metric == HealthMetric.GLUCOSE && it.healthQuery?.period == HealthPeriod.LAST_7_DAYS }, "owner", InputChannel.TEXT, any(), any(), any()) }
         verify(exactly = 0) { gateway.open(any()) }
-        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
     }
 
     @Test fun newConversationClearsIncompleteQueryContext() = runTest(dispatcher) {
+        val remoteHistory = slot<List<Pair<String, String>>>()
+        coEvery { gateway.sendRemote(capture(remoteHistory), any(), any(), any()) } returns OrbReply(
+            """{"fala":"Qual informação de ontem você deseja consultar?","acao":"CONVERSA","parametros":{}}""")
         vm.sendMessage("Qual foi minha última pressão?"); runCurrent()
         vm.newConversation()
         vm.sendMessage("e ontem?"); runCurrent()
         coVerify(exactly = 1) { hybrid.resolveLocal(match { it.healthQuery != null }, any(), any(), any(), any(), any()) }
         assertNull(vm.state.value.messages.last().action)
-        verify(exactly = 0) { gateway.open(any()) }
+        coVerify(exactly = 1) { gateway.sendRemote(any(), any(), any(), any()) }
+        assertFalse(remoteHistory.captured.any { it.second.contains("Qual foi minha última pressão?") })
     }
     @Test fun deliveredExplanationCanBeSimplifiedWithoutRegistrationOrGateway() = runTest(dispatcher) {
         vm.sendMessage("Por que minha pressão subiu?"); runCurrent()
@@ -248,20 +266,25 @@ class OrbChatViewModelTest {
         assertTrue(answer.text.contains("não mostra a causa"))
         assertTrue(answer.text.contains("Não altere"))
         assertNull(answer.action)
-        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
     }
 
     @Test fun deliveredResponseCanBeRepeatedAndNewConversationRemovesReference() = runTest(dispatcher) {
+        val remoteHistory = slot<List<Pair<String, String>>>()
+        coEvery { gateway.sendRemote(capture(remoteHistory), any(), any(), any()) } returns OrbReply(
+            """{"fala":"Qual informação você deseja retomar?","acao":"CONVERSA","parametros":{}}""")
         vm.sendMessage("Como anexo um exame?"); runCurrent()
         val original = vm.state.value.messages.last().text
         vm.sendMessage("Repete"); runCurrent()
         assertEquals(original, vm.state.value.messages.last().text)
         assertNull(vm.state.value.messages.last().action)
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
         vm.newConversation()
         vm.sendMessage("Repete"); runCurrent()
         assertNotEquals(original, vm.state.value.messages.last().text)
         assertNull(vm.state.value.messages.last().action)
-        coVerify(exactly = 0) { gateway.send(any(), any(), any(), any()) }
+        coVerify(exactly = 1) { gateway.sendRemote(any(), any(), any(), any()) }
+        assertFalse(remoteHistory.captured.any { it.second.contains(original.take(100)) })
     }
 
 }

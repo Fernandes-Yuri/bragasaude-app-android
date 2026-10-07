@@ -10,6 +10,18 @@ import org.junit.Assert.*
 import java.io.IOException
 
 class OrbChatGatewayTest {
+    @Test fun unresolvedRepeatDoesNotReturnContextPromptAsLocalAnswer() = runTest {
+        val rest = mockk<BragaLocalAiClient>()
+        val history = listOf("assistant" to "Resumo interno para a API", "user" to "repete")
+        coEvery { rest.interpretSpeech(any(), false, any(), any(), any(), any()) } returns
+            BragaAiResult("CONVERSA", "Qual informação você deseja retomar?")
+        val gateway = OrbChatGateway(mockk(), rest, mockk())
+        val reply = gateway.sendRemote(history, onPartial = {})
+        assertFalse(reply.content.contains("Resumo interno"))
+        assertTrue(reply.content.contains("Qual informação"))
+        coVerify(exactly = 1) { rest.interpretSpeech("repete", false, history, any(), any(), any()) }
+    }
+
     @Test fun transportFailureUsesRestOnce() = runTest {
         val session = mockk<OrbWebSocket.Session>(relaxed = true)
         every { session.state } returns MutableStateFlow(OrbConnectionState.CONNECTED)

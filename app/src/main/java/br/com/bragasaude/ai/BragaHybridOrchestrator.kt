@@ -73,7 +73,7 @@ class BragaHybridOrchestrator internal constructor(
             return@flow
         }
         val answer = StringBuilder()
-        cloud.stream(prompt.build(history, channel), speech).collect { delta ->
+        cloud.stream(prompt.build(history, channel, local), speech).collect { delta ->
             answer.append(delta)
             if (channel == InputChannel.VOICE) emit(BragaHybridEvent.Delta(delta))
         }

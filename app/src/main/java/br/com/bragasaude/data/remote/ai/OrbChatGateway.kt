@@ -34,6 +34,13 @@ class OrbChatGateway @Inject constructor(
             return OrbReply(JSONObject().put("fala", it).put("acao", "CONVERSA")
                 .put("parametros", JSONObject()).toString())
         }
+        return sendRemote(history, actingAs, patientId, onPartial)
+    }
+
+    /** O chamador já esgotou o atendimento local; não reinterpretar o resumo como resposta. */
+    suspend fun sendRemote(history: List<Pair<String, String>>,
+                           actingAs: String? = null, patientId: String? = null,
+                           onPartial: (String) -> Unit): OrbReply {
         try {
             return session?.chat(history, actingAs, patientId, onPartial)
                 ?: throw IOException("Sem conexão")

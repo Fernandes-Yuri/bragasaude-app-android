@@ -22,6 +22,32 @@ import org.junit.Assert.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class VoiceRecognitionSessionTest {
+    @Test fun `unknown speech reaches cloud only after local parser fails`() = runTest(dispatcher) {
+        every { hybrid.analyze(any(), InputChannel.VOICE, any(), any(), any()) } returns
+            NluOutput("entrada_sem_clareza", "Repita")
+        every { hybrid.respond(any(), any(), any(), any(), any()) } returns
+            kotlinx.coroutines.flow.flowOf(BragaHybridEvent.Completed("Resposta contextual da API"))
+        vm.startListening(context)
+        runCurrent()
+        listeners.single().onResults(result("tem certeza disso"))
+        runCurrent()
+        verify(exactly = 1) { parser.parse("tem certeza disso", any(), any()) }
+        verify(exactly = 1) { hybrid.respond("tem certeza disso", any(), InputChannel.VOICE, "conta-a",
+            match { it?.delegarParaNuvem == true && it.fallbackFromIntent == "entrada_sem_clareza" }) }
+    }
+
+    @Test fun `emergency speech bypasses parser and remote fallback`() = runTest(dispatcher) {
+        every { hybrid.analyze(any(), InputChannel.VOICE, any(), any(), any()) } returns
+            BragaNluEngine.analisar("não consigo respirar")
+        vm.startListening(context)
+        runCurrent()
+        listeners.single().onResults(result("não consigo respirar"))
+        runCurrent()
+        verify(exactly = 0) { parser.parse(any(), any(), any()) }
+        verify(exactly = 0) { hybrid.respond(any(), any(), any(), any(), any()) }
+        assertTrue((vm.state.value as VoiceUiState.Saved).summary.contains("SAMU 192"))
+    }
+
     private val dispatcher = StandardTestDispatcher()
     private val listeners = mutableListOf<RecognitionListener>()
     private lateinit var recognizer: SpeechRecognizer

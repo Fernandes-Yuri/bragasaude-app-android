@@ -56,7 +56,7 @@ object BragaDebugTrace {
                 put("reply", reply?.take(16000)); put("replyTruncated", (reply?.length ?: 0) > 16000)
                 put("detail", detail?.take(2000))
                 output?.let {
-                    put("intent", it.intent); put("route", it.route.name)
+                    put("fallbackFromIntent", it.fallbackFromIntent); put("intent", it.intent); put("route", it.route.name)
                     put("cloud", it.delegarParaNuvem); put("emergency", it.isEmergencia)
                     put("blocked", it.isBloqueioSeguranca); put("hasLocalData", it.hasLocalData)
                     put("nluMs", it.tempoMs); put("referenceMeasuredAtMillis", it.referenceMeasuredAtMillis)
