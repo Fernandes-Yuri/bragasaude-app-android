@@ -175,7 +175,8 @@ object BragaNluEngine {
         RegexOption.IGNORE_CASE
     )
     private val REGEX_CONFIRMACAO = Regex(
-        """^(ok|ta bom|tá bom|entendi|beleza|certo|combinado|perfeito|ta certo|tá certo|joia|maravilha)[!?. ]*$""",
+        // A frase inteira deve ser uma confirmação; perguntas e novos relatos seguem o roteamento normal.
+        """^(?:ok|okay|ta bom|entendi|entendido|compreendi|agora entendi|beleza|certo|combinado|perfeito|ta certo|joia|maravilha|legal|bacana|otimo|show|tudo certo|ficou claro|esta claro|ta claro|faz sentido)(?:[\s,!.;]+(?:e\s+)?(?:ok|okay|ta bom|entendi|entendido|compreendi|agora entendi|beleza|certo|combinado|perfeito|ta certo|joia|maravilha|legal|bacana|otimo|show|tudo certo|ficou claro|esta claro|ta claro|faz sentido))*[\s,!.;]*$""",
         RegexOption.IGNORE_CASE
     )
 
@@ -364,10 +365,10 @@ object BragaNluEngine {
             "Estou por aqui para ajudar. Como está sua rotina de cuidados hoje?"
         ),
         "conversa_confirmacao_compreensao" to listOf(
-            "Perfeito! Se precisar de algo ou tiver qualquer dúvida, é só me chamar.",
-            "Combinado! Estou por aqui acompanhando você.",
-            "Ótimo! Qualquer novidade nos seus registros, estou à disposição.",
-            "Certo! Quando precisar, podemos retomar sua dúvida ou consultar seus registros."
+            "Certo! Estou por aqui se precisar.",
+            "Combinado! Quando precisar, é só me chamar.",
+            "Que bom que ficou claro. Estou à disposição.",
+            "Tudo certo! Podemos continuar quando você quiser."
         )
     )
 
@@ -429,6 +430,8 @@ object BragaNluEngine {
             val resp = sortearResposta("sintoma_desconforto_moderado")
             return NluOutput("sintoma_desconforto_moderado", resp, tempoMs = deltaMs(inicio))
         }
+
+        BragaLocalHelp.answer(texto)?.let { return it.copy(tempoMs = deltaMs(inicio)) }
 
         // 2. CADASTRO DE REMÉDIO (DIRETRIZ CLÍNICA)
         if (REGEX_CADASTRO_REMEDIO.containsMatchIn(limpo) || CADASTRO_NORMALIZADO.containsMatchIn(protegido)) {
