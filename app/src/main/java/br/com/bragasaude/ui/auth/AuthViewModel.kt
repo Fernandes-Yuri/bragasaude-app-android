@@ -716,10 +716,10 @@ class AuthViewModel @Inject constructor(
                 br.com.bragasaude.data.remote.model.RemoteProfile(
                     id = guestUid,
                     fullName = "Visitante",
-                    currentLevel = 2,
-                    currentStreak = 3,
-                    currentXp = 45,
-                    totalXp = 120,
+                    currentLevel = 1,
+                    currentStreak = 0,
+                    currentXp = 0,
+                    totalXp = 0,
                     stepGoal = 8000,
                     hydrationTargetMl = 2000,
                     consentAcceptedAt = consentDate

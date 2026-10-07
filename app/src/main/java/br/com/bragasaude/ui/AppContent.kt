@@ -17,7 +17,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.compose.rememberNavController
 import br.com.bragasaude.MainActivity
-import br.com.bragasaude.domain.XpGrantService
 import br.com.bragasaude.ui.auth.AppSessionStatus
 import br.com.bragasaude.ui.auth.AuthViewModel
 import br.com.bragasaude.ui.auth.LoginScreen
@@ -298,17 +297,12 @@ fun AppContent(activity: MainActivity) {
                                         Screen.CaregiverDashboard
                                     } else initialScreen
 
-                                    val xpService = remember {
-                                        EntryPointAccessors.fromApplication(appContext, XpToastEntryPoint::class.java)
-                                            .xpGrantService()
-                                    }
                                     val navController = rememberNavController()
                                     MainScaffold(
                                         navController = navController,
                                         startDestination = startDestination,
                                         userRole = userRole,
-                                        caregiverMode = caregiverMode,
-                                        xpGrantService = xpService
+                                        caregiverMode = caregiverMode
                                     )
                                 }
                                 else -> LoadingOverlay()
@@ -414,13 +408,6 @@ private fun ConsentFlow(
             onNavigateToPrivacy = { onSetLegalSubView("privacy") }
         )
     }
-}
-
-/** Acesso ao XpGrantService a partir de composables sem ViewModel. */
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-interface XpToastEntryPoint {
-    fun xpGrantService(): XpGrantService
 }
 
 /** Acesso ao BragaApiClient a partir de composables sem ViewModel (doc 10 §1B.6). */

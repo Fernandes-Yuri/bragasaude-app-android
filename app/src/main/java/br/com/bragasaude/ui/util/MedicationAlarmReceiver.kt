@@ -297,7 +297,6 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
                     MedicationAlarmEntryPoint::class.java
                 )
                 val repository = entryPoint.medicationRepository()
-                val xpService = entryPoint.xpGrantService()
 
                 // Execução assíncrona suspensa direta em Dispatchers.IO (sem travar a main thread e prevenindo ANR)
                 val date = java.time.LocalDate.parse(doseKey.substringBefore("T"))
@@ -326,15 +325,6 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
                     .setTimeoutAfter(30_000L)
                     .build()
                 manager.notify(confirmationId, confirmNotification)
-
-                // A pontuação é secundária: sua falha não mantém o lembrete de uma dose já registrada.
-                xpService.grantXp(
-                    userId = userId,
-                    action = br.com.bragasaude.domain.GamificationActionType.MEDICATION_TAKEN_ON_TIME,
-                    isActionValid = date == java.time.LocalDate.now() && br.com.bragasaude.domain.GamificationEngine.isMedicationOnTime(time, Calendar.getInstance().get(Calendar.HOUR_OF_DAY), Calendar.getInstance().get(Calendar.MINUTE))
-                )
-
-                Log.d("MedAlarm", "Dose registrada; pontuação avaliada pela janela de horário")
             } catch (e: Exception) {
                 Log.e("MedAlarm", "Erro ao processar dose: ${e.message}", e)
             } finally {
@@ -388,5 +378,4 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
 @dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
 interface MedicationAlarmEntryPoint {
     fun medicationRepository(): br.com.bragasaude.data.remote.repository.MedicationRepository
-    fun xpGrantService(): br.com.bragasaude.domain.XpGrantService
 }
