@@ -117,6 +117,27 @@ class NutritionViewModel @Inject constructor(
         }
     }
 
+    private var hasPreparedGroceryData = false
+
+    fun prepareGroceryData() {
+        if (hasPreparedGroceryData) return
+        hasPreparedGroceryData = true
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                if (_communityPrices.value.isEmpty()) {
+                    _communityPrices.value = catalogRepository.fetchCommunityGroceryPrices()
+                }
+                val priced = catalogRepository.fetchGroceryIngredients()
+                _groceryIngredients.value = priced
+                groceryRepository.standardizeIngredients(userId, priced)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("NutritionVM", "Falha ao sincronizar dados da lista de compras: ${e.message}")
+            }
+        }
+    }
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
@@ -137,7 +158,8 @@ class NutritionViewModel @Inject constructor(
                 NutritionSuggestionEngine.isSafeFromAllergies(FoodEntity(ingredient.slug, ingredient.name),
                     profile?.foodAllergies.orEmpty(), profile?.customFoodRestrictions))
         }.sortedBy { it.name }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(kotlinx.coroutines.Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _groceryPlanResult = MutableStateFlow<br.com.bragasaude.domain.WeeklyGroceryPlanResult?>(null)
     val groceryPlanResult = _groceryPlanResult.asStateFlow()
@@ -217,6 +239,7 @@ class NutritionViewModel @Inject constructor(
         val groceryList: List<GroceryListItemEntity>
     )
 
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
     private val clinicalDataFlow = combine(
         examsRepository.getExamItems(userId),
         vitalsRepository.getVitalSigns(userId),
@@ -232,7 +255,9 @@ class NutritionViewModel @Inject constructor(
             pantryFoods = allGroceryList.filter { it.isCheckedInPantry }.map { it.foodName }.toSet(),
             groceryList = allGroceryList
         )
-    }.distinctUntilChanged()
+    }.debounce(100L)
+    .flowOn(kotlinx.coroutines.Dispatchers.Default)
+    .distinctUntilChanged()
 
     val functionalSuggestionGroups: StateFlow<List<NutritionalSuggestionGroup>> = combine(
         clinicalDataFlow,
@@ -248,8 +273,9 @@ class NutritionViewModel @Inject constructor(
             val pantryNames = snapshot.pantryFoods.map { it.trim().lowercase() }.toSet()
             val toBuyNames = groceryNames - pantryNames
 
+            val manifest = _groceryIngredients.value
             val userCatalog = catalog.filter { food ->
-                (_groceryIngredients.value?.forFood(food.remoteId, food.name)?.any { it.slug in groceryFoodIds } == true) ||
+                (manifest?.forFood(food.remoteId, food.name)?.any { it.slug in groceryFoodIds } == true) ||
                 (food.remoteId in groceryFoodIds) ||
                 (food.name.trim().lowercase() in groceryNames) ||
                 groceryNames.any { gName ->
@@ -270,7 +296,8 @@ class NutritionViewModel @Inject constructor(
                 groceryFoodNames = toBuyNames
             )
         }
-    }.distinctUntilChanged()
+    }.flowOn(kotlinx.coroutines.Dispatchers.Default)
+    .distinctUntilChanged()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _userWeight = MutableStateFlow<Double?>(null)
@@ -362,18 +389,16 @@ class NutritionViewModel @Inject constructor(
         val initialCustom = prefs.getBoolean("calorie_target_is_custom_$userId", false)
         _isCustomCalorieTarget.value = initialCustom
 
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val offline = catalogRepository.fetchGroceryIngredients(includePrices = false)
             _groceryIngredients.value = offline
-            groceryRepository.standardizeIngredients(userId, offline)
-            _communityPrices.value = catalogRepository.fetchCommunityGroceryPrices()
-            val priced = catalogRepository.fetchGroceryIngredients()
-            _groceryIngredients.value = priced
-            groceryRepository.standardizeIngredients(userId, priced)
+            // Agenda atualização de preços e catálogo em segundo plano após a tela estabilizar
+            kotlinx.coroutines.delay(2500)
+            prepareGroceryData()
         }
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             catalogRepository.seedDatabaseIfNeeded()
         }
 

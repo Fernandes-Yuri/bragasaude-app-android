@@ -109,6 +109,7 @@ fun NutritionScreen(
 
     LaunchedEffect(searchFood, openGroceryList) {
         if (openGroceryList) {
+            viewModel.prepareGroceryData()
             if (groceryList.isEmpty()) {
                 viewModel.generateWeeklyGroceryList()
             }
@@ -248,6 +249,7 @@ fun NutritionScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
+                                viewModel.prepareGroceryData()
                                 if (groceryList.isEmpty()) {
                                     viewModel.generateWeeklyGroceryList()
                                 }
@@ -560,6 +562,7 @@ fun NutritionScreen(
                                 Spacer(Modifier.height(16.dp))
                                 Button(
                                     onClick = {
+                                        viewModel.prepareGroceryData()
                                         if (groceryList.isEmpty()) {
                                             viewModel.generateWeeklyGroceryList()
                                         }
@@ -621,7 +624,10 @@ fun NutritionScreen(
                                 }
                                 Spacer(Modifier.width(8.dp))
                                 TextButton(
-                                    onClick = { showGroceryBottomSheet = true }
+                                    onClick = {
+                                        viewModel.prepareGroceryData()
+                                        showGroceryBottomSheet = true
+                                    }
                                 ) {
                                     Text("Ver Lista", color = BragaEmerald, fontWeight = FontWeight.Bold)
                                 }
