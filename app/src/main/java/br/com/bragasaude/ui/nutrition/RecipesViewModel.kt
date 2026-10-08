@@ -85,11 +85,14 @@ class RecipesViewModel @Inject constructor(
                 ) { pantryItems, profile ->
                     pantryItems to profile
                 }.collectLatest { (pantryItems, profile) ->
+                    val hasManualList = pantryItems.any {
+                        it.category == "Minha lista" || it.remoteId.contains(":manual:")
+                    }
                     // Calcula receitas para cada tipo de refeição
-                    _breakfastRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "BREAKFAST")
-                    _lunchRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "LUNCH")
-                    _snackRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "SNACK")
-                    _dinnerRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "DINNER")
+                    _breakfastRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "BREAKFAST", includeMissing = hasManualList)
+                    _lunchRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "LUNCH", includeMissing = hasManualList)
+                    _snackRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "SNACK", includeMissing = hasManualList)
+                    _dinnerRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "DINNER", includeMissing = hasManualList)
 
                     _isLoading.value = false
                 }

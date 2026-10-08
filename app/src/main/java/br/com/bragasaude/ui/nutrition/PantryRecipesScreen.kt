@@ -263,7 +263,7 @@ private fun RecipeCard(match: RecipePantryMatch) {
             Spacer(Modifier.height(14.dp))
 
             // Selo de despensa (zero emojis)
-            PantryBadge()
+            PantryBadge(missingCount = match.missingIngredients.size)
 
             Spacer(Modifier.height(14.dp))
 
@@ -576,14 +576,25 @@ private data class PantryBadgeConfig(
  * Zero emojis — icones vetoriais CheckCircle, Info, ShoppingCart.
  */
 @Composable
-private fun PantryBadge() {
-    val config = PantryBadgeConfig(
-        backgroundColor = Color(0xFFE8F5E9),
-        borderColor = Color(0xFF4CAF50).copy(alpha = 0.4f),
-        textColor = Color(0xFF2E7D32),
-        text = "Todos os ingredientes estão na sua lista",
-        icon = Icons.Default.CheckCircle
-    )
+private fun PantryBadge(missingCount: Int) {
+    val config = if (missingCount == 0) {
+        PantryBadgeConfig(
+            backgroundColor = Color(0xFFE8F5E9),
+            borderColor = Color(0xFF4CAF50).copy(alpha = 0.4f),
+            textColor = Color(0xFF2E7D32),
+            text = "Todos os ingredientes estão na sua lista",
+            icon = Icons.Default.CheckCircle
+        )
+    } else {
+        PantryBadgeConfig(
+            backgroundColor = Color(0xFFFFF8E1),
+            borderColor = Color(0xFFFFB300).copy(alpha = 0.5f),
+            textColor = Color(0xFFB78103),
+            text = if (missingCount == 1) "Falta 1 ingrediente da sua lista"
+                   else "Faltam $missingCount ingredientes da sua lista",
+            icon = Icons.Default.ShoppingCart
+        )
+    }
 
     Surface(
         shape = RoundedCornerShape(10.dp),

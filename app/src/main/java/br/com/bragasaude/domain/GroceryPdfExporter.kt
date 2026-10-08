@@ -168,9 +168,9 @@ object GroceryPdfExporter {
         )
         canvas.drawText(costText, 45f, y + 25f, textPaint)
 
-        textPaint.textSize = 9f
-        canvas.drawText("Preços estimados com base em referências nacionais; não são valores exatos.", 30f, y + 55f, textPaint)
-        canvas.drawText("Podem variar conforme região, loja e data da compra.", 30f, y + 68f, textPaint)
+        textPaint.textSize = 8.5f
+        canvas.drawText("Preços baseados em média nacional estimada (sem garantia de valores nem oferta comercial).", 30f, y + 55f, textPaint)
+        canvas.drawText("Preencha sua lista corretamente para habilitar receitas sugeridas e recursos de nutrição.", 30f, y + 68f, textPaint)
         val missing = items.count { it.estimatedPriceBrl <= 0.0 }
         if (missing > 0) canvas.drawText("Total parcial: $missing itens sem preço não entram na estimativa.", 30f, y + 81f, textPaint)
         return if (missing > 0) y + 108f else y + 90f

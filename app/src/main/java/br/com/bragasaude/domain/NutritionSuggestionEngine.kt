@@ -55,7 +55,8 @@ object NutritionSuggestionEngine {
         selectedMealType: String = "Café da Manhã",
         dislikedFoodNames: Set<String> = emptySet(),
         loggedFoodNamesToday: Set<String> = emptySet(),
-        pantryFoodNames: Set<String> = emptySet()
+        pantryFoodNames: Set<String> = emptySet(),
+        groceryFoodNames: Set<String> = emptySet()
     ): List<NutritionalSuggestionGroup> {
         val groups = mutableListOf<NutritionalSuggestionGroup>()
         val dayOfYear = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR)
@@ -86,9 +87,12 @@ object NutritionSuggestionEngine {
                 .filter { it.isDiabetesSafe && (it.functionalTags.contains("fibra_soluvel") || it.functionalTags.contains("baixo_ig") || it.functionalTags.contains("antioxidante_glicemia")) }
                 .selectStableSuggestions(dayOfYear, groupSalt = 101, pantryFoodNames = pantryFoodNames)
                 .map { food ->
+                    val isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
+                    val isGrocery = groceryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
                     food.toSuggestedOption(
                         defaultBenefit = "Rico em fibras solúveis que ajudam a modular a absorção de glicose após as refeições.",
-                        isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
+                        isPantry = isPantry,
+                        isGrocery = isGrocery
                     )
                 }
 
@@ -122,9 +126,12 @@ object NutritionSuggestionEngine {
                 .filter { it.functionalTags.contains("fitoesterol") || it.functionalTags.contains("beta_glucana") || it.functionalTags.contains("gordura_boa") || it.functionalTags.contains("omega3") }
                 .selectStableSuggestions(dayOfYear, groupSalt = 202, pantryFoodNames = pantryFoodNames)
                 .map { food ->
+                    val isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
+                    val isGrocery = groceryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
                     food.toSuggestedOption(
                         defaultBenefit = "Possui fitoesteróis e gorduras insaturadas que auxiliam no equilíbrio natural das frações de colesterol.",
-                        isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
+                        isPantry = isPantry,
+                        isGrocery = isGrocery
                     )
                 }
 
@@ -151,9 +158,12 @@ object NutritionSuggestionEngine {
                 .filter { it.functionalTags.contains("omega3") || it.functionalTags.contains("fibra_prebiotica") || it.functionalTags.contains("cha_antioxidante") }
                 .selectStableSuggestions(dayOfYear, groupSalt = 303, pantryFoodNames = pantryFoodNames)
                 .map { food ->
+                    val isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
+                    val isGrocery = groceryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
                     food.toSuggestedOption(
                         defaultBenefit = "Fonte de ácidos graxos essenciais e antioxidantes que favorecem o metabolismo das gorduras.",
-                        isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
+                        isPantry = isPantry,
+                        isGrocery = isGrocery
                     )
                 }
 
@@ -184,9 +194,12 @@ object NutritionSuggestionEngine {
                 .filter { it.isHypertensionSafe && (it.functionalTags.contains("nitrato_natural") || it.functionalTags.contains("potassio") || it.functionalTags.contains("magnesio") || it.functionalTags.contains("baixo_sodio")) }
                 .selectStableSuggestions(dayOfYear, groupSalt = 404, pantryFoodNames = pantryFoodNames)
                 .map { food ->
+                    val isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
+                    val isGrocery = groceryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
                     food.toSuggestedOption(
                         defaultBenefit = "Rico em minerais como potássio e nitratos naturais que auxiliam no relaxamento e flexibilidade dos vasos.",
-                        isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
+                        isPantry = isPantry,
+                        isGrocery = isGrocery
                     )
                 }
 
@@ -213,9 +226,12 @@ object NutritionSuggestionEngine {
                 .filter { it.functionalTags.contains("vitamina_c") || it.functionalTags.contains("alcalinizante") || it.functionalTags.contains("hidratante") }
                 .selectStableSuggestions(dayOfYear, groupSalt = 505, pantryFoodNames = pantryFoodNames)
                 .map { food ->
+                    val isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
+                    val isGrocery = groceryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
                     food.toSuggestedOption(
                         defaultBenefit = "Possui compostos alcalinizantes e vitamina C que estimulam a eliminação renal do ácido úrico.",
-                        isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
+                        isPantry = isPantry,
+                        isGrocery = isGrocery
                     )
                 }
 
@@ -239,9 +255,12 @@ object NutritionSuggestionEngine {
             val generalFoods = availableFoods
                 .selectStableSuggestions(dayOfYear, groupSalt = 606 + selectedMealType.hashCode(), pantryFoodNames = pantryFoodNames)
                 .map { food ->
+                    val isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
+                    val isGrocery = groceryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
                     food.toSuggestedOption(
                         defaultBenefit = "Alimento natural brasileiro rico em nutrientes essenciais para o seu bem-estar diário.",
-                        isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
+                        isPantry = isPantry,
+                        isGrocery = isGrocery
                     )
                 }
 
@@ -292,13 +311,21 @@ object NutritionSuggestionEngine {
 
     private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
-    private fun FoodEntity.toSuggestedOption(defaultBenefit: String, isPantry: Boolean = false): SuggestedFoodOption {
-        val pantryBadge = if (isPantry) "Na sua despensa • " else ""
+    private fun FoodEntity.toSuggestedOption(
+        defaultBenefit: String,
+        isPantry: Boolean = false,
+        isGrocery: Boolean = false
+    ): SuggestedFoodOption {
+        val badge = when {
+            isPantry -> "Na sua despensa • "
+            isGrocery -> "Na sua lista de compras • "
+            else -> ""
+        }
         return SuggestedFoodOption(
             foodId = remoteId,
             name = name,
             category = category ?: "Alimento",
-            portionTip = "$pantryBadge${consumptionTip ?: "Adicione uma porção moderada junto à sua refeição principal."}",
+            portionTip = "$badge${consumptionTip ?: "Adicione uma porção moderada junto à sua refeição principal."}",
             functionalBenefit = healthBenefits ?: defaultBenefit,
             kcal = kcal ?: 0.0,
             isDiabetesSafe = isDiabetesSafe,

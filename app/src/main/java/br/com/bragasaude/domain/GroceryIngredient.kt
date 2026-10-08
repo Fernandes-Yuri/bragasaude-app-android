@@ -23,6 +23,16 @@ data class GroceryIngredientCatalog(val ingredients: List<GroceryIngredient>, va
 }
 
 object GroceryPurchasePlanner {
+    fun parseAmount(text: String, unit: String): Int? {
+        val value = text.trim().replace(',', '.').toDoubleOrNull() ?: return null
+        if (value <= 0.0 || !value.isFinite()) return null
+        return when (unit) {
+            "kg" -> (value * 1000).toInt().takeIf { it > 0 }
+            "L" -> (value * 1000).toInt().takeIf { it > 0 }
+            else -> value.toInt().takeIf { it > 0 }
+        }
+    }
+
     fun quantity(item: GroceryIngredient, requestedGrams: Int): Int = when (item.unit) {
         "kg" -> (ceil(maxOf(requestedGrams, item.minimum).toDouble() / item.step) * item.step).toInt()
         // Litros e unidades são planejados por embalagem; não inferimos densidade ou peso de um ovo.

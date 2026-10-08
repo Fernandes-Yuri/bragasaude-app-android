@@ -40,17 +40,10 @@ class CareCelebrationTts @Inject constructor(
     private var ttsInitialization: CompletableDeferred<Boolean>? = null
 
     /**
-     * Fala a mensagem de celebração. Recebe o nome do paciente para
-     * personalizar; usa o nome de batismo se houver.
+     * Interação por voz de celebração desativada por diretriz de produto (invasiva ao paciente).
      */
     suspend fun celebrate(patientName: String?, onStart: () -> Unit = {}, onDone: () -> Unit = {}) {
-        val name = patientName?.trim()?.takeIf { it.isNotEmpty() }?.split(" ")?.firstOrNull()
-        val text = if (name.isNullOrEmpty()) {
-            "Muito bem! Remédio registrado com sucesso. Continuar firme no seu tratamento é a sua melhor escolha!"
-        } else {
-            "Muito bem, $name! Remédio registrado com sucesso. Continuar firme no seu tratamento é a sua melhor escolha!"
-        }
-        speak(text, onStart, onDone)
+        onDone()
     }
 
     /** Fala um texto livre em pt-BR (voz neural com fallback nativo). */

@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.local.ExamItemEntity
 import br.com.bragasaude.data.local.FoodEntity
@@ -157,5 +157,41 @@ class NutritionSuggestionEngineTest {
         for (item in remainingOriginal) {
             assertTrue("O item $item deveria permanecer na lista após a troca de outro", afterDismiss.options.any { it.name == item })
         }
+    }
+
+    @Test
+    fun suggestions_differentiate_pantry_and_grocery_items_in_portion_tips() {
+        val exams = listOf(
+            ExamItemEntity(
+                localId = 1,
+                userId = "u1",
+                examId = "e1",
+                itemKey = "glucose",
+                itemName = "Glicose",
+                valueNumeric = 120.0,
+                unit = "mg/dL",
+                measuredAt = Date(),
+                status = "confirmed"
+            )
+        )
+
+        val userCatalog = listOf(sampleFoods[0], sampleFoods[1])
+        val result = NutritionSuggestionEngine.generateSuggestions(
+            exams = exams,
+            vitals = emptyList(),
+            profile = RemoteProfile(id = "u1"),
+            catalog = userCatalog,
+            selectedMealType = "Café da Manhã",
+            pantryFoodNames = setOf("Aveia em Flocos"),
+            groceryFoodNames = setOf("Maçã com Casca")
+        ).first { it.id == "glucose_balance" }
+
+        val aveiaOption = result.options.firstOrNull { it.name == "Aveia em Flocos" }
+        assertNotNull(aveiaOption)
+        assertTrue(aveiaOption!!.portionTip.startsWith("Na sua despensa • "))
+
+        val macaOption = result.options.firstOrNull { it.name == "Maçã com Casca" }
+        assertNotNull(macaOption)
+        assertTrue(macaOption!!.portionTip.startsWith("Na sua lista de compras • "))
     }
 }

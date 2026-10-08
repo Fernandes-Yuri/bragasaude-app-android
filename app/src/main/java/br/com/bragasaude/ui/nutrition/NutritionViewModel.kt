@@ -39,7 +39,8 @@ class NutritionViewModel @Inject constructor(
     private val examsRepository: ExamsRepository,
     private val vitalsRepository: VitalsRepository,
     private val groceryRepository: GroceryRepository,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _contributionState = MutableStateFlow(br.com.bragasaude.domain.GroceryContributionState())
@@ -92,6 +93,45 @@ class NutritionViewModel @Inject constructor(
     private val _profile = MutableStateFlow<RemoteProfile?>(null)
     val profile = _profile.asStateFlow()
 
+    private val _groceryIngredients = MutableStateFlow<br.com.bragasaude.domain.GroceryIngredientCatalog?>(null)
+    val manualIngredients: StateFlow<List<br.com.bragasaude.domain.GroceryIngredient>> = combine(
+        _groceryIngredients, catalogRepository.getFoodCatalog(), _profile
+    ) { manifest, foods, profile ->
+        manifest?.ingredients.orEmpty().filter { ingredient ->
+            val related = foods.filter { it.remoteId in ingredient.foodIds }
+            related.any { food ->
+                NutritionSuggestionEngine.isSafeFromAllergies(food, profile?.foodAllergies.orEmpty(), profile?.customFoodRestrictions) &&
+                    (profile?.hasDiabetes != true || food.isDiabetesSafe) &&
+                    (profile?.hasHypertension != true || food.isHypertensionSafe)
+            } || (related.isEmpty() && ingredient.foodIds.isEmpty() &&
+                NutritionSuggestionEngine.isSafeFromAllergies(FoodEntity(ingredient.slug, ingredient.name),
+                    profile?.foodAllergies.orEmpty(), profile?.customFoodRestrictions))
+        }.sortedBy { it.name }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _groceryMessage = MutableStateFlow<String?>(null)
+    val groceryMessage = _groceryMessage.asStateFlow()
+
+    fun saveManualItem(slug: String, amountText: String, replacingId: String? = null) {
+        val ingredient = manualIngredients.value.firstOrNull { it.slug == slug } ?: return
+        val amount = br.com.bragasaude.domain.GroceryPurchasePlanner.parseAmount(amountText, ingredient.unit) ?: return
+        viewModelScope.launch {
+            try {
+                groceryRepository.putManualItem(userId, ingredient, amount, "Minha lista", replacingId)
+                _groceryMessage.value = "Item salvo. Marque como comprado quando estiver na despensa."
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { _groceryMessage.value = "Não foi possível salvar o item. Tente novamente." }
+        }
+    }
+
+    fun removeGroceryItem(id: String) {
+        viewModelScope.launch { groceryRepository.removeItem(userId, id) }
+    }
+
+    fun clearGroceryList() {
+        viewModelScope.launch { groceryRepository.clearGroceryList(userId) }
+    }
+
     private val _mealRules = MutableStateFlow<List<RemoteMealRule>>(emptyList())
     private val _foodCatalog = MutableStateFlow<List<RemoteFood>>(emptyList())
     private val _latestExamItems = MutableStateFlow<List<RemoteExamItem>>(emptyList())
@@ -127,7 +167,8 @@ class NutritionViewModel @Inject constructor(
         val vitals: List<VitalSignEntity>,
         val profile: ProfileEntity?,
         val loggedFoods: Set<String>,
-        val pantryFoods: Set<String>
+        val pantryFoods: Set<String>,
+        val groceryList: List<GroceryListItemEntity>
     )
 
     private val clinicalDataFlow = combine(
@@ -135,14 +176,15 @@ class NutritionViewModel @Inject constructor(
         vitalsRepository.getVitalSigns(userId),
         profileRepository.getProfile(userId),
         nutritionRepository.todayLoggedMeals,
-        groceryRepository.getPantryItems(userId)
-    ) { exams, vitals, profileEntity, todayMeals, pantryList ->
+        groceryRepository.getGroceryList(userId)
+    ) { exams, vitals, profileEntity, todayMeals, allGroceryList ->
         ClinicalSnapshot(
             exams = exams,
             vitals = vitals,
             profile = profileEntity,
             loggedFoods = todayMeals.map { it.foodName }.toSet(),
-            pantryFoods = pantryList.map { it.foodName }.toSet()
+            pantryFoods = allGroceryList.filter { it.isCheckedInPantry }.map { it.foodName }.toSet(),
+            groceryList = allGroceryList
         )
     }.distinctUntilChanged()
 
@@ -152,22 +194,49 @@ class NutritionViewModel @Inject constructor(
         _selectedMealTab,
         _dislikedFoodNames
     ) { snapshot, catalog, currentTab, dislikes ->
-        NutritionSuggestionEngine.generateSuggestions(
-            exams = snapshot.exams,
-            vitals = snapshot.vitals,
-            profile = snapshot.profile?.toRemote(),
-            catalog = catalog,
-            selectedMealType = currentTab,
-            dislikedFoodNames = dislikes,
-            loggedFoodNamesToday = snapshot.loggedFoods,
-            pantryFoodNames = snapshot.pantryFoods
-        )
+        if (snapshot.groceryList.isEmpty()) {
+            emptyList()
+        } else {
+            val groceryNames = snapshot.groceryList.map { it.foodName.trim().lowercase() }.toSet()
+            val groceryFoodIds = snapshot.groceryList.map { it.foodId }.filter { it.isNotBlank() }.toSet()
+            val pantryNames = snapshot.pantryFoods.map { it.trim().lowercase() }.toSet()
+            val toBuyNames = groceryNames - pantryNames
+
+            val userCatalog = catalog.filter { food ->
+                (food.remoteId in groceryFoodIds) ||
+                (food.name.trim().lowercase() in groceryNames) ||
+                groceryNames.any { gName ->
+                    val fName = food.name.trim().lowercase()
+                    fName.contains(gName) || gName.contains(fName)
+                }
+            }
+
+            NutritionSuggestionEngine.generateSuggestions(
+                exams = snapshot.exams,
+                vitals = snapshot.vitals,
+                profile = snapshot.profile?.toRemote(),
+                catalog = userCatalog,
+                selectedMealType = currentTab,
+                dislikedFoodNames = dislikes,
+                loggedFoodNamesToday = snapshot.loggedFoods,
+                pantryFoodNames = snapshot.pantryFoods,
+                groceryFoodNames = toBuyNames
+            )
+        }
     }.distinctUntilChanged()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val dailyCalories = _profile.map { 
-        it?.dailyCalorieTarget?.toFloat() ?: 1800f 
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1800f)
+    private val _userWeight = MutableStateFlow<Double?>(null)
+    val userWeight = _userWeight.asStateFlow()
+
+    private val _autoRecommendedCalories = MutableStateFlow(1800)
+    val autoRecommendedCalories = _autoRecommendedCalories.asStateFlow()
+
+    private val _isCustomCalorieTarget = MutableStateFlow(false)
+    val isCustomCalorieTarget = _isCustomCalorieTarget.asStateFlow()
+
+    private val _dailyCalories = MutableStateFlow(1800f)
+    val dailyCalories = _dailyCalories.asStateFlow()
 
     val totalCaloriesConsumed = nutritionRepository.todayLoggedMeals.map { list ->
         list.sumOf { it.kcal }
@@ -188,11 +257,56 @@ class NutritionViewModel @Inject constructor(
         _dislikedFoodNames.value = emptySet()
     }
 
-    init {
+    fun setCustomCalorieTarget(newTargetKcal: Double) {
         viewModelScope.launch {
-            groceryRepository.standardizeIngredients(userId, catalogRepository.fetchGroceryIngredients(includePrices = false))
+            try {
+                val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean("calorie_target_is_custom_$userId", true).apply()
+                _isCustomCalorieTarget.value = true
+                _dailyCalories.value = newTargetKcal.toFloat()
+
+                profileRepository.getProfile(userId).first()?.let { profile ->
+                    val updated = profile.toRemote().copy(dailyCalorieTarget = newTargetKcal)
+                    profileRepository.saveProfile(updated)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun resetCalorieTargetToRecommended() {
+        viewModelScope.launch {
+            try {
+                val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean("calorie_target_is_custom_$userId", false).apply()
+                _isCustomCalorieTarget.value = false
+                val autoTarget = _autoRecommendedCalories.value.toFloat()
+                _dailyCalories.value = autoTarget
+
+                profileRepository.getProfile(userId).first()?.let { profile ->
+                    val updated = profile.toRemote().copy(dailyCalorieTarget = autoTarget.toDouble())
+                    profileRepository.saveProfile(updated)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    init {
+        val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+        val initialCustom = prefs.getBoolean("calorie_target_is_custom_$userId", false)
+        _isCustomCalorieTarget.value = initialCustom
+
+        viewModelScope.launch {
+            val offline = catalogRepository.fetchGroceryIngredients(includePrices = false)
+            _groceryIngredients.value = offline
+            groceryRepository.standardizeIngredients(userId, offline)
             _communityPrices.value = catalogRepository.fetchCommunityGroceryPrices()
-            groceryRepository.standardizeIngredients(userId, catalogRepository.fetchGroceryIngredients())
+            val priced = catalogRepository.fetchGroceryIngredients()
+            _groceryIngredients.value = priced
+            groceryRepository.standardizeIngredients(userId, priced)
         }
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
@@ -204,6 +318,28 @@ class NutritionViewModel @Inject constructor(
             profileRepository.getProfile(userId).collectLatest { entity ->
                 val remProfile = entity?.toRemote()
                 _profile.value = remProfile
+
+                val weight = entity?.weight ?: remProfile?.weight
+                _userWeight.value = weight
+
+                // Diretrizes FAO/OMS e Guia Alimentar: ~25 a 30 kcal/kg (média prática de 28 kcal/kg)
+                val calculatedAuto = if (weight != null && weight > 0.0) {
+                    (weight * 28).toInt()
+                } else {
+                    1800
+                }
+                _autoRecommendedCalories.value = calculatedAuto
+
+                val isCustom = prefs.getBoolean("calorie_target_is_custom_$userId", false)
+                _isCustomCalorieTarget.value = isCustom
+
+                val target = if (isCustom && remProfile?.dailyCalorieTarget != null && remProfile.dailyCalorieTarget > 0) {
+                    remProfile.dailyCalorieTarget.toFloat()
+                } else {
+                    calculatedAuto.toFloat()
+                }
+                _dailyCalories.value = target
+
                 // Atualiza catálogo seguro quando o perfil clínico mudar (ex: diabetes marcado)
                 loadSafeCatalog(remProfile)
             }
@@ -382,6 +518,7 @@ class NutritionViewModel @Inject constructor(
                 val dislikes = _dislikedFoodNames.value
 
                 val ingredients = catalogRepository.fetchGroceryIngredients()
+                val currentDailyCal = _dailyCalories.value.toDouble()
 
                 val newList = WeeklyGroceryEngine.generateWeeklyList(
                     userId = userId,
@@ -390,10 +527,15 @@ class NutritionViewModel @Inject constructor(
                     profile = profileEntity?.toRemote(),
                     catalog = catalog,
                     dislikedFoodNames = dislikes,
-                    ingredientCatalog = ingredients
+                    ingredientCatalog = ingredients,
+                    targetCalories = currentDailyCal
                 )
-                groceryRepository.clearGroceryList(userId)
-                groceryRepository.saveGroceryList(newList)
+                if (newList.isNotEmpty()) {
+                    groceryRepository.replaceList(userId, newList)
+                    _groceryMessage.value = "Quantidades calculadas para a sua meta diária de ${currentDailyCal.toInt()} kcal."
+                } else {
+                    _groceryMessage.value = "Não foi possível gerar uma lista para o seu perfil. Você pode montar sua lista manualmente."
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
