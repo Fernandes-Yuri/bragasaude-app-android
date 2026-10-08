@@ -32,23 +32,26 @@ class WeeklyGroceryEngineTest {
             GroceryIngredient("camarao-fresco", "Camarão Fresco", "kg", 100, 400, listOf("Camarão Cozido"), listOf("food_camarao"), 60.0)
         )
 
+        val vegTags = listOf("diet:vegan", "diet:vegetarian")
+        val lactoOvoTags = listOf("diet:vegetarian")
+
         val foods = listOf(
-            FoodEntity("food_arroz", "Arroz Branco Cozido", "Grãos & Cereais", kcal = 130.0, carbsG = 28.0, proteinG = 2.5, fatG = 0.3, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 300),
-            FoodEntity("food_feijao", "Feijão Preto Cozido", "Leguminosas & Grãos", kcal = 76.0, carbsG = 14.0, proteinG = 4.5, fatG = 0.5, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250),
+            FoodEntity("food_arroz", "Arroz Branco Cozido", "Grãos & Cereais", kcal = 130.0, carbsG = 28.0, proteinG = 2.5, fatG = 0.3, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 300, functionalTags = vegTags),
+            FoodEntity("food_feijao", "Feijão Preto Cozido", "Leguminosas & Grãos", kcal = 76.0, carbsG = 14.0, proteinG = 4.5, fatG = 0.5, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = vegTags),
             FoodEntity("food_frango", "Peito de Frango Grelhado", "Carnes & Aves", kcal = 165.0, carbsG = 0.0, proteinG = 31.0, fatG = 3.6, servingSizeGrams = 120, minServingGrams = 60, maxServingGrams = 300),
             FoodEntity("food_peixe", "Filé de Tilápia Grelhado", "Peixes & Frutos do Mar", kcal = 128.0, carbsG = 0.0, proteinG = 26.0, fatG = 2.6, servingSizeGrams = 130, minServingGrams = 60, maxServingGrams = 300),
-            FoodEntity("food_ovo", "Ovo Cozido", "Proteínas & Ovos", kcal = 145.0, carbsG = 0.8, proteinG = 13.0, fatG = 9.5, servingSizeGrams = 50, minServingGrams = 50, maxServingGrams = 200, servingUnit = "1 unidade (50g)"),
-            FoodEntity("food_leite", "Leite Desnatado", "Laticínios", kcal = 35.0, carbsG = 5.0, proteinG = 3.4, fatG = 0.2, servingSizeGrams = 200, minServingGrams = 100, maxServingGrams = 400, servingUnit = "1 copo (200ml)"),
-            FoodEntity("food_iogurte", "Iogurte Natural Desnatado", "Laticínios Fermentados", kcal = 45.0, carbsG = 6.0, proteinG = 4.0, fatG = 0.5, servingSizeGrams = 170, minServingGrams = 100, maxServingGrams = 340),
-            FoodEntity("food_aveia", "Aveia em Flocos", "Cereais & Fibras", kcal = 394.0, carbsG = 66.0, proteinG = 14.0, fatG = 8.5, servingSizeGrams = 40, minServingGrams = 20, maxServingGrams = 100),
-            FoodEntity("food_cuscuz", "Cuscuz de Milho Cozido", "Cereais Tradicionais", kcal = 112.0, carbsG = 25.0, proteinG = 2.2, fatG = 0.7, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250),
-            FoodEntity("food_mandioca", "Mandioca Cozida", "Raízes & Tubérculos", kcal = 125.0, carbsG = 30.0, proteinG = 0.6, fatG = 0.3, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 300),
-            FoodEntity("food_banana", "Banana Prata", "Frutas Frescas", kcal = 98.0, carbsG = 26.0, proteinG = 1.3, fatG = 0.1, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 200),
-            FoodEntity("food_maca", "Maçã Fuji com Casca", "Frutas Frescas", kcal = 56.0, carbsG = 14.8, proteinG = 0.3, fatG = 0.2, servingSizeGrams = 120, minServingGrams = 60, maxServingGrams = 240),
-            FoodEntity("food_couve", "Couve Manteiga Refogada", "Verduras", kcal = 27.0, carbsG = 4.4, proteinG = 2.9, fatG = 0.5, servingSizeGrams = 50, minServingGrams = 20, maxServingGrams = 150),
-            FoodEntity("food_abobrinha", "Abobrinha Verde Refogada", "Legumes", kcal = 19.0, carbsG = 3.0, proteinG = 1.1, fatG = 0.2, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250),
-            FoodEntity("food_azeite", "Azeite de Oliva Extravirgem", "Gorduras & Azeites", kcal = 884.0, carbsG = 0.0, proteinG = 0.0, fatG = 100.0, servingSizeGrams = 15, minServingGrams = 5, maxServingGrams = 40, servingUnit = "1 colher de sopa (15ml)"),
-            FoodEntity("food_amendoim", "Amendoim Torrado sem Sal", "Oleaginosas", kcal = 567.0, carbsG = 16.0, proteinG = 26.0, fatG = 49.0, servingSizeGrams = 20, minServingGrams = 10, maxServingGrams = 60),
+            FoodEntity("food_ovo", "Ovo Cozido", "Proteínas & Ovos", kcal = 145.0, carbsG = 0.8, proteinG = 13.0, fatG = 9.5, servingSizeGrams = 50, minServingGrams = 50, maxServingGrams = 200, servingUnit = "1 unidade (50g)", functionalTags = lactoOvoTags),
+            FoodEntity("food_leite", "Leite Desnatado", "Laticínios", kcal = 35.0, carbsG = 5.0, proteinG = 3.4, fatG = 0.2, servingSizeGrams = 200, minServingGrams = 100, maxServingGrams = 400, servingUnit = "1 copo (200ml)", functionalTags = lactoOvoTags),
+            FoodEntity("food_iogurte", "Iogurte Natural Desnatado", "Laticínios Fermentados", kcal = 45.0, carbsG = 6.0, proteinG = 4.0, fatG = 0.5, servingSizeGrams = 170, minServingGrams = 100, maxServingGrams = 340, functionalTags = lactoOvoTags),
+            FoodEntity("food_aveia", "Aveia em Flocos", "Cereais & Fibras", kcal = 394.0, carbsG = 66.0, proteinG = 14.0, fatG = 8.5, servingSizeGrams = 40, minServingGrams = 20, maxServingGrams = 100, functionalTags = vegTags),
+            FoodEntity("food_cuscuz", "Cuscuz de Milho Cozido", "Cereais Tradicionais", kcal = 112.0, carbsG = 25.0, proteinG = 2.2, fatG = 0.7, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = vegTags),
+            FoodEntity("food_mandioca", "Mandioca Cozida", "Raízes & Tubérculos", kcal = 125.0, carbsG = 30.0, proteinG = 0.6, fatG = 0.3, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 300, functionalTags = vegTags),
+            FoodEntity("food_banana", "Banana Prata", "Frutas Frescas", kcal = 98.0, carbsG = 26.0, proteinG = 1.3, fatG = 0.1, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 200, functionalTags = vegTags),
+            FoodEntity("food_maca", "Maçã Fuji com Casca", "Frutas Frescas", kcal = 56.0, carbsG = 14.8, proteinG = 0.3, fatG = 0.2, servingSizeGrams = 120, minServingGrams = 60, maxServingGrams = 240, functionalTags = vegTags),
+            FoodEntity("food_couve", "Couve Manteiga Refogada", "Verduras", kcal = 27.0, carbsG = 4.4, proteinG = 2.9, fatG = 0.5, servingSizeGrams = 50, minServingGrams = 20, maxServingGrams = 150, functionalTags = vegTags),
+            FoodEntity("food_abobrinha", "Abobrinha Verde Refogada", "Legumes", kcal = 19.0, carbsG = 3.0, proteinG = 1.1, fatG = 0.2, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = vegTags),
+            FoodEntity("food_azeite", "Azeite de Oliva Extravirgem", "Gorduras & Azeites", kcal = 884.0, carbsG = 0.0, proteinG = 0.0, fatG = 100.0, servingSizeGrams = 15, minServingGrams = 5, maxServingGrams = 40, servingUnit = "1 colher de sopa (15ml)", functionalTags = vegTags),
+            FoodEntity("food_amendoim", "Amendoim Torrado sem Sal", "Oleaginosas", kcal = 567.0, carbsG = 16.0, proteinG = 26.0, fatG = 49.0, servingSizeGrams = 20, minServingGrams = 10, maxServingGrams = 60, functionalTags = vegTags),
             FoodEntity("food_pts", "PTS Refogada", "Proteínas Vegetais", kcal = 120.0, carbsG = 9.0, proteinG = 20.0, fatG = 1.2, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = listOf("diet:vegan", "diet:vegetarian", "proteina_vegetal")),
             FoodEntity("food_tofu", "Tofu Firme Grelhado", "Proteínas Vegetais", kcal = 85.0, carbsG = 2.0, proteinG = 10.0, fatG = 4.8, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = listOf("diet:vegan", "diet:vegetarian", "proteina_vegetal")),
             FoodEntity("food_lentilha", "Lentilha Cozida", "Leguminosas & Grãos", kcal = 116.0, carbsG = 20.0, proteinG = 9.0, fatG = 0.4, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = listOf("diet:vegan", "diet:vegetarian", "proteina_vegetal")),
