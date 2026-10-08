@@ -30,19 +30,21 @@ object WeeklyGroceryEngine {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val weekStartDate = dateFormat.format(Date())
 
-        val available = catalog.filter { food ->
+        val safeCatalog = catalog.filter { food ->
             if (ingredientCatalog.forFood(food.remoteId, food.name).isEmpty()) return@filter false
-            val clean = food.name.trim().lowercase()
-            val notDisliked = !dislikedFoodNames.any { it.trim().lowercase() == clean }
             val allergySafe = NutritionSuggestionEngine.isSafeFromAllergies(
                 food,
                 profile?.foodAllergies ?: emptyList(),
                 profile?.customFoodRestrictions
             )
-            notDisliked && allergySafe &&
+            allergySafe &&
                 (profile?.hasDiabetes != true || food.isDiabetesSafe) &&
                 (profile?.hasHypertension != true || food.isHypertensionSafe) &&
                 (profile?.hasThyroidIssue != true || food.isThyroidSafe)
+        }
+
+        val available = safeCatalog.filter { food ->
+            dislikedFoodNames.none { groceryNameKey(it) == groceryNameKey(food.name) }
         }
 
         // Determina marcadores clinicos
@@ -60,6 +62,7 @@ object WeeklyGroceryEngine {
         // Os grupos básicos e a ordem de preferência são fornecidos pelo gateway.
         ingredientCatalog.requiredGroups.forEach { group ->
             val selected = group.firstNotNullOfOrNull { id -> available.firstOrNull { it.remoteId == id } }
+                ?: group.firstNotNullOfOrNull { id -> safeCatalog.firstOrNull { it.remoteId == id } }
             if (selected != null) selectedItems.addAll(createGroceryItems(
                 userId, weekStartDate, selected, CORRIDOR_GRAOS, ingredientCatalog, targetCalories))
         }
