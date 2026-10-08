@@ -27,7 +27,8 @@ data class WeeklyGroceryPlanResult(
     val foodVarietyCount: Int,
     val limitations: List<String> = emptyList(),
     val statusMessage: String,
-    val isManuallyModified: Boolean = false
+    val isManuallyModified: Boolean = false,
+    val profileWeight: Double? = null
 )
 
 object WeeklyGroceryEngine {
@@ -315,7 +316,8 @@ object WeeklyGroceryEngine {
             plannedFatGrams = totalFatG,
             foodVarietyCount = distinctFoodsCount,
             limitations = limitations.distinct(),
-            statusMessage = statusMessage
+            statusMessage = statusMessage,
+            profileWeight = profile?.weight
         )
     }
 

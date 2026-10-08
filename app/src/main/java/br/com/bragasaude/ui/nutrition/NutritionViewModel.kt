@@ -54,6 +54,8 @@ class NutritionViewModel @Inject constructor(
     val showResizeDialog = _showResizeDialog.asStateFlow()
     val pantryStock = weeklyRepository.stock(userId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private var observedTarget: Float? = null
+    private var observedWeight: Double? = null
+    private var hasObservedProfile = false
     private suspend fun invalidateWeekly(message: String) {
         weeklyRepository.invalidate(userId, message)
         _groceryMessage.value = message
@@ -351,8 +353,8 @@ class NutritionViewModel @Inject constructor(
                     _groceryPlanResult.value = result
                     _groceryMessage.value = result?.statusMessage
                     val target = observedTarget
-                    if (result != null && !result.isManuallyModified && target != null &&
-                        kotlin.math.abs(result.targetWeeklyCalories - target * 7) > 1.0) changedTarget(target.toDouble())
+                    if (result != null && target != null &&
+                        br.com.bragasaude.domain.WeeklyGroceryPlanValidity.needsResize(result, target.toDouble(), observedWeight)) changedTarget(target.toDouble())
                 }
             }
         }
@@ -400,11 +402,16 @@ class NutritionViewModel @Inject constructor(
                     calculatedAuto.toFloat()
                 }
                 val previousTarget = observedTarget
+                val changedWeight = hasObservedProfile && observedWeight != weight
+                observedWeight = weight
+                hasObservedProfile = true
                 observedTarget = target
                 _dailyCalories.value = target
                 val persisted = _groceryPlanResult.value
-                if ((previousTarget != null && previousTarget != target) ||
-                    (previousTarget == null && persisted != null && kotlin.math.abs(persisted.targetWeeklyCalories - target * 7) > 1.0)) {
+                if (changedWeight || (previousTarget != null && previousTarget != target) ||
+                    (previousTarget == null && persisted != null &&
+                     (kotlin.math.abs(persisted.targetWeeklyCalories - target * 7) > 1.0 ||
+                      (persisted.profileWeight != null && persisted.profileWeight != weight)))) {
                     changedTarget(target.toDouble())
                 }
 

@@ -19,20 +19,21 @@ data class WeeklyGrocerySummaryEntity(
     val limitationsJson: String,
     val isManuallyModified: Boolean,
     val generatedAt: Long,
-    val statusMessage: String
+    val statusMessage: String,
+    val profileWeight: Double? = null
 ) {
     fun result(items: List<GroceryListItemEntity>): WeeklyGroceryPlanResult {
         val values = JSONArray(limitationsJson)
         return WeeklyGroceryPlanResult(items, targetWeeklyCalories, plannedWeeklyCalories, coveragePercent,
             plannedProteinGrams, plannedCarbsGrams, plannedFatGrams, foodVarietyCount,
-            (0 until values.length()).map { values.getString(it) }, statusMessage, isManuallyModified)
+            (0 until values.length()).map { values.getString(it) }, statusMessage, isManuallyModified, profileWeight)
     }
     companion object {
         fun from(userId: String, week: String, result: WeeklyGroceryPlanResult) = WeeklyGrocerySummaryEntity(
             userId, week, result.targetWeeklyCalories, result.plannedWeeklyCalories, result.coveragePercent,
             result.plannedProteinGrams, result.plannedCarbsGrams, result.plannedFatGrams,
             result.foodVarietyCount, JSONArray(result.limitations).toString(), result.isManuallyModified,
-            System.currentTimeMillis(), result.statusMessage)
+            System.currentTimeMillis(), result.statusMessage, result.profileWeight)
     }
 }
 

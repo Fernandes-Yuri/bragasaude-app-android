@@ -32,10 +32,11 @@ class WeeklyGroceryPersistenceTest {
     @After fun after() { db.close(); context.deleteDatabase("weekly-test.db") }
 
     @Test fun summarySurvivesDatabaseReopeningAndIsScopedByUserAndWeek() = runBlocking {
-        repository.save("u", plan(), false)
+        repository.save("u", plan().copy(profileWeight = 108.0), false)
         db.close(); open()
         val restored = repository.observe("u", GroceryWeek.start()).first()!!
         assertEquals(21000.0, restored.targetWeeklyCalories, 0.001)
+        assertEquals(108.0, restored.profileWeight!!, 0.001)
         assertEquals(listOf("Limitação"), restored.limitations)
         assertNull(repository.observe("other", GroceryWeek.start()).first())
         assertNull(repository.observe("u", "2000-01-03").first())

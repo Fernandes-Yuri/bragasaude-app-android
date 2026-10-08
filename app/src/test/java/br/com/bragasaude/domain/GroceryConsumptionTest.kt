@@ -31,4 +31,13 @@ class GroceryConsumptionTest {
         assertTrue(GroceryConsumption.insufficient(30.0, 70.0, 4))
         assertFalse(GroceryConsumption.insufficient(40.0, 70.0, 4))
     }
+    @Test fun targetAndWeightChangesInvalidateCoverageWithoutRewritingItems() {
+        val plan = WeeklyGroceryPlanResult(emptyList(), 21000.0, 21000.0, 100.0, 800.0, 2500.0, 600.0, 15,
+            statusMessage = "Plano", profileWeight = 108.0)
+        assertFalse(WeeklyGroceryPlanValidity.needsResize(plan, 3000.0, 108.0))
+        assertTrue(WeeklyGroceryPlanValidity.needsResize(plan, 4000.0, 108.0))
+        assertTrue(WeeklyGroceryPlanValidity.needsResize(plan, 3000.0, 100.0))
+        assertFalse(WeeklyGroceryPlanValidity.needsResize(plan.copy(isManuallyModified = true), 4000.0, 100.0))
+    }
+
 }
