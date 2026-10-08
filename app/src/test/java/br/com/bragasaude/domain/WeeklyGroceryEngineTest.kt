@@ -386,4 +386,57 @@ class WeeklyGroceryEngineTest {
         assertEquals(GroceryLimitationType.MISSING_RECIPE_PROPORTIONS.userTitle, grouped[1].first)
         assertEquals(listOf("Chá de Cidreira com Limão"), grouped[1].second)
     }
+
+    @Test
+    fun preservesRiceAndBeansAnchorsAcrossRotationsForStandardProfiles() {
+        val (foods, catalog) = createTestCatalog()
+
+        // Semana 1: plano padrão
+        val plan1 = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "user_rot", exams = emptyList(), vitals = emptyList(), profile = null,
+            catalog = foods, ingredientCatalog = catalog, targetCalories = 2500.0,
+            shuffleSeed = 1001L, previousFoodIds = emptySet()
+        )
+        val items1 = plan1.items.map { it.foodId }.toSet()
+        assertTrue("Arroz deve estar presente na semana 1", items1.contains("arroz-agulhinha"))
+        assertTrue("Feijão deve estar presente na semana 1", items1.contains("feijao-preto"))
+
+        // Semana 2: nova variedade informando os itens da semana 1
+        val plan2 = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "user_rot", exams = emptyList(), vitals = emptyList(), profile = null,
+            catalog = foods, ingredientCatalog = catalog, targetCalories = 2500.0,
+            shuffleSeed = 2002L, previousFoodIds = items1
+        )
+        val items2 = plan2.items.map { it.foodId }.toSet()
+        assertTrue("Arroz DEVE ser preservado na semana 2 como âncora fixa", items2.contains("arroz-agulhinha"))
+        assertTrue("Feijão DEVE ser preservado na semana 2 como âncora fixa", items2.contains("feijao-preto"))
+
+        // Alimentos complementares devem apresentar rotatividade real
+        val nonAnchor1 = items1 - setOf("arroz-agulhinha", "feijao-preto")
+        val nonAnchor2 = items2 - setOf("arroz-agulhinha", "feijao-preto")
+        val rotatedDifference = nonAnchor2 - nonAnchor1
+        assertTrue("Deve haver alimentos novos rotacionados na semana 2", rotatedDifference.isNotEmpty())
+    }
+
+    @Test
+    fun respectsRegisteredDietaryRestrictionsExcludingAnchorsIfRestricted() {
+        val (foods, catalog) = createTestCatalog()
+
+        // Perfil alérgico a feijão / leguminosas
+        val restrictedProfile = RemoteProfile(
+            id = "user_no_beans",
+            foodAllergies = listOf("Feijão Preto", "Feijão")
+        )
+
+        val plan = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "user_no_beans", exams = emptyList(), vitals = emptyList(), profile = restrictedProfile,
+            catalog = foods, ingredientCatalog = catalog, targetCalories = 2500.0,
+            shuffleSeed = 12345L, previousFoodIds = emptySet()
+        )
+
+        val items = plan.items.map { it.foodId }.toSet()
+        assertFalse("Feijão NÃO deve entrar para usuário com restrição/alergia registrada", items.contains("feijao-preto"))
+        assertTrue("Arroz permanece como âncora para quem não tem restrição a arroz", items.contains("arroz-agulhinha"))
+        assertTrue("Meta energética atinge patamar satisfatório mesmo sem feijão", plan.coveragePercent >= 90.0)
+    }
 }

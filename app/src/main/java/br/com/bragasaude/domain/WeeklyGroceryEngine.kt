@@ -87,7 +87,9 @@ object WeeklyGroceryEngine {
         catalog: List<FoodEntity>,
         dislikedFoodNames: Set<String> = emptySet(),
         ingredientCatalog: GroceryIngredientCatalog,
-        targetCalories: Double = 1800.0
+        targetCalories: Double = 1800.0,
+        shuffleSeed: Long? = null,
+        previousFoodIds: Set<String> = emptySet()
     ): WeeklyGroceryPlanResult {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val weekStartDate = GroceryWeek.start()
@@ -181,15 +183,36 @@ object WeeklyGroceryEngine {
         }
 
         // Separação em pools taxonômicos normalizados (sem fragilidade de acentos)
+        val random = shuffleSeed?.let { java.util.Random(it) }
+
+        fun isPreviousFood(food: FoodEntity): Boolean {
+            if (previousFoodIds.isEmpty()) return false
+            if (food.remoteId in previousFoodIds) return true
+            val slugs = ingredientCatalog.forFood(food.remoteId, food.name).map { it.slug }
+            return slugs.any { it in previousFoodIds }
+        }
+
+        fun orderPool(candidates: List<FoodEntity>): List<FoodEntity> {
+            if (candidates.isEmpty()) return emptyList()
+            if (shuffleSeed == null && previousFoodIds.isEmpty()) return candidates
+
+            val (fresh, previous) = candidates.partition { !isPreviousFood(it) }
+
+            val orderedFresh = if (random != null) fresh.shuffled(random) else fresh
+            val orderedPrevious = if (random != null) previous.shuffled(random) else previous
+
+            return orderedFresh + orderedPrevious
+        }
+
         fun poolFor(corridor: String): List<FoodEntity> {
             val list = available.filter { classifyPillar(it) == corridor && it.remoteId !in selectedRequiredFoodIds }
             return if (list.isNotEmpty()) list else safeCatalog.filter { classifyPillar(it) == corridor && it.remoteId !in selectedRequiredFoodIds }
         }
 
-        val grainsPool = poolFor(CORRIDOR_GRAOS)
-        val proteinsPool = poolFor(CORRIDOR_PROTEINAS)
+        val grainsPool = orderPool(poolFor(CORRIDOR_GRAOS))
+        val proteinsPool = orderPool(poolFor(CORRIDOR_PROTEINAS))
         val producePool = poolFor(CORRIDOR_HORTIFRUTI)
-        val pantryPool = poolFor(CORRIDOR_MERCEARIA)
+        val pantryPool = orderPool(poolFor(CORRIDOR_MERCEARIA))
 
         // Verificação de alimentos sem kcal
         val foodsWithoutKcal = (available + safeCatalog).filter { it.kcal == null || it.kcal <= 0.0 }.distinctBy { it.remoteId }
@@ -242,7 +265,8 @@ object WeeklyGroceryEngine {
             hasHighBp = hasHighBp,
             ingredientCatalog = ingredientCatalog,
             selectedCanonicalGroups = selectedCanonicalGroups,
-            destConsumptions = plannedConsumptions
+            destConsumptions = plannedConsumptions,
+            orderFn = ::orderPool
         )
 
         // 8. Dimensionamento do Pilar 4: Mercearia, Gorduras Boas, Sementes, Temperos e Chás
@@ -452,16 +476,17 @@ object WeeklyGroceryEngine {
         hasHighBp: Boolean,
         ingredientCatalog: GroceryIngredientCatalog,
         selectedCanonicalGroups: MutableSet<String>,
-        destConsumptions: MutableList<PlannedConsumption>
+        destConsumptions: MutableList<PlannedConsumption>,
+        orderFn: (List<FoodEntity>) -> List<FoodEntity> = { it }
     ) {
         if (candidates.isEmpty()) return
 
-        val frutasPool = candidates.filter { groceryNameKey(it.category.orEmpty()).contains("fruta") }
-        val folhasPool = candidates.filter {
+        val frutasPool = orderFn(candidates.filter { groceryNameKey(it.category.orEmpty()).contains("fruta") })
+        val folhasPool = orderFn(candidates.filter {
             val c = groceryNameKey(it.category.orEmpty())
             c.contains("verdura") || c.contains("folhoso") || c.contains("hortalica") || c.contains("crucifera")
-        }
-        val legumesPool = candidates.filter { groceryNameKey(it.category.orEmpty()).contains("legume") }
+        })
+        val legumesPool = orderFn(candidates.filter { groceryNameKey(it.category.orEmpty()).contains("legume") })
 
         val frutasCount = if (dailyCalorieTarget >= 2800.0) 3 else 2
         val frutasCandidates = if (hasHighGlucose) {
