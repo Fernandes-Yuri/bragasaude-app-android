@@ -39,7 +39,8 @@ class NutritionViewModel @Inject constructor(
     private val examsRepository: ExamsRepository,
     private val vitalsRepository: VitalsRepository,
     private val groceryRepository: GroceryRepository,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _contributionState = MutableStateFlow(br.com.bragasaude.domain.GroceryContributionState())
@@ -225,9 +226,17 @@ class NutritionViewModel @Inject constructor(
     }.distinctUntilChanged()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val dailyCalories = _profile.map { 
-        it?.dailyCalorieTarget?.toFloat() ?: 1800f 
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1800f)
+    private val _userWeight = MutableStateFlow<Double?>(null)
+    val userWeight = _userWeight.asStateFlow()
+
+    private val _autoRecommendedCalories = MutableStateFlow(1800)
+    val autoRecommendedCalories = _autoRecommendedCalories.asStateFlow()
+
+    private val _isCustomCalorieTarget = MutableStateFlow(false)
+    val isCustomCalorieTarget = _isCustomCalorieTarget.asStateFlow()
+
+    private val _dailyCalories = MutableStateFlow(1800f)
+    val dailyCalories = _dailyCalories.asStateFlow()
 
     val totalCaloriesConsumed = nutritionRepository.todayLoggedMeals.map { list ->
         list.sumOf { it.kcal }
@@ -248,7 +257,48 @@ class NutritionViewModel @Inject constructor(
         _dislikedFoodNames.value = emptySet()
     }
 
+    fun setCustomCalorieTarget(newTargetKcal: Double) {
+        viewModelScope.launch {
+            try {
+                val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean("calorie_target_is_custom_$userId", true).apply()
+                _isCustomCalorieTarget.value = true
+                _dailyCalories.value = newTargetKcal.toFloat()
+
+                profileRepository.getProfile(userId).first()?.let { profile ->
+                    val updated = profile.toRemote().copy(dailyCalorieTarget = newTargetKcal)
+                    profileRepository.saveProfile(updated)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun resetCalorieTargetToRecommended() {
+        viewModelScope.launch {
+            try {
+                val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean("calorie_target_is_custom_$userId", false).apply()
+                _isCustomCalorieTarget.value = false
+                val autoTarget = _autoRecommendedCalories.value.toFloat()
+                _dailyCalories.value = autoTarget
+
+                profileRepository.getProfile(userId).first()?.let { profile ->
+                    val updated = profile.toRemote().copy(dailyCalorieTarget = autoTarget.toDouble())
+                    profileRepository.saveProfile(updated)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     init {
+        val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+        val initialCustom = prefs.getBoolean("calorie_target_is_custom_$userId", false)
+        _isCustomCalorieTarget.value = initialCustom
+
         viewModelScope.launch {
             val offline = catalogRepository.fetchGroceryIngredients(includePrices = false)
             _groceryIngredients.value = offline
@@ -268,6 +318,28 @@ class NutritionViewModel @Inject constructor(
             profileRepository.getProfile(userId).collectLatest { entity ->
                 val remProfile = entity?.toRemote()
                 _profile.value = remProfile
+
+                val weight = entity?.weight ?: remProfile?.weight
+                _userWeight.value = weight
+
+                // Diretrizes FAO/OMS e Guia Alimentar: ~25 a 30 kcal/kg (média prática de 28 kcal/kg)
+                val calculatedAuto = if (weight != null && weight > 0.0) {
+                    (weight * 28).toInt()
+                } else {
+                    1800
+                }
+                _autoRecommendedCalories.value = calculatedAuto
+
+                val isCustom = prefs.getBoolean("calorie_target_is_custom_$userId", false)
+                _isCustomCalorieTarget.value = isCustom
+
+                val target = if (isCustom && remProfile?.dailyCalorieTarget != null && remProfile.dailyCalorieTarget > 0) {
+                    remProfile.dailyCalorieTarget.toFloat()
+                } else {
+                    calculatedAuto.toFloat()
+                }
+                _dailyCalories.value = target
+
                 // Atualiza catálogo seguro quando o perfil clínico mudar (ex: diabetes marcado)
                 loadSafeCatalog(remProfile)
             }
