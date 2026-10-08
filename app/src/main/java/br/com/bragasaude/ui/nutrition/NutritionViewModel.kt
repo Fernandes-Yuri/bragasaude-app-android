@@ -594,6 +594,13 @@ class NutritionViewModel @Inject constructor(
                 val dislikes = _dislikedFoodNames.value
                 val currentDailyCal = _dailyCalories.value.toDouble()
 
+                val previousFoods = if (!preserveManual) {
+                    groceryList.value.map { it.foodId }.toSet()
+                } else {
+                    emptySet()
+                }
+                val seed = if (!preserveManual) System.currentTimeMillis() else null
+
                 val plan = WeeklyGroceryEngine.planWeeklyGrocery(
                     userId = userId,
                     exams = exams,
@@ -602,7 +609,9 @@ class NutritionViewModel @Inject constructor(
                     catalog = catalog,
                     dislikedFoodNames = dislikes,
                     ingredientCatalog = ingredients,
-                    targetCalories = currentDailyCal
+                    targetCalories = currentDailyCal,
+                    shuffleSeed = seed,
+                    previousFoodIds = previousFoods
                 )
                 if (plan.items.isNotEmpty()) {
                     weeklyRepository.save(userId, plan, preserveManual)
