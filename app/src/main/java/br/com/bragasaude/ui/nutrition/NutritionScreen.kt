@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -25,14 +26,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
+import br.com.bragasaude.domain.groceryNameKey
+import kotlinx.coroutines.delay
 import br.com.bragasaude.R
 import br.com.bragasaude.data.remote.model.RemoteFood
 import br.com.bragasaude.domain.HealthCalculators
@@ -95,6 +101,9 @@ fun NutritionScreen(
     var showGroceryBottomSheet by remember { mutableStateOf(false) }
     // Agente B1: itens sugeridos pelo chat; o usuário confirma via chip.
     var pendingSuggestions by remember(suggestedGroceryItems) { mutableStateOf(suggestedGroceryItems) }
+
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
 
     // Custom Food Form
     var customFoodName by remember { mutableStateOf("") }
@@ -711,10 +720,30 @@ fun NutritionScreen(
 
     // Diálogo de Seleção e Busca Dinâmica de Alimentos
     if (showFoodSelectorDialog) {
+        LaunchedEffect(searchQuery, searchResults) {
+            val clean = groceryNameKey(searchQuery)
+            if (clean.length >= 2 && searchQuery.endsWith(" ") && searchResults.isNotEmpty()) {
+                keyboardController?.hide()
+                focusManager.clearFocus()
+            } else if (clean.length >= 3 && searchResults.isNotEmpty()) {
+                val isFullMatch = searchResults.any { food ->
+                    val fullName = groceryNameKey(food.name)
+                    fullName == clean || fullName.split(" ", "-", "/").any { it == clean }
+                }
+                if (isFullMatch) {
+                    delay(400)
+                    keyboardController?.hide()
+                    focusManager.clearFocus()
+                }
+            }
+        }
+
         BragaFormSheet(
             onDismissRequest = { 
                 showFoodSelectorDialog = false
                 selectedFoodForPortion = null
+                keyboardController?.hide()
+                focusManager.clearFocus()
             },
             title = { Text("O que você consumiu no $selectedMealTab?", fontWeight = FontWeight.Bold) },
             text = {
@@ -724,7 +753,25 @@ fun NutritionScreen(
                         onValueChange = { viewModel.onSearchQueryChanged(it) },
                         placeholder = { Text("Buscar (ex: Arroz, Frango, Banana...)") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = {
+                                    viewModel.onSearchQueryChanged("")
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Limpar busca")
+                                }
+                            }
+                        },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                            }
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -756,6 +803,8 @@ fun NutritionScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable { 
+                                            keyboardController?.hide()
+                                            focusManager.clearFocus()
                                             selectedFoodForPortion = food 
                                             portionGramsText = food.servingSizeGrams.toString()
                                         }

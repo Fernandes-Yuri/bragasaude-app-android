@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import br.com.bragasaude.domain.GroceryBudgetTier
 import br.com.bragasaude.domain.GroceryProteinPreference
 import br.com.bragasaude.domain.WeeklyGroceryPreferences
+import br.com.bragasaude.ui.components.BragaBottomSheet
 import br.com.bragasaude.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,12 +35,9 @@ fun WeeklyGroceryPreferencesSheet(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    ModalBottomSheet(
+    BragaBottomSheet(
         onDismissRequest = onDismissRequest,
-        sheetState = sheetState,
-        containerColor = BragaCardSurface,
-        tonalElevation = 0.dp,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = BragaCardBorder) }
+        sheetState = sheetState
     ) {
         Column(
             modifier = Modifier
