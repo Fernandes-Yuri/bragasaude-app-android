@@ -615,6 +615,8 @@ fun GroceryListBottomSheet(
                 item { Spacer(Modifier.height(16.dp)) }
             }
         }
+    }
+
     if (showPreferencesSheet) {
         WeeklyGroceryPreferencesSheet(
             initialPreferences = weeklyPreferences,
