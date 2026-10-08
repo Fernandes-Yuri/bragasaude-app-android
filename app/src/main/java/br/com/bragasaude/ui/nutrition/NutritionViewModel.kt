@@ -518,6 +518,7 @@ class NutritionViewModel @Inject constructor(
                 val dislikes = _dislikedFoodNames.value
 
                 val ingredients = catalogRepository.fetchGroceryIngredients()
+                val currentDailyCal = _dailyCalories.value.toDouble()
 
                 val newList = WeeklyGroceryEngine.generateWeeklyList(
                     userId = userId,
@@ -526,10 +527,12 @@ class NutritionViewModel @Inject constructor(
                     profile = profileEntity?.toRemote(),
                     catalog = catalog,
                     dislikedFoodNames = dislikes,
-                    ingredientCatalog = ingredients
+                    ingredientCatalog = ingredients,
+                    targetCalories = currentDailyCal
                 )
                 if (newList.isNotEmpty()) {
                     groceryRepository.replaceList(userId, newList)
+                    _groceryMessage.value = "Quantidades calculadas para a sua meta diária de ${currentDailyCal.toInt()} kcal."
                 } else {
                     _groceryMessage.value = "Não foi possível gerar uma lista para o seu perfil. Você pode montar sua lista manualmente."
                 }

@@ -432,28 +432,48 @@ fun NutritionScreen(
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Button(
                                     onClick = { showFoodSelectorDialog = true },
-                                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(54.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                                 ) {
                                     Icon(Icons.Default.Restaurant, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(6.dp))
-                                    Text("Registrar Consumo")
+                                    Text(
+                                        "Registrar\nConsumo",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        lineHeight = 15.sp,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                                    )
                                 }
 
                                 OutlinedButton(
                                     onClick = { showCustomFoodDialog = true },
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.heightIn(min = 48.dp),
-                                    border = BorderStroke(1.dp, BragaMintBorder)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(54.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    border = BorderStroke(1.dp, BragaMintBorder),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                                 ) {
-                                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(4.dp))
-                                    Text("Criar Manual")
+                                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp), tint = BragaEmeraldDark)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "Criar\nManual",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BragaEmeraldDark,
+                                        lineHeight = 15.sp,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                                    )
                                 }
                             }
                         }

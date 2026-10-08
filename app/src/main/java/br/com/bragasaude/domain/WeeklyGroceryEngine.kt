@@ -24,7 +24,8 @@ object WeeklyGroceryEngine {
         profile: RemoteProfile?,
         catalog: List<FoodEntity>,
         dislikedFoodNames: Set<String> = emptySet(),
-        ingredientCatalog: GroceryIngredientCatalog
+        ingredientCatalog: GroceryIngredientCatalog,
+        targetCalories: Double = 1800.0
     ): List<GroceryListItemEntity> {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val weekStartDate = dateFormat.format(Date())
@@ -78,7 +79,7 @@ object WeeklyGroceryEngine {
         val hortifrutiFoods = frutasEscolhidas + folhasEscolhidas + legumesEscolhidos + temperoFresco
 
         hortifrutiFoods.forEach { food ->
-            selectedItems.addAll(createGroceryItems(userId, weekStartDate, food, CORRIDOR_HORTIFRUTI, ingredientCatalog))
+            selectedItems.addAll(createGroceryItems(userId, weekStartDate, food, CORRIDOR_HORTIFRUTI, ingredientCatalog, targetCalories))
         }
 
         // 2. CORREDOR CEREAIS & GRAOS (3 a 4 itens)
@@ -89,7 +90,7 @@ object WeeklyGroceryEngine {
 
         val graosFoods = (aveiaOrCereal + sementes + leguminosa + graoOuRaiz).distinctBy { it.remoteId }
         graosFoods.forEach { food ->
-            selectedItems.addAll(createGroceryItems(userId, weekStartDate, food, CORRIDOR_GRAOS, ingredientCatalog))
+            selectedItems.addAll(createGroceryItems(userId, weekStartDate, food, CORRIDOR_GRAOS, ingredientCatalog, targetCalories))
         }
 
         // 3. CORREDOR PROTEINAS, OVOS & LATICINIOS (3 a 4 itens)
@@ -99,7 +100,7 @@ object WeeklyGroceryEngine {
 
         val proteinasFoods = (ovos + carnesPeixes + laticinios).distinctBy { it.remoteId }
         proteinasFoods.forEach { food ->
-            selectedItems.addAll(createGroceryItems(userId, weekStartDate, food, CORRIDOR_PROTEINAS, ingredientCatalog))
+            selectedItems.addAll(createGroceryItems(userId, weekStartDate, food, CORRIDOR_PROTEINAS, ingredientCatalog, targetCalories))
         }
 
         // 4. CORREDOR MERCEARIA, TEMPEROS & CHAS (2 a 3 itens)
@@ -109,24 +110,40 @@ object WeeklyGroceryEngine {
 
         val merceariaFoods = (azeite + especiaria + chas).distinctBy { it.remoteId }
         merceariaFoods.forEach { food ->
-            selectedItems.addAll(createGroceryItems(userId, weekStartDate, food, CORRIDOR_MERCEARIA, ingredientCatalog))
+            selectedItems.addAll(createGroceryItems(userId, weekStartDate, food, CORRIDOR_MERCEARIA, ingredientCatalog, targetCalories))
         }
 
         return selectedItems.groupBy { it.foodId }.values.map { entries -> entries.maxBy { it.purchaseWeightGrams } }
     }
 
-    private fun createGroceryItems(userId: String, weekStartDate: String, food: FoodEntity,
-                                   corridor: String, ingredientCatalog: GroceryIngredientCatalog): List<GroceryListItemEntity> {
+    private fun createGroceryItems(
+        userId: String,
+        weekStartDate: String,
+        food: FoodEntity,
+        corridor: String,
+        ingredientCatalog: GroceryIngredientCatalog,
+        targetCalories: Double = 1800.0
+    ): List<GroceryListItemEntity> {
         val dailyGrams = food.servingSizeGrams.takeIf { it > 0 } ?: 50
         val days = when (corridor) { CORRIDOR_HORTIFRUTI -> 6; CORRIDOR_GRAOS -> 5; CORRIDOR_PROTEINAS -> 6; else -> 4 }
-        val plannedGrams = (dailyGrams * days * 1.20).toInt().coerceAtLeast(50)
+        val calorieFactor = (targetCalories / 1800.0).coerceIn(0.7, 1.6)
+        val plannedGrams = (dailyGrams * days * calorieFactor * 1.20).toInt().coerceAtLeast(50)
+        val scaledWeeklyServingGrams = (dailyGrams * days * calorieFactor).toInt()
         val ingredients = ingredientCatalog.forFood(food.remoteId, food.name)
         return ingredients.map { ingredient ->
             val amount = GroceryPurchasePlanner.quantity(ingredient, if (ingredients.size == 1) plannedGrams else ingredient.minimum)
-            GroceryListItemEntity(UUID.randomUUID().toString(), userId, weekStartDate,
-                ingredient.slug, ingredient.name, corridor, dailyGrams * days,
-                if (ingredient.unit == "kg") amount else 0,
-                GroceryPurchasePlanner.text(ingredient, amount), GroceryPurchasePlanner.cost(ingredient, amount))
+            GroceryListItemEntity(
+                remoteId = UUID.randomUUID().toString(),
+                userId = userId,
+                weekStartDate = weekStartDate,
+                foodId = ingredient.slug,
+                foodName = ingredient.name,
+                category = corridor,
+                suggestedServingWeekGrams = scaledWeeklyServingGrams,
+                purchaseWeightGrams = if (ingredient.unit == "kg") amount else 0,
+                purchaseUnitText = GroceryPurchasePlanner.text(ingredient, amount),
+                estimatedPriceBrl = GroceryPurchasePlanner.cost(ingredient, amount)
+            )
         }
     }
 }
