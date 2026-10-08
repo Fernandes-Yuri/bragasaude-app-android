@@ -42,6 +42,9 @@ class RemoteNutritionCatalogTest {
             assertEquals(setOf("ingredient_a", "ingredient_b"), list.map { it.foodId }.toSet())
             assertEquals(300, list.first { it.foodId == "ingredient_a" }.purchaseWeightGrams)
         }
+        val withDislikes = WeeklyGroceryEngine.generateWeeklyList("u", emptyList(), emptyList(), null,
+            listOf(food("base_a"), food("base_b")), dislikedFoodNames = setOf("Preparo base_a", "Preparo base_b"), ingredientCatalog = parsed)
+        assertEquals(setOf("ingredient_a", "ingredient_b"), withDislikes.map { it.foodId }.toSet())
     }
 
     @Test fun respectsAllergensClinicalRestrictionsAndDietBeforeRequiredGroups() {
