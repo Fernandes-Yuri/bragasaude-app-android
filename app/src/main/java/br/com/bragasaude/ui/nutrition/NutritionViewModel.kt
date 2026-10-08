@@ -109,6 +109,9 @@ class NutritionViewModel @Inject constructor(
         }.sortedBy { it.name }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val _groceryPlanResult = MutableStateFlow<br.com.bragasaude.domain.WeeklyGroceryPlanResult?>(null)
+    val groceryPlanResult = _groceryPlanResult.asStateFlow()
+
     private val _groceryMessage = MutableStateFlow<String?>(null)
     val groceryMessage = _groceryMessage.asStateFlow()
 
@@ -118,18 +121,27 @@ class NutritionViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 groceryRepository.putManualItem(userId, ingredient, amount, "Minha lista", replacingId)
-                _groceryMessage.value = "Item salvo. Marque como comprado quando estiver na despensa."
+                _groceryPlanResult.value = null
+                _groceryMessage.value = "Item salvo. Lista editada manualmente; gere novamente para recalcular a cobertura calórica semanal pela meta vigente."
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (_: Exception) { _groceryMessage.value = "Não foi possível salvar o item. Tente novamente." }
         }
     }
 
     fun removeGroceryItem(id: String) {
-        viewModelScope.launch { groceryRepository.removeItem(userId, id) }
+        viewModelScope.launch {
+            groceryRepository.removeItem(userId, id)
+            _groceryPlanResult.value = null
+            _groceryMessage.value = "Item removido. Lista editada manualmente; gere novamente para recalcular a cobertura calórica semanal pela meta vigente."
+        }
     }
 
     fun clearGroceryList() {
-        viewModelScope.launch { groceryRepository.clearGroceryList(userId) }
+        viewModelScope.launch {
+            groceryRepository.clearGroceryList(userId)
+            _groceryPlanResult.value = null
+            _groceryMessage.value = null
+        }
     }
 
     private val _mealRules = MutableStateFlow<List<RemoteMealRule>>(emptyList())
@@ -270,6 +282,9 @@ class NutritionViewModel @Inject constructor(
                     val updated = profile.toRemote().copy(dailyCalorieTarget = newTargetKcal)
                     profileRepository.saveProfile(updated)
                 }
+                if (groceryList.value.isNotEmpty()) {
+                    _groceryMessage.value = "Meta diária alterada para ${newTargetKcal.toInt()} kcal. Gere a lista novamente para redimensionar as compras para a nova meta semanal."
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -288,6 +303,9 @@ class NutritionViewModel @Inject constructor(
                 profileRepository.getProfile(userId).first()?.let { profile ->
                     val updated = profile.toRemote().copy(dailyCalorieTarget = autoTarget.toDouble())
                     profileRepository.saveProfile(updated)
+                }
+                if (groceryList.value.isNotEmpty()) {
+                    _groceryMessage.value = "Meta diária restaurada para ${autoTarget.toInt()} kcal. Gere a lista novamente para redimensionar as compras para a nova meta semanal."
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -521,7 +539,7 @@ class NutritionViewModel @Inject constructor(
                 val dislikes = _dislikedFoodNames.value
                 val currentDailyCal = _dailyCalories.value.toDouble()
 
-                val newList = WeeklyGroceryEngine.generateWeeklyList(
+                val plan = WeeklyGroceryEngine.planWeeklyGrocery(
                     userId = userId,
                     exams = exams,
                     vitals = vitals,
@@ -531,12 +549,11 @@ class NutritionViewModel @Inject constructor(
                     ingredientCatalog = ingredients,
                     targetCalories = currentDailyCal
                 )
-                if (newList.isNotEmpty()) {
-                    groceryRepository.replaceList(userId, newList)
-                    _groceryMessage.value = "Quantidades calculadas para a sua meta diária de ${currentDailyCal.toInt()} kcal."
-                } else {
-                    _groceryMessage.value = "Não foi possível gerar uma lista para o seu perfil. Você pode montar sua lista manualmente."
+                _groceryPlanResult.value = plan
+                if (plan.items.isNotEmpty()) {
+                    groceryRepository.replaceList(userId, plan.items)
                 }
+                _groceryMessage.value = plan.statusMessage
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
@@ -565,6 +582,8 @@ class NutritionViewModel @Inject constructor(
                 clean.filter { it.lowercase() !in existing }.forEach { name ->
                     groceryRepository.addItem(userId, name)
                 }
+                _groceryPlanResult.value = null
+                _groceryMessage.value = "Itens adicionados. Lista editada manualmente; gere novamente para recalcular a cobertura calórica semanal pela meta vigente."
             } catch (e: Exception) {
                 e.printStackTrace()
             }
