@@ -391,6 +391,8 @@ fun MedicationStockScreen(
                             medication = med,
                             daysRemaining = viewModel.daysRemaining(med),
                             isCritical = viewModel.isStockCritical(med),
+                            isDoseBlocked = viewModel.isDoseBlocked(med.id),
+                            hoursUntilNextDose = viewModel.hoursUntilNextDose(med.id),
                             onTake = { viewModel.takeDose(med.id) },
                             onSendReminder = {
                                 val times = MedicationSchedule.times(med.scheduleTimes, med.scheduleTime)
@@ -598,6 +600,8 @@ private fun MedicationStockCard(
     medication: MedicationEntity,
     daysRemaining: Double,
     isCritical: Boolean,
+    isDoseBlocked: Boolean = false,
+    hoursUntilNextDose: Int = 0,
     onTake: () -> Unit,
     onSendReminder: () -> Unit = {},
     onRestock: (Int) -> Unit,
@@ -613,10 +617,60 @@ private fun MedicationStockCard(
     var showRestock by remember { mutableStateOf(false) }
     var restockQty by remember { mutableStateOf(medication.totalUnits.toString()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showTakeConfirmDialog by remember { mutableStateOf(false) }
     var showEditSchedule by remember { mutableStateOf(false) }
     var showCalendarPrompt by remember { mutableStateOf(false) }
     val currentTimes = remember(medication.scheduleTimes, medication.scheduleTime) {
         MedicationSchedule.times(medication.scheduleTimes, medication.scheduleTime)
+    }
+
+    if (showTakeConfirmDialog) {
+        BragaAlertDialog(
+            onDismissRequest = { showTakeConfirmDialog = false },
+            icon = {
+                Icon(
+                    Icons.Filled.CheckCircle,
+                    contentDescription = null,
+                    tint = BragaEmerald,
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text(
+                    "Confirmar dose",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    color = BragaTextPrimary
+                )
+            },
+            text = {
+                Text(
+                    "Você confirma que tomou a dose de ${medication.name}? O registro será concluído e o botão ficará bloqueado por 23h.",
+                    fontSize = 15.sp,
+                    color = BragaTextSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showTakeConfirmDialog = false
+                        onTake()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Text("Confirmar", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showTakeConfirmDialog = false },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Text("Cancelar", color = BragaTextSecondary)
+                }
+            }
+        )
     }
 
     if (showDeleteConfirm) {
@@ -865,17 +919,46 @@ private fun MedicationStockCard(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (canTake) {
-                    Button(
-                        onClick = onTake,
-                        enabled = !loading && medication.currentUnits > 0,
-                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 52.dp)
-                    ) {
-                        Icon(Icons.Filled.CheckCircle, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Tomar dose", color = Color.White, fontSize = 16.sp)
+                    if (isDoseBlocked) {
+                        Button(
+                            onClick = {},
+                            enabled = false,
+                            colors = ButtonDefaults.buttonColors(
+                                disabledContainerColor = BragaMintSurface,
+                                disabledContentColor = BragaEmeraldDark
+                            ),
+                            border = BorderStroke(1.dp, BragaMintBorder),
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 52.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.CheckCircle,
+                                contentDescription = null,
+                                tint = BragaEmeraldDark,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Dose tomada",
+                                color = BragaEmeraldDark,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    } else {
+                        Button(
+                            onClick = { showTakeConfirmDialog = true },
+                            enabled = !loading && medication.currentUnits > 0,
+                            colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 52.dp)
+                        ) {
+                            Icon(Icons.Filled.CheckCircle, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Tomar dose", color = Color.White, fontSize = 16.sp)
+                        }
                     }
                 } else {
                     Button(
@@ -898,6 +981,15 @@ private fun MedicationStockCard(
                         .weight(1f)
                         .heightIn(min = 52.dp)
                 ) { Text("Reabastecer", fontSize = 16.sp) }
+            }
+
+            if (isDoseBlocked && hoursUntilNextDose > 0) {
+                Text(
+                    text = "Dose registrada. Próxima dose liberada em ${hoursUntilNextDose}h.",
+                    fontSize = 12.sp,
+                    color = BragaTextSecondary,
+                    modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                )
             }
 
             if (showRestock) {

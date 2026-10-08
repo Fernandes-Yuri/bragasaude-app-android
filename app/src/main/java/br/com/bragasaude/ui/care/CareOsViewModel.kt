@@ -140,17 +140,27 @@ class CareOsViewModel @Inject constructor(
 
             viewModelScope.launch {
                 ui.map { it.selectedPatientId }.distinctUntilChanged().flatMapLatest { selected ->
-                    if (selected == null) flowOf(emptyList<MedicationEntity>() to emptyList<CareAuditEntity>())
+                    if (selected == null) flowOf(Triple(emptyList<MedicationEntity>(), emptyList<CareAuditEntity>(), emptyMap<String, Long>()))
                     else combine(
                         medicationRepository.getMedications(selected),
-                        careOsRepository.getCareWall(selected)
-                    ) { meds, wall -> meds to wall }
-                }.collect { (meds, wall) ->
+                        careOsRepository.getCareWall(selected),
+                        medicationRepository.getLogsForToday(selected)
+                    ) { meds, wall, logs ->
+                        val lastTakenMap = logs
+                            .filter { it.unitsTaken > 0 }
+                            .groupBy { it.medicationId }
+                            .mapValues { entry ->
+                                entry.value.maxOfOrNull { it.takenAt.time } ?: 0L
+                            }
+                        Triple(meds, wall, lastTakenMap)
+                    }
+                }.collect { (meds, wall, lastTakenMap) ->
                     val selected = _ui.value.selectedPatientId
                     _ui.update {
                         it.copy(
                             medications = meds,
                             wall = wall,
+                            lastTakenMillisByMed = lastTakenMap,
                             checkInDoneToday = selected?.let { id -> careOsRepository.hasCheckInForToday(id) } ?: false
                         )
                     }
@@ -195,9 +205,34 @@ class CareOsViewModel @Inject constructor(
 
     // ==================== ESTOQUE + DOSES ====================
 
+    companion object {
+        const val DOSE_COOLDOWN_MILLIS = 23L * 3600L * 1000L // Bloqueio de segurança de 23h
+    }
+
     /**
-     * Registra a toma e celebra (C38). O 409 é tratado graciosamente: avisa
-     * "já registrado" sem duplicar decremento.
+     * Verifica se a dose já foi registrada nas últimas 23 horas.
+     */
+    fun isDoseBlocked(medId: String): Boolean {
+        val lastTaken = _ui.value.lastTakenMillisByMed[medId] ?: return false
+        val elapsed = System.currentTimeMillis() - lastTaken
+        return elapsed in 0 until DOSE_COOLDOWN_MILLIS
+    }
+
+    /**
+     * Retorna a quantidade de horas restantes até desbloquear a próxima dose.
+     */
+    fun hoursUntilNextDose(medId: String): Int {
+        val lastTaken = _ui.value.lastTakenMillisByMed[medId] ?: return 0
+        val elapsed = System.currentTimeMillis() - lastTaken
+        val remaining = DOSE_COOLDOWN_MILLIS - elapsed
+        return if (remaining > 0) {
+            ((remaining + 3599999L) / 3600000L).toInt().coerceAtLeast(1)
+        } else 0
+    }
+
+    /**
+     * Registra a toma com trava de segurança de 23h e sem áudio invasivo.
+     * O 409 é tratado graciosamente: avisa "já registrado" sem duplicar decremento.
      */
     fun takeDose(medId: String, time: String? = null) {
         viewModelScope.launch {
@@ -206,15 +241,28 @@ class CareOsViewModel @Inject constructor(
                 _ui.update { it.copy(message = "Seu vínculo permite visualizar, mas não registrar doses.") }
                 return@launch
             }
+            if (isDoseBlocked(medId)) {
+                val hours = hoursUntilNextDose(medId)
+                _ui.update { it.copy(message = "Esta dose já foi registrada hoje. Próxima liberação em ${hours}h.") }
+                return@launch
+            }
             _ui.value = _ui.value.copy(loading = true, message = null)
             when (val res = medicationRepository.takeDose(patientId, medId, time, actorId = actor)) {
                 is BragaApiClient.TakeMedicationResult.Success -> {
-                    _ui.value = _ui.value.copy(loading = false, isCelebrating = true)
-                    celebrate()
-                }
-                is BragaApiClient.TakeMedicationResult.AlreadyTaken -> {
+                    val updatedMap = _ui.value.lastTakenMillisByMed + (medId to System.currentTimeMillis())
                     _ui.value = _ui.value.copy(
                         loading = false,
+                        isCelebrating = false,
+                        lastTakenMillisByMed = updatedMap,
+                        message = "Dose registrada com sucesso."
+                    )
+                }
+                is BragaApiClient.TakeMedicationResult.AlreadyTaken -> {
+                    val updatedMap = _ui.value.lastTakenMillisByMed + (medId to System.currentTimeMillis())
+                    _ui.value = _ui.value.copy(
+                        loading = false,
+                        isCelebrating = false,
+                        lastTakenMillisByMed = updatedMap,
                         message = "Esta dose já foi registrada hoje. Tudo certo — o medicamento já foi contabilizado."
                     )
                 }
@@ -319,17 +367,10 @@ class CareOsViewModel @Inject constructor(
         return daysRemaining(med) <= med.alertThresholdDays
     }
 
-    // ==================== CENA C38 — CELEBRAÇÃO ====================
-
+    // ==================== CELEBRAÇÃO VISUAL ====================
     private suspend fun celebrate() {
-        try {
-            val profile = profileRepository.getProfile(patientId).firstOrNull()?.toRemote()
-            celebrationTts.celebrate(profile?.fullName)
-        } catch (e: Exception) {
-            celebrationTts.celebrate(null)
-        } finally {
-            _ui.value = _ui.value.copy(isCelebrating = false)
-        }
+        // Áudio invasivo por voz removido por solicitação de produto.
+        _ui.value = _ui.value.copy(isCelebrating = false)
     }
 
     // ==================== SCANNER EAN-13 + CADASTRO ====================
@@ -628,6 +669,7 @@ data class CareOsUiState(
     val isCaregiver: Boolean = false,
     val loading: Boolean = false,
     val medications: List<MedicationEntity> = emptyList(),
+    val lastTakenMillisByMed: Map<String, Long> = emptyMap(),
     val wall: List<CareAuditEntity> = emptyList(),
     val checkInDoneToday: Boolean = false,
     val message: String? = null,
