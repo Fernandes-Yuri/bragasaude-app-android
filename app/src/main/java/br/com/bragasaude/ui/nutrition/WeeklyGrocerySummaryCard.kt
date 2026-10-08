@@ -39,6 +39,7 @@ fun WeeklyGrocerySummaryCard(plan: WeeklyGroceryPlanResult, onResize: () -> Unit
                     }
                 }
             }
+            if (plan.limitations.isNotEmpty()) Text("Há limitações de dados ou conversões. A cobertura energética do plano não garante quantidade de compra completa.", style = MaterialTheme.typography.bodySmall)
             plan.limitations.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
     }

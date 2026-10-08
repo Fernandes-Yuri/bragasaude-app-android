@@ -35,6 +35,11 @@ class WeeklyGrocerySummaryRepository @Inject constructor(private val database: B
         summaries.upsert(WeeklyGrocerySummaryEntity.from(userId, GroceryWeek.start(), result))
     }
 
+    suspend fun modify(userId: String, message: String, operation: suspend () -> Unit) = database.withTransaction {
+        operation()
+        summaries.invalidate(userId, GroceryWeek.start(), message)
+    }
+
     suspend fun invalidate(userId: String, message: String) = summaries.invalidate(userId, GroceryWeek.start(), message)
     suspend fun clear(userId: String) = database.withTransaction {
         groceries.clearGroceryList(userId)

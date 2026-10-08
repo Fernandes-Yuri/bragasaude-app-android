@@ -473,6 +473,7 @@ object Migrations {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN isManual INTEGER NOT NULL DEFAULT 0")
             db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN plannedWeeklyAmount REAL NOT NULL DEFAULT 0")
+            db.execSQL("UPDATE grocery_list_local SET isManual=1 WHERE category IN ('Minha lista', 'Feira & Mercado')")
             db.execSQL("CREATE TABLE IF NOT EXISTS weekly_grocery_summary_local (userId TEXT NOT NULL, weekStartDate TEXT NOT NULL, targetWeeklyCalories REAL NOT NULL, plannedWeeklyCalories REAL NOT NULL, coveragePercent REAL NOT NULL, plannedProteinGrams REAL NOT NULL, plannedCarbsGrams REAL NOT NULL, plannedFatGrams REAL NOT NULL, foodVarietyCount INTEGER NOT NULL, limitationsJson TEXT NOT NULL, isManuallyModified INTEGER NOT NULL, generatedAt INTEGER NOT NULL, statusMessage TEXT NOT NULL, PRIMARY KEY(userId, weekStartDate))")
             db.execSQL("CREATE TABLE IF NOT EXISTS grocery_pantry_stock_local (userId TEXT NOT NULL, ingredientSlug TEXT NOT NULL, unit TEXT NOT NULL, availableAmount REAL NOT NULL, PRIMARY KEY(userId, ingredientSlug))")
             db.execSQL("CREATE TABLE IF NOT EXISTS grocery_meal_local (id TEXT NOT NULL PRIMARY KEY, userId TEXT NOT NULL, day TEXT NOT NULL, foodId TEXT NOT NULL, foodName TEXT NOT NULL, mealType TEXT NOT NULL, portionGrams INTEGER NOT NULL, kcal REAL NOT NULL)")

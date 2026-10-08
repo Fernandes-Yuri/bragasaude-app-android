@@ -148,8 +148,9 @@ class NutritionViewModel @Inject constructor(
         val amount = br.com.bragasaude.domain.GroceryPurchasePlanner.parseAmount(amountText, ingredient.unit) ?: return
         viewModelScope.launch {
             try {
-                groceryRepository.putManualItem(userId, ingredient, amount, "Minha lista", replacingId)
-                invalidateWeekly("Lista modificada manualmente; redimensione para revisar a cobertura. Itens manuais serão preservados.")
+                weeklyRepository.modify(userId, "Lista modificada manualmente; redimensione para revisar a cobertura. Itens manuais serão preservados.") {
+                    groceryRepository.putManualItem(userId, ingredient, amount, "Minha lista", replacingId)
+                }
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (_: Exception) { _groceryMessage.value = "Não foi possível salvar o item. Tente novamente." }
         }
@@ -157,8 +158,9 @@ class NutritionViewModel @Inject constructor(
 
     fun removeGroceryItem(id: String) {
         viewModelScope.launch {
-            groceryRepository.removeItem(userId, id)
-            invalidateWeekly("Lista modificada manualmente; redimensione para revisar a cobertura.")
+            weeklyRepository.modify(userId, "Lista modificada manualmente; redimensione para revisar a cobertura.") {
+                groceryRepository.removeItem(userId, id)
+            }
         }
     }
 
@@ -484,7 +486,7 @@ class NutritionViewModel @Inject constructor(
             val catalog = _groceryIngredients.value ?: catalogRepository.fetchGroceryIngredients()
             val meal = br.com.bragasaude.data.local.GroceryMealEntity(
                 java.util.UUID.randomUUID().toString(), userId, java.time.LocalDate.now().toString(),
-                food.remoteId, food.name, mealType, portion, (food.kcal ?: 0.0) * portion / 100.0)
+                food.id.orEmpty(), food.name, mealType, portion, (food.kcal ?: 0.0) * portion / 100.0)
             val limitations = weeklyRepository.log(meal, catalog)
             if (limitations.isNotEmpty()) _groceryMessage.value = limitations.joinToString(" ")
         }
@@ -625,10 +627,9 @@ class NutritionViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val existing = groceryList.value.map { it.foodName.lowercase() }.toSet()
-                clean.filter { it.lowercase() !in existing }.forEach { name ->
-                    groceryRepository.addItem(userId, name)
+                weeklyRepository.modify(userId, "Lista modificada manualmente; redimensione para revisar a cobertura. Itens manuais serão preservados.") {
+                    clean.filter { it.lowercase() !in existing }.forEach { name -> groceryRepository.addItem(userId, name) }
                 }
-                invalidateWeekly("Lista modificada manualmente; redimensione para revisar a cobertura. Itens manuais serão preservados.")
             } catch (e: Exception) {
                 e.printStackTrace()
             }
