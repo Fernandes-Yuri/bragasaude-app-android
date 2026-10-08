@@ -306,4 +306,84 @@ class WeeklyGroceryEngineTest {
         assertEquals("Deve existir apenas uma única linha para cebola", 1, result.items.size)
         assertEquals("cebola", result.items.single().foodId)
     }
+
+    @Test
+    fun varietySelectionAvoidsConcentrationOfSameVariant() {
+        val ingAveia1 = GroceryIngredient("farelo-aveia", "Farelo de Aveia", "kg", 100, 200, emptyList(), listOf("food_av1"), canonicalGroupSlug = "aveia")
+        val ingAveia2 = GroceryIngredient("aveia-finos", "Aveia em Flocos Finos", "kg", 100, 200, emptyList(), listOf("food_av2"), canonicalGroupSlug = "aveia")
+        val ingQuinoa = GroceryIngredient("quinoa", "Quinoa em Grãos", "kg", 100, 200, emptyList(), listOf("food_qui"), canonicalGroupSlug = "quinoa")
+        val ingMandioca = GroceryIngredient("mandioca", "Mandioca", "kg", 100, 200, emptyList(), listOf("food_man"), canonicalGroupSlug = "mandioca")
+
+        val foodAv1 = FoodEntity("food_av1", "Farelo de Aveia", "Cereais", kcal = 300.0, servingSizeGrams = 30)
+        val foodAv2 = FoodEntity("food_av2", "Aveia em Flocos Finos", "Cereais", kcal = 300.0, servingSizeGrams = 30)
+        val foodQui = FoodEntity("food_qui", "Quinoa em Grãos", "Cereais", kcal = 300.0, servingSizeGrams = 30)
+        val foodMan = FoodEntity("food_man", "Mandioca Cozida", "Raízes", kcal = 120.0, servingSizeGrams = 100)
+
+        val cat = GroceryIngredientCatalog(
+            ingredients = listOf(ingAveia1, ingAveia2, ingQuinoa, ingMandioca),
+            components = mapOf(
+                "food_av1" to listOf("farelo-aveia"),
+                "food_av2" to listOf("aveia-finos"),
+                "food_qui" to listOf("quinoa"),
+                "food_man" to listOf("mandioca")
+            )
+        )
+
+        val selected = WeeklyGroceryEngine.selectDiverseFoods(
+            candidates = listOf(foodAv1, foodAv2, foodQui, foodMan),
+            count = 3,
+            ingredientCatalog = cat,
+            selectedGroups = mutableSetOf()
+        )
+
+        val selectedIds = selected.map { it.remoteId }
+        assertTrue("Deve selecionar food_av1", selectedIds.contains("food_av1"))
+        assertTrue("Deve selecionar food_qui de grupo distinto", selectedIds.contains("food_qui"))
+        assertTrue("Deve selecionar food_man de grupo distinto", selectedIds.contains("food_man"))
+        assertFalse("Não deve selecionar duas variantes de aveia quando há opções de outros grupos", selectedIds.contains("food_av2"))
+    }
+
+    @Test
+    fun separatesEnergyCoverageFromPurchaseCalculationStatus() {
+        val ingSemDensidade = GroceryIngredient("bebida", "Bebida", "L", 1000, 1000, emptyList(), listOf("food_bebida"), densityGPerMl = null)
+        val foodBebida = FoodEntity("food_bebida", "Bebida Láctea", "Laticínios", kcal = 100.0, servingSizeGrams = 200)
+        val cat = GroceryIngredientCatalog(
+            ingredients = listOf(ingSemDensidade),
+            components = mapOf("food_bebida" to listOf("bebida")),
+            purchaseFactors = mapOf("food_bebida" to mapOf("bebida" to 1.0))
+        )
+
+        val result = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "u", exams = emptyList(), vitals = emptyList(), profile = null,
+            catalog = listOf(foodBebida), ingredientCatalog = cat, targetCalories = 1000.0
+        )
+
+        assertEquals("Quando falta densidade, o status da compra deve ser INCOMPLETE",
+            PurchaseCalculationStatus.INCOMPLETE, result.purchaseStatus)
+    }
+
+    @Test
+    fun formatsLimitationsGroupedWithoutRepeatingFoodNames() {
+        val limitations = listOf(
+            GroceryLimitation(
+                type = GroceryLimitationType.MISSING_YIELD,
+                affectedItems = listOf("Feijão Carioca Cozido", "Arroz Integral Cozido"),
+                impact = GroceryCalculationImpact.APPROXIMATED,
+                userSummary = "Rendimento estimado em 1:1"
+            ),
+            GroceryLimitation(
+                type = GroceryLimitationType.MISSING_RECIPE_PROPORTIONS,
+                affectedItems = listOf("Chá de Cidreira com Limão"),
+                impact = GroceryCalculationImpact.NOT_CALCULABLE,
+                userSummary = "Proporções pendentes"
+            )
+        )
+
+        val grouped = GroceryLimitationFormatter.groupForUi(limitations)
+        assertEquals(2, grouped.size)
+        assertEquals(GroceryLimitationType.MISSING_YIELD.userTitle, grouped[0].first)
+        assertEquals(listOf("Feijão Carioca Cozido", "Arroz Integral Cozido"), grouped[0].second)
+        assertEquals(GroceryLimitationType.MISSING_RECIPE_PROPORTIONS.userTitle, grouped[1].first)
+        assertEquals(listOf("Chá de Cidreira com Limão"), grouped[1].second)
+    }
 }

@@ -24,16 +24,85 @@ data class WeeklyGrocerySummaryEntity(
 ) {
     fun result(items: List<GroceryListItemEntity>): WeeklyGroceryPlanResult {
         val values = JSONArray(limitationsJson)
-        return WeeklyGroceryPlanResult(items, targetWeeklyCalories, plannedWeeklyCalories, coveragePercent,
-            plannedProteinGrams, plannedCarbsGrams, plannedFatGrams, foodVarietyCount,
-            (0 until values.length()).map { values.getString(it) }, statusMessage, isManuallyModified, profileWeight)
+        val legacyStrings = mutableListOf<String>()
+        val structured = mutableListOf<br.com.bragasaude.domain.GroceryLimitation>()
+        for (i in 0 until values.length()) {
+            val elem = values.get(i)
+            if (elem is org.json.JSONObject) {
+                val typeStr = elem.optString("type", br.com.bragasaude.domain.GroceryLimitationType.MISSING_YIELD.name)
+                val type = try { br.com.bragasaude.domain.GroceryLimitationType.valueOf(typeStr) } catch (_: Exception) { br.com.bragasaude.domain.GroceryLimitationType.MISSING_YIELD }
+                val impactStr = elem.optString("impact", br.com.bragasaude.domain.GroceryCalculationImpact.APPROXIMATED.name)
+                val impact = try { br.com.bragasaude.domain.GroceryCalculationImpact.valueOf(impactStr) } catch (_: Exception) { br.com.bragasaude.domain.GroceryCalculationImpact.APPROXIMATED }
+                val summary = elem.optString("userSummary", "")
+                val itemsArr = elem.optJSONArray("affectedItems")
+                val affected = if (itemsArr != null) (0 until itemsArr.length()).map { itemsArr.getString(it) } else emptyList()
+                structured.add(br.com.bragasaude.domain.GroceryLimitation(type, affected, impact, summary))
+                legacyStrings.add(summary.ifBlank { "${type.userTitle}: ${affected.joinToString(", ")}" })
+            } else {
+                val text = elem.toString()
+                legacyStrings.add(text)
+                structured.add(br.com.bragasaude.domain.GroceryLimitation(br.com.bragasaude.domain.GroceryLimitationType.MISSING_YIELD, emptyList(), br.com.bragasaude.domain.GroceryCalculationImpact.APPROXIMATED, text))
+            }
+        }
+        val purchaseStatus = when {
+            structured.any { it.impact == br.com.bragasaude.domain.GroceryCalculationImpact.NOT_CALCULABLE } ->
+                br.com.bragasaude.domain.PurchaseCalculationStatus.INCOMPLETE
+            structured.any { it.impact == br.com.bragasaude.domain.GroceryCalculationImpact.APPROXIMATED } ->
+                br.com.bragasaude.domain.PurchaseCalculationStatus.APPROXIMATED
+            else ->
+                br.com.bragasaude.domain.PurchaseCalculationStatus.CALCULABLE
+        }
+        return WeeklyGroceryPlanResult(
+            items = items,
+            targetWeeklyCalories = targetWeeklyCalories,
+            plannedWeeklyCalories = plannedWeeklyCalories,
+            coveragePercent = coveragePercent,
+            plannedProteinGrams = plannedProteinGrams,
+            plannedCarbsGrams = plannedCarbsGrams,
+            plannedFatGrams = plannedFatGrams,
+            foodVarietyCount = foodVarietyCount,
+            limitations = legacyStrings,
+            structuredLimitations = structured,
+            purchaseStatus = purchaseStatus,
+            statusMessage = statusMessage,
+            isManuallyModified = isManuallyModified,
+            profileWeight = profileWeight
+        )
     }
     companion object {
-        fun from(userId: String, week: String, result: WeeklyGroceryPlanResult) = WeeklyGrocerySummaryEntity(
-            userId, week, result.targetWeeklyCalories, result.plannedWeeklyCalories, result.coveragePercent,
-            result.plannedProteinGrams, result.plannedCarbsGrams, result.plannedFatGrams,
-            result.foodVarietyCount, JSONArray(result.limitations).toString(), result.isManuallyModified,
-            System.currentTimeMillis(), result.statusMessage, result.profileWeight)
+        fun from(userId: String, week: String, result: WeeklyGroceryPlanResult): WeeklyGrocerySummaryEntity {
+            val jsonArr = JSONArray()
+            if (result.structuredLimitations.isNotEmpty()) {
+                result.structuredLimitations.forEach { lim ->
+                    val obj = org.json.JSONObject()
+                    obj.put("type", lim.type.name)
+                    obj.put("impact", lim.impact.name)
+                    obj.put("userSummary", lim.userSummary)
+                    val itemsArr = JSONArray()
+                    lim.affectedItems.forEach { itemsArr.put(it) }
+                    obj.put("affectedItems", itemsArr)
+                    jsonArr.put(obj)
+                }
+            } else {
+                result.limitations.forEach { jsonArr.put(it) }
+            }
+            return WeeklyGrocerySummaryEntity(
+                userId = userId,
+                weekStartDate = week,
+                targetWeeklyCalories = result.targetWeeklyCalories,
+                plannedWeeklyCalories = result.plannedWeeklyCalories,
+                coveragePercent = result.coveragePercent,
+                plannedProteinGrams = result.plannedProteinGrams,
+                plannedCarbsGrams = result.plannedCarbsGrams,
+                plannedFatGrams = result.plannedFatGrams,
+                foodVarietyCount = result.foodVarietyCount,
+                limitationsJson = jsonArr.toString(),
+                isManuallyModified = result.isManuallyModified,
+                generatedAt = System.currentTimeMillis(),
+                statusMessage = result.statusMessage,
+                profileWeight = result.profileWeight
+            )
+        }
     }
 }
 

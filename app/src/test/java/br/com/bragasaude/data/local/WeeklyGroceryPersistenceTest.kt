@@ -45,6 +45,49 @@ class WeeklyGroceryPersistenceTest {
         assertTrue(repository.observe("u", GroceryWeek.start()).first()!!.isManuallyModified)
     }
 
+    @Test fun structuredLimitationsAndLegacyFormatSurvivePersistence() = runBlocking {
+        val structuredLimitation = GroceryLimitation(
+            type = GroceryLimitationType.MISSING_YIELD,
+            affectedItems = listOf("Feijão"),
+            impact = GroceryCalculationImpact.APPROXIMATED,
+            userSummary = "Rendimento estimado 1:1"
+        )
+        val structuredPlan = plan().copy(
+            structuredLimitations = listOf(structuredLimitation),
+            purchaseStatus = PurchaseCalculationStatus.APPROXIMATED
+        )
+        repository.save("u", structuredPlan, false)
+        db.close(); open()
+        val restoredStructured = repository.observe("u", GroceryWeek.start()).first()!!
+        assertEquals(1, restoredStructured.structuredLimitations.size)
+        assertEquals(GroceryLimitationType.MISSING_YIELD, restoredStructured.structuredLimitations.first().type)
+        assertEquals(listOf("Feijão"), restoredStructured.structuredLimitations.first().affectedItems)
+        assertEquals(PurchaseCalculationStatus.APPROXIMATED, restoredStructured.purchaseStatus)
+
+        // Simula registro pré-existente legado no banco com apenas array de strings no JSON
+        db.weeklyGrocerySummaryDao().upsert(
+            WeeklyGrocerySummaryEntity(
+                userId = "legacy_user",
+                weekStartDate = GroceryWeek.start(),
+                targetWeeklyCalories = 14000.0,
+                plannedWeeklyCalories = 14000.0,
+                coveragePercent = 100.0,
+                plannedProteinGrams = 500.0,
+                plannedCarbsGrams = 1500.0,
+                plannedFatGrams = 400.0,
+                foodVarietyCount = 12,
+                limitationsJson = "[\"Aviso legado salvo anteriormente\"]",
+                isManuallyModified = false,
+                generatedAt = System.currentTimeMillis(),
+                statusMessage = "Status legado"
+            )
+        )
+        val restoredLegacy = repository.observe("legacy_user", GroceryWeek.start()).first()!!
+        assertEquals(listOf("Aviso legado salvo anteriormente"), restoredLegacy.limitations)
+        assertEquals(1, restoredLegacy.structuredLimitations.size)
+        assertEquals(PurchaseCalculationStatus.APPROXIMATED, restoredLegacy.purchaseStatus)
+    }
+
     @Test fun resizingPreservesManualItemsAndInvalidatesCoverage() = runBlocking {
         db.groceryListDao().insertAll(listOf(row(true).copy(purchaseWeightGrams = 5000)))
         repository.save("u", plan(), true)

@@ -26,6 +26,8 @@ data class WeeklyGroceryPlanResult(
     val plannedFatGrams: Double,
     val foodVarietyCount: Int,
     val limitations: List<String> = emptyList(),
+    val structuredLimitations: List<GroceryLimitation> = emptyList(),
+    val purchaseStatus: PurchaseCalculationStatus = PurchaseCalculationStatus.CALCULABLE,
     val statusMessage: String,
     val isManuallyModified: Boolean = false,
     val profileWeight: Double? = null
@@ -91,6 +93,7 @@ object WeeklyGroceryEngine {
         val weekStartDate = GroceryWeek.start()
 
         val limitations = mutableListOf<String>()
+        val structuredLimitations = mutableListOf<GroceryLimitation>()
 
         val effectiveDailyCalories = targetCalories.takeIf { it.isFinite() && it > 0 }?.coerceAtLeast(500.0) ?: 1800.0
         val targetWeeklyCalories = effectiveDailyCalories * 7.0
@@ -114,6 +117,12 @@ object WeeklyGroceryEngine {
         }
 
         if (available.isEmpty() && safeCatalog.isEmpty()) {
+            val emptyLimitation = GroceryLimitation(
+                type = GroceryLimitationType.NO_ELIGIBLE_FOODS,
+                affectedItems = emptyList(),
+                impact = GroceryCalculationImpact.NOT_CALCULABLE,
+                userSummary = "Nenhum alimento elegível encontrado para as restrições alimentares informadas."
+            )
             return WeeklyGroceryPlanResult(
                 items = emptyList(),
                 targetWeeklyCalories = targetWeeklyCalories,
@@ -123,7 +132,9 @@ object WeeklyGroceryEngine {
                 plannedCarbsGrams = 0.0,
                 plannedFatGrams = 0.0,
                 foodVarietyCount = 0,
-                limitations = listOf("Nenhum alimento elegível encontrado para as restrições alimentares informadas."),
+                limitations = listOf(emptyLimitation.userSummary),
+                structuredLimitations = listOf(emptyLimitation),
+                purchaseStatus = PurchaseCalculationStatus.INCOMPLETE,
                 statusMessage = "Não foi possível gerar uma lista para o seu perfil. Você pode montar sua lista manualmente."
             )
         }
@@ -146,6 +157,7 @@ object WeeklyGroceryEngine {
         val pantryTargetKcal = targetWeeklyCalories * 0.15
 
         val plannedConsumptions = mutableListOf<PlannedConsumption>()
+        val selectedCanonicalGroups = mutableSetOf<String>()
 
         // 4. Preservação de grupos básicos obrigatórios da política do gateway (arroz e feijão)
         val selectedRequiredFoodIds = mutableSetOf<String>()
@@ -164,6 +176,7 @@ object WeeklyGroceryEngine {
                 )
                 val weeklyGrams = portion * days
                 plannedConsumptions.add(PlannedConsumption(selected, weeklyGrams, corridor))
+                canonicalGroupFor(selected, ingredientCatalog)?.let { selectedCanonicalGroups.add(it) }
             }
         }
 
@@ -181,7 +194,16 @@ object WeeklyGroceryEngine {
         // Verificação de alimentos sem kcal
         val foodsWithoutKcal = (available + safeCatalog).filter { it.kcal == null || it.kcal <= 0.0 }.distinctBy { it.remoteId }
         if (foodsWithoutKcal.isNotEmpty()) {
-            limitations.add("Existem alimentos no catálogo com valor calórico ausente (${foodsWithoutKcal.size} item(ns)).")
+            val msg = "Existem alimentos no catálogo com valor calórico ausente (${foodsWithoutKcal.size} item(ns))."
+            limitations.add(msg)
+            structuredLimitations.add(
+                GroceryLimitation(
+                    type = GroceryLimitationType.MISSING_NUTRITIONAL_DATA,
+                    affectedItems = foodsWithoutKcal.map { it.name },
+                    impact = GroceryCalculationImpact.APPROXIMATED,
+                    userSummary = msg
+                )
+            )
         }
 
         // 5. Dimensionamento do Pilar 1: Grãos, Cereais, Tubérculos e Raízes
@@ -192,8 +214,9 @@ object WeeklyGroceryEngine {
             candidates = grainsPool,
             corridor = CORRIDOR_GRAOS,
             dailyCalorieTarget = effectiveDailyCalories,
-            destConsumptions = plannedConsumptions,
-            limitations = limitations
+            ingredientCatalog = ingredientCatalog,
+            selectedCanonicalGroups = selectedCanonicalGroups,
+            destConsumptions = plannedConsumptions
         )
 
         // 6. Dimensionamento do Pilar 2: Proteínas (Animais/Vegetais, Leguminosas, Laticínios, Ovos)
@@ -204,8 +227,9 @@ object WeeklyGroceryEngine {
             candidates = proteinsPool,
             corridor = CORRIDOR_PROTEINAS,
             dailyCalorieTarget = effectiveDailyCalories,
+            ingredientCatalog = ingredientCatalog,
+            selectedCanonicalGroups = selectedCanonicalGroups,
             destConsumptions = plannedConsumptions,
-            limitations = limitations,
             preferFish = hasHighCholesterol || hasHighBp
         )
 
@@ -216,8 +240,9 @@ object WeeklyGroceryEngine {
             dailyCalorieTarget = effectiveDailyCalories,
             hasHighGlucose = hasHighGlucose,
             hasHighBp = hasHighBp,
-            destConsumptions = plannedConsumptions,
-            limitations = limitations
+            ingredientCatalog = ingredientCatalog,
+            selectedCanonicalGroups = selectedCanonicalGroups,
+            destConsumptions = plannedConsumptions
         )
 
         // 8. Dimensionamento do Pilar 4: Mercearia, Gorduras Boas, Sementes, Temperos e Chás
@@ -226,8 +251,9 @@ object WeeklyGroceryEngine {
             candidates = pantryPool,
             corridor = CORRIDOR_MERCEARIA,
             dailyCalorieTarget = effectiveDailyCalories,
-            destConsumptions = plannedConsumptions,
-            limitations = limitations
+            ingredientCatalog = ingredientCatalog,
+            selectedCanonicalGroups = selectedCanonicalGroups,
+            destConsumptions = plannedConsumptions
         )
 
         // 9. Calibração fina da meta calórica semanal
@@ -235,8 +261,7 @@ object WeeklyGroceryEngine {
         calibrateTotalEnergy(
             targetWeeklyKcal = targetWeeklyCalories,
             plannedConsumptions = plannedConsumptions,
-            candidatesPool = allEligibleCandidates,
-            limitations = limitations
+            candidatesPool = allEligibleCandidates
         )
 
         // 10. Conversão de consumo em demanda de ingredientes e consolidação canônica
@@ -247,12 +272,22 @@ object WeeklyGroceryEngine {
             val weeklyGrams = pc.weeklyGrams
             val ingredients = ingredientCatalog.forFood(food.remoteId, food.name)
             if (ingredients.isEmpty()) {
-                limitations.add("Alimento '${food.name}' não possui ingrediente correspondente mapeado.")
+                val msg = "Alimento '${food.name}' não possui ingrediente correspondente mapeado."
+                limitations.add(msg)
+                structuredLimitations.add(
+                    GroceryLimitation(
+                        type = GroceryLimitationType.MISSING_INGREDIENT_MAPPING,
+                        affectedItems = listOf(food.name),
+                        impact = GroceryCalculationImpact.NOT_CALCULABLE,
+                        userSummary = msg
+                    )
+                )
                 return@forEach
             }
 
             val conversion = GroceryConsumption.amounts(food.remoteId, food.name, weeklyGrams.toDouble(), ingredientCatalog)
             limitations.addAll(conversion.limitations)
+            structuredLimitations.addAll(conversion.structuredLimitations)
             conversion.amounts.forEach { (slug, amount) ->
                 val ingredient = ingredients.first { it.slug == slug }
                 demandsBySlug.getOrPut(slug) { mutableListOf() }.add(
@@ -286,6 +321,33 @@ object WeeklyGroceryEngine {
             )
         }
 
+        // Consolidação das limitações estruturadas para evitar repetições
+        val consolidatedLimitations = structuredLimitations.groupBy { it.type }.map { (type, groupList) ->
+            val affected = groupList.flatMap { it.affectedItems }.distinct()
+            val hasIncomplete = groupList.any { it.impact == GroceryCalculationImpact.NOT_CALCULABLE }
+            val impact = if (hasIncomplete) GroceryCalculationImpact.NOT_CALCULABLE else GroceryCalculationImpact.APPROXIMATED
+            val summary = when (type) {
+                GroceryLimitationType.MISSING_YIELD -> "Rendimento de cocção não cadastrado para: ${affected.joinToString(", ")} (estimado em 1:1)."
+                GroceryLimitationType.MISSING_RECIPE_PROPORTIONS -> "Proporções dos ingredientes não cadastradas para: ${affected.joinToString(", ")} (compra não calculada)."
+                GroceryLimitationType.MISSING_DENSITY -> "Densidade não cadastrada para: ${affected.joinToString(", ")} (compra em litros não calculada)."
+                GroceryLimitationType.MISSING_UNIT_WEIGHT -> "Peso por unidade não cadastrado para: ${affected.joinToString(", ")} (unidades não calculadas)."
+                GroceryLimitationType.MISSING_INGREDIENT_MAPPING -> "Sem ingrediente de compra mapeado para: ${affected.joinToString(", ")}."
+                GroceryLimitationType.MISSING_NUTRITIONAL_DATA -> "Valor calórico ausente no catálogo para: ${affected.joinToString(", ")}."
+                GroceryLimitationType.NO_ELIGIBLE_FOODS -> "Nenhum alimento elegível encontrado para as restrições informadas."
+            }
+            GroceryLimitation(type, affected, impact, summary)
+        }
+
+        // Estado explícito de dimensionamento da compra
+        val purchaseStatus = when {
+            consolidatedLimitations.any { it.impact == GroceryCalculationImpact.NOT_CALCULABLE } ->
+                PurchaseCalculationStatus.INCOMPLETE
+            consolidatedLimitations.any { it.impact == GroceryCalculationImpact.APPROXIMATED } ->
+                PurchaseCalculationStatus.APPROXIMATED
+            else ->
+                PurchaseCalculationStatus.CALCULABLE
+        }
+
         // 11. Totalização nutricional real (calorias e macronutrientes do consumo planejado)
         val totalPlannedKcal = plannedConsumptions.sumOf { it.plannedCalories }
         val totalProteinG = plannedConsumptions.sumOf { it.plannedProtein }
@@ -316,6 +378,8 @@ object WeeklyGroceryEngine {
             plannedFatGrams = totalFatG,
             foodVarietyCount = distinctFoodsCount,
             limitations = limitations.distinct(),
+            structuredLimitations = consolidatedLimitations,
+            purchaseStatus = purchaseStatus,
             statusMessage = statusMessage,
             profileWeight = profile?.weight
         )
@@ -326,8 +390,9 @@ object WeeklyGroceryEngine {
         candidates: List<FoodEntity>,
         corridor: String,
         dailyCalorieTarget: Double,
+        ingredientCatalog: GroceryIngredientCatalog,
+        selectedCanonicalGroups: MutableSet<String>,
         destConsumptions: MutableList<PlannedConsumption>,
-        limitations: MutableList<String>,
         preferFish: Boolean = false
     ) {
         if (candidates.isEmpty() || targetKcal <= 0.0) return
@@ -344,7 +409,13 @@ object WeeklyGroceryEngine {
             else -> 4
         }.coerceAtMost(sortedCandidates.size).coerceAtLeast(1)
 
-        val selectedPool = sortedCandidates.take(countToTake)
+        val selectedPool = selectDiverseFoods(
+            candidates = sortedCandidates,
+            count = countToTake,
+            ingredientCatalog = ingredientCatalog,
+            selectedGroups = selectedCanonicalGroups
+        )
+        if (selectedPool.isEmpty()) return
         val perFoodKcalTarget = targetKcal / selectedPool.size
 
         selectedPool.forEach { food ->
@@ -379,8 +450,9 @@ object WeeklyGroceryEngine {
         dailyCalorieTarget: Double,
         hasHighGlucose: Boolean,
         hasHighBp: Boolean,
-        destConsumptions: MutableList<PlannedConsumption>,
-        limitations: MutableList<String>
+        ingredientCatalog: GroceryIngredientCatalog,
+        selectedCanonicalGroups: MutableSet<String>,
+        destConsumptions: MutableList<PlannedConsumption>
     ) {
         if (candidates.isEmpty()) return
 
@@ -392,19 +464,38 @@ object WeeklyGroceryEngine {
         val legumesPool = candidates.filter { groceryNameKey(it.category.orEmpty()).contains("legume") }
 
         val frutasCount = if (dailyCalorieTarget >= 2800.0) 3 else 2
-        val frutas = if (hasHighGlucose) {
-            frutasPool.filter { it.functionalTags.contains("baixo_ig") || it.functionalTags.contains("fibra_soluvel") }.take(frutasCount)
+        val frutasCandidates = if (hasHighGlucose) {
+            frutasPool.filter { it.functionalTags.contains("baixo_ig") || it.functionalTags.contains("fibra_soluvel") }
+                .ifEmpty { frutasPool }
         } else {
-            frutasPool.take(frutasCount)
-        }.ifEmpty { frutasPool.take(frutasCount) }
+            frutasPool
+        }
+        val frutas = selectDiverseFoods(
+            candidates = frutasCandidates,
+            count = frutasCount,
+            ingredientCatalog = ingredientCatalog,
+            selectedGroups = selectedCanonicalGroups
+        )
 
-        val folhas = if (hasHighBp) {
-            folhasPool.filter { it.functionalTags.contains("nitrato_natural") || it.functionalTags.contains("magnesio") || it.functionalTags.contains("potassio") }.take(2)
+        val folhasCandidates = if (hasHighBp) {
+            folhasPool.filter { it.functionalTags.contains("nitrato_natural") || it.functionalTags.contains("magnesio") || it.functionalTags.contains("potassio") }
+                .ifEmpty { folhasPool }
         } else {
-            folhasPool.take(2)
-        }.ifEmpty { folhasPool.take(2) }
+            folhasPool
+        }
+        val folhas = selectDiverseFoods(
+            candidates = folhasCandidates,
+            count = 2,
+            ingredientCatalog = ingredientCatalog,
+            selectedGroups = selectedCanonicalGroups
+        )
 
-        val legumes = legumesPool.take(2)
+        val legumes = selectDiverseFoods(
+            candidates = legumesPool,
+            count = 2,
+            ingredientCatalog = ingredientCatalog,
+            selectedGroups = selectedCanonicalGroups
+        )
 
         val selectedProduce = (frutas + folhas + legumes).distinctBy { it.remoteId }
         val perFoodKcal = if (selectedProduce.isNotEmpty()) targetKcal / selectedProduce.size else 0.0
@@ -433,8 +524,7 @@ object WeeklyGroceryEngine {
     private fun calibrateTotalEnergy(
         targetWeeklyKcal: Double,
         plannedConsumptions: MutableList<PlannedConsumption>,
-        candidatesPool: List<FoodEntity>,
-        limitations: MutableList<String>
+        candidatesPool: List<FoodEntity>
     ) {
         var currentKcal = plannedConsumptions.sumOf { it.plannedCalories }
         var deficit = targetWeeklyKcal - currentKcal
@@ -572,4 +662,54 @@ object WeeklyGroceryEngine {
         val plannedServingWeekGrams: Int,
         val corridor: String
     )
+
+    /**
+     * Determina o agrupador canônico de um alimento a partir dos metadados remotos
+     * dos ingredientes associados ou, como fallback, da raiz do nome do alimento.
+     */
+    fun canonicalGroupFor(food: FoodEntity, catalog: GroceryIngredientCatalog): String? {
+        val ingredient = catalog.forFood(food.remoteId, food.name).firstOrNull()
+        val fromIngredient = ingredient?.canonicalGroupSlug
+        if (!fromIngredient.isNullOrBlank()) return fromIngredient
+        val norm = groceryNameKey(food.name)
+        val firstToken = norm.substringBefore(' ').substringBefore('-')
+        return firstToken.takeIf { it.length >= 3 }
+    }
+
+    /**
+     * Seleciona candidatos priorizando diversidade de grupos canônicos para evitar
+     * concentração de múltiplas variantes do mesmo produto (ex.: múltiplas aveias ou linhaças)
+     * na mesma semana.
+     */
+    fun selectDiverseFoods(
+        candidates: List<FoodEntity>,
+        count: Int,
+        ingredientCatalog: GroceryIngredientCatalog,
+        selectedGroups: MutableSet<String>
+    ): List<FoodEntity> {
+        if (candidates.isEmpty() || count <= 0) return emptyList()
+        val chosen = mutableListOf<FoodEntity>()
+
+        // 1º passe: escolhe itens de grupos que ainda não foram selecionados
+        for (candidate in candidates) {
+            if (chosen.size >= count) break
+            val group = canonicalGroupFor(candidate, ingredientCatalog)
+            if (group == null || group !in selectedGroups) {
+                chosen.add(candidate)
+                if (group != null) selectedGroups.add(group)
+            }
+        }
+
+        // 2º passe: se faltarem itens para atingir 'count', preenche com os demais candidatos
+        if (chosen.size < count) {
+            val alreadyChosenIds = chosen.map { it.remoteId }.toSet()
+            for (candidate in candidates) {
+                if (chosen.size >= count) break
+                if (candidate.remoteId !in alreadyChosenIds) {
+                    chosen.add(candidate)
+                }
+            }
+        }
+        return chosen
+    }
 }
