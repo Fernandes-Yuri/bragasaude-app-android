@@ -72,6 +72,39 @@ class NutritionViewModel @Inject constructor(
         generateWeeklyGroceryList(preserveManual = true)
     }
 
+    private val _weeklyPreferences = MutableStateFlow(loadStoredWeeklyPreferences())
+    val weeklyPreferences = _weeklyPreferences.asStateFlow()
+
+    private fun loadStoredWeeklyPreferences(): br.com.bragasaude.domain.WeeklyGroceryPreferences {
+        val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+        val tierName = prefs.getString("weekly_budget_tier_$userId", br.com.bragasaude.domain.GroceryBudgetTier.ECONOMIC.name)
+        val tier = try {
+            br.com.bragasaude.domain.GroceryBudgetTier.valueOf(tierName ?: br.com.bragasaude.domain.GroceryBudgetTier.ECONOMIC.name)
+        } catch (_: Exception) {
+            br.com.bragasaude.domain.GroceryBudgetTier.ECONOMIC
+        }
+        val proteinSet = prefs.getStringSet("weekly_proteins_$userId", null)?.mapNotNull { name ->
+            try { br.com.bragasaude.domain.GroceryProteinPreference.valueOf(name) } catch (_: Exception) { null }
+        }?.toSet() ?: setOf(br.com.bragasaude.domain.GroceryProteinPreference.EGGS, br.com.bragasaude.domain.GroceryProteinPreference.POULTRY)
+        val hasStaples = prefs.getBoolean("weekly_has_staples_$userId", true)
+        return br.com.bragasaude.domain.WeeklyGroceryPreferences(
+            budgetTier = tier,
+            selectedProteins = if (proteinSet.isEmpty()) setOf(br.com.bragasaude.domain.GroceryProteinPreference.EGGS) else proteinSet,
+            hasPantryStaples = hasStaples
+        )
+    }
+
+    fun updateWeeklyPreferences(newPrefs: br.com.bragasaude.domain.WeeklyGroceryPreferences) {
+        val normalized = newPrefs.normalized()
+        _weeklyPreferences.value = normalized
+        val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString("weekly_budget_tier_$userId", normalized.budgetTier.name)
+            .putStringSet("weekly_proteins_$userId", normalized.selectedProteins.map { it.name }.toSet())
+            .putBoolean("weekly_has_staples_$userId", normalized.hasPantryStaples)
+            .apply()
+    }
+
 
     private val _contributionState = MutableStateFlow(br.com.bragasaude.domain.GroceryContributionState())
     val contributionState = _contributionState.asStateFlow()
@@ -605,8 +638,13 @@ class NutritionViewModel @Inject constructor(
         }
     }
 
-    fun generateWeeklyGroceryList(preserveManual: Boolean = true) {
+    fun generateWeeklyGroceryList(
+        preserveManual: Boolean = true,
+        preferences: br.com.bragasaude.domain.WeeklyGroceryPreferences? = null
+    ) {
         if (_isLoading.value) return
+        preferences?.let { updateWeeklyPreferences(it) }
+        val effectivePrefs = preferences ?: _weeklyPreferences.value
         viewModelScope.launch {
             _isLoading.value = true
             try {
@@ -636,7 +674,8 @@ class NutritionViewModel @Inject constructor(
                     ingredientCatalog = ingredients,
                     targetCalories = currentDailyCal,
                     shuffleSeed = seed,
-                    previousFoodIds = previousFoods
+                    previousFoodIds = previousFoods,
+                    preferences = effectivePrefs
                 )
                 if (plan.items.isNotEmpty()) {
                     weeklyRepository.save(userId, plan, preserveManual)

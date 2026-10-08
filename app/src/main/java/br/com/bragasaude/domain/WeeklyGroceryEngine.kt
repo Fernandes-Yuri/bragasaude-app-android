@@ -61,7 +61,8 @@ object WeeklyGroceryEngine {
         catalog: List<FoodEntity>,
         dislikedFoodNames: Set<String> = emptySet(),
         ingredientCatalog: GroceryIngredientCatalog,
-        targetCalories: Double = 1800.0
+        targetCalories: Double = 1800.0,
+        preferences: WeeklyGroceryPreferences = WeeklyGroceryPreferences()
     ): List<GroceryListItemEntity> {
         return planWeeklyGrocery(
             userId = userId,
@@ -71,7 +72,8 @@ object WeeklyGroceryEngine {
             catalog = catalog,
             dislikedFoodNames = dislikedFoodNames,
             ingredientCatalog = ingredientCatalog,
-            targetCalories = targetCalories
+            targetCalories = targetCalories,
+            preferences = preferences
         ).items
     }
 
@@ -89,7 +91,8 @@ object WeeklyGroceryEngine {
         ingredientCatalog: GroceryIngredientCatalog,
         targetCalories: Double = 1800.0,
         shuffleSeed: Long? = null,
-        previousFoodIds: Set<String> = emptySet()
+        previousFoodIds: Set<String> = emptySet(),
+        preferences: WeeklyGroceryPreferences = WeeklyGroceryPreferences()
     ): WeeklyGroceryPlanResult {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val weekStartDate = GroceryWeek.start()

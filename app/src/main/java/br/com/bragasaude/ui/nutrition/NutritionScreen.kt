@@ -79,6 +79,7 @@ fun NutritionScreen(
     val groceryPlan by viewModel.groceryPlanResult.collectAsState()
     val pantryStock by viewModel.pantryStock.collectAsState()
     val showResizeDialog by viewModel.showResizeDialog.collectAsState()
+    val weeklyPreferences by viewModel.weeklyPreferences.collectAsState()
 
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
@@ -995,6 +996,10 @@ fun NutritionScreen(
             onDismiss = { showGroceryBottomSheet = false },
             onToggleItem = { id, isChecked -> viewModel.togglePantryItem(id, isChecked) },
             onGenerateList = { preserveManual -> viewModel.generateWeeklyGroceryList(preserveManual) },
+            weeklyPreferences = weeklyPreferences,
+            onGenerateListWithPreferences = { preserveManual, prefs ->
+                viewModel.generateWeeklyGroceryList(preserveManual, prefs)
+            },
             onSaveManualItem = { slug, amount, repId -> viewModel.saveManualItem(slug, amount, repId) },
             onRemoveItem = { id -> viewModel.removeGroceryItem(id) },
             onClearList = { viewModel.clearGroceryList() },

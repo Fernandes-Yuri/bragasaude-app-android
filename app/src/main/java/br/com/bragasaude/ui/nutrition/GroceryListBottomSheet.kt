@@ -63,12 +63,16 @@ fun GroceryListBottomSheet(
     plan: br.com.bragasaude.domain.WeeklyGroceryPlanResult? = null,
     pantryStock: List<br.com.bragasaude.data.local.GroceryPantryStockEntity> = emptyList(),
     onResize: () -> Unit = { onGenerateList(true) },
-    isLoading: Boolean = false
+    isLoading: Boolean = false,
+    weeklyPreferences: br.com.bragasaude.domain.WeeklyGroceryPreferences = br.com.bragasaude.domain.WeeklyGroceryPreferences(),
+    onGenerateListWithPreferences: ((preserveManual: Boolean, preferences: br.com.bragasaude.domain.WeeklyGroceryPreferences) -> Unit)? = null
 ) {
     var reportingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var manualEditingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var isCreatingManual by remember { mutableStateOf(false) }
     var showPlanOptionsDialog by remember { mutableStateOf(false) }
+    var showPreferencesSheet by remember { mutableStateOf(false) }
+    var pendingPreserveManual by remember { mutableStateOf(true) }
 
     if (isCreatingManual || manualEditingItem != null) {
         ManualGroceryItemSheet(
@@ -135,7 +139,8 @@ fun GroceryListBottomSheet(
                     Surface(
                         onClick = {
                             showPlanOptionsDialog = false
-                            onGenerateList(true)
+                            pendingPreserveManual = true
+                            showPreferencesSheet = true
                         },
                         shape = RoundedCornerShape(14.dp),
                         color = BragaMintSurface,
@@ -181,7 +186,8 @@ fun GroceryListBottomSheet(
                     Surface(
                         onClick = {
                             showPlanOptionsDialog = false
-                            onGenerateList(false)
+                            pendingPreserveManual = false
+                            showPreferencesSheet = true
                         },
                         shape = RoundedCornerShape(14.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
@@ -327,7 +333,8 @@ fun GroceryListBottomSheet(
                     onClick = {
                         if (isLoading) return@OutlinedButton
                         if (!hasItems) {
-                            onGenerateList(true)
+                            pendingPreserveManual = false
+                            showPreferencesSheet = true
                         } else {
                             showPlanOptionsDialog = true
                         }
@@ -533,7 +540,10 @@ fun GroceryListBottomSheet(
                                     Text("Adicionar alimentos manualmente")
                                 }
                                 OutlinedButton(
-                                    onClick = { onGenerateList(true) },
+                                    onClick = {
+                                        pendingPreserveManual = false
+                                        showPreferencesSheet = true
+                                    },
                                     enabled = !isLoading,
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                                     border = BorderStroke(1.dp, BragaMintBorder)
@@ -605,6 +615,19 @@ fun GroceryListBottomSheet(
                 item { Spacer(Modifier.height(16.dp)) }
             }
         }
+    if (showPreferencesSheet) {
+        WeeklyGroceryPreferencesSheet(
+            initialPreferences = weeklyPreferences,
+            onDismissRequest = { showPreferencesSheet = false },
+            onConfirm = { chosenPreferences ->
+                showPreferencesSheet = false
+                if (onGenerateListWithPreferences != null) {
+                    onGenerateListWithPreferences(pendingPreserveManual, chosenPreferences)
+                } else {
+                    onGenerateList(pendingPreserveManual)
+                }
+            }
+        )
     }
 }
 

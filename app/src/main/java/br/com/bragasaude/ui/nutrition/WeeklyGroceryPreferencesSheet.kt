@@ -1,0 +1,307 @@
+package br.com.bragasaude.ui.nutrition
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import br.com.bragasaude.domain.GroceryBudgetTier
+import br.com.bragasaude.domain.GroceryProteinPreference
+import br.com.bragasaude.domain.WeeklyGroceryPreferences
+import br.com.bragasaude.ui.theme.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun WeeklyGroceryPreferencesSheet(
+    initialPreferences: WeeklyGroceryPreferences,
+    onDismissRequest: () -> Unit,
+    onConfirm: (WeeklyGroceryPreferences) -> Unit
+) {
+    var budgetTier by remember { mutableStateOf(initialPreferences.budgetTier) }
+    var selectedProteins by remember { mutableStateOf(initialPreferences.selectedProteins) }
+    var hasPantryStaples by remember { mutableStateOf(initialPreferences.hasPantryStaples) }
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        containerColor = BragaCardSurface,
+        tonalElevation = 0.dp,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = BragaCardBorder) }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            // Cabeçalho
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Planejar Compras da Semana",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = BragaTextPrimary
+                    )
+                    Text(
+                        text = "Defina suas preferências de custo e proteínas para gerar uma lista sob medida.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BragaTextSecondary
+                    )
+                }
+                IconButton(onClick = onDismissRequest) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Fechar",
+                        tint = BragaTextSecondary
+                    )
+                }
+            }
+
+            // Passo 1: Faixa de Orçamento
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "1. Foco do Orçamento",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = BragaTextPrimary
+                )
+
+                // Opção Econômica
+                BudgetOptionCard(
+                    title = "Econômica (Custo-Benefício)",
+                    description = "Alimentos essenciais e nutritivos (arroz, feijão, ovos, frango, aveia, frutas da estação). Cesta enxuta e mais acessível.",
+                    badge = "Recomendada",
+                    isSelected = budgetTier == GroceryBudgetTier.ECONOMIC,
+                    onClick = { budgetTier = GroceryBudgetTier.ECONOMIC }
+                )
+
+                // Opção Variada / Livre
+                BudgetOptionCard(
+                    title = "Variada / Livre",
+                    description = "Maior diversidade de ingredientes e opções nobres com rotação semanal aberta.",
+                    badge = null,
+                    isSelected = budgetTier == GroceryBudgetTier.BALANCED,
+                    onClick = { budgetTier = GroceryBudgetTier.BALANCED }
+                )
+            }
+
+            // Passo 2: Proteínas Prioritárias
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "2. Proteínas da Semana",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = BragaTextPrimary
+                )
+                Text(
+                    text = "Escolha as opções que você pretende consumir nos próximos 7 dias:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BragaTextSecondary
+                )
+
+                val allProteins = GroceryProteinPreference.values()
+                val row1 = allProteins.take(2)
+                val row2 = allProteins.drop(2).take(2)
+                val row3 = allProteins.drop(4)
+
+                listOf(row1, row2, row3).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowItems.forEach { protein ->
+                            val isSelected = protein in selectedProteins
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    selectedProteins = if (isSelected) {
+                                        if (selectedProteins.size > 1) selectedProteins - protein else selectedProteins
+                                    } else {
+                                        selectedProteins + protein
+                                    }
+                                },
+                                label = { Text(protein.label) },
+                                leadingIcon = if (isSelected) {
+                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                } else null,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BragaMintSurface,
+                                    selectedLabelColor = BragaEmeraldDark,
+                                    selectedLeadingIconColor = BragaEmerald
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = isSelected,
+                                    borderColor = BragaMintBorder,
+                                    selectedBorderColor = BragaEmerald
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (rowItems.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+
+            // Passo 3: Despensa Básica
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                border = BorderStroke(1.dp, BragaMintBorder)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Já tenho óleo, sal e temperos em casa",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = BragaTextPrimary
+                        )
+                        Text(
+                            text = "Evita adicionar garrafas de azeite e potes de temperos inteiros na compra semanal.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BragaTextSecondary
+                        )
+                    }
+                    Switch(
+                        checked = hasPantryStaples,
+                        onCheckedChange = { hasPantryStaples = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = BragaEmerald
+                        )
+                    )
+                }
+            }
+
+            // Botão de Confirmação
+            Button(
+                onClick = {
+                    val finalPrefs = WeeklyGroceryPreferences(
+                        budgetTier = budgetTier,
+                        selectedProteins = selectedProteins,
+                        hasPantryStaples = hasPantryStaples
+                    ).normalized()
+                    onConfirm(finalPrefs)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Gerar Lista com IA",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BudgetOptionCard(
+    title: String,
+    description: String,
+    badge: String?,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) BragaMintSurface else BragaCardSurface
+        ),
+        border = BorderStroke(
+            width = if (isSelected) 1.5.dp else 1.dp,
+            color = if (isSelected) BragaEmerald else BragaCardBorder
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = BragaTextPrimary
+                    )
+                    if (badge != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = CircleShape,
+                            color = BragaEmerald
+                        ) {
+                            Text(
+                                text = badge,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BragaTextSecondary
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Icon(
+                imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                contentDescription = null,
+                tint = if (isSelected) BragaEmerald else BragaCardBorder,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
