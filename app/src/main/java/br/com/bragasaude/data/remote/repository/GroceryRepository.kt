@@ -47,7 +47,8 @@ class GroceryRepository @Inject constructor(
             purchaseUnitText = purchaseUnitText,
             estimatedPriceBrl = 0.0,
             isCheckedInPantry = false,
-            createdAt = System.currentTimeMillis()
+            createdAt = System.currentTimeMillis(),
+            isManual = true
         )
         groceryListDao.insertAll(listOf(item))
     }
@@ -73,6 +74,7 @@ class GroceryRepository @Inject constructor(
                 purchaseWeightGrams = if (ingredient.unit == "kg") amount else 0,
                 purchaseUnitText = br.com.bragasaude.domain.GroceryPurchasePlanner.text(ingredient, amount),
                 estimatedPriceBrl = br.com.bragasaude.domain.GroceryPurchasePlanner.cost(ingredient, amount),
+                isManual = true,
                 isCheckedInPantry = old?.takeIf { it.foodId == ingredient.slug }?.isCheckedInPantry ?: false
             )
             existing.filterNot { it.remoteId == item.remoteId || it.foodId == ingredient.slug } + item

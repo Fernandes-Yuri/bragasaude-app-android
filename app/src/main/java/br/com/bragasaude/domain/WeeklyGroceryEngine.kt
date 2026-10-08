@@ -26,7 +26,8 @@ data class WeeklyGroceryPlanResult(
     val plannedFatGrams: Double,
     val foodVarietyCount: Int,
     val limitations: List<String> = emptyList(),
-    val statusMessage: String
+    val statusMessage: String,
+    val isManuallyModified: Boolean = false
 )
 
 object WeeklyGroceryEngine {
@@ -86,11 +87,11 @@ object WeeklyGroceryEngine {
         targetCalories: Double = 1800.0
     ): WeeklyGroceryPlanResult {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val weekStartDate = dateFormat.format(Date())
+        val weekStartDate = GroceryWeek.start()
 
         val limitations = mutableListOf<String>()
 
-        val effectiveDailyCalories = targetCalories.coerceAtLeast(500.0)
+        val effectiveDailyCalories = targetCalories.takeIf { it.isFinite() && it > 0 }?.coerceAtLeast(500.0) ?: 1800.0
         val targetWeeklyCalories = effectiveDailyCalories * 7.0
 
         // 1. Filtragem rigorosa por segurança clínica, alergias e preferências
@@ -249,24 +250,13 @@ object WeeklyGroceryEngine {
                 return@forEach
             }
 
-            if (ingredients.size == 1) {
-                val ingredient = ingredients.first()
-                val factor = ingredientCatalog.purchaseFactors[food.remoteId]?.get(ingredient.slug) ?: 1.0
-                val demandAmount = calculateDemandAmount(ingredient, food, weeklyGrams, factor, limitations)
-                demandsBySlug.getOrPut(ingredient.slug) { mutableListOf() }.add(
-                    IngredientDemand(ingredient, demandAmount, weeklyGrams, pc.corridor)
+            val conversion = GroceryConsumption.amounts(food.remoteId, food.name, weeklyGrams.toDouble(), ingredientCatalog)
+            limitations.addAll(conversion.limitations)
+            conversion.amounts.forEach { (slug, amount) ->
+                val ingredient = ingredients.first { it.slug == slug }
+                demandsBySlug.getOrPut(slug) { mutableListOf() }.add(
+                    IngredientDemand(ingredient, amount, weeklyGrams, pc.corridor)
                 )
-            } else {
-                val share = 1.0 / ingredients.size
-                val factorsMap = ingredientCatalog.purchaseFactors[food.remoteId]
-                ingredients.forEach { ingredient ->
-                    val factor = factorsMap?.get(ingredient.slug) ?: 1.0
-                    val compGrams = (weeklyGrams * share).toInt()
-                    val demandAmount = calculateDemandAmount(ingredient, food, compGrams, factor, limitations)
-                    demandsBySlug.getOrPut(ingredient.slug) { mutableListOf() }.add(
-                        IngredientDemand(ingredient, demandAmount, compGrams, pc.corridor)
-                    )
-                }
             }
         }
 
@@ -278,7 +268,7 @@ object WeeklyGroceryEngine {
             val preferredCorridor = demands.groupBy { it.corridor }.maxByOrNull { it.value.size }?.key ?: CORRIDOR_GRAOS
 
             val demandWithMargin = ceil(totalPrepDemand * PURCHASE_SAFETY_MARGIN).toInt().coerceAtLeast(1)
-            val purchaseAmount = GroceryPurchasePlanner.quantity(ingredient, demandWithMargin)
+            val purchaseAmount = (ceil(maxOf(demandWithMargin, ingredient.minimum).toDouble() / ingredient.step) * ingredient.step).toInt()
 
             GroceryListItemEntity(
                 remoteId = UUID.randomUUID().toString(),
@@ -290,7 +280,8 @@ object WeeklyGroceryEngine {
                 suggestedServingWeekGrams = totalSuggestedServingGrams,
                 purchaseWeightGrams = if (ingredient.unit == "kg") purchaseAmount else 0,
                 purchaseUnitText = GroceryPurchasePlanner.text(ingredient, purchaseAmount),
-                estimatedPriceBrl = GroceryPurchasePlanner.cost(ingredient, purchaseAmount)
+                estimatedPriceBrl = GroceryPurchasePlanner.cost(ingredient, purchaseAmount),
+                plannedWeeklyAmount = totalPrepDemand
             )
         }
 
@@ -326,33 +317,6 @@ object WeeklyGroceryEngine {
             limitations = limitations.distinct(),
             statusMessage = statusMessage
         )
-    }
-
-    private fun calculateDemandAmount(
-        ingredient: GroceryIngredient,
-        food: FoodEntity,
-        weeklyGrams: Int,
-        factor: Double,
-        limitations: MutableList<String>
-    ): Double {
-        return when (ingredient.unit) {
-            "kg" -> weeklyGrams * factor
-            "L" -> weeklyGrams * factor
-            "un" -> {
-                val unitGrams = if (food.servingUnit.contains("unidade", ignoreCase = true) && food.servingSizeGrams > 0) {
-                    food.servingSizeGrams.toDouble()
-                } else if (food.servingSizeGrams > 0) {
-                    food.servingSizeGrams.toDouble()
-                } else {
-                    50.0
-                }
-                ceil((weeklyGrams * factor) / unitGrams)
-            }
-            else -> {
-                limitations.add("Unidade '${ingredient.unit}' não reconhecida para ${ingredient.name}.")
-                weeklyGrams * factor
-            }
-        }
     }
 
     private fun distributePillarEnergy(
