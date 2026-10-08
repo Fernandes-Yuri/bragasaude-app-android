@@ -80,4 +80,40 @@ class WeeklyGroceryPersistenceTest {
         repository.removeMeal("u", "m")
         assertEquals(1000.0, db.groceryPantryDao().stock("u", "a")!!.availableAmount, 0.001)
     }
+    @Test fun migrationPreservesExistingManualListAndValidatesRoomSchema() = runBlocking {
+        db.close()
+        context.deleteDatabase("weekly-test.db")
+        val path = listOf(java.io.File("schemas/br.com.bragasaude.data.local.BragaDatabase/50.json"),
+            java.io.File("app/schemas/br.com.bragasaude.data.local.BragaDatabase/50.json")).first { it.exists() }
+        val schema = org.json.JSONObject(path.readText()).getJSONObject("database")
+        val config = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name("weekly-test.db").callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(50) {
+                override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                    val entities = schema.getJSONArray("entities")
+                    for (index in 0 until entities.length()) {
+                        val entity = entities.getJSONObject(index)
+                        db.execSQL(entity.getString("createSql").replace("\${TABLE_NAME}", entity.getString("tableName")))
+                        val indices = entity.optJSONArray("indices")
+                        if (indices != null) for (i in 0 until indices.length()) {
+                            db.execSQL(indices.getJSONObject(i).getString("createSql").replace("\${TABLE_NAME}", entity.getString("tableName")))
+                        }
+                    }
+                    val queries = schema.getJSONArray("setupQueries")
+                    for (index in 0 until queries.length()) db.execSQL(queries.getString(index))
+                    db.execSQL("INSERT INTO grocery_list_local(remoteId,userId,weekStartDate,foodId,foodName,category,suggestedServingWeekGrams,purchaseWeightGrams,purchaseUnitText,estimatedPriceBrl,isCheckedInPantry,createdAt) VALUES ('legacy','u','2026-10-05','a','Produto','Minha lista',0,1000,'1000 g',0,1,1)")
+                }
+                override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            }).build()
+        val helper = androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory().create(config)
+        helper.writableDatabase
+        helper.close()
+        open()
+        val migrated = db.groceryListDao().getGrocerySnapshot("u").single()
+        assertTrue(migrated.isManual)
+        assertTrue(migrated.isCheckedInPantry)
+        assertEquals(1000, migrated.purchaseWeightGrams)
+        assertEquals(0.0, migrated.plannedWeeklyAmount, 0.0)
+        assertNull(repository.observe("u", GroceryWeek.start()).first())
+    }
+
 }
