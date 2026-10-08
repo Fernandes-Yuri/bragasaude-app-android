@@ -26,11 +26,11 @@ data class WeeklyGroceryPlanResult(
     val plannedFatGrams: Double,
     val foodVarietyCount: Int,
     val limitations: List<String> = emptyList(),
-    val structuredLimitations: List<GroceryLimitation> = emptyList(),
-    val purchaseStatus: PurchaseCalculationStatus = PurchaseCalculationStatus.CALCULABLE,
     val statusMessage: String,
     val isManuallyModified: Boolean = false,
-    val profileWeight: Double? = null
+    val profileWeight: Double? = null,
+    val structuredLimitations: List<GroceryLimitation> = emptyList(),
+    val purchaseStatus: PurchaseCalculationStatus = PurchaseCalculationStatus.CALCULABLE
 )
 
 object WeeklyGroceryEngine {
