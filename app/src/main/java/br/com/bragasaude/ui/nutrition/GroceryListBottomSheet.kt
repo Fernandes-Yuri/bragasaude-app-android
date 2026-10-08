@@ -1,6 +1,8 @@
 package br.com.bragasaude.ui.nutrition
 
+import br.com.bragasaude.ui.components.BragaAlertDialog
 import br.com.bragasaude.ui.components.BragaBottomSheet
+import br.com.bragasaude.domain.WeeklyGroceryEngine
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.selection.toggleable
@@ -44,7 +46,7 @@ fun GroceryListBottomSheet(
     groceryList: List<GroceryListItemEntity>,
     onDismiss: () -> Unit,
     onToggleItem: (String, Boolean) -> Unit,
-    onGenerateList: () -> Unit,
+    onGenerateList: (preserveManual: Boolean) -> Unit,
     onExportPdf: () -> Unit,
     // Agente B1: itens sugeridos pelo chat; o usuário confirma via botão.
     suggestedItems: List<String> = emptyList(),
@@ -60,11 +62,13 @@ fun GroceryListBottomSheet(
     groceryMessage: String? = null,
     plan: br.com.bragasaude.domain.WeeklyGroceryPlanResult? = null,
     pantryStock: List<br.com.bragasaude.data.local.GroceryPantryStockEntity> = emptyList(),
-    onResize: () -> Unit = onGenerateList
+    onResize: () -> Unit = { onGenerateList(true) },
+    isLoading: Boolean = false
 ) {
     var reportingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var manualEditingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var isCreatingManual by remember { mutableStateOf(false) }
+    var showPlanOptionsDialog by remember { mutableStateOf(false) }
 
     if (isCreatingManual || manualEditingItem != null) {
         ManualGroceryItemSheet(
@@ -95,6 +99,139 @@ fun GroceryListBottomSheet(
     val dailyAvg = if (totalCost > 0.0) totalCost / 7.0 else 0.0
     val checkedCount = groceryList.count { it.isCheckedInPantry }
     val grouped = remember(groceryList) { groceryList.groupBy { it.category } }
+
+    if (showPlanOptionsDialog) {
+        BragaAlertDialog(
+            onDismissRequest = { showPlanOptionsDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = BragaEmeraldDark,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    "Planejamento semanal com IA",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = if (plan != null)
+                            "Meta semanal calculada: ${plan.targetWeeklyCalories.toInt()} kcal (${plan.plannedWeeklyCalories.toInt()} kcal planejadas para 7 dias). Escolha como deseja atualizar:"
+                        else
+                            "Sua lista já possui alimentos cadastrados. Escolha como deseja atualizar o seu planejamento semanal:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = BragaTextSecondary
+                    )
+
+                    Surface(
+                        onClick = {
+                            showPlanOptionsDialog = false
+                            onGenerateList(true)
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        color = BragaMintSurface,
+                        border = BorderStroke(1.dp, BragaMintBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = BragaEmerald.copy(alpha = 0.15f),
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        tint = BragaEmeraldDark,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Recalcular para meta diária",
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = BragaTextPrimary,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    "Ajusta porções para a meta de 7 dias mantendo itens adicionados manualmente.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = BragaTextSecondary
+                                )
+                            }
+                        }
+                    }
+
+                    Surface(
+                        onClick = {
+                            showPlanOptionsDialog = false
+                            onGenerateList(false)
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = BragaEmeraldDark,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Gerar nova variedade semanal",
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = BragaTextPrimary,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    "Cria uma nova seleção completa de alimentos para a semana inteira.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = BragaTextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPlanOptionsDialog = false }) {
+                    Text("Cancelar", color = BragaTextSecondary)
+                }
+            }
+        )
+    }
 
     BragaBottomSheet(
         onDismissRequest = onDismiss
@@ -146,7 +283,20 @@ fun GroceryListBottomSheet(
                 }
             }
 
-            // 2. Barra de Ações Rápidas (Proporcionais 1:1, Sem Quebra de Linha e com Estrelinhas de IA)
+            // 2. Barra de Ações Rápidas (Proporcionais 1:1, Sem Quebra de Linha e com Planejador Semanal Contextual)
+            val hasItems = groceryList.isNotEmpty()
+            val needsResize = plan?.isManuallyModified == true || (plan != null && plan.coveragePercent < WeeklyGroceryEngine.MIN_ENERGY_COVERAGE_PERCENT)
+            val buttonLabel = when {
+                isLoading -> "Planejando..."
+                !hasItems -> "Planejar com IA"
+                needsResize -> "Recalcular meta"
+                else -> "Opções com IA"
+            }
+            val buttonIcon = when {
+                needsResize -> Icons.Default.Refresh
+                else -> Icons.Default.AutoAwesome
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -174,24 +324,46 @@ fun GroceryListBottomSheet(
                 }
 
                 OutlinedButton(
-                    onClick = onGenerateList,
+                    onClick = {
+                        if (isLoading) return@OutlinedButton
+                        if (!hasItems) {
+                            onGenerateList(true)
+                        } else {
+                            showPlanOptionsDialog = true
+                        }
+                    },
+                    enabled = !isLoading,
                     modifier = Modifier
                         .weight(1f)
                         .height(46.dp),
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, BragaMintBorder),
-                    colors = ButtonDefaults.outlinedButtonColors(containerColor = BragaMintSurface.copy(alpha = 0.5f)),
+                    border = BorderStroke(
+                        if (needsResize) 1.5.dp else 1.dp,
+                        if (needsResize) BragaEmerald else BragaMintBorder
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (needsResize) BragaMintSurface else BragaMintSurface.copy(alpha = 0.5f)
+                    ),
                     contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Icon(
-                        Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = BragaEmeraldDark,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = BragaEmeraldDark
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    } else {
+                        Icon(
+                            buttonIcon,
+                            contentDescription = null,
+                            tint = BragaEmeraldDark,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    }
                     Text(
-                        "Sugerir com IA",
+                        buttonLabel,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = BragaEmeraldDark,
@@ -232,7 +404,7 @@ fun GroceryListBottomSheet(
                         }
                     }
                 }
-                if (groceryMessage != null) {
+                if (groceryMessage != null && (plan == null || groceryMessage != plan.statusMessage)) {
                     item {
                         Surface(
                             shape = RoundedCornerShape(12.dp),
@@ -361,13 +533,29 @@ fun GroceryListBottomSheet(
                                     Text("Adicionar alimentos manualmente")
                                 }
                                 OutlinedButton(
-                                    onClick = onGenerateList,
+                                    onClick = { onGenerateList(true) },
+                                    enabled = !isLoading,
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                                     border = BorderStroke(1.dp, BragaMintBorder)
                                 ) {
-                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = BragaEmeraldDark, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("Sugerir lista semanal com IA")
+                                    if (isLoading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp,
+                                            color = BragaEmeraldDark
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Planejando lista semanal...", color = BragaEmeraldDark)
+                                    } else {
+                                        Icon(
+                                            Icons.Default.AutoAwesome,
+                                            contentDescription = null,
+                                            tint = BragaEmeraldDark,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Planejar lista semanal com IA", color = BragaEmeraldDark)
+                                    }
                                 }
                             }
                         }
