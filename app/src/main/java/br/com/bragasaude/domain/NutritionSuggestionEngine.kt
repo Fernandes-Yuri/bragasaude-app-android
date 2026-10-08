@@ -337,11 +337,27 @@ object NutritionSuggestionEngine {
         )
     }
 
+    fun isAllowedByDietAndDeclaredAllergens(food: FoodEntity, allergies: List<String>, restrictions: String?): Boolean {
+        val terms = groceryNameKey(restrictions.orEmpty())
+        val tags = food.functionalTags
+        if (terms.contains("vegan") && "diet:vegan" !in tags) return false
+        if (terms.contains("vegetarian") && "diet:vegetarian" !in tags) return false
+        val declared = tags.filter { it.startsWith("allergen:") }.map { groceryNameKey(it.substringAfter(':')) }
+        val blocked = allergies.map { groceryNameKey(it) } + terms.split(',', ';').map { it.trim() }
+        if (declared.any { allergen -> blocked.any { term -> term.contains(allergen) } }) return false
+        val name = groceryNameKey(food.name)
+        return allergies.none { allergy ->
+            val normalized = groceryNameKey(allergy).removePrefix("alergia a ").removePrefix("alergia ao ")
+            normalized.length >= 3 && name.contains(normalized)
+        }
+    }
+
     fun isSafeFromAllergies(
         food: FoodEntity,
         allergies: List<String>,
         customRestrictions: String?
     ): Boolean {
+        if (!isAllowedByDietAndDeclaredAllergens(food, allergies, customRestrictions)) return false
         val nameLower = food.name.lowercase()
         val catLower = (food.category ?: "").lowercase()
 

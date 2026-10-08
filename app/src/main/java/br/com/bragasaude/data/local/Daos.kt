@@ -154,6 +154,16 @@ interface ProfileDao {
 
 @Dao
 interface FoodDao {
+    @Query("DELETE FROM food_catalog_local WHERE status IS NULL OR LOWER(status) != 'custom'")
+    suspend fun clearServerCatalog()
+
+    @Transaction
+    suspend fun replaceServerCatalog(foods: List<FoodEntity>) {
+        require(foods.isNotEmpty())
+        clearServerCatalog()
+        insertAll(foods)
+    }
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(foods: List<FoodEntity>)
 

@@ -203,6 +203,7 @@ class NutritionViewModel @Inject constructor(
             val toBuyNames = groceryNames - pantryNames
 
             val userCatalog = catalog.filter { food ->
+                (_groceryIngredients.value?.forFood(food.remoteId, food.name)?.any { it.slug in groceryFoodIds } == true) ||
                 (food.remoteId in groceryFoodIds) ||
                 (food.name.trim().lowercase() in groceryNames) ||
                 groceryNames.any { gName ->
@@ -514,10 +515,10 @@ class NutritionViewModel @Inject constructor(
                 val exams = examsRepository.getExamItems(userId).first()
                 val vitals = vitalsRepository.getVitalSigns(userId).first()
                 val profileEntity = profileRepository.getProfile(userId).first()
+                val ingredients = catalogRepository.fetchGroceryIngredients()
+                _groceryIngredients.value = ingredients
                 val catalog = catalogRepository.getFoodCatalog().first()
                 val dislikes = _dislikedFoodNames.value
-
-                val ingredients = catalogRepository.fetchGroceryIngredients()
                 val currentDailyCal = _dailyCalories.value.toDouble()
 
                 val newList = WeeklyGroceryEngine.generateWeeklyList(
