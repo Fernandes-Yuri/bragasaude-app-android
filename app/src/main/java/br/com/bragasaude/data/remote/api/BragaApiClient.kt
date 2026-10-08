@@ -2134,6 +2134,13 @@ class BragaApiClient @Inject constructor(
         } catch (_: Exception) { emptyList() }
     }
 
+    suspend fun getNutritionCatalog(): JSONObject? = withContext(Dispatchers.IO) {
+        try {
+            getJson("$baseUrl/api/catalog/nutrition")
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { null }
+    }
+
     suspend fun getCanonicalGroceryPrices(): Map<String, CanonicalGroceryPrice> = withContext(Dispatchers.IO) {
         try {
             val arr = getJson("$baseUrl/api/catalog/grocery-ingredients")?.optJSONArray("ingredients")

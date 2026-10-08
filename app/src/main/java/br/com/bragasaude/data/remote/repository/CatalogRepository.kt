@@ -23,26 +23,46 @@ class CatalogRepository @Inject constructor(
 
     suspend fun fetchCommunityGroceryPrices() = apiClient.getCommunityGroceryPrices()
 
+    private val catalogMutex = kotlinx.coroutines.sync.Mutex()
+    private val catalogCache by lazy { context.getSharedPreferences("remote_nutrition_catalog", Context.MODE_PRIVATE) }
+    private val catalogJson = Json { ignoreUnknownKeys = true }
+
+    private suspend fun catalogSnapshot(refresh: Boolean): org.json.JSONObject? {
+        catalogMutex.lock()
+        try {
+            if (refresh) {
+                val remote = apiClient.getNutritionCatalog()
+                if (remote != null) {
+                    try {
+                        val parsed = br.com.bragasaude.domain.RemoteNutritionCatalogParser.parse(remote)
+                        val foods = catalogJson.decodeFromString<List<FoodEntity>>(remote.getJSONArray("foods").toString())
+                        require(foods.map { it.remoteId }.toSet() == parsed.components.keys)
+                        foodDao.replaceServerCatalog(foods)
+                        check(catalogCache.edit().putString("snapshot", remote.toString()).commit())
+                        return remote
+                    } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                    catch (_: Exception) { /* Mantém a última revisão completa em caso de resposta inválida. */ }
+                }
+            }
+            return catalogCache.getString("snapshot", null)?.let { raw ->
+                try {
+                    val cached = org.json.JSONObject(raw)
+                    br.com.bragasaude.domain.RemoteNutritionCatalogParser.parse(cached)
+                    val foods = catalogJson.decodeFromString<List<FoodEntity>>(cached.getJSONArray("foods").toString())
+                    foodDao.replaceServerCatalog(foods)
+                    cached
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { null }
+            }
+        } finally { catalogMutex.unlock() }
+    }
+
     suspend fun fetchGroceryIngredients(includePrices: Boolean = true): br.com.bragasaude.domain.GroceryIngredientCatalog = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val snapshot = catalogSnapshot(refresh = includePrices)
+        if (snapshot != null) return@withContext br.com.bragasaude.domain.RemoteNutritionCatalogParser.parse(snapshot)
+        // Apenas compatibilidade offline antes da primeira sincronização; não recebe alimentos novos.
         val manifest = org.json.JSONObject(context.assets.open("grocery_ingredients.json").bufferedReader().use { it.readText() })
-        val arr = manifest.getJSONArray("ingredients")
-        val prices = if (includePrices) apiClient.getCanonicalGroceryPrices() else emptyMap()
-        fun strings(array: org.json.JSONArray): List<String> = (0 until array.length()).map { array.getString(it) }
-        val ingredients = (0 until arr.length()).map { i ->
-            val item = arr.getJSONObject(i)
-            val reference = prices[item.getString("slug")]
-            val unit = item.getString("unit")
-            br.com.bragasaude.domain.GroceryIngredient(item.getString("slug"), item.getString("name"), unit,
-                item.getInt("step"), item.getInt("minimum"), strings(item.getJSONArray("aliases")), strings(item.getJSONArray("food_ids")),
-                reference?.takeIf { it.unit == unit }?.average,
-                reference?.takeIf { it.unit == unit }?.source ?: "unavailable")
-        }
-        val foods = manifest.getJSONArray("foods")
-        val components = (0 until foods.length()).associate { i ->
-            val food = foods.getJSONObject(i)
-            food.getString("food_id") to strings(food.getJSONArray("shopping_components"))
-        }
-        br.com.bragasaude.domain.GroceryIngredientCatalog(ingredients, components)
+        br.com.bragasaude.domain.RemoteNutritionCatalogParser.parseLegacy(manifest)
     }
 
     suspend fun fetchGroceryPrices(): Map<String, Double> {
@@ -57,21 +77,17 @@ class CatalogRepository @Inject constructor(
         try {
             clinicalReferenceSeeder.seedIfNeeded()
             
-            val currentCatalog = foodDao.getCatalog().first()
-            if (currentCatalog.size < 100) {
-                val jsonString = context.assets.open("food_catalog_seed.json").bufferedReader().use { it.readText() }
-                val json = Json {
-                    ignoreUnknownKeys = true
-                    isLenient = true
-                    coerceInputValues = true
-                }
-                val foods = json.decodeFromString<List<FoodEntity>>(jsonString)
-                if (foods.isNotEmpty()) {
-                    foodDao.insertAll(foods)
+            if (catalogSnapshot(refresh = true) == null) {
+                val currentCatalog = foodDao.getCatalog().first()
+                if (currentCatalog.isEmpty()) {
+                    val jsonString = context.assets.open("food_catalog_seed.json").bufferedReader().use { it.readText() }
+                    val foods = catalogJson.decodeFromString<List<FoodEntity>>(jsonString)
+                    if (foods.isNotEmpty()) foodDao.insertAll(foods)
                 }
             }
-        } catch (e: Exception) {
-            android.util.Log.e("CatalogRepo", "Erro ao semear catálogo de alimentos: ${e.message}")
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) {
+            android.util.Log.w("CatalogRepo", "Catálogo nutricional indisponível")
         }
     }
 

@@ -13,7 +13,13 @@ data class GroceryIngredient(
     val source: String = "unavailable"
 )
 
-data class GroceryIngredientCatalog(val ingredients: List<GroceryIngredient>, val components: Map<String, List<String>>) {
+data class GroceryIngredientCatalog(
+    val ingredients: List<GroceryIngredient>,
+    val components: Map<String, List<String>>,
+    val requiredGroups: List<List<String>> = emptyList(),
+    val purchaseFactors: Map<String, Map<String, Double>> = emptyMap(),
+    val version: Int = 1
+) {
     fun forFood(id: String, name: String): List<GroceryIngredient> {
         val keys = components[id]
         if (keys != null) return keys.mapNotNull { slug -> ingredients.firstOrNull { it.slug == slug } }

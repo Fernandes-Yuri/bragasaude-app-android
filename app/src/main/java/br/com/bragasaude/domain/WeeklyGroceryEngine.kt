@@ -30,16 +30,21 @@ object WeeklyGroceryEngine {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val weekStartDate = dateFormat.format(Date())
 
-        val available = catalog.filter { food ->
+        val safeCatalog = catalog.filter { food ->
             if (ingredientCatalog.forFood(food.remoteId, food.name).isEmpty()) return@filter false
-            val clean = food.name.trim().lowercase()
-            val notDisliked = !dislikedFoodNames.any { it.trim().lowercase() == clean }
             val allergySafe = NutritionSuggestionEngine.isSafeFromAllergies(
                 food,
                 profile?.foodAllergies ?: emptyList(),
                 profile?.customFoodRestrictions
             )
-            notDisliked && allergySafe
+            allergySafe &&
+                (profile?.hasDiabetes != true || food.isDiabetesSafe) &&
+                (profile?.hasHypertension != true || food.isHypertensionSafe) &&
+                (profile?.hasThyroidIssue != true || food.isThyroidSafe)
+        }
+
+        val available = safeCatalog.filter { food ->
+            dislikedFoodNames.none { groceryNameKey(it) == groceryNameKey(food.name) }
         }
 
         // Determina marcadores clinicos
@@ -54,6 +59,14 @@ object WeeklyGroceryEngine {
         val hasHighBp = sys > 130 || profile?.hasHypertension == true
 
         val selectedItems = mutableListOf<GroceryListItemEntity>()
+        // Os grupos básicos e a ordem de preferência são fornecidos pelo gateway.
+        ingredientCatalog.requiredGroups.forEach { group ->
+            val selected = group.firstNotNullOfOrNull { id -> available.firstOrNull { it.remoteId == id } }
+                ?: group.firstNotNullOfOrNull { id -> safeCatalog.firstOrNull { it.remoteId == id } }
+            if (selected != null) selectedItems.addAll(createGroceryItems(
+                userId, weekStartDate, selected, CORRIDOR_GRAOS, ingredientCatalog, targetCalories))
+        }
+
 
         // 1. CORREDOR HORTIFRUTI (6 a 8 itens)
         val frutasPool = available.filter { it.category?.contains("Frutas", ignoreCase = true) == true }.shuffled()
@@ -98,7 +111,8 @@ object WeeklyGroceryEngine {
         val carnesPeixes = available.filter { it.category?.contains("Peixes", ignoreCase = true) == true || it.category?.contains("Carnes", ignoreCase = true) == true }.shuffled().take(2)
         val laticinios = available.filter { it.category?.contains("Laticinios", ignoreCase = true) == true || it.category?.contains("Queijo", ignoreCase = true) == true }.shuffled().take(1)
 
-        val proteinasFoods = (ovos + carnesPeixes + laticinios).distinctBy { it.remoteId }
+        val vegetais = available.filter { it.functionalTags.contains("proteina_vegetal") }.shuffled().take(1)
+        val proteinasFoods = (ovos + carnesPeixes + laticinios + vegetais).distinctBy { it.remoteId }
         proteinasFoods.forEach { food ->
             selectedItems.addAll(createGroceryItems(userId, weekStartDate, food, CORRIDOR_PROTEINAS, ingredientCatalog, targetCalories))
         }
@@ -131,7 +145,9 @@ object WeeklyGroceryEngine {
         val scaledWeeklyServingGrams = (dailyGrams * days * calorieFactor).toInt()
         val ingredients = ingredientCatalog.forFood(food.remoteId, food.name)
         return ingredients.map { ingredient ->
-            val amount = GroceryPurchasePlanner.quantity(ingredient, if (ingredients.size == 1) plannedGrams else ingredient.minimum)
+            val factor = ingredientCatalog.purchaseFactors[food.remoteId]?.get(ingredient.slug) ?: 1.0
+            val requested = if (ingredients.size == 1) kotlin.math.ceil(plannedGrams * factor).toInt() else ingredient.minimum
+            val amount = GroceryPurchasePlanner.quantity(ingredient, requested)
             GroceryListItemEntity(
                 remoteId = UUID.randomUUID().toString(),
                 userId = userId,
