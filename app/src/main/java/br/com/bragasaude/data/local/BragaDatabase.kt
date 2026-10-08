@@ -41,7 +41,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 51, // Exames locais e autorização específica de nuvem
+    version = 51, // Plano semanal persistido e saldo estimado da despensa
     exportSchema = true
 )
 @TypeConverters(Converters::class)
