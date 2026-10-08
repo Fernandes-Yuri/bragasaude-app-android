@@ -27,6 +27,10 @@ import androidx.room.TypeConverters
         FamilyBindingEntity::class,
         FamilyMessageEntity::class,
         GroceryListItemEntity::class,
+        WeeklyGrocerySummaryEntity::class,
+        GroceryPantryStockEntity::class,
+        GroceryMealEntity::class,
+        GroceryConsumptionEntity::class,
         VitalAlertLogEntity::class,
         AuditLogEntity::class,
         WearableReading::class,
@@ -37,7 +41,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 50, // Exames locais e autorização específica de nuvem
+    version = 51, // Plano semanal persistido e saldo estimado da despensa
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -60,6 +64,8 @@ abstract class BragaDatabase : RoomDatabase() {
     abstract fun socialFeedDao(): SocialFeedDao
     abstract fun xpAwardDao(): XpAwardDao
     abstract fun groceryListDao(): GroceryListDao
+    abstract fun weeklyGrocerySummaryDao(): WeeklyGrocerySummaryDao
+    abstract fun groceryPantryDao(): GroceryPantryDao
     abstract fun familyDao(): FamilyDao
     abstract fun vitalAlertLogDao(): VitalAlertLogDao
     abstract fun auditLogDao(): AuditLogDao

@@ -7,6 +7,13 @@ import org.json.JSONObject
 object RemoteNutritionCatalogParser {
     private fun strings(values: JSONArray): List<String> = (0 until values.length()).map { values.getString(it) }
 
+    private fun positive(item: JSONObject, key: String): Double? {
+        if (item.isNull(key)) return null
+        val value = item.getDouble(key)
+        require(value.isFinite() && value > 0)
+        return value
+    }
+
     private fun ingredients(values: JSONArray): List<GroceryIngredient> = (0 until values.length()).map { i ->
         val item = values.getJSONObject(i)
         val unit = item.getString("unit")
@@ -16,7 +23,9 @@ object RemoteNutritionCatalogParser {
         val price = if (item.isNull("price_avg")) null else item.optDouble("price_avg").takeIf { it.isFinite() && it > 0 }
         GroceryIngredient(item.getString("slug"), item.getString("name"), unit, step, minimum,
             strings(item.getJSONArray("aliases")), strings(item.getJSONArray("food_ids")), price,
-            item.optString("source", "unavailable"))
+            item.optString("source", "unavailable"), positive(item, "grams_per_unit"),
+            positive(item, "density_g_per_ml"),
+            if (item.isNull("canonical_group_slug")) null else item.getString("canonical_group_slug").also { require(it.isNotBlank()) })
     }
 
     fun parse(snapshot: JSONObject): GroceryIngredientCatalog {
@@ -29,6 +38,7 @@ object RemoteNutritionCatalogParser {
         require(foods.length() > 0)
         val components = mutableMapOf<String, List<String>>()
         val factors = mutableMapOf<String, Map<String, Double>>()
+        val proportions = mutableMapOf<String, Map<String, Double>>()
         for (i in 0 until foods.length()) {
             val food = foods.getJSONObject(i)
             val id = food.getString("remoteId")
@@ -36,6 +46,14 @@ object RemoteNutritionCatalogParser {
             val refs = strings(food.getJSONArray("shoppingComponents"))
             require(refs.isNotEmpty() && refs.all { it in slugs })
             components[id] = refs
+            food.optJSONObject("component_proportions")?.let { values ->
+                val shares = values.keys().asSequence().associateWith { slug ->
+                    require(slug in refs)
+                    positive(values, slug)!!
+                }
+                require(shares.keys == refs.toSet() && kotlin.math.abs(shares.values.sum() - 1.0) < 0.000001)
+                proportions[id] = shares
+            }
             val values = food.optJSONObject("purchaseFactors") ?: JSONObject()
             factors[id] = values.keys().asSequence().associateWith { slug ->
                 val factor = values.getDouble(slug)
@@ -46,7 +64,7 @@ object RemoteNutritionCatalogParser {
         val groups = snapshot.getJSONObject("policy").getJSONArray("required_groups")
         val required = (0 until groups.length()).map { strings(groups.getJSONArray(it)) }
         require(required.all { group -> group.isNotEmpty() && group.all { it in components } })
-        return GroceryIngredientCatalog(ingredients, components, required, factors, version)
+        return GroceryIngredientCatalog(ingredients, components, required, factors, version, proportions)
     }
 
     fun parseLegacy(manifest: JSONObject): GroceryIngredientCatalog {

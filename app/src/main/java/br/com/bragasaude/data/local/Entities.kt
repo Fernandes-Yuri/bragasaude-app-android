@@ -414,7 +414,9 @@ data class GroceryListItemEntity(
     val purchaseUnitText: String, // ex: "1 palma (~850g)", "1 duzia (12 un)", "1 pacote (200g)"
     val estimatedPriceBrl: Double,
     val isCheckedInPantry: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    @androidx.room.ColumnInfo(defaultValue = "0") val isManual: Boolean = false,
+    @androidx.room.ColumnInfo(defaultValue = "0") val plannedWeeklyAmount: Double = 0.0
 )
 
 /**

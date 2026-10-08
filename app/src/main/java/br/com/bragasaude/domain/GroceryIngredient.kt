@@ -10,7 +10,10 @@ fun groceryNameKey(value: String): String = java.text.Normalizer.normalize(value
 data class GroceryIngredient(
     val slug: String, val name: String, val unit: String, val step: Int, val minimum: Int,
     val aliases: List<String>, val foodIds: List<String>, val price: Double? = null,
-    val source: String = "unavailable"
+    val source: String = "unavailable",
+    val gramsPerUnit: Double? = null,
+    val densityGPerMl: Double? = null,
+    val canonicalGroupSlug: String? = null
 )
 
 data class GroceryIngredientCatalog(
@@ -18,7 +21,8 @@ data class GroceryIngredientCatalog(
     val components: Map<String, List<String>>,
     val requiredGroups: List<List<String>> = emptyList(),
     val purchaseFactors: Map<String, Map<String, Double>> = emptyMap(),
-    val version: Int = 1
+    val version: Int = 1,
+    val componentProportions: Map<String, Map<String, Double>> = emptyMap()
 ) {
     fun forFood(id: String, name: String): List<GroceryIngredient> {
         val keys = components[id]

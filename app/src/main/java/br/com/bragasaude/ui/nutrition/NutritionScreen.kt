@@ -76,6 +76,9 @@ fun NutritionScreen(
     val groceryList by viewModel.groceryList.collectAsState()
     val manualIngredients by viewModel.manualIngredients.collectAsState()
     val groceryMessage by viewModel.groceryMessage.collectAsState()
+    val groceryPlan by viewModel.groceryPlanResult.collectAsState()
+    val pantryStock by viewModel.pantryStock.collectAsState()
+    val showResizeDialog by viewModel.showResizeDialog.collectAsState()
 
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
@@ -969,6 +972,15 @@ fun NutritionScreen(
         )
     }
 
+    if (showResizeDialog) {
+        BragaAlertDialog(
+            onDismissRequest = { viewModel.keepCurrentWeeklyList() },
+            title = { Text("Meta alimentar alterada") },
+            text = { Text("Deseja redimensionar a lista semanal pela nova meta? Seus itens manuais serão preservados. Manter a lista atual deixa a cobertura invalidada.") },
+            confirmButton = { TextButton(onClick = { viewModel.resizeWeeklyList() }) { Text("Redimensionar agora") } },
+            dismissButton = { TextButton(onClick = { viewModel.keepCurrentWeeklyList() }) { Text("Manter lista atual") } }
+        )
+    }
     if (showGroceryBottomSheet) {
         val context = LocalContext.current
         GroceryListBottomSheet(
@@ -981,6 +993,9 @@ fun NutritionScreen(
             onRemoveItem = { id -> viewModel.removeGroceryItem(id) },
             onClearList = { viewModel.clearGroceryList() },
             groceryMessage = groceryMessage,
+            plan = groceryPlan,
+            pantryStock = pantryStock,
+            onResize = { viewModel.resizeWeeklyList() },
             onExportPdf = { viewModel.exportAndShareGroceryPdf(context) },
             contributionState = contributionState,
             communityPrices = communityPrices,

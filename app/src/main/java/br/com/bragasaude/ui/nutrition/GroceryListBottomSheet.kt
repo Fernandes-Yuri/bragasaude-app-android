@@ -57,7 +57,10 @@ fun GroceryListBottomSheet(
     onSaveManualItem: (String, String, String?) -> Unit = { _, _, _ -> },
     onRemoveItem: (String) -> Unit = {},
     onClearList: () -> Unit = {},
-    groceryMessage: String? = null
+    groceryMessage: String? = null,
+    plan: br.com.bragasaude.domain.WeeklyGroceryPlanResult? = null,
+    pantryStock: List<br.com.bragasaude.data.local.GroceryPantryStockEntity> = emptyList(),
+    onResize: () -> Unit = onGenerateList
 ) {
     var reportingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var manualEditingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
@@ -203,6 +206,32 @@ fun GroceryListBottomSheet(
                     .weight(1f, fill = false),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (plan != null) {
+                    item { WeeklyGrocerySummaryCard(plan, onResize) }
+                }
+                val checkedSlugs = groceryList.filter { it.isCheckedInPantry }.map { it.foodId }.toSet()
+                val trackedStock = pantryStock.filter { it.ingredientSlug in checkedSlugs }
+                if (trackedStock.isNotEmpty()) {
+                    item {
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("Saldo estimado da despensa", style = MaterialTheme.typography.titleMedium)
+                                trackedStock.forEach { stock ->
+                                    val row = groceryList.first { it.foodId == stock.ingredientSlug }
+                                    val shortage = br.com.bragasaude.domain.GroceryConsumption.insufficient(stock.availableAmount,
+                                        row.plannedWeeklyAmount, br.com.bragasaude.domain.GroceryWeek.daysRemaining())
+                                    val amount = when (stock.unit) {
+                                        "kg" -> "${stock.availableAmount.toInt()} g"
+                                        "L" -> String.format(Locale.getDefault(), "%.2f L", stock.availableAmount / 1000)
+                                        else -> String.format(Locale.getDefault(), "%.1f un", stock.availableAmount)
+                                    }
+                                    Text("${row.foodName}: $amount" + if (shortage) " • insuficiente para os dias restantes" else "")
+                                }
+                                Text("Baixa estimada pelos registros de refeições; não representa medição do estoque.", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
                 if (groceryMessage != null) {
                     item {
                         Surface(

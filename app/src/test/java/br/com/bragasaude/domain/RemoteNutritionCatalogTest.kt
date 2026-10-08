@@ -62,4 +62,25 @@ class RemoteNutritionCatalogTest {
         assertFalse(NutritionSuggestionEngine.isSafeFromAllergies(
             food("planta", listOf("diet:vegan", "allergen:soja")), listOf("Soja"), null))
     }
+    @Test fun decodesOptionalPhysicalMetadataAndRejectsInvalidValues() {
+        val snapshot = snapshot()
+        val ingredient = snapshot.getJSONArray("ingredients").getJSONObject(0)
+        ingredient.put("grams_per_unit", 50.0).put("density_g_per_ml", 0.92).put("canonical_group_slug", "grupo")
+        snapshot.getJSONArray("foods").getJSONObject(0).put("component_proportions", JSONObject("""{"ingredient_a":1.0}"""))
+        val parsed = RemoteNutritionCatalogParser.parse(snapshot)
+        assertEquals(50.0, parsed.ingredients.first().gramsPerUnit!!, 0.001)
+        assertEquals(0.92, parsed.ingredients.first().densityGPerMl!!, 0.001)
+        assertEquals("grupo", parsed.ingredients.first().canonicalGroupSlug)
+        assertEquals(1.0, parsed.componentProportions["base_a"]!!["ingredient_a"]!!, 0.001)
+        ingredient.put("grams_per_unit", -1)
+        try { RemoteNutritionCatalogParser.parse(snapshot); fail("Metadado negativo aceito") } catch (_: IllegalArgumentException) { }
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsIncompleteRecipeProportions() {
+        val snapshot = snapshot()
+        snapshot.getJSONArray("foods").getJSONObject(0).put("component_proportions", JSONObject("""{"ingredient_a":0.2}"""))
+        RemoteNutritionCatalogParser.parse(snapshot)
+    }
+
 }
