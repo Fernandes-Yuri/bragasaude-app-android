@@ -138,7 +138,6 @@ object WeeklyGroceryEngine {
         val hasHighBp = sys > 130 || profile?.hasHypertension == true
 
         // 3. Distribuição energética entre os pilares nutricionais (7 dias)
-        // AMDR/FAO/OMS: ~45% bases/carboidratos, ~25% proteínas/leguminosas, ~15% hortifruti, ~15% mercearia/gorduras
         val grainTargetKcal = targetWeeklyCalories * 0.45
         val proteinTargetKcal = targetWeeklyCalories * 0.25
         val produceTargetKcal = targetWeeklyCalories * 0.15
@@ -154,10 +153,9 @@ object WeeklyGroceryEngine {
             if (selected != null) {
                 selectedRequiredFoodIds.add(selected.remoteId)
                 val corridor = classifyPillar(selected)
-                // Arroz e feijão compõem refeições principais ao longo da semana (5 a 7 dias)
                 val days = if (catalog.size <= 5) 5 else 7
                 val basePortion = selected.servingSizeGrams.takeIf { it > 0 } ?: 80
-                val scale = (effectiveDailyCalories / 2000.0).coerceIn(0.7, 2.5)
+                val scale = (effectiveDailyCalories / 1800.0).coerceIn(0.7, 2.5)
                 val portion = (basePortion * scale).toInt().coerceIn(
                     selected.minServingGrams.takeIf { it > 0 } ?: (basePortion / 2).coerceAtLeast(20),
                     selected.maxServingGrams.takeIf { it > 0 } ?: (basePortion * 3)
@@ -231,9 +229,11 @@ object WeeklyGroceryEngine {
         )
 
         // 9. Calibração fina da meta calórica semanal
+        val allEligibleCandidates = (grainsPool + proteinsPool + producePool + pantryPool).distinctBy { it.remoteId }
         calibrateTotalEnergy(
             targetWeeklyKcal = targetWeeklyCalories,
             plannedConsumptions = plannedConsumptions,
+            candidatesPool = allEligibleCandidates,
             limitations = limitations
         )
 
@@ -257,7 +257,6 @@ object WeeklyGroceryEngine {
                     IngredientDemand(ingredient, demandAmount, weeklyGrams, pc.corridor)
                 )
             } else {
-                // Preparação com múltiplos componentes: divide proporcionalmente
                 val share = 1.0 / ingredients.size
                 val factorsMap = ingredientCatalog.purchaseFactors[food.remoteId]
                 ingredients.forEach { ingredient ->
@@ -278,9 +277,7 @@ object WeeklyGroceryEngine {
             val totalSuggestedServingGrams = demands.sumOf { it.plannedServingWeekGrams }
             val preferredCorridor = demands.groupBy { it.corridor }.maxByOrNull { it.value.size }?.key ?: CORRIDOR_GRAOS
 
-            // Margem de segurança de compra (15%) aplicada somente para a compra, sem contar nas calorias
             val demandWithMargin = ceil(totalPrepDemand * PURCHASE_SAFETY_MARGIN).toInt().coerceAtLeast(1)
-
             val purchaseAmount = GroceryPurchasePlanner.quantity(ingredient, demandWithMargin)
 
             GroceryListItemEntity(
@@ -340,15 +337,14 @@ object WeeklyGroceryEngine {
     ): Double {
         return when (ingredient.unit) {
             "kg" -> weeklyGrams * factor
-            "L" -> weeklyGrams * factor // Volume em mL (densidade padrão água/leite 1g = 1mL)
+            "L" -> weeklyGrams * factor
             "un" -> {
-                // Dedução estruturada a partir do metadado de porção do alimento
                 val unitGrams = if (food.servingUnit.contains("unidade", ignoreCase = true) && food.servingSizeGrams > 0) {
                     food.servingSizeGrams.toDouble()
                 } else if (food.servingSizeGrams > 0) {
                     food.servingSizeGrams.toDouble()
                 } else {
-                    50.0 // Média biológica de ovo
+                    50.0
                 }
                 ceil((weeklyGrams * factor) / unitGrams)
             }
@@ -376,8 +372,13 @@ object WeeklyGroceryEngine {
             candidates
         }
 
-        // Escolhe um subconjunto variado (2 a 4 alimentos por pilar)
-        val selectedPool = sortedCandidates.take(4)
+        val countToTake = when {
+            dailyCalorieTarget >= 3500.0 -> 6
+            dailyCalorieTarget >= 2500.0 -> 5
+            else -> 4
+        }.coerceAtMost(sortedCandidates.size).coerceAtLeast(1)
+
+        val selectedPool = sortedCandidates.take(countToTake)
         val perFoodKcalTarget = targetKcal / selectedPool.size
 
         selectedPool.forEach { food ->
@@ -397,7 +398,7 @@ object WeeklyGroceryEngine {
                 val portion = (neededGrams / days).coerceIn(minPortion, maxPortion)
                 portion * days
             } else {
-                val scale = (dailyCalorieTarget / 2000.0).coerceIn(0.7, 2.5)
+                val scale = (dailyCalorieTarget / 1800.0).coerceIn(0.7, 2.5)
                 val portion = (baseServing * scale).toInt().coerceIn(minPortion, maxPortion)
                 portion * days
             }
@@ -424,11 +425,12 @@ object WeeklyGroceryEngine {
         }
         val legumesPool = candidates.filter { groceryNameKey(it.category.orEmpty()).contains("legume") }
 
+        val frutasCount = if (dailyCalorieTarget >= 2800.0) 3 else 2
         val frutas = if (hasHighGlucose) {
-            frutasPool.filter { it.functionalTags.contains("baixo_ig") || it.functionalTags.contains("fibra_soluvel") }.take(2)
+            frutasPool.filter { it.functionalTags.contains("baixo_ig") || it.functionalTags.contains("fibra_soluvel") }.take(frutasCount)
         } else {
-            frutasPool.take(3)
-        }.ifEmpty { frutasPool.take(2) }
+            frutasPool.take(frutasCount)
+        }.ifEmpty { frutasPool.take(frutasCount) }
 
         val folhas = if (hasHighBp) {
             folhasPool.filter { it.functionalTags.contains("nitrato_natural") || it.functionalTags.contains("magnesio") || it.functionalTags.contains("potassio") }.take(2)
@@ -453,7 +455,7 @@ object WeeklyGroceryEngine {
                 val portion = (neededGrams / days).coerceIn(minPortion, maxPortion)
                 portion * days
             } else {
-                val scale = (dailyCalorieTarget / 2000.0).coerceIn(0.7, 2.5)
+                val scale = (dailyCalorieTarget / 1800.0).coerceIn(0.7, 2.5)
                 val portion = (baseServing * scale).toInt().coerceIn(minPortion, maxPortion)
                 portion * days
             }
@@ -465,13 +467,14 @@ object WeeklyGroceryEngine {
     private fun calibrateTotalEnergy(
         targetWeeklyKcal: Double,
         plannedConsumptions: MutableList<PlannedConsumption>,
+        candidatesPool: List<FoodEntity>,
         limitations: MutableList<String>
     ) {
-        val currentKcal = plannedConsumptions.sumOf { it.plannedCalories }
-        val deficit = targetWeeklyKcal - currentKcal
+        var currentKcal = plannedConsumptions.sumOf { it.plannedCalories }
+        var deficit = targetWeeklyKcal - currentKcal
 
-        if (deficit > 500.0 && plannedConsumptions.isNotEmpty()) {
-            // Ajusta proporcionalmente alimentos com calorias positivas respeitando os limites máximos de porção
+        // Passo A: Aumenta porções até o teto máximo de porção semanal (maxServingGrams * 7)
+        if (deficit > 200.0) {
             val eligibleForBoost = plannedConsumptions.filter { (it.food.kcal ?: 0.0) > 0.0 }
             if (eligibleForBoost.isNotEmpty()) {
                 val boostShare = deficit / eligibleForBoost.size
@@ -479,12 +482,38 @@ object WeeklyGroceryEngine {
                     val pc = plannedConsumptions[i]
                     val foodKcal = pc.food.kcal ?: 0.0
                     if (foodKcal > 0.0) {
-                        val additionalGrams = ((boostShare / foodKcal) * 100.0).toInt()
-                        val maxAllowedGrams = (pc.food.maxServingGrams.takeIf { it > 0 } ?: 500) * 7
-                        val newGrams = (pc.weeklyGrams + additionalGrams).coerceAtMost(maxAllowedGrams)
-                        plannedConsumptions[i] = pc.copy(weeklyGrams = newGrams)
+                        val maxAllowedGrams = (pc.food.maxServingGrams.takeIf { it > 0 } ?: 400) * 7
+                        val headroom = (maxAllowedGrams - pc.weeklyGrams).coerceAtLeast(0)
+                        if (headroom > 0) {
+                            val additionalGrams = ((boostShare / foodKcal) * 100.0).toInt().coerceAtMost(headroom)
+                            plannedConsumptions[i] = pc.copy(weeklyGrams = pc.weeklyGrams + additionalGrams)
+                        }
                     }
                 }
+            }
+        }
+
+        currentKcal = plannedConsumptions.sumOf { it.plannedCalories }
+        deficit = targetWeeklyKcal - currentKcal
+
+        // Passo B: Se ainda houver déficit e houver alternativas elegíveis não selecionadas, inclui opções complementares
+        if (deficit > 400.0) {
+            val alreadySelectedIds = plannedConsumptions.map { it.food.remoteId }.toSet()
+            val extraCandidates = candidatesPool.filter { it.remoteId !in alreadySelectedIds && (it.kcal ?: 0.0) > 0.0 }
+                .sortedByDescending { it.kcal ?: 0.0 }
+
+            for (food in extraCandidates) {
+                if (deficit <= 200.0) break
+                val foodKcal = food.kcal ?: continue
+                val corridor = classifyPillar(food)
+                val baseServing = food.servingSizeGrams.takeIf { it > 0 } ?: 80
+                val maxServing = food.maxServingGrams.takeIf { it > 0 } ?: (baseServing * 3)
+                val portion = ((baseServing * 1.5).toInt()).coerceIn(baseServing, maxServing)
+                val days = 5
+                val weeklyGrams = portion * days
+                val foodTotalKcal = (weeklyGrams * foodKcal) / 100.0
+                plannedConsumptions.add(PlannedConsumption(food, weeklyGrams, corridor))
+                deficit -= foodTotalKcal
             }
         }
     }
