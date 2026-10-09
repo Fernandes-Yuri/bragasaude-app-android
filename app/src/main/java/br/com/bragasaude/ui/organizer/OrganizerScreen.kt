@@ -76,11 +76,11 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
             if (session == null) {
                 Button(onClick = viewModel::start, enabled = !state.busy) { Text("Começar organização") }
             } else {
-                Text("Até 20 documentos, 100 páginas e 35 MB por arquivo. PDF e fotos. Uma foto pode ser uma página do mesmo exame.")
+                Text("Até 20 documentos, 100 páginas, 35 MB por arquivo e 150 MB por sessão. PDF e fotos. Uma foto pode ser uma página do mesmo exame.")
                 Button(onClick = { appendTo = null; picker.launch(arrayOf("application/pdf", "image/*")) }, enabled = !state.busy) { Text("Selecionar arquivos") }
                 OutlinedButton(onClick = {
                     appendTo = null
-                    val file = File(context.cacheDir, "organizer/${session.id}/capture.jpg").apply { parentFile?.mkdirs() }
+                    val file = File(context.cacheDir, "organizer-capture/${session.id}/capture.jpg").apply { parentFile?.mkdirs() }
                     captureUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
                     camera.launch(requireNotNull(captureUri))
                 }, enabled = !state.busy) { Text("Fotografar exame") }

@@ -19,7 +19,7 @@ import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.suspendCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -41,9 +41,9 @@ import kotlin.coroutines.resumeWithException
 /** Temporary workspace. No API, Room, account ID or clinical logging. */
 @Singleton
 class OrganizerStore @Inject constructor(@ApplicationContext private val context: Context) {
-    private val lock = Mutex()
+    companion object { private val lock = Mutex() }
     private val root get() = File(context.noBackupFilesDir, "organizer").apply { mkdirs() }
-    private val cache get() = File(context.cacheDir, "organizer").apply { mkdirs() }
+    private val cache get() = File(context.cacheDir, "organizer-work").apply { mkdirs() }
     private val pdf = OrganizerPdfBuilder(context)
     private val keys get() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     private fun alias(id: String) = "organizer-$id"
@@ -85,6 +85,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
     }
     private fun remove(id: String) {
         folder(id).deleteRecursively(); File(cache, id).deleteRecursively()
+        listOf("organizer-outbox", "organizer-capture").forEach { File(context.cacheDir, "$it/$id").deleteRecursively() }
         if (keys.containsAlias(alias(id))) keys.deleteEntry(alias(id))
     }
     private fun clean() {
@@ -101,7 +102,8 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
     suspend fun restore(): OrganizerSession? = withContext(Dispatchers.IO) { lock.withLock {
         clean()
         root.listFiles()?.firstOrNull()?.let { f ->
-            runCatching { read(f.name) }.getOrElse { remove(f.name); null }
+            File(cache, f.name).deleteRecursively()
+            runCatching { read(f.name).also { scheduleCleanup(it) } }.getOrElse { remove(f.name); null }
         }
     } }
     suspend fun start(): OrganizerSession = withContext(Dispatchers.IO) { lock.withLock {
@@ -111,12 +113,17 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         folder(s.id).mkdirs()
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         generator.init(KeyGenParameterSpec.Builder(alias(s.id), KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
+            .setKeySize(256).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
         generator.generateKey(); save(s)
         WorkManager.getInstance(context).enqueueUniqueWork("organizer-expiry", ExistingWorkPolicy.REPLACE,
             OneTimeWorkRequestBuilder<OrganizerCleanupWorker>().setInitialDelay(24, TimeUnit.HOURS).build())
         s
     } }
+    private fun scheduleCleanup(session: OrganizerSession) {
+        WorkManager.getInstance(context).enqueueUniqueWork("organizer-expiry", ExistingWorkPolicy.REPLACE,
+            OneTimeWorkRequestBuilder<OrganizerCleanupWorker>().setInitialDelay(
+                (session.expiresAt - System.currentTimeMillis()).coerceAtLeast(0), TimeUnit.MILLISECONDS).build())
+    }
     private fun active(id: String): OrganizerSession {
         val s = read(id)
         if (s.expired(System.currentTimeMillis())) { remove(id); error("A sessão expirou. Importe os originais novamente.") }
@@ -125,16 +132,48 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
     private fun invalidate(id: String) {
         File(folder(id), "result.enc").delete()
         temp(id).listFiles()?.forEach { it.deleteRecursively() }
+        File(context.cacheDir, "organizer-outbox/$id").deleteRecursively()
+        File(context.cacheDir, "organizer-capture/$id").deleteRecursively()
+    }
+    private fun encryptFile(id: String, source: File, target: File) {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key(id))
+        val atomic = android.util.AtomicFile(target)
+        val stream = atomic.startWrite()
+        try {
+            stream.write(cipher.iv)
+            source.inputStream().use { input ->
+                val buffer = ByteArray(8192)
+                while (true) { val n = input.read(buffer); if (n < 0) break
+                    cipher.update(buffer, 0, n)?.let { stream.write(it) } }
+            }
+            stream.write(cipher.doFinal()); atomic.finishWrite(stream)
+        } catch (error: Throwable) { atomic.failWrite(stream); throw error }
+    }
+    private fun decryptFile(id: String, source: File, target: File) {
+        source.inputStream().use { input ->
+            val iv = ByteArray(12); check(input.read(iv) == 12)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, key(id), GCMParameterSpec(128, iv))
+            try {
+                target.outputStream().use { output ->
+                    val buffer = ByteArray(8192)
+                    while (true) { val n = input.read(buffer); if (n < 0) break
+                        cipher.update(buffer, 0, n)?.let { output.write(it) } }
+                    output.write(cipher.doFinal())
+                }
+            } catch (error: Throwable) { target.delete(); throw error }
+        }
     }
     private fun original(id: String, doc: OrganizerDocument): File = File(temp(id), "${doc.id}.pdf").apply {
-        writeBytes(decrypt(id, File(folder(id), "${doc.id}.enc")))
+        decryptFile(id, File(folder(id), "${doc.id}.enc"), this)
     }
     private suspend fun recognize(bitmap: Bitmap): String {
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-        return try { suspendCancellableCoroutine { continuation ->
+        return try { suspendCoroutine { continuation ->
             recognizer.process(InputImage.fromBitmap(bitmap, 0))
-                .addOnSuccessListener { if (continuation.isActive) continuation.resume(it.text) }
-                .addOnFailureListener { if (continuation.isActive) continuation.resumeWithException(it) }
+                .addOnSuccessListener { continuation.resume(it.text) }
+                .addOnFailureListener { continuation.resumeWithException(it) }
         } } finally { recognizer.close() }
     }
     private fun render(file: File, pageNumber: Int): Bitmap {
@@ -190,6 +229,9 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
                     if (it.moveToFirst()) it.getString(0) else null
                 } ?: "Documento de exame"
                 val (title, type) = OrganizerMetadata.suggest(text, name)
+                require(normalized.length() <= 35L * 1024 * 1024) { "Cada documento pode ter até 35 MB após a organização." }
+                require((folder(id).listFiles()?.filter { it.extension == "enc" }?.sumOf { it.length() } ?: 0L) +
+                    pending.sumOf { it.second.length() } + normalized.length() <= 150L * 1024 * 1024) { "A sessão pode ter até 150 MB. Organize em lotes menores." }
                 pending.add(OrganizerDocument(docId, title, OrganizerMetadata.suggestDate(text), type, pages) to normalized)
             }
             if (appendTo != null) {
@@ -201,10 +243,10 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
                         com.tom_roush.pdfbox.multipdf.PDFMergerUtility().appendDocument(document, it)
                     } }; document.save(merged)
                 }
-                encrypt(id, merged.readBytes(), File(folder(id), "${item.id}.enc"))
+                encryptFile(id, merged, File(folder(id), "${item.id}.enc"))
                 s = s.copy(documents = s.documents.map { if (it.id == item.id) it.copy(pages = item.pages + pending.sumOf { p -> p.first.pages }, confirmed = false) else it })
             } else {
-                pending.forEach { (item, file) -> encrypt(id, file.readBytes(), File(folder(id), "${item.id}.enc")) }
+                pending.forEach { (item, file) -> encryptFile(id, file, File(folder(id), "${item.id}.enc")) }
                 s = s.copy(documents = s.documents + pending.map { it.first })
             }
             save(s); invalidate(id); s
@@ -235,19 +277,22 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
             val files = documents.map { original(id, it) }
             val result = File(work, "result.pdf")
             pdf.build(documents, files, result, work)
-            encrypt(id, result.readBytes(), File(folder(id), "result.enc"))
+            encryptFile(id, result, File(folder(id), "result.enc"))
         } finally { work.listFiles()?.forEach { it.deleteRecursively() } }
     } }
     suspend fun saveResult(id: String, uri: Uri): Unit = withContext(Dispatchers.IO) { lock.withLock {
         active(id)
-        val bytes = decrypt(id, File(folder(id), "result.enc"))
-        context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes); it.flush() }
-            ?: error("Não foi possível salvar o PDF.")
+        val file = File(temp(id), "export.pdf")
+        try {
+            decryptFile(id, File(folder(id), "result.enc"), file)
+            context.contentResolver.openOutputStream(uri, "wt")?.use { output -> file.inputStream().use { it.copyTo(output) }; output.flush() }
+                ?: error("Não foi possível salvar o PDF.")
+        } finally { file.delete() }
     } }
     suspend fun shareResult(id: String): Uri = withContext(Dispatchers.IO) { lock.withLock {
         active(id)
-        val file = File(temp(id), "exames-organizados.pdf")
-        file.writeBytes(decrypt(id, File(folder(id), "result.enc")))
+        val file = File(context.cacheDir, "organizer-outbox/$id/exames-organizados.pdf").apply { parentFile?.mkdirs() }
+        decryptFile(id, File(folder(id), "result.enc"), file)
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     } }
     suspend fun end(id: String): Unit = withContext(Dispatchers.IO) { lock.withLock { remove(id) } }

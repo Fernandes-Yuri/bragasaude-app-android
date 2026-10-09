@@ -4,7 +4,8 @@
      PDFs de exame). Qualquer URI vazada lia tudo. Agora só as subpastas que
      realmente precisam ser compartilhadas. -->
 <paths>
-    <cache-path name="organizer" path="organizer/" />
+    <cache-path name="organizer_outbox" path="organizer-outbox/" />
+    <cache-path name="organizer_capture" path="organizer-capture/" />
     <cache-path name="family_exports" path="family_exports/" />
     <cache-path name="shared_cache" path="shared_pdfs/" />
     <cache-path name="audio_cache" path="neural_tts/" />

@@ -9,6 +9,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 data class OrganizerUiState(val session: OrganizerSession? = null, val busy: Boolean = false,
@@ -20,14 +22,15 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore) 
     private val mutable = MutableStateFlow(OrganizerUiState())
     val state = mutable.asStateFlow()
     init { refresh() }
+    private val operations = Mutex()
     private fun operation(block: suspend () -> Unit) {
-        if (mutable.value.busy) return
         mutable.value = mutable.value.copy(busy = true, error = null)
-        viewModelScope.launch {
+        viewModelScope.launch { operations.withLock {
+            mutable.value = mutable.value.copy(busy = true, error = null)
             try { block() }
             catch (_: Exception) { mutable.value = mutable.value.copy(error = "Não foi possível concluir. Confira o arquivo, o espaço disponível e tente novamente. PDFs com senha precisam de uma cópia sem senha.") }
             finally { mutable.value = mutable.value.copy(busy = false) }
-        }
+        } }
     }
     fun refresh() = operation {
         val session = store.restore()
