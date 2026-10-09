@@ -1,5 +1,6 @@
 package br.com.bragasaude.data.local
 
+import android.app.Application
 import androidx.room.Room
 import br.com.bragasaude.data.remote.repository.WeeklyGrocerySummaryRepository
 import br.com.bragasaude.domain.*
@@ -14,7 +15,7 @@ import org.robolectric.annotation.Config
 import java.time.LocalDate
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28], manifest = Config.NONE)
+@Config(sdk = [28], manifest = Config.NONE, application = Application::class)
 class WeeklyGroceryPersistenceTest {
     private lateinit var db: BragaDatabase
     private lateinit var repository: WeeklyGrocerySummaryRepository
