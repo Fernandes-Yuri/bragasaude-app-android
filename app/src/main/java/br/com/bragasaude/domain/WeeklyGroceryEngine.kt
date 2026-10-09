@@ -94,6 +94,7 @@ object WeeklyGroceryEngine {
         previousFoodIds: Set<String> = emptySet(),
         preferences: WeeklyGroceryPreferences = WeeklyGroceryPreferences()
     ): WeeklyGroceryPlanResult {
+        val effectivePrefs = preferences.normalized()
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val weekStartDate = GroceryWeek.start()
 
@@ -213,15 +214,15 @@ object WeeklyGroceryEngine {
         }
 
         fun filterCost(list: List<FoodEntity>): List<FoodEntity> {
-            if (!preferences.isEconomic) return list
-            val filtered = list.filterNot { isHighCostFood(it, preferences.isUltraEconomic) }
+            if (!effectivePrefs.isEconomic) return list
+            val filtered = list.filterNot { isHighCostFood(it, effectivePrefs.isUltraEconomic) }
             return if (filtered.isNotEmpty()) filtered else list
         }
 
         val grainsPool = orderPool(filterCost(poolFor(CORRIDOR_GRAOS)))
 
         val candidateProteins = poolFor(CORRIDOR_PROTEINAS).let { list ->
-            val byPref = list.filter { matchesProteinPreference(it, preferences.selectedProteins) }
+            val byPref = list.filter { matchesProteinPreference(it, effectivePrefs.selectedProteins) }
             if (byPref.isNotEmpty()) byPref else list
         }.let { filterCost(it) }
         val proteinsPool = orderPool(candidateProteins)
@@ -229,7 +230,7 @@ object WeeklyGroceryEngine {
         val producePool = filterCost(poolFor(CORRIDOR_HORTIFRUTI))
 
         val candidatePantry = poolFor(CORRIDOR_MERCEARIA).let { list ->
-            if (preferences.hasPantryStaples) {
+            if (effectivePrefs.hasPantryStaples) {
                 list.filterNot { isPantryStaple(it) }
             } else {
                 list
@@ -263,8 +264,8 @@ object WeeklyGroceryEngine {
             ingredientCatalog = ingredientCatalog,
             selectedCanonicalGroups = selectedCanonicalGroups,
             destConsumptions = plannedConsumptions,
-            isEconomic = preferences.isEconomic,
-            isUltraEconomic = preferences.isUltraEconomic
+            isEconomic = effectivePrefs.isEconomic,
+            isUltraEconomic = effectivePrefs.isUltraEconomic
         )
 
         // 6. Dimensionamento do Pilar 2: Proteínas (Animais/Vegetais, Leguminosas, Laticínios, Ovos)
@@ -279,8 +280,8 @@ object WeeklyGroceryEngine {
             selectedCanonicalGroups = selectedCanonicalGroups,
             destConsumptions = plannedConsumptions,
             preferFish = hasHighCholesterol || hasHighBp,
-            isEconomic = preferences.isEconomic,
-            isUltraEconomic = preferences.isUltraEconomic
+            isEconomic = effectivePrefs.isEconomic,
+            isUltraEconomic = effectivePrefs.isUltraEconomic
         )
 
         // 7. Dimensionamento do Pilar 3: Hortifruti (Frutas, Folhosos, Legumes)
@@ -294,8 +295,8 @@ object WeeklyGroceryEngine {
             selectedCanonicalGroups = selectedCanonicalGroups,
             destConsumptions = plannedConsumptions,
             orderFn = ::orderPool,
-            isEconomic = preferences.isEconomic,
-            isUltraEconomic = preferences.isUltraEconomic
+            isEconomic = effectivePrefs.isEconomic,
+            isUltraEconomic = effectivePrefs.isUltraEconomic
         )
 
         // 8. Dimensionamento do Pilar 4: Mercearia, Gorduras Boas, Sementes, Temperos e Chás
@@ -307,8 +308,8 @@ object WeeklyGroceryEngine {
             ingredientCatalog = ingredientCatalog,
             selectedCanonicalGroups = selectedCanonicalGroups,
             destConsumptions = plannedConsumptions,
-            isEconomic = preferences.isEconomic,
-            isUltraEconomic = preferences.isUltraEconomic,
+            isEconomic = effectivePrefs.isEconomic,
+            isUltraEconomic = effectivePrefs.isUltraEconomic,
             isPantry = true
         )
 
@@ -318,8 +319,8 @@ object WeeklyGroceryEngine {
             targetWeeklyKcal = targetWeeklyCalories,
             plannedConsumptions = plannedConsumptions,
             candidatesPool = allEligibleCandidates,
-            isUltraEconomic = preferences.isUltraEconomic,
-            maxBasketSize = preferences.budgetTier.maxBasketSize
+            isUltraEconomic = effectivePrefs.isUltraEconomic,
+            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
         )
 
         // 10. Conversão de consumo em demanda de ingredientes e consolidação canônica
@@ -505,7 +506,7 @@ object WeeklyGroceryEngine {
                 else -> 4
             }
 
-            val maxPantryCap = maxWeeklyGramsForFood(food)
+            val maxPantryCap = maxWeeklyGramsForFood(food, isUltraEconomic)
             val weeklyGrams = if (kcalPer100 > 0.0) {
                 val neededGrams = ((perFoodKcalTarget / kcalPer100) * 100.0).toInt()
                 val portion = (neededGrams / days).coerceIn(minPortion, maxPortion)
@@ -597,7 +598,7 @@ object WeeklyGroceryEngine {
             val maxPortion = food.maxServingGrams.takeIf { it > 0 } ?: (baseServing * 3)
             val days = 6
 
-            val maxPantryCap = maxWeeklyGramsForFood(food)
+            val maxPantryCap = maxWeeklyGramsForFood(food, isUltraEconomic)
             val weeklyGrams = if (kcalPer100 > 0.0 && perFoodKcal > 0.0) {
                 val neededGrams = ((perFoodKcal / kcalPer100) * 100.0).toInt()
                 val portion = (neededGrams / days).coerceIn(minPortion, maxPortion)
@@ -614,46 +615,52 @@ object WeeklyGroceryEngine {
 
     private fun isStapleEnergyFood(food: FoodEntity): Boolean {
         val name = groceryNameKey(food.name.orEmpty())
+        val cat = groceryNameKey(food.category.orEmpty())
         return name.contains("arroz") || name.contains("feijao") || name.contains("aveia") ||
                name.contains("ovo") || name.contains("pao") || name.contains("tapioca") ||
                name.contains("banana") || name.contains("cuscuz") || name.contains("mandioca") ||
-               name.contains("batata")
+               name.contains("batata") || name.contains("frango") || cat.contains("carne") ||
+               cat.contains("ave")
     }
 
-    private fun maxWeeklyGramsForFood(food: FoodEntity): Int {
+    private fun maxWeeklyGramsForFood(food: FoodEntity, isUltraEconomic: Boolean = false): Int {
         val name = groceryNameKey(food.name.orEmpty())
         val cat = groceryNameKey(food.category.orEmpty())
         return when {
-            // Brotos e folhosos leves: nunca excedem 350g por semana
+            // Brotos e folhosos leves: nunca excedem 350g por semana (evita sacas de 3kg de broto de feijão)
             name.contains("broto") || name.contains("alface") || name.contains("rucula") ||
             name.contains("espinafre") || name.contains("agriao") || name.contains("couve") -> 350
 
-            // Frutas frescas: porção semanal equilibrada (máx 1.2kg)
-            cat.contains("fruta") -> 1200
+            // Frutas frescas: porção semanal equilibrada (máx 1.5kg)
+            cat.contains("fruta") -> 1500
 
-            // Tubérculos e legumes: máx 1kg por semana (evita compras absurdas como 4kg de mandioquinha)
-            name.contains("mandioquinha") || name.contains("batata-baroa") || name.contains("mandioca") ||
-            name.contains("batata") || name.contains("abobora") || cat.contains("legume") ||
-            cat.contains("hortalica") -> 1000
+            // Tubérculos nobres: teto estrito para evitar compras caras desnecessárias (máx 1kg de mandioquinha)
+            name.contains("mandioquinha") || name.contains("batata-baroa") -> 1000
 
-            // Massas (macarrão / espaguete): máx 700g por semana (evita 5kg de massa)
+            // Tubérculos comuns (mandioca, aipim, batata): até 2kg em modo ultraeconômico
+            name.contains("mandioca") || name.contains("batata") || name.contains("aipim") -> if (isUltraEconomic) 2000 else 1500
+
+            // Legumes e hortaliças gerais: máx 1.2kg de consumo semanal
+            cat.contains("legume") || cat.contains("hortalica") || name.contains("abobora") || name.contains("abobrinha") -> 1200
+
+            // Massas (macarrão / espaguete): máx 700g por semana (evita 5kg de massa cara a R$ 100)
             name.contains("massa") || name.contains("macarrao") -> 700
 
             // Grãos básicos: pilares energéticos essenciais brasileiros
-            name.contains("arroz") -> 2000
-            name.contains("feijao") || name.contains("lentilha") || name.contains("grao-de-bico") -> 1000
-            name.contains("aveia") -> 500
-            name.contains("cuscuz") || name.contains("milho") -> 700
+            name.contains("arroz") -> if (isUltraEconomic) 3500 else 2500
+            name.contains("feijao") || name.contains("lentilha") || name.contains("grao-de-bico") -> if (isUltraEconomic) 2000 else 1500
+            name.contains("aveia") -> if (isUltraEconomic) 1200 else 800
+            name.contains("cuscuz") || name.contains("milho") -> if (isUltraEconomic) 1200 else 800
 
             // Proteínas e ovos
-            name.contains("ovo") -> 1400 // ~24 a 28 unidades
-            cat.contains("carne") || cat.contains("ave") || cat.contains("peixe") -> 1400
+            name.contains("ovo") -> if (isUltraEconomic) 2100 else 1400 // ~30 a 42 unidades
+            cat.contains("carne") || cat.contains("ave") || cat.contains("peixe") || name.contains("frango") -> if (isUltraEconomic) 2200 else 1600
 
             // Panificados e cafés
-            name.contains("pao") || name.contains("torrada") || name.contains("tapioca") -> 500
+            name.contains("pao") || name.contains("torrada") || name.contains("tapioca") -> 800
 
             // Padrão de segurança
-            else -> 800
+            else -> 1000
         }
     }
 
@@ -685,7 +692,7 @@ object WeeklyGroceryEngine {
                     val foodKcal = pc.food.kcal ?: 0.0
                     val isEligible = if (isUltraEconomic) isStapleEnergyFood(pc.food) else true
                     if (foodKcal > 0.0 && isEligible) {
-                        val maxAllowedGrams = maxWeeklyGramsForFood(pc.food)
+                        val maxAllowedGrams = maxWeeklyGramsForFood(pc.food, isUltraEconomic)
                         val headroom = (maxAllowedGrams - pc.weeklyGrams).coerceAtLeast(0)
                         if (headroom > 0) {
                             val additionalGrams = ((boostShare / foodKcal) * 100.0).toInt().coerceAtMost(headroom)
