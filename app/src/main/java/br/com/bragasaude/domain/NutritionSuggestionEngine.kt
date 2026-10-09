@@ -151,7 +151,7 @@ object NutritionSuggestionEngine {
         // 5. ANÁLISE DE ÁCIDO ÚRICO
 
 
-        // 6. SUGESTÕES BASE DE EQUILÍBRIO & VARIEDADE (se nenhum exame estiver alterado)
+        // 6. SUGESTÕES BASE DE EQUILÍBRIO & VARIEDADE (com base no perfil e nos registros de sinais vitais)
         if (groups.isEmpty()) {
             val generalFoods = availableFoods
                 .selectStableSuggestions(dayOfYear, groupSalt = 606 + selectedMealType.hashCode(), pantryFoodNames = pantryFoodNames)

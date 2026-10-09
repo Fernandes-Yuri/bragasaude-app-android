@@ -21,13 +21,14 @@ data class OrganizerUiState(val session: OrganizerSession? = null, val busy: Boo
 class OrganizerViewModel @Inject constructor(private val store: OrganizerStore) : ViewModel() {
     private val mutable = MutableStateFlow(OrganizerUiState())
     val state = mutable.asStateFlow()
-    init { refresh() }
     private val operations = Mutex()
+    init { refresh() }
     private fun operation(block: suspend () -> Unit) {
         mutable.value = mutable.value.copy(busy = true, error = null)
         viewModelScope.launch { operations.withLock {
             mutable.value = mutable.value.copy(busy = true, error = null)
             try { block() }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
             catch (_: Exception) { mutable.value = mutable.value.copy(error = "Não foi possível concluir. Confira o arquivo, o espaço disponível e tente novamente. PDFs com senha precisam de uma cópia sem senha.") }
             finally { mutable.value = mutable.value.copy(busy = false) }
         } }
