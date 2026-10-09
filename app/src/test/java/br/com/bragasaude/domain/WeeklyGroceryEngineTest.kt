@@ -439,4 +439,23 @@ class WeeklyGroceryEngineTest {
         assertTrue("Arroz permanece como âncora para quem não tem restrição a arroz", items.contains("arroz-agulhinha"))
         assertTrue("Meta energética atinge patamar satisfatório mesmo sem feijão", plan.coveragePercent >= 90.0)
     }
+
+    @Test
+    fun preventsAbnormalPantryQuantitiesInWeeklyPlan() {
+        val (foods, catalog) = createTestCatalog()
+        val plan = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "user_caps", exams = emptyList(), vitals = emptyList(), profile = null,
+            catalog = foods, ingredientCatalog = catalog, targetCalories = 3000.0,
+            preferences = WeeklyGroceryPreferences(budgetTier = GroceryBudgetTier.ULTRA_ECONOMIC)
+        )
+        for (item in plan.items) {
+            val name = item.foodName.lowercase()
+            if (name.contains("couve") || name.contains("abobrinha")) {
+                assertTrue("Hortifrúti e legumes não devem exceder 1800g de compra semanal: ${item.foodName} tem ${item.purchaseWeightGrams}g", item.purchaseWeightGrams <= 1800)
+            }
+            if (name.contains("mandioca")) {
+                assertTrue("Tubérculos não devem exceder 2000g semanais: ${item.foodName} tem ${item.purchaseWeightGrams}g", item.purchaseWeightGrams <= 2000)
+            }
+        }
+    }
 }

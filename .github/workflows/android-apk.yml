@@ -64,7 +64,7 @@ permissions:
 
 # Evita duas builds iguais correndo em paralelo (desperdício de minutos).
 concurrency:
-  group: build-apk-${{ github.workflow }}
+  group: build-apk-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:

@@ -2793,6 +2793,183 @@
       "food_ids": [
         "food_217"
       ]
+    },
+    {
+      "slug": "pao-frances",
+      "name": "Pão Francês Tradicional",
+      "unit": "un",
+      "step": 1,
+      "minimum": 6,
+      "aliases": [
+        "Pão Francês",
+        "Pão de Sal",
+        "Pão Francês de Padaria"
+      ],
+      "food_ids": [
+        "food_221"
+      ],
+      "grams_per_unit": 50.0,
+      "canonical_group_slug": "pao"
+    },
+    {
+      "slug": "pao-de-forma-integral",
+      "name": "Pão de Forma 100% Integral",
+      "unit": "un",
+      "step": 1,
+      "minimum": 1,
+      "aliases": [
+        "Pão Integral",
+        "Pão de Forma"
+      ],
+      "food_ids": [
+        "food_222"
+      ],
+      "grams_per_unit": 450.0,
+      "canonical_group_slug": "pao"
+    },
+    {
+      "slug": "goma-de-tapioca",
+      "name": "Goma de Tapioca Hidratada",
+      "unit": "kg",
+      "step": 1,
+      "minimum": 1,
+      "aliases": [
+        "Massa de Tapioca",
+        "Tapioca"
+      ],
+      "food_ids": [
+        "food_223",
+        "food_224"
+      ],
+      "canonical_group_slug": "tapioca"
+    },
+    {
+      "slug": "torrada-integral",
+      "name": "Torrada Integral / Multigrãos",
+      "unit": "un",
+      "step": 1,
+      "minimum": 1,
+      "aliases": [
+        "Torradas"
+      ],
+      "food_ids": [
+        "food_227"
+      ],
+      "grams_per_unit": 140.0
+    },
+    {
+      "slug": "pao-de-queijo",
+      "name": "Pão de Queijo Tradicional",
+      "unit": "kg",
+      "step": 1,
+      "minimum": 1,
+      "aliases": [
+        "Pão de Queijo Mineiro"
+      ],
+      "food_ids": [
+        "food_228"
+      ]
+    },
+    {
+      "slug": "milho-para-pipoca",
+      "name": "Milho para Pipoca",
+      "unit": "un",
+      "step": 1,
+      "minimum": 1,
+      "aliases": [
+        "Milho de Pipoca"
+      ],
+      "food_ids": [
+        "food_229"
+      ],
+      "grams_per_unit": 500.0
+    },
+    {
+      "slug": "biscoito-de-polvilho",
+      "name": "Biscoito de Polvilho Assado",
+      "unit": "un",
+      "step": 1,
+      "minimum": 1,
+      "aliases": [
+        "Biscoito de Polvilho"
+      ],
+      "food_ids": [
+        "food_230"
+      ],
+      "grams_per_unit": 100.0
+    },
+    {
+      "slug": "requeijao-cremoso",
+      "name": "Requeijão Cremoso Tradicional",
+      "unit": "un",
+      "step": 1,
+      "minimum": 1,
+      "aliases": [
+        "Requeijão"
+      ],
+      "food_ids": [
+        "food_233"
+      ],
+      "grams_per_unit": 200.0
+    },
+    {
+      "slug": "manteiga-com-sal",
+      "name": "Manteiga de Primeira Qualidade",
+      "unit": "un",
+      "step": 1,
+      "minimum": 1,
+      "aliases": [
+        "Manteiga"
+      ],
+      "food_ids": [
+        "food_234"
+      ],
+      "grams_per_unit": 200.0
+    },
+    {
+      "slug": "queijo-mussarela",
+      "name": "Queijo Mussarela Fatiado",
+      "unit": "kg",
+      "step": 100,
+      "minimum": 200,
+      "aliases": [
+        "Mussarela",
+        "Mozzarella"
+      ],
+      "food_ids": [
+        "food_235"
+      ]
+    },
+    {
+      "slug": "atum-ralado-ao-natural",
+      "name": "Atum Ralado ao Natural",
+      "unit": "un",
+      "step": 1,
+      "minimum": 2,
+      "aliases": [
+        "Atum em Conserva",
+        "Atum"
+      ],
+      "food_ids": [
+        "food_237"
+      ],
+      "grams_per_unit": 170.0
+    },
+    {
+      "slug": "po-de-cafe-tradicional",
+      "name": "Café Torrado e Moído Tradicional",
+      "unit": "un",
+      "step": 1,
+      "minimum": 1,
+      "aliases": [
+        "Pó de Café",
+        "Café"
+      ],
+      "food_ids": [
+        "food_238",
+        "food_239"
+      ],
+      "grams_per_unit": 500.0
     }
   ],
   "foods": [

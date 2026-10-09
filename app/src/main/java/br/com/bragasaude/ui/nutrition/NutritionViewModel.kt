@@ -69,6 +69,120 @@ class NutritionViewModel @Inject constructor(
         generateWeeklyGroceryList(preserveManual = true)
     }
 
+    private val _weeklyPreferences = MutableStateFlow(loadStoredWeeklyPreferences())
+    val weeklyPreferences = _weeklyPreferences.asStateFlow()
+
+    private fun loadStoredWeeklyPreferences(): br.com.bragasaude.domain.WeeklyGroceryPreferences {
+        val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+        val tierName = prefs.getString("weekly_budget_tier_$userId", br.com.bragasaude.domain.GroceryBudgetTier.ECONOMIC.name)
+        val tier = try {
+            br.com.bragasaude.domain.GroceryBudgetTier.valueOf(tierName ?: br.com.bragasaude.domain.GroceryBudgetTier.ECONOMIC.name)
+        } catch (_: Exception) {
+            br.com.bragasaude.domain.GroceryBudgetTier.ECONOMIC
+        }
+        val proteinSet = prefs.getStringSet("weekly_proteins_$userId", null)?.mapNotNull { name ->
+            try { br.com.bragasaude.domain.GroceryProteinPreference.valueOf(name) } catch (_: Exception) { null }
+        }?.toSet() ?: setOf(br.com.bragasaude.domain.GroceryProteinPreference.EGGS, br.com.bragasaude.domain.GroceryProteinPreference.POULTRY)
+        val hasStaples = prefs.getBoolean("weekly_has_staples_$userId", true)
+        return br.com.bragasaude.domain.WeeklyGroceryPreferences(
+            budgetTier = tier,
+            selectedProteins = if (proteinSet.isEmpty()) setOf(br.com.bragasaude.domain.GroceryProteinPreference.EGGS) else proteinSet,
+            hasPantryStaples = hasStaples
+        )
+    }
+
+    fun updateWeeklyPreferences(newPrefs: br.com.bragasaude.domain.WeeklyGroceryPreferences) {
+        val normalized = newPrefs.normalized()
+        _weeklyPreferences.value = normalized
+        val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString("weekly_budget_tier_$userId", normalized.budgetTier.name)
+            .putStringSet("weekly_proteins_$userId", normalized.selectedProteins.map { it.name }.toSet())
+            .putBoolean("weekly_has_staples_$userId", normalized.hasPantryStaples)
+            .apply()
+    }
+
+    private val _goalSetup = MutableStateFlow(loadStoredNutritionGoalSetup())
+    val goalSetup = _goalSetup.asStateFlow()
+
+    private fun loadStoredNutritionGoalSetup(): br.com.bragasaude.domain.UserNutritionGoalSetup {
+        val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+        val goalStr = prefs.getString("nutrition_goal_$userId", br.com.bragasaude.domain.ClinicalDietaryGoal.MAINTENANCE.name)
+        val goal = try {
+            br.com.bragasaude.domain.ClinicalDietaryGoal.valueOf(goalStr ?: br.com.bragasaude.domain.ClinicalDietaryGoal.MAINTENANCE.name)
+        } catch (_: Exception) {
+            br.com.bragasaude.domain.ClinicalDietaryGoal.MAINTENANCE
+        }
+
+        val actStr = prefs.getString("nutrition_activity_$userId", br.com.bragasaude.domain.DailyActivityLevel.LIGHTLY_ACTIVE.name)
+        val activity = try {
+            br.com.bragasaude.domain.DailyActivityLevel.valueOf(actStr ?: br.com.bragasaude.domain.DailyActivityLevel.LIGHTLY_ACTIVE.name)
+        } catch (_: Exception) {
+            br.com.bragasaude.domain.DailyActivityLevel.LIGHTLY_ACTIVE
+        }
+
+        val isCustom = prefs.getBoolean("calorie_target_is_custom_$userId", false)
+        val currentWeekly = _weeklyPreferences.value
+
+        return br.com.bragasaude.domain.UserNutritionGoalSetup(
+            goal = goal,
+            activityLevel = activity,
+            budgetTier = currentWeekly.budgetTier,
+            hasPantryStaples = currentWeekly.hasPantryStaples,
+            isCustomManual = isCustom,
+            manualKcal = _dailyCalories.value.toDouble().takeIf { isCustom }
+        )
+    }
+
+    fun applyNutritionGoalSetup(setup: br.com.bragasaude.domain.UserNutritionGoalSetup) {
+        _goalSetup.value = setup
+        val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString("nutrition_goal_$userId", setup.goal.name)
+            .putString("nutrition_activity_$userId", setup.activityLevel.name)
+            .putBoolean("calorie_target_is_custom_$userId", setup.isCustomManual)
+            .apply()
+
+        val updatedWeeklyPrefs = _weeklyPreferences.value.copy(
+            budgetTier = setup.budgetTier,
+            hasPantryStaples = setup.hasPantryStaples
+        )
+        updateWeeklyPreferences(updatedWeeklyPrefs)
+
+        viewModelScope.launch {
+            try {
+                val profile = profileRepository.getProfile(userId).first()
+                val calculatedKcal = br.com.bragasaude.domain.HealthCalculators.calculateGoalSetupKcal(
+                    weight = profile?.weight,
+                    height = profile?.height,
+                    birthDate = profile?.birthDate,
+                    gender = profile?.gender,
+                    setup = setup
+                )
+
+                _isCustomCalorieTarget.value = setup.isCustomManual
+                _dailyCalories.value = calculatedKcal
+
+                profile?.let {
+                    val updated = it.toRemote().copy(
+                        dailyCalorieTarget = calculatedKcal.toDouble(),
+                        activityLevel = setup.activityLevel.name
+                    )
+                    profileRepository.saveProfile(updated)
+                }
+
+                if (observedTarget != calculatedKcal) {
+                    changedTarget(calculatedKcal.toDouble())
+                }
+                observedTarget = calculatedKcal
+
+                generateWeeklyGroceryList(preserveManual = true, preferences = updatedWeeklyPrefs)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
 
     private val _contributionState = MutableStateFlow(br.com.bragasaude.domain.GroceryContributionState())
     val contributionState = _contributionState.asStateFlow()
@@ -114,6 +228,27 @@ class NutritionViewModel @Inject constructor(
         }
     }
 
+    private var hasPreparedGroceryData = false
+
+    fun prepareGroceryData() {
+        if (hasPreparedGroceryData) return
+        hasPreparedGroceryData = true
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                if (_communityPrices.value.isEmpty()) {
+                    _communityPrices.value = catalogRepository.fetchCommunityGroceryPrices()
+                }
+                val priced = catalogRepository.fetchGroceryIngredients()
+                _groceryIngredients.value = priced
+                groceryRepository.standardizeIngredients(userId, priced)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("NutritionVM", "Falha ao sincronizar dados da lista de compras: ${e.message}")
+            }
+        }
+    }
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
@@ -134,7 +269,8 @@ class NutritionViewModel @Inject constructor(
                 NutritionSuggestionEngine.isSafeFromAllergies(FoodEntity(ingredient.slug, ingredient.name),
                     profile?.foodAllergies.orEmpty(), profile?.customFoodRestrictions))
         }.sortedBy { it.name }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(kotlinx.coroutines.Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _groceryPlanResult = MutableStateFlow<br.com.bragasaude.domain.WeeklyGroceryPlanResult?>(null)
     val groceryPlanResult = _groceryPlanResult.asStateFlow()
@@ -212,6 +348,7 @@ class NutritionViewModel @Inject constructor(
         val groceryList: List<GroceryListItemEntity>
     )
 
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
     private val clinicalDataFlow = combine(
         vitalsRepository.getVitalSigns(userId),
         profileRepository.getProfile(userId),
@@ -225,7 +362,9 @@ class NutritionViewModel @Inject constructor(
             pantryFoods = allGroceryList.filter { it.isCheckedInPantry }.map { it.foodName }.toSet(),
             groceryList = allGroceryList
         )
-    }.distinctUntilChanged()
+    }.debounce(100L)
+    .flowOn(kotlinx.coroutines.Dispatchers.Default)
+    .distinctUntilChanged()
 
     val functionalSuggestionGroups: StateFlow<List<NutritionalSuggestionGroup>> = combine(
         clinicalDataFlow,
@@ -241,8 +380,9 @@ class NutritionViewModel @Inject constructor(
             val pantryNames = snapshot.pantryFoods.map { it.trim().lowercase() }.toSet()
             val toBuyNames = groceryNames - pantryNames
 
+            val manifest = _groceryIngredients.value
             val userCatalog = catalog.filter { food ->
-                (_groceryIngredients.value?.forFood(food.remoteId, food.name)?.any { it.slug in groceryFoodIds } == true) ||
+                (manifest?.forFood(food.remoteId, food.name)?.any { it.slug in groceryFoodIds } == true) ||
                 (food.remoteId in groceryFoodIds) ||
                 (food.name.trim().lowercase() in groceryNames) ||
                 groceryNames.any { gName ->
@@ -262,7 +402,8 @@ class NutritionViewModel @Inject constructor(
                 groceryFoodNames = toBuyNames
             )
         }
-    }.distinctUntilChanged()
+    }.flowOn(kotlinx.coroutines.Dispatchers.Default)
+    .distinctUntilChanged()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _userWeight = MutableStateFlow<Double?>(null)
@@ -352,18 +493,16 @@ class NutritionViewModel @Inject constructor(
         val initialCustom = prefs.getBoolean("calorie_target_is_custom_$userId", false)
         _isCustomCalorieTarget.value = initialCustom
 
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val offline = catalogRepository.fetchGroceryIngredients(includePrices = false)
             _groceryIngredients.value = offline
-            groceryRepository.standardizeIngredients(userId, offline)
-            _communityPrices.value = catalogRepository.fetchCommunityGroceryPrices()
-            val priced = catalogRepository.fetchGroceryIngredients()
-            _groceryIngredients.value = priced
-            groceryRepository.standardizeIngredients(userId, priced)
+            // Agenda atualização de preços e catálogo em segundo plano após a tela estabilizar
+            kotlinx.coroutines.delay(2500)
+            prepareGroceryData()
         }
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             catalogRepository.seedDatabaseIfNeeded()
         }
 
@@ -375,18 +514,21 @@ class NutritionViewModel @Inject constructor(
                 val weight = entity?.weight ?: remProfile?.weight
                 _userWeight.value = weight
 
-                // Diretrizes FAO/OMS e Guia Alimentar: ~25 a 30 kcal/kg (média prática de 28 kcal/kg)
-                val calculatedAuto = if (weight != null && weight > 0.0) {
-                    (weight * 28).toInt()
-                } else {
-                    1800
-                }
+                // Cálculo clínico: TMB (Mifflin-St Jeor) * FAF (Atividade Física) + Ajuste de Objetivo
+                val calculatedAuto = HealthCalculators.calculateProfileCalorieTarget(
+                    weight = weight,
+                    height = entity?.height ?: remProfile?.height,
+                    birthDate = entity?.birthDate ?: remProfile?.birthDate,
+                    gender = entity?.gender ?: remProfile?.gender,
+                    activityLevel = entity?.activityLevel ?: remProfile?.activityLevel,
+                    weightGoal = entity?.weightGoal ?: remProfile?.weightGoal
+                ).toInt()
                 _autoRecommendedCalories.value = calculatedAuto
 
                 val isCustom = prefs.getBoolean("calorie_target_is_custom_$userId", false)
                 _isCustomCalorieTarget.value = isCustom
 
-                val target = if (isCustom && remProfile?.dailyCalorieTarget != null && remProfile.dailyCalorieTarget > 0) {
+                val target = if (isCustom && remProfile?.dailyCalorieTarget != null && remProfile.dailyCalorieTarget > 0 && remProfile.dailyCalorieTarget != 1800.0) {
                     remProfile.dailyCalorieTarget.toFloat()
                 } else {
                     calculatedAuto.toFloat()
@@ -523,8 +665,13 @@ class NutritionViewModel @Inject constructor(
         }
     }
 
-    fun generateWeeklyGroceryList(preserveManual: Boolean = true) {
+    fun generateWeeklyGroceryList(
+        preserveManual: Boolean = true,
+        preferences: br.com.bragasaude.domain.WeeklyGroceryPreferences? = null
+    ) {
         if (_isLoading.value) return
+        preferences?.let { updateWeeklyPreferences(it) }
+        val effectivePrefs = preferences ?: _weeklyPreferences.value
         viewModelScope.launch {
             _isLoading.value = true
             try {
@@ -552,7 +699,8 @@ class NutritionViewModel @Inject constructor(
                     ingredientCatalog = ingredients,
                     targetCalories = currentDailyCal,
                     shuffleSeed = seed,
-                    previousFoodIds = previousFoods
+                    previousFoodIds = previousFoods,
+                    preferences = effectivePrefs
                 )
                 if (plan.items.isNotEmpty()) {
                     weeklyRepository.save(userId, plan, preserveManual)

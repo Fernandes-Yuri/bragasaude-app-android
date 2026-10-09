@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -25,14 +26,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
+import br.com.bragasaude.domain.groceryNameKey
+import kotlinx.coroutines.delay
 import br.com.bragasaude.R
 import br.com.bragasaude.data.remote.model.RemoteFood
 import br.com.bragasaude.domain.HealthCalculators
@@ -67,8 +73,8 @@ fun NutritionScreen(
     val autoRecommendedCalories by viewModel.autoRecommendedCalories.collectAsState()
     val isCustomCalorieTarget by viewModel.isCustomCalorieTarget.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val scoreBreakdown by homeViewModel.scoreBreakdown.collectAsState()
-    val recommendations = remember(isLoading, dailyCal) { viewModel.getRecommendations() }
+    val activeAdjustments by viewModel.activeAdjustments.collectAsState()
+    val recommendations = remember(isLoading, activeAdjustments) { viewModel.getRecommendations() }
     val todayLoggedMeals by viewModel.todayLoggedMeals.collectAsState()
     val suggestionGroups by viewModel.functionalSuggestionGroups.collectAsState()
     val selectedMealTab by viewModel.selectedMealTab.collectAsState()
@@ -78,6 +84,7 @@ fun NutritionScreen(
     val groceryPlan by viewModel.groceryPlanResult.collectAsState()
     val pantryStock by viewModel.pantryStock.collectAsState()
     val showResizeDialog by viewModel.showResizeDialog.collectAsState()
+    val weeklyPreferences by viewModel.weeklyPreferences.collectAsState()
 
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
@@ -87,12 +94,17 @@ fun NutritionScreen(
     var showFoodSelectorDialog by remember { mutableStateOf(false) }
     var showCustomFoodDialog by remember { mutableStateOf(false) }
     var showCalorieTargetDialog by remember { mutableStateOf(false) }
+    val goalSetup by viewModel.goalSetup.collectAsState()
+    val userProfile by viewModel.profile.collectAsState()
     var customCalorieInputText by remember { mutableStateOf("") }
     val contributionState by viewModel.contributionState.collectAsState()
     val communityPrices by viewModel.communityPrices.collectAsState()
     var showGroceryBottomSheet by remember { mutableStateOf(false) }
     // Agente B1: itens sugeridos pelo chat; o usuário confirma via chip.
     var pendingSuggestions by remember(suggestedGroceryItems) { mutableStateOf(suggestedGroceryItems) }
+
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
 
     // Custom Food Form
     var customFoodName by remember { mutableStateOf("") }
@@ -108,6 +120,7 @@ fun NutritionScreen(
 
     LaunchedEffect(searchFood, openGroceryList) {
         if (openGroceryList) {
+            viewModel.prepareGroceryData()
             if (groceryList.isEmpty()) {
                 viewModel.generateWeeklyGroceryList()
             }
@@ -247,6 +260,7 @@ fun NutritionScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
+                                viewModel.prepareGroceryData()
                                 if (groceryList.isEmpty()) {
                                     viewModel.generateWeeklyGroceryList()
                                 }
@@ -306,6 +320,48 @@ fun NutritionScreen(
                     }
                 }
 
+                // Ajustes Clínicos, Gatilhos e Avisos de Perfil
+                if (activeAdjustments.isNotEmpty()) {
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.Tune,
+                                    contentDescription = null,
+                                    tint = BragaEmerald,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Ajustes baseados no seu perfil:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (activeAdjustments.isNotEmpty()) {
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(activeAdjustments) { adjustment ->
+                                        Surface(
+                                            shape = RoundedCornerShape(20.dp),
+                                            color = BragaMint
+                                        ) {
+                                            Text(
+                                                "Ajustado para: $adjustment",
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = BragaEmerald,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 // Seletor de Refeições (Tabs)
                 item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -516,6 +572,7 @@ fun NutritionScreen(
                                 Spacer(Modifier.height(16.dp))
                                 Button(
                                     onClick = {
+                                        viewModel.prepareGroceryData()
                                         if (groceryList.isEmpty()) {
                                             viewModel.generateWeeklyGroceryList()
                                         }
@@ -577,7 +634,10 @@ fun NutritionScreen(
                                 }
                                 Spacer(Modifier.width(8.dp))
                                 TextButton(
-                                    onClick = { showGroceryBottomSheet = true }
+                                    onClick = {
+                                        viewModel.prepareGroceryData()
+                                        showGroceryBottomSheet = true
+                                    }
                                 ) {
                                     Text("Ver Lista", color = BragaEmerald, fontWeight = FontWeight.Bold)
                                 }
@@ -660,10 +720,30 @@ fun NutritionScreen(
 
     // Diálogo de Seleção e Busca Dinâmica de Alimentos
     if (showFoodSelectorDialog) {
+        LaunchedEffect(searchQuery, searchResults) {
+            val clean = groceryNameKey(searchQuery)
+            if (clean.length >= 2 && searchQuery.endsWith(" ") && searchResults.isNotEmpty()) {
+                keyboardController?.hide()
+                focusManager.clearFocus()
+            } else if (clean.length >= 3 && searchResults.isNotEmpty()) {
+                val isFullMatch = searchResults.any { food ->
+                    val fullName = groceryNameKey(food.name)
+                    fullName == clean || fullName.split(" ", "-", "/").any { it == clean }
+                }
+                if (isFullMatch) {
+                    delay(400)
+                    keyboardController?.hide()
+                    focusManager.clearFocus()
+                }
+            }
+        }
+
         BragaFormSheet(
             onDismissRequest = { 
                 showFoodSelectorDialog = false
                 selectedFoodForPortion = null
+                keyboardController?.hide()
+                focusManager.clearFocus()
             },
             title = { Text("O que você consumiu no $selectedMealTab?", fontWeight = FontWeight.Bold) },
             text = {
@@ -673,7 +753,25 @@ fun NutritionScreen(
                         onValueChange = { viewModel.onSearchQueryChanged(it) },
                         placeholder = { Text("Buscar (ex: Arroz, Frango, Banana...)") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = {
+                                    viewModel.onSearchQueryChanged("")
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Limpar busca")
+                                }
+                            }
+                        },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                            }
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -705,6 +803,8 @@ fun NutritionScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable { 
+                                            keyboardController?.hide()
+                                            focusManager.clearFocus()
                                             selectedFoodForPortion = food 
                                             portionGramsText = food.servingSizeGrams.toString()
                                         }
@@ -834,96 +934,18 @@ fun NutritionScreen(
         )
     }
 
-    // Diálogo de Ajuste da Meta Calórica Diária (Diretrizes FAO/OMS + Peso)
+    // Wizard Clínico de Meta Calórica e Planejamento Semanal (Mifflin-St Jeor + Rotina + Orçamento)
     if (showCalorieTargetDialog) {
-        val weightText = if (userWeight != null) "${userWeight!!.toInt()} kg" else "não informado (estimativa de 70 kg)"
-        BragaFormSheet(
+        NutritionGoalWizardSheet(
+            initialSetup = goalSetup,
+            userWeight = userWeight,
+            userHeight = userProfile?.height,
+            userBirthDate = userProfile?.birthDate,
+            userGender = userProfile?.gender,
             onDismissRequest = { showCalorieTargetDialog = false },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Info,
-                        contentDescription = null,
-                        tint = BragaEmerald,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("Meta Calórica Diária", fontWeight = FontWeight.Bold)
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    Surface(
-                        color = BragaMintSurface,
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, BragaMintBorder)
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                "Diretrizes FAO/OMS & Ministério da Saúde",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = BragaEmeraldDark
-                            )
-                            Text(
-                                "O cálculo automático de referência para manutenção saudável considera ~28 kcal por kg de peso corporal. Com seu peso de $weightText, sua meta sugerida é de $autoRecommendedCalories kcal/dia.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = BragaTextSecondary,
-                                lineHeight = 18.sp
-                            )
-                            Text(
-                                "Você tem total liberdade para seguir a recomendação ou definir a meta personalizada recomendada pelo seu médico ou nutricionista.",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = BragaTextPrimary,
-                                lineHeight = 17.sp
-                            )
-                        }
-                    }
-
-                    OutlinedTextField(
-                        value = customCalorieInputText,
-                        onValueChange = { customCalorieInputText = it.filter { ch -> ch.isDigit() } },
-                        label = { Text("Sua Meta Calórica (kcal/dia)") },
-                        placeholder = { Text("Ex: $autoRecommendedCalories") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    if (isCustomCalorieTarget) {
-                        OutlinedButton(
-                            onClick = {
-                                viewModel.resetCalorieTargetToRecommended()
-                                showCalorieTargetDialog = false
-                            },
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, BragaEmerald)
-                        ) {
-                            Text("Restaurar Recomendação ($autoRecommendedCalories kcal)", color = BragaEmerald, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val parsed = customCalorieInputText.toDoubleOrNull()
-                        if (parsed != null && parsed > 500) {
-                            viewModel.setCustomCalorieTarget(parsed)
-                            showCalorieTargetDialog = false
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
-                ) {
-                    Text("Salvar Meta")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCalorieTargetDialog = false }) {
-                    Text("Fechar")
-                }
+            onApplySetup = { newSetup ->
+                viewModel.applyNutritionGoalSetup(newSetup)
+                showCalorieTargetDialog = false
             }
         )
     }
@@ -945,6 +967,10 @@ fun NutritionScreen(
             onDismiss = { showGroceryBottomSheet = false },
             onToggleItem = { id, isChecked -> viewModel.togglePantryItem(id, isChecked) },
             onGenerateList = { preserveManual -> viewModel.generateWeeklyGroceryList(preserveManual) },
+            weeklyPreferences = weeklyPreferences,
+            onGenerateListWithPreferences = { preserveManual, prefs ->
+                viewModel.generateWeeklyGroceryList(preserveManual, prefs)
+            },
             onSaveManualItem = { slug, amount, repId -> viewModel.saveManualItem(slug, amount, repId) },
             onRemoveItem = { id -> viewModel.removeGroceryItem(id) },
             onClearList = { viewModel.clearGroceryList() },

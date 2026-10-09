@@ -3,6 +3,8 @@ package br.com.bragasaude.ui.nutrition
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
@@ -11,6 +13,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import br.com.bragasaude.data.local.GroceryListItemEntity
 import br.com.bragasaude.domain.GroceryIngredient
@@ -20,6 +25,7 @@ import br.com.bragasaude.ui.components.BragaFormSheet
 import br.com.bragasaude.ui.theme.BragaEmerald
 import br.com.bragasaude.ui.theme.BragaMintBorder
 import br.com.bragasaude.ui.theme.BragaMintSurface
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun ManualGroceryItemSheet(
@@ -28,6 +34,9 @@ internal fun ManualGroceryItemSheet(
     onDismiss: () -> Unit,
     onSave: (String, String, String?) -> Unit
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
     var query by rememberSaveable { mutableStateOf("") }
     var selectedSlug by rememberSaveable(editing?.remoteId) { mutableStateOf(editing?.foodId.orEmpty()) }
     val selected = ingredients.firstOrNull { it.slug == selectedSlug }
@@ -44,6 +53,29 @@ internal fun ManualGroceryItemSheet(
     val valid = selected?.let { ingredient: GroceryIngredient ->
         GroceryPurchasePlanner.parseAmount(amount, ingredient.unit) != null
     } == true
+
+    val matches = remember(ingredients, query) {
+        if (query.isBlank()) emptyList()
+        else ingredients.filter { groceryNameKey(it.name).contains(groceryNameKey(query)) }
+    }
+
+    LaunchedEffect(query) {
+        val clean = groceryNameKey(query)
+        if (clean.length >= 2 && query.endsWith(" ") && matches.isNotEmpty()) {
+            keyboardController?.hide()
+            focusManager.clearFocus()
+        } else if (clean.length >= 3 && matches.isNotEmpty()) {
+            val isFullMatch = matches.any { ingredient ->
+                val fullName = groceryNameKey(ingredient.name)
+                fullName == clean || fullName.split(" ", "-", "/").any { it == clean }
+            }
+            if (isFullMatch) {
+                delay(400)
+                keyboardController?.hide()
+                focusManager.clearFocus()
+            }
+        }
+    }
 
     BragaFormSheet(
         onDismissRequest = onDismiss,
@@ -84,22 +116,31 @@ internal fun ManualGroceryItemSheet(
                     },
                     trailingIcon = {
                         if (query.isNotEmpty()) {
-                            IconButton(onClick = { query = "" }) {
+                            IconButton(onClick = {
+                                query = ""
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                            }) {
                                 Icon(Icons.Default.Close, contentDescription = "Limpar busca")
                             }
                         }
                     },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
+                        }
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
-
-                val matches = ingredients.filter { groceryNameKey(it.name).contains(groceryNameKey(query)) }
 
                 if (ingredients.isEmpty()) {
                     Text("O catálogo compatível com seu perfil está sendo carregado...")
                 }
 
-                if (ingredients.isNotEmpty() && matches.isEmpty()) {
+                if (ingredients.isNotEmpty() && matches.isEmpty() && query.isNotBlank()) {
                     Text("Nenhum alimento encontrado. Digite parte do nome para buscar no catálogo.")
                 }
 
@@ -110,6 +151,8 @@ internal fun ManualGroceryItemSheet(
                         onClick = {
                             selectedSlug = ingredient.slug
                             query = ingredient.name
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
                             if (amount.isBlank()) {
                                 amount = if (ingredient.unit == "un") "12" else "1"
                             }
