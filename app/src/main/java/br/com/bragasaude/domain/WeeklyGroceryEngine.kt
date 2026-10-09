@@ -317,7 +317,9 @@ object WeeklyGroceryEngine {
         calibrateTotalEnergy(
             targetWeeklyKcal = targetWeeklyCalories,
             plannedConsumptions = plannedConsumptions,
-            candidatesPool = allEligibleCandidates
+            candidatesPool = allEligibleCandidates,
+            isUltraEconomic = preferences.isUltraEconomic,
+            maxBasketSize = preferences.budgetTier.maxBasketSize
         )
 
         // 10. Conversão de consumo em demanda de ingredientes e consolidação canônica
@@ -604,7 +606,9 @@ object WeeklyGroceryEngine {
     private fun calibrateTotalEnergy(
         targetWeeklyKcal: Double,
         plannedConsumptions: MutableList<PlannedConsumption>,
-        candidatesPool: List<FoodEntity>
+        candidatesPool: List<FoodEntity>,
+        isUltraEconomic: Boolean = false,
+        maxBasketSize: Int = Int.MAX_VALUE
     ) {
         var currentKcal = plannedConsumptions.sumOf { it.plannedCalories }
         var deficit = targetWeeklyKcal - currentKcal
@@ -618,7 +622,11 @@ object WeeklyGroceryEngine {
                     val pc = plannedConsumptions[i]
                     val foodKcal = pc.food.kcal ?: 0.0
                     if (foodKcal > 0.0) {
-                        val maxAllowedGrams = (pc.food.maxServingGrams.takeIf { it > 0 } ?: 400) * 7
+                        val maxAllowedGrams = if (isUltraEconomic) {
+                            (pc.food.maxServingGrams.takeIf { it > 0 } ?: 500) * 7
+                        } else {
+                            (pc.food.maxServingGrams.takeIf { it > 0 } ?: 400) * 7
+                        }
                         val headroom = (maxAllowedGrams - pc.weeklyGrams).coerceAtLeast(0)
                         if (headroom > 0) {
                             val additionalGrams = ((boostShare / foodKcal) * 100.0).toInt().coerceAtMost(headroom)
@@ -633,13 +641,14 @@ object WeeklyGroceryEngine {
         deficit = targetWeeklyKcal - currentKcal
 
         // Passo B: Se ainda houver déficit e houver alternativas elegíveis não selecionadas, inclui opções complementares
-        if (deficit > 400.0) {
+        // No modo ultraeconômico ou quando o limite da cesta for atingido, preserva a cesta compacta sem inflar itens.
+        if (deficit > 400.0 && !isUltraEconomic && plannedConsumptions.size < maxBasketSize) {
             val alreadySelectedIds = plannedConsumptions.map { it.food.remoteId }.toSet()
             val extraCandidates = candidatesPool.filter { it.remoteId !in alreadySelectedIds && (it.kcal ?: 0.0) > 0.0 }
                 .sortedByDescending { it.kcal ?: 0.0 }
 
             for (food in extraCandidates) {
-                if (deficit <= 200.0) break
+                if (deficit <= 200.0 || plannedConsumptions.size >= maxBasketSize) break
                 val foodKcal = food.kcal ?: continue
                 val corridor = classifyPillar(food)
                 val baseServing = food.servingSizeGrams.takeIf { it > 0 } ?: 80
