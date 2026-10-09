@@ -8,8 +8,8 @@ import org.junit.Test
 class WeeklyGroceryPreferencesTest {
 
     @Test
-    fun defaultPreferences_isEconomicAndContainsEggsAndPoultry() {
-        val prefs = WeeklyGroceryPreferences()
+    fun recommendedPreferences_isEconomicAndContainsEggsAndPoultry() {
+        val prefs = WeeklyGroceryPreferences.RECOMMENDED
         assertEquals(GroceryBudgetTier.ECONOMIC, prefs.budgetTier)
         assertTrue(prefs.isEconomic)
         assertTrue(prefs.selectedProteins.contains(GroceryProteinPreference.EGGS))
@@ -18,8 +18,18 @@ class WeeklyGroceryPreferencesTest {
     }
 
     @Test
-    fun normalized_whenProteinsEmpty_defaultsToEggs() {
+    fun defaultPreferences_isBalanced() {
+        val prefs = WeeklyGroceryPreferences()
+        assertEquals(GroceryBudgetTier.BALANCED, prefs.budgetTier)
+        assertFalse(prefs.isEconomic)
+        assertTrue(prefs.selectedProteins.isEmpty())
+        assertFalse(prefs.hasPantryStaples)
+    }
+
+    @Test
+    fun normalized_whenProteinsEmptyInEconomic_defaultsToEggs() {
         val emptyPrefs = WeeklyGroceryPreferences(
+            budgetTier = GroceryBudgetTier.ECONOMIC,
             selectedProteins = emptySet()
         )
         val normalized = emptyPrefs.normalized()
