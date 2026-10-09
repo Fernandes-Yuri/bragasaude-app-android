@@ -8,9 +8,10 @@ import org.junit.Test
 class WeeklyGroceryPreferencesTest {
 
     @Test
-    fun recommendedPreferences_isEconomicAndContainsEggsAndPoultry() {
+    fun recommendedPreferences_isUltraEconomicAndContainsEggsAndPoultry() {
         val prefs = WeeklyGroceryPreferences.RECOMMENDED
-        assertEquals(GroceryBudgetTier.ECONOMIC, prefs.budgetTier)
+        assertEquals(GroceryBudgetTier.ULTRA_ECONOMIC, prefs.budgetTier)
+        assertTrue(prefs.isUltraEconomic)
         assertTrue(prefs.isEconomic)
         assertTrue(prefs.selectedProteins.contains(GroceryProteinPreference.EGGS))
         assertTrue(prefs.selectedProteins.contains(GroceryProteinPreference.POULTRY))
@@ -18,18 +19,19 @@ class WeeklyGroceryPreferencesTest {
     }
 
     @Test
-    fun defaultPreferences_isBalanced() {
+    fun defaultPreferences_isModerate() {
         val prefs = WeeklyGroceryPreferences()
-        assertEquals(GroceryBudgetTier.BALANCED, prefs.budgetTier)
+        assertEquals(GroceryBudgetTier.MODERATE, prefs.budgetTier)
         assertFalse(prefs.isEconomic)
+        assertFalse(prefs.isUltraEconomic)
         assertTrue(prefs.selectedProteins.isEmpty())
         assertFalse(prefs.hasPantryStaples)
     }
 
     @Test
-    fun normalized_whenProteinsEmptyInEconomic_defaultsToEggs() {
+    fun normalized_whenProteinsEmptyInUltraEconomic_defaultsToEggs() {
         val emptyPrefs = WeeklyGroceryPreferences(
-            budgetTier = GroceryBudgetTier.ECONOMIC,
+            budgetTier = GroceryBudgetTier.ULTRA_ECONOMIC,
             selectedProteins = emptySet()
         )
         val normalized = emptyPrefs.normalized()
@@ -38,14 +40,21 @@ class WeeklyGroceryPreferencesTest {
     }
 
     @Test
-    fun balancedTier_isNotEconomic() {
-        val balancedPrefs = WeeklyGroceryPreferences(
-            budgetTier = GroceryBudgetTier.BALANCED,
-            selectedProteins = setOf(GroceryProteinPreference.FISH, GroceryProteinPreference.BEEF),
-            hasPantryStaples = false
-        )
-        assertFalse(balancedPrefs.isEconomic)
-        assertEquals(2, balancedPrefs.selectedProteins.size)
-        assertFalse(balancedPrefs.hasPantryStaples)
+    fun allFourTiersHaveConsistentProperties() {
+        assertEquals(10, GroceryBudgetTier.ULTRA_ECONOMIC.maxBasketSize)
+        assertEquals(15, GroceryBudgetTier.ECONOMIC.maxBasketSize)
+        assertEquals(20, GroceryBudgetTier.MODERATE.maxBasketSize)
+        assertEquals(35, GroceryBudgetTier.FREE.maxBasketSize)
+        assertEquals(GroceryBudgetTier.MODERATE, GroceryBudgetTier.BALANCED)
+    }
+
+    @Test
+    fun moderateAndFreeTier_areNotEconomic() {
+        val modPrefs = WeeklyGroceryPreferences(budgetTier = GroceryBudgetTier.MODERATE)
+        val freePrefs = WeeklyGroceryPreferences(budgetTier = GroceryBudgetTier.FREE)
+        assertFalse(modPrefs.isEconomic)
+        assertFalse(modPrefs.isUltraEconomic)
+        assertFalse(freePrefs.isEconomic)
+        assertFalse(freePrefs.isUltraEconomic)
     }
 }

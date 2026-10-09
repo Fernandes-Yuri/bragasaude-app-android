@@ -214,7 +214,7 @@ object WeeklyGroceryEngine {
 
         fun filterCost(list: List<FoodEntity>): List<FoodEntity> {
             if (!preferences.isEconomic) return list
-            val filtered = list.filterNot { isHighCostFood(it) }
+            val filtered = list.filterNot { isHighCostFood(it, preferences.isUltraEconomic) }
             return if (filtered.isNotEmpty()) filtered else list
         }
 
@@ -263,7 +263,8 @@ object WeeklyGroceryEngine {
             ingredientCatalog = ingredientCatalog,
             selectedCanonicalGroups = selectedCanonicalGroups,
             destConsumptions = plannedConsumptions,
-            isEconomic = preferences.isEconomic
+            isEconomic = preferences.isEconomic,
+            isUltraEconomic = preferences.isUltraEconomic
         )
 
         // 6. Dimensionamento do Pilar 2: Proteínas (Animais/Vegetais, Leguminosas, Laticínios, Ovos)
@@ -278,7 +279,8 @@ object WeeklyGroceryEngine {
             selectedCanonicalGroups = selectedCanonicalGroups,
             destConsumptions = plannedConsumptions,
             preferFish = hasHighCholesterol || hasHighBp,
-            isEconomic = preferences.isEconomic
+            isEconomic = preferences.isEconomic,
+            isUltraEconomic = preferences.isUltraEconomic
         )
 
         // 7. Dimensionamento do Pilar 3: Hortifruti (Frutas, Folhosos, Legumes)
@@ -292,7 +294,8 @@ object WeeklyGroceryEngine {
             selectedCanonicalGroups = selectedCanonicalGroups,
             destConsumptions = plannedConsumptions,
             orderFn = ::orderPool,
-            isEconomic = preferences.isEconomic
+            isEconomic = preferences.isEconomic,
+            isUltraEconomic = preferences.isUltraEconomic
         )
 
         // 8. Dimensionamento do Pilar 4: Mercearia, Gorduras Boas, Sementes, Temperos e Chás
@@ -305,6 +308,7 @@ object WeeklyGroceryEngine {
             selectedCanonicalGroups = selectedCanonicalGroups,
             destConsumptions = plannedConsumptions,
             isEconomic = preferences.isEconomic,
+            isUltraEconomic = preferences.isUltraEconomic,
             isPantry = true
         )
 
@@ -447,6 +451,7 @@ object WeeklyGroceryEngine {
         destConsumptions: MutableList<PlannedConsumption>,
         preferFish: Boolean = false,
         isEconomic: Boolean = false,
+        isUltraEconomic: Boolean = false,
         isPantry: Boolean = false
     ) {
         if (candidates.isEmpty() || targetKcal <= 0.0) return
@@ -458,12 +463,17 @@ object WeeklyGroceryEngine {
         }
 
         val countToTake = when {
+            isPantry && isUltraEconomic -> 0
             isPantry && isEconomic -> 1
+            isUltraEconomic && corridor == CORRIDOR_GRAOS -> 1
+            isUltraEconomic -> 1
             isEconomic -> 2
             dailyCalorieTarget >= 3500.0 -> 6
             dailyCalorieTarget >= 2500.0 -> 5
             else -> 4
-        }.coerceAtMost(sortedCandidates.size).coerceAtLeast(1)
+        }.coerceAtMost(sortedCandidates.size).coerceAtLeast(if (isPantry && isUltraEconomic) 0 else 1)
+
+        if (countToTake <= 0) return
 
         val selectedPool = selectDiverseFoods(
             candidates = sortedCandidates,
@@ -510,7 +520,8 @@ object WeeklyGroceryEngine {
         selectedCanonicalGroups: MutableSet<String>,
         destConsumptions: MutableList<PlannedConsumption>,
         orderFn: (List<FoodEntity>) -> List<FoodEntity> = { it },
-        isEconomic: Boolean = false
+        isEconomic: Boolean = false,
+        isUltraEconomic: Boolean = false
     ) {
         if (candidates.isEmpty()) return
 
@@ -521,7 +532,12 @@ object WeeklyGroceryEngine {
         })
         val legumesPool = orderFn(candidates.filter { groceryNameKey(it.category.orEmpty()).contains("legume") })
 
-        val frutasCount = if (isEconomic) 2 else if (dailyCalorieTarget >= 2800.0) 3 else 2
+        val frutasCount = when {
+            isUltraEconomic -> 1
+            isEconomic -> 2
+            dailyCalorieTarget >= 2800.0 -> 3
+            else -> 2
+        }
         val frutasCandidates = if (hasHighGlucose) {
             frutasPool.filter { it.functionalTags.contains("baixo_ig") || it.functionalTags.contains("fibra_soluvel") }
                 .ifEmpty { frutasPool }
@@ -541,7 +557,7 @@ object WeeklyGroceryEngine {
         } else {
             folhasPool
         }
-        val folhasCount = if (isEconomic) 1 else 2
+        val folhasCount = 1
         val folhas = selectDiverseFoods(
             candidates = folhasCandidates,
             count = folhasCount,
@@ -549,7 +565,11 @@ object WeeklyGroceryEngine {
             selectedGroups = selectedCanonicalGroups
         )
 
-        val legumesCount = if (isEconomic) 2 else 2
+        val legumesCount = when {
+            isUltraEconomic -> 1
+            isEconomic -> 2
+            else -> 2
+        }
         val legumes = selectDiverseFoods(
             candidates = legumesPool,
             count = legumesCount,
@@ -773,11 +793,18 @@ object WeeklyGroceryEngine {
         return chosen
     }
 
-    private fun isHighCostFood(food: FoodEntity): Boolean {
+    private fun isHighCostFood(food: FoodEntity, isUltraEconomic: Boolean = false): Boolean {
         val key = groceryNameKey(food.name)
-        return key.contains("salmao") || key.contains("camarao") || key.contains("mignon") ||
+        val isLuxury = key.contains("salmao") || key.contains("camarao") || key.contains("mignon") ||
                key.contains("cardamomo") || key.contains("pistache") || key.contains("noz") ||
                key.contains("amendoa") || key.contains("macadamia") || key.contains("bacalhau")
+        if (isLuxury) return true
+        if (isUltraEconomic) {
+            return key.contains("parmesao") || key.contains("gorgonzola") || key.contains("brie") ||
+                   key.contains("alcatra") || key.contains("picanha") || key.contains("contrafile") ||
+                   key.contains("whey") || key.contains("iogurte grego") || key.contains("castanha")
+        }
+        return false
     }
 
     private fun isPantryStaple(food: FoodEntity): Boolean {

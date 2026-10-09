@@ -30,7 +30,7 @@ fun WeeklyGroceryPreferencesSheet(
     onConfirm: (WeeklyGroceryPreferences) -> Unit
 ) {
     val effectiveInitial = remember(initialPreferences) {
-        if (initialPreferences.selectedProteins.isEmpty() && initialPreferences.budgetTier == GroceryBudgetTier.BALANCED) {
+        if (initialPreferences.selectedProteins.isEmpty() && initialPreferences.budgetTier == GroceryBudgetTier.MODERATE) {
             WeeklyGroceryPreferences.RECOMMENDED
         } else {
             initialPreferences
@@ -91,22 +91,40 @@ fun WeeklyGroceryPreferencesSheet(
                     color = BragaTextPrimary
                 )
 
-                // Opção Econômica
+                // 1. Ultraeconômica
+                BudgetOptionCard(
+                    title = "Ultraeconômica (Cesta Essencial)",
+                    description = "Máximo rendimento por real gasto. Cesta supercompacta de 8 a 10 alimentos básicos (arroz, feijão, ovos, aveia, frango acessível/PTS e banana). Menor custo semanal.",
+                    badge = "Menor Custo",
+                    isSelected = budgetTier == GroceryBudgetTier.ULTRA_ECONOMIC,
+                    onClick = { budgetTier = GroceryBudgetTier.ULTRA_ECONOMIC }
+                )
+
+                // 2. Econômica
                 BudgetOptionCard(
                     title = "Econômica (Custo-Benefício)",
-                    description = "Alimentos essenciais e nutritivos (arroz, feijão, ovos, frango, aveia, frutas da estação). Cesta enxuta e mais acessível.",
-                    badge = "Recomendada",
+                    description = "Alimentos essenciais e nutritivos (12 a 15 itens) com boa variedade, sem cortes nobres ou ingredientes caros.",
+                    badge = null,
                     isSelected = budgetTier == GroceryBudgetTier.ECONOMIC,
                     onClick = { budgetTier = GroceryBudgetTier.ECONOMIC }
                 )
 
-                // Opção Variada / Livre
+                // 3. Média
                 BudgetOptionCard(
-                    title = "Variada / Livre",
-                    description = "Maior diversidade de ingredientes e opções nobres com rotação semanal aberta.",
+                    title = "Média (Equilibrada)",
+                    description = "Maior diversidade de ingredientes (16 a 20 itens), permitindo carnes magras, peixes e frutas variadas da estação.",
                     badge = null,
-                    isSelected = budgetTier == GroceryBudgetTier.BALANCED,
-                    onClick = { budgetTier = GroceryBudgetTier.BALANCED }
+                    isSelected = budgetTier == GroceryBudgetTier.MODERATE,
+                    onClick = { budgetTier = GroceryBudgetTier.MODERATE }
+                )
+
+                // 4. Custo Livre
+                BudgetOptionCard(
+                    title = "Custo Livre (Variada / Premium)",
+                    description = "Catálogo completo liberado (20+ itens) com rotação aberta de frutos do mar, cortes nobres e castanhas.",
+                    badge = null,
+                    isSelected = budgetTier == GroceryBudgetTier.FREE,
+                    onClick = { budgetTier = GroceryBudgetTier.FREE }
                 )
             }
 
