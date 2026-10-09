@@ -143,7 +143,7 @@ class BragaContextualHelpTest {
             assertNull(session.recentQuery("u", "c"))
             assertEquals("entrada_variacao_sem_referencia", ask("Por que ela subiu?", channel).intent)
             deliver(help)
-            assertTrue(ask("Explica melhor", channel).respostaLocal.orEmpty().contains("Meus Exames"))
+            assertTrue(ask("Explica melhor", channel).respostaLocal.orEmpty().contains("Organizar exames"))
         }
     }
 

@@ -69,24 +69,15 @@
     <string name="hydration_milestone_title">Hidratação Completa</string>
     <string name="hydration_milestone_desc">Você atingiu sua meta diária de %1$dml de água hoje.</string>
 
-    <string name="exam_critical_alert">Alerta de Parâmetro</string>
-    <string name="exam_critical_msg">Valor do parâmetro %1$s acima da faixa de referência (%2$s).</string>
-    <string name="exam_critical_action">Apresente este resultado ao seu profissional de saúde assistente.</string>
-    <string name="exam_evolution_msg">Evolução positiva: o valor de %s retornou para a faixa de referência.</string>
-    <string name="exam_evolution_action">Continue com os bons hábitos e acompanhamento!</string>
 
     <!-- Transparência Metodológica & Compliance -->
     <string name="observations_section_title">Observações de Parâmetros</string>
     <string name="observations_referral">Considere conversar com seu profissional de saúde sobre esses valores.</string>
     <string name="observation_bp_trend">Pressão arterial (sistólica) acima da faixa de referência em %1$d medições seguidas.</string>
-    <string name="observation_exam_high">Parâmetro %1$s acima da faixa de referência.</string>
     <string name="disclaimer_not_medical">Conteúdo informativo com base em faixas de referência e consensos internacionais. Não constitui diagnóstico nem prescrição médica. Em caso de dúvidas ou sintomas, consulte um profissional de saúde.</string>
     <string name="care_modules_subtitle">Sugestões de autocuidado com base nos parâmetros que você registra. Não substituem orientação médica.</string>
     <string name="nutrition_disclaimer">Sugestões de autocuidado alimentar baseadas no seu perfil e parâmetros informados. Não constituem prescrição médica nem substituem nutricionista.</string>
 
-    <!-- Exames em PDF -->
-    <string name="exam_pdf_only_hint">Envie o laudo em PDF disponibilizado pelo laboratório.</string>
-    <string name="exam_pdf_only_error">Apenas arquivos no formato PDF são aceitos.</string>
 
     <!-- Atividade e Sedentarismo -->
     <string name="sedentary_alert">Momento de Movimento</string>
@@ -112,8 +103,6 @@
     <string name="security_dev_mode_step3">3. Retorne ao aplicativo Braga Saúde para continuar.</string>
     <string name="security_dev_mode_btn_settings">Abrir Configurações do Sistema</string>
     <string name="security_dev_mode_btn_retry">Verificar Novamente</string>
-    <string name="observation_exam_low">%1$s abaixo da faixa de referência geral</string>
-    <string name="exam_critical_low_msg">Valor do parâmetro %1$s abaixo da faixa de referência (%2$s).</string>
     <string name="observation_metric_trend">%1$s acima da faixa de referência geral em 3 medições seguidas. Considere conversar com seu médico.</string>
     <string name="weight_gain_48h">Notamos ganho de %1$s kg nas últimas 48 horas.</string>
     <string name="weight_gain_48h_action">Procure atendimento. Este aplicativo não substitui avaliação médica.</string>

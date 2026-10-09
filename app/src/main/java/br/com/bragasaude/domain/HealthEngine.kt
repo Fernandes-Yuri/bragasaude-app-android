@@ -7,7 +7,6 @@ import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import br.com.bragasaude.data.local.DailyMetricsEntity
-import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.model.*
 import br.com.bragasaude.data.remote.repository.*
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,9 +26,7 @@ class HealthEngine @Inject constructor(
     private val profileRepository: ProfileRepository,
     private val biometryRepository: BiometryRepository,
     private val riskManager: RiskManager,
-    private val auth: com.google.firebase.auth.FirebaseAuth,
-    private val apiClient: BragaApiClient,
-    private val familyDao: br.com.bragasaude.data.local.FamilyDao
+    private val auth: com.google.firebase.auth.FirebaseAuth
 ) {
 
     private val CHANNEL_ID = "health_alerts_channel"

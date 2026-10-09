@@ -27,9 +27,6 @@ class HealthEngineTest {
     private val biometryRepository = mockk<BiometryRepository>()
     private val riskManager = mockk<RiskManager>(relaxed = true)
     private val auth = mockk<FirebaseAuth>(relaxed = true)
-    // doc 10 §3.3: exame critico avisa o cuidador (apiClient + familyDao).
-    private val apiClient = mockk<br.com.bragasaude.data.remote.api.BragaApiClient>(relaxed = true)
-    private val familyDao = mockk<br.com.bragasaude.data.local.FamilyDao>(relaxed = true)
 
     private lateinit var healthEngine: HealthEngine
 
@@ -39,7 +36,7 @@ class HealthEngineTest {
             context, vitalsRepository,
             milestonesRepository, conditionRepository,
             profileRepository, biometryRepository,
-            riskManager, auth, apiClient, familyDao
+            riskManager, auth
         )
 
         every { auth.currentUser } returns null

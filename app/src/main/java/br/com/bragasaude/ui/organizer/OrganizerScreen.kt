@@ -127,7 +127,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
         BragaBottomSheet(onDismissRequest = { if (!state.busy) { resultReview = false; viewModel.clearPreview() } }) {
             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("PDF organizado", style = MaterialTheme.typography.titleLarge)
-                PagePreview(state.preview, page)
+                PagePreview(state.preview.takeIf { state.previewPage == page }, page)
                 if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 Row {
                     TextButton(onClick = { page-- }, enabled = page > 0 && !state.busy) { Text("Anterior") }
@@ -166,11 +166,11 @@ private fun ReviewDocument(doc: OrganizerDocument, state: OrganizerUiState, vm: 
     val seen = remember(doc.id) { mutableStateListOf<Int>() }
     var confirmed by remember(doc.id) { mutableStateOf(false) }
     LaunchedEffect(doc.id, page) { vm.preview(doc.id, page) }
-    LaunchedEffect(state.preview) { if (state.preview != null && page !in seen) seen.add(page) }
+    LaunchedEffect(state.preview, page) { if (state.preview != null && state.previewPage == page && page !in seen) seen.add(page) }
     BragaBottomSheet(onDismissRequest = { if (!state.busy) onClose() }) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Confira o documento original", style = MaterialTheme.typography.titleLarge)
-            PagePreview(state.preview, page)
+            PagePreview(state.preview.takeIf { state.previewPage == page }, page)
             if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { page-- }, enabled = page > 0 && !state.busy) { Text("Anterior") }

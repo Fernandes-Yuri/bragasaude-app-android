@@ -51,7 +51,7 @@ class BragaAppAssistanceTest {
     @Test fun `ajuda preserva limites reais e nao afirma executar operacoes`() {
         assertTrue(hybrid.analyze("Como excluo minha conta?").respostaLocal.orEmpty().contains("não exclui"))
         assertTrue(hybrid.analyze("Como retiro a cópia do exame da nuvem?").respostaLocal.orEmpty().contains("não removeu"))
-        assertTrue(hybrid.analyze("Meus exames estão só neste celular?").respostaLocal.orEmpty().contains("não posso afirmar"))
+        assertTrue(hybrid.analyze("Meus exames estão só neste celular?").respostaLocal.orEmpty().contains("expiram em 24 horas"))
         assertTrue(hybrid.analyze("Como conecto meu relógio?").respostaLocal.orEmpty().contains("autorizar não garante"))
         assertTrue(hybrid.analyze("Como registro que tomei meu remédio?").respostaLocal.orEmpty().contains("Registrar dose"))
         for (channel in InputChannel.entries) {

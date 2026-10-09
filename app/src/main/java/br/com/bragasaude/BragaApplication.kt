@@ -51,6 +51,17 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
         // primeiro push chega e e descartado (Causa 6 do levantamento).
         BragaFirebaseMessagingService.initChannels(this)
 
+        // Encerra a sessão temporária se houver saída ou troca de conta.
+        val organizerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val organizerAuth = com.google.firebase.auth.FirebaseAuth.getInstance()
+        var organizerUid = organizerAuth.currentUser?.uid
+        organizerAuth.addAuthStateListener { changedAuth ->
+            val newUid = changedAuth.currentUser?.uid
+            if (newUid != organizerUid) {
+                organizerUid = newUid
+                organizerScope.launch { br.com.bragasaude.data.local.organizer.OrganizerStore(this@BragaApplication).clearAll() }
+            }
+        }
         syncManager.startRealtimeSync()
         syncScheduler.schedulePeriodicRecoverySync()
         

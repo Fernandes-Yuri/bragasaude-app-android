@@ -919,7 +919,7 @@ fun ProfileDetailScreen(
                 },
                 text = {
                     Text(
-                        "Esta ação apagará permanentemente todos os seus dados de saúde, exames, registros e metas deste dispositivo e da nuvem.\n\nSua conta será cancelada, mas você poderá criar uma nova conta com o mesmo e-mail Google a qualquer momento caso deseje retornar.",
+                        "Esta ação apagará permanentemente todos os seus dados de saúde, registros e metas deste dispositivo e da nuvem.\n\nSua conta será cancelada, mas você poderá criar uma nova conta com o mesmo e-mail Google a qualquer momento caso deseje retornar.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

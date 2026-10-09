@@ -60,7 +60,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         } catch (error: Throwable) { atomic.failWrite(stream); throw error }
     }
     private fun decrypt(id: String, source: File): ByteArray {
-        val bytes = source.readBytes()
+        val bytes = android.util.AtomicFile(source).readFully()
         require(bytes.size >= 28)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key(id), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
@@ -151,8 +151,8 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         } catch (error: Throwable) { atomic.failWrite(stream); throw error }
     }
     private fun decryptFile(id: String, source: File, target: File) {
-        source.inputStream().use { input ->
-            val iv = ByteArray(12); check(input.read(iv) == 12)
+        android.util.AtomicFile(source).openRead().use { input ->
+            val iv = ByteArray(12); java.io.DataInputStream(input).readFully(iv)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, key(id), GCMParameterSpec(128, iv))
             try {
@@ -243,13 +243,18 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
                         com.tom_roush.pdfbox.multipdf.PDFMergerUtility().appendDocument(document, it)
                     } }; document.save(merged)
                 }
-                encryptFile(id, merged, File(folder(id), "${item.id}.enc"))
-                s = s.copy(documents = s.documents.map { if (it.id == item.id) it.copy(pages = item.pages + pending.sumOf { p -> p.first.pages }, confirmed = false) else it })
+                val replacementId = UUID.randomUUID().toString()
+                encryptFile(id, merged, File(folder(id), "$replacementId.enc"))
+                s = s.copy(documents = s.documents.map { if (it.id == item.id) it.copy(id = replacementId, pages = item.pages + pending.sumOf { p -> p.first.pages }, confirmed = false) else it })
             } else {
                 pending.forEach { (item, file) -> encryptFile(id, file, File(folder(id), "${item.id}.enc")) }
                 s = s.copy(documents = s.documents + pending.map { it.first })
             }
-            save(s); invalidate(id); s
+            active(id)
+            save(s)
+            val keep = s.documents.map { "${it.id}.enc" }.toSet() + setOf("session.enc", "result.enc")
+            folder(id).listFiles()?.filter { it.extension == "enc" && it.name !in keep }?.forEach { it.delete() }
+            invalidate(id); s
         } finally { work.deleteRecursively() }
     } }
     suspend fun update(id: String, item: OrganizerDocument): OrganizerSession = withContext(Dispatchers.IO) { lock.withLock {
@@ -308,6 +313,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     } }
     suspend fun end(id: String): Unit = withContext(Dispatchers.IO) { lock.withLock { remove(id) } }
+    suspend fun clearAll(): Unit = withContext(Dispatchers.IO) { lock.withLock { root.listFiles()?.forEach { remove(it.name) } } }
     suspend fun cleanup(): Unit = withContext(Dispatchers.IO) { lock.withLock { clean() } }
 }
 
