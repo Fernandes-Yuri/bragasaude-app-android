@@ -38,7 +38,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 52, // Plano semanal persistido e saldo estimado da despensa
+    version = 52, // Remove as tabelas do armazenamento de exames
     exportSchema = true
 )
 @TypeConverters(Converters::class)

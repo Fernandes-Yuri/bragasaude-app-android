@@ -41,7 +41,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
     var reviewing by remember { mutableStateOf<OrganizerDocument?>(null) }
-    var appendTo by remember { mutableStateOf<String?>(null) }
+    var appendTo by rememberSaveable { mutableStateOf<String?>(null) }
     var ending by remember { mutableStateOf(false) }
     var resultReview by remember { mutableStateOf(false) }
     var sharing by remember { mutableStateOf(false) }
@@ -65,7 +65,8 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
         val file = File(context.cacheDir, "organizer-capture/${session.id}/capture.jpg").apply { parentFile?.mkdirs() }
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         captureUriString = uri.toString()
-        camera.launch(uri)
+        try { camera.launch(uri) }
+        catch (_: Exception) { file.delete(); captureUriString = null; cameraError = "Não foi possível abrir a câmera. Selecione uma foto ou um PDF existente." }
     }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) capturePage() else { cameraError = "Permita o acesso à câmera para fotografar ou selecione arquivos já existentes."; appendTo = null }

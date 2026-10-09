@@ -71,7 +71,8 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             // Expurgo da área de exames retirada; não toca nos originais externos.
             java.io.File(filesDir, "exams").deleteRecursively()
-            listOf("exam_photos", "dossiers").forEach { java.io.File(cacheDir, it).deleteRecursively() }
+            listOf("exam_photos", "exam_originals", "dossiers").forEach { java.io.File(cacheDir, it).deleteRecursively() }
+            java.io.File(cacheDir, "shared_pdfs").listFiles()?.filter { it.name.startsWith("exame_") }?.forEach { it.delete() }
             br.com.bragasaude.data.local.organizer.OrganizerStore(this@BragaApplication).cleanup()
             catalogRepository.seedDatabaseIfNeeded()
         }
