@@ -44,6 +44,8 @@ class HomeViewModel @Inject constructor(
     private val _userName = MutableStateFlow("Usuário")
     val userName = _userName.asStateFlow()
 
+    private val todayDateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+
     private val _dashboardVitals = MutableStateFlow(RemoteVitalSign(userId = ""))
     val dashboardVitals = _dashboardVitals.asStateFlow()
 
@@ -86,7 +88,6 @@ class HomeViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val alertPrefs = context.getSharedPreferences("braga_alerts_prefs", Context.MODE_PRIVATE)
-    private val todayDateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
     private val dismissedAlerts: MutableSet<String> = alertPrefs.getStringSet("dismissed_alerts_$todayDateStr", emptySet())?.toMutableSet() ?: mutableSetOf()
 
     private val readAlertsKey = "read_alerts_${auth.currentUser?.uid ?: BragaConstants.GUEST_UID}_$todayDateStr"

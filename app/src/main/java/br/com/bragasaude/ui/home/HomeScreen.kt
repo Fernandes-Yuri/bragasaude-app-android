@@ -520,7 +520,7 @@ fun HomeScreen(
                             consumedKcal = consumedCal,
                             targetKcal = targetCal,
                             modifier = Modifier.weight(1f).fillMaxHeight(),
-                            onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Nutrition) }
+                            onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Nutrition()) }
                         )
                     }
 
