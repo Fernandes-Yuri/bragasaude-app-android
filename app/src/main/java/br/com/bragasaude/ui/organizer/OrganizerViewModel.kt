@@ -15,7 +15,7 @@ import javax.inject.Inject
 
 data class OrganizerUiState(val session: OrganizerSession? = null, val busy: Boolean = false,
     val error: String? = null, val ready: Boolean = false, val saved: Boolean = false,
-    val preview: Bitmap? = null, val newest: Boolean = false)
+    val preview: Bitmap? = null, val resultPages: Int = 0, val newest: Boolean = false)
 
 @HiltViewModel
 class OrganizerViewModel @Inject constructor(private val store: OrganizerStore) : ViewModel() {
@@ -50,6 +50,11 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore) 
         mutable.value = mutable.value.copy(preview = null)
         val bitmap = store.preview(requireNotNull(mutable.value.session).id, id, page)
         mutable.value = mutable.value.copy(preview = bitmap)
+    }
+    fun previewResult(page: Int) = operation {
+        mutable.value = mutable.value.copy(preview = null)
+        val (bitmap, pages) = store.previewResult(requireNotNull(mutable.value.session).id, page)
+        mutable.value = mutable.value.copy(preview = bitmap, resultPages = pages)
     }
     fun clearPreview() { mutable.value = mutable.value.copy(preview = null) }
     fun order(newest: Boolean) { if (!mutable.value.busy) mutable.value = mutable.value.copy(newest = newest, ready = false, saved = false) }

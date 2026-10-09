@@ -68,7 +68,7 @@ fun NutritionScreen(
     val isCustomCalorieTarget by viewModel.isCustomCalorieTarget.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val scoreBreakdown by homeViewModel.scoreBreakdown.collectAsState()
-    val recommendations = remember(isLoading, dailyCalories) { viewModel.getRecommendations() }
+    val recommendations = remember(isLoading, dailyCal) { viewModel.getRecommendations() }
     val todayLoggedMeals by viewModel.todayLoggedMeals.collectAsState()
     val suggestionGroups by viewModel.functionalSuggestionGroups.collectAsState()
     val selectedMealTab by viewModel.selectedMealTab.collectAsState()

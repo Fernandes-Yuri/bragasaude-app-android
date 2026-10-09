@@ -280,6 +280,18 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
             encryptFile(id, result, File(folder(id), "result.enc"))
         } finally { work.listFiles()?.forEach { it.deleteRecursively() } }
     } }
+    suspend fun previewResult(id: String, page: Int): Pair<Bitmap, Int> = withContext(Dispatchers.IO) { lock.withLock {
+        active(id)
+        val file = File(temp(id), "preview-result.pdf")
+        try {
+            decryptFile(id, File(folder(id), "result.enc"), file)
+            val count = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
+                PdfRenderer(fd).use { it.pageCount }
+            }
+            require(page in 0 until count)
+            render(file, page) to count
+        } finally { file.delete() }
+    } }
     suspend fun saveResult(id: String, uri: Uri): Unit = withContext(Dispatchers.IO) { lock.withLock {
         active(id)
         val file = File(temp(id), "export.pdf")

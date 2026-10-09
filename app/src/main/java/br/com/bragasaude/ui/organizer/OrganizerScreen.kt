@@ -8,6 +8,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -36,6 +41,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
     var reviewing by remember { mutableStateOf<OrganizerDocument?>(null) }
     var appendTo by remember { mutableStateOf<String?>(null) }
     var ending by remember { mutableStateOf(false) }
+    var resultReview by remember { mutableStateOf(false) }
     var sharing by remember { mutableStateOf(false) }
     var captureUri by remember { mutableStateOf<Uri?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -103,6 +109,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                 }
                 if (state.ready) {
                     Text("PDF pronto. Contém índice, divisórias e todas as páginas originais. A montagem não preserva assinaturas digitais; guarde os arquivos originais.")
+                    OutlinedButton(onClick = { resultReview = true }, enabled = !state.busy) { Text("Conferir PDF gerado") }
                     Button(onClick = { save.launch("exames-organizados.pdf") }, enabled = !state.busy) { Text("Salvar fora do aplicativo") }
                     OutlinedButton(onClick = { sharing = true }, enabled = !state.busy) { Text("Compartilhar PDF") }
                 }
@@ -113,6 +120,23 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
     }
     reviewing?.let { doc ->
         ReviewDocument(doc, state, viewModel, onClose = { reviewing = null; viewModel.clearPreview() })
+    }
+    if (resultReview) {
+        var page by remember { mutableIntStateOf(0) }
+        LaunchedEffect(page) { viewModel.previewResult(page) }
+        BragaBottomSheet(onDismissRequest = { if (!state.busy) { resultReview = false; viewModel.clearPreview() } }) {
+            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("PDF organizado", style = MaterialTheme.typography.titleLarge)
+                PagePreview(state.preview, page)
+                if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                Row {
+                    TextButton(onClick = { page-- }, enabled = page > 0 && !state.busy) { Text("Anterior") }
+                    Text("${page + 1}/${state.resultPages}")
+                    TextButton(onClick = { page++ }, enabled = page + 1 < state.resultPages && !state.busy) { Text("Próxima") }
+                }
+                TextButton(onClick = { resultReview = false; viewModel.clearPreview() }, enabled = !state.busy) { Text("Fechar prévia") }
+            }
+        }
     }
     if (ending) BragaAlertDialog(onDismissRequest = { ending = false }, title = { Text("Encerrar organização?") },
         text = { Text(if (state.saved) "As cópias temporárias serão apagadas. Seus arquivos de origem e o PDF salvo fora do aplicativo permanecem."
@@ -146,7 +170,7 @@ private fun ReviewDocument(doc: OrganizerDocument, state: OrganizerUiState, vm: 
     BragaBottomSheet(onDismissRequest = { if (!state.busy) onClose() }) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Confira o documento original", style = MaterialTheme.typography.titleLarge)
-            state.preview?.let { Image(it.asImageBitmap(), "Página ${page + 1} do exame", Modifier.fillMaxWidth().heightIn(max = 400.dp)) }
+            PagePreview(state.preview, page)
             if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { page-- }, enabled = page > 0 && !state.busy) { Text("Anterior") }
@@ -167,4 +191,19 @@ private fun ReviewDocument(doc: OrganizerDocument, state: OrganizerUiState, vm: 
             TextButton(onClick = onClose, enabled = !state.busy) { Text("Voltar sem confirmar") }
         }
     }
+}
+
+@Composable
+private fun PagePreview(bitmap: android.graphics.Bitmap?, page: Int) {
+    var scale by remember(page, bitmap) { mutableFloatStateOf(1f) }
+    var offset by remember(page, bitmap) { mutableStateOf(Offset.Zero) }
+    val transform = rememberTransformableState { zoom, pan, _ ->
+        scale = (scale * zoom).coerceIn(1f, 5f)
+        offset = if (scale == 1f) Offset.Zero else offset + pan
+    }
+    Box(Modifier.fillMaxWidth().height(350.dp).clipToBounds().transformable(transform)) {
+        bitmap?.let { Image(it.asImageBitmap(), "Página ${page + 1}; use dois dedos para ampliar e mover",
+            Modifier.fillMaxSize().graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y)) }
+    }
+    Text("Use dois dedos para ampliar e mover a página.", style = MaterialTheme.typography.bodySmall)
 }
