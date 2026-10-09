@@ -15,7 +15,7 @@ import javax.inject.Inject
 
 data class OrganizerUiState(val session: OrganizerSession? = null, val busy: Boolean = false,
     val error: String? = null, val ready: Boolean = false, val saved: Boolean = false,
-    val preview: Bitmap? = null, val previewPage: Int = -1, val resultPages: Int = 0, val newest: Boolean = false)
+    val preview: Bitmap? = null, val previewPage: Int = -1, val resultPages: Int = 0, val newest: Boolean = true)
 
 @HiltViewModel
 class OrganizerViewModel @Inject constructor(private val store: OrganizerStore) : ViewModel() {
@@ -47,6 +47,10 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore) 
     }
     fun update(item: OrganizerDocument) = operation { changed(store.update(requireNotNull(mutable.value.session).id, item)) }
     fun delete(id: String) = operation { changed(store.delete(requireNotNull(mutable.value.session).id, id)) }
+    fun editPhotoPage(id: String, page: Int, moveTo: Int? = null) = operation {
+        changed(store.editPhotoPage(requireNotNull(mutable.value.session).id, id, page, moveTo))
+    }
+    fun saveOriginal(id: String, uri: Uri) = operation { store.saveOriginal(requireNotNull(mutable.value.session).id, id, uri) }
     fun preview(id: String, page: Int) = operation {
         mutable.value = mutable.value.copy(preview = null)
         val bitmap = store.preview(requireNotNull(mutable.value.session).id, id, page)

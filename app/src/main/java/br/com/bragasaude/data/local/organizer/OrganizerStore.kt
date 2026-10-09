@@ -70,7 +70,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         val json = JSONObject().put("id", s.id).put("createdAt", s.createdAt)
         val docs = JSONArray()
         s.documents.forEach { d -> docs.put(JSONObject().put("id", d.id).put("title", d.title)
-            .put("date", d.date).put("type", d.type).put("pages", d.pages).put("confirmed", d.confirmed)) }
+            .put("date", d.date).put("type", d.type).put("pages", d.pages).put("confirmed", d.confirmed).put("photoOnly", d.photoOnly).put("sourceDigest", d.sourceDigest).put("possibleDuplicate", d.possibleDuplicate)) }
         json.put("documents", docs)
         encrypt(s.id, json.toString().toByteArray(Charsets.UTF_8), File(folder(s.id), "session.enc"))
     }
@@ -80,13 +80,18 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         return OrganizerSession(id, json.getLong("createdAt"), (0 until docs.length()).map { n ->
             val d = docs.getJSONObject(n)
             OrganizerDocument(d.getString("id"), d.getString("title"), d.getString("date"),
-                d.getString("type"), d.getInt("pages"), d.getBoolean("confirmed"))
+                d.getString("type"), d.getInt("pages"), d.getBoolean("confirmed"), d.optBoolean("photoOnly"), d.optString("sourceDigest"), d.optBoolean("possibleDuplicate"))
         })
     }
     private fun remove(id: String) {
-        folder(id).deleteRecursively(); File(cache, id).deleteRecursively()
-        listOf("organizer-outbox", "organizer-capture").forEach { File(context.cacheDir, "$it/$id").deleteRecursively() }
+        File(context.cacheDir, "organizer-outbox/$id").listFiles()?.forEach { file ->
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            context.revokeUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val removed = listOf(folder(id), File(cache, id), File(context.cacheDir, "organizer-outbox/$id"),
+            File(context.cacheDir, "organizer-capture/$id")).map { !it.exists() || it.deleteRecursively() }.all { it }
         if (keys.containsAlias(alias(id))) keys.deleteEntry(alias(id))
+        check(removed) { "A limpeza não foi concluída. Tente encerrar novamente." }
     }
     private fun clean() {
         val now = System.currentTimeMillis()
@@ -204,6 +209,13 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
                     while (true) { val n = input.read(buffer); if (n < 0) break
                         total += n; require(total <= 35L * 1024 * 1024) { "Cada arquivo pode ter até 35 MB." }; out.write(buffer, 0, n) }
                 } } ?: error("Não foi possível ler o arquivo.")
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                source.inputStream().use { input ->
+                    val buffer = ByteArray(8192)
+                    while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) }
+                }
+                val sourceDigest = digest.digest().joinToString("") { "%02x".format(it) }
+                val duplicate = (s.documents + pending.map { it.first }).any { it.sourceDigest == sourceDigest }
                 val normalized = File(work, "$docId.pdf")
                 val isPdf = source.inputStream().use { String(ByteArray(5).also { header -> it.read(header) }, Charsets.US_ASCII) == "%PDF-" }
                 var text = ""; var pages = 1
@@ -232,7 +244,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
                 require(normalized.length() <= 35L * 1024 * 1024) { "Cada documento pode ter até 35 MB após a organização." }
                 require((folder(id).listFiles()?.filter { it.extension == "enc" }?.sumOf { it.length() } ?: 0L) +
                     pending.sumOf { it.second.length() } + normalized.length() <= 150L * 1024 * 1024) { "A sessão pode ter até 150 MB. Organize em lotes menores." }
-                pending.add(OrganizerDocument(docId, title, OrganizerMetadata.suggestDate(text), type, pages) to normalized)
+                pending.add(OrganizerDocument(docId, title, OrganizerMetadata.suggestDate(text), type, pages, photoOnly = !isPdf, sourceDigest = sourceDigest, possibleDuplicate = duplicate) to normalized)
             }
             if (appendTo != null) {
                 val item = s.documents.first { it.id == appendTo }
@@ -245,7 +257,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
                 }
                 val replacementId = UUID.randomUUID().toString()
                 encryptFile(id, merged, File(folder(id), "$replacementId.enc"))
-                s = s.copy(documents = s.documents.map { if (it.id == item.id) it.copy(id = replacementId, pages = item.pages + pending.sumOf { p -> p.first.pages }, confirmed = false) else it })
+                s = s.copy(documents = s.documents.map { if (it.id == item.id) it.copy(id = replacementId, pages = item.pages + pending.sumOf { p -> p.first.pages }, confirmed = false, photoOnly = item.photoOnly && pending.all { it.first.photoOnly }, sourceDigest = "", possibleDuplicate = item.possibleDuplicate || pending.any { it.first.possibleDuplicate }) else it })
             } else {
                 pending.forEach { (item, file) -> encryptFile(id, file, File(folder(id), "${item.id}.enc")) }
                 s = s.copy(documents = s.documents + pending.map { it.first })
@@ -267,6 +279,39 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
     suspend fun delete(id: String, docId: String): OrganizerSession = withContext(Dispatchers.IO) { lock.withLock {
         val s = active(id).let { it.copy(documents = it.documents.filterNot { d -> d.id == docId }) }
         save(s); File(folder(id), "$docId.enc").delete(); invalidate(id); s
+    } }
+    suspend fun editPhotoPage(id: String, docId: String, page: Int, moveTo: Int? = null): OrganizerSession = withContext(Dispatchers.IO) { lock.withLock {
+        val session = active(id)
+        val item = session.documents.first { it.id == docId }
+        require(item.photoOnly && page in 0 until item.pages)
+        if (moveTo != null) require(moveTo in 0 until item.pages)
+        val work = temp(id)
+        val original = original(id, item)
+        val edited = File(work, "edited.pdf")
+        try {
+            PDDocument.load(original, MemoryUsageSetting.setupTempFileOnly().setTempDir(work)).use { document ->
+                val current = document.getPage(page)
+                if (moveTo == null) current.rotation = (current.rotation + 90) % 360
+                else {
+                    document.removePage(page)
+                    if (moveTo >= document.numberOfPages) document.addPage(current)
+                    else document.pages.insertBefore(current, document.getPage(moveTo))
+                }
+                document.save(edited)
+            }
+            val replacement = item.copy(id = UUID.randomUUID().toString(), confirmed = false, sourceDigest = "")
+            encryptFile(id, edited, File(folder(id), "${replacement.id}.enc"))
+            val changed = session.copy(documents = session.documents.map { if (it.id == docId) replacement else it })
+            active(id); save(changed); File(folder(id), "$docId.enc").delete(); invalidate(id); changed
+        } finally { original.delete(); edited.delete() }
+    } }
+    suspend fun saveOriginal(id: String, docId: String, uri: Uri): Unit = withContext(Dispatchers.IO) { lock.withLock {
+        val item = active(id).documents.first { it.id == docId }
+        val file = original(id, item)
+        try {
+            context.contentResolver.openOutputStream(uri, "wt")?.use { output -> file.inputStream().use { it.copyTo(output) }; output.flush() }
+                ?: error("Não foi possível salvar o documento.")
+        } finally { file.delete() }
     } }
     suspend fun preview(id: String, docId: String, page: Int): Bitmap = withContext(Dispatchers.IO) { lock.withLock {
         val s = active(id); val doc = s.documents.first { it.id == docId }
@@ -308,7 +353,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
     } }
     suspend fun shareResult(id: String): Uri = withContext(Dispatchers.IO) { lock.withLock {
         active(id)
-        val file = File(context.cacheDir, "organizer-outbox/$id/exames-organizados.pdf").apply { parentFile?.mkdirs() }
+        val file = File(context.cacheDir, "organizer-outbox/$id/exames-${UUID.randomUUID()}.pdf").apply { parentFile?.mkdirs() }
         decryptFile(id, File(folder(id), "result.enc"), file)
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     } }

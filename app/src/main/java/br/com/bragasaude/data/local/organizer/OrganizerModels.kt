@@ -10,7 +10,10 @@ data class OrganizerDocument(
     val date: String = "",
     val type: String = "Outros",
     val pages: Int,
-    val confirmed: Boolean = false
+    val confirmed: Boolean = false,
+    val photoOnly: Boolean = false,
+    val sourceDigest: String = "",
+    val possibleDuplicate: Boolean = false
 )
 data class OrganizerSession(val id: String, val createdAt: Long, val documents: List<OrganizerDocument> = emptyList()) {
     val expiresAt: Long get() = createdAt + SESSION_DURATION

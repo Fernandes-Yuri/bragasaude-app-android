@@ -43,6 +43,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
     var reviewing by remember { mutableStateOf<OrganizerDocument?>(null) }
     var appendTo by rememberSaveable { mutableStateOf<String?>(null) }
     var ending by remember { mutableStateOf(false) }
+    var originalToSave by rememberSaveable { mutableStateOf<String?>(null) }
     var resultReview by remember { mutableStateOf(false) }
     var sharing by remember { mutableStateOf(false) }
     var captureUriString by rememberSaveable { mutableStateOf<String?>(null) }
@@ -75,6 +76,10 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
         appendTo = documentId; cameraError = null
         if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) capturePage()
         else cameraPermission.launch(android.Manifest.permission.CAMERA)
+    }
+    val saveOriginal = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        originalToSave?.let { if (uri != null) viewModel.saveOriginal(it, uri) }
+        originalToSave = null
     }
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
         if (uri != null) viewModel.save(uri)
@@ -110,16 +115,19 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                 Text("Até 20 documentos, 100 páginas, 35 MB por arquivo e 150 MB por sessão. PDF e fotos. Uma foto pode ser uma página do mesmo exame.")
                 Button(onClick = { appendTo = null; picker.launch(arrayOf("application/pdf", "image/*")) }, enabled = !state.busy) { Text("Selecionar arquivos") }
                 OutlinedButton(onClick = { requestCamera(null) }, enabled = !state.busy) { Text("Fotografar exame") }
+                Text("Guarde os documentos em papel. As fotos feitas aqui são temporárias; salve uma cópia do documento se precisar delas separadamente.")
                 Text("O reconhecimento ocorre no dispositivo e apenas sugere título, data e tipo. Confira cada página: não interpretamos resultados nem diagnosticamos condições.")
                 OrganizerMetadata.ordered(session.documents, state.newest).forEach { doc ->
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(doc.title, style = MaterialTheme.typography.titleMedium)
                             Text("${doc.date.ifBlank { "Data não informada" }} · ${doc.type} · ${doc.pages} página(s)")
+                            if (doc.possibleDuplicate) Text("Possível documento repetido. Confira antes de manter ou remover.")
                             Text(if (doc.confirmed) "Conferido" else "Revisão obrigatória")
                             TextButton(onClick = { reviewing = doc }, enabled = !state.busy) { Text("Ver e conferir documento") }
                             TextButton(onClick = { appendTo = doc.id; picker.launch(arrayOf("application/pdf", "image/*")) }, enabled = !state.busy) { Text("Adicionar páginas a este exame") }
                             TextButton(onClick = { requestCamera(doc.id) }, enabled = !state.busy) { Text("Fotografar outra página deste exame") }
+                            TextButton(onClick = { originalToSave = doc.id; saveOriginal.launch("documento-de-exame.pdf") }, enabled = !state.busy) { Text("Salvar cópia deste documento fora do app") }
                             TextButton(onClick = { viewModel.delete(doc.id) }, enabled = !state.busy) { Text("Remover da organização") }
                         }
                     }
@@ -197,6 +205,13 @@ private fun ReviewDocument(doc: OrganizerDocument, state: OrganizerUiState, vm: 
                 TextButton(onClick = { page-- }, enabled = page > 0 && !state.busy) { Text("Anterior") }
                 Text("${page + 1}/${doc.pages}")
                 TextButton(onClick = { page++ }, enabled = page + 1 < doc.pages && !state.busy) { Text("Próxima") }
+            }
+            if (doc.photoOnly) {
+                TextButton(onClick = { vm.editPhotoPage(doc.id, page); onClose() }, enabled = !state.busy) { Text("Girar esta foto e conferir novamente") }
+                Row {
+                    TextButton(onClick = { vm.editPhotoPage(doc.id, page, page - 1); onClose() }, enabled = page > 0 && !state.busy) { Text("Mover página para antes") }
+                    TextButton(onClick = { vm.editPhotoPage(doc.id, page, page + 1); onClose() }, enabled = page + 1 < doc.pages && !state.busy) { Text("Mover página para depois") }
+                }
             }
             OutlinedTextField(title, { title = it.take(80); confirmed = false }, label = { Text("Título") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(date, { date = it.take(10); confirmed = false }, label = { Text("Data dd/mm/aaaa (opcional)") },
