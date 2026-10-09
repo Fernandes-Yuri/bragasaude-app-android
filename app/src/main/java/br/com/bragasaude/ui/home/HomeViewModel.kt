@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.remote.model.*
 import br.com.bragasaude.data.remote.repository.*
 import br.com.bragasaude.data.util.toRemote
+import br.com.bragasaude.domain.HealthCalculators
 import br.com.bragasaude.domain.HealthEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.google.firebase.auth.FirebaseAuth
@@ -57,8 +58,19 @@ class HomeViewModel @Inject constructor(
     val dailyCalorieTarget: StateFlow<Double> = profileRepository
         .getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
         .map { profile ->
-            val raw = profile?.dailyCalorieTarget
-            if (raw != null && raw > 500.0) raw else 2000.0
+            val custom = profile?.dailyCalorieTarget
+            if (custom != null && custom > 500.0 && custom != 1800.0) {
+                custom
+            } else {
+                HealthCalculators.calculateProfileCalorieTarget(
+                    weight = profile?.weight,
+                    height = profile?.height,
+                    birthDate = profile?.birthDate,
+                    gender = profile?.gender,
+                    activityLevel = profile?.activityLevel,
+                    weightGoal = profile?.weightGoal
+                ).toDouble()
+            }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 2000.0)
 

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -26,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.bragasaude.ui.theme.BragaCardBorder
@@ -36,8 +38,8 @@ import br.com.bragasaude.ui.theme.BragaTextPrimary
 import br.com.bragasaude.ui.theme.BragaTextSecondary
 
 /**
- * Card de Calorias Diárias com gráfico circular de progresso.
- * Substitui o antigo score de saúde na grade principal de métricas da Home.
+ * Card de Calorias Diárias com gráfico circular de progresso expressivo.
+ * Acompanha dinamicamente o progresso do usuário em relação à sua meta calculada clinicamente.
  */
 @Composable
 fun BragaCalorieProgressCard(
@@ -65,58 +67,71 @@ fun BragaCalorieProgressCard(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // 1. Gráfico circular de progresso com ícone nutricional
+            // 1. Gráfico circular de progresso com porcentagem ou ícone institucional
             Box(
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(48.dp),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier.size(38.dp),
+                    modifier = Modifier.fillMaxSize(),
                     color = BragaEmerald,
                     trackColor = BragaMint,
-                    strokeWidth = 3.5.dp,
+                    strokeWidth = 4.5.dp,
                     strokeCap = StrokeCap.Round
                 )
-                Icon(
-                    imageVector = Icons.Default.Restaurant,
-                    contentDescription = null,
-                    tint = BragaEmerald,
-                    modifier = Modifier.size(16.dp)
-                )
+                if (consumedKcal > 0) {
+                    Text(
+                        text = "${(progress * 100).toInt()}%",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BragaEmerald,
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Restaurant,
+                        contentDescription = null,
+                        tint = BragaEmerald.copy(alpha = 0.8f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
 
-            // 2. Calorias consumidas hoje
+            // 2. Valor métrico: calorias consumidas hoje
             Text(
-                text = consumedKcal.toInt().toString(),
+                text = "%,d".format(consumedKcal.toInt()),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = BragaTextPrimary,
                 letterSpacing = (-0.5).sp,
-                textAlign = TextAlign.Center
-            )
-
-            // 3. Rótulo da métrica
-            Text(
-                text = "Calorias",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = BragaTextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
             )
 
             Spacer(Modifier.height(2.dp))
 
-            // 4. Meta diária de referência
-            Text(
-                text = "Meta ${targetKcal.toInt()} kcal",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Normal,
-                color = BragaTextSecondary,
-                textAlign = TextAlign.Center
-            )
+            // 3. Rótulo e meta clínica calculada
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "calorias",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = BragaTextSecondary,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "meta %,d kcal".format(targetKcal.toInt()),
+                    fontSize = 11.sp,
+                    color = BragaTextSecondary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }

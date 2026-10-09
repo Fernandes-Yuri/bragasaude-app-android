@@ -505,14 +505,15 @@ object WeeklyGroceryEngine {
                 else -> 4
             }
 
+            val maxPantryCap = maxWeeklyGramsForFood(food)
             val weeklyGrams = if (kcalPer100 > 0.0) {
                 val neededGrams = ((perFoodKcalTarget / kcalPer100) * 100.0).toInt()
                 val portion = (neededGrams / days).coerceIn(minPortion, maxPortion)
-                portion * days
+                (portion * days).coerceAtMost(maxPantryCap)
             } else {
                 val scale = (dailyCalorieTarget / 1800.0).coerceIn(0.7, 2.5)
                 val portion = (baseServing * scale).toInt().coerceIn(minPortion, maxPortion)
-                portion * days
+                (portion * days).coerceAtMost(maxPantryCap)
             }
 
             destConsumptions.add(PlannedConsumption(food, weeklyGrams, corridor))
@@ -596,17 +597,63 @@ object WeeklyGroceryEngine {
             val maxPortion = food.maxServingGrams.takeIf { it > 0 } ?: (baseServing * 3)
             val days = 6
 
+            val maxPantryCap = maxWeeklyGramsForFood(food)
             val weeklyGrams = if (kcalPer100 > 0.0 && perFoodKcal > 0.0) {
                 val neededGrams = ((perFoodKcal / kcalPer100) * 100.0).toInt()
                 val portion = (neededGrams / days).coerceIn(minPortion, maxPortion)
-                portion * days
+                (portion * days).coerceAtMost(maxPantryCap)
             } else {
                 val scale = (dailyCalorieTarget / 1800.0).coerceIn(0.7, 2.5)
                 val portion = (baseServing * scale).toInt().coerceIn(minPortion, maxPortion)
-                portion * days
+                (portion * days).coerceAtMost(maxPantryCap)
             }
 
             destConsumptions.add(PlannedConsumption(food, weeklyGrams, CORRIDOR_HORTIFRUTI))
+        }
+    }
+
+    private fun isStapleEnergyFood(food: FoodEntity): Boolean {
+        val name = groceryNameKey(food.name.orEmpty())
+        return name.contains("arroz") || name.contains("feijao") || name.contains("aveia") ||
+               name.contains("ovo") || name.contains("pao") || name.contains("tapioca") ||
+               name.contains("banana") || name.contains("cuscuz") || name.contains("mandioca") ||
+               name.contains("batata")
+    }
+
+    private fun maxWeeklyGramsForFood(food: FoodEntity): Int {
+        val name = groceryNameKey(food.name.orEmpty())
+        val cat = groceryNameKey(food.category.orEmpty())
+        return when {
+            // Brotos e folhosos leves: nunca excedem 350g por semana
+            name.contains("broto") || name.contains("alface") || name.contains("rucula") ||
+            name.contains("espinafre") || name.contains("agriao") || name.contains("couve") -> 350
+
+            // Frutas frescas: porção semanal equilibrada (máx 1.2kg)
+            cat.contains("fruta") -> 1200
+
+            // Tubérculos e legumes: máx 1kg por semana (evita compras absurdas como 4kg de mandioquinha)
+            name.contains("mandioquinha") || name.contains("batata-baroa") || name.contains("mandioca") ||
+            name.contains("batata") || name.contains("abobora") || cat.contains("legume") ||
+            cat.contains("hortalica") -> 1000
+
+            // Massas (macarrão / espaguete): máx 700g por semana (evita 5kg de massa)
+            name.contains("massa") || name.contains("macarrao") -> 700
+
+            // Grãos básicos: pilares energéticos essenciais brasileiros
+            name.contains("arroz") -> 2000
+            name.contains("feijao") || name.contains("lentilha") || name.contains("grao-de-bico") -> 1000
+            name.contains("aveia") -> 500
+            name.contains("cuscuz") || name.contains("milho") -> 700
+
+            // Proteínas e ovos
+            name.contains("ovo") -> 1400 // ~24 a 28 unidades
+            cat.contains("carne") || cat.contains("ave") || cat.contains("peixe") -> 1400
+
+            // Panificados e cafés
+            name.contains("pao") || name.contains("torrada") || name.contains("tapioca") -> 500
+
+            // Padrão de segurança
+            else -> 800
         }
     }
 
@@ -620,29 +667,25 @@ object WeeklyGroceryEngine {
         var currentKcal = plannedConsumptions.sumOf { it.plannedCalories }
         var deficit = targetWeeklyKcal - currentKcal
 
-        // Passo A: Aumenta porções dos alimentos já selecionados até os tetos semanais
+        // Passo A: Aumenta porções de alimentos básicos de alta densidade até os tetos semanais
         if (deficit > 200.0) {
             val maxIterations = 4
             var iteration = 0
             while (deficit > 200.0 && iteration < maxIterations) {
                 iteration++
-                val eligibleForBoost = plannedConsumptions.filter { (it.food.kcal ?: 0.0) > 0.0 }
+                val eligibleForBoost = plannedConsumptions.filter {
+                    val k = it.food.kcal ?: 0.0
+                    k > 0.0 && (if (isUltraEconomic) isStapleEnergyFood(it.food) else true)
+                }
                 if (eligibleForBoost.isEmpty()) break
                 val boostShare = deficit / eligibleForBoost.size
                 var changedAny = false
                 for (i in plannedConsumptions.indices) {
                     val pc = plannedConsumptions[i]
                     val foodKcal = pc.food.kcal ?: 0.0
-                    if (foodKcal > 0.0) {
-                        val maxAllowedGrams = if (isUltraEconomic) {
-                            when (pc.corridor) {
-                                CORRIDOR_GRAOS -> 3500
-                                CORRIDOR_PROTEINAS -> 2500
-                                else -> 2000
-                            }
-                        } else {
-                            (pc.food.maxServingGrams.takeIf { it > 0 } ?: 400) * 7
-                        }
+                    val isEligible = if (isUltraEconomic) isStapleEnergyFood(pc.food) else true
+                    if (foodKcal > 0.0 && isEligible) {
+                        val maxAllowedGrams = maxWeeklyGramsForFood(pc.food)
                         val headroom = (maxAllowedGrams - pc.weeklyGrams).coerceAtLeast(0)
                         if (headroom > 0) {
                             val additionalGrams = ((boostShare / foodKcal) * 100.0).toInt().coerceAtMost(headroom)

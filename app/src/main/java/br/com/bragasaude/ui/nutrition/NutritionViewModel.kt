@@ -443,18 +443,21 @@ class NutritionViewModel @Inject constructor(
                 val weight = entity?.weight ?: remProfile?.weight
                 _userWeight.value = weight
 
-                // Diretrizes FAO/OMS e Guia Alimentar: ~25 a 30 kcal/kg (média prática de 28 kcal/kg)
-                val calculatedAuto = if (weight != null && weight > 0.0) {
-                    (weight * 28).toInt()
-                } else {
-                    1800
-                }
+                // Cálculo clínico: TMB (Mifflin-St Jeor) * FAF (Atividade Física) + Ajuste de Objetivo
+                val calculatedAuto = HealthCalculators.calculateProfileCalorieTarget(
+                    weight = weight,
+                    height = entity?.height ?: remProfile?.height,
+                    birthDate = entity?.birthDate ?: remProfile?.birthDate,
+                    gender = entity?.gender ?: remProfile?.gender,
+                    activityLevel = entity?.activityLevel ?: remProfile?.activityLevel,
+                    weightGoal = entity?.weightGoal ?: remProfile?.weightGoal
+                ).toInt()
                 _autoRecommendedCalories.value = calculatedAuto
 
                 val isCustom = prefs.getBoolean("calorie_target_is_custom_$userId", false)
                 _isCustomCalorieTarget.value = isCustom
 
-                val target = if (isCustom && remProfile?.dailyCalorieTarget != null && remProfile.dailyCalorieTarget > 0) {
+                val target = if (isCustom && remProfile?.dailyCalorieTarget != null && remProfile.dailyCalorieTarget > 0 && remProfile.dailyCalorieTarget != 1800.0) {
                     remProfile.dailyCalorieTarget.toFloat()
                 } else {
                     calculatedAuto.toFloat()
