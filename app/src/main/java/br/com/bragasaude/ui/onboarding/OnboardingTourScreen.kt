@@ -283,7 +283,7 @@ fun OnboardingTourScreen(
 
                 slide.notice?.let {
                     Spacer(Modifier.height(16.dp))
-                    ExamStorageNotice(it)
+                    OrganizerTemporaryNotice(it)
                 }
 
                 // Na última página, convida ao vínculo do WhatsApp. O usuário pode

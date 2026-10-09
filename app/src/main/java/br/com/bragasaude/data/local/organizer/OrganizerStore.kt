@@ -91,7 +91,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         val removed = listOf(folder(id), File(cache, id), File(context.cacheDir, "organizer-outbox/$id"),
             File(context.cacheDir, "organizer-capture/$id")).map { !it.exists() || it.deleteRecursively() }.all { it }
         if (keys.containsAlias(alias(id))) keys.deleteEntry(alias(id))
-        if (!removed) throw OrganizerProblem("A limpeza não foi concluída. As cópias restantes estão bloqueadas; tente encerrar novamente.")
+        if (!removed) throw OrganizerProblem("A limpeza não foi concluída. Tente encerrar novamente para remover as cópias restantes.")
     }
     private fun sessionIds(): Set<String> = listOf(root, cache, File(context.cacheDir, "organizer-outbox"),
         File(context.cacheDir, "organizer-capture")).flatMap { parent -> parent.listFiles()?.map { it.name }.orEmpty() }.toSet()
@@ -232,7 +232,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
                         try { text = runCatching { recognize(bitmap) }.getOrDefault("") } finally { bitmap.recycle() }
                     }
                 } else {
-                    val bitmap = ExamPhotoDecoder.decode(context.contentResolver, uri)
+                    val bitmap = ExamPhotoDecoder.decode(context.contentResolver, Uri.fromFile(source))
                     try { pdf.imagePdf(bitmap, normalized); text = runCatching { recognize(bitmap) }.getOrDefault("") }
                     finally { bitmap.recycle() }
                 }

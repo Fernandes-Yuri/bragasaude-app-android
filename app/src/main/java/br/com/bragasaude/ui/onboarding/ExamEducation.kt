@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -51,6 +52,17 @@ fun ExamEducationIllustration(scene: ExamEducationScene, modifier: Modifier = Mo
     Surface(modifier.fillMaxWidth().height(height), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(icon, description, Modifier.size(96.dp), tint = MaterialTheme.colorScheme.primary)
+        }
+    }
+}
+
+@Composable
+fun OrganizerTemporaryNotice(text: String) {
+    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
+            Icon(Icons.Default.Info, null, Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
