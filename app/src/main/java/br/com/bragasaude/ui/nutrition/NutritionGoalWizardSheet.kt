@@ -266,7 +266,7 @@ private fun StepGoalSelection(
                         modifier = Modifier
                             .size(42.dp)
                             .clip(CircleShape)
-                            .background(if (isChosen) BragaEmerald else BragaSurface),
+                            .background(if (isChosen) BragaEmerald else BragaCardSurface),
                         contentAlignment = Alignment.Center
                     ) {
                         val icon = when (goal) {
@@ -371,7 +371,7 @@ private fun StepActivitySelection(
                             Spacer(Modifier.width(8.dp))
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = if (isChosen) BragaEmerald.copy(alpha = 0.15f) else BragaSurface
+                                color = if (isChosen) BragaEmerald.copy(alpha = 0.15f) else BragaCardSurface
                             ) {
                                 Text(
                                     text = "FAF ${level.factor}",
@@ -569,7 +569,7 @@ private fun StepSummaryAndConfirm(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            color = BragaSurface,
+            color = BragaCardSurface,
             border = BorderStroke(1.dp, BragaMintBorder)
         ) {
             Row(
