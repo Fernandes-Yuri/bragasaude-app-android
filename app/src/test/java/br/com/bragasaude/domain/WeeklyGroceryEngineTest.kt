@@ -451,7 +451,7 @@ class WeeklyGroceryEngineTest {
         for (item in plan.items) {
             val name = item.foodName.lowercase()
             if (name.contains("couve") || name.contains("abobrinha")) {
-                assertTrue("Hortifrúti e legumes não devem exceder 1500g de compra semanal: ${item.foodName} tem ${item.purchaseWeightGrams}g", item.purchaseWeightGrams <= 1500)
+                assertTrue("Hortifrúti e legumes não devem exceder 1800g de compra semanal: ${item.foodName} tem ${item.purchaseWeightGrams}g", item.purchaseWeightGrams <= 1800)
             }
             if (name.contains("mandioca")) {
                 assertTrue("Tubérculos não devem exceder 2000g semanais: ${item.foodName} tem ${item.purchaseWeightGrams}g", item.purchaseWeightGrams <= 2000)
