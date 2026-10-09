@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.domain.model.BloodPressureCategory
 import br.com.bragasaude.domain.util.BloodPressureParser

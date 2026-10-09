@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.sync
+package br.com.bragasaude.data.remote.sync
 
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy

@@ -19,7 +19,6 @@ import br.com.bragasaude.util.BragaConstants
 class ReportViewModel @Inject constructor(
     private val biometryRepository: BiometryRepository,
     private val vitalsRepository: VitalsRepository,
-    private val examsRepository: ExamsRepository,
     private val profileRepository: ProfileRepository,
     private val dailyMetricsDao: DailyMetricsDao,
     private val database: br.com.bragasaude.data.local.BragaDatabase,
@@ -33,8 +32,6 @@ class ReportViewModel @Inject constructor(
     private val _vitalsHistory = MutableStateFlow<List<RemoteVitalSign>>(emptyList())
     val vitalsHistory = _vitalsHistory.asStateFlow()
 
-    private val _examItemsHistory = MutableStateFlow<List<RemoteExamItem>>(emptyList())
-    val examItemsHistory = _examItemsHistory.asStateFlow()
 
     private val _pdfFile = MutableSharedFlow<File?>()
     val pdfFile = _pdfFile.asSharedFlow()
@@ -62,12 +59,6 @@ class ReportViewModel @Inject constructor(
             }
         }
 
-        // Observe Routine Lab Tests (for charts)
-        viewModelScope.launch {
-            examsRepository.getExamItems(userId).collectLatest { entities ->
-                _examItemsHistory.value = entities.map { it.toRemote() }.sortedBy { it.measuredAt }
-            }
-        }
     }
 
     fun generatePdfReport() {

@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.profile
+package br.com.bragasaude.ui.profile
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

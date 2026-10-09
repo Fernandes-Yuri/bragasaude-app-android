@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.sync
+package br.com.bragasaude.data.remote.sync
 
 import android.content.Context
 import androidx.work.WorkerParameters

@@ -3,13 +3,11 @@ package br.com.bragasaude.ui.nutrition
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.local.FoodEntity
-import br.com.bragasaude.data.local.ExamItemEntity
 import br.com.bragasaude.data.local.VitalSignEntity
 import br.com.bragasaude.data.local.ProfileEntity
 import br.com.bragasaude.data.local.GroceryListItemEntity
 import br.com.bragasaude.data.remote.model.*
 import br.com.bragasaude.data.remote.repository.CatalogRepository
-import br.com.bragasaude.data.remote.repository.ExamsRepository
 import br.com.bragasaude.data.remote.repository.NutritionRepository
 import br.com.bragasaude.data.remote.repository.ProfileRepository
 import br.com.bragasaude.data.remote.repository.GroceryRepository
@@ -36,7 +34,6 @@ class NutritionViewModel @Inject constructor(
     private val catalogRepository: CatalogRepository,
     private val nutritionRepository: NutritionRepository,
     private val profileRepository: ProfileRepository,
-    private val examsRepository: ExamsRepository,
     private val vitalsRepository: VitalsRepository,
     private val groceryRepository: GroceryRepository,
     private val weeklyRepository: br.com.bragasaude.data.remote.repository.WeeklyGrocerySummaryRepository,
@@ -176,7 +173,6 @@ class NutritionViewModel @Inject constructor(
 
     private val _mealRules = MutableStateFlow<List<RemoteMealRule>>(emptyList())
     private val _foodCatalog = MutableStateFlow<List<RemoteFood>>(emptyList())
-    private val _latestExamItems = MutableStateFlow<List<RemoteExamItem>>(emptyList())
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
@@ -209,7 +205,6 @@ class NutritionViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private data class ClinicalSnapshot(
-        val exams: List<ExamItemEntity>,
         val vitals: List<VitalSignEntity>,
         val profile: ProfileEntity?,
         val loggedFoods: Set<String>,
@@ -218,14 +213,12 @@ class NutritionViewModel @Inject constructor(
     )
 
     private val clinicalDataFlow = combine(
-        examsRepository.getExamItems(userId),
         vitalsRepository.getVitalSigns(userId),
         profileRepository.getProfile(userId),
         todayLoggedMeals,
         groceryRepository.getGroceryList(userId)
-    ) { exams, vitals, profileEntity, todayMeals, allGroceryList ->
+    ) { vitals, profileEntity, todayMeals, allGroceryList ->
         ClinicalSnapshot(
-            exams = exams,
             vitals = vitals,
             profile = profileEntity,
             loggedFoods = todayMeals.map { it.foodName }.toSet(),
@@ -259,7 +252,6 @@ class NutritionViewModel @Inject constructor(
             }
 
             NutritionSuggestionEngine.generateSuggestions(
-                exams = snapshot.exams,
                 vitals = snapshot.vitals,
                 profile = snapshot.profile?.toRemote(),
                 catalog = userCatalog,
@@ -435,12 +427,6 @@ class NutritionViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
-            examsRepository.getExamItems(userId).collectLatest { entities ->
-                val items = entities.map { it.toRemote() }
-                _latestExamItems.value = items
-                updateAdjustments(items)
-            }
         }
     }
 
@@ -524,26 +510,10 @@ class NutritionViewModel @Inject constructor(
         }
     }
 
-    private fun updateAdjustments(exams: List<RemoteExamItem>) {
-        val adjustments = mutableListOf<String>()
-        val validExams = exams.filter { it.status == "confirmed" }
-        
-        if (validExams.any { it.itemKey == "total_cholesterol" && (it.valueNumeric ?: 0.0) > 200 }) {
-            adjustments.add("Colesterol")
-        }
-        if (validExams.any { it.itemKey == "glucose" && (it.valueNumeric ?: 0.0) > 126 }) {
-            adjustments.add("Glicose")
-        }
-        if (validExams.any { it.itemKey == "triglycerides" && (it.valueNumeric ?: 0.0) > 150 }) {
-            adjustments.add("Triglicerídeos")
-        }
-        _activeAdjustments.value = adjustments
-    }
 
     fun getRecommendations(): List<Pair<String, HealthCalculators.MealRecommendation>> {
         val profile = _profile.value ?: RemoteProfile(id = "")
         val catalog = _foodCatalog.value
-        val validExams = _latestExamItems.value.filter { it.status == "confirmed" }
 
         return _mealRules.value.map { rule ->
             var recommendation = HealthCalculators.calculateSmartMeal(
@@ -551,30 +521,6 @@ class NutritionViewModel @Inject constructor(
                 caloriePercentage = rule.caloriePercentage?.toFloat() ?: 0.25f,
                 catalog = catalog
             )
-
-            // 1. Ajuste para Colesterol Alto
-            val cholesterol = validExams.firstOrNull { it.itemKey == "total_cholesterol" }?.valueNumeric
-            if (cholesterol != null && cholesterol > 200) {
-                recommendation = recommendation.copy(
-                    fat = recommendation.fat.copy(
-                        max = recommendation.fat.max * 0.8f,
-                        avg = recommendation.fat.avg * 0.8f,
-                        min = recommendation.fat.min * 0.8f
-                    )
-                )
-            }
-
-            // 2. Ajuste para Glicose Alta
-            val glucose = validExams.firstOrNull { it.itemKey == "glucose" }?.valueNumeric
-            if (glucose != null && glucose > 126) {
-                recommendation = recommendation.copy(
-                    carbs = recommendation.carbs.copy(
-                        max = recommendation.carbs.max * 0.75f,
-                        avg = recommendation.carbs.avg * 0.75f,
-                        min = recommendation.carbs.min * 0.75f
-                    )
-                )
-            }
 
             rule.mealName to recommendation
         }
@@ -585,7 +531,6 @@ class NutritionViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val exams = examsRepository.getExamItems(userId).first()
                 val vitals = vitalsRepository.getVitalSigns(userId).first()
                 val profileEntity = profileRepository.getProfile(userId).first()
                 val ingredients = catalogRepository.fetchGroceryIngredients()
@@ -603,7 +548,6 @@ class NutritionViewModel @Inject constructor(
 
                 val plan = WeeklyGroceryEngine.planWeeklyGrocery(
                     userId = userId,
-                    exams = exams,
                     vitals = vitals,
                     profile = profileEntity?.toRemote(),
                     catalog = catalog,

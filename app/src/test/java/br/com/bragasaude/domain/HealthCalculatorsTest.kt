@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.remote.model.RemoteFood
 import br.com.bragasaude.data.remote.model.RemoteProfile

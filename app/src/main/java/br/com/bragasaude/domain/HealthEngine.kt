@@ -22,14 +22,12 @@ import kotlin.math.abs
 class HealthEngine @Inject constructor(
     @ApplicationContext private val context: Context,
     private val vitalsRepository: VitalsRepository,
-    private val examsRepository: ExamsRepository,
     private val milestonesRepository: MilestonesRepository,
     private val conditionRepository: ConditionRepository,
     private val profileRepository: ProfileRepository,
     private val biometryRepository: BiometryRepository,
     private val riskManager: RiskManager,
     private val auth: com.google.firebase.auth.FirebaseAuth,
-    // doc 10 §3.3: exame crítico avisa o cuidador pelo mesmo caminho dos vitais.
     private val apiClient: BragaApiClient,
     private val familyDao: br.com.bragasaude.data.local.FamilyDao
 ) {
@@ -327,156 +325,8 @@ class HealthEngine @Inject constructor(
         return null
     }
 
-    suspend fun analyzeExamItems(userId: String, items: List<RemoteExamItem>, silent: Boolean = false): AnalysisResult {
-        val alerts = mutableListOf<String>()
-        val recommendations = mutableListOf<HealthRecommendation>()
-        val conditions = mutableListOf<RemoteDetectedCondition>()
-        
-        // Busca histórico para comparar evolução
-        val history = examsRepository.getExamItems(userId).first()
 
-        items.forEach { item ->
-            val ref = examsRepository.getClinicalReference(item.itemKey)
-            val nameLower = item.itemName.lowercase()
-            val value = item.valueNumeric
 
-            if (value != null) {
-                // Sugestões Nutricionais Preventivas por Inteligência Artificial
-                if (nameLower.contains("glic") || nameLower.contains("glicose")) {
-                    if (value >= 100.0) {
-                        recommendations.add(
-                            HealthRecommendation(
-                                message = context.getString(R.string.nutrition_glucose_msg, value.toInt()),
-                                action = context.getString(R.string.nutrition_glucose_action),
-                                isEmergency = false
-                            )
-                        )
-                    }
-                } else if (item.itemKey in setOf("total_cholesterol", "ldl", "vldl")) {
-                    if (ref?.maxTarget != null && item.unit == ref.unit && value > ref.maxTarget) {
-                        recommendations.add(
-                            HealthRecommendation(
-                                message = context.getString(R.string.nutrition_cholesterol_msg, item.itemName, value.toInt()),
-                                action = context.getString(R.string.nutrition_cholesterol_action),
-                                isEmergency = false
-                            )
-                        )
-                    }
-                } else if (nameLower.contains("triglic")) {
-                    if (value >= 150.0) {
-                        recommendations.add(
-                            HealthRecommendation(
-                                message = context.getString(R.string.nutrition_triglycerides_msg, value.toInt()),
-                                action = context.getString(R.string.nutrition_triglycerides_action),
-                                isEmergency = false
-                            )
-                        )
-                    }
-                } else if (nameLower.contains("úrico") || nameLower.contains("urico")) {
-                    if (value >= 7.0) {
-                        recommendations.add(
-                            HealthRecommendation(
-                                message = context.getString(R.string.nutrition_uric_acid_msg, value.toString()),
-                                action = context.getString(R.string.nutrition_uric_acid_action),
-                                isEmergency = false
-                            )
-                        )
-                    }
-                }
-            }
-
-            if (ref != null && item.valueNumeric != null && item.valueNumeric.isFinite() && item.unit == ref.unit) {
-                val numVal = item.valueNumeric
-                
-                // --- SITUAÇÃO: ALERTA CRÍTICO ---
-                val isLow = ref.minCritical?.let { numVal <= it } == true
-                val isHigh = ref.maxCritical?.let { numVal >= it } == true
-                if (isLow || isHigh) {
-                    val rec = HealthRecommendation(
-                        message = context.getString(if (isLow) R.string.exam_critical_low_msg else R.string.exam_critical_msg, item.itemName, numVal.toString()),
-                        action = context.getString(R.string.exam_critical_action),
-                        isEmergency = true
-                    )
-                    recommendations.add(rec)
-                    alerts.add(rec.message)
-                    
-                    if (!silent) {
-                        showNotification(context.getString(R.string.exam_critical_alert), "${rec.message} ${rec.action}", NOTIFICATION_ID_EMERGENCY)
-                        // doc 10 §3.3: exame crítico avisa os cuidadores ativos,
-                        // pelo mesmo caminho do alerta de sinal vital.
-                        // Exames são compartilhados com o cuidador apenas por iniciativa do usuário (PDF).
-                        conditions.add(RemoteDetectedCondition(
-                            userId = userId,
-                            conditionName = context.getString(if (isLow) R.string.observation_exam_low else R.string.observation_exam_high, item.itemName),
-                            evidenceType = "exam_items",
-                            evidenceId = item.id ?: "new"
-                        ))
-                    }
-                }
-
-                // --- SITUAÇÃO: EVOLUÇÃO POSITIVA (SAIU DO CRÍTICO) ---
-                val previousItem = history.filter { it.itemKey == item.itemKey && it.remoteId != item.id }
-                    .sortedByDescending { it.measuredAt }
-                    .firstOrNull()
-
-                if (previousItem != null && previousItem.valueNumeric != null) {
-                    val prevValue = previousItem.valueNumeric
-                    val wasCritical = ref.minCritical?.let { prevValue <= it } == true || ref.maxCritical?.let { prevValue >= it } == true
-                    val inTarget = (ref.minTarget != null || ref.maxTarget != null) &&
-                        (ref.minTarget == null || numVal >= ref.minTarget) &&
-                        (ref.maxTarget == null || numVal <= ref.maxTarget)
-                    if (wasCritical && inTarget && !isLow && !isHigh && previousItem.unit == item.unit) {
-                        val rec = HealthRecommendation(
-                            message = context.getString(R.string.exam_evolution_msg, item.itemName),
-                            action = context.getString(R.string.exam_evolution_action)
-                        )
-                        recommendations.add(rec)
-                        alerts.add(rec.message)
-                        if (!silent) {
-                            showNotification(context.getString(R.string.health_evolution_title), rec.message, NOTIFICATION_ID_EVOLUTION)
-                        }
-                    }
-                }
-            }
-        }
-
-        // Observações de exames permanecem locais; compartilhamento ocorre pelo PDF.
-
-        return AnalysisResult(alerts, recommendations.sortedByDescending { it.isEmergency }, emptyList(), conditions)
-    }
-
-    /**
-     * Avisa os cuidadores ativos sobre um exame laboratorial crítico (doc 10 §3.3).
-     *
-     * Mesmo caminho do alerta de sinal vital: /api/family/health-alert, que
-     * valida o vínculo no servidor e entrega o push FCM no aparelho do cuidador.
-     * Best-effort — a notificação local de autocuidado já foi ao paciente.
-     */
-    private suspend fun notifyCaregiversOfCriticalExam(
-        userId: String,
-        itemName: String,
-        value: Double,
-        isLow: Boolean
-    ) {
-        try {
-            val patientName = profileRepository.getProfile(userId).firstOrNull()?.fullName
-                ?: "Seu familiar"
-            val direction = if (isLow) "abaixo" else "acima"
-            val message = "Aviso de cuidado: O exame de $patientName ($itemName) " +
-                "veio $direction da faixa crítica: ${value}. Vale acompanhar com a equipe de saúde."
-
-            val bindings = familyDao.getActiveBindingsForPatient(userId).first()
-            for (binding in bindings) {
-                try {
-                    apiClient.sendCaregiverHealthAlert(userId, binding.caregiverUserId, message)
-                } catch (e: Exception) {
-                    android.util.Log.w("HealthEngine", "Falha ao avisar cuidador do exame crítico: ${e.message}")
-                }
-            }
-        } catch (e: Exception) {
-            android.util.Log.w("HealthEngine", "Falha ao resolver destinatários do exame crítico: ${e.message}")
-        }
-    }
 
     suspend fun analyzeActivityPatterns(userId: String, dailyMetrics: List<DailyMetricsEntity>): List<ActivityRecommendation> {
         val recommendations = mutableListOf<ActivityRecommendation>()

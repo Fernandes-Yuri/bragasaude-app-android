@@ -125,19 +125,19 @@ class WeeklyGroceryEngineTest {
         val (foods, catalog) = createTestCatalog()
 
         val result1960 = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "user1", exams = emptyList(), vitals = emptyList(), profile = null,
+            userId = "user1", vitals = emptyList(), profile = null,
             catalog = foods, ingredientCatalog = catalog, targetCalories = 1960.0
         )
         val result2800 = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "user1", exams = emptyList(), vitals = emptyList(), profile = null,
+            userId = "user1", vitals = emptyList(), profile = null,
             catalog = foods, ingredientCatalog = catalog, targetCalories = 2800.0
         )
         val result3000 = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "user1", exams = emptyList(), vitals = emptyList(), profile = null,
+            userId = "user1", vitals = emptyList(), profile = null,
             catalog = foods, ingredientCatalog = catalog, targetCalories = 3000.0
         )
         val result4000 = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "user1", exams = emptyList(), vitals = emptyList(), profile = null,
+            userId = "user1", vitals = emptyList(), profile = null,
             catalog = foods, ingredientCatalog = catalog, targetCalories = 4000.0
         )
 
@@ -168,7 +168,7 @@ class WeeklyGroceryEngineTest {
         val (foods, catalog) = createTestCatalog()
 
         val result = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "user1", exams = emptyList(), vitals = emptyList(), profile = null,
+            userId = "user1", vitals = emptyList(), profile = null,
             catalog = foods, ingredientCatalog = catalog, targetCalories = 3000.0
         )
 
@@ -186,7 +186,7 @@ class WeeklyGroceryEngineTest {
         val (foods, catalog) = createTestCatalog()
 
         val result = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "user1", exams = emptyList(), vitals = emptyList(), profile = null,
+            userId = "user1", vitals = emptyList(), profile = null,
             catalog = foods, ingredientCatalog = catalog, targetCalories = 2800.0
         )
 
@@ -211,7 +211,7 @@ class WeeklyGroceryEngineTest {
 
         val vegProfile = RemoteProfile(id = "veg", customFoodRestrictions = "vegetariano")
         val vegResult = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "veg", exams = emptyList(), vitals = emptyList(), profile = vegProfile,
+            userId = "veg", vitals = emptyList(), profile = vegProfile,
             catalog = foods, ingredientCatalog = catalog, targetCalories = 2800.0
         )
 
@@ -227,7 +227,7 @@ class WeeklyGroceryEngineTest {
 
         val veganProfile = RemoteProfile(id = "vegan", customFoodRestrictions = "vegano")
         val veganResult = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "vegan", exams = emptyList(), vitals = emptyList(), profile = veganProfile,
+            userId = "vegan", vitals = emptyList(), profile = veganProfile,
             catalog = foods, ingredientCatalog = catalog, targetCalories = 2800.0
         )
         val veganSlugs = veganResult.items.map { it.foodId }.toSet()
@@ -250,7 +250,7 @@ class WeeklyGroceryEngineTest {
             foodAllergies = listOf("Frutos do Mar", "Leite", "Peixe")
         )
         val result = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "allergic", exams = emptyList(), vitals = emptyList(), profile = allergicProfile,
+            userId = "allergic", vitals = emptyList(), profile = allergicProfile,
             catalog = foods, ingredientCatalog = catalog, targetCalories = 3000.0
         )
 
@@ -269,7 +269,7 @@ class WeeklyGroceryEngineTest {
         val smallCatalog = GroceryIngredientCatalog(listOf(smallIng), mapOf("small_food" to listOf("alface")))
 
         val result = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "small", exams = emptyList(), vitals = emptyList(), profile = null,
+            userId = "small", vitals = emptyList(), profile = null,
             catalog = listOf(smallFood), ingredientCatalog = smallCatalog, targetCalories = 3000.0
         )
 
@@ -299,7 +299,7 @@ class WeeklyGroceryEngineTest {
         )
 
         val result = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "u", exams = emptyList(), vitals = emptyList(), profile = null,
+            userId = "u", vitals = emptyList(), profile = null,
             catalog = listOf(recipe1, recipe2), ingredientCatalog = cat, targetCalories = 2000.0
         )
 
@@ -354,7 +354,7 @@ class WeeklyGroceryEngineTest {
         )
 
         val result = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "u", exams = emptyList(), vitals = emptyList(), profile = null,
+            userId = "u", vitals = emptyList(), profile = null,
             catalog = listOf(foodBebida), ingredientCatalog = cat, targetCalories = 1000.0
         )
 
@@ -393,7 +393,7 @@ class WeeklyGroceryEngineTest {
 
         // Semana 1: plano padrão
         val plan1 = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "user_rot", exams = emptyList(), vitals = emptyList(), profile = null,
+            userId = "user_rot", vitals = emptyList(), profile = null,
             catalog = foods, ingredientCatalog = catalog, targetCalories = 2500.0,
             shuffleSeed = 1001L, previousFoodIds = emptySet()
         )
@@ -403,7 +403,7 @@ class WeeklyGroceryEngineTest {
 
         // Semana 2: nova variedade informando os itens da semana 1
         val plan2 = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "user_rot", exams = emptyList(), vitals = emptyList(), profile = null,
+            userId = "user_rot", vitals = emptyList(), profile = null,
             catalog = foods, ingredientCatalog = catalog, targetCalories = 2500.0,
             shuffleSeed = 2002L, previousFoodIds = items1
         )
@@ -429,7 +429,7 @@ class WeeklyGroceryEngineTest {
         )
 
         val plan = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "user_no_beans", exams = emptyList(), vitals = emptyList(), profile = restrictedProfile,
+            userId = "user_no_beans", vitals = emptyList(), profile = restrictedProfile,
             catalog = foods, ingredientCatalog = catalog, targetCalories = 2500.0,
             shuffleSeed = 12345L, previousFoodIds = emptySet()
         )

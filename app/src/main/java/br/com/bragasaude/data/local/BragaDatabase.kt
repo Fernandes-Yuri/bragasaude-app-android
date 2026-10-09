@@ -8,15 +8,12 @@ import androidx.room.TypeConverters
     entities = [
         VitalSignEntity::class,
         ProfileEntity::class,
-        ExamEntity::class,
         FoodEntity::class,
         MealRuleEntity::class,
         MilestoneEntity::class,
         BiometryEntity::class,
         MedicationEntity::class,
         MedicationLogEntity::class,
-        ClinicalReferenceEntity::class,
-        ExamItemEntity::class,
         DailyMetricsEntity::class,
         FeedbackEntity::class,
         LeagueCycleEntity::class,
@@ -41,7 +38,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 51, // Plano semanal persistido e saldo estimado da despensa
+    version = 52, // Plano semanal persistido e saldo estimado da despensa
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -52,12 +49,9 @@ abstract class BragaDatabase : RoomDatabase() {
     abstract fun foodDao(): FoodDao
     abstract fun mealRuleDao(): MealRuleDao
     abstract fun biometryDao(): BiometryDao
-    abstract fun examDao(): ExamDao
     abstract fun medicationDao(): MedicationDao
     abstract fun medicationLogDao(): MedicationLogDao
     abstract fun milestoneDao(): MilestoneDao
-    abstract fun clinicalReferenceDao(): ClinicalReferenceDao
-    abstract fun examItemDao(): ExamItemDao
     abstract fun dailyMetricsDao(): DailyMetricsDao
     abstract fun feedbackDao(): FeedbackDao
     abstract fun leagueDao(): LeagueDao

@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.local.BiometryEntity
 import br.com.bragasaude.data.remote.model.RemoteVitalSign

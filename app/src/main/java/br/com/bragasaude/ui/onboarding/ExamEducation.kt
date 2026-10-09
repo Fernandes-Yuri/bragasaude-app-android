@@ -39,19 +39,19 @@ data class ExamEducationStep(
 
 val examEducationSteps = listOf(
     ExamEducationStep(
-        "Guarde seus exames",
-        "Fotografe um laudo, anexe um arquivo ou digite os resultados. Confira os valores e encontre tudo na sua biblioteca.",
+        "Organize para a consulta",
+        "Selecione PDFs ou fotos, confira título, data e tipo e gere um PDF com índice e todas as páginas.",
         ExamEducationScene.STORE
     ),
     ExamEducationStep(
-        "Você decide onde ficam",
-        "Os novos exames ficam neste aparelho. Uma cópia na nuvem só é enviada se você autorizar, no detalhe de cada exame.",
+        "Uma organização temporária",
+        "Os documentos são processados apenas neste aparelho. Esta área não é um local de armazenamento.",
         ExamEducationScene.PRIVACY,
-        "Sem uma cópia fora do celular, você pode perder todos os exames se apagar o app, apagar seus dados ou perder acesso ao aparelho. Você pode gerar e guardar um PDF."
+        "Salve o PDF fora do aplicativo e guarde os originais. As cópias temporárias expiram em 24 horas."
     ),
     ExamEducationStep(
         "Compartilhe quando precisar",
-        "Gere um PDF e escolha com quem compartilhar: médico, cuidador ou familiar. Compartilhar o PDF não ativa o envio à nuvem.",
+        "Salve o PDF no destino escolhido ou envie ao profissional. Compartilhar não confirma o salvamento. Encerre para apagar as cópias temporárias.",
         ExamEducationScene.SHARE
     )
 )
@@ -107,11 +107,11 @@ private fun ExamExampleCard() {
 @Composable
 fun ExamGettingStarted(onAddExam: () -> Unit, onLearnMore: () -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Seus exames, à mão", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text("Prepare seus exames", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("Guarde seus laudos, encontre os resultados e compartilhe quando precisar.", style = MaterialTheme.typography.bodyMedium)
         ExamEducationIllustration(ExamEducationScene.STORE, height = 190.dp)
         ExamExampleCard()
-        Text("Os novos exames ficam no celular. Você escolhe se quer uma cópia na nuvem.", style = MaterialTheme.typography.bodySmall)
+        Text("Organização local temporária. Gere o PDF e salve fora do aplicativo.", style = MaterialTheme.typography.bodySmall)
         Button(onClick = onAddExam, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(14.dp)) {
             Icon(Icons.Default.Add, null)
             Spacer(Modifier.width(8.dp))

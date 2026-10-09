@@ -1,7 +1,6 @@
 package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.local.ProfileEntity
-import br.com.bragasaude.data.local.ExamItemEntity
 import br.com.bragasaude.data.local.FoodEntity
 import br.com.bragasaude.data.local.VitalSignEntity
 import br.com.bragasaude.data.remote.model.RemoteProfile
@@ -41,14 +40,13 @@ data class NutritionalSuggestionGroup(
 /**
  * 🧠 Cérebro de Sugestões Nutricionais — Braga Saúde
  *
- * Cruza marcadores laboratoriais e sinais vitais autorreportados do usuário
+ * Usa perfil e sinais vitais autorreportados do usuário
  * com um catálogo rico de alimentos funcionais, gerando múltiplos caminhos
  * de escolha (frutas, sementes, vegetais, temperos) no campo de autocuidado.
  */
 object NutritionSuggestionEngine {
 
     fun generateSuggestions(
-        exams: List<ExamItemEntity>,
         vitals: List<VitalSignEntity>,
         profile: RemoteProfile?,
         catalog: List<FoodEntity>,
@@ -71,15 +69,12 @@ object NutritionSuggestionEngine {
         }
 
         // 1. ANÁLISE DE GLICOSE / HbA1c
-        val labGlucose = exams.firstOrNull { it.itemKey == "glucose" }?.valueNumeric
-        val labHba1c = exams.firstOrNull { it.itemKey == "hba1c" }?.valueNumeric
         val recentVitalGlucose = vitals.firstOrNull { it.glucoseLevel != null }?.glucoseLevel?.toDouble()
-        val glucoseVal = labGlucose ?: recentVitalGlucose
+        val glucoseVal = recentVitalGlucose
 
-        if ((glucoseVal != null && glucoseVal > 100.0) || (labHba1c != null && labHba1c > 5.7) || profile?.hasDiabetes == true) {
+        if ((glucoseVal != null && glucoseVal > 100.0) || profile?.hasDiabetes == true) {
             val markerText = when {
                 glucoseVal != null -> "Glicemia recente em ${glucoseVal.toInt()} mg/dL"
-                labHba1c != null -> "HbA1c em $labHba1c%"
                 else -> "Acompanhamento de Glicemia"
             }
 
@@ -112,75 +107,10 @@ object NutritionSuggestionEngine {
         }
 
         // 2. ANÁLISE DE COLESTEROL TOTAL / LDL
-        val labCholesterol = exams.firstOrNull { it.itemKey == "total_cholesterol" }?.valueNumeric
-        val labLdl = exams.firstOrNull { it.itemKey == "ldl" }?.valueNumeric
 
-        if ((labCholesterol != null && labCholesterol > 190.0) || (labLdl != null && labLdl > 130.0)) {
-            val markerText = when {
-                labCholesterol != null -> "Colesterol Total em ${labCholesterol.toInt()} mg/dL"
-                labLdl != null -> "LDL em ${labLdl.toInt()} mg/dL"
-                else -> "Acompanhamento Lipídico"
-            }
-
-            val matchingFoods = availableFoods
-                .filter { it.functionalTags.contains("fitoesterol") || it.functionalTags.contains("beta_glucana") || it.functionalTags.contains("gordura_boa") || it.functionalTags.contains("omega3") }
-                .selectStableSuggestions(dayOfYear, groupSalt = 202, pantryFoodNames = pantryFoodNames)
-                .map { food ->
-                    val isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
-                    val isGrocery = groceryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
-                    food.toSuggestedOption(
-                        defaultBenefit = "Possui fitoesteróis e gorduras insaturadas que auxiliam no equilíbrio natural das frações de colesterol.",
-                        isPantry = isPantry,
-                        isGrocery = isGrocery
-                    )
-                }
-
-            if (matchingFoods.isNotEmpty()) {
-                groups.add(
-                    NutritionalSuggestionGroup(
-                        id = "cholesterol_balance",
-                        title = "Controle do Colesterol",
-                        subtitle = "Fitoesteróis, Beta-glucanas e Gorduras Boas",
-                        observedMarker = markerText,
-                        targetNutrientGoal = "Fitoesteróis & Fibras de Aveia",
-                        whyItMatters = "Fibras como a beta-glucana se ligam aos ácidos biliares no intestino, incentivando o organismo a equilibrar o colesterol circulante.",
-                        options = matchingFoods
-                    )
-                )
-            }
-        }
 
         // 3. ANÁLISE DE TRIGLICERÍDEOS
-        val labTriglycerides = exams.firstOrNull { it.itemKey == "triglycerides" }?.valueNumeric
 
-        if (labTriglycerides != null && labTriglycerides > 150.0) {
-            val matchingFoods = availableFoods
-                .filter { it.functionalTags.contains("omega3") || it.functionalTags.contains("fibra_prebiotica") || it.functionalTags.contains("cha_antioxidante") }
-                .selectStableSuggestions(dayOfYear, groupSalt = 303, pantryFoodNames = pantryFoodNames)
-                .map { food ->
-                    val isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
-                    val isGrocery = groceryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
-                    food.toSuggestedOption(
-                        defaultBenefit = "Fonte de ácidos graxos essenciais e antioxidantes que favorecem o metabolismo das gorduras.",
-                        isPantry = isPantry,
-                        isGrocery = isGrocery
-                    )
-                }
-
-            if (matchingFoods.isNotEmpty()) {
-                groups.add(
-                    NutritionalSuggestionGroup(
-                        id = "triglycerides_balance",
-                        title = "Equilíbrio dos Triglicerídeos",
-                        subtitle = "Fontes de Ômega-3 vegetal e prebióticos",
-                        observedMarker = "Triglicerídeos em ${labTriglycerides.toInt()} mg/dL",
-                        targetNutrientGoal = "Ômega-3 & Compostos Bioativos",
-                        whyItMatters = "O aporte de gorduras boas e folhas escuras apoia o fígado no processamento e transporte lipídico saudável.",
-                        options = matchingFoods
-                    )
-                )
-            }
-        }
 
         // 4. ANÁLISE DE PRESSÃO ARTERIAL
         val recentBp = vitals.firstOrNull { it.systolicPressure != null }
@@ -219,36 +149,7 @@ object NutritionSuggestionEngine {
         }
 
         // 5. ANÁLISE DE ÁCIDO ÚRICO
-        val labUricAcid = exams.firstOrNull { it.itemKey == "uric_acid" }?.valueNumeric
 
-        if (labUricAcid != null && labUricAcid > 6.8) {
-            val matchingFoods = availableFoods
-                .filter { it.functionalTags.contains("vitamina_c") || it.functionalTags.contains("alcalinizante") || it.functionalTags.contains("hidratante") }
-                .selectStableSuggestions(dayOfYear, groupSalt = 505, pantryFoodNames = pantryFoodNames)
-                .map { food ->
-                    val isPantry = pantryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
-                    val isGrocery = groceryFoodNames.any { it.trim().equals(food.name.trim(), ignoreCase = true) }
-                    food.toSuggestedOption(
-                        defaultBenefit = "Possui compostos alcalinizantes e vitamina C que estimulam a eliminação renal do ácido úrico.",
-                        isPantry = isPantry,
-                        isGrocery = isGrocery
-                    )
-                }
-
-            if (matchingFoods.isNotEmpty()) {
-                groups.add(
-                    NutritionalSuggestionGroup(
-                        id = "uric_acid_balance",
-                        title = "Equilíbrio do Ácido Úrico",
-                        subtitle = "Alimentos hidratantes e fontes de Vitamina C",
-                        observedMarker = "Ácido Úrico em $labUricAcid mg/dL",
-                        targetNutrientGoal = "Vitamina C & Hidratação",
-                        whyItMatters = "Alimentos de alto teor hídrico e antioxidantes auxiliam os rins na filtragem e excreção de cristais de urato.",
-                        options = matchingFoods
-                    )
-                )
-            }
-        }
 
         // 6. SUGESTÕES BASE DE EQUILÍBRIO & VARIEDADE (se nenhum exame estiver alterado)
         if (groups.isEmpty()) {
@@ -474,7 +375,6 @@ object NutritionSuggestionEngine {
         profile: ProfileEntity? = null,
         remoteProfile: RemoteProfile? = null,
         vitals: List<VitalSignEntity> = emptyList(),
-        exams: List<ExamItemEntity> = emptyList(),
         catalog: List<FoodEntity>,
         userWeightKg: Double? = null,
         specificConditionOrQuery: String? = null
@@ -493,9 +393,8 @@ object NutritionSuggestionEngine {
         val hasHypertension = profile?.hasHypertension == true || remoteProfile?.hasHypertension == true
 
         // Verificação de glicemia recente
-        val labGlucose = exams.firstOrNull { it.itemKey == "glucose" }?.valueNumeric
         val recentVitalGlucose = vitals.firstOrNull { it.glucoseLevel != null }?.glucoseLevel?.toDouble()
-        val glucoseVal = labGlucose ?: recentVitalGlucose
+        val glucoseVal = recentVitalGlucose
 
         // Verificação de pressão arterial recente
         val recentBp = vitals.firstOrNull { it.systolicPressure != null }

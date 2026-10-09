@@ -2,7 +2,6 @@ package br.com.bragasaude.data.remote.repository
 
 import android.content.Context
 import android.content.SharedPreferences
-import br.com.bragasaude.data.local.ClinicalReferenceSeeder
 import br.com.bragasaude.data.local.FoodDao
 import br.com.bragasaude.data.local.FoodEntity
 import br.com.bragasaude.data.local.MealRuleDao
@@ -29,7 +28,6 @@ class RemoteCatalogRepositoryTest {
         val editor = mockk<SharedPreferences.Editor>()
         val dao = mockk<FoodDao>(relaxed = true)
         val api = mockk<BragaApiClient>()
-        val seeder = mockk<ClinicalReferenceSeeder>(relaxed = true)
         init {
             every { context.getSharedPreferences(any(), any()) } returns preferences
             every { preferences.getString("snapshot", null) } answers { cached }
@@ -37,7 +35,7 @@ class RemoteCatalogRepositoryTest {
             every { editor.putString("snapshot", any()) } answers { cached = secondArg(); editor }
             every { editor.commit() } returns true
         }
-        fun repository() = CatalogRepository(context, dao, mockk<MealRuleDao>(), seeder, api)
+        fun repository() = CatalogRepository(context, dao, mockk<MealRuleDao>(), api)
     }
 
     @Test fun updatesExistingLocalCatalogFromServerWithoutReadingAssets() = runTest {

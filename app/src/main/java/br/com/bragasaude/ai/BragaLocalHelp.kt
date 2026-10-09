@@ -29,11 +29,11 @@ internal object BragaLocalHelp {
         )
         if (exam.containsMatchIn(input) && addExam.containsMatchIn(input)) return NluOutput(
             "ajuda_anexar_exame",
-            "Na área Meus Exames, toque em Adicionar exame. Você pode escolher foto, arquivo ou preenchimento manual. Confira os campos e os valores transcritos antes de salvar. Essa orientação não anexa nem salva um exame por você."
+            "Abra Organizar exames, selecione PDFs ou fotos e confira todas as páginas, título, data e tipo. Gere o PDF com índice e salve fora do aplicativo. Esta área é temporária: as cópias expiram em 24 horas. Não há biblioteca nem envio ao servidor. Esta conversa não importa documentos por você."
         )
         if (exam.containsMatchIn(input) && missing.containsMatchIn(input)) return NluOutput(
             "ajuda_exame_sem_dados",
-            "Na área Meus Exames, confira a busca pelo nome e o filtro de armazenamento. Verifique também se está na conta correta e se concluiu a revisão antes de salvar. Não consigo afirmar que o exame foi perdido só pela mensagem."
+            "Abra Organizar exames, selecione PDFs ou fotos e confira todas as páginas, título, data e tipo. Gere o PDF com índice e salve fora do aplicativo. Esta área é temporária: as cópias expiram em 24 horas. Não há biblioteca nem envio ao servidor. Esta conversa não importa documentos por você."
         )
         if (record.containsMatchIn(input) && correction.containsMatchIn(input) && !clinicalExplanation.containsMatchIn(input)) return NluOutput(
             "ajuda_corrigir_registro",

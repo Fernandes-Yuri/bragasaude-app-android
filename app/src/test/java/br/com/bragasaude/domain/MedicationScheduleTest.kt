@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import java.time.LocalDate
 import java.time.LocalDateTime

@@ -58,6 +58,10 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
         // do catálogo propagava e derrubava o processo na inicialização. O
         // scope de aplicação deve sobreviver a falhas de um filho.
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            // Expurgo da área de exames retirada; não toca nos originais externos.
+            java.io.File(filesDir, "exams").deleteRecursively()
+            listOf("exam_photos", "dossiers").forEach { java.io.File(cacheDir, it).deleteRecursively() }
+            br.com.bragasaude.data.local.organizer.OrganizerStore(this@BragaApplication).cleanup()
             catalogRepository.seedDatabaseIfNeeded()
         }
 

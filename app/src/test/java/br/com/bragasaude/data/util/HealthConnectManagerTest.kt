@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.util
+package br.com.bragasaude.data.util
 
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.OxygenSaturationRecord

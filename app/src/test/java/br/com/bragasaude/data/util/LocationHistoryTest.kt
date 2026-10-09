@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.util
+package br.com.bragasaude.data.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

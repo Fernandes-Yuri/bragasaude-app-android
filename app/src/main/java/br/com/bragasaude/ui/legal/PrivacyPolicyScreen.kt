@@ -83,7 +83,7 @@ fun PrivacyPolicyScreen(
                 LegalClause(
                     number = "1",
                     title = "Dados Coletados e Finalidade",
-                    content = "Coletamos apenas os dados estritamente necessários para o funcionamento do app: registros de sinais vitais informados por você, parâmetros de exames laboratoriais em PDF carregados voluntariamente, dados de movimentação/passos (quando autorizados) e contato de emergência opcional."
+                    content = "Coletamos apenas os dados estritamente necessários para o funcionamento do app: registros de sinais vitais informados por você, dados de movimentação/passos (quando autorizados) e contato de emergência opcional. O organizador de exames processa PDFs e fotos apenas no dispositivo, em uma sessão temporária de até 24 horas. Não enviamos esses documentos ao servidor. Ao compartilhar ou salvar fora do aplicativo, o destino escolhido passa a receber essa cópia."
                 )
             }
 

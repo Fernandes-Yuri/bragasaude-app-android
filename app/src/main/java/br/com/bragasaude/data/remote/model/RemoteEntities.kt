@@ -44,56 +44,8 @@ data class RemoteMedicationLog(
     @SerialName("scheduled_for") val scheduledFor: String? = null
 )
 
-@Serializable
-data class RemoteExam(
-    val id: String? = null,
-    @SerialName("user_id") val userId: String,
-    val title: String,
-    val category: String? = null,
-    @SerialName("exam_date") val examDate: String,
-    @SerialName("result_summary") val resultSummary: String? = null,
-    @SerialName("file_url") val fileUrl: String? = null,
-    @SerialName("created_at") val createdAt: String? = null,
-    @SerialName("updated_at") val updatedAt: String? = null,
-    /** "uploaded" | "analyzed" | "confirmed" */
-    val status: String = "uploaded",
-    @SerialName("ai_extracted_data") val aiExtractedData: String? = null,
-    @SerialName("validated_by") val validatedBy: String? = null,
-    @SerialName("validation_notes") val validationNotes: String? = null,
-    @kotlinx.serialization.Transient val cloudState: String = br.com.bragasaude.domain.ExamCloudState.UNKNOWN,
-    @kotlinx.serialization.Transient val localFilePath: String? = null,
-    @kotlinx.serialization.Transient val hasCloudCopy: Boolean = false,
-    @kotlinx.serialization.Transient val labItems: List<RemoteExamItem> = emptyList()
-)
 
-@Serializable
-data class RemoteClinicalReference(
-    @SerialName("item_key") val itemKey: String,
-    @SerialName("item_name") val itemName: String,
-    val category: String,
-    val gender: String = "BOTH",
-    @SerialName("min_target") val minTarget: Double? = null,
-    @SerialName("max_target") val maxTarget: Double? = null,
-    @SerialName("min_critical") val minCritical: Double? = null,
-    @SerialName("max_critical") val maxCritical: Double? = null,
-    val unit: String? = null,
-    @SerialName("interpretation_hint") val interpretationHint: String? = null
-)
 
-@Serializable
-data class RemoteExamItem(
-    val id: String? = null,
-    @SerialName("exam_id") val examId: String,
-    @SerialName("user_id") val userId: String,
-    @SerialName("item_key") val itemKey: String,
-    @SerialName("item_name") val itemName: String,
-    @SerialName("value_numeric") val valueNumeric: Double? = null,
-    @SerialName("value_text") val valueText: String? = null,
-    val unit: String? = null,
-    @SerialName("reference_text") val referenceText: String? = null,
-    val status: String? = null,
-    @SerialName("measured_at") val measuredAt: String? = null
-)
 
 @Serializable
 data class RemoteProfile(

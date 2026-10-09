@@ -4,13 +4,12 @@
      PDFs de exame). Qualquer URI vazada lia tudo. Agora só as subpastas que
      realmente precisam ser compartilhadas. -->
 <paths>
-    <cache-path name="exam_photos" path="exam_photos/" />
+    <cache-path name="organizer" path="organizer/" />
     <cache-path name="family_exports" path="family_exports/" />
     <cache-path name="shared_cache" path="shared_pdfs/" />
     <cache-path name="audio_cache" path="neural_tts/" />
     <cache-path name="relatorios" path="relatorios/" />
     <cache-path name="medication_photos" path="medication_photos/" />
-    <cache-path name="dossiers" path="dossiers/" />
     <files-path name="shared_files" path="exports/" />
     <external-cache-path name="shared_ext_cache" path="shared/" />
 </paths>

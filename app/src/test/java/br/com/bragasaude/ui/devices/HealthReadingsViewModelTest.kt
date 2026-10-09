@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.devices
+package br.com.bragasaude.ui.devices
 
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.domain.HealthReadingInput

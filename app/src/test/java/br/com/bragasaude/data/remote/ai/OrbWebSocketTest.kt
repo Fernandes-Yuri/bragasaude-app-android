@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.ai
+package br.com.bragasaude.data.remote.ai
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel

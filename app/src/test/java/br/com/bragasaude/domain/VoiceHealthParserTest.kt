@@ -393,7 +393,6 @@ class VoiceHealthParserTest {
         val suggestion = NutritionSuggestionEngine.suggestFoodForUser(
             profile = null,
             vitals = listOf(vitalGlucose),
-            exams = emptyList(),
             catalog = testCatalog,
             userWeightKg = 70.0
         )
@@ -414,7 +413,6 @@ class VoiceHealthParserTest {
         val suggestion = NutritionSuggestionEngine.suggestFoodForUser(
             profile = null,
             vitals = listOf(vitalGlucose),
-            exams = emptyList(),
             catalog = testCatalog,
             userWeightKg = 70.0
         )
@@ -435,7 +433,6 @@ class VoiceHealthParserTest {
         val suggestion = NutritionSuggestionEngine.suggestFoodForUser(
             profile = null,
             vitals = listOf(vitalBp),
-            exams = emptyList(),
             catalog = testCatalog,
             userWeightKg = 75.0
         )
@@ -455,7 +452,6 @@ class VoiceHealthParserTest {
         val suggestion = NutritionSuggestionEngine.suggestFoodForUser(
             profile = profile,
             vitals = emptyList(),
-            exams = emptyList(),
             catalog = testCatalog,
             userWeightKg = 96.0
         )

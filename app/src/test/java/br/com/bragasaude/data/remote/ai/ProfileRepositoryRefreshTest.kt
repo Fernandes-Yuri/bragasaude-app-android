@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.ai
+package br.com.bragasaude.data.remote.ai
 
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.api.BragaApiClient

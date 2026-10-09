@@ -157,39 +157,7 @@ fun BiometryEntity.toRemote() = RemoteBiometry(
     measuredAt = formatDate(measuredAt)
 )
 
-fun RemoteExam.toEntity() = ExamEntity(
-    remoteId = id,
-    userId = userId,
-    title = title,
-    category = category,
-    examDate = parseDate(examDate) ?: Date(),
-    resultSummary = resultSummary,
-    fileUrl = fileUrl,
-    status = status,
-    aiExtractedData = aiExtractedData,
-    validatedBy = validatedBy,
-    validationNotes = validationNotes,
-    createdAt = createdAt?.let { parseDate(it) },
-    pendingSync = false
-)
 
-fun ExamEntity.toRemote() = RemoteExam(
-    id = remoteId,
-    userId = userId,
-    title = title,
-    category = category,
-    examDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(examDate),
-    resultSummary = resultSummary,
-    fileUrl = fileUrl,
-    status = status,
-    aiExtractedData = aiExtractedData,
-    validatedBy = validatedBy,
-    validationNotes = validationNotes,
-    createdAt = createdAt?.let { formatDate(it) },
-    cloudState = cloudState,
-    localFilePath = localFilePath,
-    hasCloudCopy = hasCloudCopy
-)
 
 fun RemoteMilestone.toEntity() = MilestoneEntity(
     remoteId = id,
@@ -251,61 +219,9 @@ fun MedicationLogEntity.toRemote() = RemoteMedicationLog(
     takenAt = formatDate(takenAt)
 )
 
-fun RemoteClinicalReference.toEntity() = ClinicalReferenceEntity(
-    itemKey = itemKey,
-    itemName = itemName,
-    category = category,
-    gender = gender,
-    minTarget = minTarget,
-    maxTarget = maxTarget,
-    minCritical = minCritical,
-    maxCritical = maxCritical,
-    unit = unit,
-    interpretationHint = interpretationHint
-)
 
-fun ClinicalReferenceEntity.toRemote() = RemoteClinicalReference(
-    itemKey = itemKey,
-    itemName = itemName,
-    category = category,
-    gender = gender,
-    minTarget = minTarget,
-    maxTarget = maxTarget,
-    minCritical = minCritical,
-    maxCritical = maxCritical,
-    unit = unit,
-    interpretationHint = interpretationHint
-)
 
-fun RemoteExamItem.toEntity() = ExamItemEntity(
-    remoteId = id,
-    examId = examId,
-    userId = userId,
-    itemKey = itemKey,
-    itemName = itemName,
-    valueNumeric = valueNumeric,
-    valueText = valueText,
-    unit = unit,
-    referenceText = referenceText,
-    status = status,
-    measuredAt = measuredAt?.let { parseDate(it) },
-    createdAt = Date(),
-    pendingSync = false
-)
 
-fun ExamItemEntity.toRemote() = RemoteExamItem(
-    id = remoteId,
-    examId = examId,
-    userId = userId,
-    itemKey = itemKey,
-    itemName = itemName,
-    valueNumeric = valueNumeric,
-    valueText = valueText,
-    unit = unit,
-    referenceText = referenceText,
-    status = status,
-    measuredAt = measuredAt?.let { formatDate(it) }
-)
 
 // AUD-AN40: mappers de DailyMetrics REMOVIDOS — mortos junto com a
 // RemoteDailyMetrics. O parse real e manual em BragaApiClient.

@@ -20,7 +20,7 @@ import br.com.bragasaude.ui.hydration.HydrationScreen
 import br.com.bragasaude.ui.steps.StepsScreen
 import br.com.bragasaude.ui.nutrition.NutritionScreen
 import br.com.bragasaude.ui.nutrition.PantryRecipesScreen
-import br.com.bragasaude.ui.exams.ExamsScreen
+import br.com.bragasaude.ui.organizer.OrganizerScreen
 import br.com.bragasaude.ui.social.SocialFeedScreen
 import br.com.bragasaude.ui.profile.ProfileScreen
 import br.com.bragasaude.ui.profile.ProfileDetailScreen
@@ -141,10 +141,7 @@ fun AppNavHost(
             RemindersScreen(onBack = navigateBack)
         }
         composable<Screen.Exams> {
-            ExamsScreen(
-                onBack = navigateBack,
-                onNavigateToEvolution = { navController.navigate(Screen.Report) }
-            )
+            OrganizerScreen(onBack = navigateBack)
         }
         composable<Screen.Notifications> {
             NotificationsScreen(onBack = navigateBack)

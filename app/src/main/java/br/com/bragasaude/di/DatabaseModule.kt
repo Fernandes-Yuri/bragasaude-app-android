@@ -76,10 +76,6 @@ object DatabaseModule {
         return database.mealRuleDao()
     }
 
-    @Provides
-    fun provideExamDao(database: BragaDatabase): ExamDao {
-        return database.examDao()
-    }
 
     @Provides
     fun provideMedicationDao(database: BragaDatabase): MedicationDao {
@@ -96,15 +92,7 @@ object DatabaseModule {
         return database.milestoneDao()
     }
 
-    @Provides
-    fun provideClinicalReferenceDao(database: BragaDatabase): ClinicalReferenceDao {
-        return database.clinicalReferenceDao()
-    }
 
-    @Provides
-    fun provideExamItemDao(database: BragaDatabase): ExamItemDao {
-        return database.examItemDao()
-    }
 
     @Provides
     fun provideDailyMetricsDao(database: BragaDatabase): DailyMetricsDao {
