@@ -18,6 +18,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -43,14 +45,35 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
     var ending by remember { mutableStateOf(false) }
     var resultReview by remember { mutableStateOf(false) }
     var sharing by remember { mutableStateOf(false) }
-    var captureUri by remember { mutableStateOf<Uri?>(null) }
+    var captureUriString by rememberSaveable { mutableStateOf<String?>(null) }
+    var cameraError by remember { mutableStateOf<String?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) viewModel.import(uris, appendTo)
         appendTo = null
     }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        captureUri?.let { if (ok) viewModel.import(listOf(it), appendTo) }
+        captureUriString?.let { value ->
+            val uri = Uri.parse(value)
+            if (ok) viewModel.import(listOf(uri), appendTo)
+            else context.contentResolver.delete(uri, null, null)
+        }
+        captureUriString = null
         appendTo = null
+    }
+    fun capturePage() {
+        val session = state.session ?: return
+        val file = File(context.cacheDir, "organizer-capture/${session.id}/capture.jpg").apply { parentFile?.mkdirs() }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        captureUriString = uri.toString()
+        camera.launch(uri)
+    }
+    val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) capturePage() else { cameraError = "Permita o acesso à câmera para fotografar ou selecione arquivos já existentes."; appendTo = null }
+    }
+    fun requestCamera(documentId: String?) {
+        appendTo = documentId; cameraError = null
+        if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) capturePage()
+        else cameraPermission.launch(android.Manifest.permission.CAMERA)
     }
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
         if (uri != null) viewModel.save(uri)
@@ -76,6 +99,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
             Text("Prepare seus exames para a consulta", style = MaterialTheme.typography.headlineSmall)
             Text("Esta área organiza documentos temporariamente. Não é um local de armazenamento. Nada é enviado ao Braga Saúde. Salve o PDF fora do aplicativo e guarde seus originais.")
             Text("As cópias expiram em 24 horas. Depois desse prazo não poderão ser abertas; a limpeza ocorre quando o sistema permitir ou ao abrir esta área.")
+            cameraError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             val session = state.session
@@ -84,12 +108,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
             } else {
                 Text("Até 20 documentos, 100 páginas, 35 MB por arquivo e 150 MB por sessão. PDF e fotos. Uma foto pode ser uma página do mesmo exame.")
                 Button(onClick = { appendTo = null; picker.launch(arrayOf("application/pdf", "image/*")) }, enabled = !state.busy) { Text("Selecionar arquivos") }
-                OutlinedButton(onClick = {
-                    appendTo = null
-                    val file = File(context.cacheDir, "organizer-capture/${session.id}/capture.jpg").apply { parentFile?.mkdirs() }
-                    captureUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                    camera.launch(requireNotNull(captureUri))
-                }, enabled = !state.busy) { Text("Fotografar exame") }
+                OutlinedButton(onClick = { requestCamera(null) }, enabled = !state.busy) { Text("Fotografar exame") }
                 Text("O reconhecimento ocorre no dispositivo e apenas sugere título, data e tipo. Confira cada página: não interpretamos resultados nem diagnosticamos condições.")
                 OrganizerMetadata.ordered(session.documents, state.newest).forEach { doc ->
                     Card(Modifier.fillMaxWidth()) {
@@ -99,6 +118,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                             Text(if (doc.confirmed) "Conferido" else "Revisão obrigatória")
                             TextButton(onClick = { reviewing = doc }, enabled = !state.busy) { Text("Ver e conferir documento") }
                             TextButton(onClick = { appendTo = doc.id; picker.launch(arrayOf("application/pdf", "image/*")) }, enabled = !state.busy) { Text("Adicionar páginas a este exame") }
+                            TextButton(onClick = { requestCamera(doc.id) }, enabled = !state.busy) { Text("Fotografar outra página deste exame") }
                             TextButton(onClick = { viewModel.delete(doc.id) }, enabled = !state.busy) { Text("Remover da organização") }
                         }
                     }
