@@ -43,25 +43,46 @@ class WeeklyGroceryEnginePreferencesTest {
             FoodEntity("food_azeite", "Azeite de Oliva Extravirgem", "Gorduras & Azeites", kcal = 884.0, carbsG = 0.0, proteinG = 0.0, fatG = 100.0, servingSizeGrams = 15, minServingGrams = 5, maxServingGrams = 40, servingUnit = "1 colher de sopa (15ml)")
         )
 
+        val components = mapOf(
+            "food_arroz" to listOf("arroz-agulhinha"),
+            "food_feijao" to listOf("feijao-preto"),
+            "food_frango" to listOf("peito-frango"),
+            "food_peixe" to listOf("tilapia-file"),
+            "food_camarao" to listOf("camarao-fresco"),
+            "food_ovo" to listOf("ovo-caipira"),
+            "food_leite" to listOf("leite-desnatado"),
+            "food_aveia" to listOf("aveia-flocos"),
+            "food_mandioca" to listOf("mandioca-aipim"),
+            "food_banana" to listOf("banana-prata"),
+            "food_maca" to listOf("maca-fuji"),
+            "food_couve" to listOf("couve-manteiga"),
+            "food_abobrinha" to listOf("abobrinha-verde"),
+            "food_cenoura" to listOf("cenoura-fresca"),
+            "food_azeite" to listOf("azeite-oliva")
+        )
+
+        val purchaseFactors = mapOf(
+            "food_arroz" to mapOf("arroz-agulhinha" to 0.4),
+            "food_feijao" to mapOf("feijao-preto" to 0.33),
+            "food_frango" to mapOf("peito-frango" to 1.2),
+            "food_peixe" to mapOf("tilapia-file" to 1.15),
+            "food_camarao" to mapOf("camarao-fresco" to 1.3),
+            "food_ovo" to mapOf("ovo-caipira" to 1.0),
+            "food_leite" to mapOf("leite-desnatado" to 1.0),
+            "food_aveia" to mapOf("aveia-flocos" to 1.0),
+            "food_mandioca" to mapOf("mandioca-aipim" to 1.1),
+            "food_banana" to mapOf("banana-prata" to 1.0),
+            "food_maca" to mapOf("maca-fuji" to 1.0),
+            "food_couve" to mapOf("couve-manteiga" to 1.2),
+            "food_abobrinha" to mapOf("abobrinha-verde" to 1.1),
+            "food_cenoura" to mapOf("cenoura-fresca" to 1.0),
+            "food_azeite" to mapOf("azeite-oliva" to 1.0)
+        )
+
         val catalog = GroceryIngredientCatalog(
             ingredients = ingredients,
-            preparations = listOf(
-                GroceryPreparation("Arroz Branco", listOf(GroceryIngredientPortion("arroz-agulhinha", 0.4))),
-                GroceryPreparation("Feijão", listOf(GroceryIngredientPortion("feijao-preto", 0.33))),
-                GroceryPreparation("Frango Grelhado", listOf(GroceryIngredientPortion("peito-frango", 1.2))),
-                GroceryPreparation("Peixe Grelhado", listOf(GroceryIngredientPortion("tilapia-file", 1.15))),
-                GroceryPreparation("Camarão Cozido", listOf(GroceryIngredientPortion("camarao-fresco", 1.3))),
-                GroceryPreparation("Ovo Cozido", listOf(GroceryIngredientPortion("ovo-caipira", 1.0))),
-                GroceryPreparation("Leite", listOf(GroceryIngredientPortion("leite-desnatado", 1.0))),
-                GroceryPreparation("Aveia", listOf(GroceryIngredientPortion("aveia-flocos", 1.0))),
-                GroceryPreparation("Mandioca Cozida", listOf(GroceryIngredientPortion("mandioca-aipim", 1.1))),
-                GroceryPreparation("Banana", listOf(GroceryIngredientPortion("banana-prata", 1.0))),
-                GroceryPreparation("Maçã", listOf(GroceryIngredientPortion("maca-fuji", 1.0))),
-                GroceryPreparation("Couve Refogada", listOf(GroceryIngredientPortion("couve-manteiga", 1.2))),
-                GroceryPreparation("Abobrinha Refogada", listOf(GroceryIngredientPortion("abobrinha-verde", 1.1))),
-                GroceryPreparation("Cenoura", listOf(GroceryIngredientPortion("cenoura-fresca", 1.0))),
-                GroceryPreparation("Azeite", listOf(GroceryIngredientPortion("azeite-oliva", 1.0)))
-            ),
+            components = components,
+            purchaseFactors = purchaseFactors,
             requiredGroups = listOf(listOf("food_arroz"), listOf("food_feijao")),
             version = 1
         )
