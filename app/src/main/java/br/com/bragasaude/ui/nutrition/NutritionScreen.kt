@@ -74,7 +74,6 @@ fun NutritionScreen(
     val isCustomCalorieTarget by viewModel.isCustomCalorieTarget.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val activeAdjustments by viewModel.activeAdjustments.collectAsState()
-    val scoreBreakdown by homeViewModel.scoreBreakdown.collectAsState()
     val recommendations = remember(isLoading, activeAdjustments) { viewModel.getRecommendations() }
     val todayLoggedMeals by viewModel.todayLoggedMeals.collectAsState()
     val suggestionGroups by viewModel.functionalSuggestionGroups.collectAsState()
@@ -320,7 +319,7 @@ fun NutritionScreen(
                 }
 
                 // Ajustes Clínicos, Gatilhos e Avisos de Perfil
-                if (activeAdjustments.isNotEmpty() || scoreBreakdown.negativeFactors.isNotEmpty()) {
+                if (activeAdjustments.isNotEmpty()) {
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {

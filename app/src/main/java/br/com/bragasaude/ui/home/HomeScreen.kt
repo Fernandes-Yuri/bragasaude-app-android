@@ -1,6 +1,7 @@
 package br.com.bragasaude.ui.home
 
 import br.com.bragasaude.ui.components.BragaAlertDialog
+import br.com.bragasaude.ui.components.BragaCalorieProgressCard
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -88,13 +89,13 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val userName by viewModel.userName.collectAsState()
-    val healthScore by viewModel.healthScore.collectAsState()
+    val consumedCal by viewModel.todayCaloriesConsumed.collectAsState()
+    val targetCal by viewModel.dailyCalorieTarget.collectAsState()
     val vitals by viewModel.dashboardVitals.collectAsState()
     val milestone by viewModel.latestMilestone.collectAsState()
     val clinicalAlerts by viewModel.clinicalAlerts.collectAsState()
     val readAlerts by viewModel.readAlerts.collectAsState()
     val hasUnreadAlerts = clinicalAlerts.any { it !in readAlerts }
-    val scoreBreakdown by viewModel.scoreBreakdown.collectAsState()
     val userStepGoal by viewModel.userStepGoal.collectAsState()
     val profile by viewModel.profile.collectAsState()
     val medications by viewModel.medications.collectAsState()
@@ -108,7 +109,6 @@ fun HomeScreen(
     var showMorningCheckIn by remember { mutableStateOf(false) }
     var showCompletedCheckInDialog by remember { mutableStateOf(false) }
     
-    var showScoreDetails by remember { mutableStateOf(false) }
     var showEmergencyDialog by remember { mutableStateOf(false) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -516,25 +516,24 @@ fun HomeScreen(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Vitals("PRESSURE")) }
                         )
-                        if (profile?.hasDiabetes == true || gluc != null) {
-                            BragaMetricCard(
-                                value = gluc?.toString() ?: "--",
-                                label = "Glicemia",
-                                unit = "mg/dL",
-                                icon = Icons.Default.Bloodtype,
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
-                                onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Vitals("GLUCOSE")) }
-                            )
-                        } else {
-                            BragaMetricCard(
-                                value = "$healthScore pts",
-                                label = "Score Saúde",
-                                unit = "Classificação geral",
-                                icon = Icons.Default.EmojiEvents,
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
-                                onClick = { showScoreDetails = true }
-                            )
-                        }
+                        BragaCalorieProgressCard(
+                            consumedKcal = consumedCal,
+                            targetKcal = targetCal,
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Nutrition) }
+                        )
+                    }
+
+                    if (profile?.hasDiabetes == true || gluc != null) {
+                        Spacer(Modifier.height(14.dp))
+                        BragaMetricCard(
+                            value = gluc?.toString() ?: "--",
+                            label = "Glicemia",
+                            unit = "mg/dL",
+                            icon = Icons.Default.Bloodtype,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Vitals("GLUCOSE")) }
+                        )
                     }
                 }
 
@@ -611,56 +610,6 @@ fun HomeScreen(
             onDismiss = { showEmergencyDialog = false }
         )
     }
-
-    if (showScoreDetails) {
-        ScoreDetailsDialog(
-            breakdown = scoreBreakdown,
-            onDismiss = { showScoreDetails = false }
-        )
-    }
-}
-
-@Composable
-fun ScoreDetailsDialog(
-    breakdown: br.com.bragasaude.domain.ScoreBreakdown,
-    onDismiss: () -> Unit
-) {
-    BragaAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Por que minha nota é ${breakdown.finalScore}?", fontWeight = FontWeight.Bold) },
-        text = {
-            // DECISOES.md (D4): disclaimer inseparável da interpretação de dados.
-            val context = LocalContext.current
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (breakdown.positiveFactors.isNotEmpty()) {
-                    Text("Pontos Positivos", style = MaterialTheme.typography.labelLarge, color = Success)
-                    breakdown.positiveFactors.forEach { factor ->
-                        Text("• $factor", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-
-                if (breakdown.negativeFactors.isNotEmpty()) {
-                    Text("Oportunidades de Melhoria", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error)
-                    breakdown.negativeFactors.forEach { factor ->
-                        Text("• $factor", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-
-                if (breakdown.positiveFactors.isEmpty() && breakdown.negativeFactors.isEmpty()) {
-                    Text("Adicione mais dados para um detalhamento completo.")
-                }
-
-                Text(
-                    context.getString(R.string.disclaimer_not_medical),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Entendido") }
-        }
-    )
 }
 
 @Composable

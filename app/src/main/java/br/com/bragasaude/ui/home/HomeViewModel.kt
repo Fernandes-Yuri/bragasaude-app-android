@@ -6,8 +6,6 @@ import br.com.bragasaude.data.remote.model.*
 import br.com.bragasaude.data.remote.repository.*
 import br.com.bragasaude.data.util.toRemote
 import br.com.bragasaude.domain.HealthEngine
-import br.com.bragasaude.domain.HealthScoreCalculator
-import br.com.bragasaude.domain.ScoreBreakdown
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.*
@@ -46,14 +44,21 @@ class HomeViewModel @Inject constructor(
     private val _userName = MutableStateFlow("Usuário")
     val userName = _userName.asStateFlow()
 
-    private val _healthScore = MutableStateFlow(0)
-    val healthScore = _healthScore.asStateFlow()
-
-    private val _scoreBreakdown = MutableStateFlow(ScoreBreakdown(0))
-    val scoreBreakdown = _scoreBreakdown.asStateFlow()
-
     private val _dashboardVitals = MutableStateFlow(RemoteVitalSign(userId = ""))
     val dashboardVitals = _dashboardVitals.asStateFlow()
+
+    val todayCaloriesConsumed: StateFlow<Double> = database.groceryPantryDao()
+        .meals(auth.currentUser?.uid ?: BragaConstants.GUEST_UID, todayDateStr)
+        .map { meals -> meals.sumOf { it.kcal } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    val dailyCalorieTarget: StateFlow<Double> = profileRepository
+        .getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
+        .map { profile ->
+            val raw = profile?.dailyCalorieTarget
+            if (raw != null && raw > 500.0) raw else 2000.0
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 2000.0)
 
     private val _latestMilestone = MutableStateFlow<RemoteMilestone?>(null)
     val latestMilestone = _latestMilestone.asStateFlow()
@@ -163,23 +168,19 @@ class HomeViewModel @Inject constructor(
                 listOf(br.com.bragasaude.data.local.DailyMetricsEntity(userId = userId, date = today, steps = stepsNow)) + dailyMetrics
             }
 
-            val breakdown = HealthScoreCalculator.calculate(profile, vitals, examItemsEntities, updatedMetrics)
-            
-            Triple(latest, breakdown, Quadruple(userId, vitals, examItemsEntities, updatedMetrics))
+            Pair(latest, Quadruple(userId, vitals, examItemsEntities, updatedMetrics))
         }.shareIn(viewModelScope, SharingStarted.WhileSubscribed())
 
         // Atualiza UI principal
         viewModelScope.launch {
-            healthDataFlow.collect { (latest, breakdown, _) ->
+            healthDataFlow.collect { (latest, _) ->
                 _dashboardVitals.value = latest
-                _scoreBreakdown.value = breakdown
-                _healthScore.value = breakdown.finalScore
             }
         }
 
         // Análise de Alertas (com collectLatest para evitar processamento pesado repetitivo)
         viewModelScope.launch {
-            healthDataFlow.map { it.third }.collectLatest { (uid, vitals, examItems, metrics) ->
+            healthDataFlow.map { it.second }.collectLatest { (uid, vitals, examItems, metrics) ->
                 val profile = profileRepository.getProfile(uid).firstOrNull()?.toRemote()
                 
                 val vitalAnalysis = healthEngine.analyzeVitals(uid, vitals.take(1), silent = true)

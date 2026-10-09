@@ -175,4 +175,39 @@ class WeeklyGroceryEnginePreferencesTest {
         assertFalse("Não deve incluir camarão no modo ultraeconômico", foodNames.any { it.contains("camarão") })
         assertFalse("Não deve incluir azeite no modo ultraeconômico com despensa", foodNames.any { it.contains("azeite") })
     }
+
+    @Test
+    fun planWeeklyGrocery_withUltraEconomicTierAndHighCalories_achievesHighEnergyCoverageWithCompactBasket() {
+        val (foods, catalog) = createTestCatalog()
+        val prefs = WeeklyGroceryPreferences(
+            budgetTier = GroceryBudgetTier.ULTRA_ECONOMIC,
+            selectedProteins = setOf(GroceryProteinPreference.EGGS, GroceryProteinPreference.POULTRY),
+            hasPantryStaples = true
+        )
+
+        val targetDailyKcal = 3000.0
+        val targetWeeklyKcal = targetDailyKcal * 7
+
+        val plan = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "test_user",
+            exams = emptyList(),
+            vitals = emptyList(),
+            profile = null,
+            catalog = foods,
+            ingredientCatalog = catalog,
+            targetCalories = targetDailyKcal,
+            preferences = prefs
+        )
+
+        assertFalse("Plano não deve estar vazio", plan.items.isEmpty())
+        assertTrue("Cesta ultraeconômica deve ter <= 10 itens, obteve ${plan.items.size}", plan.items.size <= 10)
+
+        val totalKcal = plan.consumptions.sumOf { it.plannedCalories }
+        val coverage = totalKcal / targetWeeklyKcal
+        assertTrue("Cobertura energética deve ser >= 85% para meta alta sem passar fome, obteve ${coverage * 100}%", coverage >= 0.85)
+
+        val foodNames = plan.items.map { it.foodName.lowercase() }
+        assertTrue("Deve conter arroz", foodNames.any { it.contains("arroz") })
+        assertTrue("Deve conter feijão", foodNames.any { it.contains("feijão") })
+    }
 }

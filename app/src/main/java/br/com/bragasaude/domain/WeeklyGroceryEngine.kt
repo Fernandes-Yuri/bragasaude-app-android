@@ -467,7 +467,8 @@ object WeeklyGroceryEngine {
         val countToTake = when {
             isPantry && isUltraEconomic -> 0
             isPantry && isEconomic -> 1
-            isUltraEconomic && corridor == CORRIDOR_GRAOS -> 1
+            isUltraEconomic && corridor == CORRIDOR_GRAOS -> 2
+            isUltraEconomic && corridor == CORRIDOR_PROTEINAS -> 2
             isUltraEconomic -> 1
             isEconomic -> 2
             dailyCalorieTarget >= 3500.0 -> 6
@@ -490,11 +491,17 @@ object WeeklyGroceryEngine {
             val kcalPer100 = food.kcal ?: 0.0
             val baseServing = food.servingSizeGrams.takeIf { it > 0 } ?: 60
             val minPortion = food.minServingGrams.takeIf { it > 0 } ?: (baseServing / 2).coerceAtLeast(10)
-            val maxPortion = food.maxServingGrams.takeIf { it > 0 } ?: (baseServing * 3)
+            val baseMaxPortion = food.maxServingGrams.takeIf { it > 0 } ?: (baseServing * 3)
+            val mealMultiplier = when {
+                isUltraEconomic && dailyCalorieTarget >= 2800.0 -> 3
+                isUltraEconomic || dailyCalorieTarget >= 2400.0 -> 2
+                else -> 1
+            }
+            val maxPortion = baseMaxPortion * mealMultiplier
 
             val days = when (corridor) {
-                CORRIDOR_GRAOS -> 5
-                CORRIDOR_PROTEINAS -> 6
+                CORRIDOR_GRAOS -> if (isUltraEconomic) 7 else 5
+                CORRIDOR_PROTEINAS -> if (isUltraEconomic) 7 else 6
                 else -> 4
             }
 
@@ -613,36 +620,50 @@ object WeeklyGroceryEngine {
         var currentKcal = plannedConsumptions.sumOf { it.plannedCalories }
         var deficit = targetWeeklyKcal - currentKcal
 
-        // Passo A: Aumenta porções até o teto máximo de porção semanal (maxServingGrams * 7)
+        // Passo A: Aumenta porções dos alimentos já selecionados até os tetos semanais
         if (deficit > 200.0) {
-            val eligibleForBoost = plannedConsumptions.filter { (it.food.kcal ?: 0.0) > 0.0 }
-            if (eligibleForBoost.isNotEmpty()) {
+            val maxIterations = 4
+            var iteration = 0
+            while (deficit > 200.0 && iteration < maxIterations) {
+                iteration++
+                val eligibleForBoost = plannedConsumptions.filter { (it.food.kcal ?: 0.0) > 0.0 }
+                if (eligibleForBoost.isEmpty()) break
                 val boostShare = deficit / eligibleForBoost.size
+                var changedAny = false
                 for (i in plannedConsumptions.indices) {
                     val pc = plannedConsumptions[i]
                     val foodKcal = pc.food.kcal ?: 0.0
                     if (foodKcal > 0.0) {
                         val maxAllowedGrams = if (isUltraEconomic) {
-                            (pc.food.maxServingGrams.takeIf { it > 0 } ?: 500) * 7
+                            when (pc.corridor) {
+                                CORRIDOR_GRAOS -> 3500
+                                CORRIDOR_PROTEINAS -> 2500
+                                else -> 2000
+                            }
                         } else {
                             (pc.food.maxServingGrams.takeIf { it > 0 } ?: 400) * 7
                         }
                         val headroom = (maxAllowedGrams - pc.weeklyGrams).coerceAtLeast(0)
                         if (headroom > 0) {
                             val additionalGrams = ((boostShare / foodKcal) * 100.0).toInt().coerceAtMost(headroom)
-                            plannedConsumptions[i] = pc.copy(weeklyGrams = pc.weeklyGrams + additionalGrams)
+                            if (additionalGrams > 0) {
+                                plannedConsumptions[i] = pc.copy(weeklyGrams = pc.weeklyGrams + additionalGrams)
+                                changedAny = true
+                            }
                         }
                     }
                 }
+                currentKcal = plannedConsumptions.sumOf { it.plannedCalories }
+                deficit = targetWeeklyKcal - currentKcal
+                if (!changedAny) break
             }
         }
 
         currentKcal = plannedConsumptions.sumOf { it.plannedCalories }
         deficit = targetWeeklyKcal - currentKcal
 
-        // Passo B: Se ainda houver déficit e houver alternativas elegíveis não selecionadas, inclui opções complementares
-        // No modo ultraeconômico ou quando o limite da cesta for atingido, preserva a cesta compacta sem inflar itens.
-        if (deficit > 400.0 && !isUltraEconomic && plannedConsumptions.size < maxBasketSize) {
+        // Passo B: Se ainda houver déficit e houver espaço na cesta (plannedConsumptions.size < maxBasketSize)
+        if (deficit > 400.0 && plannedConsumptions.size < maxBasketSize) {
             val alreadySelectedIds = plannedConsumptions.map { it.food.remoteId }.toSet()
             val extraCandidates = candidatesPool.filter { it.remoteId !in alreadySelectedIds && (it.kcal ?: 0.0) > 0.0 }
                 .sortedByDescending { it.kcal ?: 0.0 }
