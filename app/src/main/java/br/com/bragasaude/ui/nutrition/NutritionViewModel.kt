@@ -148,6 +148,7 @@ class NutritionViewModel @Inject constructor(
             hasPantryStaples = setup.hasPantryStaples
         )
         updateWeeklyPreferences(updatedWeeklyPrefs)
+        updateAdjustments(_profile.value, setup)
 
         viewModelScope.launch {
             try {
@@ -422,6 +423,25 @@ class NutritionViewModel @Inject constructor(
         list.sumOf { it.kcal }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
+    private val _activeAdjustments = MutableStateFlow<List<String>>(emptyList())
+    val activeAdjustments = _activeAdjustments.asStateFlow()
+
+    private fun updateAdjustments(profile: RemoteProfile?, setup: br.com.bragasaude.domain.UserNutritionGoalSetup) {
+        val adjustments = mutableListOf<String>()
+        when (setup.goal) {
+            br.com.bragasaude.domain.ClinicalDietaryGoal.WEIGHT_LOSS -> adjustments.add("Déficit Calórico")
+            br.com.bragasaude.domain.ClinicalDietaryGoal.HYPERTROPHY -> adjustments.add("Hipertrofia")
+            br.com.bragasaude.domain.ClinicalDietaryGoal.MAINTENANCE -> {}
+        }
+        if (profile?.hasHypertension == true) {
+            adjustments.add("Controle de Sódio")
+        }
+        if (profile?.hasDiabetes == true) {
+            adjustments.add("Glicose Controlada")
+        }
+        _activeAdjustments.value = adjustments
+    }
+
 
     val nutritionDisclaimer = MutableStateFlow(
         "Sugestões de autocuidado alimentar baseadas no seu perfil e nas suas escolhas. Não constituem prescrição médica nem substituem nutricionista."
@@ -510,6 +530,7 @@ class NutritionViewModel @Inject constructor(
             profileRepository.getProfile(userId).collectLatest { entity ->
                 val remProfile = entity?.toRemote()
                 _profile.value = remProfile
+                updateAdjustments(remProfile, _goalSetup.value)
 
                 val weight = entity?.weight ?: remProfile?.weight
                 _userWeight.value = weight
@@ -655,11 +676,21 @@ class NutritionViewModel @Inject constructor(
         val catalog = _foodCatalog.value
 
         return _mealRules.value.map { rule ->
-            val recommendation = HealthCalculators.calculateSmartMeal(
+            var recommendation = HealthCalculators.calculateSmartMeal(
                 profile = profile,
                 caloriePercentage = rule.caloriePercentage?.toFloat() ?: 0.25f,
                 catalog = catalog
             )
+
+            if (profile.hasDiabetes) {
+                recommendation = recommendation.copy(
+                    carbs = recommendation.carbs.copy(
+                        max = recommendation.carbs.max * 0.8f,
+                        avg = recommendation.carbs.avg * 0.8f,
+                        min = recommendation.carbs.min * 0.8f
+                    )
+                )
+            }
 
             rule.mealName to recommendation
         }
