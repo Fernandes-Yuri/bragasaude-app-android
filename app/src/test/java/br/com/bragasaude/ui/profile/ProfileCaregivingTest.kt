@@ -1,4 +1,4 @@
-package br.com.bragasaude.ui.profile
+﻿package br.com.bragasaude.ui.profile
 
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.repository.*

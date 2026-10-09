@@ -93,6 +93,14 @@ class SyncWorker @AssistedInject constructor(
     }
 
 
+    private suspend fun syncMedications() {
+        for (medication in medicationDao.getPendingSync()) {
+            if (apiClient.syncMedication(medication) != null) {
+                medicationDao.insert(medication.copy(pendingSync = false))
+            }
+        }
+    }
+
     private suspend fun syncMedicationLogs() {
         val pending = medicationLogDao.getPendingSync()
         for (l in pending) {

@@ -1,4 +1,4 @@
-package br.com.bragasaude.domain
+﻿package br.com.bragasaude.domain
 
 import br.com.bragasaude.domain.model.GlucoseCategory
 import br.com.bragasaude.domain.model.GlucoseContext

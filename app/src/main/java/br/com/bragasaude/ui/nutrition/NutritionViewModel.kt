@@ -281,8 +281,6 @@ class NutritionViewModel @Inject constructor(
         list.sumOf { it.kcal }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
-    private val _activeAdjustments = MutableStateFlow<List<String>>(emptyList())
-    val activeAdjustments = _activeAdjustments.asStateFlow()
 
     val nutritionDisclaimer = MutableStateFlow(
         "Sugestões de autocuidado alimentar baseadas no seu perfil e nas suas escolhas. Não constituem prescrição médica nem substituem nutricionista."
@@ -427,7 +425,6 @@ class NutritionViewModel @Inject constructor(
             }
         }
 
-        }
     }
 
     private var safeCatalogJob: kotlinx.coroutines.Job? = null
@@ -516,7 +513,7 @@ class NutritionViewModel @Inject constructor(
         val catalog = _foodCatalog.value
 
         return _mealRules.value.map { rule ->
-            var recommendation = HealthCalculators.calculateSmartMeal(
+            val recommendation = HealthCalculators.calculateSmartMeal(
                 profile = profile,
                 caloriePercentage = rule.caloriePercentage?.toFloat() ?: 0.25f,
                 catalog = catalog

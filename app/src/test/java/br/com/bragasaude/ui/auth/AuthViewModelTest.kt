@@ -1,4 +1,4 @@
-package br.com.bragasaude.ui.auth
+﻿package br.com.bragasaude.ui.auth
 
 import br.com.bragasaude.data.local.BragaDatabase
 import br.com.bragasaude.data.remote.repository.ProfileRepository

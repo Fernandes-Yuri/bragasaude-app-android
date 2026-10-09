@@ -67,9 +67,8 @@ fun NutritionScreen(
     val autoRecommendedCalories by viewModel.autoRecommendedCalories.collectAsState()
     val isCustomCalorieTarget by viewModel.isCustomCalorieTarget.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val activeAdjustments by viewModel.activeAdjustments.collectAsState()
     val scoreBreakdown by homeViewModel.scoreBreakdown.collectAsState()
-    val recommendations = remember(isLoading, activeAdjustments) { viewModel.getRecommendations() }
+    val recommendations = remember(isLoading, dailyCalories) { viewModel.getRecommendations() }
     val todayLoggedMeals by viewModel.todayLoggedMeals.collectAsState()
     val suggestionGroups by viewModel.functionalSuggestionGroups.collectAsState()
     val selectedMealTab by viewModel.selectedMealTab.collectAsState()
@@ -303,49 +302,6 @@ fun NutritionScreen(
                                 contentDescription = null,
                                 tint = BragaEmerald
                             )
-                        }
-                    }
-                }
-
-                // Ajustes Clínicos, Gatilhos e Avisos de Perfil
-                if (activeAdjustments.isNotEmpty() || scoreBreakdown.negativeFactors.isNotEmpty()) {
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.Tune,
-                                    contentDescription = null,
-                                    tint = BragaEmerald,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    "Ajustes baseados no seu perfil:",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            if (activeAdjustments.isNotEmpty()) {
-                                LazyRow(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    items(activeAdjustments) { adjustment ->
-                                        Surface(
-                                            shape = RoundedCornerShape(20.dp),
-                                            color = BragaMint
-                                        ) {
-                                            Text(
-                                                "Ajustado para: $adjustment",
-                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = BragaEmerald,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }
