@@ -41,16 +41,15 @@ class OrganizerRoomMigrationTest {
             database.execSQL("INSERT INTO vital_signs_local(userId,measuredAt,status,pendingSync) VALUES ('u',123,'confirmed',0)")
             database.version = 51
         }
+        val room = Room.databaseBuilder(context, BragaDatabase::class.java, name).allowMainThreadQueries()
+            .addMigrations(*Migrations.ALL).build()
         try {
-            Room.databaseBuilder(context, BragaDatabase::class.java, name).allowMainThreadQueries()
-                .addMigrations(*Migrations.ALL).build().use { room ->
                     room.openHelper.writableDatabase.query("SELECT userId,measuredAt FROM vital_signs_local").use {
                         assertTrue(it.moveToFirst()); assertEquals("u", it.getString(0)); assertEquals(123, it.getInt(1))
                     }
                     room.openHelper.writableDatabase.query("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('exams_local','exam_items_local','clinical_references_local')").use {
                         assertEquals(0, it.count)
                     }
-                }
-        } finally { context.deleteDatabase(name) }
+        } finally { room.close(); context.deleteDatabase(name) }
     }
 }
