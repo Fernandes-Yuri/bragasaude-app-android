@@ -51,6 +51,17 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
         // primeiro push chega e e descartado (Causa 6 do levantamento).
         BragaFirebaseMessagingService.initChannels(this)
 
+        // Encerra a sessão temporária se houver saída ou troca de conta.
+        val organizerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val organizerAuth = com.google.firebase.auth.FirebaseAuth.getInstance()
+        var organizerUid = organizerAuth.currentUser?.uid
+        organizerAuth.addAuthStateListener { changedAuth ->
+            val newUid = changedAuth.currentUser?.uid
+            if (newUid != organizerUid) {
+                organizerUid = newUid
+                organizerScope.launch { br.com.bragasaude.data.local.organizer.OrganizerStore(this@BragaApplication).clearAll() }
+            }
+        }
         syncManager.startRealtimeSync()
         syncScheduler.schedulePeriodicRecoverySync()
         
@@ -58,6 +69,11 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
         // do catálogo propagava e derrubava o processo na inicialização. O
         // scope de aplicação deve sobreviver a falhas de um filho.
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            // Expurgo da área de exames retirada; não toca nos originais externos.
+            java.io.File(filesDir, "exams").deleteRecursively()
+            listOf("exam_photos", "exam_originals", "dossiers").forEach { java.io.File(cacheDir, it).deleteRecursively() }
+            java.io.File(cacheDir, "shared_pdfs").listFiles()?.filter { it.name.startsWith("exame_") }?.forEach { it.delete() }
+            br.com.bragasaude.data.local.organizer.OrganizerStore(this@BragaApplication).cleanup()
             catalogRepository.seedDatabaseIfNeeded()
         }
 

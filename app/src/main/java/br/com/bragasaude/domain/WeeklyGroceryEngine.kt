@@ -1,6 +1,5 @@
 package br.com.bragasaude.domain
 
-import br.com.bragasaude.data.local.ExamItemEntity
 import br.com.bragasaude.data.local.FoodEntity
 import br.com.bragasaude.data.local.GroceryListItemEntity
 import br.com.bragasaude.data.local.VitalSignEntity
@@ -55,7 +54,6 @@ object WeeklyGroceryEngine {
      */
     fun generateWeeklyList(
         userId: String,
-        exams: List<ExamItemEntity>,
         vitals: List<VitalSignEntity>,
         profile: RemoteProfile?,
         catalog: List<FoodEntity>,
@@ -65,7 +63,6 @@ object WeeklyGroceryEngine {
     ): List<GroceryListItemEntity> {
         return planWeeklyGrocery(
             userId = userId,
-            exams = exams,
             vitals = vitals,
             profile = profile,
             catalog = catalog,
@@ -81,7 +78,6 @@ object WeeklyGroceryEngine {
      */
     fun planWeeklyGrocery(
         userId: String,
-        exams: List<ExamItemEntity>,
         vitals: List<VitalSignEntity>,
         profile: RemoteProfile?,
         catalog: List<FoodEntity>,
@@ -142,12 +138,9 @@ object WeeklyGroceryEngine {
         }
 
         // 2. Análise de marcadores clínicos laboratoriais e vitais
-        val glucose = exams.firstOrNull { it.itemKey == "glucose" }?.valueNumeric
-            ?: vitals.firstOrNull { it.glucoseLevel != null }?.glucoseLevel?.toDouble()
+        val glucose = vitals.firstOrNull { it.glucoseLevel != null }?.glucoseLevel?.toDouble()
         val hasHighGlucose = (glucose != null && glucose > 100.0) || profile?.hasDiabetes == true
 
-        val cholesterol = exams.firstOrNull { it.itemKey == "total_cholesterol" }?.valueNumeric
-        val hasHighCholesterol = cholesterol != null && cholesterol > 190.0
 
         val sys = vitals.firstOrNull { it.systolicPressure != null }?.systolicPressure ?: 0
         val hasHighBp = sys > 130 || profile?.hasHypertension == true
@@ -253,7 +246,7 @@ object WeeklyGroceryEngine {
             ingredientCatalog = ingredientCatalog,
             selectedCanonicalGroups = selectedCanonicalGroups,
             destConsumptions = plannedConsumptions,
-            preferFish = hasHighCholesterol || hasHighBp
+            preferFish = hasHighBp
         )
 
         // 7. Dimensionamento do Pilar 3: Hortifruti (Frutas, Folhosos, Legumes)

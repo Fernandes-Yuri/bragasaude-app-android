@@ -26,7 +26,6 @@ import br.com.bragasaude.util.BragaConstants
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val vitalsRepository: VitalsRepository,
-    private val examsRepository: ExamsRepository,
     private val milestonesRepository: MilestonesRepository,
     private val profileRepository: ProfileRepository,
     private val medicationRepository: MedicationRepository,
@@ -129,11 +128,10 @@ class HomeViewModel @Inject constructor(
 
         val healthDataFlow = combine(
             vitalsRepository.getVitalSigns(userId),
-            examsRepository.getExamItems(userId),
             profileRepository.getProfile(userId),
             dailyMetricsDao.getRecent30Days(userId),
             debouncedSteps
-        ) { vitalsEntities, examItemsEntities, profileEntity, dailyMetrics, liveSteps ->
+        ) { vitalsEntities, profileEntity, dailyMetrics, liveSteps ->
             val vitals = vitalsEntities.map { it.toRemote() }
             val profile = profileEntity?.toRemote()
             
@@ -163,9 +161,9 @@ class HomeViewModel @Inject constructor(
                 listOf(br.com.bragasaude.data.local.DailyMetricsEntity(userId = userId, date = today, steps = stepsNow)) + dailyMetrics
             }
 
-            val breakdown = HealthScoreCalculator.calculate(profile, vitals, examItemsEntities, updatedMetrics)
+            val breakdown = HealthScoreCalculator.calculate(profile, vitals, updatedMetrics)
             
-            Triple(latest, breakdown, Quadruple(userId, vitals, examItemsEntities, updatedMetrics))
+            Triple(latest, breakdown, Triple(userId, vitals, updatedMetrics))
         }.shareIn(viewModelScope, SharingStarted.WhileSubscribed())
 
         // Atualiza UI principal
@@ -179,16 +177,14 @@ class HomeViewModel @Inject constructor(
 
         // Análise de Alertas (com collectLatest para evitar processamento pesado repetitivo)
         viewModelScope.launch {
-            healthDataFlow.map { it.third }.collectLatest { (uid, vitals, examItems, metrics) ->
+            healthDataFlow.map { it.third }.collectLatest { (uid, vitals, metrics) ->
                 val profile = profileRepository.getProfile(uid).firstOrNull()?.toRemote()
                 
                 val vitalAnalysis = healthEngine.analyzeVitals(uid, vitals.take(1), silent = true)
-                val examAnalysis = healthEngine.analyzeExamItems(uid, examItems.map { it.toRemote() }.take(10), silent = true)
                 val activityRecommendations = healthEngine.analyzeActivityPatterns(uid, metrics)
                 
                 val alerts = mutableListOf<String>()
                 alerts.addAll(vitalAnalysis.alerts)
-                alerts.addAll(examAnalysis.alerts)
                 alerts.addAll(activityRecommendations.map { it.message })
 
                 if (profile?.fullName != null) {
@@ -269,5 +265,4 @@ class HomeViewModel @Inject constructor(
         super.onCleared()
     }
 
-    private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 }

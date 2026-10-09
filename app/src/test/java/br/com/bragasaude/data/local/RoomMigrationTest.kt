@@ -56,6 +56,14 @@ class RoomMigrationTest {
         ).forEach { assertTrue("Schema v48 sem $it", text.contains(it)) }
     }
 
+    @Test fun removesOnlyRetiredExamTables() {
+        val database = mockk<SupportSQLiteDatabase>()
+        val sql = mutableListOf<String>()
+        every { database.execSQL(capture(sql)) } just runs
+        Migrations.MIGRATION_51_52.migrate(database)
+        assertEquals(listOf("DROP TABLE IF EXISTS exam_items_local", "DROP TABLE IF EXISTS exams_local", "DROP TABLE IF EXISTS clinical_references_local"), sql)
+        assertTrue(Migrations.ALL.contains(Migrations.MIGRATION_51_52))
+    }
     private fun findSchema48(): File? {
         val relative = "schemas/br.com.bragasaude.data.local.BragaDatabase/48.json"
         return sequenceOf(File(relative), File("app/$relative")).firstOrNull(File::isFile)

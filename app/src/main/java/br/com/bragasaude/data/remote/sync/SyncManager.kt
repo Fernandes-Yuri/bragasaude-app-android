@@ -28,12 +28,9 @@ class SyncManager @Inject constructor(
     private val profileDao: ProfileDao,
     private val vitalSignDao: VitalSignDao,
     private val biometryDao: BiometryDao,
-    private val examDao: ExamDao,
-    private val examItemDao: ExamItemDao,
     private val medicationDao: MedicationDao,
     private val milestoneDao: MilestoneDao,
     private val dailyMetricsDao: DailyMetricsDao,
-    private val clinicalReferenceDao: ClinicalReferenceDao,
     private val syncPreferences: SyncPreferences,
     private val familyBridgeRepository: br.com.bragasaude.data.remote.repository.FamilyBridgeRepository,
     private val movementManagerProvider: javax.inject.Provider<br.com.bragasaude.data.util.MovementManager>

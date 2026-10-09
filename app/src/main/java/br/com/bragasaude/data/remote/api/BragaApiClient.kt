@@ -586,92 +586,6 @@ class BragaApiClient @Inject constructor(
 
     // ==================== EXAMES ====================
 
-    suspend fun syncExam(exam: ExamEntity): String? = withContext(Dispatchers.IO) {
-        try {
-            val json = JSONObject().apply {
-                if (exam.remoteId != null) put("id", exam.remoteId)
-                put("userId", exam.userId)
-                put("title", exam.title)
-                if (exam.category != null) put("category", exam.category)
-                put("examDate", dateFormat.format(exam.examDate))
-                if (exam.resultSummary != null) put("resultSummary", exam.resultSummary)
-                if (exam.fileUrl != null) put("fileUrl", exam.fileUrl)
-                put("status", exam.status)
-                if (exam.aiExtractedData != null) put("aiExtractedData", exam.aiExtractedData)
-                if (exam.validatedBy != null) put("validatedBy", exam.validatedBy)
-                if (exam.validationNotes != null) put("validationNotes", exam.validationNotes)
-            }
-            val res = postJson("$baseUrl/api/sync/exam", json)
-            return@withContext res?.optString("id", null)
-        } catch (e: Exception) {
-            Log.w(TAG, "Falha ao sincronizar exame: ${e.message}")
-            return@withContext null
-        }
-    }
-
-    suspend fun syncExamItem(item: ExamItemEntity): String? = withContext(Dispatchers.IO) {
-        try {
-            val json = JSONObject().apply {
-                if (item.remoteId != null) put("id", item.remoteId)
-                put("examId", item.examId)
-                put("userId", item.userId)
-                put("itemKey", item.itemKey)
-                put("itemName", item.itemName)
-                if (item.valueNumeric != null) put("valueNumeric", item.valueNumeric)
-                if (item.valueText != null) put("valueText", item.valueText)
-                if (item.unit != null) put("unit", item.unit)
-                if (item.referenceText != null) put("referenceText", item.referenceText)
-                if (item.status != null) put("status", item.status)
-                if (item.measuredAt != null) put("measuredAt", isoFormat.format(item.measuredAt))
-            }
-            val res = postJson("$baseUrl/api/sync/exam-item", json)
-            return@withContext res?.optString("id", null)
-        } catch (e: Exception) {
-            Log.w(TAG, "Falha ao sincronizar item de exame: ${e.message}")
-            return@withContext null
-        }
-    }
-
-    suspend fun getExams(userId: String): List<RemoteExam> = withContext(Dispatchers.IO) {
-        try {
-            val arr = getJsonArray("$baseUrl/api/exams/$userId") ?: return@withContext emptyList()
-            val list = mutableListOf<RemoteExam>()
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                list.add(
-                    RemoteExam(
-                        id = obj.getString("id"),
-                        userId = obj.getString("user_id"),
-                        title = obj.getString("title"),
-                        category = obj.optString("category", null),
-                        examDate = obj.getString("exam_date"),
-                        resultSummary = obj.optString("result_summary", null),
-                        fileUrl = obj.optString("file_url", null),
-                        status = obj.optString("status", "uploaded"),
-                        aiExtractedData = obj.optString("ai_extracted_data", null),
-                        validatedBy = obj.optString("validated_by", null),
-                        validationNotes = obj.optString("validation_notes", null),
-                        createdAt = obj.optString("created_at", null),
-                        labItems = obj.optJSONArray("lab_items")?.let { items ->
-                            (0 until items.length()).map { index ->
-                                val item = items.getJSONObject(index)
-                                RemoteExamItem(id = item.getString("id"), examId = obj.getString("id"), userId = userId,
-                                    itemKey = item.getString("item_key"), itemName = item.getString("item_name"),
-                                    valueNumeric = if (item.isNull("value_numeric")) null else item.optDouble("value_numeric"),
-                                    valueText = item.optString("value_text", null), unit = item.optString("unit", null),
-                                    referenceText = item.optString("reference_text", null), status = item.optString("status", "confirmed"),
-                                    measuredAt = item.optString("measured_at", null))
-                            }
-                        } ?: emptyList()
-                    )
-                )
-            }
-            return@withContext list
-        } catch (e: Exception) {
-            Log.w(TAG, "Falha ao buscar exames do servidor: ${e.message}")
-            return@withContext emptyList()
-        }
-    }
 
     suspend fun sendCaregiverHealthAlert(patientId: String, caregiverId: String, message: String): Boolean = withContext(Dispatchers.IO) {
         try {
@@ -1167,7 +1081,7 @@ class BragaApiClient @Inject constructor(
 
     // ==================== NOVOS CONTRATOS DE EXAMES (D49 / FASE 3) ====================
 
-    private fun deleteRequest(urlString: String, allowMissingExam: Boolean = false): Boolean {
+    private fun deleteRequest(urlString: String): Boolean {
         var conn: HttpURLConnection? = null
         return try {
             val url = URL(urlString)
@@ -1180,8 +1094,7 @@ class BragaApiClient @Inject constructor(
                 attachIdentity(urlString)
             }
             val responseCode = conn.responseCode
-            responseCode in 200..299 || (allowMissingExam && responseCode == 404 &&
-                conn.errorStream?.bufferedReader()?.use { JSONObject(it.readText()).optString("detail") } == "Exame não encontrado.")
+            responseCode in 200..299
         } catch (e: Exception) {
             false
         } finally {
@@ -1189,9 +1102,6 @@ class BragaApiClient @Inject constructor(
         }
     }
 
-    suspend fun deleteExam(examId: String): Boolean = withContext(Dispatchers.IO) {
-        deleteRequest("$baseUrl/api/exams/$examId", allowMissingExam = true)
-    }
 
     /**
      * Exclusão da conta na nuvem — Direito ao Esquecimento (LGPD Art. 18).
@@ -1202,161 +1112,6 @@ class BragaApiClient @Inject constructor(
         deleteRequest("$baseUrl/api/profile/$userId")
     }
 
-    suspend fun supportsExamSnapshots(): Boolean = withContext(Dispatchers.IO) {
-        try { getJson("$baseUrl/api/exams-sync/capabilities")?.optBoolean("snapshot_updates", false) == true }
-        catch (e: Exception) { false }
-    }
-
-    suspend fun syncManualExam(
-        examId: String?,
-        title: String,
-        category: String,
-        examDate: String,
-        items: List<RemoteExamItem>
-    ): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val json = JSONObject().apply {
-                if (examId != null) put("exam_id", examId)
-                put("cloud_consent", true)
-                put("replace_items", true)
-                put("terms_version", br.com.bragasaude.domain.ExamStorageTerms.VERSION)
-                put("valid_exam_attested", true)
-                put("non_diagnostic_purpose_accepted", true)
-                put("title", title)
-                put("category", category)
-                put("exam_date", examDate)
-                val itemsArr = JSONArray()
-                for (it in items) {
-                    val itObj = JSONObject().apply {
-                        put("item_key", it.itemKey)
-                        put("item_name", it.itemName)
-                        put("value_numeric", it.valueNumeric ?: 0.0)
-                        put("value_text", it.valueText ?: it.valueNumeric?.toString() ?: "")
-                        put("unit", it.unit ?: "")
-                        if (it.referenceText != null) put("reference_text", it.referenceText)
-                        put("status", it.status ?: "confirmed")
-                    }
-                    itemsArr.put(itObj)
-                }
-                put("items", itemsArr)
-            }
-            val res = postJson("$baseUrl/api/exams/manual", json)
-            res?.optBoolean("success", false) == true && res.optBoolean("snapshot_applied", false)
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao sincronizar exame manual: ${e.message}", e)
-            false
-        }
-    }
-
-    suspend fun downloadExamOriginal(fileUrl: String): ByteArray = withContext(Dispatchers.IO) {
-        val source = URL(fileUrl)
-        val api = URL(baseUrl)
-        require(source.protocol == api.protocol && source.host == api.host && source.port == api.port &&
-            source.path.startsWith("/api/files/exams/")) { "Origem do arquivo de exame inválida." }
-        val connection = (source.openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = CONNECT_TIMEOUT_MS
-            readTimeout = READ_TIMEOUT_MS
-            instanceFollowRedirects = false
-            attachIdentity(fileUrl)
-        }
-        try {
-            check(connection.responseCode in 200..299) { "Não foi possível obter um exame original. Tente novamente." }
-            connection.inputStream.use { input ->
-                val output = java.io.ByteArrayOutputStream()
-                val buffer = ByteArray(8192)
-                var read = input.read(buffer)
-                while (read != -1) {
-                    check(output.size() + read <= 35 * 1024 * 1024) { "Arquivo de exame muito grande para exportar." }
-                    output.write(buffer, 0, read)
-                    read = input.read(buffer)
-                }
-                output.toByteArray()
-            }
-        } finally { connection.disconnect() }
-    }
-
-    suspend fun uploadExamContract(
-        examId: String,
-        title: String,
-        category: String,
-        examDate: String,
-        examType: String,
-        cloudConsent: Boolean,
-        termsVersion: String,
-        fileName: String,
-        fileBytes: ByteArray
-    ): RemoteExamUploadResponse? = withContext(Dispatchers.IO) {
-        val boundary = "Boundary-${System.currentTimeMillis()}"
-        val lineEnd = "\r\n"
-        val twoHyphens = "--"
-        var conn: HttpURLConnection? = null
-        try {
-            val url = URL("$baseUrl/api/exams/upload")
-            conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                connectTimeout = 10000
-                readTimeout = 25000
-                doOutput = true
-                doInput = true
-                setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-                setRequestProperty("Accept", "application/json")
-                attachIdentity(url.toString())
-            }
-
-            conn.outputStream.use { os ->
-                fun writeFormField(fieldName: String, value: String) {
-                    os.write("$twoHyphens$boundary$lineEnd".toByteArray())
-                    os.write("Content-Disposition: form-data; name=\"$fieldName\"$lineEnd$lineEnd".toByteArray())
-                    os.write("$value$lineEnd".toByteArray())
-                }
-
-                writeFormField("exam_id", examId)
-                writeFormField("title", title)
-                writeFormField("category", category)
-                writeFormField("exam_date", examDate)
-                writeFormField("exam_type", examType)
-                writeFormField("cloud_consent", cloudConsent.toString())
-                writeFormField("terms_version", termsVersion)
-                writeFormField("valid_exam_attested", cloudConsent.toString())
-                writeFormField("non_diagnostic_purpose_accepted", cloudConsent.toString())
-
-                val mimeType = when {
-                    fileName.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
-                    fileName.endsWith(".png", ignoreCase = true) -> "image/png"
-                    fileName.endsWith(".webp", ignoreCase = true) -> "image/webp"
-                    else -> "image/jpeg"
-                }
-                os.write("$twoHyphens$boundary$lineEnd".toByteArray())
-                os.write("Content-Disposition: form-data; name=\"file\"; filename=\"$fileName\"$lineEnd".toByteArray())
-                os.write("Content-Type: $mimeType$lineEnd$lineEnd".toByteArray())
-                os.write(fileBytes)
-                os.write(lineEnd.toByteArray())
-
-                os.write("$twoHyphens$boundary$twoHyphens$lineEnd".toByteArray())
-                os.flush()
-            }
-
-            if (conn.responseCode in 200..299) {
-                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-                val json = JSONObject(responseText)
-                RemoteExamUploadResponse(
-                    success = json.optBoolean("success", false),
-                    examId = json.optString("exam_id", examId),
-                    storageStatus = json.optString("storage_status", "LOCAL_ONLY"),
-                    fileUrl = json.optString("file_url", null)
-                )
-            } else {
-                Log.w(TAG, "Falha no upload multipart do exame: HTTP ${conn.responseCode}")
-                null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao enviar exame multipart: ${e.message}", e)
-            null
-        } finally {
-            try { conn?.disconnect() } catch (_: Exception) {}
-        }
-    }
 
     // ==================== CARE OS — D62 (FIRST CONTRACT) ====================
     // Contratos canônicos de scripts/server/openapi_care_os.json. Tipos estritos
@@ -2179,11 +1934,3 @@ class BragaApiClient @Inject constructor(
         }
     }
 }
-
-data class RemoteExamUploadResponse(
-    val success: Boolean,
-    val examId: String,
-    val storageStatus: String,
-    val fileUrl: String?
-)
-

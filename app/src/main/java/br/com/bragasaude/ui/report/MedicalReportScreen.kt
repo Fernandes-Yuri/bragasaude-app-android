@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.report
+package br.com.bragasaude.ui.report
 
 import android.content.Intent
 import android.net.Uri
@@ -35,7 +35,6 @@ fun MedicalReportScreen(
     viewModel: ReportViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val examItemsHistory by viewModel.examItemsHistory.collectAsState()
     val isGeneratingPdf by viewModel.isGeneratingPdf.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -182,86 +181,6 @@ fun MedicalReportScreen(
                 }
             }
 
-            // SEÇÃO LABORATORIAL E EXAMES (Sem gráfico redundante de hidratação)
-            val hasLipidProfile = examItemsHistory.any { it.itemKey in listOf("total_cholesterol", "ldl") }
-            val hasThyroidProfile = examItemsHistory.any { it.itemKey == "tsh" }
-
-            if (!hasLipidProfile && !hasThyroidProfile) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                Icons.Default.MedicalInformation,
-                                contentDescription = null,
-                                modifier = Modifier.size(56.dp),
-                                tint = MaterialTheme.colorScheme.outline
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                "Histórico de exames",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "Anexe seus laudos na tela de Exames para acompanhar as curvas de colesterol e tireoide aqui.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
-                        }
-                    }
-                }
-            } else {
-                if (hasLipidProfile) {
-                    val isLipidVerified = examItemsHistory.any { it.itemKey in listOf("total_cholesterol", "ldl") && it.status == "confirmed" }
-                    item {
-                        ChartCard(title = "Perfil Lipídico (Colesterol)", isVerified = isLipidVerified) {
-                            SimpleTrendChart(
-                                data = examItemsHistory.filter { it.itemKey == "total_cholesterol" && it.valueNumeric != null }.map { it.valueNumeric!! },
-                                label = "Colesterol Total",
-                                color = Color(0xFF9C27B0),
-                                targetValue = 200.0,
-                                unit = "mg/dL"
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            SimpleTrendChart(
-                                data = examItemsHistory.filter { it.itemKey == "ldl" && it.valueNumeric != null }.map { it.valueNumeric!! },
-                                label = "LDL (Ruim)",
-                                color = Color(0xFFFF5722),
-                                targetValue = 100.0,
-                                unit = "mg/dL"
-                            )
-                        }
-                    }
-                }
-
-                if (hasThyroidProfile) {
-                    val isThyroidVerified = examItemsHistory.any { it.itemKey == "tsh" && it.status == "confirmed" }
-                    item {
-                        ChartCard(title = "Função Tireoidiana", isVerified = isThyroidVerified) {
-                            SimpleTrendChart(
-                                data = examItemsHistory.filter { it.itemKey == "tsh" && it.valueNumeric != null }.map { it.valueNumeric!! },
-                                label = "TSH",
-                                color = Color(0xFF4CAF50),
-                                targetValue = 2.5,
-                                unit = "µUI/mL"
-                            )
-                        }
-                    }
-                }
-            }
-            
             item { Spacer(Modifier.height(80.dp)) }
         }
     }

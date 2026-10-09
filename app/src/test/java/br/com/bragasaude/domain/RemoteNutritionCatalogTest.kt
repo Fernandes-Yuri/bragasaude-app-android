@@ -37,12 +37,12 @@ class RemoteNutritionCatalogTest {
     @Test fun everyGeneratedListIncludesDatabaseGroupsWithoutHardcodedFoodNames() {
         val parsed = RemoteNutritionCatalogParser.parse(snapshot())
         repeat(30) {
-            val list = WeeklyGroceryEngine.generateWeeklyList("u", emptyList(), emptyList(), null,
+            val list = WeeklyGroceryEngine.generateWeeklyList("u", emptyList(), null,
                 listOf(food("base_a"), food("base_b")), ingredientCatalog = parsed)
             assertEquals(setOf("ingredient_a", "ingredient_b"), list.map { it.foodId }.toSet())
             assertEquals(300, list.first { it.foodId == "ingredient_a" }.purchaseWeightGrams)
         }
-        val withDislikes = WeeklyGroceryEngine.generateWeeklyList("u", emptyList(), emptyList(), null,
+        val withDislikes = WeeklyGroceryEngine.generateWeeklyList("u", emptyList(), null,
             listOf(food("base_a"), food("base_b")), dislikedFoodNames = setOf("Preparo base_a", "Preparo base_b"), ingredientCatalog = parsed)
         assertEquals(setOf("ingredient_a", "ingredient_b"), withDislikes.map { it.foodId }.toSet())
     }
@@ -50,10 +50,10 @@ class RemoteNutritionCatalogTest {
     @Test fun respectsAllergensClinicalRestrictionsAndDietBeforeRequiredGroups() {
         val parsed = RemoteNutritionCatalogParser.parse(snapshot())
         val blocked = food("base_a", listOf("diet:vegan", "diet:vegetarian", "allergen:teste"))
-        val list = WeeklyGroceryEngine.generateWeeklyList("u", emptyList(), emptyList(),
+        val list = WeeklyGroceryEngine.generateWeeklyList("u", emptyList(),
             RemoteProfile("u", foodAllergies = listOf("Teste")), listOf(blocked, food("base_b")), ingredientCatalog = parsed)
         assertEquals(listOf("ingredient_b"), list.map { it.foodId })
-        val diabetes = WeeklyGroceryEngine.generateWeeklyList("u", emptyList(), emptyList(),
+        val diabetes = WeeklyGroceryEngine.generateWeeklyList("u", emptyList(),
             RemoteProfile("u", hasDiabetes = true), listOf(food("base_a").copy(isDiabetesSafe = false), food("base_b")), ingredientCatalog = parsed)
         assertEquals(listOf("ingredient_b"), diabetes.map { it.foodId })
         assertFalse(NutritionSuggestionEngine.isSafeFromAllergies(food("animal", emptyList()), emptyList(), "vegetariano"))

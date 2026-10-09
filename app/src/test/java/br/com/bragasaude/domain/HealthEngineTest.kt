@@ -21,33 +21,29 @@ class HealthEngineTest {
 
     private val context = mockk<Context>(relaxed = true)
     private val vitalsRepository = mockk<VitalsRepository>()
-    private val examsRepository = mockk<ExamsRepository>()
     private val milestonesRepository = mockk<MilestonesRepository>()
     private val conditionRepository = mockk<ConditionRepository>()
     private val profileRepository = mockk<ProfileRepository>()
     private val biometryRepository = mockk<BiometryRepository>()
     private val riskManager = mockk<RiskManager>(relaxed = true)
     private val auth = mockk<FirebaseAuth>(relaxed = true)
-    // doc 10 §3.3: exame critico avisa o cuidador (apiClient + familyDao).
-    private val apiClient = mockk<br.com.bragasaude.data.remote.api.BragaApiClient>(relaxed = true)
-    private val familyDao = mockk<br.com.bragasaude.data.local.FamilyDao>(relaxed = true)
 
     private lateinit var healthEngine: HealthEngine
 
     @Before
     fun setup() {
         healthEngine = HealthEngine(
-            context, vitalsRepository, examsRepository, 
-            milestonesRepository, conditionRepository, 
+            context, vitalsRepository,
+            milestonesRepository, conditionRepository,
             profileRepository, biometryRepository,
-            riskManager, auth, apiClient, familyDao
+            riskManager, auth
         )
-        
+
         every { auth.currentUser } returns null
         coEvery { conditionRepository.saveDetectedCondition(any()) } just Runs
         coEvery { milestonesRepository.saveMilestone(any()) } just Runs
         coEvery { milestonesRepository.getMilestones(any()) } returns flowOf(emptyList())
-        
+
         // Mock strings default
         every { context.getString(any()) } returns "Mock String"
         every { context.getString(any(), *anyVararg()) } answers { "Mock String with Args ${args.drop(1).joinToString()}" }
@@ -81,26 +77,10 @@ class HealthEngineTest {
     }
 
     @Test
-    fun `exam low limit is evaluated and HDL is not treated as LDL`() = runBlocking {
-        coEvery { examsRepository.getExamItems("user1") } returns flowOf(emptyList())
-        coEvery { examsRepository.getClinicalReference("glucose_fasting") } returns
-            br.com.bragasaude.data.local.ClinicalReferenceEntity(
-                itemKey = "glucose_fasting", itemName = "Glicose", category = "test",
-                minCritical = 54.0, maxCritical = 300.0, unit = "mg/dL")
-        coEvery { examsRepository.getClinicalReference("hdl") } returns null
-        val low = br.com.bragasaude.data.remote.model.RemoteExamItem(
-            examId = "exam", userId = "user1", itemKey = "glucose_fasting", itemName = "Glicose",
-            valueNumeric = 50.0, unit = "mg/dL")
-        assertTrue(healthEngine.analyzeExamItems("user1", listOf(low), silent = true).recommendations.single().isEmergency)
-        assertTrue(healthEngine.analyzeExamItems("user1", listOf(low.copy(itemKey = "hdl", itemName = "Colesterol HDL", valueNumeric = 135.0)), silent = true).recommendations.isEmpty())
-        assertTrue(healthEngine.analyzeExamItems("user1", listOf(low.copy(unit = "mmol/L")), silent = true).recommendations.isEmpty())
-    }
-
-    @Test
     fun `analyzeVitals should detect high BP crisis`() = runBlocking {
         val userId = "user1"
         val vital = RemoteVitalSign(userId = userId, systolicPressure = 185)
-        
+
         coEvery { vitalsRepository.getVitalSignsSync(userId) } returns emptyList()
         coEvery { vitalsRepository.getVitalSigns(userId) } returns flowOf(emptyList())
         coEvery { profileRepository.getProfile(userId) } returns flowOf(null)
@@ -116,7 +96,7 @@ class HealthEngineTest {
     fun `analyzeBiometry should detect weight goal achievement`() = runBlocking {
         val userId = "user1"
         val current = RemoteBiometry(userId = userId, weight = 70f, height = 1.70f, imc = 24.2f)
-        
+
         coEvery { biometryRepository.getBiometry(userId) } returns flowOf(emptyList())
         coEvery { profileRepository.getProfile(userId) } returns flowOf(
             ProfileEntity(userId = userId, weightGoal = 70.0)

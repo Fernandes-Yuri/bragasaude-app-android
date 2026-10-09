@@ -23,9 +23,6 @@ class SyncWorker @AssistedInject constructor(
     private val profileDao: ProfileDao,
     private val vitalSignDao: VitalSignDao,
     private val biometryDao: BiometryDao,
-    private val examDao: ExamDao,
-    private val examItemDao: ExamItemDao,
-    private val examsRepository: br.com.bragasaude.data.remote.repository.ExamsRepository,
     private val medicationDao: MedicationDao,
     private val medicationLogDao: MedicationLogDao,
     private val milestoneDao: MilestoneDao,
@@ -43,7 +40,6 @@ class SyncWorker @AssistedInject constructor(
 
         if (!safeSync { syncProfiles() }) hasErrors = true
         if (!safeSync { syncVitalSigns() }) hasErrors = true
-        if (!safeSync { syncExams() }) hasErrors = true
         if (!safeSync { syncMedications() }) hasErrors = true
         if (!safeSync { syncMedicationLogs() }) hasErrors = true
         if (!safeSync { syncSymptomsDiary() }) hasErrors = true
@@ -96,14 +92,11 @@ class SyncWorker @AssistedInject constructor(
         }
     }
 
-    private suspend fun syncExams() = examsRepository.syncAuthorizedExams()
 
     private suspend fun syncMedications() {
-        val pending = medicationDao.getPendingSync()
-        for (m in pending) {
-            val remoteId = apiClient.syncMedication(m)
-            if (remoteId != null) {
-                medicationDao.insert(m.copy(pendingSync = false))
+        for (medication in medicationDao.getPendingSync()) {
+            if (apiClient.syncMedication(medication) != null) {
+                medicationDao.insert(medication.copy(pendingSync = false))
             }
         }
     }

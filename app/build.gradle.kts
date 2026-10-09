@@ -95,6 +95,7 @@ android {
     sourceSets.getByName("main").assets.srcDir(rootProject.file("scripts/server/persona"))
     testOptions {
         unitTests {
+            isIncludeAndroidResources = true
             isReturnDefaultValues = true
             all {
                 it.maxHeapSize = "768m"

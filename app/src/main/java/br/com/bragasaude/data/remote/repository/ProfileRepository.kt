@@ -218,7 +218,7 @@ class ProfileRepository @Inject constructor(
      *   1. `DeleteUserFeedbacks` primeiro — a FK de feedback.user é SET NULL, então
      *      a linha sobreviveria órfã se não apagássemos explicitamente.
      *   2. `DeleteProfile` depois — dispara ON DELETE CASCADE em 14 tabelas filhas
-     *      (vital_sign, medication, exam, daily_metric, family_binding como patient, etc).
+     *      (vital_sign, medication, daily_metric, family_binding como patient, etc).
      *
      * Retorna `true` se a nuvem confirmou a exclusão, `false` em falha de rede
      * (o chamador deve decidir se prossegue mesmo assim — LGPD não pode travar por

@@ -481,6 +481,14 @@ object Migrations {
         }
     }
 
+    val MIGRATION_51_52 = object : Migration(51, 52) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("DROP TABLE IF EXISTS exam_items_local")
+            db.execSQL("DROP TABLE IF EXISTS exams_local")
+            db.execSQL("DROP TABLE IF EXISTS clinical_references_local")
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -507,6 +515,7 @@ object Migrations {
         MIGRATION_47_48,
         MIGRATION_48_49,
         MIGRATION_49_50,
-        MIGRATION_50_51
+        MIGRATION_50_51,
+        MIGRATION_51_52
     )
 }

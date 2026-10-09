@@ -1,7 +1,6 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.local.DailyMetricsEntity
-import br.com.bragasaude.data.local.ExamItemEntity
 import br.com.bragasaude.data.remote.model.RemoteProfile
 import br.com.bragasaude.data.remote.model.RemoteVitalSign
 
@@ -22,7 +21,6 @@ object HealthScoreCalculator {
     fun calculate(
         profile: RemoteProfile?,
         vitals: List<RemoteVitalSign>,
-        examItems: List<ExamItemEntity> = emptyList(),
         dailyMetrics: List<DailyMetricsEntity> = emptyList()
     ): ScoreBreakdown {
         val scores = mutableListOf<Int>()
@@ -30,12 +28,11 @@ object HealthScoreCalculator {
         val negative = mutableListOf<String>()
 
         // 1. Glicose
-        val labGlucose = examItems.firstOrNull { it.itemKey == "glucose" }?.valueNumeric
         val vitalGlucose = vitals.firstOrNull { it.glucoseLevel != null }
-        val glucoseValue = labGlucose ?: vitalGlucose?.glucoseLevel?.toDouble()
+        val glucoseValue = vitalGlucose?.glucoseLevel?.toDouble()
         
         glucoseValue?.let { value ->
-            val isFasting = (labGlucose != null) || (vitalGlucose?.glucoseType?.lowercase() == "jejum")
+            val isFasting = (vitalGlucose?.glucoseType?.lowercase() == "jejum")
             val targetMin = if (isFasting) 80.0 else 70.0
             val targetMax = if (isFasting) 130.0 else 160.0
             
@@ -75,17 +72,6 @@ object HealthScoreCalculator {
                     scores.add(60)
                     negative.add("Pressão arterial fora do alvo")
                 }
-            }
-        }
-
-        // 3. Colesterol
-        examItems.firstOrNull { it.itemKey == "total_cholesterol" }?.valueNumeric?.let { value ->
-            if (value < 200) {
-                scores.add(100)
-                positive.add("Colesterol total sob controle")
-            } else {
-                scores.add(60)
-                negative.add("Colesterol total elevado ($value)")
             }
         }
 

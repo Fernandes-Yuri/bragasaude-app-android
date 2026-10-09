@@ -95,66 +95,8 @@ data class ProfileEntity(
     val whatsappPhone: String? = null
 )
 
-@Entity(tableName = "exams_local")
-data class ExamEntity(
-    @PrimaryKey(autoGenerate = true) val localId: Long = 0,
-    val remoteId: String? = null,
-    val userId: String,
-    val title: String,
-    val category: String? = null,
-    val examDate: Date,
-    val resultSummary: String? = null,
-    val fileUrl: String? = null,
-    val status: String = "uploaded",
-    val aiExtractedData: String? = null,
-    val validatedBy: String? = null,
-    val validationNotes: String? = null,
-    val createdAt: Date? = null,
-    val pendingSync: Boolean = false,
-    @androidx.room.ColumnInfo(defaultValue = "'UNKNOWN'") val cloudState: String = br.com.bragasaude.domain.ExamCloudState.UNKNOWN,
-    @androidx.room.ColumnInfo(defaultValue = "0") val cloudConsentAccepted: Boolean = false,
-    val cloudConsentVersion: String? = null,
-    val cloudConsentAt: Long? = null,
-    val localFilePath: String? = null,
-    @androidx.room.ColumnInfo(defaultValue = "0") val hasCloudCopy: Boolean = false,
-    val lastCloudSyncAt: Long? = null
-)
 
-@Entity(tableName = "clinical_references_local")
-data class ClinicalReferenceEntity(
-    @PrimaryKey val itemKey: String,
-    val itemName: String,
-    val category: String,
-    val gender: String = "BOTH",
-    val minTarget: Double? = null,
-    val maxTarget: Double? = null,
-    val minCritical: Double? = null,
-    val maxCritical: Double? = null,
-    val unit: String? = null,
-    val interpretationHint: String? = null,
-    val institution: String? = "AHA",
-    val documentVersion: String? = "2026",
-    val parameter: String? = null,
-    val updatedAt: Date = Date()
-)
 
-@Entity(tableName = "exam_items_local")
-data class ExamItemEntity(
-    @PrimaryKey(autoGenerate = true) val localId: Long = 0,
-    val remoteId: String? = null,
-    val examId: String,
-    val userId: String,
-    val itemKey: String,
-    val itemName: String,
-    val valueNumeric: Double? = null,
-    val valueText: String? = null,
-    val unit: String? = null,
-    val referenceText: String? = null,
-    val status: String? = null,
-    val measuredAt: Date? = null,
-    val createdAt: Date = Date(),
-    val pendingSync: Boolean = false
-)
 
 @Serializable
 @Entity(tableName = "food_catalog_local")

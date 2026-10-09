@@ -15,7 +15,6 @@ class CatalogRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val foodDao: FoodDao,
     private val mealRuleDao: MealRuleDao,
-    private val clinicalReferenceSeeder: ClinicalReferenceSeeder,
     private val apiClient: BragaApiClient
 ) {
     suspend fun contributeGroceryPrice(foodName: String, value: br.com.bragasaude.domain.GroceryPriceContribution) =
@@ -75,7 +74,6 @@ class CatalogRepository @Inject constructor(
 
     suspend fun seedDatabaseIfNeeded() {
         try {
-            clinicalReferenceSeeder.seedIfNeeded()
             
             if (catalogSnapshot(refresh = true) == null) {
                 val currentCatalog = foodDao.getCatalog().first()

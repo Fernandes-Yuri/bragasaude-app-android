@@ -206,52 +206,6 @@ interface BiometryDao {
     suspend fun purgeOlderThan(cutoffMillis: Long)
 }
 
-@Dao
-interface ExamDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertItems(items: List<ExamItemEntity>)
-
-    @Query("DELETE FROM exam_items_local WHERE examId = :examId")
-    suspend fun deleteItems(examId: String)
-
-    @androidx.room.Transaction
-    suspend fun saveWithItems(exam: ExamEntity, items: List<ExamItemEntity>) {
-        insert(exam)
-        deleteItems(requireNotNull(exam.remoteId))
-        insertItems(items)
-    }
-
-    @androidx.room.Transaction
-    suspend fun deleteWithItems(examId: String) {
-        deleteItems(examId)
-        deleteByRemoteId(examId)
-    }
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(exam: ExamEntity): Long
-
-    @Query("SELECT * FROM exams_local WHERE userId = :userId ORDER BY examDate DESC")
-    fun getAll(userId: String): Flow<List<ExamEntity>>
-
-    @Query("SELECT * FROM exams_local WHERE remoteId = :remoteId LIMIT 1")
-    suspend fun getByRemoteId(remoteId: String): ExamEntity?
-
-    @Query("SELECT * FROM exams_local WHERE userId = :userId AND remoteId IS NULL AND title = :title ORDER BY examDate DESC LIMIT 1")
-    suspend fun findMatchingLocalExam(userId: String, title: String): ExamEntity?
-
-    @Query("DELETE FROM exams_local WHERE localId NOT IN (SELECT MIN(localId) FROM exams_local GROUP BY userId, COALESCE(remoteId, title || '_' || examDate))")
-    suspend fun deduplicateExams()
-
-    @Query("SELECT * FROM exams_local WHERE pendingSync = 1 AND cloudConsentAccepted = 1")
-    suspend fun getPendingSync(): List<ExamEntity>
-
-    /** Busca o exame com maior localId para um remoteId */
-    @Query("SELECT * FROM exams_local WHERE remoteId = :examId ORDER BY localId DESC LIMIT 1")
-    suspend fun getLatestByExamId(examId: String): ExamEntity?
-
-    @Query("DELETE FROM exams_local WHERE remoteId = :examId")
-    suspend fun deleteByRemoteId(examId: String)
-}
 
 @Dao
 interface MedicationDao {
@@ -364,53 +318,7 @@ interface MilestoneDao {
     suspend fun getPendingSync(): List<MilestoneEntity>
 }
 
-@Dao
-interface ClinicalReferenceDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(references: List<ClinicalReferenceEntity>)
 
-    @Query("SELECT COUNT(*) FROM clinical_references_local")
-    suspend fun count(): Int
-
-    @Query("SELECT * FROM clinical_references_local")
-    fun getAll(): Flow<List<ClinicalReferenceEntity>>
-
-    @Query("SELECT * FROM clinical_references_local WHERE itemKey = :key")
-    suspend fun getByKey(key: String): ClinicalReferenceEntity?
-}
-
-@Dao
-interface ExamItemDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(item: ExamItemEntity)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(items: List<ExamItemEntity>)
-
-    @Query("SELECT * FROM exam_items_local WHERE userId = :userId ORDER BY measuredAt DESC")
-    fun getAll(userId: String): Flow<List<ExamItemEntity>>
-
-    @Query("SELECT * FROM exam_items_local WHERE examId = :examId")
-    fun getByExam(examId: String): Flow<List<ExamItemEntity>>
-
-    @Query("SELECT * FROM exam_items_local WHERE pendingSync = 1")
-    suspend fun getPendingSync(): List<ExamItemEntity>
-
-    /** Busca item por remoteId (UUID no Firebase Data Connect) */
-    @Query("SELECT * FROM exam_items_local WHERE remoteId = :remoteId LIMIT 1")
-    suspend fun getByRemoteId(remoteId: String): ExamItemEntity?
-
-    /** Busca item por localId quando ainda não tem remoteId */
-    @Query("SELECT * FROM exam_items_local WHERE localId = :localId LIMIT 1")
-    suspend fun getById(localId: Long): ExamItemEntity?
-
-    /** Busca todos os itens de um exame especificado (por examId local ou remoto) */
-    @Query("SELECT * FROM exam_items_local WHERE examId = :examId")
-    suspend fun getByExamLocal(examId: String): List<ExamItemEntity>
-
-    @Query("DELETE FROM exam_items_local WHERE examId = :examId")
-    suspend fun deleteByExamId(examId: String)
-}
 
 @Dao
 interface DailyMetricsDao {
