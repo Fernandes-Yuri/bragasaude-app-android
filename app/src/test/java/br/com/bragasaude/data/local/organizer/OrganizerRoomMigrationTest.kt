@@ -31,7 +31,7 @@ class OrganizerRoomMigrationTest {
                 val entity = entities.getJSONObject(i)
                 val table = entity.getString("tableName")
                 database.execSQL(entity.getString("createSql").replace("\${TABLE_NAME}", table))
-                val indexes = entity.getJSONArray("indices")
+                val indexes = entity.optJSONArray("indices") ?: org.json.JSONArray()
                 repeat(indexes.length()) { n ->
                     database.execSQL(indexes.getJSONObject(n).getString("createSql").replace("\${TABLE_NAME}", table))
                 }
