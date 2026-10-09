@@ -106,6 +106,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
             Text("Esta área organiza documentos temporariamente. Não é um local de armazenamento. Nada é enviado ao Braga Saúde. Salve o PDF fora do aplicativo e guarde seus originais.")
             Text("As cópias expiram em 24 horas. Depois desse prazo não poderão ser abertas; a limpeza ocorre quando o sistema permitir ou ao abrir esta área.")
             cameraError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            state.notice?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             val session = state.session

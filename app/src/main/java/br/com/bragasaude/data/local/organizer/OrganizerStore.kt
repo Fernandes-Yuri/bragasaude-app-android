@@ -91,15 +91,16 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         val removed = listOf(folder(id), File(cache, id), File(context.cacheDir, "organizer-outbox/$id"),
             File(context.cacheDir, "organizer-capture/$id")).map { !it.exists() || it.deleteRecursively() }.all { it }
         if (keys.containsAlias(alias(id))) keys.deleteEntry(alias(id))
-        check(removed) { "A limpeza não foi concluída. Tente encerrar novamente." }
+        if (!removed) throw OrganizerProblem("A limpeza não foi concluída. As cópias restantes estão bloqueadas; tente encerrar novamente.")
     }
+    private fun sessionIds(): Set<String> = listOf(root, cache, File(context.cacheDir, "organizer-outbox"),
+        File(context.cacheDir, "organizer-capture")).flatMap { parent -> parent.listFiles()?.map { it.name }.orEmpty() }.toSet()
     private fun clean() {
         val now = System.currentTimeMillis()
-        root.listFiles()?.forEach { f ->
-            val created = f.name.substringBefore('-').toLongOrNull()
-            if (created == null || now < created || now >= created + OrganizerSession.SESSION_DURATION) remove(f.name)
+        sessionIds().forEach { id ->
+            val created = id.substringBefore('-').toLongOrNull()
+            if (!folder(id).exists() || created == null || now < created || now >= created + OrganizerSession.SESSION_DURATION) remove(id)
         }
-        // Also wipe keys left behind by a crash between key creation and directory creation.
         val aliases = keys.aliases().toList()
         aliases.filter { it.startsWith("organizer-") && !folder(it.removePrefix("organizer-")).exists() }
             .forEach { keys.deleteEntry(it) }
@@ -131,13 +132,12 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
     }
     private fun active(id: String): OrganizerSession {
         val s = read(id)
-        if (s.expired(System.currentTimeMillis())) { remove(id); error("A sessão expirou. Importe os originais novamente.") }
+        if (s.expired(System.currentTimeMillis())) { remove(id); throw OrganizerProblem("A sessão expirou. Importe os originais novamente.") }
         return s
     }
     private fun invalidate(id: String) {
         File(folder(id), "result.enc").delete()
         temp(id).listFiles()?.forEach { it.deleteRecursively() }
-        File(context.cacheDir, "organizer-outbox/$id").deleteRecursively()
         File(context.cacheDir, "organizer-capture/$id").deleteRecursively()
     }
     private fun encryptFile(id: String, source: File, target: File) {
@@ -358,7 +358,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     } }
     suspend fun end(id: String): Unit = withContext(Dispatchers.IO) { lock.withLock { remove(id) } }
-    suspend fun clearAll(): Unit = withContext(Dispatchers.IO) { lock.withLock { root.listFiles()?.forEach { remove(it.name) } } }
+    suspend fun clearAll(): Unit = withContext(Dispatchers.IO) { lock.withLock { sessionIds().forEach { remove(it) } } }
     suspend fun cleanup(): Unit = withContext(Dispatchers.IO) { lock.withLock { clean() } }
 }
 

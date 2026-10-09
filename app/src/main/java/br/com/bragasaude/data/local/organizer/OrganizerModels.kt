@@ -59,3 +59,5 @@ object OrganizerMetadata {
     fun suggestDate(text: String): String = Regex("(?i)(?:data\\s+(?:do\\s+exame|de\\s+coleta)|coleta)\\s*[:\\-]?\\s*(\\d{2}/\\d{2}/\\d{4})")
         .find(text)?.groupValues?.get(1)?.takeIf(::validDate).orEmpty()
 }
+
+class OrganizerProblem(message: String) : IllegalStateException(message)

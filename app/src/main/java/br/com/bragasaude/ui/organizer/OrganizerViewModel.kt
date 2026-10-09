@@ -14,7 +14,7 @@ import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 data class OrganizerUiState(val session: OrganizerSession? = null, val busy: Boolean = false,
-    val error: String? = null, val ready: Boolean = false, val saved: Boolean = false,
+    val error: String? = null, val notice: String? = null, val ready: Boolean = false, val saved: Boolean = false,
     val preview: Bitmap? = null, val previewPage: Int = -1, val resultPages: Int = 0, val newest: Boolean = true)
 
 @HiltViewModel
@@ -29,6 +29,7 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore) 
             mutable.value = mutable.value.copy(busy = true, error = null)
             try { block() }
             catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (problem: OrganizerProblem) { mutable.value = mutable.value.copy(error = problem.message) }
             catch (_: Exception) { mutable.value = mutable.value.copy(error = "Não foi possível concluir. Confira o arquivo, o espaço disponível e tente novamente. PDFs com senha precisam de uma cópia sem senha.") }
             finally { mutable.value = mutable.value.copy(busy = false) }
         } }
@@ -40,7 +41,7 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore) 
     }
     fun start() = operation { mutable.value = OrganizerUiState(session = store.start(), busy = true) }
     private fun changed(session: OrganizerSession) {
-        mutable.value = mutable.value.copy(session = session, ready = false, saved = false, preview = null)
+        mutable.value = mutable.value.copy(session = session, ready = false, saved = false, preview = null, notice = null)
     }
     fun import(uris: List<Uri>, appendTo: String? = null) = operation {
         changed(store.import(requireNotNull(mutable.value.session).id, uris, appendTo))
@@ -50,7 +51,10 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore) 
     fun editPhotoPage(id: String, page: Int, moveTo: Int? = null) = operation {
         changed(store.editPhotoPage(requireNotNull(mutable.value.session).id, id, page, moveTo))
     }
-    fun saveOriginal(id: String, uri: Uri) = operation { store.saveOriginal(requireNotNull(mutable.value.session).id, id, uri) }
+    fun saveOriginal(id: String, uri: Uri) = operation {
+        store.saveOriginal(requireNotNull(mutable.value.session).id, id, uri)
+        mutable.value = mutable.value.copy(notice = "Cópia do documento salva no destino escolhido.")
+    }
     fun preview(id: String, page: Int) = operation {
         mutable.value = mutable.value.copy(preview = null)
         val bitmap = store.preview(requireNotNull(mutable.value.session).id, id, page)
