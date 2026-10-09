@@ -105,6 +105,87 @@ class NutritionViewModel @Inject constructor(
             .apply()
     }
 
+    private val _goalSetup = MutableStateFlow(loadStoredNutritionGoalSetup())
+    val goalSetup = _goalSetup.asStateFlow()
+
+    private fun loadStoredNutritionGoalSetup(): br.com.bragasaude.domain.UserNutritionGoalSetup {
+        val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+        val goalStr = prefs.getString("nutrition_goal_$userId", br.com.bragasaude.domain.ClinicalDietaryGoal.MAINTENANCE.name)
+        val goal = try {
+            br.com.bragasaude.domain.ClinicalDietaryGoal.valueOf(goalStr ?: br.com.bragasaude.domain.ClinicalDietaryGoal.MAINTENANCE.name)
+        } catch (_: Exception) {
+            br.com.bragasaude.domain.ClinicalDietaryGoal.MAINTENANCE
+        }
+
+        val actStr = prefs.getString("nutrition_activity_$userId", br.com.bragasaude.domain.DailyActivityLevel.LIGHTLY_ACTIVE.name)
+        val activity = try {
+            br.com.bragasaude.domain.DailyActivityLevel.valueOf(actStr ?: br.com.bragasaude.domain.DailyActivityLevel.LIGHTLY_ACTIVE.name)
+        } catch (_: Exception) {
+            br.com.bragasaude.domain.DailyActivityLevel.LIGHTLY_ACTIVE
+        }
+
+        val isCustom = prefs.getBoolean("calorie_target_is_custom_$userId", false)
+        val currentWeekly = _weeklyPreferences.value
+
+        return br.com.bragasaude.domain.UserNutritionGoalSetup(
+            goal = goal,
+            activityLevel = activity,
+            budgetTier = currentWeekly.budgetTier,
+            hasPantryStaples = currentWeekly.hasPantryStaples,
+            isCustomManual = isCustom,
+            manualKcal = _dailyCalories.value.toDouble().takeIf { isCustom }
+        )
+    }
+
+    fun applyNutritionGoalSetup(setup: br.com.bragasaude.domain.UserNutritionGoalSetup) {
+        _goalSetup.value = setup
+        val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString("nutrition_goal_$userId", setup.goal.name)
+            .putString("nutrition_activity_$userId", setup.activityLevel.name)
+            .putBoolean("calorie_target_is_custom_$userId", setup.isCustomManual)
+            .apply()
+
+        val updatedWeeklyPrefs = _weeklyPreferences.value.copy(
+            budgetTier = setup.budgetTier,
+            hasPantryStaples = setup.hasPantryStaples
+        )
+        updateWeeklyPreferences(updatedWeeklyPrefs)
+
+        viewModelScope.launch {
+            try {
+                val profile = profileRepository.getProfile(userId).first()
+                val calculatedKcal = br.com.bragasaude.domain.HealthCalculators.calculateGoalSetupKcal(
+                    weight = profile?.weight,
+                    height = profile?.height,
+                    birthDate = profile?.birthDate,
+                    gender = profile?.gender,
+                    setup = setup
+                )
+
+                _isCustomCalorieTarget.value = setup.isCustomManual
+                _dailyCalories.value = calculatedKcal
+
+                profile?.let {
+                    val updated = it.toRemote().copy(
+                        dailyCalorieTarget = calculatedKcal.toDouble(),
+                        activityLevel = setup.activityLevel.name
+                    )
+                    profileRepository.saveProfile(updated)
+                }
+
+                if (observedTarget != calculatedKcal) {
+                    changedTarget(calculatedKcal.toDouble())
+                }
+                observedTarget = calculatedKcal
+
+                generateWeeklyGroceryList(preserveManual = true, preferences = updatedWeeklyPrefs)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
 
     private val _contributionState = MutableStateFlow(br.com.bragasaude.domain.GroceryContributionState())
     val contributionState = _contributionState.asStateFlow()

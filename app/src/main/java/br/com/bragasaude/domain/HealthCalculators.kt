@@ -227,6 +227,36 @@ object HealthCalculators {
             )
     }
 
+    /**
+     * Calcula as calorias com base no questionario de metas e rotina do usuario.
+     */
+    fun calculateGoalSetupKcal(
+        weight: Double?,
+        height: Double?,
+        birthDate: String?,
+        gender: String?,
+        setup: UserNutritionGoalSetup
+    ): Float {
+        if (setup.isCustomManual && setup.manualKcal != null && setup.manualKcal > 500.0) {
+            return setup.manualKcal.toFloat()
+        }
+
+        val weightKg = (weight?.toFloat() ?: 70f).coerceIn(30f, 300f)
+        val isMale = gender?.equals("FEMININO", ignoreCase = true) != true
+        val rawHeight = height?.toFloat()
+        val heightCm = when {
+            rawHeight != null && rawHeight in 50f..250f -> rawHeight
+            rawHeight != null && rawHeight in 0.5f..2.5f -> rawHeight * 100f
+            isMale -> 175f
+            else -> 162f
+        }
+
+        val age = calculateAge(birthDate)
+        val bmr = calculateBMR(weightKg, heightCm, age, isMale)
+        val tdee = calculateTDEE(bmr, setup.activityLevel.factor)
+        return calculateTargetCalories(tdee, bmr, setup.goal.toDietaryGoal())
+    }
+
     data class NutritionTriad(
         val min: Float,
         val avg: Float,
