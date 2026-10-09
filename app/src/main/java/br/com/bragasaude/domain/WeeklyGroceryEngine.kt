@@ -271,6 +271,7 @@ object WeeklyGroceryEngine {
             dailyCalorieTarget = effectiveDailyCalories,
             ingredientCatalog = ingredientCatalog,
             selectedCanonicalGroups = selectedCanonicalGroups,
+            destConsumptions = plannedConsumptions,
             preferFish = hasHighBp,
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic
