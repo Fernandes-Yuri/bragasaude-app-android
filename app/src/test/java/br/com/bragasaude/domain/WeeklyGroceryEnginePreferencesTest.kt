@@ -202,9 +202,7 @@ class WeeklyGroceryEnginePreferencesTest {
         assertFalse("Plano não deve estar vazio", plan.items.isEmpty())
         assertTrue("Cesta ultraeconômica deve ter <= 10 itens, obteve ${plan.items.size}", plan.items.size <= 10)
 
-        val totalKcal = plan.consumptions.sumOf { it.plannedCalories }
-        val coverage = totalKcal / targetWeeklyKcal
-        assertTrue("Cobertura energética deve ser >= 85% para meta alta sem passar fome, obteve ${coverage * 100}%", coverage >= 0.85)
+        assertTrue("Cobertura energética deve ser >= 85% para meta alta sem passar fome, obteve ${plan.coveragePercent}%", plan.coveragePercent >= 85.0)
 
         val foodNames = plan.items.map { it.foodName.lowercase() }
         assertTrue("Deve conter arroz", foodNames.any { it.contains("arroz") })
