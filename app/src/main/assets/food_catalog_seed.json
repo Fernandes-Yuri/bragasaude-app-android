@@ -143,34 +143,6 @@
     ]
   },
   {
-    "remoteId": "food_006",
-    "name": "Linhaça Marrom Moída",
-    "category": "Sementes & Grãos",
-    "kcal": 530,
-    "carbsG": 29,
-    "proteinG": 18,
-    "fatG": 42,
-    "fiberG": 27,
-    "isDiabetesSafe": true,
-    "isHypertensionSafe": true,
-    "status": "RECOMENDADO",
-    "functionalTags": [
-      "omega3",
-      "lignanas",
-      "fibra_soluvel"
-    ],
-    "healthBenefits": "Rica em fibras e compostos antioxidantes benéficos para a saúde intestinal.",
-    "consumptionTip": "Salpique sobre salada de frutas ou iogurte.",
-    "servingSizeGrams": 15,
-    "servingUnit": "1 colher de sopa (15g)",
-    "minServingGrams": 5,
-    "maxServingGrams": 30,
-    "suitableMeals": [
-      "Café da Manhã",
-      "Lanche da Tarde"
-    ]
-  },
-  {
     "remoteId": "food_007",
     "name": "Semente de Girassol com Casca",
     "category": "Sementes & Grãos",
@@ -597,33 +569,6 @@
     ],
     "healthBenefits": "Dose abundante de cálcio e vitamina E para pele e ossos saudáveis.",
     "consumptionTip": "6 a 8 amêndoas no lanche da tarde.",
-    "servingSizeGrams": 15,
-    "servingUnit": "1 colher de sopa (15g)",
-    "minServingGrams": 5,
-    "maxServingGrams": 30,
-    "suitableMeals": [
-      "Lanche da Tarde"
-    ]
-  },
-  {
-    "remoteId": "food_023",
-    "name": "Amendoim Torrado sem Sal",
-    "category": "Oleaginosas",
-    "kcal": 567,
-    "carbsG": 16.1,
-    "proteinG": 25.8,
-    "fatG": 49.2,
-    "fiberG": 8.5,
-    "isDiabetesSafe": true,
-    "isHypertensionSafe": true,
-    "status": "RECOMENDADO",
-    "functionalTags": [
-      "resveratrol",
-      "proteina_vegetal",
-      "arginina"
-    ],
-    "healthBenefits": "Contém arginina e resveratrol que auxiliam no relaxamento dos vasos sanguíneos.",
-    "consumptionTip": "1 colher de sopa rasa no lanche.",
     "servingSizeGrams": 15,
     "servingUnit": "1 colher de sopa (15g)",
     "minServingGrams": 5,
@@ -1692,114 +1637,6 @@
     ]
   },
   {
-    "remoteId": "food_063",
-    "name": "Alface Lisa",
-    "category": "Verduras",
-    "kcal": 11,
-    "carbsG": 1.7,
-    "proteinG": 1.3,
-    "fatG": 0.2,
-    "fiberG": 1.8,
-    "isDiabetesSafe": true,
-    "isHypertensionSafe": true,
-    "status": "RECOMENDADO",
-    "functionalTags": [
-      "hidratante",
-      "digestivo_leve",
-      "baixo_calorico"
-    ],
-    "healthBenefits": "Textura macia de mastigação rápida para saladas leves.",
-    "consumptionTip": "Folhas frescas no jantar.",
-    "servingSizeGrams": 50,
-    "servingUnit": "1 prato de sobremesa (50g)",
-    "minServingGrams": 25,
-    "maxServingGrams": 150,
-    "suitableMeals": [
-      "Jantar"
-    ]
-  },
-  {
-    "remoteId": "food_064",
-    "name": "Alface Roxa",
-    "category": "Verduras",
-    "kcal": 13,
-    "carbsG": 2,
-    "proteinG": 1.3,
-    "fatG": 0.2,
-    "fiberG": 1.9,
-    "isDiabetesSafe": true,
-    "isHypertensionSafe": true,
-    "status": "RECOMENDADO",
-    "functionalTags": [
-      "antocianina",
-      "antioxidante",
-      "baixo_ig"
-    ],
-    "healthBenefits": "Pigmentos roxos que protegem a integridade das artérias.",
-    "consumptionTip": "Salada colorida de almoço.",
-    "servingSizeGrams": 50,
-    "servingUnit": "1 prato de sobremesa (50g)",
-    "minServingGrams": 25,
-    "maxServingGrams": 150,
-    "suitableMeals": [
-      "Almoço"
-    ]
-  },
-  {
-    "remoteId": "food_065",
-    "name": "Folhas de Mostarda Refogadas",
-    "category": "Hortaliças & Folhosos",
-    "kcal": 27,
-    "carbsG": 4.4,
-    "proteinG": 2.9,
-    "fatG": 0.5,
-    "fiberG": 3.1,
-    "isDiabetesSafe": true,
-    "isHypertensionSafe": true,
-    "status": "RECOMENDADO",
-    "functionalTags": [
-      "nitrato_natural",
-      "antioxidante_glicemia",
-      "digestivo_leve"
-    ],
-    "healthBenefits": "Nitratos vasodilatadores e princípios amargos estimulantes da digestão.",
-    "consumptionTip": "Tempere com azeite e limão no almoço.",
-    "servingSizeGrams": 50,
-    "servingUnit": "2 folhas picadas (50g)",
-    "minServingGrams": 20,
-    "maxServingGrams": 150,
-    "suitableMeals": [
-      "Almoço"
-    ]
-  },
-  {
-    "remoteId": "food_066",
-    "name": "Agrião d'Água",
-    "category": "Verduras",
-    "kcal": 17,
-    "carbsG": 2.3,
-    "proteinG": 2.7,
-    "fatG": 0.2,
-    "fiberG": 2.1,
-    "isDiabetesSafe": true,
-    "isHypertensionSafe": true,
-    "status": "RECOMENDADO",
-    "functionalTags": [
-      "ferro_vegetal",
-      "vitamina_k",
-      "antioxidante"
-    ],
-    "healthBenefits": "Vitamina K para fixação do cálcio nos ossos e proteção pulmonar.",
-    "consumptionTip": "1 xícara na salada do almoço.",
-    "servingSizeGrams": 40,
-    "servingUnit": "1 xícara cheia (40g)",
-    "minServingGrams": 20,
-    "maxServingGrams": 120,
-    "suitableMeals": [
-      "Almoço"
-    ]
-  },
-  {
     "remoteId": "food_067",
     "name": "Espinafre Refogado",
     "category": "Verduras",
@@ -1825,60 +1662,6 @@
     "maxServingGrams": 180,
     "suitableMeals": [
       "Jantar"
-    ]
-  },
-  {
-    "remoteId": "food_068",
-    "name": "Escarola / Chicória Refogada",
-    "category": "Verduras",
-    "kcal": 20,
-    "carbsG": 3.4,
-    "proteinG": 1.7,
-    "fatG": 0.2,
-    "fiberG": 2.8,
-    "isDiabetesSafe": true,
-    "isHypertensionSafe": true,
-    "status": "RECOMENDADO",
-    "functionalTags": [
-      "inulina",
-      "fibra_prebiotica",
-      "baixo_ig"
-    ],
-    "healthBenefits": "Inulina prebiótica pura que estimula o intestino saudável.",
-    "consumptionTip": "Refogue com alho para o jantar.",
-    "servingSizeGrams": 60,
-    "servingUnit": "2 colheres de sopa (60g)",
-    "minServingGrams": 30,
-    "maxServingGrams": 180,
-    "suitableMeals": [
-      "Jantar"
-    ]
-  },
-  {
-    "remoteId": "food_069",
-    "name": "Almeirão Refogado",
-    "category": "Verduras",
-    "kcal": 18,
-    "carbsG": 3,
-    "proteinG": 1.8,
-    "fatG": 0.2,
-    "fiberG": 2.6,
-    "isDiabetesSafe": true,
-    "isHypertensionSafe": true,
-    "status": "RECOMENDADO",
-    "functionalTags": [
-      "compostos_amargos",
-      "hepatoprotetor",
-      "baixo_ig"
-    ],
-    "healthBenefits": "Amargor terapêutico que estimula a produção de bile e digestão de gorduras.",
-    "consumptionTip": "Refogue levemente no almoço.",
-    "servingSizeGrams": 50,
-    "servingUnit": "2 colheres de sopa (50g)",
-    "minServingGrams": 25,
-    "maxServingGrams": 150,
-    "suitableMeals": [
-      "Almoço"
     ]
   },
   {
@@ -4183,34 +3966,6 @@
     ]
   },
   {
-    "remoteId": "food_155",
-    "name": "Músculo Bovino Cozido em Pedaços",
-    "category": "Carnes & Aves",
-    "kcal": 142,
-    "carbsG": 0,
-    "proteinG": 27,
-    "fatG": 3.5,
-    "fiberG": 0,
-    "isDiabetesSafe": true,
-    "isHypertensionSafe": true,
-    "status": "RECOMENDADO",
-    "functionalTags": [
-      "colageno_natural",
-      "ferro_heme",
-      "caldo_nutritivo"
-    ],
-    "healthBenefits": "Rico em colágeno natural que protege cartilagens e tendões.",
-    "consumptionTip": "2 pedaços macios no almoço ou sopa do jantar.",
-    "servingSizeGrams": 90,
-    "servingUnit": "2 pedaços macios (90g)",
-    "minServingGrams": 45,
-    "maxServingGrams": 180,
-    "suitableMeals": [
-      "Almoço",
-      "Jantar"
-    ]
-  },
-  {
     "remoteId": "food_156",
     "name": "Lombo Suíno Assado Magro",
     "category": "Carnes & Aves",
@@ -4390,33 +4145,6 @@
       "potassio"
     ],
     "healthBenefits": "Carne branca delicada de fácil mastigação e leve digestão.",
-    "consumptionTip": "1 filé médio no jantar.",
-    "servingSizeGrams": 100,
-    "servingUnit": "1 filé médio (100g)",
-    "minServingGrams": 50,
-    "maxServingGrams": 200,
-    "suitableMeals": [
-      "Jantar"
-    ]
-  },
-  {
-    "remoteId": "food_163",
-    "name": "Pescada Branca Grelhada",
-    "category": "Peixes & Frutos do Mar",
-    "kcal": 85,
-    "carbsG": 0,
-    "proteinG": 18.5,
-    "fatG": 1,
-    "fiberG": 0,
-    "isDiabetesSafe": true,
-    "isHypertensionSafe": true,
-    "status": "RECOMENDADO",
-    "functionalTags": [
-      "baixo_sodio",
-      "baixo_calorico",
-      "digestivo_leve"
-    ],
-    "healthBenefits": "Peixe magro tradicional das feiras brasileiras, ideal para o jantar.",
     "consumptionTip": "1 filé médio no jantar.",
     "servingSizeGrams": 100,
     "servingUnit": "1 filé médio (100g)",
@@ -4741,33 +4469,6 @@
     ],
     "healthBenefits": "Leve e 100% livre de lactose para estômagos intolerantes.",
     "consumptionTip": "1 copo americano no café da manhã.",
-    "servingSizeGrams": 200,
-    "servingUnit": "1 copo (200ml)",
-    "minServingGrams": 100,
-    "maxServingGrams": 300,
-    "suitableMeals": [
-      "Café da Manhã"
-    ]
-  },
-  {
-    "remoteId": "food_176",
-    "name": "Leite Integral Pasteurizado",
-    "category": "Laticínios & Derivados",
-    "kcal": 35,
-    "carbsG": 4.9,
-    "proteinG": 3.4,
-    "fatG": 0.1,
-    "fiberG": 0,
-    "isDiabetesSafe": true,
-    "isHypertensionSafe": true,
-    "status": "RECOMENDADO",
-    "functionalTags": [
-      "beta_glucana_liquida",
-      "zero_lactose",
-      "conforto"
-    ],
-    "healthBenefits": "Textura aveludada com fibras solúveis de aveia.",
-    "consumptionTip": "1 copo morno no café da manhã.",
     "servingSizeGrams": 200,
     "servingUnit": "1 copo (200ml)",
     "minServingGrams": 100,
@@ -5209,34 +4910,6 @@
     ]
   },
   {
-    "remoteId": "food_193",
-    "name": "Gengibre Fresco Ralado",
-    "category": "Temperos & Raízes",
-    "kcal": 80,
-    "carbsG": 17.8,
-    "proteinG": 1.8,
-    "fatG": 0.7,
-    "fiberG": 2,
-    "isDiabetesSafe": true,
-    "isHypertensionSafe": true,
-    "status": "RECOMENDADO",
-    "functionalTags": [
-      "gingerol",
-      "digestivo_leve",
-      "anti_inflamatorio"
-    ],
-    "healthBenefits": "Gingerol que ativa o peristaltismo gástrico saudável.",
-    "consumptionTip": "1 lasca fina ralada em chás ou peixes.",
-    "servingSizeGrams": 3,
-    "servingUnit": "1 lasca fina (3g)",
-    "minServingGrams": 1,
-    "maxServingGrams": 10,
-    "suitableMeals": [
-      "Lanche da Tarde",
-      "Jantar"
-    ]
-  },
-  {
     "remoteId": "food_194",
     "name": "Pimenta-do-Reino Moída na Hora",
     "category": "Temperos & Especiarias",
@@ -5287,32 +4960,6 @@
     "maxServingGrams": 3,
     "suitableMeals": [
       "Almoço"
-    ]
-  },
-  {
-    "remoteId": "food_196",
-    "name": "Alho Fresco Picadinho",
-    "category": "Temperos & Ervas",
-    "kcal": 149,
-    "carbsG": 33.1,
-    "proteinG": 6.4,
-    "fatG": 0.5,
-    "fiberG": 2.1,
-    "isDiabetesSafe": true,
-    "isHypertensionSafe": true,
-    "status": "RECOMENDADO",
-    "functionalTags": [
-      "miristicina",
-      "calmante_digestivo"
-    ],
-    "healthBenefits": "Aroma clássico de conforto que relaxa a musculatura gastrointestinal.",
-    "consumptionTip": "1 pitada sobre purê de abóbora no jantar.",
-    "servingSizeGrams": 5,
-    "servingUnit": "1 dente médio (5g)",
-    "minServingGrams": 2,
-    "maxServingGrams": 15,
-    "suitableMeals": [
-      "Jantar"
     ]
   },
   {
@@ -5957,6 +5604,564 @@
     "minServingGrams": 150,
     "maxServingGrams": 500,
     "suitableMeals": [
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_221",
+    "name": "Pão Francês Tradicional",
+    "category": "Panificados & Pães",
+    "kcal": 300,
+    "carbsG": 58.7,
+    "proteinG": 8.0,
+    "fatG": 3.1,
+    "fiberG": 2.3,
+    "isDiabetesSafe": false,
+    "isHypertensionSafe": true,
+    "status": "MODERADO",
+    "functionalTags": [
+      "carboidrato_rapido",
+      "padaria_tradicional"
+    ],
+    "healthBenefits": "Fonte de energia rápida matinal tradicional brasileira.",
+    "consumptionTip": "Prefira consumir acompanhado de uma fonte de proteína como ovo ou queijo para reduzir a resposta glicêmica.",
+    "servingSizeGrams": 50,
+    "servingUnit": "1 unidade (50g)",
+    "minServingGrams": 25,
+    "maxServingGrams": 100,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_222",
+    "name": "Pão de Forma Integral",
+    "category": "Panificados & Pães",
+    "kcal": 245,
+    "carbsG": 44.0,
+    "proteinG": 9.5,
+    "fatG": 3.5,
+    "fiberG": 6.9,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": true,
+    "status": "RECOMENDADO",
+    "functionalTags": [
+      "fibras_integrais",
+      "baixo_ig",
+      "saciedade"
+    ],
+    "healthBenefits": "Rico em fibras insolúveis que retardam a absorção do carboidrato e prolongam a saciedade.",
+    "consumptionTip": "Excelente base para torradas com ovos mexidos ou pasta de amendoim.",
+    "servingSizeGrams": 50,
+    "servingUnit": "2 fatias (50g)",
+    "minServingGrams": 25,
+    "maxServingGrams": 100,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_223",
+    "name": "Goma de Tapioca Hidratada",
+    "category": "Cereais & Fibras",
+    "kcal": 240,
+    "carbsG": 60.0,
+    "proteinG": 0.0,
+    "fatG": 0.0,
+    "fiberG": 0.5,
+    "isDiabetesSafe": false,
+    "isHypertensionSafe": true,
+    "status": "MODERADO",
+    "functionalTags": [
+      "sem_gluten",
+      "energia_rapida"
+    ],
+    "healthBenefits": "Opção natural livre de glúten e conservantes para o café da manhã.",
+    "consumptionTip": "Prepare na frigideira com recheio proteico (ovo, frango ou queijo) para equilibrar a carga glicêmica.",
+    "servingSizeGrams": 60,
+    "servingUnit": "3 colheres de sopa cheias (60g)",
+    "minServingGrams": 30,
+    "maxServingGrams": 120,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_224",
+    "name": "Crepioca Simples (Tapioca + Ovo)",
+    "category": "Preparações Matinais",
+    "kcal": 175,
+    "carbsG": 18.0,
+    "proteinG": 9.0,
+    "fatG": 6.5,
+    "fiberG": 0.5,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": true,
+    "status": "RECOMENDADO",
+    "functionalTags": [
+      "proteina_alto_vb",
+      "saciedade",
+      "sem_gluten"
+    ],
+    "healthBenefits": "Combinação equilibrada de carboidrato e proteína que reduz o pico de insulina.",
+    "consumptionTip": "Bata 1 ovo com 2 colheres de tapioca e doure dos dois lados na frigideira antiaderente.",
+    "servingSizeGrams": 90,
+    "servingUnit": "1 disco médio (90g)",
+    "minServingGrams": 50,
+    "maxServingGrams": 180,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_225",
+    "name": "Panqueca de Aveia e Banana",
+    "category": "Preparações Matinais",
+    "kcal": 165,
+    "carbsG": 24.0,
+    "proteinG": 7.5,
+    "fatG": 4.5,
+    "fiberG": 3.2,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": true,
+    "status": "RECOMENDADO",
+    "functionalTags": [
+      "beta_glucana",
+      "potassio",
+      "saciedade_prolongada"
+    ],
+    "healthBenefits": "Rica em fibras solúveis da aveia e potássio natural da banana para sustentação energética.",
+    "consumptionTip": "Amasse 1 banana com 1 ovo e 2 colheres de aveia em flocos e doure na frigideira.",
+    "servingSizeGrams": 130,
+    "servingUnit": "1 unidade média (130g)",
+    "minServingGrams": 65,
+    "maxServingGrams": 260,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_226",
+    "name": "Mingau de Aveia com Leite",
+    "category": "Preparações Matinais",
+    "kcal": 95,
+    "carbsG": 14.0,
+    "proteinG": 4.2,
+    "fatG": 2.4,
+    "fiberG": 1.8,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": true,
+    "status": "RECOMENDADO",
+    "functionalTags": [
+      "conforto_termico",
+      "digestao_suave",
+      "beta_glucana"
+    ],
+    "healthBenefits": "Refeição morna e reconfortante de alta digestibilidade e proteção da mucosa gástrica.",
+    "consumptionTip": "Cozinhe 30g de aveia em 150ml de leite com canela em pó sem açúcar.",
+    "servingSizeGrams": 200,
+    "servingUnit": "1 tigela média (200g)",
+    "minServingGrams": 100,
+    "maxServingGrams": 350,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_227",
+    "name": "Torrada Tradicional / Integral",
+    "category": "Panificados & Pães",
+    "kcal": 380,
+    "carbsG": 72.0,
+    "proteinG": 11.0,
+    "fatG": 5.0,
+    "fiberG": 5.0,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": true,
+    "status": "RECOMENDADO",
+    "functionalTags": [
+      "crocancia",
+      "praticidade"
+    ],
+    "healthBenefits": "Opção prática e estável para consumo diário com pastas e queijos magros.",
+    "consumptionTip": "Acompanhe com queijo ricota, requeijão ou ovo mexido.",
+    "servingSizeGrams": 30,
+    "servingUnit": "3 fatias (30g)",
+    "minServingGrams": 20,
+    "maxServingGrams": 60,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_228",
+    "name": "Pão de Queijo Tradicional",
+    "category": "Panificados & Pães",
+    "kcal": 310,
+    "carbsG": 38.0,
+    "proteinG": 6.0,
+    "fatG": 15.0,
+    "fiberG": 1.0,
+    "isDiabetesSafe": false,
+    "isHypertensionSafe": false,
+    "status": "MODERADO",
+    "functionalTags": [
+      "afetivo_tradicional",
+      "sem_gluten"
+    ],
+    "healthBenefits": "Alimento tradicional afetivo rico em energia.",
+    "consumptionTip": "Consuma com moderação em dias de maior gasto calórico acompanhado de café preto.",
+    "servingSizeGrams": 50,
+    "servingUnit": "2 unidades pequenas (50g)",
+    "minServingGrams": 25,
+    "maxServingGrams": 100,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_229",
+    "name": "Pipoca de Panela",
+    "category": "Lanches & Snacks",
+    "kcal": 375,
+    "carbsG": 65.0,
+    "proteinG": 10.0,
+    "fatG": 9.0,
+    "fiberG": 12.0,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": true,
+    "status": "RECOMENDADO",
+    "functionalTags": [
+      "polifenois",
+      "alto_volume",
+      "fibras_puras"
+    ],
+    "healthBenefits": "Altíssima densidade de polifenóis antioxidantes e fibras alimentares com alto volume e baixa densidade calórica.",
+    "consumptionTip": "Estoure na panela com pouco óleo e tempere com ervas finas e pouco sal.",
+    "servingSizeGrams": 30,
+    "servingUnit": "1 bacia pequena (30g)",
+    "minServingGrams": 15,
+    "maxServingGrams": 60,
+    "suitableMeals": [
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_230",
+    "name": "Biscoito de Polvilho Assado",
+    "category": "Lanches & Snacks",
+    "kcal": 410,
+    "carbsG": 75.0,
+    "proteinG": 3.0,
+    "fatG": 11.0,
+    "fiberG": 1.5,
+    "isDiabetesSafe": false,
+    "isHypertensionSafe": true,
+    "status": "MODERADO",
+    "functionalTags": [
+      "leveza",
+      "sem_gluten",
+      "snack_pratico"
+    ],
+    "healthBenefits": "Digestão rápida e leve para intervalos vespertinos sem pesar no estômago.",
+    "consumptionTip": "Consuma uma porção controlada no lanche da tarde acompanhado de chá ou café.",
+    "servingSizeGrams": 30,
+    "servingUnit": "1 porção individual (30g)",
+    "minServingGrams": 15,
+    "maxServingGrams": 50,
+    "suitableMeals": [
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_231",
+    "name": "Bolo de Fubá Caseiro Simples",
+    "category": "Panificados & Pães",
+    "kcal": 310,
+    "carbsG": 48.0,
+    "proteinG": 5.5,
+    "fatG": 11.0,
+    "fiberG": 2.0,
+    "isDiabetesSafe": false,
+    "isHypertensionSafe": true,
+    "status": "MODERADO",
+    "functionalTags": [
+      "tradicao_brasileira",
+      "energia_conforto"
+    ],
+    "healthBenefits": "Opção tradicional de padaria e casa brasileira preparada com milho nacional.",
+    "consumptionTip": "Aprecie uma fatia fina no lanche da tarde com café coado sem açúcar.",
+    "servingSizeGrams": 50,
+    "servingUnit": "1 fatia fina (50g)",
+    "minServingGrams": 30,
+    "maxServingGrams": 80,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_232",
+    "name": "Ovo Mexido Simples",
+    "category": "Proteínas & Ovos",
+    "kcal": 155,
+    "carbsG": 1.2,
+    "proteinG": 13.0,
+    "fatG": 11.0,
+    "fiberG": 0.0,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": true,
+    "status": "RECOMENDADO",
+    "functionalTags": [
+      "colina",
+      "proteina_completa",
+      "zero_carb"
+    ],
+    "healthBenefits": "Proteína de referência biológica máxima e colina para memória e preservação celular.",
+    "consumptionTip": "Prepare em fogo baixo com um fio de azeite e orégano.",
+    "servingSizeGrams": 100,
+    "servingUnit": "2 ovos médios (100g)",
+    "minServingGrams": 50,
+    "maxServingGrams": 180,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde",
+      "Jantar"
+    ]
+  },
+  {
+    "remoteId": "food_233",
+    "name": "Requeijão Cremoso Tradicional",
+    "category": "Laticínios & Derivados",
+    "kcal": 250,
+    "carbsG": 3.5,
+    "proteinG": 9.0,
+    "fatG": 23.0,
+    "fiberG": 0.0,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": true,
+    "status": "MODERADO",
+    "functionalTags": [
+      "calcio",
+      "cremosidade",
+      "baixo_carb"
+    ],
+    "healthBenefits": "Cremosidade e sabor com cálcio lácteo para pães e cuscuz.",
+    "consumptionTip": "Espalhe 1 colher de sopa sobre torradas ou tapioca.",
+    "servingSizeGrams": 30,
+    "servingUnit": "1 colher de sopa (30g)",
+    "minServingGrams": 15,
+    "maxServingGrams": 45,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_234",
+    "name": "Manteiga com Sal",
+    "category": "Gorduras & Manteigas",
+    "kcal": 720,
+    "carbsG": 0.1,
+    "proteinG": 0.8,
+    "fatG": 81.0,
+    "fiberG": 0.0,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": false,
+    "status": "MODERADO",
+    "functionalTags": [
+      "gordura_natural",
+      "butirato",
+      "zero_ultraprocessado"
+    ],
+    "healthBenefits": "Gordura natural sem óleos hidrogenados nem gorduras trans industriais.",
+    "consumptionTip": "Passe uma ponta de faca no cuscuz quente ou pão francês.",
+    "servingSizeGrams": 10,
+    "servingUnit": "1 ponta de faca (10g)",
+    "minServingGrams": 5,
+    "maxServingGrams": 20,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_235",
+    "name": "Queijo Mussarela em Fatias",
+    "category": "Laticínios & Derivados",
+    "kcal": 285,
+    "carbsG": 2.5,
+    "proteinG": 22.0,
+    "fatG": 21.0,
+    "fiberG": 0.0,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": false,
+    "status": "MODERADO",
+    "functionalTags": [
+      "calcio",
+      "proteina_lactea",
+      "acessivel"
+    ],
+    "healthBenefits": "O queijo mais popular e acessível para complementar sanduíches e cuscuz com proteína.",
+    "consumptionTip": "Aqueça 1 fatia no pão integral ou na tapioca para derreter.",
+    "servingSizeGrams": 30,
+    "servingUnit": "1 fatia média (30g)",
+    "minServingGrams": 15,
+    "maxServingGrams": 60,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_236",
+    "name": "Frango Desfiado Temperado",
+    "category": "Carnes & Aves",
+    "kcal": 150,
+    "carbsG": 0.5,
+    "proteinG": 30.0,
+    "fatG": 3.2,
+    "fiberG": 0.0,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": true,
+    "status": "RECOMENDADO",
+    "functionalTags": [
+      "proteina_magra",
+      "saciedade_maxima",
+      "baixo_gordura"
+    ],
+    "healthBenefits": "Proteína magra desfiada e versátil para recheios nutritivos sem gordura saturada excessiva.",
+    "consumptionTip": "Use para rechear tapiocas, crepiocas ou sanduíches naturais.",
+    "servingSizeGrams": 60,
+    "servingUnit": "2 colheres de sopa cheias (60g)",
+    "minServingGrams": 30,
+    "maxServingGrams": 120,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Almoço",
+      "Lanche da Tarde",
+      "Jantar"
+    ]
+  },
+  {
+    "remoteId": "food_237",
+    "name": "Atum Ralado em Conserva",
+    "category": "Peixes & Frutos do Mar",
+    "kcal": 120,
+    "carbsG": 0.0,
+    "proteinG": 26.0,
+    "fatG": 1.5,
+    "fiberG": 0.0,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": true,
+    "status": "RECOMENDADO",
+    "functionalTags": [
+      "omega3",
+      "proteina_magra",
+      "praticidade"
+    ],
+    "healthBenefits": "Fonte de ômega-3 marinho e proteína rápida para lanches sem necessidade de cozimento.",
+    "consumptionTip": "Misture com ricota ou iogurte natural para criar um patê saudável.",
+    "servingSizeGrams": 60,
+    "servingUnit": "1/2 lata (60g)",
+    "minServingGrams": 30,
+    "maxServingGrams": 120,
+    "suitableMeals": [
+      "Almoço",
+      "Lanche da Tarde",
+      "Jantar"
+    ]
+  },
+  {
+    "remoteId": "food_238",
+    "name": "Café Preto Coado",
+    "category": "Bebidas & Infusões",
+    "kcal": 1,
+    "carbsG": 0.2,
+    "proteinG": 0.1,
+    "fatG": 0.0,
+    "fiberG": 0.0,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": true,
+    "status": "RECOMENDADO",
+    "functionalTags": [
+      "cafeina",
+      "antioxidantes",
+      "polifenois",
+      "zero_calorias"
+    ],
+    "healthBenefits": "Rico em ácidos clorogênicos que estimulam a atenção, cognição e sensibilidade à insulina.",
+    "consumptionTip": "Aprecie puro ou com canela em pó, evitando adição de açúcar refinado.",
+    "servingSizeGrams": 150,
+    "servingUnit": "1 xícara média (150ml)",
+    "minServingGrams": 50,
+    "maxServingGrams": 300,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_239",
+    "name": "Café com Leite (Pingado)",
+    "category": "Bebidas & Infusões",
+    "kcal": 35,
+    "carbsG": 3.5,
+    "proteinG": 2.5,
+    "fatG": 1.5,
+    "fiberG": 0.0,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": true,
+    "status": "RECOMENDADO",
+    "functionalTags": [
+      "calcio",
+      "tradicao_matinal",
+      "energia_suave"
+    ],
+    "healthBenefits": "O clássico matinal brasileiro que combina o estímulo do café com o cálcio e proteína láctea.",
+    "consumptionTip": "Prefira preparar com leite desnatado ou integral sem açúcar.",
+    "servingSizeGrams": 150,
+    "servingUnit": "1 xícara média (150ml)",
+    "minServingGrams": 100,
+    "maxServingGrams": 300,
+    "suitableMeals": [
+      "Café da Manhã",
+      "Lanche da Tarde"
+    ]
+  },
+  {
+    "remoteId": "food_240",
+    "name": "Vitamina de Banana com Leite e Aveia",
+    "category": "Bebidas & Infusões",
+    "kcal": 78,
+    "carbsG": 14.0,
+    "proteinG": 3.2,
+    "fatG": 1.2,
+    "fiberG": 1.2,
+    "isDiabetesSafe": true,
+    "isHypertensionSafe": true,
+    "status": "RECOMENDADO",
+    "functionalTags": [
+      "potassio",
+      "beta_glucana",
+      "refeicao_liquida"
+    ],
+    "healthBenefits": "Refeição líquida completa para manhãs corridas, rica em fibras solúveis, cálcio e potássio.",
+    "consumptionTip": "Bata 1 banana com 200ml de leite e 1 colher de sopa de aveia.",
+    "servingSizeGrams": 250,
+    "servingUnit": "1 copo grande (250ml)",
+    "minServingGrams": 150,
+    "maxServingGrams": 350,
+    "suitableMeals": [
+      "Café da Manhã",
       "Lanche da Tarde"
     ]
   }
