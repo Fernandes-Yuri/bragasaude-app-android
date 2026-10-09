@@ -29,24 +29,32 @@ enum class GroceryProteinPreference(val label: String, val categoryKeywords: Lis
  * Configurações de preferências do usuário para a geração da lista semanal.
  */
 data class WeeklyGroceryPreferences(
-    val budgetTier: GroceryBudgetTier = GroceryBudgetTier.ECONOMIC,
-    val selectedProteins: Set<GroceryProteinPreference> = setOf(
-        GroceryProteinPreference.EGGS,
-        GroceryProteinPreference.POULTRY
-    ),
-    val hasPantryStaples: Boolean = true
+    val budgetTier: GroceryBudgetTier = GroceryBudgetTier.BALANCED,
+    val selectedProteins: Set<GroceryProteinPreference> = emptySet(),
+    val hasPantryStaples: Boolean = false
 ) {
     val isEconomic: Boolean get() = budgetTier == GroceryBudgetTier.ECONOMIC
 
     /**
-     * Valida e garante ao menos uma proteína selecionada.
+     * Valida e garante ao menos uma proteína selecionada quando no modo restrito.
      */
     fun normalized(): WeeklyGroceryPreferences {
-        val proteins = if (selectedProteins.isEmpty()) {
+        val proteins = if (selectedProteins.isEmpty() && isEconomic) {
             setOf(GroceryProteinPreference.EGGS)
         } else {
             selectedProteins
         }
         return copy(selectedProteins = proteins)
+    }
+
+    companion object {
+        val RECOMMENDED = WeeklyGroceryPreferences(
+            budgetTier = GroceryBudgetTier.ECONOMIC,
+            selectedProteins = setOf(
+                GroceryProteinPreference.EGGS,
+                GroceryProteinPreference.POULTRY
+            ),
+            hasPantryStaples = true
+        )
     }
 }

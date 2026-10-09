@@ -29,9 +29,16 @@ fun WeeklyGroceryPreferencesSheet(
     onDismissRequest: () -> Unit,
     onConfirm: (WeeklyGroceryPreferences) -> Unit
 ) {
-    var budgetTier by remember { mutableStateOf(initialPreferences.budgetTier) }
-    var selectedProteins by remember { mutableStateOf(initialPreferences.selectedProteins) }
-    var hasPantryStaples by remember { mutableStateOf(initialPreferences.hasPantryStaples) }
+    val effectiveInitial = remember(initialPreferences) {
+        if (initialPreferences.selectedProteins.isEmpty() && initialPreferences.budgetTier == GroceryBudgetTier.BALANCED) {
+            WeeklyGroceryPreferences.RECOMMENDED
+        } else {
+            initialPreferences
+        }
+    }
+    var budgetTier by remember { mutableStateOf(effectiveInitial.budgetTier) }
+    var selectedProteins by remember { mutableStateOf(effectiveInitial.selectedProteins) }
+    var hasPantryStaples by remember { mutableStateOf(effectiveInitial.hasPantryStaples) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 

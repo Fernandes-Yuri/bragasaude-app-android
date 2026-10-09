@@ -230,8 +230,7 @@ object WeeklyGroceryEngine {
 
         val candidatePantry = poolFor(CORRIDOR_MERCEARIA).let { list ->
             if (preferences.hasPantryStaples) {
-                val nonStaples = list.filterNot { isPantryStaple(it) }
-                if (nonStaples.isNotEmpty()) nonStaples else list
+                list.filterNot { isPantryStaple(it) }
             } else {
                 list
             }
