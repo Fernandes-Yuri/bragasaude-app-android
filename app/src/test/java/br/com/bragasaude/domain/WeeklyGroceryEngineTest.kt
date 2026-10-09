@@ -446,7 +446,7 @@ class WeeklyGroceryEngineTest {
         val plan = WeeklyGroceryEngine.planWeeklyGrocery(
             userId = "user_caps", exams = emptyList(), vitals = emptyList(), profile = null,
             catalog = foods, ingredientCatalog = catalog, targetCalories = 3000.0,
-            preferences = WeeklyGroceryPreferences(costProfile = GroceryCostProfile.ULTRA_ECONOMIC)
+            preferences = WeeklyGroceryPreferences(budgetTier = GroceryBudgetTier.ULTRA_ECONOMIC)
         )
         for (item in plan.items) {
             val name = item.foodName.lowercase()
