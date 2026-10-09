@@ -101,7 +101,6 @@ class WeeklyGroceryEnginePreferencesTest {
 
         val plan = WeeklyGroceryEngine.planWeeklyGrocery(
             userId = "test_user",
-            exams = emptyList(),
             vitals = emptyList(),
             profile = null,
             catalog = foods,
@@ -131,7 +130,6 @@ class WeeklyGroceryEnginePreferencesTest {
 
         val plan = WeeklyGroceryEngine.planWeeklyGrocery(
             userId = "test_user",
-            exams = emptyList(),
             vitals = emptyList(),
             profile = null,
             catalog = foods,
@@ -156,7 +154,6 @@ class WeeklyGroceryEnginePreferencesTest {
 
         val plan = WeeklyGroceryEngine.planWeeklyGrocery(
             userId = "test_user",
-            exams = emptyList(),
             vitals = emptyList(),
             profile = null,
             catalog = foods,
@@ -190,7 +187,6 @@ class WeeklyGroceryEnginePreferencesTest {
 
         val plan = WeeklyGroceryEngine.planWeeklyGrocery(
             userId = "test_user",
-            exams = emptyList(),
             vitals = emptyList(),
             profile = null,
             catalog = foods,

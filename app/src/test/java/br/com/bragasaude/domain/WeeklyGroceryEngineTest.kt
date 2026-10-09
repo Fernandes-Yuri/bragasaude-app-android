@@ -444,7 +444,7 @@ class WeeklyGroceryEngineTest {
     fun preventsAbnormalPantryQuantitiesInWeeklyPlan() {
         val (foods, catalog) = createTestCatalog()
         val plan = WeeklyGroceryEngine.planWeeklyGrocery(
-            userId = "user_caps", exams = emptyList(), vitals = emptyList(), profile = null,
+            userId = "user_caps", vitals = emptyList(), profile = null,
             catalog = foods, ingredientCatalog = catalog, targetCalories = 3000.0,
             preferences = WeeklyGroceryPreferences(budgetTier = GroceryBudgetTier.ULTRA_ECONOMIC)
         )
