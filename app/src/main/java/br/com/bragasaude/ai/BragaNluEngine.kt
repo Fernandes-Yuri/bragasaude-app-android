@@ -498,8 +498,8 @@ object BragaNluEngine {
         if (REGEX_DUVIDA_AGUA.containsMatchIn(limpo)) {
             return NluOutput("duvida_hidratacao_agua", sortearResposta("duvida_hidratacao_agua"), tempoMs = deltaMs(inicio))
         }
-        if (REGEX_DUVIDA_ALIMENTACAO.containsMatchIn(limpo)) {
-            return NluOutput("duvida_alimentacao_rotina", sortearResposta("duvida_alimentacao_rotina"), tempoMs = deltaMs(inicio))
+        if (REGEX_DUVIDA_ALIMENTACAO.containsMatchIn(limpo) || DietAndGroceryMemory.isFoodQuestion(texto)) {
+            return NluOutput("duvida_alimentacao_rotina", null, delegarParaNuvem = true, tempoMs = deltaMs(inicio))
         }
         if (REGEX_DUVIDA_SONO.containsMatchIn(limpo)) {
             return NluOutput("duvida_sono_insonia", sortearResposta("duvida_sono_insonia"), tempoMs = deltaMs(inicio))

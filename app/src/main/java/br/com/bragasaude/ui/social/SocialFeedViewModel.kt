@@ -77,7 +77,7 @@ class SocialFeedViewModel @Inject constructor(
     val author: StateFlow<SocialPostAuthor> = combine(
         socialFeedRepository.getAuthorProfile(currentUserId), _communityNickname
     ) { profile, nickname ->
-        resolveSocialPostAuthor(profile, auth.currentUser?.displayName, currentUserPhotoUrl, nickname)
+        resolveSocialPostAuthor(profile, auth.currentUser?.displayName, currentUserPhotoUrl, profile?.communityNickname ?: nickname)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(30_000), SocialPostAuthor(
         name = br.com.bragasaude.domain.communityDisplayName(auth.currentUser?.displayName),
         photoUrl = currentUserPhotoUrl
@@ -132,7 +132,7 @@ class SocialFeedViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             try {
-                _communityNickname.value = socialFeedRepository.getCommunityNickname()
+                _communityNickname.value = socialFeedRepository.getCommunityNickname(currentUserId)
             } catch (_: Exception) {
                 // O perfil local continua disponível se a rede falhar.
             }
@@ -223,6 +223,22 @@ class SocialFeedViewModel @Inject constructor(
                     e.message ?: "Não foi possível publicar agora. Tente novamente."
                 )
             }
+        }
+    }
+
+    fun editPost(post: SocialPostEntity, title: String, description: String) {
+        viewModelScope.launch {
+            try { socialFeedRepository.editPost(post.id, currentUserId, title, description) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { _feedError.value = e.message ?: "Não foi possível editar." }
+        }
+    }
+
+    fun deletePost(post: SocialPostEntity) {
+        viewModelScope.launch {
+            try { socialFeedRepository.deletePost(post.id, currentUserId) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { _feedError.value = e.message ?: "Não foi possível excluir." }
         }
     }
 

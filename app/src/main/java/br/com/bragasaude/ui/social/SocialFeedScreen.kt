@@ -1,6 +1,8 @@
 package br.com.bragasaude.ui.social
 
 import br.com.bragasaude.ui.components.BragaBottomSheet
+import br.com.bragasaude.ui.components.BragaAlertDialog
+import br.com.bragasaude.ui.components.BragaFormSheet
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -14,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Diversity3
@@ -96,6 +99,8 @@ fun SocialFeedScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var searchQuery by remember { mutableStateOf("") }
     var showCreateSheet by remember { mutableStateOf(false) }
+    var editingPost by remember { mutableStateOf<SocialPostEntity?>(null) }
+    var deletingPost by remember { mutableStateOf<SocialPostEntity?>(null) }
 
     LaunchedEffect(publishState) {
         when (val state = publishState) {
@@ -279,6 +284,9 @@ fun SocialFeedScreen(
                             val selectedReaction = reactions.firstOrNull { it.userId == viewModel.currentUserId }?.reactionType
                                 ?: if (post.hasUserReacted) "apoio" else null
                             SocialPostCard(
+                                isOwner = post.userId == viewModel.currentUserId && !post.pendingSync,
+                                onEdit = { editingPost = post },
+                                onDelete = { deletingPost = post },
                                 nowMillis = nowMillis,
                                 post = post,
                                 fallbackPhotoUrl = viewModel.currentUserPhotoUrl.takeIf { post.userId == viewModel.currentUserId },
@@ -293,6 +301,26 @@ fun SocialFeedScreen(
                 }
             }
         }
+    }
+
+    editingPost?.let { post ->
+        EditPublicationSheet(post, onDismiss = { editingPost = null }) { title, description ->
+            viewModel.editPost(post, title, description)
+            editingPost = null
+        }
+    }
+    deletingPost?.let { post ->
+        BragaAlertDialog(
+            onDismissRequest = { deletingPost = null },
+            title = { Text("Excluir publicação?") },
+            text = { Text("A publicação será removida do mural. Esta ação não pode ser desfeita.") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.deletePost(post); deletingPost = null }) {
+                    Text("Excluir publicação", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { deletingPost = null }) { Text("Cancelar") } }
+        )
     }
 
     if (showCreateSheet) {
@@ -426,7 +454,10 @@ private fun SocialPostCard(
     fallbackPhotoUrl: String?,
     reactions: List<PostReactionEntity>,
     selectedReaction: String?,
-    onReact: (String) -> Unit
+    onReact: (String) -> Unit,
+    isOwner: Boolean,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
     val (typeIcon, typeColor, typeLabel) = getPostTypeBadge(post.postType)
     val haptics = LocalHapticFeedback.current
@@ -476,14 +507,27 @@ private fun SocialPostCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = formatSocialPostTime(post.createdAt, nowMillis),
+                            text = formatSocialPostTime(post.createdAt, nowMillis) + if (post.editedAt != null) " · Editado" else "",
                             modifier = Modifier.semantics {
-                                contentDescription = "Publicado em ${SimpleDateFormat("dd/MM/yyyy 'às' HH:mm", Locale("pt", "BR")).format(post.createdAt)}"
+                                contentDescription = "Publicado em ${SimpleDateFormat("dd/MM/yyyy 'às' HH:mm", Locale("pt", "BR")).format(post.createdAt)}" + if (post.editedAt != null) " · Editado" else ""
                             },
                             style = MaterialTheme.typography.bodySmall,
                             fontSize = 14.sp,
                             color = BragaTextSecondary
                         )
+                    }
+                }
+
+                if (isOwner) {
+                    var menuExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Opções da publicação")
+                        }
+                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                            DropdownMenuItem(text = { Text("Editar publicação") }, onClick = { menuExpanded = false; onEdit() })
+                            DropdownMenuItem(text = { Text("Excluir publicação") }, onClick = { menuExpanded = false; onDelete() })
+                        }
                     }
                 }
 
@@ -1043,4 +1087,30 @@ private fun achievementIcon(categoryOrTitle: String): ImageVector = when {
     categoryOrTitle.contains("Constância", ignoreCase = true) || categoryOrTitle.contains("Disciplina", ignoreCase = true) -> Icons.Default.LocalFireDepartment
     categoryOrTitle.contains("Pressão", ignoreCase = true) -> Icons.Default.Favorite
     else -> Icons.Default.EmojiEvents
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditPublicationSheet(post: SocialPostEntity, onDismiss: () -> Unit, onSave: (String, String) -> Unit) {
+    var title by remember(post.id) { mutableStateOf(post.title) }
+    var description by remember(post.id) { mutableStateOf(post.description.orEmpty()) }
+    BragaFormSheet(
+        onDismissRequest = onDismiss,
+        title = { Text("Editar publicação") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(value = title, onValueChange = { if (it.length <= 200) title = it },
+                    label = { Text("Título") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = description, onValueChange = { if (it.length <= 5000) description = it },
+                    label = { Text("Conteúdo") }, modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 6)
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(title, description) }, enabled = title.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+                Text("Salvar alterações")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Cancelar") } }
+    )
 }

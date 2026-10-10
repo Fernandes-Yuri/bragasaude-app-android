@@ -38,7 +38,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 52, // Remove as tabelas do armazenamento de exames
+    version = 53, // Apelido local e alterações pendentes do mural
     exportSchema = true
 )
 @TypeConverters(Converters::class)

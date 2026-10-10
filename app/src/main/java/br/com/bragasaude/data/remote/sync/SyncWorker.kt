@@ -14,6 +14,8 @@ import br.com.bragasaude.util.BragaTime
 import br.com.bragasaude.ui.util.NotificationHelper
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 @HiltWorker
 class SyncWorker @AssistedInject constructor(
@@ -34,6 +36,12 @@ class SyncWorker @AssistedInject constructor(
     private val symptomsDiaryDao: SymptomsDiaryDao,
     private val bleTelemetryReceiptDao: BleTelemetryReceiptDao
 ) : CoroutineWorker(appContext, workerParams) {
+
+    companion object {
+        private val socialMutationLock = Mutex()
+        /** AUD-AN23: teto de tentativas antes de abandonar um tombstone. */
+        private const val MAX_DELETION_ATTEMPTS = 10
+    }
 
     override suspend fun doWork(): Result {
         var hasErrors = false
@@ -193,6 +201,17 @@ class SyncWorker @AssistedInject constructor(
     }
 
     private suspend fun syncSocialPosts() {
+        socialMutationLock.withLock {
+            for (post in socialFeedDao.getPendingMutations()) {
+                val ok = when (post.pendingMutation) {
+                    "DELETE" -> apiClient.deleteSocialPost(post.id)
+                    "EDIT" -> apiClient.editSocialPost(post)
+                    else -> false
+                }
+                if (!ok) throw java.io.IOException("Publicação aguardando sincronização")
+                socialFeedDao.completeMutation(post)
+            }
+        }
         val pending = socialFeedDao.getPendingPosts()
         for (post in pending) {
             val remoteId = apiClient.syncSocialPost(post)
@@ -258,10 +277,6 @@ class SyncWorker @AssistedInject constructor(
         familyDao.purgeExpiredMessages()
     }
 
-    private companion object {
-        /** AUD-AN23: teto de tentativas antes de abandonar um tombstone. */
-        private const val MAX_DELETION_ATTEMPTS = 10
-    }
 
     private suspend fun syncAuditLogs() {
         val pending = auditLogDao.getPendingSync()
