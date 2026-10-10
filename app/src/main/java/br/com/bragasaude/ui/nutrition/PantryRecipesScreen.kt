@@ -66,6 +66,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import br.com.bragasaude.data.local.model.RecipeIngredientRequirement
+import br.com.bragasaude.data.local.model.RecipeReadinessStatus
 import br.com.bragasaude.domain.RecipePantryMatch
 import kotlinx.coroutines.launch
 
@@ -243,42 +245,60 @@ private fun RecipeCard(match: RecipePantryMatch) {
 
             Spacer(Modifier.height(12.dp))
 
-            // Badges de preparo
+            // Badges de preparo e macros
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Tempo de preparo com Timer icon
-                PrepBadge(
-                    icon = Icons.Default.Timer,
-                    label = "${recipe.prepTimeMinutes} min",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Tempo de preparo com Timer icon
+                    PrepBadge(
+                        icon = Icons.Default.Timer,
+                        label = "${recipe.prepTimeMinutes} min",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
 
-                // Nivel de dificuldade
-                PrepBadge(
-                    icon = Icons.Default.Restaurant,
-                    label = recipe.difficulty,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    // Nivel de dificuldade
+                    PrepBadge(
+                        icon = Icons.Default.Restaurant,
+                        label = recipe.difficulty,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                if (recipe.servingKcal > 0.0) {
+                    MacrosBadge(
+                        kcal = recipe.servingKcal,
+                        carbs = recipe.servingCarbsG,
+                        protein = recipe.servingProteinG,
+                        fat = recipe.servingFatG
+                    )
+                }
             }
 
             Spacer(Modifier.height(14.dp))
 
-            // Selo de despensa (zero emojis)
-            PantryBadge(missingCount = match.missingIngredients.size)
+            // Selo de prontidao da despensa e lista (zero emojis)
+            PantryBadge(match = match)
 
             Spacer(Modifier.height(14.dp))
 
-            // Ingredientes
+            // Ingredientes estruturados
+            val formattedAvailable = match.availableIngredients.map { name ->
+                formatIngredient(name, recipe.structuredIngredients.find { it.ingredientName == name })
+            }
+            val formattedMissing = match.missingIngredients.map { name ->
+                formatIngredient(name, recipe.structuredIngredients.find { it.ingredientName == name })
+            }
+
             IngredientRow(
-                label = "Na lista de compras",
-                items = match.availableIngredients,
+                label = if (match.readinessStatus == RecipeReadinessStatus.READY_TO_COOK) "Disponível na despensa" else "Na lista de compras",
+                items = formattedAvailable,
                 color = MaterialTheme.colorScheme.primary
             )
 
-            if (match.missingIngredients.isNotEmpty()) {
+            if (formattedMissing.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
                 IngredientRow(
                     label = "Faltando",
-                    items = match.missingIngredients,
+                    items = formattedMissing,
                     color = MaterialTheme.colorScheme.error
                 )
             }
@@ -572,27 +592,33 @@ private data class PantryBadgeConfig(
 )
 
 /**
- * Badge indicando status da despensa.
- * Zero emojis — icones vetoriais CheckCircle, Info, ShoppingCart.
+ * Badge indicando status da despensa e lista de compras.
+ * Zero emojis — icones vetoriais CheckCircle, ShoppingCart, Info.
  */
 @Composable
-private fun PantryBadge(missingCount: Int) {
-    val config = if (missingCount == 0) {
-        PantryBadgeConfig(
+private fun PantryBadge(match: RecipePantryMatch) {
+    val config = when (match.readinessStatus) {
+        RecipeReadinessStatus.READY_TO_COOK -> PantryBadgeConfig(
             backgroundColor = Color(0xFFE8F5E9),
             borderColor = Color(0xFF4CAF50).copy(alpha = 0.4f),
             textColor = Color(0xFF2E7D32),
-            text = "Todos os ingredientes estão na sua lista",
+            text = "Pronto para cozinhar: ingredientes na despensa",
             icon = Icons.Default.CheckCircle
         )
-    } else {
-        PantryBadgeConfig(
+        RecipeReadinessStatus.PLANNED_ON_LIST -> PantryBadgeConfig(
+            backgroundColor = Color(0xFFE3F2FD),
+            borderColor = Color(0xFF2196F3).copy(alpha = 0.4f),
+            textColor = Color(0xFF1565C0),
+            text = "Planejado: ingredientes na sua lista de compras",
+            icon = Icons.Default.ShoppingCart
+        )
+        RecipeReadinessStatus.MISSING_INGREDIENTS -> PantryBadgeConfig(
             backgroundColor = Color(0xFFFFF8E1),
             borderColor = Color(0xFFFFB300).copy(alpha = 0.5f),
             textColor = Color(0xFFB78103),
-            text = if (missingCount == 1) "Falta 1 ingrediente da sua lista"
-                   else "Faltam $missingCount ingredientes da sua lista",
-            icon = Icons.Default.ShoppingCart
+            text = if (match.missingCount == 1) "Falta 1 ingrediente da sua lista"
+                   else "Faltam ${match.missingCount} ingredientes da sua lista",
+            icon = Icons.Default.Info
         )
     }
 
@@ -621,6 +647,56 @@ private fun PantryBadge(missingCount: Int) {
             )
         }
     }
+}
+
+/**
+ * Badge com calorias e macronutrientes da receita.
+ */
+@Composable
+private fun MacrosBadge(
+    kcal: Double,
+    carbs: Double,
+    protein: Double,
+    fat: Double
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Restaurant,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(15.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = "${kcal.toInt()} kcal • ${carbs.toInt()}g carb • ${protein.toInt()}g prot • ${fat.toInt()}g gord",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 15.sp
+            )
+        }
+    }
+}
+
+/**
+ * Formata nome do ingrediente acompanhado de quantidade e unidade estruturada.
+ */
+private fun formatIngredient(name: String, req: RecipeIngredientRequirement?): String {
+    if (req == null) return name
+    val amtText = if (req.requiredAmount % 1.0 == 0.0) {
+        req.requiredAmount.toInt().toString()
+    } else {
+        req.requiredAmount.toString().replace('.', ',')
+    }
+    return "$name ($amtText ${req.unit})"
 }
 
 // ==================== ESTADO VAZIO ====================

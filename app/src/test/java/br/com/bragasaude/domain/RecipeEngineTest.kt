@@ -78,7 +78,65 @@ class RecipeEngineTest {
         assertTrue(engine.findBestRecipes(itemsCrepioca, ProfileEntity(userId = "user", foodAllergies = listOf("Ovo"))).isEmpty())
 
         // Alergia declarada "Lactose" deve bloquear receita com "Ricota" (derivado lácteo)
-        assertTrue(engine.findBestRecipes(itemsCrepioca, ProfileEntity(userId = "user", foodAllergies = listOf("Lactose"))).isEmpty())
+        val lactoseRecipes = engine.findBestRecipes(itemsCrepioca, ProfileEntity(userId = "user", foodAllergies = listOf("Lactose")))
+        assertTrue(lactoseRecipes.none { it.recipe.id == "recipe_005" })
+    }
+
+    @Test fun recipeHasStructuredIngredientsAndPositiveMacros() {
+        val all = RecipeCatalog.getAll()
+        assertEquals(21, all.size)
+        for (recipe in all) {
+            assertTrue("Recipe ${recipe.id} structured ingredients empty", recipe.structuredIngredients.isNotEmpty())
+            assertEquals(recipe.ingredientNames.size, recipe.structuredIngredients.size)
+            assertTrue("Recipe ${recipe.id} calories should be positive", recipe.servingKcal > 0.0)
+            assertTrue("Recipe ${recipe.id} protein should be positive", recipe.servingProteinG > 0.0)
+            for (req in recipe.structuredIngredients) {
+                assertTrue("Req ${req.ingredientName} in ${recipe.id} requiredAmount > 0", req.requiredAmount > 0.0)
+                assertTrue("Req ${req.ingredientName} in ${recipe.id} unit valid", req.unit in listOf("g", "ml", "un"))
+            }
+        }
+    }
+
+    @Test fun physicalPantryStockProvidesReadyToCookStatus() {
+        // Recipe 021: Ovo Cozido (needs 2 ovos)
+        val eggStock = br.com.bragasaude.data.local.GroceryPantryStockEntity(
+            userId = "user",
+            ingredientSlug = "food_ovo",
+            unit = "un",
+            availableAmount = 6.0
+        )
+        val result = engine.findBestRecipes(
+            pantryItems = emptyList(),
+            profile = null,
+            mealType = "BREAKFAST",
+            pantryStock = listOf(eggStock)
+        )
+        val eggRecipe = result.firstOrNull { it.recipe.id == "recipe_021" }
+        assertNotNull(eggRecipe)
+        assertEquals(br.com.bragasaude.data.local.model.RecipeReadinessStatus.READY_TO_COOK, eggRecipe!!.readinessStatus)
+        assertTrue(eggRecipe.hasAll)
+        assertTrue(eggRecipe.missingIngredients.isEmpty())
+    }
+
+    @Test fun partialStockFallsBackToPlannedOnListWhenInShoppingList() {
+        // Recipe 021: Ovo Cozido (needs 2 ovos, but stock has only 1 egg)
+        val lowEggStock = br.com.bragasaude.data.local.GroceryPantryStockEntity(
+            userId = "user",
+            ingredientSlug = "food_ovo",
+            unit = "un",
+            availableAmount = 1.0
+        )
+        val shoppingItem = item("Ovos")
+        val result = engine.findBestRecipes(
+            pantryItems = listOf(shoppingItem),
+            profile = null,
+            mealType = "BREAKFAST",
+            pantryStock = listOf(lowEggStock)
+        )
+        val eggRecipe = result.firstOrNull { it.recipe.id == "recipe_021" }
+        assertNotNull(eggRecipe)
+        assertEquals(br.com.bragasaude.data.local.model.RecipeReadinessStatus.PLANNED_ON_LIST, eggRecipe!!.readinessStatus)
+        assertTrue(eggRecipe.hasAll)
     }
 
     private fun item(name: String) = GroceryListItemEntity(

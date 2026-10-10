@@ -1,35 +1,43 @@
 package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.local.GroceryListItemEntity
+import br.com.bragasaude.data.local.GroceryPantryStockEntity
 import br.com.bragasaude.data.local.ProfileEntity
 import br.com.bragasaude.data.local.model.HealthyRecipe
 import br.com.bragasaude.data.local.model.RecipeCatalog
+import br.com.bragasaude.data.local.model.RecipeIngredientRequirement
+import br.com.bragasaude.data.local.model.RecipeMissingRequirement
+import br.com.bragasaude.data.local.model.RecipeReadinessStatus
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Resultado do cruzamento de uma receita com a lista de compras do usuário.
+ * Resultado do cruzamento de uma receita com a lista de compras e a despensa do usuário.
  *
  * @param recipe A receita recomendada.
- * @param availableIngredients Ingredientes que o usuário incluiu na lista de compras.
- * @param missingIngredients Ingredientes que faltam.
- * @param hasAll True se o usuário tem TODOS os ingredientes.
- * @param missingCount Número de ingredientes faltando.
+ * @param availableIngredients Ingredientes que o usuário tem na despensa ou incluiu na lista de compras.
+ * @param missingIngredients Ingredientes que faltam tanto na despensa quanto na lista de compras.
+ * @param hasAll True se o usuário tem todos os ingredientes (no estoque da despensa ou na lista).
+ * @param missingCount Número de ingredientes faltando totalmente.
+ * @param readinessStatus Status de prontidão física (READY_TO_COOK, PLANNED_ON_LIST, MISSING_INGREDIENTS).
+ * @param missingRequirements Detalhes quantitativos dos requisitos pendentes ou planejados.
  */
 data class RecipePantryMatch(
     val recipe: HealthyRecipe,
     val availableIngredients: List<String>,
     val missingIngredients: List<String>,
     val hasAll: Boolean,
-    val missingCount: Int
+    val missingCount: Int,
+    val readinessStatus: RecipeReadinessStatus = RecipeReadinessStatus.READY_TO_COOK,
+    val missingRequirements: List<RecipeMissingRequirement> = emptyList()
 )
 
 /**
- * Motor de Busca e Cruzamento de Receitas com a Despensa.
+ * Motor de Busca e Cruzamento de Receitas com a Despensa e Lista de Compras.
  *
- * Cruza a lista de alimentos da lista de compras do usuário com o catálogo de receitas,
- * aplicando filtros clínicos baseados no perfil (diabetes, hipertensão, alergias).
+ * Cruza a lista de alimentos da lista de compras e o estoque real da despensa do usuário
+ * com o catálogo de receitas, aplicando filtros clínicos baseados no perfil (diabetes, hipertensão, alergias).
  *
  * **Regra de ouro (D3/D4 / DECISOES.md):** As receitas são sugestões de autocuidado
  * nutricional, com ingredientes naturais e preparo simples. Nenhuma alegação diagnóstica
@@ -39,18 +47,21 @@ data class RecipePantryMatch(
 class RecipeEngine @Inject constructor() {
 
     /**
-     * Encontra as melhores receitas para cozinhar com os alimentos da lista de compras.
+     * Encontra as melhores receitas para cozinhar com os alimentos da despensa e lista de compras.
      *
      * @param pantryItems Todos os itens da lista de compras, comprados ou ainda não comprados.
      * @param profile Perfil do usuário com condições clínicas e alergias.
      * @param mealType Tipo de refeição desejado (BREAKFAST, LUNCH, SNACK, DINNER) ou vazio para todas.
-     * @return Lista de receitas ordenadas por maior número de ingredientes disponíveis.
+     * @param includeMissing Se true, inclui sugestões com ingredientes faltando (ex: quando o usuário montou sua própria lista).
+     * @param pantryStock Estoque físico real armazenado na despensa local.
+     * @return Lista de receitas ordenadas por nível de prontidão e maior número de ingredientes disponíveis.
      */
     fun findBestRecipes(
         pantryItems: List<GroceryListItemEntity>,
         profile: ProfileEntity?,
         mealType: String? = null,
-        includeMissing: Boolean = false
+        includeMissing: Boolean = false,
+        pantryStock: List<GroceryPantryStockEntity> = emptyList()
     ): List<RecipePantryMatch> {
         // Extrai nomes de alimentos da despensa (normalizados para comparação case-insensitive)
         val pantryNames = pantryItems
@@ -69,16 +80,23 @@ class RecipeEngine @Inject constructor() {
             isClinicallySafe(recipe, profile)
         }
 
-        // Cruza com a despensa e calcula score
+        // Cruza com o estoque da despensa e a lista de compras e calcula score
         val matches = clinicallySafe.map { recipe ->
-            calculateMatch(recipe, pantryNames)
+            calculateMatch(recipe, pantryNames, pantryStock)
         }
 
-        // Sugestões incompletas são opcionais (quando o usuário montou sua própria lista); receitas completas aparecem primeiro.
+        // Sugestões incompletas são opcionais; receitas prontas e completas aparecem primeiro.
         return matches
             .filter { it.availableIngredients.isNotEmpty() && (includeMissing || it.hasAll) }
             .sortedWith(
-                compareByDescending<RecipePantryMatch> { it.hasAll }
+                compareBy<RecipePantryMatch> {
+                    when (it.readinessStatus) {
+                        RecipeReadinessStatus.READY_TO_COOK -> 0
+                        RecipeReadinessStatus.PLANNED_ON_LIST -> 1
+                        RecipeReadinessStatus.MISSING_INGREDIENTS -> 2
+                    }
+                }
+                    .thenByDescending { it.hasAll }
                     .thenByDescending { it.availableIngredients.size.toDouble() / it.recipe.ingredientNames.size }
                     .thenBy { it.missingCount }
                     .thenBy { it.recipe.id }
@@ -128,30 +146,115 @@ class RecipeEngine @Inject constructor() {
     }
 
     /**
-     * Calcula o cruzamento entre uma receita e a lista de compras do usuário.
+     * Calcula o cruzamento entre uma receita, a lista de compras e o estoque real da despensa.
      */
     private fun calculateMatch(
         recipe: HealthyRecipe,
-        pantryNames: Set<String>
+        pantryNames: Set<String>,
+        pantryStock: List<GroceryPantryStockEntity>
     ): RecipePantryMatch {
         val available = mutableListOf<String>()
         val missing = mutableListOf<String>()
+        val missingRequirements = mutableListOf<RecipeMissingRequirement>()
 
-        for (ingredient in recipe.ingredientNames) {
-            if (RecipeIngredientMatcher.acceptedNames(ingredient).any { it in pantryNames }) {
-                available.add(ingredient)
-            } else {
-                missing.add(ingredient)
+        val requirements = if (recipe.structuredIngredients.isNotEmpty()) {
+            recipe.structuredIngredients
+        } else {
+            recipe.ingredientNames.zip(
+                if (recipe.ingredientFoodIds.size == recipe.ingredientNames.size) recipe.ingredientFoodIds
+                else List(recipe.ingredientNames.size) { "" }
+            ).map { (name, foodId) ->
+                RecipeIngredientRequirement(name, foodId, 100.0, "g")
             }
+        }
+
+        var allPhysicallyInStock = pantryStock.isNotEmpty()
+
+        for (req in requirements) {
+            val stockAmount = getAvailableStockAmount(req, pantryStock)
+            val isPhysicallyAvailable = pantryStock.isNotEmpty() && stockAmount >= req.requiredAmount
+            val isPlanned = RecipeIngredientMatcher.acceptedNames(req.ingredientName).any { it in pantryNames }
+
+            if (isPhysicallyAvailable) {
+                available.add(req.ingredientName)
+            } else {
+                if (pantryStock.isNotEmpty()) {
+                    allPhysicallyInStock = false
+                }
+                if (isPlanned) {
+                    available.add(req.ingredientName)
+                    missingRequirements.add(
+                        RecipeMissingRequirement(
+                            ingredientName = req.ingredientName,
+                            requiredAmount = req.requiredAmount,
+                            unit = req.unit,
+                            availableInPantry = stockAmount,
+                            isPlannedOnList = true
+                        )
+                    )
+                } else {
+                    missing.add(req.ingredientName)
+                    missingRequirements.add(
+                        RecipeMissingRequirement(
+                            ingredientName = req.ingredientName,
+                            requiredAmount = req.requiredAmount,
+                            unit = req.unit,
+                            availableInPantry = stockAmount,
+                            isPlannedOnList = false
+                        )
+                    )
+                }
+            }
+        }
+
+        val hasAll = missing.isEmpty()
+        val readinessStatus = when {
+            allPhysicallyInStock && hasAll -> RecipeReadinessStatus.READY_TO_COOK
+            hasAll -> RecipeReadinessStatus.PLANNED_ON_LIST
+            else -> RecipeReadinessStatus.MISSING_INGREDIENTS
         }
 
         return RecipePantryMatch(
             recipe = recipe,
             availableIngredients = available,
             missingIngredients = missing,
-            hasAll = missing.isEmpty(),
-            missingCount = missing.size
+            hasAll = hasAll,
+            missingCount = missing.size,
+            readinessStatus = readinessStatus,
+            missingRequirements = missingRequirements
         )
+    }
+
+    /**
+     * Calcula a quantidade disponível de um ingrediente no estoque real da despensa.
+     */
+    private fun getAvailableStockAmount(
+        requirement: RecipeIngredientRequirement,
+        pantryStock: List<GroceryPantryStockEntity>
+    ): Double {
+        if (pantryStock.isEmpty()) return 0.0
+        return pantryStock
+            .filter { matchesStock(requirement, it) }
+            .sumOf { it.availableAmount }
+    }
+
+    /**
+     * Verifica correspondência de um requisito de receita com uma entrada do estoque da despensa.
+     */
+    private fun matchesStock(
+        requirement: RecipeIngredientRequirement,
+        stock: GroceryPantryStockEntity
+    ): Boolean {
+        if (requirement.ingredientFoodId.isNotBlank()) {
+            val cleanReqId = requirement.ingredientFoodId.removePrefix("food_").lowercase(Locale.ROOT)
+            val cleanStockSlug = stock.ingredientSlug.removePrefix("food_").lowercase(Locale.ROOT)
+            if (cleanStockSlug == cleanReqId || cleanStockSlug.replace("-", "_") == cleanReqId.replace("-", "_")) {
+                return true
+            }
+        }
+        val normalizedStockSlug = normalizeFoodName(stock.ingredientSlug.replace("-", " ").replace("_", " "))
+        val accepted = RecipeIngredientMatcher.acceptedNames(requirement.ingredientName)
+        return accepted.any { it == normalizedStockSlug || normalizedStockSlug.contains(it) || it.contains(normalizedStockSlug) }
     }
 
     /**

@@ -2,10 +2,12 @@ package br.com.bragasaude.ui.nutrition
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import br.com.bragasaude.domain.RecipePantryMatch
-import br.com.bragasaude.domain.RecipeEngine
 import br.com.bragasaude.data.remote.repository.GroceryRepository
 import br.com.bragasaude.data.remote.repository.ProfileRepository
+import br.com.bragasaude.data.remote.repository.WeeklyGrocerySummaryRepository
+import br.com.bragasaude.domain.RecipeEngine
+import br.com.bragasaude.domain.RecipePantryMatch
+import br.com.bragasaude.util.BragaConstants
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +16,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import br.com.bragasaude.util.BragaConstants
 
 /**
  * Tipo de refeição com label para exibição na UI.
@@ -28,15 +29,17 @@ data class MealTab(
 /**
  * ViewModel do módulo "O Que Cozinhar Hoje?".
  *
- * Coleta os itens da lista de compras do usuário, aplica o filtro clínico do perfil
- * e cruzar com o catálogo de receitas para sugerir preparações caseiras.
+ * Coleta os itens da lista de compras do usuário e o estoque real da despensa,
+ * aplica o filtro clínico do perfil e cruza com o catálogo de receitas para sugerir
+ * preparações caseiras priorizando o que já está na despensa (READY_TO_COOK).
  */
 @HiltViewModel
 class RecipesViewModel @Inject constructor(
     private val groceryRepository: GroceryRepository,
     private val profileRepository: ProfileRepository,
     private val recipeEngine: RecipeEngine,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val weeklyGrocerySummaryRepository: WeeklyGrocerySummaryRepository
 ) : ViewModel() {
 
     private val currentUserId: String
@@ -72,27 +75,28 @@ class RecipesViewModel @Inject constructor(
     }
 
     /**
-     * Carrega as receitas recomendadas cruzando lista de compras e perfil.
+     * Carrega as receitas recomendadas cruzando lista de compras, estoque físico da despensa e perfil.
      */
     private fun loadRecipes() {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                // Combina lista de compras e perfil de forma reativa sem aninhamento
+                // Combina lista de compras, perfil e estoque físico de forma reativa
                 kotlinx.coroutines.flow.combine(
                     groceryRepository.getGroceryList(currentUserId),
-                    profileRepository.getProfile(currentUserId)
-                ) { pantryItems, profile ->
-                    pantryItems to profile
-                }.collectLatest { (pantryItems, profile) ->
+                    profileRepository.getProfile(currentUserId),
+                    weeklyGrocerySummaryRepository.stock(currentUserId)
+                ) { pantryItems, profile, stock ->
+                    Triple(pantryItems, profile, stock)
+                }.collectLatest { (pantryItems, profile, stock) ->
                     val hasManualList = pantryItems.any {
                         it.isManual || it.category == "Minha lista" || it.remoteId.contains(":manual:")
                     }
-                    // Calcula receitas para cada tipo de refeição
-                    _breakfastRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "BREAKFAST", includeMissing = hasManualList)
-                    _lunchRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "LUNCH", includeMissing = hasManualList)
-                    _snackRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "SNACK", includeMissing = hasManualList)
-                    _dinnerRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "DINNER", includeMissing = hasManualList)
+                    // Calcula receitas para cada tipo de refeição com estoque real
+                    _breakfastRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "BREAKFAST", includeMissing = hasManualList, pantryStock = stock)
+                    _lunchRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "LUNCH", includeMissing = hasManualList, pantryStock = stock)
+                    _snackRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "SNACK", includeMissing = hasManualList, pantryStock = stock)
+                    _dinnerRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "DINNER", includeMissing = hasManualList, pantryStock = stock)
 
                     _isLoading.value = false
                 }

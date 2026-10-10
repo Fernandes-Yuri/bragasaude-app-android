@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.local.model
+package br.com.bragasaude.data.local.model
 
 /**
  * Catálogo de 21 Receitas Caseiras Brasileiras Acessíveis para Idosos.
@@ -9,6 +9,44 @@
  * Os ingredientNames usam nomes que correspondem ao catálogo de 220 alimentos
  * do Braga Saúde para permitir o cruzamento com a despensa local.
  */
+
+/**
+ * Requisito quantitativo estruturado de um ingrediente na receita.
+ *
+ * @param ingredientName Nome legível do ingrediente.
+ * @param ingredientFoodId Identificador no catálogo de alimentos.
+ * @param requiredAmount Quantidade necessária para a preparação da porção.
+ * @param unit Unidade de medida correspondente ("g", "ml", "un").
+ */
+data class RecipeIngredientRequirement(
+    val ingredientName: String,
+    val ingredientFoodId: String,
+    val requiredAmount: Double,
+    val unit: String
+)
+
+/**
+ * Nível de prontidão da receita em relação à despensa e lista de compras.
+ */
+enum class RecipeReadinessStatus {
+    /** Todos os ingredientes estão fisicamente na despensa com saldo suficiente. */
+    READY_TO_COOK,
+    /** Todos os ingredientes estão na lista de compras (ou parte no estoque e parte na lista). */
+    PLANNED_ON_LIST,
+    /** Faltam ingredientes tanto no estoque quanto na lista de compras. */
+    MISSING_INGREDIENTS
+}
+
+/**
+ * Ingrediente faltante ou pendente para execução da receita.
+ */
+data class RecipeMissingRequirement(
+    val ingredientName: String,
+    val requiredAmount: Double,
+    val unit: String,
+    val availableInPantry: Double = 0.0,
+    val isPlannedOnList: Boolean = false
+)
 
 /**
  * Receita saudável simples para o módulo "O Que Cozinhar Hoje?".
@@ -24,6 +62,11 @@
  * @param clinicalBenefit Benefício clínico descritivo (sem alegação diagnóstica).
  * @param isDiabetesSafe Se a receita é adequada para pessoas com diabetes.
  * @param isHypertensionSafe Se a receita é adequada para pessoas com hipertensão.
+ * @param structuredIngredients Quantidades estruturadas por ingrediente.
+ * @param servingKcal Calorias totais por porção (kcal).
+ * @param servingCarbsG Carboidratos por porção (g).
+ * @param servingProteinG Proteínas por porção (g).
+ * @param servingFatG Gorduras por porção (g).
  */
 data class HealthyRecipe(
     val id: String,
@@ -36,8 +79,53 @@ data class HealthyRecipe(
     val instructions: List<String>,
     val clinicalBenefit: String,
     val isDiabetesSafe: Boolean,
-    val isHypertensionSafe: Boolean
-)
+    val isHypertensionSafe: Boolean,
+    val structuredIngredients: List<RecipeIngredientRequirement> = emptyList(),
+    val servingKcal: Double = 0.0,
+    val servingCarbsG: Double = 0.0,
+    val servingProteinG: Double = 0.0,
+    val servingFatG: Double = 0.0
+) {
+    /**
+     * Construtor secundário retrocompatível para chamadas legadas que não passam
+     * quantidades estruturadas nem macros explícitos.
+     */
+    constructor(
+        id: String,
+        title: String,
+        mealType: String,
+        prepTimeMinutes: Int,
+        difficulty: String,
+        ingredientNames: List<String>,
+        ingredientFoodIds: List<String>,
+        instructions: List<String>,
+        clinicalBenefit: String,
+        isDiabetesSafe: Boolean,
+        isHypertensionSafe: Boolean
+    ) : this(
+        id = id,
+        title = title,
+        mealType = mealType,
+        prepTimeMinutes = prepTimeMinutes,
+        difficulty = difficulty,
+        ingredientNames = ingredientNames,
+        ingredientFoodIds = ingredientFoodIds,
+        instructions = instructions,
+        clinicalBenefit = clinicalBenefit,
+        isDiabetesSafe = isDiabetesSafe,
+        isHypertensionSafe = isHypertensionSafe,
+        structuredIngredients = ingredientNames.zip(
+            if (ingredientFoodIds.size == ingredientNames.size) ingredientFoodIds
+            else List(ingredientNames.size) { "" }
+        ).map { (name, foodId) ->
+            RecipeIngredientRequirement(name, foodId, 100.0, "g")
+        },
+        servingKcal = 0.0,
+        servingCarbsG = 0.0,
+        servingProteinG = 0.0,
+        servingFatG = 0.0
+    )
+}
 
 /**
  * Catálogo completo de receitas do Braga Saúde.
@@ -64,7 +152,14 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Fonte de proteína, com preparo simples",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Ovos", "food_ovo", 2.0, "un")
+            ),
+            servingKcal = 140.0,
+            servingCarbsG = 1.0,
+            servingProteinG = 12.0,
+            servingFatG = 10.0
         ),
 
         // ===== CAFÉ DA MANHÃ & LANCHES =====
@@ -85,7 +180,17 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Rico em fibras solúveis e potássio, sem adição de açúcar",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Aveia em flocos", "food_aveia", 30.0, "g"),
+                RecipeIngredientRequirement("Banana", "food_banana", 1.0, "un"),
+                RecipeIngredientRequirement("Leite", "food_leite", 200.0, "ml"),
+                RecipeIngredientRequirement("Canela em pó", "food_canela", 2.0, "g")
+            ),
+            servingKcal = 270.0,
+            servingCarbsG = 48.0,
+            servingProteinG = 9.0,
+            servingFatG = 4.5
         ),
 
         HealthyRecipe(
@@ -104,7 +209,17 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Boa fonte de proteína de alto valor biológico e licopeno",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Ovos", "food_ovo", 2.0, "un"),
+                RecipeIngredientRequirement("Tomate", "food_tomate", 50.0, "g"),
+                RecipeIngredientRequirement("Azeite de oliva", "food_azeite", 5.0, "ml"),
+                RecipeIngredientRequirement("Orégano", "food_oregano", 2.0, "g")
+            ),
+            servingKcal = 195.0,
+            servingCarbsG = 3.0,
+            servingProteinG = 13.0,
+            servingFatG = 15.0
         ),
 
         HealthyRecipe(
@@ -123,7 +238,15 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Rico em gorduras boas e fibras, sem açúcar adicionado",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Abacate", "food_abacate", 100.0, "g"),
+                RecipeIngredientRequirement("Limão", "food_limao", 0.5, "un")
+            ),
+            servingKcal = 160.0,
+            servingCarbsG = 9.0,
+            servingProteinG = 2.0,
+            servingFatG = 15.0
         ),
 
         HealthyRecipe(
@@ -142,7 +265,16 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Rico em fibras, vitamina C e cálcio, auxilia o trânsito intestinal",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Mamão", "food_mamao", 150.0, "g"),
+                RecipeIngredientRequirement("Leite", "food_leite", 200.0, "ml"),
+                RecipeIngredientRequirement("Aveia em flocos", "food_aveia", 20.0, "g")
+            ),
+            servingKcal = 210.0,
+            servingCarbsG = 34.0,
+            servingProteinG = 8.0,
+            servingFatG = 4.5
         ),
 
         HealthyRecipe(
@@ -161,7 +293,17 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Boa proteína e cálcio, preparo simples sem fritura",
             isDiabetesSafe = false,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Ovos", "food_ovo", 1.0, "un"),
+                RecipeIngredientRequirement("Tapioca", "food_tapioca", 30.0, "g"),
+                RecipeIngredientRequirement("Ricota", "food_ricota", 40.0, "g"),
+                RecipeIngredientRequirement("Orégano", "food_oregano", 2.0, "g")
+            ),
+            servingKcal = 230.0,
+            servingCarbsG = 26.0,
+            servingProteinG = 13.0,
+            servingFatG = 8.0
         ),
 
         // ===== ALMOÇO =====
@@ -182,7 +324,17 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Rico em proteínas e cálcio, com fibras da couve",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Ovos", "food_ovo", 3.0, "un"),
+                RecipeIngredientRequirement("Couve", "food_couve", 50.0, "g"),
+                RecipeIngredientRequirement("Queijo minas frescal", "food_queijo_minas", 40.0, "g"),
+                RecipeIngredientRequirement("Azeite de oliva", "food_azeite", 5.0, "ml")
+            ),
+            servingKcal = 330.0,
+            servingCarbsG = 4.0,
+            servingProteinG = 26.0,
+            servingFatG = 23.0
         ),
 
         HealthyRecipe(
@@ -201,7 +353,16 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Fonte de proteína, com preparo simples na frigideira",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Tilápia", "food_tilapia", 150.0, "g"),
+                RecipeIngredientRequirement("Azeite de oliva", "food_azeite", 10.0, "ml"),
+                RecipeIngredientRequirement("Limão", "food_limao", 0.5, "un")
+            ),
+            servingKcal = 240.0,
+            servingCarbsG = 1.0,
+            servingProteinG = 31.0,
+            servingFatG = 12.0
         ),
 
         HealthyRecipe(
@@ -220,7 +381,16 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Fonte de proteína e vitamina A",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Peito de frango", "food_frango", 120.0, "g"),
+                RecipeIngredientRequirement("Abóbora cabotiá", "food_abobora", 120.0, "g"),
+                RecipeIngredientRequirement("Azeite de oliva", "food_azeite", 5.0, "ml")
+            ),
+            servingKcal = 235.0,
+            servingCarbsG = 13.0,
+            servingProteinG = 32.0,
+            servingFatG = 6.0
         ),
 
         HealthyRecipe(
@@ -239,7 +409,17 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Rico em fibras, ferro e vitamina A, combinação completa de aminoácidos",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Feijão carioca", "food_feijao_carioca", 100.0, "g"),
+                RecipeIngredientRequirement("Cenoura", "food_cenoura", 60.0, "g"),
+                RecipeIngredientRequirement("Louro", "food_louro", 1.0, "g"),
+                RecipeIngredientRequirement("Azeite de oliva", "food_azeite", 5.0, "ml")
+            ),
+            servingKcal = 175.0,
+            servingCarbsG = 24.0,
+            servingProteinG = 7.0,
+            servingFatG = 5.0
         ),
 
         HealthyRecipe(
@@ -258,7 +438,18 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Excelente fonte de ômega-3 e cálcio, preparo sem fritura",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Sardinha", "food_sardinha", 120.0, "g"),
+                RecipeIngredientRequirement("Tomate", "food_tomate", 50.0, "g"),
+                RecipeIngredientRequirement("Cebola", "food_cebola", 40.0, "g"),
+                RecipeIngredientRequirement("Azeite de oliva", "food_azeite", 5.0, "ml"),
+                RecipeIngredientRequirement("Limão", "food_limao", 0.5, "un")
+            ),
+            servingKcal = 260.0,
+            servingCarbsG = 6.0,
+            servingProteinG = 25.0,
+            servingFatG = 15.0
         ),
 
         // ===== LANCHE =====
@@ -279,7 +470,17 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Rico em fibras e proteína vegetal, sem sódio adicionado",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Grão-de-bico", "food_garaodebico", 120.0, "g"),
+                RecipeIngredientRequirement("Tomate", "food_tomate", 60.0, "g"),
+                RecipeIngredientRequirement("Salsinha", "food_salsinha", 5.0, "g"),
+                RecipeIngredientRequirement("Azeite de oliva", "food_azeite", 10.0, "ml")
+            ),
+            servingKcal = 285.0,
+            servingCarbsG = 34.0,
+            servingProteinG = 11.0,
+            servingFatG = 11.0
         ),
 
         // ===== JANTAR =====
@@ -300,7 +501,18 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Leve e nutritiva, ideal para o jantar, rica em vitaminas",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Chuchu", "food_chuchu", 80.0, "g"),
+                RecipeIngredientRequirement("Abobrinha", "food_abobrinha", 80.0, "g"),
+                RecipeIngredientRequirement("Cenoura", "food_cenoura", 60.0, "g"),
+                RecipeIngredientRequirement("Peito de frango", "food_frango", 100.0, "g"),
+                RecipeIngredientRequirement("Louro", "food_louro", 1.0, "g")
+            ),
+            servingKcal = 210.0,
+            servingCarbsG = 14.0,
+            servingProteinG = 28.0,
+            servingFatG = 3.5
         ),
 
         HealthyRecipe(
@@ -319,7 +531,17 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Rico em fibras e antioxidantes, combinação completa de nutrientes",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Arroz integral", "food_arroz_integral", 100.0, "g"),
+                RecipeIngredientRequirement("Brócolis", "food_brocolis", 80.0, "g"),
+                RecipeIngredientRequirement("Alho", "food_alho", 5.0, "g"),
+                RecipeIngredientRequirement("Azeite de oliva", "food_azeite", 5.0, "ml")
+            ),
+            servingKcal = 215.0,
+            servingCarbsG = 35.0,
+            servingProteinG = 5.0,
+            servingFatG = 6.0
         ),
 
         HealthyRecipe(
@@ -338,7 +560,16 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Fonte de carboidrato complexo e potássio, preparo sem leite",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Mandioquinha", "food_mandioquinha", 150.0, "g"),
+                RecipeIngredientRequirement("Azeite de oliva", "food_azeite", 5.0, "ml"),
+                RecipeIngredientRequirement("Salsinha", "food_salsinha", 5.0, "g")
+            ),
+            servingKcal = 190.0,
+            servingCarbsG = 36.0,
+            servingProteinG = 2.0,
+            servingFatG = 5.0
         ),
 
         HealthyRecipe(
@@ -357,7 +588,17 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Fonte de proteína e ferro, com legumes",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Patinho moído", "food_patinho", 120.0, "g"),
+                RecipeIngredientRequirement("Chuchu", "food_chuchu", 100.0, "g"),
+                RecipeIngredientRequirement("Tomate", "food_tomate", 50.0, "g"),
+                RecipeIngredientRequirement("Azeite de oliva", "food_azeite", 5.0, "ml")
+            ),
+            servingKcal = 260.0,
+            servingCarbsG = 6.0,
+            servingProteinG = 33.0,
+            servingFatG = 11.0
         ),
 
         // ===== RECEITAS ADICIONAIS PARA COMPLETAR 20 =====
@@ -378,7 +619,17 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Sem açúcar, rica em fibras e potássio",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Banana", "food_banana", 1.0, "un"),
+                RecipeIngredientRequirement("Ovos", "food_ovo", 1.0, "un"),
+                RecipeIngredientRequirement("Aveia em flocos", "food_aveia", 30.0, "g"),
+                RecipeIngredientRequirement("Canela em pó", "food_canela", 2.0, "g")
+            ),
+            servingKcal = 240.0,
+            servingCarbsG = 40.0,
+            servingProteinG = 9.0,
+            servingFatG = 6.0
         ),
 
         HealthyRecipe(
@@ -397,7 +648,18 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Proteína vegetal completa e rica em fibras",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Quinoa", "food_quinoa", 80.0, "g"),
+                RecipeIngredientRequirement("Tomate", "food_tomate", 50.0, "g"),
+                RecipeIngredientRequirement("Pepino", "food_pepino", 50.0, "g"),
+                RecipeIngredientRequirement("Azeite de oliva", "food_azeite", 10.0, "ml"),
+                RecipeIngredientRequirement("Limão", "food_limao", 0.5, "un")
+            ),
+            servingKcal = 220.0,
+            servingCarbsG = 28.0,
+            servingProteinG = 6.0,
+            servingFatG = 10.0
         ),
 
         HealthyRecipe(
@@ -416,7 +678,16 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Sopa de legumes, fonte de vitamina A",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Abóbora cabotiá", "food_abobora", 200.0, "g"),
+                RecipeIngredientRequirement("Cebola", "food_cebola", 40.0, "g"),
+                RecipeIngredientRequirement("Azeite de oliva", "food_azeite", 5.0, "ml")
+            ),
+            servingKcal = 140.0,
+            servingCarbsG = 22.0,
+            servingProteinG = 3.0,
+            servingFatG = 5.0
         ),
 
         HealthyRecipe(
@@ -435,7 +706,18 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Proteína vegetal e fibras, alternativa nutritiva ao lanche processado",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Pão integral", "food_pao_integral", 50.0, "g"),
+                RecipeIngredientRequirement("Grão-de-bico", "food_garaodebico", 80.0, "g"),
+                RecipeIngredientRequirement("Azeite de oliva", "food_azeite", 5.0, "ml"),
+                RecipeIngredientRequirement("Limão", "food_limao", 0.5, "un"),
+                RecipeIngredientRequirement("Alho", "food_alho", 2.0, "g")
+            ),
+            servingKcal = 270.0,
+            servingCarbsG = 42.0,
+            servingProteinG = 11.0,
+            servingFatG = 7.0
         ),
 
         HealthyRecipe(
@@ -454,7 +736,18 @@ object RecipeCatalog {
             ),
             clinicalBenefit = "Carboidrato complexo com licopeno do tomate cozido",
             isDiabetesSafe = true,
-            isHypertensionSafe = true
+            isHypertensionSafe = true,
+            structuredIngredients = listOf(
+                RecipeIngredientRequirement("Macarrão integral", "food_macarrao_integral", 80.0, "g"),
+                RecipeIngredientRequirement("Tomate", "food_tomate", 100.0, "g"),
+                RecipeIngredientRequirement("Alho", "food_alho", 5.0, "g"),
+                RecipeIngredientRequirement("Azeite de oliva", "food_azeite", 5.0, "ml"),
+                RecipeIngredientRequirement("Manjericão", "food_manjericao", 5.0, "g")
+            ),
+            servingKcal = 320.0,
+            servingCarbsG = 58.0,
+            servingProteinG = 11.0,
+            servingFatG = 6.0
         )
     )
 
