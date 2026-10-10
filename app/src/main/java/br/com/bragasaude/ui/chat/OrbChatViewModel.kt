@@ -287,8 +287,8 @@ class OrbChatViewModel @Inject constructor(
                     if (version != revision) return@launch
                     healthQuerySession.forgetReferences(owner, conversationId, contextTurn)
                     gateway.open(viewModelScope)
-                    val dietContext = hybrid.dietContext(scope?.second ?: owner, value)
-                    if (auth.currentUser?.uid != owner || uid != owner || version != revision) return@launch
+                    val dietContext = try { hybrid.dietContext(scope?.second ?: owner, value) } catch (_: Exception) { "" }
+                    if (version != revision) return@launch
                     val context = listOf("assistant" to GroqDynamicPrompt().build(history.dropLast(1), channel, local, dietContext)) + history.takeLast(10)
                     gateway.sendRemote(context, actingAs = scope?.first, patientId = scope?.second) { partial ->
                         if (version == revision) {

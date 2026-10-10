@@ -39,6 +39,7 @@ class OrbChatViewModelTest {
         every { hybrid.analyze(any(), any(), any(), any(), any()) } answers {
             analyzer.analyze(firstArg(), secondArg(), thirdArg(), arg(3), arg(4))
         }
+        coEvery { hybrid.dietContext(any(), any()) } returns ""
         coEvery { hybrid.resolveLocal(any(), any(), any(), any(), any(), any()) } answers {
             firstArg<NluOutput>().let {
                 it.healthQuery?.let { query -> arg<HealthQuerySession>(3).remember(query, secondArg(), arg(4), arg(5)) }
