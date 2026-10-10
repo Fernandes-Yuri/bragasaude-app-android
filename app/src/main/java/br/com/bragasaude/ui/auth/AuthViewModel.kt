@@ -146,7 +146,7 @@ class AuthViewModel @Inject constructor(
         auth.removeAuthStateListener(authStateListener)
     }
 
-    fun retryProfile() { auth.currentUser?.uid?.let { checkProfile(it) } }
+    fun retryProfile() { auth.currentUser?.uid?.let { checkProfile(it, force = true) } }
 
     /**
      * G2 (doc 10 §3.2): registra o token FCM no gateway sempre que há um usuário
@@ -170,7 +170,8 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    private fun checkProfile(userId: String) {
+    private fun checkProfile(userId: String, force: Boolean = false) {
+        if (!force && profileOwner == userId && profileJob?.isActive == true) return
         profileJob?.cancel()
         if (profileOwner != userId) {
             _isProfileComplete.value = null
@@ -732,7 +733,7 @@ class AuthViewModel @Inject constructor(
     }
 
     fun setProfileComplete() {
-        auth.currentUser?.uid?.let { checkProfile(it) }
+        auth.currentUser?.uid?.let { checkProfile(it, force = true) }
     }
 
     fun setProfileIncomplete() {

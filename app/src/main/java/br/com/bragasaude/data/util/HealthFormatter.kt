@@ -1,9 +1,17 @@
-﻿package br.com.bragasaude.data.util
+package br.com.bragasaude.data.util
 
 import java.text.NumberFormat
 import java.util.Locale
 
 object HealthFormatter {
+    fun formatActivityLevel(value: String): String = when (value.trim().uppercase(Locale.ROOT)) {
+        "SEDENTARY", "SEDENTÁRIO", "SEDENTARIO" -> "Rotina leve / inicial"
+        "LIGHTLY_ACTIVE", "LEVEMENTE ATIVO" -> "Levemente ativo"
+        "MODERATELY_ACTIVE", "MODERADAMENTE ATIVO" -> "Moderadamente ativo"
+        "VERY_ACTIVE", "MUITO ATIVO" -> "Muito ativo"
+        else -> value
+    }
+
     private val ptBrLocale = Locale("pt", "BR")
     
     /**

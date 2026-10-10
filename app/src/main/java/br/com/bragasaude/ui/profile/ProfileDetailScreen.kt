@@ -144,8 +144,6 @@ fun ProfileDetailScreen(
 
     LaunchedEffect(Unit) {
         profileViewModel.loadProfile()
-        profileViewModel.loadCommunityNickname()
-        profileViewModel.refreshServerPhoto()
     }
 
     val resolvedFeedbacks = remember(userFeedbacks) {
@@ -662,7 +660,7 @@ fun ProfileDetailScreen(
                             val items = listOfNotNull(
                                 p?.birthDate?.takeIf { it.isNotBlank() }?.let { "Nascimento" to br.com.bragasaude.data.util.HealthFormatter.formatDisplayDate(it) },
                                 p?.gender?.takeIf { it.isNotBlank() }?.let { "Gênero" to it },
-                                p?.activityLevel?.takeIf { it.isNotBlank() }?.let { "Atividade Física" to it }
+                                p?.activityLevel?.takeIf { it.isNotBlank() }?.let { "Atividade Física" to br.com.bragasaude.data.util.HealthFormatter.formatActivityLevel(it) }
                             )
                             items.forEachIndexed { index, (label, value) ->
                                 Row(

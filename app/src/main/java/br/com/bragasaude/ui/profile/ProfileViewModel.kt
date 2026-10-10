@@ -57,6 +57,15 @@ class ProfileViewModel @Inject constructor(
     val avatarMessage = _avatarMessage.asStateFlow()
     fun consumeAvatarMessage() { _avatarMessage.value = null }
 
+    private val _communityNickname = MutableStateFlow("")
+    val communityNickname = _communityNickname.asStateFlow()
+    private val _communitySaving = MutableStateFlow(false)
+    val communitySaving = _communitySaving.asStateFlow()
+    private val _communityError = MutableStateFlow<String?>(null)
+    val communityError = _communityError.asStateFlow()
+
+    private var nicknameFetchAttempted = false
+
     init {
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         
@@ -64,6 +73,7 @@ class ProfileViewModel @Inject constructor(
             repository.getProfile(userId).collectLatest { entity ->
                 _profile.value = entity?.toRemote()
                 _customPhotoUri.value = entity?.customPhotoUri
+                _communityNickname.value = entity?.communityNickname.orEmpty()
             }
         }
 
@@ -75,21 +85,8 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun loadProfile() {
-        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
-        viewModelScope.launch {
-            // Puxa o perfil do backend: e dele que vem o segredo TOTP do vínculo
-            // de WhatsApp (a fonte da verdade, D55). Sem isso, uma conta já
-            // logada que tinha segredo nulo no Room continua sem ele — o botão
-            // "Vincular meu WhatsApp" abre a conversa.
-            try {
-                repository.syncProfile(userId)
-            } catch (_: Exception) { }
-
-            repository.getProfile(userId).collectLatest { entity ->
-                _profile.value = entity?.toRemote()
-                _customPhotoUri.value = entity?.customPhotoUri
-            }
-        }
+        // O perfil já é observado no init. Sincronização de conta acontece no arranque.
+        loadCommunityNickname()
     }
 
     fun startSelfCareSetup(onReady: () -> Unit) {
@@ -279,29 +276,27 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    private val _communityNickname = MutableStateFlow("")
-    val communityNickname = _communityNickname.asStateFlow()
-    private val _communitySaving = MutableStateFlow(false)
-    val communitySaving = _communitySaving.asStateFlow()
-    private val _communityError = MutableStateFlow<String?>(null)
-    val communityError = _communityError.asStateFlow()
-
     fun consumeCommunityError() { _communityError.value = null }
 
     fun loadCommunityNickname(onLoaded: (String) -> Unit = {}) {
-        if (_communitySaving.value) return
-        _communitySaving.value = true
-        _communityError.value = null
+        val uid = auth.currentUser?.uid ?: return
         viewModelScope.launch {
+            val local = database.profileDao().getProfileOneShot(uid)
+            if (local?.communityNickname != null) {
+                _communityNickname.value = local.communityNickname
+                onLoaded(local.communityNickname)
+                return@launch
+            }
+            if (nicknameFetchAttempted) { onLoaded(_communityNickname.value); return@launch }
+            nicknameFetchAttempted = true
             try {
                 val nickname = apiClient.getCommunityNickname()
+                if (auth.currentUser?.uid != uid) return@launch
+                database.profileDao().updateCommunityNickname(uid, nickname)
                 _communityNickname.value = nickname
                 onLoaded(nickname)
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-            catch (_: Exception) {
-                // Silencioso: se o backend estiver sem o registro ou indisponível, usa o nome do perfil.
-            }
-            finally { _communitySaving.value = false }
+            catch (_: Exception) { onLoaded(_communityNickname.value) }
         }
     }
 
@@ -316,7 +311,21 @@ class ProfileViewModel @Inject constructor(
                     && name.all { it.isLetterOrDigit() || it in " .'-" })) {
                     "Use de 2 a 24 caracteres: letras, números, espaços, ponto, apóstrofo ou hífen."
                 }
-                _communityNickname.value = apiClient.saveCommunityNickname(name)
+                val uid = auth.currentUser?.uid ?: error("Entre na sua conta para salvar.")
+                val previous = database.profileDao().getProfileOneShot(uid)?.communityNickname
+                database.profileDao().updateCommunityNickname(uid, name)
+                _communityNickname.value = name
+                try {
+                    val saved = apiClient.saveCommunityNickname(name)
+                    if (auth.currentUser?.uid != uid) return@launch
+                    database.profileDao().updateCommunityNickname(uid, saved)
+                    _communityNickname.value = saved
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: Exception) {
+                    database.profileDao().updateCommunityNickname(uid, previous)
+                    _communityNickname.value = previous.orEmpty()
+                    throw e
+                }
                 onSaved()
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: Exception) { _communityError.value = e.message ?: "Não foi possível salvar." }

@@ -360,6 +360,17 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    suspend fun editSocialPost(post: SocialPostEntity): Boolean = withContext(Dispatchers.IO) {
+        patchJson("$baseUrl/api/sync/social-post/${post.id}", JSONObject().apply {
+            put("title", post.title)
+            put("description", post.description ?: JSONObject.NULL)
+        })
+    }
+
+    suspend fun deleteSocialPost(postId: String): Boolean = withContext(Dispatchers.IO) {
+        deleteRequest("$baseUrl/api/sync/social-post/$postId")
+    }
+
     suspend fun getSocialFeed(currentUserId: String, limit: Int = 30): List<SocialPostEntity> = withContext(Dispatchers.IO) {
         try {
             val arr = getJsonArray("$baseUrl/api/social/feed?limit=$limit")
@@ -382,6 +393,7 @@ class BragaApiClient @Inject constructor(
                         description = obj.optString("description", null),
                         relatedMilestoneId = null,
                         createdAt = cAt,
+                        editedAt = obj.safeNullableString("edited_at")?.let { br.com.bragasaude.domain.parseSocialPostDate(it) },
                         isVisible = true,
                         visibility = obj.optString("visibility", "PUBLIC"),
                         reactionCount = obj.optInt("reaction_count", 0),

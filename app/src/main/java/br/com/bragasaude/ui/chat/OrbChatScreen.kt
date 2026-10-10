@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -468,7 +469,7 @@ fun OrbChatContent(
                                     val pulseAlpha by infiniteTransition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(1000), RepeatMode.Reverse), label = "pulse")
                                     
                                     Box(Modifier.size(48.dp).clip(CircleShape).background(Color(0xFF00897B).copy(alpha = pulseAlpha)), contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Default.Add, contentDescription = "Saúde", tint = Color.White)
+                                        Icon(Icons.Default.AutoAwesome, contentDescription = "Assistente de saúde", tint = Color.White)
                                     }
                                     
                                     Spacer(Modifier.height(16.dp))
@@ -482,8 +483,15 @@ fun OrbChatContent(
                                     
                                     Spacer(Modifier.height(24.dp))
                                     
-                                    val suggestions = listOf("Como está minha pressão?", "O que posso almoçar?", "Lembrete de remédio", "Preciso de ajuda")
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    var suggestionTime by remember { mutableStateOf(java.time.LocalTime.now()) }
+                                    LaunchedEffect(Unit) {
+                                        while (true) {
+                                            suggestionTime = java.time.LocalTime.now()
+                                            delay(30_000)
+                                        }
+                                    }
+                                    val suggestions = br.com.bragasaude.ai.ChatTimeContext.suggestions(suggestionTime)
+                                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         itemsIndexed(suggestions) { index, suggestion ->
                                             var chipVisible by remember { mutableStateOf(false) }
                                             LaunchedEffect(Unit) {

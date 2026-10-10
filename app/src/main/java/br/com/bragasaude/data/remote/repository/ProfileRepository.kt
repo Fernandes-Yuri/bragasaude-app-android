@@ -56,7 +56,8 @@ class ProfileRepository @Inject constructor(
         }
         val entity = withTotp.toEntity().copy(
             pendingSync = true,
-            customPhotoUri = existing?.customPhotoUri
+            customPhotoUri = existing?.customPhotoUri,
+            communityNickname = existing?.communityNickname
         )
         // Se a entidade já existe e não mudou nada relevante, e não está com sync pendente, não reenvia
         if (existing != null && !existing.pendingSync &&

@@ -92,7 +92,8 @@ data class ProfileEntity(
      */
     val whatsappTotpSecret: String? = null,
     /**Número de WhatsApp vinculado (verificado pela Meta via webhook). */
-    val whatsappPhone: String? = null
+    val whatsappPhone: String? = null,
+    val communityNickname: String? = null
 )
 
 
@@ -312,7 +313,10 @@ data class SocialPostEntity(
     val caregiverName: String? = null,
     val patientName: String? = null,
     // Visibilidade do post (PUBLIC ou FAMILY)
-    val visibility: String = "PUBLIC"
+    val visibility: String = "PUBLIC",
+    val editedAt: Date? = null,
+    @androidx.room.ColumnInfo(defaultValue = "''") val pendingMutation: String = ""
+
 )
 
 /**

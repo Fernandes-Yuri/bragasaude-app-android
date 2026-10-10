@@ -194,8 +194,10 @@ class HomeViewModel @Inject constructor(
             healthDataFlow.map { it.second }.collectLatest { (uid, vitals, metrics) ->
                 val profile = profileRepository.getProfile(uid).firstOrNull()?.toRemote()
                 
-                val vitalAnalysis = healthEngine.analyzeVitals(uid, vitals.take(1), silent = true)
-                val activityRecommendations = healthEngine.analyzeActivityPatterns(uid, metrics)
+                val (vitalAnalysis, activityRecommendations) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    healthEngine.analyzeVitals(uid, vitals.take(1), silent = true) to
+                        healthEngine.analyzeActivityPatterns(uid, metrics)
+                }
                 
                 val alerts = mutableListOf<String>()
                 alerts.addAll(vitalAnalysis.alerts)
@@ -233,6 +235,7 @@ class HomeViewModel @Inject constructor(
         }
         
         viewModelScope.launch {
+            kotlinx.coroutines.delay(350)
             medicationRepository.syncMedicationsFromServer(userId)
             syncManager.syncUserData(userId, force = false)
             if (healthConnectManager.isAvailable() && healthConnectManager.checkHasPermissions()) {
