@@ -89,8 +89,9 @@ class NutritionViewModelTest {
         every { weeklyRepo.observe(any(), any()) } returns flowOf(null)
         every { catalogRepo.getMealRules() } returns flowOf(emptyList())
         every { catalogRepo.getFoodCatalog() } returns flowOf(sampleFoodCatalog)
-        coEvery { catalogRepo.fetchGroceryIngredients(any()) } returns null
-        coEvery { catalogRepo.fetchGroceryIngredients() } returns null
+        val dummyManifest = br.com.bragasaude.domain.GroceryIngredientCatalog(ingredients = emptyList(), components = emptyMap())
+        coEvery { catalogRepo.fetchGroceryIngredients(any()) } returns dummyManifest
+        coEvery { catalogRepo.fetchGroceryIngredients() } returns dummyManifest
     }
 
     @After
@@ -111,7 +112,7 @@ class NutritionViewModelTest {
         } returns null
 
         val profileFlow = MutableStateFlow<ProfileEntity?>(
-            ProfileEntity(id = "test_user_id", hasDiabetes = true, hasHypertension = false)
+            ProfileEntity(userId = "test_user_id", hasDiabetes = true, hasHypertension = false)
         )
         every { profileRepo.getProfile("test_user_id") } returns profileFlow
 
