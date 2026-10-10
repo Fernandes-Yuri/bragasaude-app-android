@@ -45,6 +45,11 @@ fun NotificationsScreen(onBack: () -> Unit, viewModel: HomeViewModel = hiltViewM
     val identifiedAt by viewModel.alertIdentifiedAt.collectAsState()
     var selectedAlert by rememberSaveable { mutableStateOf<String?>(null) }
     val unreadCount = alerts.count { it !in readAlerts }
+    LaunchedEffect(alerts) {
+        if (alerts.isNotEmpty()) {
+            viewModel.markAlertsAsRead()
+        }
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     var batteryAllowed by remember(context) { mutableStateOf(BatteryOptimizationHelper.estaLiberado(context)) }
     var batteryGuidance by rememberSaveable { mutableStateOf<String?>(null) }

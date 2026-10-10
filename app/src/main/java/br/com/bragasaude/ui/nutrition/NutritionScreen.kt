@@ -83,7 +83,6 @@ fun NutritionScreen(
     val groceryMessage by viewModel.groceryMessage.collectAsState()
     val groceryPlan by viewModel.groceryPlanResult.collectAsState()
     val pantryStock by viewModel.pantryStock.collectAsState()
-    val showResizeDialog by viewModel.showResizeDialog.collectAsState()
     val weeklyPreferences by viewModel.weeklyPreferences.collectAsState()
 
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -950,15 +949,6 @@ fun NutritionScreen(
         )
     }
 
-    if (showResizeDialog) {
-        BragaAlertDialog(
-            onDismissRequest = { viewModel.keepCurrentWeeklyList() },
-            title = { Text("Meta alimentar alterada") },
-            text = { Text("Deseja redimensionar a lista semanal pela nova meta? Seus itens manuais serão preservados. Manter a lista atual deixa a cobertura invalidada.") },
-            confirmButton = { TextButton(onClick = { viewModel.resizeWeeklyList() }) { Text("Redimensionar agora") } },
-            dismissButton = { TextButton(onClick = { viewModel.keepCurrentWeeklyList() }) { Text("Manter lista atual") } }
-        )
-    }
     if (showGroceryBottomSheet) {
         val context = LocalContext.current
         GroceryListBottomSheet(

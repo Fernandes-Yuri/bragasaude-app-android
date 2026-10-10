@@ -59,8 +59,7 @@ class NutritionViewModel @Inject constructor(
     }
     private suspend fun changedTarget(target: Double) {
         if (groceryRepository.getGroceryList(userId).first().isNotEmpty()) {
-            invalidateWeekly("Meta alterada para ${target.toInt()} kcal/dia. Cobertura anterior invalidada; escolha se deseja redimensionar.")
-            _showResizeDialog.value = true
+            generateWeeklyGroceryList(preserveManual = true)
         }
     }
     fun keepCurrentWeeklyList() { _showResizeDialog.value = false }
