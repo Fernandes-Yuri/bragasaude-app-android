@@ -15,7 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import java.util.Locale
 import br.com.bragasaude.domain.GroceryBudgetTier
 import br.com.bragasaude.domain.GroceryProteinPreference
 import br.com.bragasaude.domain.WeeklyGroceryPreferences
@@ -39,6 +41,13 @@ fun WeeklyGroceryPreferencesSheet(
     var budgetTier by remember { mutableStateOf(effectiveInitial.budgetTier) }
     var selectedProteins by remember { mutableStateOf(effectiveInitial.selectedProteins) }
     var hasPantryStaples by remember { mutableStateOf(effectiveInitial.hasPantryStaples) }
+    var maxBudgetInput by remember {
+        mutableStateOf(
+            effectiveInitial.maxWeeklyBudgetReais?.let {
+                if (it % 1.0 == 0.0) it.toInt().toString() else String.format(Locale.ROOT, "%.2f", it)
+            } ?: ""
+        )
+    }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -126,6 +135,108 @@ fun WeeklyGroceryPreferencesSheet(
                     isSelected = budgetTier == GroceryBudgetTier.FREE,
                     onClick = { budgetTier = GroceryBudgetTier.FREE }
                 )
+            }
+
+            // Teto Orçamentário Semanal (Opcional)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                border = BorderStroke(1.dp, BragaMintBorder)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Teto Máximo Semanal (Opcional)",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = BragaTextPrimary
+                            )
+                            Text(
+                                text = "Prioriza alimentos com melhor custo por caloria e alerta se ultrapassar.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BragaTextSecondary
+                            )
+                        }
+                        if (maxBudgetInput.isNotBlank()) {
+                            TextButton(
+                                onClick = { maxBudgetInput = "" },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text("Limpar", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = maxBudgetInput,
+                        onValueChange = { input ->
+                            val sanitized = input.replace(',', '.')
+                            if (sanitized.isEmpty() || sanitized.matches(Regex("""^\d*(\.\d{0,2})?$"""))) {
+                                maxBudgetInput = input
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Ex: 120,00", color = BragaTextSecondary) },
+                        prefix = {
+                            Text(
+                                text = "R$ ",
+                                fontWeight = FontWeight.Bold,
+                                color = BragaEmeraldDark
+                            )
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = BragaEmerald,
+                            unfocusedBorderColor = BragaMintBorder,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
+                            focusedTextColor = BragaTextPrimary,
+                            unfocusedTextColor = BragaTextPrimary
+                        )
+                    )
+
+                    // Chips de atalho rápido
+                    val quickBudgets = listOf("80", "120", "160", "200")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        quickBudgets.forEach { amount ->
+                            val isSelected = maxBudgetInput.replace(',', '.').toDoubleOrNull() == amount.toDouble()
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { maxBudgetInput = amount },
+                                label = { Text("R$ $amount", style = MaterialTheme.typography.labelSmall) },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BragaEmerald,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = Color.White,
+                                    labelColor = BragaTextPrimary
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = isSelected,
+                                    borderColor = BragaMintBorder,
+                                    selectedBorderColor = BragaEmerald
+                                )
+                            )
+                        }
+                    }
+                }
             }
 
             // Passo 2: Proteínas Prioritárias
@@ -229,10 +340,12 @@ fun WeeklyGroceryPreferencesSheet(
             // Botão de Confirmação
             Button(
                 onClick = {
+                    val parsedBudget = maxBudgetInput.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0.0 }
                     val finalPrefs = WeeklyGroceryPreferences(
                         budgetTier = budgetTier,
                         selectedProteins = selectedProteins,
-                        hasPantryStaples = hasPantryStaples
+                        hasPantryStaples = hasPantryStaples,
+                        maxWeeklyBudgetReais = parsedBudget
                     ).normalized()
                     onConfirm(finalPrefs)
                 },

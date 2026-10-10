@@ -62,7 +62,8 @@ fun NutritionGoalWizardSheet(
             budgetTier = selectedBudgetTier,
             hasPantryStaples = hasPantryStaples,
             isCustomManual = isManualMode && parsedManual != null && parsedManual > 500,
-            manualKcal = parsedManual
+            manualKcal = parsedManual,
+            maxWeeklyBudgetReais = initialSetup.maxWeeklyBudgetReais
         )
     }
 

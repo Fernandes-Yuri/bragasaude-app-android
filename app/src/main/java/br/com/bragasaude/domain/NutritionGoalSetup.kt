@@ -91,5 +91,6 @@ data class UserNutritionGoalSetup(
     val budgetTier: GroceryBudgetTier = GroceryBudgetTier.ULTRA_ECONOMIC,
     val hasPantryStaples: Boolean = true,
     val isCustomManual: Boolean = false,
-    val manualKcal: Double? = null
+    val manualKcal: Double? = null,
+    val maxWeeklyBudgetReais: Double? = null
 )

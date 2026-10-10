@@ -460,6 +460,37 @@ fun GroceryListBottomSheet(
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = BragaEmeraldDark
                                 )
+
+                                val maxBudget = weeklyPreferences.maxWeeklyBudgetReais
+                                if (maxBudget != null && maxBudget > 0.0) {
+                                    val isOverBudget = totalCost > maxBudget
+                                    val diff = kotlin.math.abs(totalCost - maxBudget)
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isOverBudget) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f) else BragaEmerald.copy(alpha = 0.12f),
+                                        border = BorderStroke(1.dp, if (isOverBudget) MaterialTheme.colorScheme.error.copy(alpha = 0.5f) else BragaEmerald.copy(alpha = 0.3f)),
+                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = if (isOverBudget) "Excede o teto em R$ ${String.format(Locale.getDefault(), "%.2f", diff)}"
+                                                       else "Dentro do teto (R$ ${String.format(Locale.getDefault(), "%.2f", diff)} livres)",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (isOverBudget) MaterialTheme.colorScheme.error else BragaEmeraldDark
+                                            )
+                                            Text(
+                                                text = "Teto: R$ ${String.format(Locale.getDefault(), "%.2f", maxBudget)}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = BragaTextSecondary
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

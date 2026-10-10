@@ -83,10 +83,14 @@ class NutritionViewModel @Inject constructor(
             try { br.com.bragasaude.domain.GroceryProteinPreference.valueOf(name) } catch (_: Exception) { null }
         }?.toSet() ?: setOf(br.com.bragasaude.domain.GroceryProteinPreference.EGGS, br.com.bragasaude.domain.GroceryProteinPreference.POULTRY)
         val hasStaples = prefs.getBoolean("weekly_has_staples_$userId", true)
+        val maxBudget = if (prefs.contains("weekly_max_budget_$userId")) {
+            prefs.getFloat("weekly_max_budget_$userId", 0f).toDouble().takeIf { it > 0 }
+        } else null
         return br.com.bragasaude.domain.WeeklyGroceryPreferences(
             budgetTier = tier,
             selectedProteins = if (proteinSet.isEmpty()) setOf(br.com.bragasaude.domain.GroceryProteinPreference.EGGS) else proteinSet,
-            hasPantryStaples = hasStaples
+            hasPantryStaples = hasStaples,
+            maxWeeklyBudgetReais = maxBudget
         )
     }
 
@@ -94,11 +98,16 @@ class NutritionViewModel @Inject constructor(
         val normalized = newPrefs.normalized()
         _weeklyPreferences.value = normalized
         val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
-        prefs.edit()
+        val editor = prefs.edit()
             .putString("weekly_budget_tier_$userId", normalized.budgetTier.name)
             .putStringSet("weekly_proteins_$userId", normalized.selectedProteins.map { it.name }.toSet())
             .putBoolean("weekly_has_staples_$userId", normalized.hasPantryStaples)
-            .apply()
+        if (normalized.maxWeeklyBudgetReais != null && normalized.maxWeeklyBudgetReais > 0) {
+            editor.putFloat("weekly_max_budget_$userId", normalized.maxWeeklyBudgetReais.toFloat())
+        } else {
+            editor.remove("weekly_max_budget_$userId")
+        }
+        editor.apply()
     }
 
     private val _autoRecommendedCalories = MutableStateFlow(1800)
@@ -138,7 +147,8 @@ class NutritionViewModel @Inject constructor(
             budgetTier = currentWeekly.budgetTier,
             hasPantryStaples = currentWeekly.hasPantryStaples,
             isCustomManual = isCustom,
-            manualKcal = if (isCustom) _dailyCalories.value.toDouble() else null
+            manualKcal = if (isCustom) _dailyCalories.value.toDouble() else null,
+            maxWeeklyBudgetReais = currentWeekly.maxWeeklyBudgetReais
         )
     }
 
@@ -153,7 +163,8 @@ class NutritionViewModel @Inject constructor(
 
         val updatedWeeklyPrefs = _weeklyPreferences.value.copy(
             budgetTier = setup.budgetTier,
-            hasPantryStaples = setup.hasPantryStaples
+            hasPantryStaples = setup.hasPantryStaples,
+            maxWeeklyBudgetReais = setup.maxWeeklyBudgetReais ?: _weeklyPreferences.value.maxWeeklyBudgetReais
         )
         updateWeeklyPreferences(updatedWeeklyPrefs)
         updateAdjustments(_profile.value, setup)
