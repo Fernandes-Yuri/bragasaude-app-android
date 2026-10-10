@@ -417,6 +417,14 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = BragaTextSecondary
                                             )
+                                            if (doc.topics.isNotEmpty()) {
+                                                Text(
+                                                    text = "Tópicos: ${doc.topics.take(3).joinToString(", ")}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = BragaEmeraldDark,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
                                         }
                                     }
                                     BragaStatusBadge(
