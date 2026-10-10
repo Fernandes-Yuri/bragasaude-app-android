@@ -655,7 +655,7 @@ fun NutritionScreen(
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    if (groceryList.isNotEmpty() || pantryItems.isNotEmpty())
+                                    if (groceryList.isNotEmpty() || pantryStock.isNotEmpty())
                                         "Sugestões da sua Lista para o $selectedMealTab"
                                     else
                                         "Sugestões Saudáveis para o $selectedMealTab",
@@ -665,7 +665,7 @@ fun NutritionScreen(
                                 )
                             }
                             Text(
-                                if (groceryList.isNotEmpty() || pantryItems.isNotEmpty())
+                                if (groceryList.isNotEmpty() || pantryStock.isNotEmpty())
                                     "Alimentos planejados na sua lista de compras ou presentes na sua despensa"
                                 else
                                     "Alimentos indicados para o seu perfil clínico e autocuidado diário",
