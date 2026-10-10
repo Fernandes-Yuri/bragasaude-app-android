@@ -130,7 +130,8 @@ data class RemoteFood(
     @SerialName("serving_size_grams") val servingSizeGrams: Int = 100,
     @SerialName("serving_unit") val servingUnit: String = "100g",
     @SerialName("min_serving_grams") val minServingGrams: Int = 1,
-    @SerialName("max_serving_grams") val maxServingGrams: Int = 500
+    @SerialName("max_serving_grams") val maxServingGrams: Int = 500,
+    @SerialName("clinical_warning") val clinicalWarning: String? = null
 )
 
 @Serializable

@@ -6,6 +6,7 @@ import br.com.bragasaude.data.local.FoodEntity
 import br.com.bragasaude.data.local.VitalSignEntity
 import br.com.bragasaude.data.local.ProfileEntity
 import br.com.bragasaude.data.local.GroceryListItemEntity
+import br.com.bragasaude.data.local.GroceryPantryStockEntity
 import br.com.bragasaude.data.remote.model.*
 import br.com.bragasaude.data.remote.repository.CatalogRepository
 import br.com.bragasaude.data.remote.repository.NutritionRepository
@@ -338,6 +339,7 @@ class NutritionViewModel @Inject constructor(
 
     private val _mealRules = MutableStateFlow<List<RemoteMealRule>>(emptyList())
     private val _foodCatalog = MutableStateFlow<List<RemoteFood>>(emptyList())
+    private val _searchFoodCatalog = MutableStateFlow<List<RemoteFood>>(emptyList())
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
@@ -374,66 +376,89 @@ class NutritionViewModel @Inject constructor(
         val profile: ProfileEntity?,
         val loggedFoods: Set<String>,
         val pantryFoods: Set<String>,
-        val groceryList: List<GroceryListItemEntity>
+        val groceryList: List<GroceryListItemEntity>,
+        val pantryStock: List<GroceryPantryStockEntity>
     )
 
-    @OptIn(kotlinx.coroutines.FlowPreview::class)
     private val clinicalDataFlow = combine(
         vitalsRepository.getVitalSigns(userId),
         profileRepository.getProfile(userId),
         todayLoggedMeals,
-        groceryRepository.getGroceryList(userId)
-    ) { vitals, profileEntity, todayMeals, allGroceryList ->
+        groceryRepository.getGroceryList(userId),
+        weeklyRepository.stock(userId)
+    ) { vitals, profileEntity, todayMeals, allGroceryList, stockList ->
         ClinicalSnapshot(
             vitals = vitals,
             profile = profileEntity,
             loggedFoods = todayMeals.map { it.foodName }.toSet(),
             pantryFoods = allGroceryList.filter { it.isCheckedInPantry }.map { it.foodName }.toSet(),
-            groceryList = allGroceryList
+            groceryList = allGroceryList,
+            pantryStock = stockList
         )
-    }.debounce(100L)
-    .flowOn(kotlinx.coroutines.Dispatchers.Default)
+    }.flowOn(kotlinx.coroutines.Dispatchers.Default)
     .distinctUntilChanged()
 
     val functionalSuggestionGroups: StateFlow<List<NutritionalSuggestionGroup>> = combine(
         clinicalDataFlow,
         catalogRepository.getFoodCatalog().distinctUntilChanged(),
         _selectedMealTab,
-        _dislikedFoodNames
-    ) { snapshot, catalog, currentTab, dislikes ->
-        if (snapshot.groceryList.isEmpty()) {
-            emptyList()
+        _dislikedFoodNames,
+        _groceryIngredients
+    ) { snapshot, catalog, currentTab, dislikes, manifest ->
+        val groceryNames = snapshot.groceryList.map { it.foodName.trim().lowercase() }.toSet()
+        val groceryFoodIds = snapshot.groceryList.map { it.foodId }.filter { it.isNotBlank() }.toSet()
+        val checkedPantryNames = snapshot.pantryFoods.map { it.trim().lowercase() }.toSet()
+
+        val physicalPantrySlugs = snapshot.pantryStock.filter { it.availableAmount > 0 }.map { it.ingredientSlug.trim().lowercase() }.toSet()
+
+        val physicalPantryFoodNames = catalog.filter { food ->
+            val foodId = food.remoteId.lowercase()
+            val foodName = food.name.trim().lowercase()
+            physicalPantrySlugs.contains(foodId) || physicalPantrySlugs.contains(foodName) ||
+                (manifest?.forFood(food.remoteId, food.name)?.any { it.slug.lowercase() in physicalPantrySlugs } == true)
+        }.map { it.name.trim().lowercase() }.toSet()
+
+        val allPantryNames = checkedPantryNames + physicalPantryFoodNames
+        val toBuyNames = groceryNames - allPantryNames
+
+        val hasPantryOrGrocery = groceryNames.isNotEmpty() || physicalPantrySlugs.isNotEmpty() || checkedPantryNames.isNotEmpty()
+
+        val candidateCatalog = if (!hasPantryOrGrocery) {
+            catalog
         } else {
-            val groceryNames = snapshot.groceryList.map { it.foodName.trim().lowercase() }.toSet()
-            val groceryFoodIds = snapshot.groceryList.map { it.foodId }.filter { it.isNotBlank() }.toSet()
-            val pantryNames = snapshot.pantryFoods.map { it.trim().lowercase() }.toSet()
-            val toBuyNames = groceryNames - pantryNames
-
-            val manifest = _groceryIngredients.value
-            val userCatalog = catalog.filter { food ->
-                (manifest?.forFood(food.remoteId, food.name)?.any { it.slug in groceryFoodIds } == true) ||
-                (food.remoteId in groceryFoodIds) ||
-                (food.name.trim().lowercase() in groceryNames) ||
-                groceryNames.any { gName ->
-                    val fName = food.name.trim().lowercase()
-                    fName.contains(gName) || gName.contains(fName)
-                }
+            val filtered = catalog.filter { food ->
+                val foodName = food.name.trim().lowercase()
+                val foodId = food.remoteId
+                val isPantryPhysical = physicalPantrySlugs.isNotEmpty() && (
+                    physicalPantrySlugs.contains(foodId.lowercase()) ||
+                    physicalPantrySlugs.contains(foodName) ||
+                    (manifest?.forFood(foodId, food.name)?.any { it.slug.lowercase() in physicalPantrySlugs } == true)
+                )
+                val isPantryChecked = allPantryNames.contains(foodName) || allPantryNames.any { pName -> foodName.contains(pName) || pName.contains(foodName) }
+                val isGrocery = (
+                    (manifest?.forFood(foodId, food.name)?.any { it.slug in groceryFoodIds } == true) ||
+                    (foodId in groceryFoodIds) ||
+                    (foodName in groceryNames) ||
+                    groceryNames.any { gName -> foodName.contains(gName) || gName.contains(foodName) }
+                )
+                isPantryPhysical || isPantryChecked || isGrocery
             }
-
-            NutritionSuggestionEngine.generateSuggestions(
-                vitals = snapshot.vitals,
-                profile = snapshot.profile?.toRemote(),
-                catalog = userCatalog,
-                selectedMealType = currentTab,
-                dislikedFoodNames = dislikes,
-                loggedFoodNamesToday = snapshot.loggedFoods,
-                pantryFoodNames = snapshot.pantryFoods,
-                groceryFoodNames = toBuyNames
-            )
+            if (filtered.isNotEmpty()) filtered else catalog
         }
+
+        NutritionSuggestionEngine.generateSuggestions(
+            vitals = snapshot.vitals,
+            profile = snapshot.profile?.toRemote(),
+            catalog = candidateCatalog,
+            selectedMealType = currentTab,
+            dislikedFoodNames = dislikes,
+            loggedFoodNamesToday = snapshot.loggedFoods,
+            pantryFoodNames = allPantryNames,
+            groceryFoodNames = toBuyNames
+        )
     }.flowOn(kotlinx.coroutines.Dispatchers.Default)
     .distinctUntilChanged()
-    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _userWeight = MutableStateFlow<Double?>(null)
     val userWeight = _userWeight.asStateFlow()
@@ -592,9 +617,12 @@ class NutritionViewModel @Inject constructor(
 
                 // Atualiza catálogo seguro quando o perfil clínico mudar (ex: diabetes marcado)
                 loadSafeCatalog(remProfile)
+                loadFullSearchCatalog(remProfile)
             }
         }
         
+        loadFullSearchCatalog(null)
+
         viewModelScope.launch {
             catalogRepository.getMealRules().collectLatest { entities ->
                 _mealRules.value = entities.map { rule ->
@@ -631,25 +659,62 @@ class NutritionViewModel @Inject constructor(
                         isDiabetesSafe = food.isDiabetesSafe,
                         isHypertensionSafe = food.isHypertensionSafe,
                         isThyroidSafe = food.isThyroidSafe,
-                        preparationRule = food.preparationRule
+                        preparationRule = food.preparationRule,
+                        servingSizeGrams = food.servingSizeGrams,
+                        servingUnit = food.servingUnit,
+                        minServingGrams = food.minServingGrams,
+                        maxServingGrams = food.maxServingGrams
                     )
                 }
                 _foodCatalog.value = list
-                if (_searchQuery.value.isBlank()) {
-                    _searchResults.value = list
-                } else {
-                    onSearchQueryChanged(_searchQuery.value)
+            }
+        }
+    }
+
+    private var fullCatalogJob: kotlinx.coroutines.Job? = null
+
+    private fun loadFullSearchCatalog(userProfile: RemoteProfile?) {
+        fullCatalogJob?.cancel()
+        fullCatalogJob = viewModelScope.launch {
+            nutritionRepository.getFullFoodCatalog().collectLatest { entities ->
+                val list = entities.map { food ->
+                    RemoteFood(
+                        id = food.remoteId,
+                        name = food.name,
+                        category = food.category,
+                        kcal = food.kcal,
+                        carbsG = food.carbsG,
+                        proteinG = food.proteinG,
+                        fatG = food.fatG,
+                        status = food.status,
+                        isDiabetesSafe = food.isDiabetesSafe,
+                        isHypertensionSafe = food.isHypertensionSafe,
+                        isThyroidSafe = food.isThyroidSafe,
+                        preparationRule = food.preparationRule,
+                        servingSizeGrams = food.servingSizeGrams,
+                        servingUnit = food.servingUnit,
+                        minServingGrams = food.minServingGrams,
+                        maxServingGrams = food.maxServingGrams,
+                        clinicalWarning = nutritionRepository.evaluateFoodClinicalWarning(food, userProfile)
+                    )
                 }
+                _searchFoodCatalog.value = list
+                applySearchFilter(_searchQuery.value)
             }
         }
     }
 
     fun onSearchQueryChanged(query: String) {
         _searchQuery.value = query
+        applySearchFilter(query)
+    }
+
+    private fun applySearchFilter(query: String) {
+        val baseList = _searchFoodCatalog.value
         if (query.isBlank()) {
-            _searchResults.value = _foodCatalog.value
+            _searchResults.value = baseList
         } else {
-            _searchResults.value = _foodCatalog.value.filter {
+            _searchResults.value = baseList.filter {
                 it.name.contains(query, ignoreCase = true) || (it.category?.contains(query, ignoreCase = true) == true)
             }
         }
