@@ -101,93 +101,110 @@ class NutritionViewModelTest {
 
     @Test
     fun foodSearchReturnsRestrictedItemsWithClinicalWarningForFactualLogging() = runTest(testDispatcher) {
-        val fullCatalogFlow = MutableStateFlow(sampleFoodCatalog)
-        every { nutritionRepo.getFullFoodCatalog() } returns fullCatalogFlow
-        every { nutritionRepo.getSafeFoodCatalog(any()) } returns flowOf(listOf(sampleFoodCatalog.first()))
-        every {
-            nutritionRepo.evaluateFoodClinicalWarning(match { it.remoteId == "food_pao" }, any())
-        } returns "Atenção: alto índice glicêmico para diabetes"
-        every {
-            nutritionRepo.evaluateFoodClinicalWarning(match { it.remoteId == "food_aveia" }, any())
-        } returns null
+        var vm: NutritionViewModel? = null
+        try {
+            val fullCatalogFlow = MutableStateFlow(sampleFoodCatalog)
+            every { nutritionRepo.getFullFoodCatalog() } returns fullCatalogFlow
+            every { nutritionRepo.getSafeFoodCatalog(any()) } returns flowOf(listOf(sampleFoodCatalog.first()))
+            every {
+                nutritionRepo.evaluateFoodClinicalWarning(match { it.remoteId == "food_pao" }, any())
+            } returns "Atenção: alto índice glicêmico para diabetes"
+            every {
+                nutritionRepo.evaluateFoodClinicalWarning(match { it.remoteId == "food_aveia" }, any())
+            } returns null
 
-        val profileFlow = MutableStateFlow<ProfileEntity?>(
-            ProfileEntity(userId = "test_user_id", hasDiabetes = true, hasHypertension = false)
-        )
-        every { profileRepo.getProfile("test_user_id") } returns profileFlow
+            val profileFlow = MutableStateFlow<ProfileEntity?>(
+                ProfileEntity(userId = "test_user_id", hasDiabetes = true, hasHypertension = false)
+            )
+            every { profileRepo.getProfile("test_user_id") } returns profileFlow
 
-        val vm = NutritionViewModel(
-            catalogRepo, nutritionRepo, profileRepo, vitalsRepo, groceryRepo, weeklyRepo, auth, context
-        )
+            val model = NutritionViewModel(
+                catalogRepo, nutritionRepo, profileRepo, vitalsRepo, groceryRepo, weeklyRepo, auth, context
+            )
+            vm = model
 
-        advanceUntilIdle()
+            testScheduler.advanceTimeBy(300)
+            runCurrent()
 
-        vm.onSearchQueryChanged("Pão")
-        advanceUntilIdle()
+            model.onSearchQueryChanged("Pão")
+            testScheduler.advanceTimeBy(100)
+            runCurrent()
 
-        val results = vm.searchResults.value
-        assertEquals(1, results.size)
-        val bread = results.first()
-        assertEquals("Pão Francês", bread.name)
-        assertNotNull(bread.clinicalWarning)
-        assertTrue(bread.clinicalWarning!!.contains("diabetes"))
-
-        vm.viewModelScope.cancel()
+            val results = model.searchResults.value
+            assertEquals(1, results.size)
+            val bread = results.first()
+            assertEquals("Pão Francês", bread.name)
+            assertNotNull(bread.clinicalWarning)
+            assertTrue(bread.clinicalWarning!!.contains("diabetes"))
+        } finally {
+            vm?.viewModelScope?.cancel()
+        }
     }
 
     @Test
     fun functionalSuggestionsEmitEvenWhenGroceryListIsEmpty() = runTest(testDispatcher) {
-        every { nutritionRepo.getFullFoodCatalog() } returns flowOf(sampleFoodCatalog)
-        every { nutritionRepo.getSafeFoodCatalog(any()) } returns flowOf(sampleFoodCatalog)
-        every { groceryRepo.getGroceryList("test_user_id") } returns flowOf(emptyList())
-        every { weeklyRepo.stock("test_user_id") } returns flowOf(emptyList())
-        every { profileRepo.getProfile("test_user_id") } returns flowOf(null)
+        var vm: NutritionViewModel? = null
+        try {
+            every { nutritionRepo.getFullFoodCatalog() } returns flowOf(sampleFoodCatalog)
+            every { nutritionRepo.getSafeFoodCatalog(any()) } returns flowOf(sampleFoodCatalog)
+            every { groceryRepo.getGroceryList("test_user_id") } returns flowOf(emptyList())
+            every { weeklyRepo.stock("test_user_id") } returns flowOf(emptyList())
+            every { profileRepo.getProfile("test_user_id") } returns flowOf(null)
 
-        val vm = NutritionViewModel(
-            catalogRepo, nutritionRepo, profileRepo, vitalsRepo, groceryRepo, weeklyRepo, auth, context
-        )
+            val model = NutritionViewModel(
+                catalogRepo, nutritionRepo, profileRepo, vitalsRepo, groceryRepo, weeklyRepo, auth, context
+            )
+            vm = model
 
-        advanceUntilIdle()
+            testScheduler.advanceTimeBy(300)
+            runCurrent()
 
-        // Grocery list is empty
-        assertTrue(vm.groceryList.value.isEmpty())
+            // Grocery list is empty
+            assertTrue(model.groceryList.value.isEmpty())
 
-        // Suggestions should still be generated from catalog
-        val suggestions = vm.functionalSuggestionGroups.value
-        assertNotNull(suggestions)
-        assertTrue("Sugestões não devem estar bloqueadas quando a lista for vazia", suggestions.isNotEmpty())
-
-        vm.viewModelScope.cancel()
+            // Suggestions should still be generated from catalog
+            val suggestions = model.functionalSuggestionGroups.value
+            assertNotNull(suggestions)
+            assertTrue("Sugestões não devem estar bloqueadas quando a lista for vazia", suggestions.isNotEmpty())
+        } finally {
+            vm?.viewModelScope?.cancel()
+        }
     }
 
     @Test
     fun functionalSuggestionsRecomputeWhenPantryStockEmits() = runTest(testDispatcher) {
-        val stockFlow = MutableStateFlow<List<GroceryPantryStockEntity>>(emptyList())
-        every { nutritionRepo.getFullFoodCatalog() } returns flowOf(sampleFoodCatalog)
-        every { nutritionRepo.getSafeFoodCatalog(any()) } returns flowOf(sampleFoodCatalog)
-        every { groceryRepo.getGroceryList("test_user_id") } returns flowOf(emptyList())
-        every { weeklyRepo.stock("test_user_id") } returns stockFlow
-        every { profileRepo.getProfile("test_user_id") } returns flowOf(null)
+        var vm: NutritionViewModel? = null
+        try {
+            val stockFlow = MutableStateFlow<List<GroceryPantryStockEntity>>(emptyList())
+            every { nutritionRepo.getFullFoodCatalog() } returns flowOf(sampleFoodCatalog)
+            every { nutritionRepo.getSafeFoodCatalog(any()) } returns flowOf(sampleFoodCatalog)
+            every { groceryRepo.getGroceryList("test_user_id") } returns flowOf(emptyList())
+            every { weeklyRepo.stock("test_user_id") } returns stockFlow
+            every { profileRepo.getProfile("test_user_id") } returns flowOf(null)
 
-        val vm = NutritionViewModel(
-            catalogRepo, nutritionRepo, profileRepo, vitalsRepo, groceryRepo, weeklyRepo, auth, context
-        )
+            val model = NutritionViewModel(
+                catalogRepo, nutritionRepo, profileRepo, vitalsRepo, groceryRepo, weeklyRepo, auth, context
+            )
+            vm = model
 
-        advanceUntilIdle()
+            testScheduler.advanceTimeBy(300)
+            runCurrent()
 
-        val initialSuggestions = vm.functionalSuggestionGroups.value
-        assertNotNull(initialSuggestions)
+            val initialSuggestions = model.functionalSuggestionGroups.value
+            assertNotNull(initialSuggestions)
 
-        // Adding stock for Aveia
-        stockFlow.value = listOf(
-            GroceryPantryStockEntity(userId = "test_user_id", ingredientSlug = "food_aveia", unit = "g", availableAmount = 500.0)
-        )
-        advanceUntilIdle()
+            // Adding stock for Aveia
+            stockFlow.value = listOf(
+                GroceryPantryStockEntity(userId = "test_user_id", ingredientSlug = "food_aveia", unit = "g", availableAmount = 500.0)
+            )
+            testScheduler.advanceTimeBy(300)
+            runCurrent()
 
-        val updatedSuggestions = vm.functionalSuggestionGroups.value
-        assertNotNull(updatedSuggestions)
-        assertTrue(updatedSuggestions.isNotEmpty())
-
-        vm.viewModelScope.cancel()
+            val updatedSuggestions = model.functionalSuggestionGroups.value
+            assertNotNull(updatedSuggestions)
+            assertTrue(updatedSuggestions.isNotEmpty())
+        } finally {
+            vm?.viewModelScope?.cancel()
+        }
     }
 }
