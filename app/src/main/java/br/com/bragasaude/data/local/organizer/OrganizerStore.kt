@@ -70,7 +70,8 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         val json = JSONObject().put("id", s.id).put("createdAt", s.createdAt)
         val docs = JSONArray()
         s.documents.forEach { d -> docs.put(JSONObject().put("id", d.id).put("title", d.title)
-            .put("date", d.date).put("type", d.type).put("pages", d.pages).put("confirmed", d.confirmed).put("photoOnly", d.photoOnly).put("sourceDigest", d.sourceDigest).put("possibleDuplicate", d.possibleDuplicate)) }
+            .put("date", d.date).put("type", d.type).put("pages", d.pages).put("confirmed", d.confirmed).put("photoOnly", d.photoOnly).put("sourceDigest", d.sourceDigest).put("possibleDuplicate", d.possibleDuplicate)
+            .put("topics", JSONArray(d.topics))) }
         json.put("documents", docs)
         encrypt(s.id, json.toString().toByteArray(Charsets.UTF_8), File(folder(s.id), "session.enc"))
     }
@@ -79,8 +80,11 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         val docs = json.getJSONArray("documents")
         return OrganizerSession(id, json.getLong("createdAt"), (0 until docs.length()).map { n ->
             val d = docs.getJSONObject(n)
+            val topicsList = d.optJSONArray("topics")?.let { arr ->
+                (0 until arr.length()).map { arr.getString(it) }
+            }.orEmpty()
             OrganizerDocument(d.getString("id"), d.getString("title"), d.getString("date"),
-                d.getString("type"), d.getInt("pages"), d.getBoolean("confirmed"), d.optBoolean("photoOnly"), d.optString("sourceDigest"), d.optBoolean("possibleDuplicate"))
+                d.getString("type"), d.getInt("pages"), d.getBoolean("confirmed"), d.optBoolean("photoOnly"), d.optString("sourceDigest"), d.optBoolean("possibleDuplicate"), topicsList)
         })
     }
     private fun remove(id: String) {
@@ -240,11 +244,11 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
                 val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
                     if (it.moveToFirst()) it.getString(0) else null
                 } ?: "Documento de exame"
-                val (title, type) = OrganizerMetadata.suggest(text, name)
+                val (title, type, topics) = OrganizerMetadata.suggestWithTopics(text, name)
                 require(normalized.length() <= 35L * 1024 * 1024) { "Cada documento pode ter até 35 MB após a organização." }
                 require((folder(id).listFiles()?.filter { it.extension == "enc" }?.sumOf { it.length() } ?: 0L) +
                     pending.sumOf { it.second.length() } + normalized.length() <= 150L * 1024 * 1024) { "A sessão pode ter até 150 MB. Organize em lotes menores." }
-                pending.add(OrganizerDocument(docId, title, OrganizerMetadata.suggestDate(text), type, pages, photoOnly = !isPdf, sourceDigest = sourceDigest, possibleDuplicate = duplicate) to normalized)
+                pending.add(OrganizerDocument(docId, title, OrganizerMetadata.suggestDate(text), type, pages, photoOnly = !isPdf, sourceDigest = sourceDigest, possibleDuplicate = duplicate, topics = topics) to normalized)
             }
             if (appendTo != null) {
                 val item = s.documents.first { it.id == appendTo }

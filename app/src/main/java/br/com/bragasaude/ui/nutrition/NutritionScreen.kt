@@ -43,7 +43,6 @@ import br.com.bragasaude.R
 import br.com.bragasaude.data.remote.model.RemoteFood
 import br.com.bragasaude.domain.HealthCalculators
 import br.com.bragasaude.ui.components.EmeraldHeaderBanner
-import br.com.bragasaude.ui.home.HomeViewModel
 import br.com.bragasaude.ui.theme.BragaBackground
 import br.com.bragasaude.ui.theme.BragaCardBorder
 import br.com.bragasaude.ui.theme.BragaCardSurface
@@ -64,7 +63,6 @@ fun NutritionScreen(
     openGroceryList: Boolean = false,
     suggestedGroceryItems: List<String> = emptyList(),
     viewModel: NutritionViewModel = hiltViewModel(),
-    homeViewModel: HomeViewModel = hiltViewModel(),
     onNavigateToPantryRecipes: () -> Unit = {}
 ) {
     val dailyCal by viewModel.dailyCalories.collectAsState()
@@ -74,7 +72,7 @@ fun NutritionScreen(
     val isCustomCalorieTarget by viewModel.isCustomCalorieTarget.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val activeAdjustments by viewModel.activeAdjustments.collectAsState()
-    val recommendations = remember(isLoading, activeAdjustments) { viewModel.getRecommendations() }
+    val recommendations by viewModel.recommendations.collectAsState()
     val todayLoggedMeals by viewModel.todayLoggedMeals.collectAsState()
     val suggestionGroups by viewModel.functionalSuggestionGroups.collectAsState()
     val selectedMealTab by viewModel.selectedMealTab.collectAsState()
@@ -83,7 +81,6 @@ fun NutritionScreen(
     val groceryMessage by viewModel.groceryMessage.collectAsState()
     val groceryPlan by viewModel.groceryPlanResult.collectAsState()
     val pantryStock by viewModel.pantryStock.collectAsState()
-    val showResizeDialog by viewModel.showResizeDialog.collectAsState()
     val weeklyPreferences by viewModel.weeklyPreferences.collectAsState()
 
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -950,15 +947,6 @@ fun NutritionScreen(
         )
     }
 
-    if (showResizeDialog) {
-        BragaAlertDialog(
-            onDismissRequest = { viewModel.keepCurrentWeeklyList() },
-            title = { Text("Meta alimentar alterada") },
-            text = { Text("Deseja redimensionar a lista semanal pela nova meta? Seus itens manuais serão preservados. Manter a lista atual deixa a cobertura invalidada.") },
-            confirmButton = { TextButton(onClick = { viewModel.resizeWeeklyList() }) { Text("Redimensionar agora") } },
-            dismissButton = { TextButton(onClick = { viewModel.keepCurrentWeeklyList() }) { Text("Manter lista atual") } }
-        )
-    }
     if (showGroceryBottomSheet) {
         val context = LocalContext.current
         GroceryListBottomSheet(

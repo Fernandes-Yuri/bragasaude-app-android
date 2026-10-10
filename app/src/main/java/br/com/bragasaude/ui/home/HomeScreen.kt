@@ -165,17 +165,6 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-            val alpha by infiniteTransition.animateFloat(
-                initialValue = 1f,
-                targetValue = 0.3f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(800, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "alpha"
-            )
-
             EmeraldHeaderBanner(
                 greetingPrefix = getGreetingPrefix(),
                 title = userName.ifBlank { "Meu perfil" },
@@ -197,8 +186,7 @@ fun HomeScreen(
                             Icon(
                                 Icons.Default.Notifications,
                                 contentDescription = "Notificações",
-                                tint = Color.White,
-                                modifier = if (hasUnreadAlerts) Modifier.graphicsLayer(alpha = alpha) else Modifier
+                                tint = Color.White
                             )
                         }
                     }
@@ -239,7 +227,7 @@ fun HomeScreen(
                                 add(Triple("Dados", Icons.Default.BarChart, br.com.bragasaude.ui.util.Screen.Report))
                             }
                             add(Triple("Mural", Icons.Default.Groups, br.com.bragasaude.ui.util.Screen.SocialFeed))
-                            add(Triple("Organizar exames", Icons.Default.Assignment, br.com.bragasaude.ui.util.Screen.Exams))
+                            add(Triple("Exames", Icons.Default.Assignment, br.com.bragasaude.ui.util.Screen.Exams))
                         }
                         
                         items(items.size) { index ->

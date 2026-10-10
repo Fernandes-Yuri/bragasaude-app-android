@@ -59,8 +59,7 @@ class NutritionViewModel @Inject constructor(
     }
     private suspend fun changedTarget(target: Double) {
         if (groceryRepository.getGroceryList(userId).first().isNotEmpty()) {
-            invalidateWeekly("Meta alterada para ${target.toInt()} kcal/dia. Cobertura anterior invalidada; escolha se deseja redimensionar.")
-            _showResizeDialog.value = true
+            generateWeeklyGroceryList(preserveManual = true)
         }
     }
     fun keepCurrentWeeklyList() { _showResizeDialog.value = false }
@@ -250,7 +249,7 @@ class NutritionViewModel @Inject constructor(
     private var hasPreparedGroceryData = false
 
     fun prepareGroceryData() {
-        if (hasPreparedGroceryData) return
+        if (hasPreparedGroceryData && _groceryIngredients.value?.ingredients?.any { it.price != null && it.price > 0 } == true) return
         hasPreparedGroceryData = true
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
@@ -535,11 +534,6 @@ class NutritionViewModel @Inject constructor(
             kotlinx.coroutines.delay(2500)
             prepareGroceryData()
         }
-        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
-        
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            catalogRepository.seedDatabaseIfNeeded()
-        }
 
         viewModelScope.launch {
             profileRepository.getProfile(userId).collectLatest { entity ->
@@ -686,18 +680,20 @@ class NutritionViewModel @Inject constructor(
     }
 
 
-    fun getRecommendations(): List<Pair<String, HealthCalculators.MealRecommendation>> {
-        val profile = _profile.value ?: RemoteProfile(id = "")
-        val catalog = _foodCatalog.value
-
-        return _mealRules.value.map { rule ->
+    val recommendations: StateFlow<List<Pair<String, HealthCalculators.MealRecommendation>>> = combine(
+        _profile,
+        _foodCatalog,
+        _mealRules
+    ) { profile, catalog, rules ->
+        val userProfile = profile ?: RemoteProfile(id = "")
+        rules.map { rule ->
             var recommendation = HealthCalculators.calculateSmartMeal(
-                profile = profile,
+                profile = userProfile,
                 caloriePercentage = rule.caloriePercentage?.toFloat() ?: 0.25f,
                 catalog = catalog
             )
 
-            if (profile.hasDiabetes) {
+            if (userProfile.hasDiabetes) {
                 recommendation = recommendation.copy(
                     carbs = recommendation.carbs.copy(
                         max = recommendation.carbs.max * 0.8f,
@@ -708,6 +704,34 @@ class NutritionViewModel @Inject constructor(
             }
 
             rule.mealName to recommendation
+        }
+    }.flowOn(kotlinx.coroutines.Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun getRecommendations(): List<Pair<String, HealthCalculators.MealRecommendation>> {
+        return recommendations.value.ifEmpty {
+            val profile = _profile.value ?: RemoteProfile(id = "")
+            val catalog = _foodCatalog.value
+
+            _mealRules.value.map { rule ->
+                var recommendation = HealthCalculators.calculateSmartMeal(
+                    profile = profile,
+                    caloriePercentage = rule.caloriePercentage?.toFloat() ?: 0.25f,
+                    catalog = catalog
+                )
+
+                if (profile.hasDiabetes) {
+                    recommendation = recommendation.copy(
+                        carbs = recommendation.carbs.copy(
+                            max = recommendation.carbs.max * 0.8f,
+                            avg = recommendation.carbs.avg * 0.8f,
+                            min = recommendation.carbs.min * 0.8f
+                        )
+                    )
+                }
+
+                rule.mealName to recommendation
+            }
         }
     }
 
