@@ -102,15 +102,25 @@ class RecipeEngine @Inject constructor() {
         // Filtro por hipertensão
         if (profile.hasHypertension && !recipe.isHypertensionSafe) return false
 
-        // Filtro por alergias alimentares
+        // Filtro por alergias alimentares com ontologia e sinônimos (corrige P11)
         val allergies = profile.foodAllergies
         if (allergies.isNotEmpty()) {
-            val normalizedAllergies = allergies.map { normalizeFoodName(it) }.toSet()
-            val recipeIngredients = recipe.ingredientNames.map { normalizeFoodName(it) }.toSet()
-
-            // Se alguma alergia coincide com ingrediente da receita, não é segura
-            if (recipeIngredients.intersect(normalizedAllergies).isNotEmpty()) {
-                return false
+            val declaredFamilies = br.com.bragasaude.domain.nutrition.core.AllergenFamily.parseDeclaredAllergens(allergies)
+            for (ingredient in recipe.ingredientNames) {
+                // Checagem por famílias ontológicas
+                for (family in declaredFamilies) {
+                    if (br.com.bragasaude.domain.nutrition.core.AllergenFamily.matchesFood(ingredient, null, emptyList(), family)) {
+                        return false
+                    }
+                }
+                // Fallback por igualdade de substring normalizada
+                val normIng = normalizeFoodName(ingredient)
+                for (allergy in allergies) {
+                    val normAllergy = normalizeFoodName(allergy)
+                    if (normIng.contains(normAllergy) || normAllergy.contains(normIng)) {
+                        return false
+                    }
+                }
             }
         }
 

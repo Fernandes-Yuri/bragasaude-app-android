@@ -48,17 +48,22 @@ class WeeklyGrocerySummaryRepository @Inject constructor(private val database: B
 
     suspend fun check(userId: String, id: String, checked: Boolean, catalog: GroceryIngredientCatalog) = database.withTransaction {
         val item = groceries.getGrocerySnapshot(userId).firstOrNull { it.remoteId == id } ?: return@withTransaction
+        if (item.isCheckedInPantry == checked) return@withTransaction
         groceries.updateCheckedStatus(id, checked)
+        val ingredient = catalog.ingredients.firstOrNull { it.slug == item.foodId } ?: return@withTransaction
+        val amount = GroceryPurchasePlanner.parseAmount(item.purchaseUnitText.substringBefore(' '), ingredient.unit)
+            ?: item.purchaseWeightGrams.takeIf { ingredient.unit == "kg" && it > 0 }
+        val internalAmount = (if (ingredient.unit == "kg") item.purchaseWeightGrams else amount ?: 0).toDouble()
+
+        val existingStock = pantry.stock(userId, item.foodId)
         if (checked) {
-            val ingredient = catalog.ingredients.firstOrNull { it.slug == item.foodId } ?: return@withTransaction
-            // Marcar novamente não reabastece um estoque já acompanhado.
-            if (pantry.stock(userId, item.foodId) == null) {
-                val amount = GroceryPurchasePlanner.parseAmount(item.purchaseUnitText.substringBefore(' '), ingredient.unit)
-                    ?: item.purchaseWeightGrams.takeIf { ingredient.unit == "kg" && it > 0 }
-                // Texto em kg é exibido em gramas; parseAmount recebe kg na montagem manual.
-                val internalAmount = if (ingredient.unit == "kg") item.purchaseWeightGrams else amount ?: 0
-                pantry.upsert(GroceryPantryStockEntity(userId, item.foodId, ingredient.unit, internalAmount.toDouble()))
-            }
+            // Reabastece o saldo na despensa: soma à quantidade existente ou cria se for novo
+            val updatedAmount = (existingStock?.availableAmount ?: 0.0) + internalAmount
+            pantry.upsert(GroceryPantryStockEntity(userId, item.foodId, ingredient.unit, updatedAmount))
+        } else if (existingStock != null) {
+            // Desmarcar estorna a quantidade da compra correspondente
+            val updatedAmount = (existingStock.availableAmount - internalAmount).coerceAtLeast(0.0)
+            pantry.upsert(existingStock.copy(availableAmount = updatedAmount))
         }
     }
 
@@ -75,16 +80,16 @@ class WeeklyGrocerySummaryRepository @Inject constructor(private val database: B
         undo(meal.userId, meal.id)
         pantry.upsert(meal)
         val conversion = GroceryConsumption.amounts(meal.foodId, meal.foodName, meal.portionGrams.toDouble(), catalog)
-        val checked = groceries.getGrocerySnapshot(meal.userId).filter { it.isCheckedInPantry }.map { it.foodId }.toSet()
         val limitations = conversion.limitations.toMutableList()
         conversion.amounts.forEach { (slug, amount) ->
-            if (slug in checked) {
-                val stock = pantry.stock(meal.userId, slug)
-                if (stock != null) {
-                    val consumed = minOf(amount, stock.availableAmount).coerceAtLeast(0.0)
-                    pantry.upsert(stock.copy(availableAmount = (stock.availableAmount - consumed).coerceAtLeast(0.0)))
-                    pantry.upsert(GroceryConsumptionEntity(meal.id, slug, meal.userId, consumed))
-                    if (consumed < amount) limitations.add("Saldo insuficiente na despensa para ${catalog.ingredients.first { it.slug == slug }.name}.")
+            val stock = pantry.stock(meal.userId, slug)
+            if (stock != null && stock.availableAmount > 0.0) {
+                val consumed = minOf(amount, stock.availableAmount).coerceAtLeast(0.0)
+                pantry.upsert(stock.copy(availableAmount = (stock.availableAmount - consumed).coerceAtLeast(0.0)))
+                pantry.upsert(GroceryConsumptionEntity(meal.id, slug, meal.userId, consumed))
+                if (consumed < amount) {
+                    val ingName = catalog.ingredients.firstOrNull { it.slug == slug }?.name ?: slug
+                    limitations.add("Saldo insuficiente na despensa para $ingName.")
                 }
             }
         }

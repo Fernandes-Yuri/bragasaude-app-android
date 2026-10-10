@@ -204,4 +204,30 @@ class WeeklyGroceryEnginePreferencesTest {
         assertTrue("Deve conter arroz", foodNames.any { it.contains("arroz") })
         assertTrue("Deve conter feijão", foodNames.any { it.contains("feijão") })
     }
+
+    @Test
+    fun `budget limit in Reais is evaluated and signals when basket exceeds maxWeeklyBudgetReais`() {
+        val (foods, catalog) = createTestCatalog()
+        val tightBudget = 50.0 // R$ 50 para uma semana de 2000 kcal/dia
+        val prefs = WeeklyGroceryPreferences(
+            budgetTier = GroceryBudgetTier.ECONOMIC,
+            maxWeeklyBudgetReais = tightBudget
+        )
+
+        val plan = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "test_user",
+            vitals = emptyList(),
+            profile = null,
+            catalog = foods,
+            ingredientCatalog = catalog,
+            targetCalories = 2000.0,
+            preferences = prefs
+        )
+
+        val totalCost = plan.items.sumOf { it.estimatedPriceBrl }
+        if (totalCost > tightBudget) {
+            assertTrue("Deve conter aviso de teto orçamentário excedido",
+                plan.limitations.any { it.contains("excedeu o teto orçamentário") })
+        }
+    }
 }

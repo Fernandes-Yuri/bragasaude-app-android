@@ -530,20 +530,22 @@ class NutritionViewModel @Inject constructor(
                 _userWeight.value = weight
 
                 // Cálculo clínico: TMB (Mifflin-St Jeor) * FAF (Atividade Física) + Ajuste de Objetivo
+                val goalSetupValue = _goalSetup.value
                 val calculatedAuto = HealthCalculators.calculateProfileCalorieTarget(
                     weight = weight,
                     height = entity?.height ?: remProfile?.height,
                     birthDate = entity?.birthDate ?: remProfile?.birthDate,
                     gender = entity?.gender ?: remProfile?.gender,
                     activityLevel = entity?.activityLevel ?: remProfile?.activityLevel,
-                    weightGoal = entity?.weightGoal ?: remProfile?.weightGoal
+                    weightGoal = entity?.weightGoal ?: remProfile?.weightGoal,
+                    dietaryGoalStr = goalSetupValue.goal.name
                 ).toInt()
                 _autoRecommendedCalories.value = calculatedAuto
 
                 val isCustom = prefs.getBoolean("calorie_target_is_custom_$userId", false)
                 _isCustomCalorieTarget.value = isCustom
 
-                val target = if (isCustom && remProfile?.dailyCalorieTarget != null && remProfile.dailyCalorieTarget > 0 && remProfile.dailyCalorieTarget != 1800.0) {
+                val target = if (isCustom && remProfile?.dailyCalorieTarget != null && remProfile.dailyCalorieTarget > 0) {
                     remProfile.dailyCalorieTarget.toFloat()
                 } else {
                     calculatedAuto.toFloat()
@@ -672,22 +674,11 @@ class NutritionViewModel @Inject constructor(
     ) { profile, catalog, rules ->
         val userProfile = profile ?: RemoteProfile(id = "")
         rules.map { rule ->
-            var recommendation = HealthCalculators.calculateSmartMeal(
+            val recommendation = HealthCalculators.calculateSmartMeal(
                 profile = userProfile,
                 caloriePercentage = rule.caloriePercentage?.toFloat() ?: 0.25f,
                 catalog = catalog
             )
-
-            if (userProfile.hasDiabetes) {
-                recommendation = recommendation.copy(
-                    carbs = recommendation.carbs.copy(
-                        max = recommendation.carbs.max * 0.8f,
-                        avg = recommendation.carbs.avg * 0.8f,
-                        min = recommendation.carbs.min * 0.8f
-                    )
-                )
-            }
-
             rule.mealName to recommendation
         }
     }.flowOn(kotlinx.coroutines.Dispatchers.Default)
@@ -699,22 +690,11 @@ class NutritionViewModel @Inject constructor(
             val catalog = _foodCatalog.value
 
             _mealRules.value.map { rule ->
-                var recommendation = HealthCalculators.calculateSmartMeal(
+                val recommendation = HealthCalculators.calculateSmartMeal(
                     profile = profile,
                     caloriePercentage = rule.caloriePercentage?.toFloat() ?: 0.25f,
                     catalog = catalog
                 )
-
-                if (profile.hasDiabetes) {
-                    recommendation = recommendation.copy(
-                        carbs = recommendation.carbs.copy(
-                            max = recommendation.carbs.max * 0.8f,
-                            avg = recommendation.carbs.avg * 0.8f,
-                            min = recommendation.carbs.min * 0.8f
-                        )
-                    )
-                }
-
                 rule.mealName to recommendation
             }
         }

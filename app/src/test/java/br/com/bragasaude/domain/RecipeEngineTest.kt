@@ -70,6 +70,17 @@ class RecipeEngineTest {
         }
     }
 
+    @Test fun singularAndPluralAndSynonymAllergiesAreProperlyFiltered() {
+        val recipeCrepioca = RecipeCatalog.getAll().single { it.id == "recipe_005" } // Ovos, Tapioca, Ricota, Orégano
+        val itemsCrepioca = recipeCrepioca.ingredientNames.map(::item)
+
+        // Alergia declarada no singular "Ovo" deve bloquear receita com ingrediente "Ovos"
+        assertTrue(engine.findBestRecipes(itemsCrepioca, ProfileEntity(userId = "user", foodAllergies = listOf("Ovo"))).isEmpty())
+
+        // Alergia declarada "Lactose" deve bloquear receita com "Ricota" (derivado lácteo)
+        assertTrue(engine.findBestRecipes(itemsCrepioca, ProfileEntity(userId = "user", foodAllergies = listOf("Lactose"))).isEmpty())
+    }
+
     private fun item(name: String) = GroceryListItemEntity(
         remoteId = name, userId = "user", weekStartDate = "2026-10-06", foodId = name,
         foodName = name, category = "Feira", suggestedServingWeekGrams = 100,

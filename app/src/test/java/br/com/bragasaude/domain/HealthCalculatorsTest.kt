@@ -129,4 +129,40 @@ class HealthCalculatorsTest {
         assertEquals(expectedAvg * 0.85f, recommendation.calories.min, 0.01f)
         assertEquals(expectedAvg * 1.15f, recommendation.calories.max, 0.01f)
     }
+
+    @Test
+    fun `parseActivityFactor should accurately parse enum names in English as well as Portuguese`() {
+        assertEquals(1.725f, HealthCalculators.parseActivityFactor("VERY_ACTIVE"), 0.001f)
+        assertEquals(1.375f, HealthCalculators.parseActivityFactor("LIGHTLY_ACTIVE"), 0.001f)
+        assertEquals(1.55f, HealthCalculators.parseActivityFactor("MODERATELY_ACTIVE"), 0.001f)
+        assertEquals(1.20f, HealthCalculators.parseActivityFactor("SEDENTARY"), 0.001f)
+        assertEquals(1.90f, HealthCalculators.parseActivityFactor("EXTREME_ATHLETE"), 0.001f)
+    }
+
+    @Test
+    fun `resolveDietaryGoal should parse explicit setup goal names correctly`() {
+        assertEquals(DietaryGoal.LOSE_WEIGHT, HealthCalculators.resolveDietaryGoal(null, null, "WEIGHT_LOSS"))
+        assertEquals(DietaryGoal.GAIN_MUSCLE, HealthCalculators.resolveDietaryGoal(null, null, "HYPERTROPHY"))
+        assertEquals(DietaryGoal.MAINTAIN, HealthCalculators.resolveDietaryGoal(null, null, "MAINTENANCE"))
+    }
+
+    @Test
+    fun `calculateMacroDistribution should strictly conserve energy even for severe deficit`() {
+        // Exemplo de estresse: meta baixa com peso alto
+        val macros = HealthCalculators.calculateMacroDistribution(
+            targetKcal = 800f,
+            weightKg = 100f,
+            goal = DietaryGoal.LOSE_WEIGHT
+        )
+        val calculatedTotal = macros.proteinKcal + macros.fatKcal + macros.carbsKcal
+        assertEquals(800f, calculatedTotal, 1.0f)
+    }
+
+    @Test
+    fun `calculateSmartMeal for diabetic profile should conserve 100 percent of meal calories`() {
+        val profile = RemoteProfile(id = "1", hasDiabetes = true)
+        val recommendation = HealthCalculators.calculateSmartMeal(profile, 0.25f, emptyList())
+        val avgTotalKcal = (recommendation.carbs.avg * 4f) + (recommendation.protein.avg * 4f) + (recommendation.fat.avg * 9f)
+        assertEquals(recommendation.calories.avg, avgTotalKcal, 1.0f)
+    }
 }

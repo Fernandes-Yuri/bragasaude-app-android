@@ -59,7 +59,8 @@ enum class GroceryProteinPreference(val label: String, val categoryKeywords: Lis
 data class WeeklyGroceryPreferences(
     val budgetTier: GroceryBudgetTier = GroceryBudgetTier.MODERATE,
     val selectedProteins: Set<GroceryProteinPreference> = emptySet(),
-    val hasPantryStaples: Boolean = false
+    val hasPantryStaples: Boolean = false,
+    val maxWeeklyBudgetReais: Double? = null
 ) {
     val isUltraEconomic: Boolean get() = budgetTier == GroceryBudgetTier.ULTRA_ECONOMIC
     val isEconomic: Boolean get() = budgetTier == GroceryBudgetTier.ECONOMIC || budgetTier == GroceryBudgetTier.ULTRA_ECONOMIC

@@ -68,22 +68,10 @@ object HealthCalculators {
 
     /**
      * 2. Fator de Atividade Física (FAF)
-     * Sedentário: 1.20
-     * Levemente ativo: 1.375
-     * Moderadamente ativo: 1.55
-     * Muito ativo: 1.725
-     * Extremamente ativo: 1.90
+     * Sedentário: 1.20 | Levemente ativo: 1.375 | Moderadamente ativo: 1.55 | Muito ativo: 1.725 | Atleta: 1.90
      */
     fun parseActivityFactor(activityLevel: String?): Float {
-        val normalized = activityLevel.orEmpty().lowercase(Locale.ROOT).trim()
-        return when {
-            normalized.contains("extrem") || normalized.contains("atleta") -> 1.90f
-            normalized.contains("muito") || normalized.contains("intenso") -> 1.725f
-            normalized.contains("modera") -> 1.55f
-            normalized.contains("leve") -> 1.375f
-            normalized.contains("sedent") -> 1.20f
-            else -> 1.20f
-        }
+        return br.com.bragasaude.domain.nutrition.core.CanonicalActivityLevel.from(activityLevel).factor
     }
 
     /**
@@ -102,17 +90,16 @@ object HealthCalculators {
         weightGoal: Double?,
         explicitGoalStr: String? = null
     ): DietaryGoal {
-        val exp = explicitGoalStr.orEmpty().lowercase(Locale.ROOT)
-        if (exp.contains("emagrec") || exp.contains("perda") || exp.contains("deficit")) return DietaryGoal.LOSE_WEIGHT
-        if (exp.contains("hipertrofia") || exp.contains("ganho") || exp.contains("massa")) return DietaryGoal.GAIN_MUSCLE
-        if (exp.contains("manut")) return DietaryGoal.MAINTAIN
-
-        if (weight != null && weightGoal != null && weight > 0 && weightGoal > 0) {
-            val diff = weightGoal - weight
-            if (diff <= -1.0) return DietaryGoal.LOSE_WEIGHT
-            if (diff >= 1.0) return DietaryGoal.GAIN_MUSCLE
+        val canonical = br.com.bragasaude.domain.nutrition.core.CanonicalDietaryGoal.from(
+            explicitGoalStr = explicitGoalStr,
+            weight = weight,
+            weightGoal = weightGoal
+        )
+        return when (canonical) {
+            br.com.bragasaude.domain.nutrition.core.CanonicalDietaryGoal.LOSE_WEIGHT -> DietaryGoal.LOSE_WEIGHT
+            br.com.bragasaude.domain.nutrition.core.CanonicalDietaryGoal.MAINTAIN -> DietaryGoal.MAINTAIN
+            br.com.bragasaude.domain.nutrition.core.CanonicalDietaryGoal.GAIN_MUSCLE -> DietaryGoal.GAIN_MUSCLE
         }
-        return DietaryGoal.MAINTAIN
     }
 
     /**
@@ -126,51 +113,40 @@ object HealthCalculators {
         bmr: Float,
         goal: DietaryGoal
     ): Float {
-        return when (goal) {
-            DietaryGoal.LOSE_WEIGHT -> {
-                val deficitKcal = 400f
-                val target = tdee - deficitKcal
-                // Segurança clínica: não prescrever abaixo de 90% da TMB ou abaixo de 1200 kcal
-                target.coerceAtLeast(bmr * 0.9f).coerceAtLeast(1200f)
-            }
-            DietaryGoal.MAINTAIN -> tdee
-            DietaryGoal.GAIN_MUSCLE -> tdee + 350f
+        val canonicalGoal = when (goal) {
+            DietaryGoal.LOSE_WEIGHT -> br.com.bragasaude.domain.nutrition.core.CanonicalDietaryGoal.LOSE_WEIGHT
+            DietaryGoal.MAINTAIN -> br.com.bragasaude.domain.nutrition.core.CanonicalDietaryGoal.MAINTAIN
+            DietaryGoal.GAIN_MUSCLE -> br.com.bragasaude.domain.nutrition.core.CanonicalDietaryGoal.GAIN_MUSCLE
         }
+        return br.com.bragasaude.domain.nutrition.core.NutritionMathEngine.calculateTargetCalories(tdee, bmr, canonicalGoal)
     }
 
     /**
-     * 4. Distribuição de Macronutrientes
-     * - Proteínas (4 kcal/g): 1.6 a 2.0 g/kg (essencial para preservação muscular em déficit)
-     * - Gorduras (9 kcal/g): ~25% do total ou min 0.8 g/kg
-     * - Carboidratos (4 kcal/g): restante do saldo
+     * 4. Distribuição de Macronutrientes com fechamento energético garantido.
+     * Kcal Total == (Prot * 4) + (Fat * 9) + (Carb * 4)
      */
     fun calculateMacroDistribution(
         targetKcal: Float,
         weightKg: Float,
         goal: DietaryGoal
     ): MacroSplit {
-        val safeWeight = weightKg.coerceIn(20f, 250f)
-        val proteinPerKg = when (goal) {
-            DietaryGoal.LOSE_WEIGHT -> 2.0f
-            DietaryGoal.GAIN_MUSCLE -> 1.8f
-            DietaryGoal.MAINTAIN -> 1.6f
+        val canonicalGoal = when (goal) {
+            DietaryGoal.LOSE_WEIGHT -> br.com.bragasaude.domain.nutrition.core.CanonicalDietaryGoal.LOSE_WEIGHT
+            DietaryGoal.MAINTAIN -> br.com.bragasaude.domain.nutrition.core.CanonicalDietaryGoal.MAINTAIN
+            DietaryGoal.GAIN_MUSCLE -> br.com.bragasaude.domain.nutrition.core.CanonicalDietaryGoal.GAIN_MUSCLE
         }
-        val proteinG = (safeWeight * proteinPerKg).coerceIn(45f, 260f)
-        val proteinKcal = proteinG * 4f
-
-        val fatKcal = (targetKcal * 0.25f).coerceAtLeast(safeWeight * 0.75f * 9f)
-        val fatG = fatKcal / 9f
-
-        val carbsKcal = (targetKcal - proteinKcal - fatKcal).coerceAtLeast(0f)
-        val carbsG = carbsKcal / 4f
-
+        val balanced = br.com.bragasaude.domain.nutrition.core.NutritionMathEngine.calculateBalancedMacros(
+            targetKcal = targetKcal,
+            weightKg = weightKg,
+            goal = canonicalGoal
+        )
         return MacroSplit(
-            proteinG = proteinG,
-            proteinKcal = proteinKcal,
-            fatG = fatG,
-            fatKcal = fatKcal,
-            carbsG = carbsG,
-            carbsKcal = carbsKcal
+            proteinG = balanced.proteinG,
+            proteinKcal = balanced.proteinKcal,
+            fatG = balanced.fatG,
+            fatKcal = balanced.fatKcal,
+            carbsG = balanced.carbsG,
+            carbsKcal = balanced.carbsKcal
         )
     }
 
@@ -295,22 +271,27 @@ object HealthCalculators {
             isDiabetesSafe && isHypertensionSafe && isThyroidSafe
         }
 
+        // Distribuição balanceada de macronutrientes (100% da energia conservada)
+        val carbRatio = if (profile.hasDiabetes) 0.40f else 0.50f
+        val proteinRatio = if (profile.hasDiabetes) 0.30f else 0.25f
+        val fatRatio = if (profile.hasDiabetes) 0.30f else 0.25f
+
         return MealRecommendation(
             calories = NutritionTriad(mealMinCal, mealAvgCal, mealMaxCal),
             carbs = NutritionTriad(
-                (mealMinCal * 0.5f) / 4f,
-                (mealAvgCal * 0.5f) / 4f,
-                (mealMaxCal * 0.5f) / 4f
+                (mealMinCal * carbRatio) / 4f,
+                (mealAvgCal * carbRatio) / 4f,
+                (mealMaxCal * carbRatio) / 4f
             ),
             protein = NutritionTriad(
-                (mealMinCal * 0.25f) / 4f,
-                (mealAvgCal * 0.25f) / 4f,
-                (mealMaxCal * 0.25f) / 4f
+                (mealMinCal * proteinRatio) / 4f,
+                (mealAvgCal * proteinRatio) / 4f,
+                (mealMaxCal * proteinRatio) / 4f
             ),
             fat = NutritionTriad(
-                (mealMinCal * 0.25f) / 9f,
-                (mealAvgCal * 0.25f) / 9f,
-                (mealMaxCal * 0.25f) / 9f
+                (mealMinCal * fatRatio) / 9f,
+                (mealAvgCal * fatRatio) / 9f,
+                (mealMaxCal * fatRatio) / 9f
             ),
             suggestedFoods = safeFoods.take(3)
         )

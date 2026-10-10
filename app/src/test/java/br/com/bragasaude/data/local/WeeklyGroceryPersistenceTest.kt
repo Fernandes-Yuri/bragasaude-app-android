@@ -125,6 +125,27 @@ class WeeklyGroceryPersistenceTest {
         repository.removeMeal("u", "m")
         assertEquals(1000.0, db.groceryPantryDao().stock("u", "a")!!.availableAmount, 0.001)
     }
+
+    @Test fun repeatedOrSubsequentPurchasesResupplyPantryStockCorrectly() = runBlocking {
+        repository.save("u", plan(), false)
+        // Primeira compra de 1000g
+        repository.check("u", "r", true, catalog)
+        assertEquals(1000.0, db.groceryPantryDao().stock("u", "a")!!.availableAmount, 0.001)
+
+        // Consome 300g (150g de ingrediente "a")
+        val meal = GroceryMealEntity("m1", "u", LocalDate.now().toString(), "f", "Preparo", "Almoço", 300, 300.0)
+        repository.log(meal, catalog)
+        assertEquals(850.0, db.groceryPantryDao().stock("u", "a")!!.availableAmount, 0.001)
+
+        // Nova lista de compras com mais 1000g do mesmo ingrediente
+        val row2 = row().copy(remoteId = "r2", purchaseWeightGrams = 1000)
+        db.groceryListDao().insertAll(listOf(row2))
+        repository.check("u", "r2", true, catalog)
+
+        // Saldo agora deve ser 850 + 1000 = 1850g (reabastecimento real)
+        assertEquals(1850.0, db.groceryPantryDao().stock("u", "a")!!.availableAmount, 0.001)
+    }
+
     @Test fun migrationPreservesExistingManualListAndValidatesRoomSchema() = runBlocking {
         db.close()
         context.deleteDatabase("weekly-test.db")

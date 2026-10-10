@@ -86,7 +86,7 @@ class RecipesViewModel @Inject constructor(
                     pantryItems to profile
                 }.collectLatest { (pantryItems, profile) ->
                     val hasManualList = pantryItems.any {
-                        it.category == "Minha lista" || it.remoteId.contains(":manual:")
+                        it.isManual || it.category == "Minha lista" || it.remoteId.contains(":manual:")
                     }
                     // Calcula receitas para cada tipo de refeição
                     _breakfastRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "BREAKFAST", includeMissing = hasManualList)

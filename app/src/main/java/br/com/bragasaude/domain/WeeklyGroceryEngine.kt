@@ -207,9 +207,20 @@ object WeeklyGroceryEngine {
         }
 
         fun filterCost(list: List<FoodEntity>): List<FoodEntity> {
-            if (!effectivePrefs.isEconomic) return list
+            val shouldFilterCost = effectivePrefs.isEconomic || (effectivePrefs.maxWeeklyBudgetReais != null && effectivePrefs.maxWeeklyBudgetReais > 0)
+            if (!shouldFilterCost) return list
             val filtered = list.filterNot { isHighCostFood(it, effectivePrefs.isUltraEconomic) }
-            return if (filtered.isNotEmpty()) filtered else list
+            val baseList = if (filtered.isNotEmpty()) filtered else list
+
+            return baseList.sortedBy { food ->
+                val ing = ingredientCatalog.forFood(food.remoteId, food.name).firstOrNull()
+                val price = ing?.price ?: ing?.canonicalPrice ?: 0.0
+                if (price > 0.0 && (food.kcal ?: 0.0) > 0.0) {
+                    (100.0 / (food.kcal ?: 100.0)) * price
+                } else {
+                    50.0
+                }
+            }
         }
 
         val grainsPool = orderPool(filterCost(poolFor(CORRIDOR_GRAOS)))
@@ -409,7 +420,14 @@ object WeeklyGroceryEngine {
 
         val distinctFoodsCount = plannedConsumptions.map { it.food.remoteId }.distinct().size
 
-        // 12. Mensagem informativa na interface
+        // 12. Validação do teto orçamentário em Reais (R$)
+        val totalEstimatedCost = consolidatedItems.sumOf { it.estimatedPriceBrl }
+        if (effectivePrefs.maxWeeklyBudgetReais != null && effectivePrefs.maxWeeklyBudgetReais > 0 && totalEstimatedCost > effectivePrefs.maxWeeklyBudgetReais) {
+            val budgetMsg = "Custo estimado da cesta (R$ ${String.format(Locale.ROOT, "%.2f", totalEstimatedCost)}) excedeu o teto orçamentário configurado (R$ ${String.format(Locale.ROOT, "%.2f", effectivePrefs.maxWeeklyBudgetReais)})."
+            limitations.add(budgetMsg)
+        }
+
+        // 13. Mensagem informativa na interface
         val statusMessage = buildStatusMessage(
             targetDailyCalories = effectiveDailyCalories,
             targetWeeklyCalories = targetWeeklyCalories,
