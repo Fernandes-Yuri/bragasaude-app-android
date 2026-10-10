@@ -481,6 +481,14 @@ object Migrations {
         }
     }
 
+    val MIGRATION_52_53 = object : Migration(52, 53) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE profiles_local ADD COLUMN communityNickname TEXT")
+            db.execSQL("ALTER TABLE social_posts_local ADD COLUMN editedAt INTEGER")
+            db.execSQL("ALTER TABLE social_posts_local ADD COLUMN pendingMutation TEXT NOT NULL DEFAULT ''")
+        }
+    }
+
     val MIGRATION_51_52 = object : Migration(51, 52) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("DROP TABLE IF EXISTS exam_items_local")
@@ -516,6 +524,7 @@ object Migrations {
         MIGRATION_48_49,
         MIGRATION_49_50,
         MIGRATION_50_51,
-        MIGRATION_51_52
+        MIGRATION_51_52,
+        MIGRATION_52_53
     )
 }

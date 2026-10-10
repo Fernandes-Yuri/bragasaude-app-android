@@ -36,16 +36,35 @@ class SocialFeedRepository @Inject constructor(
     }
 
     suspend fun fetchGlobalFeed(limit: Int = 20, offset: Int = 0, currentUserId: String): Int {
+        val expected = socialFeedDao.getCachedPosts().associateBy { it.id }
         val posts = apiClient.getSocialFeed(currentUserId, limit)
         if (posts.isNotEmpty()) {
-            socialFeedDao.insertPosts(posts)
+            socialFeedDao.cacheRemotePosts(posts, expected)
         }
         return posts.size
     }
 
     fun getAuthorProfile(userId: String) = profileDao.getProfile(userId)
 
-    suspend fun getCommunityNickname(): String = apiClient.getCommunityNickname()
+    suspend fun getCommunityNickname(userId: String): String {
+        val local = profileDao.getProfileOneShot(userId)
+        local?.communityNickname?.let { return it }
+        val nickname = apiClient.getCommunityNickname()
+        profileDao.updateCommunityNickname(userId, nickname)
+        return nickname
+    }
+
+    suspend fun editPost(postId: String, userId: String, title: String, description: String) {
+        val clean = title.trim()
+        require(clean.isNotEmpty() && clean.length <= 200 && description.length <= 5000) { "Revise o título e o conteúdo da publicação." }
+        socialFeedDao.queueMutation(postId, userId, clean, description.trim(), delete = false)
+        syncScheduler.scheduleSync(androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE)
+    }
+
+    suspend fun deletePost(postId: String, userId: String) {
+        socialFeedDao.queueMutation(postId, userId, null, null, delete = true)
+        syncScheduler.scheduleSync(androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE)
+    }
 
     fun reactionsForPost(postId: String) = socialFeedDao.getReactionsForPost(postId)
 
@@ -114,7 +133,7 @@ class SocialFeedRepository @Inject constructor(
         relatedMilestoneId: String? = null
     ): SocialPostEntity {
         val userProfile = profileDao.getProfileOneShot(userId)
-        val nickname = apiClient.getCommunityNickname()
+        val nickname = getCommunityNickname(userId)
         val name = br.com.bragasaude.domain.communityDisplayName(userName ?: userProfile?.fullName, nickname)
         val post = SocialPostEntity(
             id = UUID.randomUUID().toString(),

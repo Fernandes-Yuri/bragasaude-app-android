@@ -14,6 +14,8 @@ import br.com.bragasaude.util.BragaTime
 import br.com.bragasaude.ui.util.NotificationHelper
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 @HiltWorker
 class SyncWorker @AssistedInject constructor(
@@ -34,6 +36,10 @@ class SyncWorker @AssistedInject constructor(
     private val symptomsDiaryDao: SymptomsDiaryDao,
     private val bleTelemetryReceiptDao: BleTelemetryReceiptDao
 ) : CoroutineWorker(appContext, workerParams) {
+
+    companion object {
+        private val socialMutationLock = Mutex()
+    }
 
     override suspend fun doWork(): Result {
         var hasErrors = false
@@ -193,6 +199,17 @@ class SyncWorker @AssistedInject constructor(
     }
 
     private suspend fun syncSocialPosts() {
+        socialMutationLock.withLock {
+            for (post in socialFeedDao.getPendingMutations()) {
+                val ok = when (post.pendingMutation) {
+                    "DELETE" -> apiClient.deleteSocialPost(post.id)
+                    "EDIT" -> apiClient.editSocialPost(post)
+                    else -> false
+                }
+                if (!ok) throw java.io.IOException("Publicação aguardando sincronização")
+                socialFeedDao.completeMutation(post)
+            }
+        }
         val pending = socialFeedDao.getPendingPosts()
         for (post in pending) {
             val remoteId = apiClient.syncSocialPost(post)

@@ -219,6 +219,7 @@ data class RemoteSocialPost(
     val description: String? = null,
     @SerialName("related_milestone_id") val relatedMilestoneId: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("edited_at") val editedAt: String? = null,
     @SerialName("is_visible") val isVisible: Boolean = true,
     @SerialName("reaction_count") val reactionCount: Int = 0,
     @SerialName("has_user_reacted") val hasUserReacted: Boolean = false

@@ -129,7 +129,7 @@ interface ProfileDao {
                 }
             }
         }
-        val merged = remote.copy(customPhotoUri = current?.customPhotoUri)
+        val merged = remote.copy(customPhotoUri = current?.customPhotoUri, communityNickname = current?.communityNickname)
         insert(merged)
         return merged
     }
@@ -141,6 +141,9 @@ interface ProfileDao {
 
     @Query("SELECT * FROM profiles_local WHERE userId = :userId LIMIT 1")
     suspend fun getProfileOneShot(userId: String): ProfileEntity?
+
+    @Query("UPDATE profiles_local SET communityNickname = :nickname WHERE userId = :userId")
+    suspend fun updateCommunityNickname(userId: String, nickname: String?)
 
     @Query("SELECT * FROM profiles_local WHERE pendingSync = 1")
     suspend fun getPendingSync(): List<ProfileEntity>
@@ -441,6 +444,35 @@ interface XpAwardDao {
 
 @Dao
 interface SocialFeedDao {
+    @Transaction
+    suspend fun cacheRemotePosts(posts: List<SocialPostEntity>, expected: Map<String, SocialPostEntity>) {
+        posts.forEach { remote ->
+            val local = getPostById(remote.id)
+            if (local == expected[remote.id] && local?.pendingMutation.isNullOrEmpty() && local?.isVisible != false) insertPost(remote)
+        }
+    }
+
+    @Transaction
+    suspend fun completeMutation(expected: SocialPostEntity) {
+        val current = getPostById(expected.id)
+        if (current == expected) insertPost(expected.copy(pendingMutation = "", pendingSync = false))
+    }
+
+    @Query("SELECT * FROM social_posts_local")
+    suspend fun getCachedPosts(): List<SocialPostEntity>
+
+    @Query("SELECT * FROM social_posts_local WHERE pendingMutation != ''")
+    suspend fun getPendingMutations(): List<SocialPostEntity>
+
+    @Transaction
+    suspend fun queueMutation(postId: String, userId: String, title: String?, description: String?, delete: Boolean) {
+        val post = getPostById(postId) ?: error("Publicação não encontrada.")
+        require(post.userId == userId && post.isVisible && !post.pendingSync) { "Não foi possível alterar esta publicação." }
+        insertPost(if (delete) post.copy(isVisible = false, pendingMutation = "DELETE")
+            else post.copy(title = requireNotNull(title), description = description,
+                editedAt = java.util.Date(), pendingMutation = "EDIT"))
+    }
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPost(post: SocialPostEntity)
 
