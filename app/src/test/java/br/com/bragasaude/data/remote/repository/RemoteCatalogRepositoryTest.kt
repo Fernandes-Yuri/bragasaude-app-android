@@ -70,4 +70,15 @@ class RemoteCatalogRepositoryTest {
         coVerify(exactly = 0) { setup.api.getNutritionCatalog() }
         verify(exactly = 0) { setup.context.assets }
     }
+
+    @Test fun enrichesIngredientsWithGroceryPricesWhenSnapshotHasNoPrices() = runTest {
+        val setup = Setup()
+        coEvery { setup.api.getNutritionCatalog() } returns snapshot()
+        coEvery { setup.api.getGroceryPrices() } returns mapOf("Ingrediente remoto" to 12.50)
+        every { setup.dao.getCatalog() } returns flowOf(emptyList())
+        val catalog = setup.repository().fetchGroceryIngredients()
+        val ing = catalog.ingredients.single()
+        assertEquals(12.50, ing.price ?: 0.0, 0.001)
+        assertEquals("estimated", ing.source)
+    }
 }

@@ -253,24 +253,39 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                             onClick = { showInfoSheet = true },
                             shape = RoundedCornerShape(12.dp),
                             color = BragaMintSurface,
-                            border = BorderStroke(1.dp, BragaMintBorder)
+                            border = BorderStroke(1.dp, BragaMintBorder),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Info,
+                                    imageVector = Icons.Default.Lock,
                                     contentDescription = null,
                                     tint = BragaEmerald,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
-                                Text(
-                                    text = "Processamento 100% no celular · Expira em 24h",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = BragaEmeraldDark,
-                                    fontWeight = FontWeight.SemiBold
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Armazenamento local",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = BragaEmeraldDark,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Expira em 24h",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = BragaTextSecondary,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Ver detalhes",
+                                    tint = BragaEmerald,
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }

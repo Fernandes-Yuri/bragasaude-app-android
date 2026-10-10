@@ -58,10 +58,36 @@ class CatalogRepository @Inject constructor(
 
     suspend fun fetchGroceryIngredients(includePrices: Boolean = true): br.com.bragasaude.domain.GroceryIngredientCatalog = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val snapshot = catalogSnapshot(refresh = includePrices)
-        if (snapshot != null) return@withContext br.com.bragasaude.domain.RemoteNutritionCatalogParser.parse(snapshot)
-        // Apenas compatibilidade offline antes da primeira sincronização; não recebe alimentos novos.
-        val manifest = org.json.JSONObject(context.assets.open("grocery_ingredients.json").bufferedReader().use { it.readText() })
-        br.com.bragasaude.domain.RemoteNutritionCatalogParser.parseLegacy(manifest)
+        val catalog = if (snapshot != null) {
+            try {
+                br.com.bragasaude.domain.RemoteNutritionCatalogParser.parse(snapshot)
+            } catch (_: Exception) {
+                val manifest = org.json.JSONObject(context.assets.open("grocery_ingredients.json").bufferedReader().use { it.readText() })
+                br.com.bragasaude.domain.RemoteNutritionCatalogParser.parseLegacy(manifest)
+            }
+        } else {
+            val manifest = org.json.JSONObject(context.assets.open("grocery_ingredients.json").bufferedReader().use { it.readText() })
+            br.com.bragasaude.domain.RemoteNutritionCatalogParser.parseLegacy(manifest)
+        }
+
+        if (!includePrices) return@withContext catalog
+        if (snapshot != null && catalog.ingredients.any { it.price != null && it.price > 0 }) return@withContext catalog
+
+        val prices = fetchGroceryPrices()
+        if (prices.isEmpty()) return@withContext catalog
+
+        val normalizedPrices = prices.mapKeys { br.com.bragasaude.domain.groceryNameKey(it.key) }
+        val enrichedIngredients = catalog.ingredients.map { ing ->
+            val matchPrice = normalizedPrices[br.com.bragasaude.domain.groceryNameKey(ing.name)]
+                ?: ing.aliases.firstNotNullOfOrNull { normalizedPrices[br.com.bragasaude.domain.groceryNameKey(it)] }
+                ?: normalizedPrices[br.com.bragasaude.domain.groceryNameKey(ing.slug.replace('-', ' '))]
+            if (matchPrice != null && matchPrice > 0.0) {
+                ing.copy(price = matchPrice, source = "estimated")
+            } else {
+                ing
+            }
+        }
+        catalog.copy(ingredients = enrichedIngredients)
     }
 
     suspend fun fetchGroceryPrices(): Map<String, Double> {
