@@ -66,13 +66,21 @@ data class WeeklyGroceryPreferences(
     val isEconomic: Boolean get() = budgetTier == GroceryBudgetTier.ECONOMIC || budgetTier == GroceryBudgetTier.ULTRA_ECONOMIC
 
     /**
-     * Valida e garante ao menos uma proteína selecionada quando no modo restrito.
+     * Valida preferências garantindo que o ovo nunca fique isolado como única proteína.
+     * Quando apenas ovos forem selecionados, adiciona proteína carnívora como principal.
      */
     fun normalized(): WeeklyGroceryPreferences {
-        val proteins = if (selectedProteins.isEmpty() && isEconomic) {
-            setOf(GroceryProteinPreference.EGGS)
-        } else {
-            selectedProteins
+        val hasCarnivorous = selectedProteins.any {
+            it == GroceryProteinPreference.POULTRY || it == GroceryProteinPreference.FISH || it == GroceryProteinPreference.BEEF
+        }
+        val proteins = when {
+            selectedProteins == setOf(GroceryProteinPreference.EGGS) -> {
+                setOf(GroceryProteinPreference.POULTRY, GroceryProteinPreference.EGGS)
+            }
+            selectedProteins.isNotEmpty() && !hasCarnivorous -> {
+                selectedProteins + GroceryProteinPreference.POULTRY
+            }
+            else -> selectedProteins
         }
         return copy(selectedProteins = proteins)
     }
