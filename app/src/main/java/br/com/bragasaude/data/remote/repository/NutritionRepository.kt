@@ -81,6 +81,47 @@ class NutritionRepository @Inject constructor(
         }
     }
 
+    /**
+     * Retorna todo o catálogo de alimentos para busca e registro factual no diário,
+     * excluindo apenas itens de categorias estritamente farmacológicas / medicamentos.
+     * Permite que o usuário registre o que realmente consumiu (ex: pão, doce, pizza).
+     */
+    fun getFullFoodCatalog(): Flow<List<FoodEntity>> {
+        return foodDao.getCatalog().map { allFoods ->
+            allFoods.filter { food ->
+                val categoryLower = food.category?.lowercase() ?: ""
+                !prohibitedCategories.any { categoryLower.contains(it) }
+            }
+        }
+    }
+
+    /**
+     * Avalia se um alimento possui alerta educativo/clínico para o perfil do usuário.
+     * Não bloqueia o registro, servindo como orientação visual de autocuidado no diário.
+     */
+    fun evaluateFoodClinicalWarning(food: FoodEntity, profile: RemoteProfile?): String? {
+        if (profile == null) return null
+
+        // 1. Diabetes: alimento contraindicado ou com status RESTRICTED
+        if (profile.hasDiabetes && (!food.isDiabetesSafe || food.status == "RESTRICTED")) {
+            return "Atenção: alto índice glicêmico para diabetes"
+        }
+
+        // 2. Hipertensão: teor de sódio elevado
+        if (profile.hasHypertension && !food.isHypertensionSafe) {
+            return "Atenção: alto teor de sódio para hipertensão"
+        }
+
+        // 3. Alergias e restrições cadastradas
+        val allergies = profile.foodAllergies.orEmpty()
+        val customRestrictions = profile.customFoodRestrictions
+        if (!br.com.bragasaude.domain.NutritionSuggestionEngine.isSafeFromAllergies(food, allergies, customRestrictions)) {
+            return "Atenção: contém item registrado em suas alergias"
+        }
+
+        return null
+    }
+
     // ==================== LOG DE REFEIÇÕES (AUTOCUIDADO) ====================
 
     private val _todayLoggedMeals = MutableStateFlow<List<MealLogItem>>(emptyList())

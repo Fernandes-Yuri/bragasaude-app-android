@@ -522,71 +522,68 @@ fun NutritionScreen(
                     }
                 }
 
-                // Sugestões do Plano Alimentar Ancoradas Exclusivamente na Lista de Compras
+                // Sugestões do Plano Alimentar
                 if (groceryList.isEmpty()) {
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(20.dp),
+                            shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
                             border = BorderStroke(1.dp, BragaMintBorder)
                         ) {
-                            Column(
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Surface(
                                     shape = CircleShape,
                                     color = BragaMint,
-                                    modifier = Modifier.size(54.dp)
+                                    modifier = Modifier.size(38.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
                                             Icons.Default.ShoppingCart,
                                             contentDescription = null,
                                             tint = BragaEmerald,
-                                            modifier = Modifier.size(26.dp)
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                 }
-                                Spacer(Modifier.height(12.dp))
-                                Text(
-                                    text = "Monte sua lista para ver seu plano alimentar",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BragaTextPrimary,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    text = "O seu plano alimentar é montado exclusivamente a partir dos alimentos que você planejou na sua lista de compras ou tem na sua despensa.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = BragaTextSecondary,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                                Spacer(Modifier.height(16.dp))
-                                Button(
+                                Spacer(Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Planeje sua lista da semana",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BragaTextPrimary
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = "Personalize suas compras com IA para alinhar seu cardápio ao que você tem em casa.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BragaTextSecondary
+                                    )
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                TextButton(
                                     onClick = {
                                         viewModel.prepareGroceryData()
                                         if (groceryList.isEmpty()) {
                                             viewModel.generateWeeklyGroceryList()
                                         }
                                         showGroceryBottomSheet = true
-                                    },
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                                    modifier = Modifier.heightIn(min = 48.dp)
+                                    }
                                 ) {
-                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("Montar ou Sugerir Lista com IA", fontWeight = FontWeight.SemiBold)
+                                    Text("Montar", color = BragaEmerald, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
                     }
-                } else if (suggestionGroups.isEmpty()) {
+                }
+
+                if (suggestionGroups.isEmpty()) {
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -617,26 +614,31 @@ fun NutritionScreen(
                                 Spacer(Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        "Sem opções na lista para o $selectedMealTab",
+                                        if (groceryList.isNotEmpty()) "Sem opções na lista para o $selectedMealTab" else "Sem opções para o $selectedMealTab",
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = BragaTextPrimary
                                     )
                                     Spacer(Modifier.height(2.dp))
                                     Text(
-                                        "Os alimentos da sua lista atual atendem a outras refeições. Que tal adicionar opções para o seu $selectedMealTab?",
+                                        if (groceryList.isNotEmpty())
+                                            "Os alimentos da sua lista atual atendem a outras refeições. Que tal adicionar opções para o seu $selectedMealTab?"
+                                        else
+                                            "Nenhum alimento do catálogo corresponde a esta refeição e às suas preferências atuais.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = BragaTextSecondary
                                     )
                                 }
-                                Spacer(Modifier.width(8.dp))
-                                TextButton(
-                                    onClick = {
-                                        viewModel.prepareGroceryData()
-                                        showGroceryBottomSheet = true
+                                if (groceryList.isNotEmpty()) {
+                                    Spacer(Modifier.width(8.dp))
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.prepareGroceryData()
+                                            showGroceryBottomSheet = true
+                                        }
+                                    ) {
+                                        Text("Ver Lista", color = BragaEmerald, fontWeight = FontWeight.Bold)
                                     }
-                                ) {
-                                    Text("Ver Lista", color = BragaEmerald, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -653,14 +655,20 @@ fun NutritionScreen(
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    "Sugestões da sua Lista para o $selectedMealTab",
+                                    if (groceryList.isNotEmpty() || pantryItems.isNotEmpty())
+                                        "Sugestões da sua Lista para o $selectedMealTab"
+                                    else
+                                        "Sugestões Saudáveis para o $selectedMealTab",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onBackground
                                 )
                             }
                             Text(
-                                "Alimentos planejados na sua lista de compras ou presentes na sua despensa",
+                                if (groceryList.isNotEmpty() || pantryItems.isNotEmpty())
+                                    "Alimentos planejados na sua lista de compras ou presentes na sua despensa"
+                                else
+                                    "Alimentos indicados para o seu perfil clínico e autocuidado diário",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline
                             )
@@ -781,6 +789,33 @@ fun NutritionScreen(
                             Column(modifier = Modifier.padding(12.dp)) {
                                 Text(selectedFood.name, fontWeight = FontWeight.Bold)
                                 Text("${(selectedFood.kcal ?: 0.0).toInt()} kcal / 100g • Sugerido: ${selectedFood.servingUnit}", style = MaterialTheme.typography.bodySmall)
+                                selectedFood.clinicalWarning?.let { warning ->
+                                    Spacer(Modifier.height(6.dp))
+                                    Surface(
+                                        color = Warning.copy(alpha = 0.12f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, Warning.copy(alpha = 0.35f))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Info,
+                                                contentDescription = null,
+                                                tint = Warning,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(
+                                                text = warning,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = BragaTextPrimary,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
+                                }
                                 Spacer(Modifier.height(8.dp))
                                 OutlinedTextField(
                                     value = portionGramsText,
@@ -812,6 +847,24 @@ fun NutritionScreen(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(food.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
                                         Text("${food.category ?: ""} • ${food.servingUnit}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                                        food.clinicalWarning?.let { warning ->
+                                            Spacer(Modifier.height(2.dp))
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    Icons.Default.Info,
+                                                    contentDescription = null,
+                                                    tint = Warning,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Spacer(Modifier.width(4.dp))
+                                                Text(
+                                                    text = warning,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = Warning,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
+                                        }
                                     }
                                     Text("${(food.kcal ?: 0.0).toInt()} kcal/100g", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                                 }
