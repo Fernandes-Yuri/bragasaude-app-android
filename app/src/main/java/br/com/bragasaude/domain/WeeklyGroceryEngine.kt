@@ -214,7 +214,7 @@ object WeeklyGroceryEngine {
 
             return baseList.sortedBy { food ->
                 val ing = ingredientCatalog.forFood(food.remoteId, food.name).firstOrNull()
-                val price = ing?.price ?: ing?.canonicalPrice ?: 0.0
+                val price = ing?.price ?: 0.0
                 if (price > 0.0 && (food.kcal ?: 0.0) > 0.0) {
                     (100.0 / (food.kcal ?: 100.0)) * price
                 } else {
