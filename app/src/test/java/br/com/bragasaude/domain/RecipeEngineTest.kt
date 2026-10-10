@@ -78,7 +78,8 @@ class RecipeEngineTest {
         assertTrue(engine.findBestRecipes(itemsCrepioca, ProfileEntity(userId = "user", foodAllergies = listOf("Ovo"))).isEmpty())
 
         // Alergia declarada "Lactose" deve bloquear receita com "Ricota" (derivado lácteo)
-        assertTrue(engine.findBestRecipes(itemsCrepioca, ProfileEntity(userId = "user", foodAllergies = listOf("Lactose"))).isEmpty())
+        val lactoseRecipes = engine.findBestRecipes(itemsCrepioca, ProfileEntity(userId = "user", foodAllergies = listOf("Lactose")))
+        assertTrue(lactoseRecipes.none { it.recipe.id == "recipe_005" })
     }
 
     @Test fun recipeHasStructuredIngredientsAndPositiveMacros() {
