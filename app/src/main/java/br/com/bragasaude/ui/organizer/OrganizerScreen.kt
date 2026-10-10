@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -283,7 +284,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                             shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
                             Text("Começar organização", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
@@ -470,17 +471,17 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                                             onClick = { appendTo = doc.id; picker.launch(arrayOf("application/pdf", "image/*")) },
                                             enabled = !state.busy
                                         ) {
-                                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(16.dp))
                                             Spacer(Modifier.width(4.dp))
-                                            Text("+ Páginas", style = MaterialTheme.typography.bodySmall)
+                                            Text("Mais páginas", style = MaterialTheme.typography.bodySmall)
                                         }
                                         TextButton(
                                             onClick = { requestCamera(doc.id) },
                                             enabled = !state.busy
                                         ) {
-                                            Icon(Icons.Default.AddAPhoto, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp))
                                             Spacer(Modifier.width(4.dp))
-                                            Text("+ Foto", style = MaterialTheme.typography.bodySmall)
+                                            Text("Fotografar página", style = MaterialTheme.typography.bodySmall)
                                         }
                                     }
                                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -227,7 +227,7 @@ fun HomeScreen(
                                 add(Triple("Dados", Icons.Default.BarChart, br.com.bragasaude.ui.util.Screen.Report))
                             }
                             add(Triple("Mural", Icons.Default.Groups, br.com.bragasaude.ui.util.Screen.SocialFeed))
-                            add(Triple("Organizar exames", Icons.Default.Assignment, br.com.bragasaude.ui.util.Screen.Exams))
+                            add(Triple("Exames", Icons.Default.Assignment, br.com.bragasaude.ui.util.Screen.Exams))
                         }
                         
                         items(items.size) { index ->
