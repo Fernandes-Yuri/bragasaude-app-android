@@ -38,17 +38,17 @@ class OrganizerPdfBuilder(context: Context) {
             text.forEach { c -> append(if (runCatching { f.encode(c.toString()) }.isSuccess) c else '?') }
         }
 
-        fun lines(text: String, maxWidth: Float = 470f, f: PDType1Font = font, size: Float = 10.5f) =
+        fun lines(text: String, maxWidth: Float = 470f, f: PDType1Font = font, size: Float = 11f) =
             PdfTextLayout.wrap(safe(text, f), maxWidth) { f.getStringWidth(it) / 1000f * size }
 
         // Linhas de cada entrada para calcular a paginação do índice
-        val entries = documents.map { lines("${it.title} | ${it.date.ifBlank { "Data não informada" }} | ${it.type} | página 999", 450f) }
+        val entries = documents.map { lines("${it.title} | ${it.date.ifBlank { "Data não informada" }} | ${it.type} | página 999", 450f, font, 11f) }
 
         val indexGroups = mutableListOf<MutableList<Int>>(mutableListOf())
-        var available = 22
+        var available = 24
         entries.forEachIndexed { i, entry ->
-            val needed = maxOf(2, entry.size + (if (documents[i].topics.isNotEmpty()) 1 else 0))
-            if (needed > available) { indexGroups.add(mutableListOf()); available = 22 }
+            val needed = entry.size + 1
+            if (needed > available) { indexGroups.add(mutableListOf()); available = 24 }
             indexGroups.last().add(i); available -= needed
         }
 
@@ -146,9 +146,10 @@ class OrganizerPdfBuilder(context: Context) {
                     group.forEach { n ->
                         val doc = documents[n]
                         val (r, g, b) = getCategoryColor(doc.type)
-                        val titleLines = lines(doc.title, 360f, boldFont, 10.5f)
+                        val entryText = "${doc.title} | ${doc.date.ifBlank { "Data não informada" }} | ${doc.type} | página ${firstPages[n]}"
+                        val entryLines = lines(entryText, 450f, font, 10f)
                         val hasTopics = doc.topics.isNotEmpty()
-                        val cardHeight = 36f + (titleLines.size - 1) * 12f + (if (hasTopics) 12f else 0f)
+                        val cardHeight = 14f + entryLines.size * 13f + (if (hasTopics) 12f else 0f)
 
                         // Fundo do card
                         stream.setNonStrokingColor(248, 250, 252)
@@ -165,34 +166,24 @@ class OrganizerPdfBuilder(context: Context) {
                         stream.addRect(48f, y - cardHeight, 4f, cardHeight)
                         stream.fill()
 
-                        // Título do documento
+                        // Linhas de texto completas da entrada
                         var textY = y - 13f
-                        titleLines.forEachIndexed { _, line ->
+                        entryLines.forEach { line ->
                             stream.beginText()
-                            stream.setFont(boldFont, 10f)
+                            stream.setFont(font, 10f)
                             stream.setNonStrokingColor(26, 26, 46)
                             stream.newLineAtOffset(58f, textY)
                             stream.showText(line)
                             stream.endText()
-                            textY -= 12f
+                            textY -= 13f
                         }
 
-                        // Detalhes e Destino de Página
-                        val metaText = "${doc.title} | ${doc.date.ifBlank { "Data não informada" }} | ${doc.type} | página ${firstPages[n]}"
-                        stream.beginText()
-                        stream.setFont(font, 8.5f)
-                        stream.setNonStrokingColor(71, 85, 105)
-                        stream.newLineAtOffset(58f, textY)
-                        stream.showText(safe(metaText).take(80))
-                        stream.endText()
-
                         if (hasTopics) {
-                            textY -= 11f
                             stream.beginText()
                             stream.setFont(font, 8f)
                             stream.setNonStrokingColor(0, 105, 92)
                             stream.newLineAtOffset(58f, textY)
-                            stream.showText(safe("Tópicos: ${doc.topics.joinToString(", ")}").take(75))
+                            stream.showText(safe("Tópicos: ${doc.topics.joinToString(", ")}"))
                             stream.endText()
                         }
 
