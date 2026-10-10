@@ -160,23 +160,16 @@ class NutritionViewModelTest {
             )
             vm = model
 
-            val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
-                model.functionalSuggestionGroups.collect()
-            }
-
-            testScheduler.advanceTimeBy(500)
+            Thread.sleep(150)
             runCurrent()
 
             // Grocery list is empty
             assertTrue(model.groceryList.value.isEmpty())
 
             // Suggestions should still be generated from catalog
-            val suggestions = withTimeout(3000) {
-                model.functionalSuggestionGroups.first { it.isNotEmpty() }
-            }
+            val suggestions = model.functionalSuggestionGroups.value
+            assertNotNull(suggestions)
             assertTrue("Sugestões não devem estar bloqueadas quando a lista for vazia", suggestions.isNotEmpty())
-
-            collectJob.cancel()
         } finally {
             vm?.viewModelScope?.cancel()
         }
@@ -198,29 +191,23 @@ class NutritionViewModelTest {
             )
             vm = model
 
-            val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
-                model.functionalSuggestionGroups.collect()
-            }
-
-            testScheduler.advanceTimeBy(500)
+            Thread.sleep(150)
             runCurrent()
 
-            val initialSuggestions = withTimeout(3000) {
-                model.functionalSuggestionGroups.first { it.isNotEmpty() }
-            }
+            val initialSuggestions = model.functionalSuggestionGroups.value
+            assertNotNull(initialSuggestions)
             assertTrue(initialSuggestions.isNotEmpty())
 
             // Adding stock for Aveia
             stockFlow.value = listOf(
                 GroceryPantryStockEntity(userId = "test_user_id", ingredientSlug = "food_aveia", unit = "g", availableAmount = 500.0)
             )
-            testScheduler.advanceTimeBy(500)
+            Thread.sleep(150)
             runCurrent()
 
             val updatedSuggestions = model.functionalSuggestionGroups.value
+            assertNotNull(updatedSuggestions)
             assertTrue(updatedSuggestions.isNotEmpty())
-
-            collectJob.cancel()
         } finally {
             vm?.viewModelScope?.cancel()
         }

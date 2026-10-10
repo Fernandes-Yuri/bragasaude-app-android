@@ -380,7 +380,6 @@ class NutritionViewModel @Inject constructor(
         val pantryStock: List<GroceryPantryStockEntity>
     )
 
-    @OptIn(kotlinx.coroutines.FlowPreview::class)
     private val clinicalDataFlow = combine(
         vitalsRepository.getVitalSigns(userId),
         profileRepository.getProfile(userId),
@@ -396,8 +395,7 @@ class NutritionViewModel @Inject constructor(
             groceryList = allGroceryList,
             pantryStock = stockList
         )
-    }.debounce(100L)
-    .flowOn(kotlinx.coroutines.Dispatchers.Default)
+    }.flowOn(kotlinx.coroutines.Dispatchers.Default)
     .distinctUntilChanged()
 
     val functionalSuggestionGroups: StateFlow<List<NutritionalSuggestionGroup>> = combine(
@@ -460,7 +458,7 @@ class NutritionViewModel @Inject constructor(
         )
     }.flowOn(kotlinx.coroutines.Dispatchers.Default)
     .distinctUntilChanged()
-    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _userWeight = MutableStateFlow<Double?>(null)
     val userWeight = _userWeight.asStateFlow()
