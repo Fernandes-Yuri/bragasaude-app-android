@@ -52,4 +52,35 @@ class RecipesViewModelTest {
             Dispatchers.resetMain()
         }
     }
+
+    @Test fun pantryStockReactivatesReadyToCookRecipesEvenWithoutPendingShoppingList() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        var vm: RecipesViewModel? = null
+        try {
+            val grocery = mockk<GroceryRepository>()
+            val profile = mockk<ProfileRepository>()
+            val summaryRepo = mockk<br.com.bragasaude.data.remote.repository.WeeklyGrocerySummaryRepository>()
+            val auth = mockk<FirebaseAuth>(relaxed = true)
+            every { auth.currentUser?.uid } returns "user"
+
+            every { grocery.getGroceryList("user") } returns flowOf(emptyList())
+            every { profile.getProfile("user") } returns flowOf(null)
+            val eggStock = listOf(
+                br.com.bragasaude.data.local.GroceryPantryStockEntity("user", "food_ovo", "un", 4.0)
+            )
+            every { summaryRepo.stock("user") } returns flowOf(eggStock)
+
+            val model = RecipesViewModel(grocery, profile, RecipeEngine(), auth, summaryRepo)
+            vm = model
+            advanceUntilIdle()
+
+            val breakfast = model.breakfastRecipes.value
+            val eggRecipe = breakfast.firstOrNull { it.recipe.id == "recipe_021" }
+            assertNotNull(eggRecipe)
+            assertEquals(br.com.bragasaude.data.local.model.RecipeReadinessStatus.READY_TO_COOK, eggRecipe!!.readinessStatus)
+        } finally {
+            vm?.viewModelScope?.cancel()
+            Dispatchers.resetMain()
+        }
+    }
 }
