@@ -16,8 +16,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.*
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -156,16 +160,23 @@ class NutritionViewModelTest {
             )
             vm = model
 
-            testScheduler.advanceTimeBy(300)
+            val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
+                model.functionalSuggestionGroups.collect()
+            }
+
+            testScheduler.advanceTimeBy(500)
             runCurrent()
 
             // Grocery list is empty
             assertTrue(model.groceryList.value.isEmpty())
 
             // Suggestions should still be generated from catalog
-            val suggestions = model.functionalSuggestionGroups.value
-            assertNotNull(suggestions)
+            val suggestions = withTimeout(3000) {
+                model.functionalSuggestionGroups.first { it.isNotEmpty() }
+            }
             assertTrue("Sugestões não devem estar bloqueadas quando a lista for vazia", suggestions.isNotEmpty())
+
+            collectJob.cancel()
         } finally {
             vm?.viewModelScope?.cancel()
         }
@@ -187,22 +198,29 @@ class NutritionViewModelTest {
             )
             vm = model
 
-            testScheduler.advanceTimeBy(300)
+            val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
+                model.functionalSuggestionGroups.collect()
+            }
+
+            testScheduler.advanceTimeBy(500)
             runCurrent()
 
-            val initialSuggestions = model.functionalSuggestionGroups.value
-            assertNotNull(initialSuggestions)
+            val initialSuggestions = withTimeout(3000) {
+                model.functionalSuggestionGroups.first { it.isNotEmpty() }
+            }
+            assertTrue(initialSuggestions.isNotEmpty())
 
             // Adding stock for Aveia
             stockFlow.value = listOf(
                 GroceryPantryStockEntity(userId = "test_user_id", ingredientSlug = "food_aveia", unit = "g", availableAmount = 500.0)
             )
-            testScheduler.advanceTimeBy(300)
+            testScheduler.advanceTimeBy(500)
             runCurrent()
 
             val updatedSuggestions = model.functionalSuggestionGroups.value
-            assertNotNull(updatedSuggestions)
             assertTrue(updatedSuggestions.isNotEmpty())
+
+            collectJob.cancel()
         } finally {
             vm?.viewModelScope?.cancel()
         }
