@@ -39,6 +39,8 @@ class SyncWorker @AssistedInject constructor(
 
     companion object {
         private val socialMutationLock = Mutex()
+        /** AUD-AN23: teto de tentativas antes de abandonar um tombstone. */
+        private const val MAX_DELETION_ATTEMPTS = 10
     }
 
     override suspend fun doWork(): Result {
@@ -275,10 +277,6 @@ class SyncWorker @AssistedInject constructor(
         familyDao.purgeExpiredMessages()
     }
 
-    private companion object {
-        /** AUD-AN23: teto de tentativas antes de abandonar um tombstone. */
-        private const val MAX_DELETION_ATTEMPTS = 10
-    }
 
     private suspend fun syncAuditLogs() {
         val pending = auditLogDao.getPendingSync()
