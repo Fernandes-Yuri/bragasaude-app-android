@@ -230,4 +230,30 @@ class WeeklyGroceryEnginePreferencesTest {
                 plan.limitations.any { it.contains("excedeu o teto orçamentário") })
         }
     }
+
+    @Test
+    fun planWeeklyGroceryStrictlyEnforcesMaxBasketSizeAcrossAllTiers() {
+        val (foods, catalog) = createTestCatalog()
+
+        val tiers = listOf(
+            GroceryBudgetTier.ULTRA_ECONOMIC,
+            GroceryBudgetTier.ECONOMIC,
+            GroceryBudgetTier.MODERATE
+        )
+
+        for (tier in tiers) {
+            val prefs = WeeklyGroceryPreferences(budgetTier = tier)
+            val plan = WeeklyGroceryEngine.planWeeklyGrocery(
+                userId = "test_user_tier",
+                vitals = emptyList(),
+                profile = null,
+                catalog = foods,
+                ingredientCatalog = catalog,
+                targetCalories = 2200.0,
+                preferences = prefs
+            )
+            assertTrue("Plano para ${tier.name} deve ter <= ${tier.maxBasketSize} itens, obteve ${plan.items.size}",
+                plan.items.size <= tier.maxBasketSize)
+        }
+    }
 }

@@ -203,7 +203,20 @@ object WeeklyGroceryEngine {
 
         fun poolFor(corridor: String): List<FoodEntity> {
             val list = available.filter { classifyPillar(it) == corridor && it.remoteId !in selectedRequiredFoodIds }
-            return if (list.isNotEmpty()) list else safeCatalog.filter { classifyPillar(it) == corridor && it.remoteId !in selectedRequiredFoodIds }
+            if (list.isNotEmpty()) return list
+
+            val fallback = safeCatalog.filter { classifyPillar(it) == corridor && it.remoteId !in selectedRequiredFoodIds }
+            if (fallback.isNotEmpty()) {
+                val dislikedUsed = fallback.filter { food ->
+                    dislikedFoodNames.any { groceryNameKey(it) == groceryNameKey(food.name) }
+                }
+                if (dislikedUsed.isNotEmpty()) {
+                    val names = dislikedUsed.joinToString(", ") { it.name }
+                    val msg = "Alimento(s) previamente desmarcado(s) ($names) incluído(s) como alternativa para o corredor $corridor por falta de outras opções no catálogo."
+                    limitations.add(msg)
+                }
+            }
+            return fallback
         }
 
         fun filterCost(list: List<FoodEntity>): List<FoodEntity> {
@@ -269,7 +282,8 @@ object WeeklyGroceryEngine {
             selectedCanonicalGroups = selectedCanonicalGroups,
             destConsumptions = plannedConsumptions,
             isEconomic = effectivePrefs.isEconomic,
-            isUltraEconomic = effectivePrefs.isUltraEconomic
+            isUltraEconomic = effectivePrefs.isUltraEconomic,
+            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
         )
 
         // 6. Dimensionamento do Pilar 2: Proteínas (Animais/Vegetais, Leguminosas, Laticínios, Ovos)
@@ -285,7 +299,8 @@ object WeeklyGroceryEngine {
             destConsumptions = plannedConsumptions,
             preferFish = hasHighBp,
             isEconomic = effectivePrefs.isEconomic,
-            isUltraEconomic = effectivePrefs.isUltraEconomic
+            isUltraEconomic = effectivePrefs.isUltraEconomic,
+            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
         )
 
         // 7. Dimensionamento do Pilar 3: Hortifruti (Frutas, Folhosos, Legumes)
@@ -300,7 +315,8 @@ object WeeklyGroceryEngine {
             destConsumptions = plannedConsumptions,
             orderFn = ::orderPool,
             isEconomic = effectivePrefs.isEconomic,
-            isUltraEconomic = effectivePrefs.isUltraEconomic
+            isUltraEconomic = effectivePrefs.isUltraEconomic,
+            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
         )
 
         // 8. Dimensionamento do Pilar 4: Mercearia, Gorduras Boas, Sementes, Temperos e Chás
@@ -314,7 +330,8 @@ object WeeklyGroceryEngine {
             destConsumptions = plannedConsumptions,
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
-            isPantry = true
+            isPantry = true,
+            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
         )
 
         // 9. Calibração fina da meta calórica semanal
@@ -326,6 +343,17 @@ object WeeklyGroceryEngine {
             isUltraEconomic = effectivePrefs.isUltraEconomic,
             maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
         )
+
+        // Garantia de respeito estrito ao maxBasketSize
+        while (plannedConsumptions.size > effectivePrefs.budgetTier.maxBasketSize && plannedConsumptions.size > 1) {
+            val nonStapleMinKcal = plannedConsumptions.filterNot { isStapleEnergyFood(it.food) }
+                .minByOrNull { it.plannedCalories }
+            if (nonStapleMinKcal != null) {
+                plannedConsumptions.remove(nonStapleMinKcal)
+            } else {
+                break
+            }
+        }
 
         // 10. Conversão de consumo em demanda de ingredientes e consolidação canônica
         val demandsBySlug = mutableMapOf<String, MutableList<IngredientDemand>>()
@@ -427,6 +455,20 @@ object WeeklyGroceryEngine {
             limitations.add(budgetMsg)
         }
 
+        val itemsWithoutPrice = consolidatedItems.filter { it.estimatedPriceBrl <= 0.0 }
+        if (itemsWithoutPrice.isNotEmpty()) {
+            val msg = "Preço estimado não disponível para ${itemsWithoutPrice.size} item(ns) (${itemsWithoutPrice.joinToString(", ") { it.foodName }}). O custo total reflete apenas os itens com cotação confirmada."
+            limitations.add(msg)
+            structuredLimitations.add(
+                GroceryLimitation(
+                    type = GroceryLimitationType.MISSING_NUTRITIONAL_DATA,
+                    affectedItems = itemsWithoutPrice.map { it.foodName },
+                    impact = GroceryCalculationImpact.APPROXIMATED,
+                    userSummary = msg
+                )
+            )
+        }
+
         // 13. Mensagem informativa na interface
         val statusMessage = buildStatusMessage(
             targetDailyCalories = effectiveDailyCalories,
@@ -466,7 +508,8 @@ object WeeklyGroceryEngine {
         preferFish: Boolean = false,
         isEconomic: Boolean = false,
         isUltraEconomic: Boolean = false,
-        isPantry: Boolean = false
+        isPantry: Boolean = false,
+        maxBasketSize: Int = Int.MAX_VALUE
     ) {
         if (candidates.isEmpty() || targetKcal <= 0.0) return
 
@@ -476,6 +519,7 @@ object WeeklyGroceryEngine {
             candidates
         }
 
+        val remainingSlots = (maxBasketSize - destConsumptions.size).coerceAtLeast(0)
         val countToTake = when {
             isPantry && isUltraEconomic -> 0
             isPantry && isEconomic -> 1
@@ -486,7 +530,9 @@ object WeeklyGroceryEngine {
             dailyCalorieTarget >= 3500.0 -> 6
             dailyCalorieTarget >= 2500.0 -> 5
             else -> 4
-        }.coerceAtMost(sortedCandidates.size).coerceAtLeast(if (isPantry && isUltraEconomic) 0 else 1)
+        }.coerceAtMost(sortedCandidates.size)
+         .coerceAtMost(if (remainingSlots > 0) remainingSlots else 0)
+         .coerceAtLeast(if (isPantry && isUltraEconomic) 0 else if (remainingSlots > 0) 1 else 0)
 
         if (countToTake <= 0) return
 
@@ -543,7 +589,8 @@ object WeeklyGroceryEngine {
         destConsumptions: MutableList<PlannedConsumption>,
         orderFn: (List<FoodEntity>) -> List<FoodEntity> = { it },
         isEconomic: Boolean = false,
-        isUltraEconomic: Boolean = false
+        isUltraEconomic: Boolean = false,
+        maxBasketSize: Int = Int.MAX_VALUE
     ) {
         if (candidates.isEmpty()) return
 
@@ -554,12 +601,13 @@ object WeeklyGroceryEngine {
         })
         val legumesPool = orderFn(candidates.filter { groceryNameKey(it.category.orEmpty()).contains("legume") })
 
+        val remainingSlots = (maxBasketSize - destConsumptions.size).coerceAtLeast(0)
         val frutasCount = when {
             isUltraEconomic -> 1
             isEconomic -> 2
             dailyCalorieTarget >= 2800.0 -> 3
             else -> 2
-        }
+        }.coerceAtMost(maxOf(1, remainingSlots / 3))
         val frutasCandidates = if (hasHighGlucose) {
             frutasPool.filter { it.functionalTags.contains("baixo_ig") || it.functionalTags.contains("fibra_soluvel") }
                 .ifEmpty { frutasPool }
@@ -579,7 +627,7 @@ object WeeklyGroceryEngine {
         } else {
             folhasPool
         }
-        val folhasCount = 1
+        val folhasCount = 1.coerceAtMost(maxOf(1, (maxBasketSize - destConsumptions.size - frutas.size).coerceAtLeast(0)))
         val folhas = selectDiverseFoods(
             candidates = folhasCandidates,
             count = folhasCount,
@@ -591,7 +639,7 @@ object WeeklyGroceryEngine {
             isUltraEconomic -> 1
             isEconomic -> 2
             else -> 2
-        }
+        }.coerceAtMost(maxOf(1, (maxBasketSize - destConsumptions.size - frutas.size - folhas.size).coerceAtLeast(0)))
         val legumes = selectDiverseFoods(
             candidates = legumesPool,
             count = legumesCount,
@@ -743,6 +791,33 @@ object WeeklyGroceryEngine {
                 deficit -= foodTotalKcal
             }
         }
+
+        currentKcal = plannedConsumptions.sumOf { it.plannedCalories }
+
+        // Passo C: Redução de excesso (superávit acima de 110% da meta semanal)
+        val maxTolerableKcal = targetWeeklyKcal * 1.10
+        if (currentKcal > maxTolerableKcal) {
+            var excessToTrim = currentKcal - (targetWeeklyKcal * 1.05)
+            for (i in plannedConsumptions.indices.reversed()) {
+                if (excessToTrim <= 50.0) break
+                val pc = plannedConsumptions[i]
+                val foodKcal = pc.food.kcal ?: 0.0
+                if (foodKcal <= 0.0) continue
+
+                val baseServing = pc.food.servingSizeGrams.takeIf { it > 0 } ?: 60
+                val minPortion = pc.food.minServingGrams.takeIf { it > 0 } ?: (baseServing / 2).coerceAtLeast(10)
+                val minWeeklyGrams = minPortion * (if (pc.corridor == CORRIDOR_GRAOS) 5 else 4)
+                val reducibleGrams = (pc.weeklyGrams - minWeeklyGrams).coerceAtLeast(0)
+
+                if (reducibleGrams > 0) {
+                    val gramsToCut = minOf(reducibleGrams, ((excessToTrim / foodKcal) * 100.0).toInt())
+                    if (gramsToCut > 0) {
+                        plannedConsumptions[i] = pc.copy(weeklyGrams = pc.weeklyGrams - gramsToCut)
+                        excessToTrim -= (gramsToCut * foodKcal) / 100.0
+                    }
+                }
+            }
+        }
     }
 
     private fun buildStatusMessage(
@@ -773,15 +848,7 @@ object WeeklyGroceryEngine {
         val name = groceryNameKey(food.name)
         val tags = food.functionalTags
 
-        // 1. Hortifruti (Frutas, verduras, folhas, legumes)
-        if (cat.contains("fruta") || cat.contains("verdura") || cat.contains("hortalica") ||
-            cat.contains("folhoso") || cat.contains("crucifera") ||
-            (cat.contains("legume") && !cat.contains("leguminosa"))
-        ) {
-            return CORRIDOR_HORTIFRUTI
-        }
-
-        // 2. Proteínas, Leguminosas, Laticínios e Ovos
+        // 1. Proteínas, Leguminosas, Laticínios e Ovos
         if (cat.contains("carne") || cat.contains("ave") || cat.contains("peixe") ||
             cat.contains("pescado") || cat.contains("frutos do mar") || cat.contains("proteina") ||
             cat.contains("ovo") || cat.contains("laticinio") || cat.contains("queijo") ||
@@ -795,17 +862,36 @@ object WeeklyGroceryEngine {
             return CORRIDOR_PROTEINAS
         }
 
-        // 3. Grãos, Cereais, Raízes e Tubérculos (inclui Cuscuz e Massas Integrais)
-        if (cat.contains("arroz") || cat.contains("cereal") || cat.contains("grao") ||
-            cat.contains("tuberculo") || cat.contains("raiz") || cat.contains("massa") ||
-            name.contains("arroz") || name.contains("cuscuz") || name.contains("macarrao") ||
-            name.contains("aveia") || name.contains("quinoa") || name.contains("mandioca") ||
-            name.contains("batata") || name.contains("inhame") || name.contains("aipim")
+        // 2. Mercearia: Oleaginosas e Sementes Ricas em Lipídios
+        if (name.contains("chia") || name.contains("linhaca") || name.contains("gergelim") ||
+            name.contains("girassol") || name.contains("castanha") || name.contains("noz") ||
+            name.contains("amendoa") || name.contains("amendoim") || cat.contains("oleaginosa")
+        ) {
+            return CORRIDOR_MERCEARIA
+        }
+
+        // 3. Grãos, Cereais, Raízes e Tubérculos (inclui Mandioca, Batata, Inhame, Cuscuz, Massas e Panificados)
+        if (name.contains("batata") || name.contains("mandioca") || name.contains("aipim") ||
+            name.contains("inhame") || name.contains("cara") || name.contains("mandioquinha") ||
+            name.contains("baroa") || cat.contains("tuberculo") || cat.contains("raiz") ||
+            cat.contains("arroz") || cat.contains("cereal") || cat.contains("grao") ||
+            cat.contains("massa") || name.contains("arroz") || name.contains("cuscuz") ||
+            name.contains("macarrao") || name.contains("aveia") || name.contains("quinoa") ||
+            name.contains("pao") || name.contains("torrada") || name.contains("tapioca") ||
+            name.contains("milho") || name.contains("trigo")
         ) {
             return CORRIDOR_GRAOS
         }
 
-        // 4. Mercearia, Gorduras Boas, Oleaginosas, Sementes, Temperos e Chás
+        // 4. Hortifruti (Frutas, verduras, folhas, legumes não amiláceos)
+        if (cat.contains("fruta") || cat.contains("verdura") || cat.contains("hortalica") ||
+            cat.contains("folhoso") || cat.contains("crucifera") ||
+            (cat.contains("legume") && !cat.contains("leguminosa"))
+        ) {
+            return CORRIDOR_HORTIFRUTI
+        }
+
+        // 5. Mercearia, Gorduras Boas, Temperos e Chás
         return CORRIDOR_MERCEARIA
     }
 

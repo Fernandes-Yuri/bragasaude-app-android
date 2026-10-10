@@ -458,4 +458,82 @@ class WeeklyGroceryEngineTest {
             }
         }
     }
+
+    @Test
+    fun classifyPillarCorrectlyCategorizesTubersAndSeeds() {
+        val batata = FoodEntity("food_batata", "Batata Inglesa Cozida", "Legumes & Vegetais", kcal = 80.0)
+        val mandioca = FoodEntity("food_mandioca", "Mandioca Cozida", "Hortaliças", kcal = 120.0)
+        val linhaca = FoodEntity("food_linhaca", "Semente de Linhaça", "Grãos e Sementes", kcal = 530.0)
+        val chia = FoodEntity("food_chia", "Semente de Chia", "Cereais", kcal = 480.0)
+        val feijao = FoodEntity("food_feijao", "Feijão Carioca", "Grãos e Cereais", kcal = 80.0)
+        val couve = FoodEntity("food_couve", "Couve Refogada", "Verduras", kcal = 30.0)
+
+        assertEquals(WeeklyGroceryEngine.CORRIDOR_GRAOS, WeeklyGroceryEngine.classifyPillar(batata))
+        assertEquals(WeeklyGroceryEngine.CORRIDOR_GRAOS, WeeklyGroceryEngine.classifyPillar(mandioca))
+        assertEquals(WeeklyGroceryEngine.CORRIDOR_MERCEARIA, WeeklyGroceryEngine.classifyPillar(linhaca))
+        assertEquals(WeeklyGroceryEngine.CORRIDOR_MERCEARIA, WeeklyGroceryEngine.classifyPillar(chia))
+        assertEquals(WeeklyGroceryEngine.CORRIDOR_PROTEINAS, WeeklyGroceryEngine.classifyPillar(feijao))
+        assertEquals(WeeklyGroceryEngine.CORRIDOR_HORTIFRUTI, WeeklyGroceryEngine.classifyPillar(couve))
+    }
+
+    @Test
+    fun planWeeklyGroceryEmitsLimitationWhenDislikedFoodIsRecoveredAsFallback() {
+        val (foods, catalog) = createTestCatalog()
+        val disliked = setOf("Aveia em Flocos", "Cuscuz de Milho Cozido", "Mandioca Cozida")
+        val plan = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "user_fallback",
+            vitals = emptyList(),
+            profile = null,
+            catalog = foods,
+            dislikedFoodNames = disliked,
+            ingredientCatalog = catalog,
+            targetCalories = 2000.0
+        )
+
+        val usedDisliked = plan.items.filter { item -> disliked.any { item.foodName.contains(it, ignoreCase = true) } }
+        if (usedDisliked.isNotEmpty()) {
+            assertTrue("Deve conter limitação alertando sobre inclusão de item previamente desmarcado",
+                plan.limitations.any { it.contains("previamente desmarcado") || it.contains("rejeitado") })
+        }
+    }
+
+    @Test
+    fun calibrateTotalEnergyReducesExcessWhenCoverageExceedsUpperTolerance() {
+        val (foods, catalog) = createTestCatalog()
+        val plan = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "user_excess",
+            vitals = emptyList(),
+            profile = null,
+            catalog = foods,
+            ingredientCatalog = catalog,
+            targetCalories = 1000.0
+        )
+
+        assertTrue("Cobertura não deve explodir acima de 125%: ${plan.coveragePercent}%",
+            plan.coveragePercent <= 125.0)
+    }
+
+    @Test
+    fun planWeeklyGroceryIdentifiesMissingPricesWithoutZeroCostIllusion() {
+        val (foods, originalCatalog) = createTestCatalog()
+        val zeroPriceIngredients = originalCatalog.ingredients.map {
+            if (it.slug == "banana-prata") it.copy(price = 0.0) else it
+        }
+        val customCatalog = originalCatalog.copy(ingredients = zeroPriceIngredients)
+
+        val plan = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "user_zero_price",
+            vitals = emptyList(),
+            profile = null,
+            catalog = foods,
+            ingredientCatalog = customCatalog,
+            targetCalories = 1800.0
+        )
+
+        val zeroItem = plan.items.firstOrNull { it.foodId == "banana-prata" }
+        if (zeroItem != null) {
+            assertTrue("Deve conter aviso de preço indisponível",
+                plan.limitations.any { it.contains("Preço estimado não disponível") })
+        }
+    }
 }
