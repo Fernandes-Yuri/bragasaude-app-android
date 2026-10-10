@@ -256,4 +256,116 @@ class WeeklyGroceryEnginePreferencesTest {
                 plan.items.size <= tier.maxBasketSize)
         }
     }
+
+    @Test
+    fun planWeeklyGrocery_acrossAllBudgetTiers_alwaysIncludesRiceBeansAndCarnivorousProtein() {
+        val (foods, catalog) = createTestCatalog()
+
+        val tiers = listOf(
+            GroceryBudgetTier.ULTRA_ECONOMIC,
+            GroceryBudgetTier.ECONOMIC,
+            GroceryBudgetTier.MODERATE,
+            GroceryBudgetTier.FREE
+        )
+
+        for (tier in tiers) {
+            val prefs = WeeklyGroceryPreferences(budgetTier = tier)
+            val plan = WeeklyGroceryEngine.planWeeklyGrocery(
+                userId = "test_user_rice_beans_meat",
+                vitals = emptyList(),
+                profile = null,
+                catalog = foods,
+                ingredientCatalog = catalog,
+                targetCalories = 2000.0,
+                preferences = prefs
+            )
+
+            val itemNames = plan.items.map { it.foodName.lowercase() }
+            assertTrue(
+                "Tier $tier deve conter arroz na cesta semanal",
+                itemNames.any { it.contains("arroz") }
+            )
+            assertTrue(
+                "Tier $tier deve conter feijão na cesta semanal",
+                itemNames.any { it.contains("feijão") }
+            )
+            val hasCarnivorous = plan.items.any { item ->
+                val f = foods.firstOrNull { it.name == item.foodName }
+                f != null && WeeklyGroceryEngine.isCarnivorousProtein(f)
+            }
+            assertTrue(
+                "Tier $tier deve conter ao menos uma proteína carnívora na cesta semanal",
+                hasCarnivorous
+            )
+        }
+    }
+
+    @Test
+    fun planWeeklyGrocery_whenCatalogRequiredGroupsIsEmpty_stillGuaranteesRiceAndBeans() {
+        val (foods, originalCatalog) = createTestCatalog()
+        val catalogWithEmptyRequired = originalCatalog.copy(requiredGroups = emptyList())
+
+        val plan = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "test_user_empty_required",
+            vitals = emptyList(),
+            profile = null,
+            catalog = foods,
+            ingredientCatalog = catalogWithEmptyRequired,
+            targetCalories = 2000.0,
+            preferences = WeeklyGroceryPreferences(budgetTier = GroceryBudgetTier.ECONOMIC)
+        )
+
+        val itemNames = plan.items.map { it.foodName.lowercase() }
+        assertTrue("Deve conter arroz mesmo com requiredGroups vazio", itemNames.any { it.contains("arroz") })
+        assertTrue("Deve conter feijão mesmo com requiredGroups vazio", itemNames.any { it.contains("feijão") })
+    }
+
+    @Test
+    fun planWeeklyGrocery_whenUserSelectsOnlyEggs_guaranteesCarnivorousAsMainProteinAndEggAsComplementary() {
+        val (foods, catalog) = createTestCatalog()
+        val prefs = WeeklyGroceryPreferences(
+            budgetTier = GroceryBudgetTier.ECONOMIC,
+            selectedProteins = setOf(GroceryProteinPreference.EGGS)
+        )
+
+        val plan = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "test_user_eggs_only",
+            vitals = emptyList(),
+            profile = null,
+            catalog = foods,
+            ingredientCatalog = catalog,
+            targetCalories = 2000.0,
+            preferences = prefs
+        )
+
+        val itemNames = plan.items.map { it.foodName.lowercase() }
+        val hasEgg = itemNames.any { it.contains("ovo") }
+        val hasCarnivorous = plan.items.any { item ->
+            val f = foods.firstOrNull { it.name == item.foodName }
+            f != null && WeeklyGroceryEngine.isCarnivorousProtein(f)
+        }
+
+        assertTrue("Deve conter ovos como complementar", hasEgg)
+        assertTrue("Deve conter proteína carnívora principal acompanhando o ovo", hasCarnivorous)
+    }
+
+    @Test
+    fun isCarnivorousProteinAndIsEggProtein_categorizeCorrectly() {
+        val frango = FoodEntity("f1", "Peito de Frango Grelhado", "Carnes & Aves")
+        val peixe = FoodEntity("f2", "Filé de Tilápia Grelhado", "Peixes & Frutos do Mar")
+        val carne = FoodEntity("f3", "Carne Moída Patinho", "Carnes & Aves")
+        val ovo = FoodEntity("f4", "Ovo Cozido", "Proteínas & Ovos")
+        val arroz = FoodEntity("f5", "Arroz Branco", "Grãos")
+
+        assertTrue(WeeklyGroceryEngine.isCarnivorousProtein(frango))
+        assertTrue(WeeklyGroceryEngine.isCarnivorousProtein(peixe))
+        assertTrue(WeeklyGroceryEngine.isCarnivorousProtein(carne))
+        assertFalse(WeeklyGroceryEngine.isCarnivorousProtein(ovo))
+        assertFalse(WeeklyGroceryEngine.isCarnivorousProtein(arroz))
+
+        assertTrue(WeeklyGroceryEngine.isEggProtein(ovo))
+        assertFalse(WeeklyGroceryEngine.isEggProtein(frango))
+        assertFalse(WeeklyGroceryEngine.isEggProtein(peixe))
+        assertFalse(WeeklyGroceryEngine.isEggProtein(arroz))
+    }
 }

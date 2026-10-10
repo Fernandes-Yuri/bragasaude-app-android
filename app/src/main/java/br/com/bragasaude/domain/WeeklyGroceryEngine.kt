@@ -158,9 +158,34 @@ object WeeklyGroceryEngine {
         val plannedConsumptions = mutableListOf<PlannedConsumption>()
         val selectedCanonicalGroups = mutableSetOf<String>()
 
-        // 4. Preservação de grupos básicos obrigatórios da política do gateway (arroz e feijão)
+        // 4. Preservação de grupos básicos obrigatórios da política do gateway (arroz e feijão sempre garantidos)
         val selectedRequiredFoodIds = mutableSetOf<String>()
-        ingredientCatalog.requiredGroups.forEach { group ->
+        val requiredGroupsList = ingredientCatalog.requiredGroups.toMutableList()
+
+        val hasRiceGroup = requiredGroupsList.any { group ->
+            group.any { id -> (available + safeCatalog).any { it.remoteId == id && groceryNameKey(it.name).contains("arroz") } }
+        }
+        if (!hasRiceGroup) {
+            val eligibleRice = (available + safeCatalog).filter { groceryNameKey(it.name).contains("arroz") }.map { it.remoteId }
+            if (eligibleRice.isNotEmpty()) {
+                requiredGroupsList.add(eligibleRice)
+            }
+        }
+
+        val hasBeanGroup = requiredGroupsList.any { group ->
+            group.any { id -> (available + safeCatalog).any { it.remoteId == id && (groceryNameKey(it.name).contains("feijao") || groceryNameKey(it.name).contains("lentilha") || groceryNameKey(it.name).contains("grao-de-bico")) } }
+        }
+        if (!hasBeanGroup) {
+            val eligibleBeans = (available + safeCatalog).filter {
+                val key = groceryNameKey(it.name)
+                key.contains("feijao") || key.contains("lentilha") || key.contains("grao-de-bico")
+            }.map { it.remoteId }
+            if (eligibleBeans.isNotEmpty()) {
+                requiredGroupsList.add(eligibleBeans)
+            }
+        }
+
+        requiredGroupsList.forEach { group ->
             val selected = group.firstNotNullOfOrNull { id -> available.firstOrNull { it.remoteId == id } }
                 ?: group.firstNotNullOfOrNull { id -> safeCatalog.firstOrNull { it.remoteId == id } }
             if (selected != null) {
@@ -239,7 +264,19 @@ object WeeklyGroceryEngine {
         val grainsPool = orderPool(filterCost(poolFor(CORRIDOR_GRAOS)))
 
         val candidateProteins = poolFor(CORRIDOR_PROTEINAS).let { list ->
-            val byPref = list.filter { matchesProteinPreference(it, effectivePrefs.selectedProteins) }
+            val hasCarnivorousPref = effectivePrefs.selectedProteins.any {
+                it == GroceryProteinPreference.POULTRY || it == GroceryProteinPreference.FISH || it == GroceryProteinPreference.BEEF
+            }
+            val prefsToApply = if (!hasCarnivorousPref && list.any { isCarnivorousProtein(it) }) {
+                effectivePrefs.selectedProteins + setOf(
+                    GroceryProteinPreference.POULTRY,
+                    GroceryProteinPreference.FISH,
+                    GroceryProteinPreference.BEEF
+                )
+            } else {
+                effectivePrefs.selectedProteins
+            }
+            val byPref = list.filter { matchesProteinPreference(it, prefsToApply) }
             if (byPref.isNotEmpty()) byPref else list
         }.let { filterCost(it) }
         val proteinsPool = orderPool(candidateProteins)
@@ -346,7 +383,7 @@ object WeeklyGroceryEngine {
 
         // Garantia de respeito estrito ao maxBasketSize
         while (plannedConsumptions.size > effectivePrefs.budgetTier.maxBasketSize && plannedConsumptions.size > 1) {
-            val nonStapleMinKcal = plannedConsumptions.filterNot { isStapleEnergyFood(it.food) }
+            val nonStapleMinKcal = plannedConsumptions.filterNot { isStapleEnergyFood(it.food) || isCarnivorousProtein(it.food) }
                 .minByOrNull { it.plannedCalories }
             if (nonStapleMinKcal != null) {
                 plannedConsumptions.remove(nonStapleMinKcal)
@@ -536,12 +573,32 @@ object WeeklyGroceryEngine {
 
         if (countToTake <= 0) return
 
-        val selectedPool = selectDiverseFoods(
-            candidates = sortedCandidates,
-            count = countToTake,
-            ingredientCatalog = ingredientCatalog,
-            selectedGroups = selectedCanonicalGroups
-        )
+        val selectedPool = if (corridor == CORRIDOR_PROTEINAS && sortedCandidates.any { isCarnivorousProtein(it) }) {
+            val chosen = mutableListOf<FoodEntity>()
+            val primaryMeat = sortedCandidates.firstOrNull { isCarnivorousProtein(it) }
+            if (primaryMeat != null) {
+                chosen.add(primaryMeat)
+                canonicalGroupFor(primaryMeat, ingredientCatalog)?.let { selectedCanonicalGroups.add(it) }
+            }
+            if (countToTake > 1) {
+                val remainingCandidates = sortedCandidates.filter { it.remoteId != primaryMeat?.remoteId }
+                val secondaryChosen = selectDiverseFoods(
+                    candidates = remainingCandidates,
+                    count = countToTake - 1,
+                    ingredientCatalog = ingredientCatalog,
+                    selectedGroups = selectedCanonicalGroups
+                )
+                chosen.addAll(secondaryChosen)
+            }
+            chosen
+        } else {
+            selectDiverseFoods(
+                candidates = sortedCandidates,
+                count = countToTake,
+                ingredientCatalog = ingredientCatalog,
+                selectedGroups = selectedCanonicalGroups
+            )
+        }
         if (selectedPool.isEmpty()) return
         val perFoodKcalTarget = targetKcal / selectedPool.size
 
@@ -1019,5 +1076,23 @@ object WeeklyGroceryEngine {
         }
         if (cat.contains("laticinio") && !cat.contains("queijo")) return true
         return false
+    }
+
+    fun isCarnivorousProtein(food: FoodEntity): Boolean {
+        val key = groceryNameKey(food.name.orEmpty())
+        val cat = groceryNameKey(food.category.orEmpty())
+        return key.contains("frango") || key.contains("ave") || key.contains("peru") || key.contains("sobrecoxa") ||
+               cat.contains("ave") ||
+               key.contains("carne") || key.contains("patinho") || key.contains("alcatra") ||
+               key.contains("bovino") || key.contains("moida") || key.contains("acem") ||
+               key.contains("musculo") || cat.contains("carne") ||
+               cat.contains("peixe") || key.contains("peixe") || key.contains("tilapia") ||
+               key.contains("sardinha") || key.contains("atum") || key.contains("pescada") ||
+               key.contains("salmao")
+    }
+
+    fun isEggProtein(food: FoodEntity): Boolean {
+        val key = groceryNameKey(food.name.orEmpty())
+        return key.contains("ovo") || key.contains("ovos")
     }
 }

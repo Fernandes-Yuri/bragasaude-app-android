@@ -29,14 +29,45 @@ class WeeklyGroceryPreferencesTest {
     }
 
     @Test
-    fun normalized_whenProteinsEmptyInUltraEconomic_defaultsToEggs() {
-        val emptyPrefs = WeeklyGroceryPreferences(
-            budgetTier = GroceryBudgetTier.ULTRA_ECONOMIC,
-            selectedProteins = emptySet()
+    fun normalized_whenProteinsEmptyInAnyBudgetTier_containsCarnivorousAndComplementaryEggs() {
+        val tiers = listOf(
+            GroceryBudgetTier.ULTRA_ECONOMIC,
+            GroceryBudgetTier.ECONOMIC,
+            GroceryBudgetTier.MODERATE,
+            GroceryBudgetTier.FREE
         )
-        val normalized = emptyPrefs.normalized()
-        assertFalse(normalized.selectedProteins.isEmpty())
-        assertTrue(normalized.selectedProteins.contains(GroceryProteinPreference.EGGS))
+        for (tier in tiers) {
+            val emptyPrefs = WeeklyGroceryPreferences(
+                budgetTier = tier,
+                selectedProteins = emptySet()
+            )
+            val normalized = emptyPrefs.normalized()
+            assertFalse("Proteínas não devem ser vazias para $tier", normalized.selectedProteins.isEmpty())
+            assertTrue("Deve conter frango como carnívora para $tier", normalized.selectedProteins.contains(GroceryProteinPreference.POULTRY))
+            assertTrue("Deve conter ovos como complementar para $tier", normalized.selectedProteins.contains(GroceryProteinPreference.EGGS))
+        }
+    }
+
+    @Test
+    fun normalized_whenOnlyEggsSelected_addsCarnivorousProtein() {
+        val eggsOnlyPrefs = WeeklyGroceryPreferences(
+            budgetTier = GroceryBudgetTier.ECONOMIC,
+            selectedProteins = setOf(GroceryProteinPreference.EGGS)
+        )
+        val normalized = eggsOnlyPrefs.normalized()
+        assertTrue("Deve manter ovo como complementar", normalized.selectedProteins.contains(GroceryProteinPreference.EGGS))
+        assertTrue("Deve adicionar proteína carnívora (frango)", normalized.selectedProteins.contains(GroceryProteinPreference.POULTRY))
+    }
+
+    @Test
+    fun normalized_whenCarnivorousAlreadyPresent_preservesUserSelection() {
+        val fishPrefs = WeeklyGroceryPreferences(
+            budgetTier = GroceryBudgetTier.MODERATE,
+            selectedProteins = setOf(GroceryProteinPreference.FISH)
+        )
+        val normalized = fishPrefs.normalized()
+        assertTrue(normalized.selectedProteins.contains(GroceryProteinPreference.FISH))
+        assertEquals(setOf(GroceryProteinPreference.FISH), normalized.selectedProteins)
     }
 
     @Test
