@@ -48,14 +48,12 @@ object RemoteNutritionCatalogParser {
             components[id] = refs
             if (refs.isNotEmpty()) {
                 food.optJSONObject("component_proportions")?.let { values ->
-                    val validShares = values.keys().asSequence().filter { it in refs }.associateWith { slug ->
+                    val shares = values.keys().asSequence().associateWith { slug ->
+                        require(slug in refs)
                         positive(values, slug)!!
                     }
-                    if (validShares.isNotEmpty()) {
-                        val sum = validShares.values.sum()
-                        val normalized = if (sum > 0) validShares.mapValues { it.value / sum } else validShares
-                        proportions[id] = normalized
-                    }
+                    require(shares.keys == refs.toSet() && kotlin.math.abs(shares.values.sum() - 1.0) < 0.000001)
+                    proportions[id] = shares
                 }
                 val values = food.optJSONObject("purchaseFactors") ?: JSONObject()
                 factors[id] = values.keys().asSequence().filter { it in refs }.associateWith { slug ->
