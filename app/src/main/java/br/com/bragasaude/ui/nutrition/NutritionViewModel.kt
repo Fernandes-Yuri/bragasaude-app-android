@@ -102,6 +102,15 @@ class NutritionViewModel @Inject constructor(
             .apply()
     }
 
+    private val _autoRecommendedCalories = MutableStateFlow(1800)
+    val autoRecommendedCalories = _autoRecommendedCalories.asStateFlow()
+
+    private val _isCustomCalorieTarget = MutableStateFlow(false)
+    val isCustomCalorieTarget = _isCustomCalorieTarget.asStateFlow()
+
+    private val _dailyCalories = MutableStateFlow(1800f)
+    val dailyCalories = _dailyCalories.asStateFlow()
+
     private val _goalSetup = MutableStateFlow(loadStoredNutritionGoalSetup())
     val goalSetup = _goalSetup.asStateFlow()
 
@@ -130,7 +139,7 @@ class NutritionViewModel @Inject constructor(
             budgetTier = currentWeekly.budgetTier,
             hasPantryStaples = currentWeekly.hasPantryStaples,
             isCustomManual = isCustom,
-            manualKcal = _dailyCalories.value.toDouble().takeIf { isCustom }
+            manualKcal = if (isCustom) _dailyCalories.value.toDouble() else null
         )
     }
 
@@ -409,15 +418,6 @@ class NutritionViewModel @Inject constructor(
 
     private val _userWeight = MutableStateFlow<Double?>(null)
     val userWeight = _userWeight.asStateFlow()
-
-    private val _autoRecommendedCalories = MutableStateFlow(1800)
-    val autoRecommendedCalories = _autoRecommendedCalories.asStateFlow()
-
-    private val _isCustomCalorieTarget = MutableStateFlow(false)
-    val isCustomCalorieTarget = _isCustomCalorieTarget.asStateFlow()
-
-    private val _dailyCalories = MutableStateFlow(1800f)
-    val dailyCalories = _dailyCalories.asStateFlow()
 
     val totalCaloriesConsumed = todayLoggedMeals.map { list ->
         list.sumOf { it.kcal }
