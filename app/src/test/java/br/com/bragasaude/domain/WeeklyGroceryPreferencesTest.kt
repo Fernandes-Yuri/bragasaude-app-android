@@ -29,23 +29,13 @@ class WeeklyGroceryPreferencesTest {
     }
 
     @Test
-    fun normalized_whenProteinsEmptyInAnyBudgetTier_containsCarnivorousAndComplementaryEggs() {
-        val tiers = listOf(
-            GroceryBudgetTier.ULTRA_ECONOMIC,
-            GroceryBudgetTier.ECONOMIC,
-            GroceryBudgetTier.MODERATE,
-            GroceryBudgetTier.FREE
+    fun normalized_whenProteinsEmpty_preservesEmptySetForEngineFlexibility() {
+        val emptyPrefs = WeeklyGroceryPreferences(
+            budgetTier = GroceryBudgetTier.MODERATE,
+            selectedProteins = emptySet()
         )
-        for (tier in tiers) {
-            val emptyPrefs = WeeklyGroceryPreferences(
-                budgetTier = tier,
-                selectedProteins = emptySet()
-            )
-            val normalized = emptyPrefs.normalized()
-            assertFalse("Proteínas não devem ser vazias para $tier", normalized.selectedProteins.isEmpty())
-            assertTrue("Deve conter frango como carnívora para $tier", normalized.selectedProteins.contains(GroceryProteinPreference.POULTRY))
-            assertTrue("Deve conter ovos como complementar para $tier", normalized.selectedProteins.contains(GroceryProteinPreference.EGGS))
-        }
+        val normalized = emptyPrefs.normalized()
+        assertTrue("Modo automatizado sem filtro preserva emptySet para total flexibilidade e rotatividade do motor", normalized.selectedProteins.isEmpty())
     }
 
     @Test

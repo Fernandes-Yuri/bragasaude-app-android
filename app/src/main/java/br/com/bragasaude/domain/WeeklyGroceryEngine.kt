@@ -267,7 +267,7 @@ object WeeklyGroceryEngine {
             val hasCarnivorousPref = effectivePrefs.selectedProteins.any {
                 it == GroceryProteinPreference.POULTRY || it == GroceryProteinPreference.FISH || it == GroceryProteinPreference.BEEF
             }
-            val prefsToApply = if (!hasCarnivorousPref && list.any { isCarnivorousProtein(it) }) {
+            val prefsToApply = if (effectivePrefs.selectedProteins.isNotEmpty() && !hasCarnivorousPref && list.any { isCarnivorousProtein(it) }) {
                 effectivePrefs.selectedProteins + setOf(
                     GroceryProteinPreference.POULTRY,
                     GroceryProteinPreference.FISH,
