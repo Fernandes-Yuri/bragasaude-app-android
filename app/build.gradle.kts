@@ -31,14 +31,18 @@ android {
         applicationId = "br.com.bragasaude"
         minSdk = 26
         targetSdk = 35
-        versionCode = 26
-        versionName = "1.4.0"
+        versionCode = 27
+        versionName = "1.5.0"
 
         buildConfigField("String", "BASE_URL", "\"https://api.bragasaude.online\"")
         // AUD-AN33: o feedback ia pra URL hardcoded do Firebase Hosting
         // (braga-saude.web.app — landing page, NÃO o portal de operações).
         // Agora configurável por flavor; default = o portal de operações real.
         buildConfigField("String", "WEBSERVICE_BASE_URL", "\"https://portal.bragasaude.online\"")
+
+        ndk {
+            abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -93,6 +97,16 @@ android {
     }
     // A mesma personalidade é carregada pelo gateway Python.
     sourceSets.getByName("main").assets.srcDir(rootProject.file("scripts/server/persona"))
+    packaging {
+        resources {
+            excludes += listOf(
+                "org/bouncycastle/pqc/**",
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE*",
+                "META-INF/NOTICE*"
+            )
+        }
+    }
     testOptions {
         unitTests {
             isIncludeAndroidResources = true

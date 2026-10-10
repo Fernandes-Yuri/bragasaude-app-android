@@ -43,27 +43,28 @@ object RemoteNutritionCatalogParser {
             val food = foods.getJSONObject(i)
             val id = food.getString("remoteId")
             require(id.isNotBlank() && !components.containsKey(id))
-            val refs = strings(food.getJSONArray("shoppingComponents"))
-            require(refs.isNotEmpty() && refs.all { it in slugs })
+            val rawRefs = strings(food.getJSONArray("shoppingComponents"))
+            val refs = rawRefs.filter { it in slugs }
             components[id] = refs
-            food.optJSONObject("component_proportions")?.let { values ->
-                val shares = values.keys().asSequence().associateWith { slug ->
-                    require(slug in refs)
-                    positive(values, slug)!!
+            if (refs.isNotEmpty()) {
+                food.optJSONObject("component_proportions")?.let { values ->
+                    val shares = values.keys().asSequence().associateWith { slug ->
+                        require(slug in refs)
+                        positive(values, slug)!!
+                    }
+                    require(shares.keys == refs.toSet() && kotlin.math.abs(shares.values.sum() - 1.0) < 0.000001)
+                    proportions[id] = shares
                 }
-                require(shares.keys == refs.toSet() && kotlin.math.abs(shares.values.sum() - 1.0) < 0.000001)
-                proportions[id] = shares
-            }
-            val values = food.optJSONObject("purchaseFactors") ?: JSONObject()
-            factors[id] = values.keys().asSequence().associateWith { slug ->
-                val factor = values.getDouble(slug)
-                require(slug in refs && factor.isFinite() && factor > 0 && factor <= 10)
-                factor
+                val values = food.optJSONObject("purchaseFactors") ?: JSONObject()
+                factors[id] = values.keys().asSequence().filter { it in refs }.associateWith { slug ->
+                    val factor = values.getDouble(slug)
+                    if (factor.isFinite() && factor > 0 && factor <= 10) factor else 1.0
+                }
             }
         }
         val groups = snapshot.getJSONObject("policy").getJSONArray("required_groups")
         val required = (0 until groups.length()).map { strings(groups.getJSONArray(it)) }
-        require(required.all { group -> group.isNotEmpty() && group.all { it in components } })
+        require(required.all { group -> group.isNotEmpty() && group.all { it in components && components[it]!!.isNotEmpty() } })
         return GroceryIngredientCatalog(ingredients, components, required, factors, version, proportions)
     }
 

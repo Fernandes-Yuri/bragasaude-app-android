@@ -71,7 +71,6 @@ class CatalogRepository @Inject constructor(
         }
 
         if (!includePrices) return@withContext catalog
-        if (snapshot != null && catalog.ingredients.any { it.price != null && it.price > 0 }) return@withContext catalog
 
         val prices = fetchGroceryPrices()
         if (prices.isEmpty()) return@withContext catalog
@@ -82,7 +81,7 @@ class CatalogRepository @Inject constructor(
                 ?: ing.aliases.firstNotNullOfOrNull { normalizedPrices[br.com.bragasaude.domain.groceryNameKey(it)] }
                 ?: normalizedPrices[br.com.bragasaude.domain.groceryNameKey(ing.slug.replace('-', ' '))]
             if (matchPrice != null && matchPrice > 0.0) {
-                ing.copy(price = matchPrice, source = "estimated")
+                ing.copy(price = matchPrice, source = if (ing.source == "manual") "manual" else "estimated")
             } else {
                 ing
             }
