@@ -33,7 +33,9 @@ class RecipesViewModelTest {
             val list = MutableStateFlow(items)
             every { grocery.getGroceryList("user") } returns list
             every { profile.getProfile("user") } returns flowOf(null)
-            val model = RecipesViewModel(grocery, profile, RecipeEngine(), auth)
+            val summaryRepo = mockk<br.com.bragasaude.data.remote.repository.WeeklyGrocerySummaryRepository>()
+            every { summaryRepo.stock("user") } returns flowOf(emptyList())
+            val model = RecipesViewModel(grocery, profile, RecipeEngine(), auth, summaryRepo)
             vm = model
             advanceUntilIdle()
             assertTrue(model.snackRecipes.value.any { it.recipe.id == "recipe_003" })

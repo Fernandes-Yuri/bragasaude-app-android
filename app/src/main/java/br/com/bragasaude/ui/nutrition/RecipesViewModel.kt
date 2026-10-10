@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -35,41 +34,13 @@ data class MealTab(
  * preparações caseiras priorizando o que já está na despensa (READY_TO_COOK).
  */
 @HiltViewModel
-class RecipesViewModel(
+class RecipesViewModel @Inject constructor(
     private val groceryRepository: GroceryRepository,
     private val profileRepository: ProfileRepository,
     private val recipeEngine: RecipeEngine,
     private val auth: FirebaseAuth,
-    private val weeklyGrocerySummaryRepository: WeeklyGrocerySummaryRepository?
+    private val weeklyGrocerySummaryRepository: WeeklyGrocerySummaryRepository
 ) : ViewModel() {
-
-    @Inject
-    constructor(
-        groceryRepository: GroceryRepository,
-        profileRepository: ProfileRepository,
-        recipeEngine: RecipeEngine,
-        auth: FirebaseAuth,
-        weeklyGrocerySummaryRepository: WeeklyGrocerySummaryRepository
-    ) : this(
-        groceryRepository = groceryRepository,
-        profileRepository = profileRepository,
-        recipeEngine = recipeEngine,
-        auth = auth,
-        weeklyGrocerySummaryRepository = weeklyGrocerySummaryRepository as WeeklyGrocerySummaryRepository?
-    )
-
-    constructor(
-        groceryRepository: GroceryRepository,
-        profileRepository: ProfileRepository,
-        recipeEngine: RecipeEngine,
-        auth: FirebaseAuth
-    ) : this(
-        groceryRepository = groceryRepository,
-        profileRepository = profileRepository,
-        recipeEngine = recipeEngine,
-        auth = auth,
-        weeklyGrocerySummaryRepository = null
-    )
 
     private val currentUserId: String
         get() = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
@@ -110,13 +81,11 @@ class RecipesViewModel(
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val stockFlow = weeklyGrocerySummaryRepository?.stock(currentUserId) ?: flowOf(emptyList())
-
                 // Combina lista de compras, perfil e estoque físico de forma reativa
                 kotlinx.coroutines.flow.combine(
                     groceryRepository.getGroceryList(currentUserId),
                     profileRepository.getProfile(currentUserId),
-                    stockFlow
+                    weeklyGrocerySummaryRepository.stock(currentUserId)
                 ) { pantryItems, profile, stock ->
                     Triple(pantryItems, profile, stock)
                 }.collectLatest { (pantryItems, profile, stock) ->
