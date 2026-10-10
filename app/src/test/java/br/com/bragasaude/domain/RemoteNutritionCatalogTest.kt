@@ -83,4 +83,15 @@ class RemoteNutritionCatalogTest {
         RemoteNutritionCatalogParser.parse(snapshot)
     }
 
+    @Test
+    fun toleratesNonAnchorFoodWithDanglingComponentWithoutAbortingCatalog() {
+        val snap = snapshot()
+        val foods = snap.getJSONArray("foods")
+        foods.put(JSONObject("""{"remoteId":"extra_c","name":"Extra C","shoppingComponents":["ingredient_inexistente"],"purchaseFactors":{}}"""))
+        val parsed = RemoteNutritionCatalogParser.parse(snap)
+        assertNotNull(parsed)
+        assertTrue(parsed.components.containsKey("extra_c"))
+        assertTrue(parsed.components["extra_c"]!!.isEmpty())
+        assertEquals(2, parsed.ingredients.size)
+    }
 }

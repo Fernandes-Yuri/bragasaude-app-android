@@ -258,11 +258,7 @@ class NutritionViewModel @Inject constructor(
         }
     }
 
-    private var hasPreparedGroceryData = false
-
     fun prepareGroceryData() {
-        if (hasPreparedGroceryData && _groceryIngredients.value?.ingredients?.any { it.price != null && it.price > 0 } == true) return
-        hasPreparedGroceryData = true
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 if (_communityPrices.value.isEmpty()) {

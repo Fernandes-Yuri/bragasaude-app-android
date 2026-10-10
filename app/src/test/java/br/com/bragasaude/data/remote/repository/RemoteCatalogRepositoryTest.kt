@@ -81,4 +81,21 @@ class RemoteCatalogRepositoryTest {
         assertEquals(12.50, ing.price ?: 0.0, 0.001)
         assertEquals("estimated", ing.source)
     }
+
+    @Test fun overridesOlderPricesWithLatestManualGroceryPrices() = runTest {
+        val setup = Setup()
+        val snapWithPrice = JSONObject("""{
+            "version":8,
+            "foods":[{"remoteId":"remote_rice","name":"Arroz","shoppingComponents":["arroz-branco"],"purchaseFactors":{}}],
+            "ingredients":[{"slug":"arroz-branco","name":"Arroz Branco Tipo 1","unit":"kg","step":1000,"minimum":1000,"aliases":[],"food_ids":["remote_rice"],"price_avg":6.00,"source":"estimated"}],
+            "policy":{"required_groups":[["remote_rice"]]}
+        }""")
+        coEvery { setup.api.getNutritionCatalog() } returns snapWithPrice
+        coEvery { setup.api.getGroceryPrices() } returns mapOf("Arroz Branco Tipo 1" to 4.52)
+        every { setup.dao.getCatalog() } returns flowOf(emptyList())
+
+        val catalog = setup.repository().fetchGroceryIngredients()
+        val ing = catalog.ingredients.single()
+        assertEquals(4.52, ing.price ?: 0.0, 0.001)
+    }
 }
