@@ -102,6 +102,15 @@ class NutritionViewModel @Inject constructor(
             .apply()
     }
 
+    private val _autoRecommendedCalories = MutableStateFlow(1800)
+    val autoRecommendedCalories = _autoRecommendedCalories.asStateFlow()
+
+    private val _isCustomCalorieTarget = MutableStateFlow(false)
+    val isCustomCalorieTarget = _isCustomCalorieTarget.asStateFlow()
+
+    private val _dailyCalories = MutableStateFlow(1800f)
+    val dailyCalories = _dailyCalories.asStateFlow()
+
     private val _goalSetup = MutableStateFlow(loadStoredNutritionGoalSetup())
     val goalSetup = _goalSetup.asStateFlow()
 
@@ -123,6 +132,10 @@ class NutritionViewModel @Inject constructor(
 
         val isCustom = prefs.getBoolean("calorie_target_is_custom_$userId", false)
         val currentWeekly = _weeklyPreferences.value
+        val manualKcal = if (isCustom) {
+            val savedKcal = prefs.getFloat("calorie_target_manual_kcal_$userId", 0f).toDouble()
+            if (savedKcal > 500.0) savedKcal else _dailyCalories.value.toDouble()
+        } else null
 
         return br.com.bragasaude.domain.UserNutritionGoalSetup(
             goal = goal,
@@ -130,18 +143,23 @@ class NutritionViewModel @Inject constructor(
             budgetTier = currentWeekly.budgetTier,
             hasPantryStaples = currentWeekly.hasPantryStaples,
             isCustomManual = isCustom,
-            manualKcal = _dailyCalories.value.toDouble().takeIf { isCustom }
+            manualKcal = manualKcal
         )
     }
 
     fun applyNutritionGoalSetup(setup: br.com.bragasaude.domain.UserNutritionGoalSetup) {
         _goalSetup.value = setup
         val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
-        prefs.edit()
+        val editor = prefs.edit()
             .putString("nutrition_goal_$userId", setup.goal.name)
             .putString("nutrition_activity_$userId", setup.activityLevel.name)
             .putBoolean("calorie_target_is_custom_$userId", setup.isCustomManual)
-            .apply()
+        if (setup.isCustomManual && setup.manualKcal != null) {
+            editor.putFloat("calorie_target_manual_kcal_$userId", setup.manualKcal.toFloat())
+        } else {
+            editor.remove("calorie_target_manual_kcal_$userId")
+        }
+        editor.apply()
 
         val updatedWeeklyPrefs = _weeklyPreferences.value.copy(
             budgetTier = setup.budgetTier,
@@ -410,15 +428,6 @@ class NutritionViewModel @Inject constructor(
     private val _userWeight = MutableStateFlow<Double?>(null)
     val userWeight = _userWeight.asStateFlow()
 
-    private val _autoRecommendedCalories = MutableStateFlow(1800)
-    val autoRecommendedCalories = _autoRecommendedCalories.asStateFlow()
-
-    private val _isCustomCalorieTarget = MutableStateFlow(false)
-    val isCustomCalorieTarget = _isCustomCalorieTarget.asStateFlow()
-
-    private val _dailyCalories = MutableStateFlow(1800f)
-    val dailyCalories = _dailyCalories.asStateFlow()
-
     val totalCaloriesConsumed = todayLoggedMeals.map { list ->
         list.sumOf { it.kcal }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
@@ -460,7 +469,10 @@ class NutritionViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
-                prefs.edit().putBoolean("calorie_target_is_custom_$userId", true).apply()
+                prefs.edit()
+                    .putBoolean("calorie_target_is_custom_$userId", true)
+                    .putFloat("calorie_target_manual_kcal_$userId", newTargetKcal.toFloat())
+                    .apply()
                 _isCustomCalorieTarget.value = true
                 _dailyCalories.value = newTargetKcal.toFloat()
 
@@ -480,7 +492,10 @@ class NutritionViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
-                prefs.edit().putBoolean("calorie_target_is_custom_$userId", false).apply()
+                prefs.edit()
+                    .putBoolean("calorie_target_is_custom_$userId", false)
+                    .remove("calorie_target_manual_kcal_$userId")
+                    .apply()
                 _isCustomCalorieTarget.value = false
                 val autoTarget = _autoRecommendedCalories.value.toFloat()
                 _dailyCalories.value = autoTarget
