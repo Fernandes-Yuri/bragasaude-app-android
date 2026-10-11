@@ -115,7 +115,7 @@ fun ProfileDetailScreen(
         }
     }
     
-    // Launcher para escolher foto da galeria — sobe ao gateway (moderação igual ao PWA)
+    // Launcher para escolher foto da galeria — sobe ao gateway (moderação no gateway)
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -354,7 +354,7 @@ fun ProfileDetailScreen(
             item {
                 Spacer(Modifier.height(8.dp))
                 // Foto de Perfil Reativa com botão de edição
-                // Se a foto do servidor falhar (ex.: disco da EC2 trocado), cai no próximo fallback — igual ao PWA.
+                // Se a foto do servidor falhar (ex.: disco da EC2 trocado), cai no próximo fallback — no gateway.
                 var photoLoadFailed by remember(customPhotoUri) { mutableStateOf(false) }
                 val avatarIcon = when (profile?.avatarIdentifier) {
                     "Person" -> Icons.Default.Person

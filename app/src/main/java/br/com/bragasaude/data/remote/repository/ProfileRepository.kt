@@ -108,7 +108,7 @@ class ProfileRepository @Inject constructor(
 
     // ---- Foto de perfil via gateway (com moderação server-side) ----
     // A photo_url do servidor vive em customPhotoUri local e fica FORA do
-    // upsert de perfil — o sync existente nunca apaga a foto (mesmo desenho do PWA).
+    // upsert de perfil — o sync existente nunca apaga a foto.
 
     suspend fun uploadAvatarPhoto(userId: String, fileName: String, mimeType: String, bytes: ByteArray) =
         apiClient.uploadProfileAvatar(userId, fileName, mimeType, bytes)

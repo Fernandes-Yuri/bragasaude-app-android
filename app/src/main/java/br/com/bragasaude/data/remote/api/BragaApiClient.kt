@@ -1281,7 +1281,7 @@ class BragaApiClient @Inject constructor(
     }
 
     // ==================== FOTO DE PERFIL (avatar com moderação server-side) ====================
-    // Espelha o PWA (services/api.ts): resize local 512px/JPEG no cliente e upload
+    // Avatar: resize local 512px/JPEG no cliente e upload
     // em POST /api/profile/{id}/avatar. A moderação (Gemini/Groq, fail-closed) roda
     // no gateway ANTES de gravar: reprovada = 422 com motivo; indisponível = 503.
 
@@ -1358,7 +1358,7 @@ class BragaApiClient @Inject constructor(
         }
     }
 
-    /** Lê a photo_url do perfil (qualquer familiar pode ler; falha → null). Espelha o PWA. */
+    /** Lê a photo_url do perfil (qualquer familiar pode ler; falha → null). */
     suspend fun fetchProfilePhotoUrl(userId: String): String? = withContext(Dispatchers.IO) {
         try {
             val res = getJson("$baseUrl/api/profile/$userId", strict = true) ?: return@withContext null

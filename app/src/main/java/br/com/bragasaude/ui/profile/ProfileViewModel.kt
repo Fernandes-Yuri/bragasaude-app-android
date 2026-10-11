@@ -50,7 +50,7 @@ class ProfileViewModel @Inject constructor(
     private val _customPhotoUri = MutableStateFlow<String?>(null)
     val customPhotoUri = _customPhotoUri.asStateFlow()
 
-    // Upload de avatar via gateway (com moderação server-side, igual ao PWA)
+    // Upload de avatar via gateway (com moderação server-side, no gateway)
     private val _avatarUploading = MutableStateFlow(false)
     val avatarUploading = _avatarUploading.asStateFlow()
     private val _avatarMessage = MutableStateFlow<String?>(null)
@@ -375,7 +375,7 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    // Redimensiona para máx. 512px em JPEG 85 — espelha resizeAvatarFile do PWA.
+    // Redimensiona para máx. 512px em JPEG 85 — reduz o tamanho antes do envio.
     private fun resizeAvatar(context: Context, uri: Uri): Pair<ByteArray?, String> {
         val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
         if (mime != "image/jpeg" && mime != "image/png" && mime != "image/webp") {
