@@ -35,10 +35,12 @@ data class SyncProfileResult(
 )
 
 /**
- * Cliente HTTP REST para sincronização de dados com o PostgreSQL no Lenovo G460.
+ * Cliente HTTP REST canônico do app para o Gateway API
+ * (`https://api.bragasaude.online`, repo `gateway-api`).
  *
- * Substitui o SDK do Firebase Data Connect com alta performance,
- * latência ultrabaixa na rede local e dependência zero de bibliotecas pesadas.
+ * Substituiu o SDK do Firebase Data Connect: persistência, contratos e
+ * regras vivem no gateway, que é quem fala com o PostgreSQL/RDS. Este
+ * cliente trata apenas de transporte, autenticação e serialização.
  */
 @Singleton
 class BragaApiClient @Inject constructor(
