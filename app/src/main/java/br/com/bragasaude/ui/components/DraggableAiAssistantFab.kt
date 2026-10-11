@@ -322,6 +322,22 @@ fun DraggableAiAssistantFab(
         val isOrbMode = isLiveMode || state !is VoiceUiState.Idle
         val isListening = state is VoiceUiState.Listening
 
+        var showMic by remember { mutableStateOf(true) }
+
+        // Sempre que o assistente concluir a fala e voltar para IDLE (ou na inicialização),
+        // o microfone DEVE ser exibido primeiro para o usuário saber que pode falar novamente.
+        LaunchedEffect(isOrbMode) {
+            if (isOrbMode) {
+                showMic = true
+            } else {
+                showMic = true
+                while (true) {
+                    delay(2500)
+                    showMic = !showMic
+                }
+            }
+        }
+
         // Configurações de animação visual
         val glowDuration = if (isListening) 800 else 2000
         val maxGlowRadiusMult = if (isListening) 1.0f else 0.85f
@@ -590,13 +606,6 @@ fun DraggableAiAssistantFab(
                             )
                         }
                         else -> {
-                            var showMic by remember { mutableStateOf(false) }
-                            LaunchedEffect(Unit) {
-                                while (true) {
-                                    delay(2500)
-                                    showMic = !showMic
-                                }
-                            }
                             AnimatedContent(
                                 targetState = showMic,
                                 transitionSpec = {
