@@ -27,10 +27,10 @@ class FcmDownloadUrlWhitelistTest {
     }
 
     @Test
-    fun `valid firebase hosting domain is accepted`() {
+    fun `retired firebase hosting domain is rejected and returns default url`() {
         val url = "https://braga-saude.web.app/app/download"
         val result = BragaFirebaseMessagingService.sanitizeDownloadUrl(url)
-        assertEquals(url, result)
+        assertEquals(BragaFirebaseMessagingService.DEFAULT_DOWNLOAD_URL, result)
     }
 
     @Test

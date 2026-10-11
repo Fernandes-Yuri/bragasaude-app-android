@@ -98,7 +98,6 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
                 val isAllowedHost = host != null && (
                     host == "api.bragasaude.online" ||
                     host == "bragasaude.online" ||
-                    host == "braga-saude.web.app" ||
                     host == "github.com" ||
                     host.endsWith(".bragasaude.online")
                 )

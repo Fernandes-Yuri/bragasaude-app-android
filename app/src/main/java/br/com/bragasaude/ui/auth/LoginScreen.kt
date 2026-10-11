@@ -611,14 +611,14 @@ fun LoginScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(
-                            onClick = { uriHandler.openUri("https://braga-saude.web.app/terms") },
+                            onClick = { uriHandler.openUri("https://bragasaude.online/termos") },
                             contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                         ) {
                             Text("Termos de Uso", style = MaterialTheme.typography.labelSmall)
                         }
                         Text("e", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(
-                            onClick = { uriHandler.openUri("https://braga-saude.web.app/privacy") },
+                            onClick = { uriHandler.openUri("https://bragasaude.online/privacidade") },
                             contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                         ) {
                             Text("Privacidade", style = MaterialTheme.typography.labelSmall)
