@@ -117,9 +117,20 @@ class VoiceRecognitionSessionTest {
             NluOutput("saudacao", "Olá, como posso ajudar?")
         parser = mockk(relaxed = true)
         every { parser.parse(any(), any(), any()) } returns VoiceHealthIntent.Unknown("fala", "detalhe")
-        vm = VoiceHealthViewModel(parser, mockk(relaxed = true), mockk<TelemetryService>(relaxed = true).also { telemetry = it },
-            mockk(relaxed = true), auth, mockk(relaxed = true), player, mockk(relaxed = true),
-            mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), hybrid, focus)
+        vm = VoiceHealthViewModel(
+            parser = parser,
+            executor = mockk(relaxed = true),
+            telemetryService = mockk<TelemetryService>(relaxed = true).also { telemetry = it },
+            profileDao = mockk(relaxed = true),
+            auth = auth,
+            localAiClient = mockk(relaxed = true),
+            neuralAudioPlayer = player,
+            vitalSignDao = mockk(relaxed = true),
+            dailyMetricsDao = mockk(relaxed = true),
+            notificationClient = mockk(relaxed = true),
+            hybridOrchestrator = hybrid,
+            playbackFocus = focus
+        )
     }
 
     @After fun cleanup() {
@@ -156,7 +167,7 @@ class VoiceRecognitionSessionTest {
         every { hybrid.analyze(any(), any(), any(), any(), any()) } returns decision
         coEvery { hybrid.respond(any(), any(), any(), any(), any()) } returns flow {
             emit(BragaHybridEvent.Delta("Primeira frase. Segunda frase. "))
-            awaitCancellation()
+            emit(BragaHybridEvent.Completed("Primeira frase. Segunda frase. "))
         }
         var oldFinished: (() -> Unit)? = null
         coEvery { player.playSpeech(any(), any(), any(), any()) } coAnswers {

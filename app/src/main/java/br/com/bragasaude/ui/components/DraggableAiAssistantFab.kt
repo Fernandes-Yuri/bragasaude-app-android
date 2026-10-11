@@ -264,8 +264,6 @@ fun DraggableAiAssistantFab(
         }
     }
 
-    var showVoiceOnboarding by remember { mutableStateOf(false) }
-
     val startListeningWithPermission = {
         val hasPermission = ContextCompat.checkSelfPermission(
             context,
@@ -279,17 +277,10 @@ fun DraggableAiAssistantFab(
     }
 
     val handleFabTap = {
-        when {
-            viewModel.voiceProfileManager.needsOnboarding() -> {
-                showVoiceOnboarding = true
-            }
-            !isLiveMode -> {
-                startListeningWithPermission()
-            }
-            else -> {
-                // Também cancela a resposta em geração, antes de haver áudio.
-                viewModel.interruptAndListen(context)
-            }
+        if (!isLiveMode) {
+            startListeningWithPermission()
+        } else {
+            viewModel.cancel()
         }
     }
 
@@ -427,7 +418,7 @@ fun DraggableAiAssistantFab(
 
         val isModalOpen = LocalBragaModalState.current.isOpen
         val isKeyboardOpen = WindowInsets.isImeVisible
-        val shouldHideOrbVisuals = (isModalOpen || isKeyboardOpen) && !isLiveMode && !showVoiceOnboarding && !showEmergencyDialog
+        val shouldHideOrbVisuals = (isModalOpen || isKeyboardOpen) && !isLiveMode && !showEmergencyDialog
         LaunchedEffect(shouldHideOrbVisuals) {
             if (shouldHideOrbVisuals) viewModel.onHostStopped()
         }
@@ -675,17 +666,6 @@ fun DraggableAiAssistantFab(
             type = "EMERGENCIA",
             message = "Atenção: Sintomas agudos exigem avaliação médica urgente. Escolha uma das opções abaixo para obter socorro imediato:",
             onDismiss = { showEmergencyDialog = false }
-        )
-    }
-
-    if (showVoiceOnboarding) {
-        br.com.bragasaude.ui.voice.VoiceSelectionBottomSheet(
-            manager = viewModel.voiceProfileManager,
-            onDismissRequest = { showVoiceOnboarding = false },
-            onVoiceConfigured = {
-                showVoiceOnboarding = false
-                startListeningWithPermission()
-            }
         )
     }
 }

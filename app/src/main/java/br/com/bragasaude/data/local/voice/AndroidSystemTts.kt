@@ -15,19 +15,19 @@ import javax.inject.Singleton
 import kotlin.coroutines.resume
 
 /**
- * Fallback definitivo de síntese vocal utilizando o TextToSpeech nativo do Android.
+ * Motor definitivo de síntese vocal utilizando o TextToSpeech nativo do Android.
  *
- * Garante que se o modelo neural on-device estiver ausente ou indisponível,
- * o dispositivo sintetize a fala localmente com o motor do sistema (Google Speech Engine),
- * eliminando 100% a dependência de servidores remotos para áudio.
+ * Utiliza o motor local do sistema operacional (Google Speech Engine, Samsung TTS, etc.),
+ * sem necessidade de download de modelos neurais, sem bibliotecas C++/JNI e com máxima
+ * estabilidade em qualquer dispositivo.
  */
 @Singleton
-class AndroidSystemTtsFallback @Inject constructor(
+class AndroidSystemTts @Inject constructor(
     @ApplicationContext private val context: Context
 ) : TextToSpeech.OnInitListener {
 
     companion object {
-        private const val TAG = "AndroidSystemTtsFallback"
+        private const val TAG = "AndroidSystemTts"
     }
 
     private var tts: TextToSpeech? = null
@@ -38,7 +38,7 @@ class AndroidSystemTtsFallback @Inject constructor(
         try {
             tts = TextToSpeech(context, this)
         } catch (e: Exception) {
-            Log.w(TAG, "Falha ao instanciar TTS do sistema operacional: ${e.message}")
+            Log.w(TAG, "Falha ao instanciar TTS do sistema: ${e.message}")
         }
     }
 
@@ -46,7 +46,7 @@ class AndroidSystemTtsFallback @Inject constructor(
         if (status == TextToSpeech.SUCCESS) {
             val result = tts?.setLanguage(Locale("pt", "BR"))
             if (result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED) {
-                tts?.setSpeechRate(0.92f)
+                tts?.setSpeechRate(0.95f)
                 isReady.set(true)
             } else {
                 Log.w(TAG, "Idioma pt-BR nao suportado no TTS do sistema")
@@ -65,7 +65,7 @@ class AndroidSystemTtsFallback @Inject constructor(
         stop()
         suspendCancellableCoroutine { continuation ->
             pending = continuation
-            val utteranceId = "fallback_${System.currentTimeMillis()}"
+            val utteranceId = "braga_tts_${System.currentTimeMillis()}"
             engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(id: String?) {
                     if (id == utteranceId && continuation.isActive) onStart()
