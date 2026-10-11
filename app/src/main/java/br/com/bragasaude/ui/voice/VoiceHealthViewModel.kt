@@ -320,6 +320,7 @@ class VoiceHealthViewModel @Inject constructor(
                 val callback = onTtsDoneListener
                 onTtsDoneListener = null
                 abandonPlaybackFocus()
+                delay(3000L)
                 callback?.invoke()
             }
         }

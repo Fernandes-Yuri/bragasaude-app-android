@@ -12,4 +12,13 @@ class AndroidSystemTtsTest {
         val tts = AndroidSystemTts(context)
         assertFalse(tts.isAvailable)
     }
+
+    @Test
+    fun `stop and shutdown succeed without error`() {
+        val context = mockk<Context>(relaxed = true)
+        val tts = AndroidSystemTts(context)
+        tts.stop()
+        tts.shutdown()
+        assertFalse(tts.isAvailable)
+    }
 }
