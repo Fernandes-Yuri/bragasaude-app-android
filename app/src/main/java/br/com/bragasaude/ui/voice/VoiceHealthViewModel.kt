@@ -4,8 +4,6 @@ import android.content.Context
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.domain.ClarificationActionType
@@ -38,10 +36,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.channels.Channel
 import br.com.bragasaude.ai.BragaHybridEvent
-import br.com.bragasaude.ai.BragaSpeechBuffer
 import br.com.bragasaude.ai.InputChannel
 import br.com.bragasaude.ai.BragaHealthMemory
 import br.com.bragasaude.ai.HealthQuerySession
@@ -78,10 +73,9 @@ sealed interface VoiceNavigationEvent {
 }
 
 /**
- * UI-V01 / D14 — Orquestrador do Copiloto de Voz Metamórfico.
+ * UI-V01 / D14 — Orquestrador do Copiloto de Voz Metamórfico (Push-to-Talk).
  *
- * Elimina o modal bloqueante. Agora emite eventos de navegação autônoma e preenchimento
- * de formulários reais, mantendo a regra rígida de validação manual do usuário para salvar.
+ * Modo Push-to-Talk resiliente com TTS nativo do sistema operacional.
  */
 @HiltViewModel
 class VoiceHealthViewModel @Inject constructor(
@@ -95,7 +89,6 @@ class VoiceHealthViewModel @Inject constructor(
     private val vitalSignDao: VitalSignDao,
     private val dailyMetricsDao: DailyMetricsDao,
     private val notificationClient: br.com.bragasaude.data.remote.service.NotificationClient,
-    val voiceProfileManager: br.com.bragasaude.data.local.voice.VoiceProfileManager,
     private val hybridOrchestrator: br.com.bragasaude.ai.BragaHybridOrchestrator,
     private val playbackFocus: VoicePlaybackFocus = VoicePlaybackFocus()
 ) : ViewModel() {
@@ -125,10 +118,9 @@ class VoiceHealthViewModel @Inject constructor(
 
     companion object {
         /**
-         * Abertura de tela via voz aguarda a síntese do Piper alcançar a fala.
-         * Medido no SM-A175F: SPEECH_REQUEST até AudioTrack ~630 ms em frase curta;
-         * instruções longas passam de 800 ms. Com 400 ms a tela surge instantes
-         * antes da voz, sem custo extra no tempo total. Emergência não espera.
+         * Abertura de tela via voz aguarda a síntese do TTS alcançar a fala.
+         * Com 400 ms a tela surge instantes antes da voz, sem custo extra no tempo total.
+         * Emergência não espera.
          */
         const val VOICE_NAV_DELAY_MS = 400L
     }
@@ -167,7 +159,6 @@ class VoiceHealthViewModel @Inject constructor(
     val closeEvent: SharedFlow<Unit> = _closeEvent.asSharedFlow()
 
     private val voiceSession = VoiceSessionControl()
-    private var restartJob: kotlinx.coroutines.Job? = null
     private var playbackJob: kotlinx.coroutines.Job? = null
     private var speechGeneration = 0L
     private var conversationGeneration = 0L
@@ -178,16 +169,11 @@ class VoiceHealthViewModel @Inject constructor(
     private val authStateListener = FirebaseAuth.AuthStateListener {
         viewModelScope.launch(Dispatchers.Main.immediate) { selectSessionOwner() }
     }
-    private var activeTtsId: String? = null
-    private var activeTtsOwner: String? = null
-    private var activeTtsTurn = 0L
     private val conversationMemory = VoiceConversationMemory()
     private var onTtsDoneListener: (() -> Unit)? = null
 
     private var speechRecognizer: SpeechRecognizer? = null
     private var currentContext: Context? = null
-    private var textToSpeech: TextToSpeech? = null
-    private var isTtsReady: Boolean = false
 
     init {
         auth.addAuthStateListener(authStateListener)
@@ -264,26 +250,13 @@ class VoiceHealthViewModel @Inject constructor(
 
     /**
      * Chamado sempre que qualquer fala da assistente termina (ou é cancelada).
-     * No modo Live Streaming, retoma a escuta automaticamente após um breve intervalo.
+     * No modo Push-to-Talk, encerra a interação e volta para o estado Idle.
      */
     fun onSpeechFinished() {
         selectSessionOwner()
-        if (_isLiveMode.value) scheduleListeningRestart(350)
-        else _state.value = VoiceUiState.Idle
-    }
-
-    private fun scheduleListeningRestart(waitMs: Long) {
-        restartJob?.cancel()
-        val ticket = speechGeneration
-        val owner = sessionOwner
-        val turn = conversationGeneration
-        restartJob = viewModelScope.launch(Dispatchers.Main) {
-            delay(waitMs)
-            if (_isLiveMode.value && ticket == speechGeneration && currentTurn(owner, turn)) {
-                restartJob = null
-                currentContext?.let { startListening(it) }
-            }
-        }
+        _isLiveMode.value = false
+        _isSpeaking.value = false
+        _state.value = VoiceUiState.Idle
     }
 
     fun interruptAndListen(context: Context) {
@@ -298,55 +271,21 @@ class VoiceHealthViewModel @Inject constructor(
         healthQuerySession.clear()
         conversationId = java.util.UUID.randomUUID().toString()
         _state.value = VoiceUiState.Idle
-        speak("Conversa pausada. Toque no orbe quando quiser continuar.", remember = false)
     }
 
     private fun handleSilence() {
-        if (voiceSession.shouldPauseAfterSilence()) pauseConversation()
-        else scheduleListeningRestart(400)
+        _isLiveMode.value = false
+        invalidateConversationWork()
+        voiceSession.reset()
+        _state.value = VoiceUiState.Idle
     }
 
     /**
-     * Encerra o modo Live Streaming explicitamente (acionado pelo botão 'X' ou comando de voz).
+     * Encerra a interação de voz explicitamente.
      */
     fun stopLiveMode() {
         _isLiveMode.value = false
         cancel()
-    }
-
-    private fun initTts(context: Context) {
-        if (textToSpeech == null) {
-            textToSpeech = TextToSpeech(context.applicationContext) { status ->
-                if (status == TextToSpeech.SUCCESS) {
-                    val result = textToSpeech?.setLanguage(Locale("pt", "BR"))
-                    isTtsReady = (result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED)
-                    textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                        override fun onStart(utteranceId: String?) {
-                            viewModelScope.launch(Dispatchers.Main) {
-                                if (utteranceId != null && utteranceId == activeTtsId &&
-                                    activeTtsOwner?.let { currentTurn(it, activeTtsTurn) } == true) _isSpeaking.value = true
-                            }
-                        }
-                        override fun onDone(utteranceId: String?) { finishLocalTts(utteranceId) }
-                        override fun onError(utteranceId: String?) { finishLocalTts(utteranceId) }
-                    })
-                }
-            }
-        }
-    }
-
-    private fun finishLocalTts(id: String?) {
-        viewModelScope.launch(Dispatchers.Main) {
-            if (id == null || id != activeTtsId ||
-                activeTtsOwner?.let { currentTurn(it, activeTtsTurn) } != true) return@launch
-            activeTtsId = null
-            activeTtsOwner = null
-            _isSpeaking.value = false
-            val callback = onTtsDoneListener
-            onTtsDoneListener = null
-            abandonPlaybackFocus()
-            callback?.invoke()
-        }
     }
 
     fun speak(text: String, isMale: Boolean = true, remember: Boolean = true, onDone: (() -> Unit)? = null) {
@@ -376,46 +315,27 @@ class VoiceHealthViewModel @Inject constructor(
                     }
                 } })
             currentCoroutineContext().ensureActive()
-            if (!played && ticket == speechGeneration && currentTurn(owner, turn)) speakLocalTts(sanitized, ticket, owner, turn)
-        }
-    }
-
-    private suspend fun speakLocalTts(text: String, ticket: Long, owner: String, turn: Long) {
-        var retries = 0
-        while (!isTtsReady && retries++ < 15) delay(100)
-        currentCoroutineContext().ensureActive()
-        if (ticket != speechGeneration || !currentTurn(owner, turn)) return
-        val id = "braga_tts_$ticket"
-        activeTtsId = id
-        activeTtsOwner = owner
-        activeTtsTurn = turn
-        try {
-            if (isTtsReady && textToSpeech != null) {
-                val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f) }
-                _isSpeaking.value = true
-                if (textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, params, id) == TextToSpeech.ERROR) finishLocalTts(id)
-            } else finishLocalTts(id)
-        } catch (e: Exception) {
-            finishLocalTts(id)
+            if (!played && ticket == speechGeneration && currentTurn(owner, turn)) {
+                _isSpeaking.value = false
+                val callback = onTtsDoneListener
+                onTtsDoneListener = null
+                abandonPlaybackFocus()
+                callback?.invoke()
+            }
         }
     }
 
     fun stopSpeaking() {
         speechGeneration++
-        restartJob?.cancel()
-        restartJob = null
         playbackJob?.cancel()
         playbackJob = null
-        activeTtsId = null
-        activeTtsOwner = null
         onTtsDoneListener = null
         _isSpeaking.value = false
         neuralAudioPlayer.stop()
-        try { textToSpeech?.stop() } catch (_: Exception) { }
         abandonPlaybackFocus()
     }
 
-    /** Inicia reconhecimento estritamente on-device; síntese tem disponibilidade independente. */
+    /** Inicia reconhecimento de voz Push-to-Talk via speech recognizer resiliente. */
     fun startListening(context: Context) {
         selectSessionOwner()
         conversationMemory.selectUser(sessionOwner)
@@ -430,7 +350,6 @@ class VoiceHealthViewModel @Inject constructor(
         val owner = sessionOwner
         val turn = conversationGeneration
         currentContext = context.applicationContext
-        initTts(context)
         _audioRmsDb.value = -2f
         _liveTranscription.value = ""
         _state.value = VoiceUiState.Listening
@@ -570,10 +489,7 @@ class VoiceHealthViewModel @Inject constructor(
         speechRecognizer = null
         try {
             neuralAudioPlayer.stop()
-            textToSpeech?.stop()
-            textToSpeech?.shutdown()
         } catch (_: Exception) { }
-        textToSpeech = null
         currentContext = null
     }
 
@@ -794,29 +710,12 @@ class VoiceHealthViewModel @Inject constructor(
         private suspend fun streamHybridResponse(
             speech: String, history: List<Pair<String, String>>, owner: String,
             decision: br.com.bragasaude.ai.NluOutput
-        ) = coroutineScope {
+        ) {
             stopSpeaking()
             val generation = speechGeneration
-            if (!requestPlaybackFocus()) return@coroutineScope
             _partialResponse.value = ""
             _state.value = VoiceUiState.Saving
-            val phrases = Channel<String>(32)
-            val buffer = BragaSpeechBuffer()
             var completed = ""
-            val player = launch {
-                for (phrase in phrases) {
-                    currentCoroutineContext().ensureActive()
-                    if (!currentTurn(owner, turn) || generation != speechGeneration) throw kotlinx.coroutines.CancellationException("Sessão alterada")
-                    val finished = kotlinx.coroutines.CompletableDeferred<Unit>()
-                    val played = neuralAudioPlayer.playSpeech(phrase,
-                        onStart = { viewModelScope.launch {
-                            if (generation == speechGeneration && currentTurn(owner, turn)) _isSpeaking.value = true
-                        } },
-                        onDone = { finished.complete(Unit) })
-                    if (played) finished.await()
-                }
-            }
-            playbackJob = player
             try {
                 hybridOrchestrator.respond(speech, history, InputChannel.VOICE, owner, decision).collect { event ->
                     currentCoroutineContext().ensureActive()
@@ -825,16 +724,12 @@ class VoiceHealthViewModel @Inject constructor(
                         is BragaHybridEvent.Local -> showLocalResponse(event.output)
                         is BragaHybridEvent.Delta -> {
                             _partialResponse.value += event.text
-                            buffer.append(event.text).forEach { phrases.send(it) }
                         }
                         is BragaHybridEvent.Completed -> {
                             completed = event.text
-                            buffer.finish().takeIf { it.isNotBlank() }?.let { phrases.send(it) }
                         }
                     }
                 }
-                phrases.close()
-                player.join()
                 if (completed.isNotBlank() && generation == speechGeneration && currentTurn(owner, turn)) {
                     br.com.bragasaude.ai.BragaRoutingLogger.record(
                         channel = br.com.bragasaude.ai.InputChannel.VOICE,
@@ -858,18 +753,15 @@ class VoiceHealthViewModel @Inject constructor(
                             .put("remoteAction", "CONVERSA").put("local", false).toString()
                     )
                     _state.value = VoiceUiState.Saved(completed, isConversational = true)
-                    _isSpeaking.value = false
-                    abandonPlaybackFocus()
-                    onSpeechFinished()
+                    speak(completed) { onSpeechFinished() }
                 }
-            } finally {
-                phrases.cancel()
-                player.cancel()
-                if (playbackJob === player) playbackJob = null
-                if (generation == speechGeneration) {
-                    neuralAudioPlayer.stop()
-                    _isSpeaking.value = false
-                    abandonPlaybackFocus()
+            } catch (c: kotlinx.coroutines.CancellationException) {
+                throw c
+            } catch (e: Exception) {
+                if (currentTurn(owner, turn)) {
+                    val fallbackMsg = "Não foi possível concluir a resposta agora. Tente novamente."
+                    _state.value = VoiceUiState.Error(fallbackMsg, retryable = true, isSpokenOnly = true)
+                    speak(fallbackMsg) { onSpeechFinished() }
                 }
             }
         }

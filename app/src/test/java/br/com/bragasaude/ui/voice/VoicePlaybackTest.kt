@@ -24,7 +24,7 @@ class VoicePlaybackTest {
             telemetryService = mockk(relaxed = true), profileDao = mockk(relaxed = true),
             auth = auth, localAiClient = mockk(relaxed = true), neuralAudioPlayer = player,
             vitalSignDao = mockk(relaxed = true), dailyMetricsDao = mockk(relaxed = true),
-            notificationClient = mockk(relaxed = true), voiceProfileManager = mockk(relaxed = true),
+            notificationClient = mockk(relaxed = true),
             hybridOrchestrator = mockk(relaxed = true)
         )
     }

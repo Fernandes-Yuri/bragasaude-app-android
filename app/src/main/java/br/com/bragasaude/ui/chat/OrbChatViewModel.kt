@@ -83,7 +83,7 @@ class OrbChatViewModel @Inject constructor(
     private val healthQuerySession = HealthQuerySession()
     var nluResponseDelayMs: Long = 500L
     internal fun textCadenceMs(channel: InputChannel, isEmergencia: Boolean, isBloqueio: Boolean): Long {
-        // Cadência apenas no chat de texto. A voz usa o tempo do Piper e não recebe atraso extra.
+        // Cadência apenas no chat de texto. A voz usa o TTS nativo e não recebe atraso extra.
         if (channel != InputChannel.TEXT || isEmergencia || isBloqueio || nluResponseDelayMs <= 0) return 0L
         return nluResponseDelayMs
     }
@@ -270,7 +270,7 @@ class OrbChatViewModel @Inject constructor(
                     val resolved = hybrid.resolveLocal(local, owner, channel, healthQuerySession, conversationId, contextTurn)
                     deliveredLocal = resolved
                     if (BragaHealthMemory.supports(local.intent)) roomMs = (System.nanoTime() - roomStartedAt) / 1_000_000.0
-                    // Cadência mínima só no chat de texto para experiência humana; voz usa o Piper.
+                    // Cadência mínima só no chat de texto para experiência humana; voz usa o TTS nativo.
                     val cadence = textCadenceMs(channel, local.isEmergencia, local.isBloqueioSeguranca)
                     if (cadence > 0) {
                         cadenceMs = cadence

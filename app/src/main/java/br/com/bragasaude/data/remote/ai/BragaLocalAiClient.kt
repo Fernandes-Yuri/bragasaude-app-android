@@ -67,7 +67,11 @@ class BragaLocalAiClient @Inject constructor(
     }
 
     private val persona: String by lazy {
-        context.assets.open("braga.txt").bufferedReader(Charsets.UTF_8).use { it.readText() }
+        runCatching {
+            context.assets.open("braga.txt").bufferedReader(Charsets.UTF_8).use { it.readText() }
+        }.getOrElse {
+            "Você é o Braga, assistente virtual de rotina e autocuidado do Braga Saúde. Seja acolhedor, claro, ético e fale português brasileiro."
+        }
     }
 
     var serverBaseUrl: String = DEFAULT_SERVER_URL

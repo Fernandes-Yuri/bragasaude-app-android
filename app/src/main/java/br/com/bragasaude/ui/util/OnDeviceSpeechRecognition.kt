@@ -7,6 +7,7 @@ import android.speech.RecognitionSupport
 import android.speech.RecognitionSupportCallback
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.util.Log
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
@@ -14,17 +15,28 @@ import kotlin.coroutines.resume
 
 class OnDeviceRecognitionUnavailable(message: String) : IllegalStateException(message)
 
-/** Reconhecimento explicitamente local. Nenhum serviço remoto ou download automático. */
+/** Reconhecimento de fala resiliente: prioriza on-device se disponível, com fallback automático para o sistema. */
 object OnDeviceSpeechRecognition {
+    private const val TAG = "SpeechRecognition"
     const val LANGUAGE = "pt-BR"
 
     fun create(context: Context): SpeechRecognizer {
-        if (Build.VERSION.SDK_INT < 31) {
-            throw OnDeviceRecognitionUnavailable(unavailableReason(Build.VERSION.SDK_INT, false)!!)
+        val appContext = context.applicationContext
+        if (Build.VERSION.SDK_INT >= 31) {
+            val hasOnDevice = try {
+                SpeechRecognizer.isOnDeviceRecognitionAvailable(appContext)
+            } catch (_: Throwable) {
+                false
+            }
+            if (hasOnDevice) {
+                try {
+                    return SpeechRecognizer.createOnDeviceSpeechRecognizer(appContext)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Falha ao criar OnDeviceSpeechRecognizer, usando SpeechRecognizer padrão: ${t.message}")
+                }
+            }
         }
-        unavailableReason(Build.VERSION.SDK_INT, SpeechRecognizer.isOnDeviceRecognitionAvailable(context))
-            ?.let { throw OnDeviceRecognitionUnavailable(it) }
-        return SpeechRecognizer.createOnDeviceSpeechRecognizer(context.applicationContext)
+        return SpeechRecognizer.createSpeechRecognizer(appContext)
     }
 
     internal fun unavailableReason(apiLevel: Int, available: Boolean): String? = when {
@@ -36,33 +48,31 @@ object OnDeviceSpeechRecognition {
     fun intent(partialResults: Boolean = true): Intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
         putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
         putExtra(RecognizerIntent.EXTRA_LANGUAGE, LANGUAGE)
-        putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, LANGUAGE)
+        putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf(LANGUAGE))
         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, partialResults)
         putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
     }
 
-    /** API 31/32 informam ausência de idioma pelo listener; API 33+ permite consulta prévia. */
+    /** Consulta suporte local se disponível; falhas não bloqueiam o reconhecimento resiliente. */
     suspend fun checkPortugueseSupport(context: Context, recognizer: SpeechRecognizer, intent: Intent) {
         if (Build.VERSION.SDK_INT < 33) return
-        val reason = withTimeoutOrNull(2_000) {
-            suspendCancellableCoroutine<String?> { continuation ->
-                recognizer.checkRecognitionSupport(intent, context.mainExecutor, object : RecognitionSupportCallback {
-                    override fun onSupportResult(recognitionSupport: RecognitionSupport) {
-                        if (continuation.isActive) continuation.resume(
-                            languageUnavailableReason(recognitionSupport.installedOnDeviceLanguages)
-                        )
-                    }
-                    override fun onError(error: Int) {
-                        if (continuation.isActive) continuation.resume(
-                            // Alguns serviços locais não implementam a consulta. O listener trata o idioma.
-                            if (error == SpeechRecognizer.ERROR_CANNOT_CHECK_SUPPORT) null else errorMessage(error)
-                        )
-                    }
-                })
+        try {
+            withTimeoutOrNull(1_500) {
+                suspendCancellableCoroutine<Unit> { continuation ->
+                    recognizer.checkRecognitionSupport(intent, context.mainExecutor, object : RecognitionSupportCallback {
+                        override fun onSupportResult(recognitionSupport: RecognitionSupport) {
+                            if (continuation.isActive) continuation.resume(Unit)
+                        }
+                        override fun onError(error: Int) {
+                            if (continuation.isActive) continuation.resume(Unit)
+                        }
+                    })
+                }
             }
+        } catch (_: Throwable) {
+            // Consulta defensiva: se falhar ou der timeout, a execução prossegue com o reconhecedor ativo.
         }
-        // Timeout da consulta não muda o tipo do reconhecedor: ainda é apenas on-device.
-        reason?.let { throw OnDeviceRecognitionUnavailable(it) }
     }
 
     internal fun languageUnavailableReason(installedLanguages: List<String>): String? {
