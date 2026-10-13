@@ -179,7 +179,7 @@ class DoseQueuePersistenceTest {
             val entity=entities.getJSONObject(i);val table=entity.getString("tableName")
             val placeholder="${'$'}{TABLE_NAME}"
             sqlite.execSQL(entity.getString("createSql").replace(placeholder,table))
-            val indices=entity.getJSONArray("indices")
+            val indices=entity.optJSONArray("indices") ?: org.json.JSONArray()
             for(j in 0 until indices.length()) sqlite.execSQL(indices.getJSONObject(j).getString("createSql").replace(placeholder,table))
         }
         val setup=schema.getJSONArray("setupQueries")

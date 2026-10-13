@@ -31,8 +31,8 @@ android {
         applicationId = "br.com.bragasaude"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "1.6.2"
+        versionCode = 31
+        versionName = "1.7.0"
 
         buildConfigField("String", "BASE_URL", "\"https://api.bragasaude.online\"")
         // AUD-AN33: o feedback ia pra URL hardcoded da landing page do
