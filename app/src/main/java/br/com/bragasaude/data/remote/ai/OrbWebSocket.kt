@@ -5,6 +5,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import okhttp3.*
+import br.com.bragasaude.data.remote.network.GatewayTlsPolicy
+import br.com.bragasaude.BuildConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -22,7 +24,7 @@ data class OrbReply(val content: String, val metrics: String? = null)
 
 @Singleton
 class OrbWebSocket @Inject constructor() {
-    private val client = OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS)
+    private val client = GatewayTlsPolicy.configure(OkHttpClient.Builder(), !BuildConfig.DEBUG).connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS).pingInterval(10, TimeUnit.SECONDS).build()
 
     fun openSession(scope: CoroutineScope, baseUrl: String,

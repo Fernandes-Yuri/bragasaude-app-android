@@ -6,6 +6,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.OutputStreamWriter
+import br.com.bragasaude.data.remote.network.GatewayConnection
+import br.com.bragasaude.data.remote.network.GatewayTlsPolicy
+import okhttp3.OkHttpClient
 import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
@@ -19,7 +22,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class NotificationClient @Inject constructor(
-    private val authService: AuthService
+    private val authService: AuthService,
+    private val httpClient: OkHttpClient = GatewayTlsPolicy.defaultClient()
 ) {
 
     companion object {
@@ -110,7 +114,7 @@ class NotificationClient @Inject constructor(
     private fun sendJsonPost(url: URL, json: JSONObject): Boolean {
         var conn: HttpURLConnection? = null
         return try {
-            conn = (url.openConnection() as HttpURLConnection).apply {
+            conn = GatewayConnection(url, httpClient).apply {
                 requestMethod = "POST"
                 connectTimeout = TIMEOUT_MS
                 readTimeout = TIMEOUT_MS
