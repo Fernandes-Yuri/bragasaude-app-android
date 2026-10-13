@@ -41,7 +41,7 @@ class MedicationRepositoryTest {
 
     @Before
     fun setup() {
-        repository = MedicationRepository(context, api, medicationDao, logDao, auditDao, scheduler)
+        repository = MedicationRepository(context, api, medicationDao, logDao, auditDao, scheduler, mockk(relaxed = true))
         coEvery { medicationDao.getById("med-1") } returns medication
         coEvery { logDao.insertOnce(any()) } returns 1L
     }

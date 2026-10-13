@@ -497,6 +497,16 @@ object Migrations {
         }
     }
 
+    val MIGRATION_53_54 = object : Migration(53,54) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS dose_groups (actorId TEXT NOT NULL,groupId TEXT NOT NULL,patientId TEXT NOT NULL,localDate TEXT NOT NULL,scheduledAt INTEGER NOT NULL,payload TEXT NOT NULL,fetchedAt INTEGER NOT NULL,PRIMARY KEY(actorId,groupId))")
+            db.execSQL("CREATE TABLE IF NOT EXISTS dose_intents (id TEXT NOT NULL PRIMARY KEY,actorId TEXT NOT NULL,patientId TEXT NOT NULL,groupId TEXT NOT NULL,snapshot TEXT NOT NULL,selection TEXT NOT NULL,clientBatchId TEXT NOT NULL,confirmationId TEXT NOT NULL,declaredAt TEXT NOT NULL,remoteBatch TEXT,state TEXT NOT NULL,result TEXT,message TEXT,createdAt INTEGER NOT NULL)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_dose_intents_actorId_state ON dose_intents(actorId,state)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS dose_reservations (patientId TEXT NOT NULL,occurrenceId TEXT NOT NULL,intentId TEXT NOT NULL,PRIMARY KEY(patientId,occurrenceId))")
+            db.execSQL("CREATE TABLE IF NOT EXISTS dose_schedules (actorId TEXT NOT NULL,medicationId TEXT NOT NULL,patientId TEXT NOT NULL,payload TEXT NOT NULL,draft TEXT,PRIMARY KEY(actorId,medicationId))")
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -525,6 +535,7 @@ object Migrations {
         MIGRATION_49_50,
         MIGRATION_50_51,
         MIGRATION_51_52,
-        MIGRATION_52_53
+        MIGRATION_52_53,
+        MIGRATION_53_54
     )
 }

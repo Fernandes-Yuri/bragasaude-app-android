@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
@@ -143,6 +144,15 @@
             android:name=".ui.util.MedicationAlarmReceiver"
             android:exported="false" />
 
+        <activity android:name=".ui.medication.doses.MedicationDoseActivity" android:exported="false" />
+        <receiver android:name=".ui.medication.doses.DoseAlarmReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
         <!-- QR Code Scanner -->
         <activity android:name=".ui.registration.FamilyQrScannerActivity" android:exported="false" />
         <activity

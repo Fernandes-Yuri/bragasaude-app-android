@@ -386,6 +386,13 @@ fun MedicationStockScreen(
                             }
                         }
                     }
+                    item {
+                        br.com.bragasaude.ui.medication.doses.MedicationDosePanel(
+                            patientId=ui.selectedPatient.id,
+                            canTake=ui.selectedPatient.canTakeMedication,
+                            canEdit=ui.selectedPatient.canWriteMedication,
+                            medications=ui.medications.map { it.id to it.name })
+                    }
                     items(ui.medications, key = { it.id }) { med ->
                         MedicationStockCard(
                             medication = med,
@@ -645,7 +652,7 @@ private fun MedicationStockCard(
             },
             text = {
                 Text(
-                    "Você confirma que tomou a dose de ${medication.name}? O registro será concluído e o botão ficará bloqueado por 23h.",
+                    "Você confirma que tomou a dose de ${medication.name}? Somente esta ocorrência será registrada; os outros horários permanecem independentes.",
                     fontSize = 15.sp,
                     color = BragaTextSecondary
                 )
