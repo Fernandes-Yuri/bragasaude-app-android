@@ -6,6 +6,7 @@ import androidx.work.Configuration
 import br.com.bragasaude.data.remote.auth.AuthService
 import br.com.bragasaude.data.remote.network.AvatarAuthInterceptor
 import okhttp3.OkHttpClient
+import br.com.bragasaude.data.remote.network.GatewayTlsPolicy
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
@@ -87,7 +88,7 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
         return ImageLoader.Builder(context)
             .components {
                 add(OkHttpNetworkFetcherFactory(callFactory = {
-                    OkHttpClient.Builder()
+                    GatewayTlsPolicy.configure(OkHttpClient.Builder(), !BuildConfig.DEBUG)
                         .addInterceptor(AvatarAuthInterceptor(BuildConfig.BASE_URL.toHttpUrl()) { forceRefresh ->
                             authService.getTokenBlocking(forceRefresh = forceRefresh)
                         })

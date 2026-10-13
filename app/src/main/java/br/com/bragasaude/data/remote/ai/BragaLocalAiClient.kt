@@ -17,6 +17,9 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
+import br.com.bragasaude.data.remote.network.GatewayConnection
+import br.com.bragasaude.data.remote.network.GatewayTlsPolicy
+import okhttp3.OkHttpClient
 import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
@@ -31,7 +34,8 @@ import javax.inject.Singleton
 class BragaLocalAiClient @Inject constructor(
     private val orbWebSocket: OrbWebSocket,
     private val authService: AuthService,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val httpClient: OkHttpClient = GatewayTlsPolicy.defaultClient()
 ) {
 
     companion object {
@@ -82,7 +86,7 @@ class BragaLocalAiClient @Inject constructor(
         var connection: HttpURLConnection? = null
         try {
             val token = authService.getFreshToken() ?: return@withContext null
-            connection = (URL("$serverBaseUrl/api/assistant/preferences").openConnection() as HttpURLConnection).apply {
+            connection = GatewayConnection(URL("$serverBaseUrl/api/assistant/preferences"), httpClient).apply {
                 connectTimeout = 2500
                 readTimeout = 2500
                 setRequestProperty("Authorization", "Bearer $token")
@@ -171,7 +175,7 @@ class BragaLocalAiClient @Inject constructor(
         var connection: HttpURLConnection? = null
         try {
             val endpoint = URL("$serverBaseUrl/v1/chat/completions")
-            connection = (endpoint.openConnection() as HttpURLConnection).apply {
+            connection = GatewayConnection(endpoint, httpClient).apply {
                 requestMethod = "POST"
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
