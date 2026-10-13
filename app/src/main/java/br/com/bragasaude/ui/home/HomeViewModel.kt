@@ -93,10 +93,15 @@ class HomeViewModel @Inject constructor(
         .getMedications(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val heartReadings = database.wearableReadingDao().observeRecent(auth.currentUser?.uid.orEmpty(), "HEART_RATE")
+    private val readingsUid = auth.currentUser?.uid.orEmpty()
+    private fun readingHistory(metric: String) = combine(
+        database.wearableReadingDao().observeRecent(readingsUid, metric),
+        vitalsRepository.getVitalSigns(readingsUid)
+    ) { wearable, vitals -> br.com.bragasaude.domain.HealthReadingHistory.merge(readingsUid, metric, wearable, vitals) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val oxygenReadings = database.wearableReadingDao().observeRecent(auth.currentUser?.uid.orEmpty(), "OXYGEN_SATURATION")
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val heartReadings = readingHistory(br.com.bragasaude.domain.HealthReadingInput.HEART)
+    val oxygenReadings = readingHistory(br.com.bragasaude.domain.HealthReadingInput.OXYGEN)
 
     private val alertPrefs = context.getSharedPreferences("braga_alerts_prefs", Context.MODE_PRIVATE)
     private val dismissedAlerts: MutableSet<String> = alertPrefs.getStringSet("dismissed_alerts_$todayDateStr", emptySet())?.toMutableSet() ?: mutableSetOf()

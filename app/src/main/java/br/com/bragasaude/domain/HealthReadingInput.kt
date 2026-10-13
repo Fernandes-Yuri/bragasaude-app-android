@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import java.text.Normalizer
 import java.util.Locale
@@ -19,7 +19,7 @@ object HealthReadingInput {
             else -> null
         }
     }
-    fun origin(source: String) = when (source) { MANUAL -> "Manual"; VOICE -> "Voz, conferida por você"; else -> "Health Connect" }
+    fun origin(source: String) = when (source) { MANUAL -> "Manual"; VOICE -> "Voz, conferida por você"; HealthReadingHistory.WHATSAPP -> "WhatsApp, confirmado por você"; HealthReadingHistory.SYNC -> "Registro sincronizado"; else -> "Health Connect" }
     fun spoken(raw: String, expectedMetric: String? = null): HealthReadingDraft? {
         var text = Normalizer.normalize(raw, Normalizer.Form.NFD).replace(Regex("\\p{M}"), "").lowercase(Locale.ROOT)
         if (Regex("\\b(qual|normal|deveria|seria|exemplo|se)\\b").containsMatchIn(text)) return null
