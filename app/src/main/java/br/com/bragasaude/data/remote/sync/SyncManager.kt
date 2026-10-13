@@ -118,6 +118,11 @@ class SyncManager @Inject constructor(
                 syncPreferences.recordEntitySyncSuccess(userId, "vitals", nowUtc)
             }
 
+            // Biometria compartilhada entre app e WhatsApp; cache por ID remoto.
+            for (biometry in apiClient.getBiometry(userId)) {
+                biometryDao.cacheRemote(biometry.toEntity())
+            }
+
             // 3. Daily Metrics (Delta Sync)
             try {
                 val remoteMetrics = apiClient.getDailyMetrics(userId)

@@ -213,6 +213,34 @@ class BragaApiClient @Inject constructor(
 
     // ==================== SINAIS VITAIS ====================
 
+    suspend fun syncBiometry(value: BiometryEntity): Boolean = withContext(Dispatchers.IO) {
+        val id = value.remoteId ?: return@withContext false
+        val json = JSONObject().apply {
+            put("id", id)
+            put("userId", value.userId)
+            put("weight", value.weight)
+            if (value.height > 0f) put("height", value.height)
+            put("measuredAt", isoFormat.format(value.measuredAt))
+        }
+        val result = postJson("$baseUrl/api/sync/biometry", json) ?: return@withContext false
+        result.optString("status") == "success" && result.optString("id") == id
+    }
+
+    suspend fun getBiometry(userId: String): List<RemoteBiometry> = withContext(Dispatchers.IO) {
+        val array = getJsonArray("$baseUrl/api/biometry/$userId")
+            ?: throw java.io.IOException("Não foi possível baixar a biometria")
+        (0 until array.length()).map { index ->
+            val value = array.getJSONObject(index)
+            RemoteBiometry(
+                id = value.getString("id"), userId = value.getString("user_id"),
+                weight = value.getDouble("weight").toFloat(),
+                height = if (value.isNull("height")) 0f else value.getDouble("height").toFloat(),
+                imc = if (value.isNull("imc")) 0f else value.getDouble("imc").toFloat(),
+                measuredAt = value.getString("measured_at")
+            )
+        }
+    }
+
     suspend fun syncVitalSign(v: VitalSignEntity): String? = withContext(Dispatchers.IO) {
         try {
             val json = JSONObject().apply {

@@ -48,6 +48,7 @@ class SyncWorker @AssistedInject constructor(
 
         if (!safeSync { syncProfiles() }) hasErrors = true
         if (!safeSync { syncVitalSigns() }) hasErrors = true
+        if (!safeSync { syncBiometry() }) hasErrors = true
         if (!safeSync { syncMedications() }) hasErrors = true
         if (!safeSync { syncMedicationLogs() }) hasErrors = true
         if (!safeSync { syncSymptomsDiary() }) hasErrors = true
@@ -87,6 +88,17 @@ class SyncWorker @AssistedInject constructor(
                 val mergedSecret = result.returnedSecret ?: p.whatsappTotpSecret
                 if (profileDao.getProfileOneShot(p.userId) == p) profileDao.insert(p.copy(whatsappTotpSecret = mergedSecret, pendingSync = false))
             } else throw java.io.IOException("Perfil aguardando sincronização")
+        }
+    }
+
+    private suspend fun syncBiometry() {
+        for (pending in biometryDao.getPendingSync()) {
+            if (pending.userId == br.com.bragasaude.util.BragaConstants.GUEST_UID) continue
+            val identified = if (pending.remoteId == null) {
+                pending.copy(remoteId = java.util.UUID.randomUUID().toString()).also { biometryDao.insert(it) }
+            } else pending
+            if (!apiClient.syncBiometry(identified)) throw java.io.IOException("Biometria aguardando sincronização")
+            biometryDao.acknowledgeSync(identified)
         }
     }
 
