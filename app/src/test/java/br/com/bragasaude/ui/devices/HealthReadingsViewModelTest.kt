@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.devices
+package br.com.bragasaude.ui.devices
 
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.domain.HealthReadingInput
@@ -20,6 +20,9 @@ class HealthReadingsViewModelTest {
             val db = mockk<BragaDatabase>()
             val auth = mockk<FirebaseAuth>(relaxed = true)
             every { db.wearableReadingDao() } returns dao
+            val vitalDao = mockk<VitalSignDao>()
+            every { db.vitalSignDao() } returns vitalDao
+            every { vitalDao.getAll("user") } returns flowOf(emptyList())
             every { auth.currentUser?.uid } returns "user"
             every { dao.observeRecent("user", any()) } returns flowOf(emptyList())
             val vm = HealthReadingsViewModel(db, auth)
@@ -41,6 +44,9 @@ class HealthReadingsViewModelTest {
             val db = mockk<BragaDatabase>()
             val auth = mockk<FirebaseAuth>(relaxed = true)
             every { db.wearableReadingDao() } returns dao
+            val vitalDao = mockk<VitalSignDao>()
+            every { db.vitalSignDao() } returns vitalDao
+            every { vitalDao.getAll("user") } returns flowOf(emptyList())
             every { auth.currentUser?.uid } returns "user"
             every { dao.observeRecent("user", any()) } returns flowOf(emptyList())
             val vm = HealthReadingsViewModel(db, auth)

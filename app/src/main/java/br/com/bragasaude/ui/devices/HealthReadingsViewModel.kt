@@ -20,8 +20,13 @@ class HealthReadingsViewModel @Inject constructor(private val database: BragaDat
     val saving = _saving.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
-    val heart = database.wearableReadingDao().observeRecent(uid, HealthReadingInput.HEART).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val oxygen = database.wearableReadingDao().observeRecent(uid, HealthReadingInput.OXYGEN).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private fun readingHistory(metric: String) = combine(
+        database.wearableReadingDao().observeRecent(uid, metric),
+        database.vitalSignDao().getAll(uid)
+    ) { wearable, vitals -> br.com.bragasaude.domain.HealthReadingHistory.merge(uid, metric, wearable, vitals) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val heart = readingHistory(HealthReadingInput.HEART)
+    val oxygen = readingHistory(HealthReadingInput.OXYGEN)
     fun save(metric: String, raw: String, fromVoice: Boolean, onSaved: () -> Unit) {
         if (_saving.value) return
         val value = HealthReadingInput.value(metric, raw)

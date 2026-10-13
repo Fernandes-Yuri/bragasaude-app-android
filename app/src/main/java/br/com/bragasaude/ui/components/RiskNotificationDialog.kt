@@ -102,7 +102,7 @@ fun RiskNotificationDialog(
                         try {
                             context.startActivity(mapIntent)
                         } catch (_: android.content.ActivityNotFoundException) {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/search/?api=1&query=UPA")))
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/search/?api=1&query=UNIDADE+DE+PRONTO+ATENDIMENTO")))
                         }
                     },
                     modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
