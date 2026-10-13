@@ -28,7 +28,7 @@ interface MedicationDoseDao {
     @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun putIntent(row:DoseIntentEntity)
     @Query("SELECT * FROM dose_intents WHERE actorId=:actor AND patientId=:patient ORDER BY createdAt DESC")
     fun intents(actor:String,patient:String):Flow<List<DoseIntentEntity>>
-    @Query("SELECT * FROM dose_intents WHERE actorId=:actor AND state IN ('PENDING','WAITING','CANCEL_REQUESTED') ORDER BY createdAt")
+    @Query("SELECT * FROM dose_intents WHERE actorId=:actor AND state IN ('PENDING','WAITING','CONFIRMING','CANCEL_REQUESTED') ORDER BY createdAt")
     suspend fun pending(actor:String):List<DoseIntentEntity>
     @Query("SELECT * FROM dose_intents WHERE id=:id") suspend fun intent(id:String):DoseIntentEntity?
     @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun reserve(row:DoseReservationEntity)

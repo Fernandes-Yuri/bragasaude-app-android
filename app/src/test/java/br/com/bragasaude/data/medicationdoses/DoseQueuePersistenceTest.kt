@@ -9,7 +9,7 @@ import br.com.bragasaude.data.remote.api.BragaApiClient
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import io.mockk.*
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
@@ -37,6 +37,11 @@ class DoseQueuePersistenceTest {
     private var committed:JSONObject?=null
     private var timeout=false
     private var reject=false
+    private var denied=false
+    private var expireFirstConfirmation=false
+    private var expired=false
+    private var prepareGate:CompletableDeferred<Unit>?=null
+    private var prepareStarted:CompletableDeferred<Unit>?=null
     private fun group():DoseGroup {
         val at=Instant.now().minusSeconds(3600).atZone(ZoneId.of("UTC"))
         return DoseGroup.parse(JSONObject().put("group_id","group").put("patient_id","patient").put("patient_name","Maria")
@@ -63,12 +68,19 @@ class DoseQueuePersistenceTest {
             val method=firstArg<String>();val path=secondArg<String>();val body=thirdArg<JSONObject?>()
             when {
                 method=="POST" && path.endsWith("medication-dose-batches") -> {
-                    if(reject) BragaApiClient.ApiResponse(JSONObject().put("detail",JSONObject().put("code","SCHEDULE_CHANGED").put("message","Cadastro alterado")),409,"Cadastro alterado")
-                    else { proposal=JSONObject(groupPayload).put("batch_id","batch").put("state","prepared").put("snapshot_digest","snapshot")
+                    prepareStarted?.complete(Unit);prepareGate?.await()
+                    if(denied) BragaApiClient.ApiResponse(JSONObject().put("detail",JSONObject().put("code","PERMISSION_DENIED")),403,"Vínculo revogado")
+                    else if(reject) BragaApiClient.ApiResponse(JSONObject().put("detail",JSONObject().put("code","SCHEDULE_CHANGED").put("message","Cadastro alterado")),409,"Cadastro alterado")
+                    else { expired=false;proposal=JSONObject(groupPayload).put("batch_id","batch").put("state","prepared").put("snapshot_digest","snapshot")
                         BragaApiClient.ApiResponse(proposal,201,null) }
                 }
-                method=="GET" && path.endsWith("/batch") -> BragaApiClient.ApiResponse(committed ?: proposal,200,null)
+                method=="POST" && path.endsWith("/cancel") -> BragaApiClient.ApiResponse(JSONObject(proposal.toString()).put("state","cancelled"),200,null)
+                method=="GET" && path.endsWith("/batch") -> BragaApiClient.ApiResponse(committed ?: if(expired) JSONObject(proposal.toString()).put("state","expired") else proposal,200,null)
                 method=="POST" && path.endsWith("/confirm") -> {
+                    if(expireFirstConfirmation) {
+                        expireFirstConfirmation=false;expired=true
+                        return@coAnswers BragaApiClient.ApiResponse(JSONObject().put("detail",JSONObject().put("code","PROPOSAL_EXPIRED")),409,"Proposta expirada")
+                    }
                     val selected=DoseProtocol.selection(body!!.getJSONArray("selected_occurrence_ids").toString())
                     val array=JSONArray()
                     val items=proposal.getJSONArray("items")
@@ -129,13 +141,73 @@ class DoseQueuePersistenceTest {
         assertTrue(db.medicationLogDao().getPendingSync().isEmpty())
         coVerify(exactly=0) { api.doseRequest("POST",match { it.endsWith("/confirm") },any()) }
     }
-    @Test fun upgradeFrom53KeepsOldLogsAndCreatesDurableQueue()=runBlocking {
-        db.medicationLogDao().insert(MedicationLogEntity("old","patient","med",pendingSync=true))
-        db.close()
-        val sqlite=SQLiteDatabase.openDatabase(context.getDatabasePath("dose-test.db").path,null,SQLiteDatabase.OPEN_READWRITE)
-        for(table in listOf("dose_groups","dose_intents","dose_reservations","dose_schedules")) sqlite.execSQL("DROP TABLE $table")
+    @Test fun cancellationDuringPreparationDoesNotSendConfirmation()=runBlocking {
+        val group=cache();repo.submit(group,group.items.map { it.occurrenceId }.toSet())
+        val id=db.medicationDoseDao().pending("patient").single().id
+        prepareGate=CompletableDeferred();prepareStarted=CompletableDeferred()
+        val sending=async(Dispatchers.Default) { repo.flush() }
+        prepareStarted!!.await()
+        withTimeout(5000) { assertTrue(repo.cancel(id).contains("solicitado")) }
+        prepareGate!!.complete(Unit)
+        assertFalse(sending.await())
+        assertTrue(repo.flush())
+        assertEquals("CANCELLED",db.medicationDoseDao().intent(id)!!.state)
+        coVerify(exactly=0) { api.doseRequest("POST",match { it.endsWith("/confirm") },any()) }
+    }
+    @Test fun slowNetworkDoesNotBlockSavingAnotherOfflineIntent()=runBlocking {
+        val group=cache();repo.submit(group,group.items.map { it.occurrenceId }.toSet())
+        prepareGate=CompletableDeferred();prepareStarted=CompletableDeferred()
+        val sending=async(Dispatchers.Default) { repo.flush() }
+        prepareStarted!!.await()
+        val payload=JSONObject(group.payload).put("group_id","otherGroup")
+        val items=payload.getJSONArray("items")
+        for(i in 0 until items.length()) items.getJSONObject(i).put("occurrence_id","second$i").put("medication_id","otherMed$i")
+        val other=DoseGroup.parse(payload)
+        db.medicationDoseDao().putGroup(DoseGroupEntity("patient",other.id,"patient",other.date,other.instant.toEpochMilli(),other.payload,System.currentTimeMillis()))
+        withTimeout(5000) { repo.submit(other,other.items.map { it.occurrenceId }.toSet()) }
+        assertEquals(2,db.medicationDoseDao().pending("patient").size)
+        sending.cancelAndJoin()
+    }
+    @Test fun upgradeFromPublished53KeepsOldLogsAndCreatesDurableQueue()=runBlocking {
+        db.close();context.deleteDatabase("dose-test.db")
+        val file=listOf(java.io.File("schemas/br.com.bragasaude.data.local.BragaDatabase/53.json"),
+            java.io.File("app/schemas/br.com.bragasaude.data.local.BragaDatabase/53.json")).first { it.exists() }
+        val schema=JSONObject(file.readText()).getJSONObject("database")
+        val sqlite=SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath("dose-test.db"),null)
+        val entities=schema.getJSONArray("entities")
+        for(i in 0 until entities.length()) {
+            val entity=entities.getJSONObject(i);val table=entity.getString("tableName")
+            val placeholder="${'$'}{TABLE_NAME}"
+            sqlite.execSQL(entity.getString("createSql").replace(placeholder,table))
+            val indices=entity.getJSONArray("indices")
+            for(j in 0 until indices.length()) sqlite.execSQL(indices.getJSONObject(j).getString("createSql").replace(placeholder,table))
+        }
+        val setup=schema.getJSONArray("setupQueries")
+        for(i in 0 until setup.length()) sqlite.execSQL(setup.getString(i))
+        sqlite.execSQL("INSERT INTO medication_logs_local (id,userId,medicationId,takenAt,unitsTaken,pendingSync) VALUES('old','patient','med',0,1,1)")
         sqlite.version=53;sqlite.close();open()
         assertEquals(1,db.medicationLogDao().getPendingSync().size)
         cache();assertEquals(1,db.medicationDoseDao().allGroups("patient").size)
     }
+    @Test fun expiryRepreparesSameSelectionWithNewIds()=runBlocking {
+        val group=cache();repo.submit(group,group.items.map { it.occurrenceId }.toSet())
+        val old=db.medicationDoseDao().pending("patient").single()
+        expireFirstConfirmation=true
+        assertFalse(repo.flush())
+        assertTrue(repo.flush())
+        val resolved=db.medicationDoseDao().intent(old.id)!!
+        assertEquals("RESOLVED",resolved.state)
+        assertNotEquals(old.clientBatchId,resolved.clientBatchId)
+        assertEquals(old.selection,resolved.selection)
+        assertEquals(12,repo.reservations("patient").size)
+    }
+    @Test fun revokedBindingIsTerminalAccessLossWithoutLogs()=runBlocking {
+        val group=cache();repo.submit(group,group.items.map { it.occurrenceId }.toSet())
+        val old=db.medicationDoseDao().pending("patient").single();denied=true
+        assertTrue(repo.flush())
+        assertEquals("ACCESS_LOST",db.medicationDoseDao().intent(old.id)!!.state)
+        assertTrue(repo.reservations("patient").isEmpty())
+        coVerify(exactly=0) { api.doseRequest("POST",match { it.endsWith("/confirm") },any()) }
+    }
+
 }

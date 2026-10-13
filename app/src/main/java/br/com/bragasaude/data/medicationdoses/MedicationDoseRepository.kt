@@ -30,6 +30,7 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
     private val database:BragaDatabase,private val api:BragaApiClient,private val auth:FirebaseAuth) {
     private val dao get()=database.medicationDoseDao()
     private val lock=Mutex()
+    private val flushLock=Mutex()
     init {
         var priorActor:String?=null
         auth.addAuthStateListener { firebase ->
@@ -136,11 +137,13 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
         enqueue(); reschedule()
         "Confirmação salva; aguardando sincronização."
     }
-    suspend fun cancel(id:String)=lock.withLock {
-        val intent=dao.intent(id) ?: return@withLock
+    suspend fun cancel(id:String):String=lock.withLock {
+        val intent=dao.intent(id) ?: return@withLock "Proposta não encontrada."
         require(intent.actorId==actor())
-        if(intent.state in setOf("PENDING","WAITING")) dao.putIntent(intent.copy(state="CANCEL_REQUESTED"))
+        if(intent.state !in setOf("PENDING","WAITING")) return@withLock "A operação já foi enviada. Aguarde o resultado."
+        dao.putIntent(intent.copy(state="CANCEL_REQUESTED"))
         enqueue()
+        "Cancelamento solicitado."
     }
     private suspend fun resolved(intent:DoseIntentEntity,result:JSONObject) {
         val resultItems=result.optJSONArray("items") ?: JSONArray()
@@ -176,13 +179,13 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
             api.getMedicationStock(intent.patientId).forEach { item -> item.id?.let { database.medicationDao().applyAuthoritativeStock(it,item.currentUnits) } }
         } catch(e:kotlinx.coroutines.CancellationException) { throw e } catch(_:Exception) { }
     }
-    suspend fun flush():Boolean=lock.withLock {
+    suspend fun flush():Boolean=flushLock.withLock {
         val actor=auth.currentUser?.uid ?: return@withLock true
         var complete=true
         val resolvedGroups=mutableSetOf<String>()
         for(original in dao.pending(actor)) {
             if(auth.currentUser?.uid!=actor) return@withLock false
-            var intent=original
+            var intent=dao.intent(original.id) ?: continue
             try {
                 var remote=intent.remoteBatch?.let(::JSONObject)
                 if(remote!=null) {
@@ -191,6 +194,7 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
                         resolved(intent,remote);resolvedGroups.add(intent.groupId); continue
                     }
                 }
+                intent=dao.intent(intent.id) ?: continue
                 if(intent.state=="CANCEL_REQUESTED") {
                     if(remote!=null && remote.getString("state")=="prepared") remote=request("POST",
                         "/api/medication-dose-batches/${remote.getString("batch_id")}/cancel",JSONObject())
@@ -200,26 +204,39 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
                 val group=DoseGroup.parse(JSONObject(intent.snapshot))
                 val selected=DoseProtocol.selection(intent.selection)
                 if(remote?.getString("state")=="expired") {
-                    intent=intent.copy(clientBatchId=UUID.randomUUID().toString(),confirmationId=UUID.randomUUID().toString(),remoteBatch=null)
-                    dao.putIntent(intent); remote=null
+                    intent=lock.withLock {
+                        (dao.intent(intent.id) ?: intent).copy(clientBatchId=UUID.randomUUID().toString(),confirmationId=UUID.randomUUID().toString(),remoteBatch=null)
+                            .also { dao.putIntent(it) }
+                    }
+                    remote=null
                 }
                 if(remote==null) {
                     remote=request("POST","/api/family/patients/${intent.patientId}/medication-dose-batches",JSONObject()
                         .put("client_batch_id",intent.clientBatchId).put("group_id",group.id)
                         .put("expected_schedule_digest",group.digest).put("occurrence_ids",JSONArray(group.items.filter { it.eligible }.map { it.occurrenceId }.sorted())).put("channel","app"))
-                    intent=intent.copy(remoteBatch=remote.toString(),state="WAITING"); dao.putIntent(intent)
+                    intent=lock.withLock {
+                        val latest=dao.intent(intent.id) ?: intent
+                        latest.copy(remoteBatch=remote.toString(),state=if(latest.state=="CANCEL_REQUESTED") "CANCEL_REQUESTED" else "WAITING").also { dao.putIntent(it) }
+                    }
                 }
-                require(DoseProtocol.sameSelection(group,remote,group.items.filter { it.eligible }.map { it.occurrenceId }.toSet())) { "A proposta mudou. Confira a lista novamente." }
+                val proposal=requireNotNull(remote)
+                require(DoseProtocol.sameSelection(group,proposal,group.items.filter { it.eligible }.map { it.occurrenceId }.toSet())) { "A proposta mudou. Confira a lista novamente." }
+                val mayConfirm=lock.withLock {
+                    val latest=dao.intent(intent.id) ?: intent
+                    if(latest.state=="CANCEL_REQUESTED") { intent=latest;false }
+                    else { intent=latest.copy(state="CONFIRMING");dao.putIntent(intent);true }
+                }
+                if(!mayConfirm) { complete=false;continue }
                 check(auth.currentUser?.uid==actor)
-                val result=request("POST","/api/medication-dose-batches/${remote.getString("batch_id")}/confirm",JSONObject()
-                    .put("confirmation_id",intent.confirmationId).put("snapshot_digest",remote.getString("snapshot_digest"))
+                val result=request("POST","/api/medication-dose-batches/${proposal.getString("batch_id")}/confirm",JSONObject()
+                    .put("confirmation_id",intent.confirmationId).put("snapshot_digest",proposal.getString("snapshot_digest"))
                     .put("selected_occurrence_ids",JSONArray(selected.sorted())).put("declared_taken_at",intent.declaredAt))
                 resolved(intent,result)
                 resolvedGroups.add(intent.groupId)
             } catch(e: kotlinx.coroutines.CancellationException) { throw e
             } catch(e:Exception) {
                 val retry=e is DoseApiException && (e.http==0 || e.http>=500 || e.code=="PROPOSAL_EXPIRED")
-                if(retry) { complete=false; dao.putIntent(intent.copy(message=e.message)) }
+                if(retry) { complete=false; lock.withLock { dao.putIntent((dao.intent(intent.id) ?: intent).copy(message=e.message)) } }
                 else database.withTransaction {
                     dao.release(intent.id)
                     dao.putIntent(intent.copy(state=if(e is DoseApiException && e.http in listOf(401,403)) "ACCESS_LOST" else "REVIEW",

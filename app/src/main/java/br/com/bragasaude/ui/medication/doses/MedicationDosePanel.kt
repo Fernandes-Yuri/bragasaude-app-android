@@ -111,6 +111,7 @@ fun MedicationDosePanel(patientId:String,canTake:Boolean,canEdit:Boolean,medicat
                 "REVIEW" -> "Precisa de revisão: ${intent.message}"
                 "ACCESS_LOST" -> "Acesso perdido: ${intent.message}"
                 "CANCELLED" -> "Proposta cancelada."
+                "CONFIRMING" -> "Pedido enviado; aguardando o resultado do servidor."
                 else -> "Confirmação salva; aguardando sincronização.${intent.message?.let { " $it" } ?: ""}"
             })
             if(intent.state=="REVIEW") TextButton(onClick={viewModel.review(intent)},enabled=!state.busy) { Text("Revisar esta confirmação") }

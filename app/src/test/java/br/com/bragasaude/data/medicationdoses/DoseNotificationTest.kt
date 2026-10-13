@@ -23,7 +23,7 @@ class DoseNotificationTest {
     private val context get()=RuntimeEnvironment.getApplication()
     private val manager get()=context.getSystemService(NotificationManager::class.java)
     private fun row():DoseGroupEntity {
-        val instant=Instant.now().minusSeconds(60);val local=instant.atZone(ZoneId.of("UTC"))
+        val instant=Instant.now().atZone(ZoneId.of("UTC")).toLocalDate().atStartOfDay(ZoneId.of("UTC")).toInstant();val local=instant.atZone(ZoneId.of("UTC"))
         val payload=JSONObject().put("group_id","group").put("patient_id","patient").put("patient_name","Maria")
             .put("timezone","UTC").put("local_date",local.toLocalDate().toString()).put("local_time",local.toLocalTime().withSecond(0).withNano(0).toString())
             .put("scheduled_at",instant.toString()).put("schedule_digest","digest")
