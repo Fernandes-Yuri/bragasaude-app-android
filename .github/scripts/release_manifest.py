@@ -40,7 +40,8 @@ def inspect_apk(apk, variant, policy=None):
         r'^Signer(?: #\d+| \(.*\)) certificate SHA-256 digest:\s*([a-fA-F0-9]{64})\s*$',
         signature, re.MULTILINE)))
     if len(signers) != 1:
-        raise ValueError('APK precisa de um único certificado aprovado')
+        diagnostics = [line for line in signature.splitlines() if 'SHA-256' in line]
+        raise ValueError(f'APK precisa de um único certificado aprovado; ferramenta={tool("apksigner")}; digests públicos={diagnostics}')
     analyzer = tool('apkanalyzer')
 
     def field(name):
