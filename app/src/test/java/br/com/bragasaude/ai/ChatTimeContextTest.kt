@@ -8,10 +8,10 @@ class ChatTimeContextTest {
     @Test fun `todos os limites selecionam o turno correto`() {
         listOf(
             "00:00" to "Dificuldade para dormir", "04:59" to "Dificuldade para dormir",
-            "05:00" to "Café da manhã saudável", "10:59" to "Café da manhã saudável",
-            "11:00" to "O que preparar para o almoço?", "14:59" to "O que preparar para o almoço?",
+            "05:00" to "Ideias para um café da manhã saudável", "10:59" to "Ideias para um café da manhã saudável",
+            "11:00" to "Ideias para um almoço saudável", "14:59" to "Ideias para um almoço saudável",
             "15:00" to "Opção de lanche saudável", "18:29" to "Opção de lanche saudável",
-            "18:30" to "O que jantar leve?", "23:59" to "O que jantar leve?"
+            "18:30" to "Ideias para um jantar leve", "23:59" to "Ideias para um jantar leve"
         ).forEach { (time, expected) ->
             assertEquals(time, expected, ChatTimeContext.suggestions(LocalTime.parse(time)).first())
         }
