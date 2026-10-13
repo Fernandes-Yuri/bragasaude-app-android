@@ -35,8 +35,23 @@ class DoseAlarmReceiver:BroadcastReceiver() {
                 if(owner!=actor) { deps.doses().reschedule();return@launch }
                 val row=deps.database().medicationDoseDao().group(owner,id) ?: return@launch
                 if(row.patientId!=owner) return@launch
-                if(intent.action=="SNOOZE") DoseAlarmScheduler.snooze(context,owner,id)
+                if(intent.action=="TAKE") {
+                    val snapshot=intent.getStringExtra("snapshot") ?: return@launch
+                    val group=br.com.bragasaude.data.medicationdoses.DoseGroup.parse(org.json.JSONObject(snapshot))
+                    val selected=group.items.filter { it.eligible && it.occurrenceId !in deps.doses().reservations(group.patientId) }.map { it.occurrenceId }.toSet()
+                    if(selected.isNotEmpty()) deps.doses().submit(group,selected)
+                } else if(intent.action=="SNOOZE") DoseAlarmScheduler.snooze(context,owner,id)
                 else DoseAlarmScheduler.show(context,row,intent.action=="PRE",deps.doses().reservations(row.patientId))
+            } catch(e:CancellationException) { throw e
+            } catch(_:Exception) {
+                // Reopen the full list; an old snapshot never confirms a changed medication set.
+                val deps=EntryPointAccessors.fromApplication(context.applicationContext,DoseAlarmEntryPoint::class.java)
+                val owner=intent.getStringExtra("actor");val groupId=intent.getStringExtra("group")
+                if(owner!=null && groupId!=null && deps.auth().currentUser?.uid==owner) {
+                    deps.database().medicationDoseDao().group(owner,groupId)?.let {
+                        DoseAlarmScheduler.show(context,it,false,deps.doses().reservations(it.patientId))
+                    }
+                }
             } finally { pending.finish() }
         }
     }

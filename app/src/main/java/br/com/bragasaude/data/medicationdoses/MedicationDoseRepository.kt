@@ -99,7 +99,7 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
         require(selected.isNotEmpty())
         require(selected.all { id -> group.items.any { it.occurrenceId==id && it.eligible } })
         require(!group.instant.isAfter(Instant.now())) { "Este horário ainda não chegou." }
-        require(dao.group(actor,group.id)?.payload==group.payload) { "A conta ou a lista mudou. Atualize os horários." }
+        require(dao.group(actor,group.id)?.let { DoseGroup.parse(JSONObject(it.payload)).digest==group.digest }==true) { "A conta ou a lista mudou. Atualize os horários." }
         val id=UUID.randomUUID().toString()
         database.withTransaction {
             val reserved=dao.reserved(group.patientId).toSet()

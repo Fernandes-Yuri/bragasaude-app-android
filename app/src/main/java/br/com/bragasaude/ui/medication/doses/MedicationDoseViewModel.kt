@@ -20,6 +20,7 @@ class MedicationDoseViewModel @Inject constructor(private val repository:Medicat
     private val _state=MutableStateFlow(DoseScreenState())
     val state:StateFlow<DoseScreenState> = _state.asStateFlow()
     private var watch:Job?=null
+    fun actorId()=runCatching { repository.actor() }.getOrDefault("")
     fun open(patient:String) {
         if(patient==_state.value.patient) return
         watch?.cancel(); _state.value=DoseScreenState(patient=patient)

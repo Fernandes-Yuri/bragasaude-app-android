@@ -75,6 +75,16 @@ fun MedicationDosePanel(patientId:String,canTake:Boolean,canEdit:Boolean,medicat
                             }
                         }
                     }
+                    var quick by remember(group.id,group.digest) { mutableStateOf(context.getSharedPreferences("dose_preferences",android.content.Context.MODE_PRIVATE)
+                        .getString("direct:${viewModel.actorId()}:${group.id}",null)==group.digest) }
+                    Row {
+                        Checkbox(checked=quick,enabled=canTake && group.items.all { it.state=="recorded" || it.eligible },onCheckedChange={ checked ->
+                            quick=checked
+                            context.getSharedPreferences("dose_preferences",android.content.Context.MODE_PRIVATE).edit()
+                                .putString("direct:${viewModel.actorId()}:${group.id}",if(checked) group.digest else null).apply()
+                        })
+                        Text("Revisei este grupo; permitir confirmar diretamente na notificação.")
+                    }
                     Button(onClick={viewModel.submit(group,selected)},enabled=canTake && !state.busy && selected.isNotEmpty() && !group.instant.isAfter(Instant.now()),
                         modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {
                         Text(if(selected.size==available.size && available.size==group.items.size) "Tomei todos"

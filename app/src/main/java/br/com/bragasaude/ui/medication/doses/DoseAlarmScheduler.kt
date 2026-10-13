@@ -70,7 +70,15 @@ object DoseAlarmScheduler {
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
         if(!pre) {
             // Full review is always one collective acceptance. Avoid accepting truncated notification contents.
-            builder.addAction(0,"Ver e confirmar",open)
+            val direct=context.getSharedPreferences("dose_preferences",Context.MODE_PRIVATE).getString("direct:${row.actorId}:${group.id}",null)==group.digest
+            if(direct && remaining.all { it.eligible }) {
+                val take=PendingIntent.getBroadcast(context,0,Intent(context,DoseAlarmReceiver::class.java).apply {
+                    action="TAKE";data=identity(row.actorId,group.id,"TAKE")
+                    putExtra("actor",row.actorId);putExtra("group",group.id);putExtra("snapshot",row.payload)
+                },PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                builder.addAction(0,"Tomei todos",take)
+            }
+            builder.addAction(0,"Escolher",open)
             pending(context,row.actorId,row.groupId,"SNOOZE")?.let { builder.addAction(0,"Lembrar depois",it) }
         }
         try { context.getSystemService(NotificationManager::class.java).notify("${row.actorId}|${row.groupId}",0,builder.build()) }
