@@ -205,6 +205,25 @@ interface BiometryDao {
     @Query("SELECT * FROM biometry_local WHERE pendingSync = 1")
     suspend fun getPendingSync(): List<BiometryEntity>
 
+    @Query("SELECT * FROM biometry_local WHERE localId = :localId")
+    suspend fun getByLocalId(localId: Long): BiometryEntity?
+
+    @Query("SELECT * FROM biometry_local WHERE userId = :userId AND remoteId = :remoteId LIMIT 1")
+    suspend fun getByRemoteId(userId: String, remoteId: String): BiometryEntity?
+
+    @Transaction
+    suspend fun cacheRemote(biometry: BiometryEntity) {
+        val remoteId = biometry.remoteId ?: return
+        val existing = getByRemoteId(biometry.userId, remoteId)
+        if (existing?.pendingSync == true) return
+        insert(biometry.copy(localId = existing?.localId ?: 0L, pendingSync = false))
+    }
+
+    @Transaction
+    suspend fun acknowledgeSync(expected: BiometryEntity) {
+        if (getByLocalId(expected.localId) == expected) insert(expected.copy(pendingSync = false))
+    }
+
     @Query("DELETE FROM biometry_local WHERE measuredAt < :cutoffMillis")
     suspend fun purgeOlderThan(cutoffMillis: Long)
 }
