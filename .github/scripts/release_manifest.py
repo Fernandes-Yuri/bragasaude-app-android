@@ -15,10 +15,15 @@ FIELDS = ('package_name', 'variant', 'debuggable', 'version_name', 'version_code
 
 
 def tool(name):
+    sdk = Path(os.environ.get('ANDROID_HOME') or os.environ.get('ANDROID_SDK_ROOT') or '/nonexistent')
+    if name == 'apksigner':
+        pinned = sdk / 'build-tools' / '35.0.0' / name
+        if not pinned.is_file():
+            raise RuntimeError('Build Tools 35.0.0 é obrigatório para verificar assinatura')
+        return str(pinned)
     found = shutil.which(name)
     if found:
         return found
-    sdk = Path(os.environ.get('ANDROID_HOME') or os.environ.get('ANDROID_SDK_ROOT') or '/nonexistent')
     matches = sorted(sdk.glob(f'build-tools/*/{name}')) + sorted(sdk.glob(f'cmdline-tools/*/bin/{name}'))
     if not matches:
         raise RuntimeError(f'Ferramenta obrigatória ausente: {name}')
@@ -37,7 +42,7 @@ def inspect_apk(apk, variant, policy=None):
     # v3.1 descreve faixas de SDK em vez de "#1" e pode repetir a mesma chave.
     # Source Stamp não é o assinante do APK e fica fora da seleção.
     signers = sorted(set(value.lower() for value in re.findall(
-        r'^Signer(?: #\d+| \(.*\)) certificate SHA-256 digest:\s*([a-fA-F0-9]{64})\s*$',
+        r'^(?:Signer(?: #\d+| \(.*\))|V[123](?:\.1)? Signer(?::| #\d+:?)) certificate SHA-256 digest:\s*([a-fA-F0-9]{64})\s*$',
         signature, re.MULTILINE)))
     if len(signers) != 1:
         diagnostics = [line for line in signature.splitlines() if 'SHA-256' in line]

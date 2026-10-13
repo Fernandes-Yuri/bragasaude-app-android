@@ -100,6 +100,7 @@ class GateTests(unittest.TestCase):
                 if args[0] == 'apksigner':
                     return (f'Signer (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: {CERT}\n'
                             f'Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: {CERT}\n'
+                            f'V2 Signer: certificate SHA-256 digest: {CERT}\n'
                             f'Source Stamp Signer certificate SHA-256 digest: {"0" * 64}')
                 return {'application-id': 'br.com.bragasaude', 'debuggable': 'false',
                         'version-name': '1.7.1', 'version-code': '32', 'min-sdk': '26'}[args[2]]
