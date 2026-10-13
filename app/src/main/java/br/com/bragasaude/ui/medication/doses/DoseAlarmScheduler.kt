@@ -74,7 +74,7 @@ object DoseAlarmScheduler {
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
         if(!pre) {
             // Full review is always one collective acceptance. Avoid accepting truncated notification contents.
-            val direct=context.getSharedPreferences("dose_preferences",Context.MODE_PRIVATE).getString("direct:${row.actorId}:${group.id}",null)==group.digest
+            val direct=context.getSharedPreferences("dose_preferences",Context.MODE_PRIVATE).getString(br.com.bragasaude.data.medicationdoses.DoseProtocol.reviewKey(row.actorId,group),null)==br.com.bragasaude.data.medicationdoses.DoseProtocol.reviewDigest(group)
             if(direct && remaining.all { it.eligible }) {
                 val take=PendingIntent.getBroadcast(context,0,Intent(context,DoseAlarmReceiver::class.java).apply {
                     action="TAKE";data=identity(row.actorId,group.id,"TAKE")

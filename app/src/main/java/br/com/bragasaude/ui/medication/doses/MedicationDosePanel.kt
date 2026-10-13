@@ -87,12 +87,12 @@ fun MedicationDosePanel(patientId:String,canTake:Boolean,canEdit:Boolean,medicat
                         }
                     }
                     var quick by remember(group.id,group.digest) { mutableStateOf(context.getSharedPreferences("dose_preferences",android.content.Context.MODE_PRIVATE)
-                        .getString("direct:${viewModel.actorId()}:${group.id}",null)==group.digest) }
+                        .getString(br.com.bragasaude.data.medicationdoses.DoseProtocol.reviewKey(viewModel.actorId(),group),null)==br.com.bragasaude.data.medicationdoses.DoseProtocol.reviewDigest(group)) }
                     Row {
                         Checkbox(checked=quick,enabled=canTake && group.items.all { it.state=="recorded" || it.eligible },onCheckedChange={ checked ->
                             quick=checked
                             context.getSharedPreferences("dose_preferences",android.content.Context.MODE_PRIVATE).edit()
-                                .putString("direct:${viewModel.actorId()}:${group.id}",if(checked) group.digest else null).apply()
+                                .putString(br.com.bragasaude.data.medicationdoses.DoseProtocol.reviewKey(viewModel.actorId(),group),if(checked) br.com.bragasaude.data.medicationdoses.DoseProtocol.reviewDigest(group) else null).apply()
                         })
                         Text("Revisei este grupo; permitir confirmar diretamente na notificação.")
                     }

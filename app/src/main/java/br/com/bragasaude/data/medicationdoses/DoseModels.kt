@@ -37,6 +37,18 @@ data class DoseGroup(val id: String,val patientId: String,val patientName: Strin
 }
 
 object DoseProtocol {
+    fun reviewKey(actor:String,group:DoseGroup)="direct:$actor:${group.patientId}:${group.zone}:${group.time}"
+    /** A reviewed regimen survives the date change, but any displayed business change invalidates it. */
+    fun reviewDigest(group:DoseGroup):String {
+        val items=group.items.sortedBy { it.medicationId }.map { item ->
+            JSONArray(listOf(item.medicationId,item.name,item.units ?: JSONObject.NULL,
+                item.instruction ?: JSONObject.NULL,item.revision))
+        }
+        val value=JSONArray(listOf(group.patientId,group.zone,group.time,JSONArray(items))).toString()
+        return java.security.MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+    }
+
     val terminal = setOf("confirmed","partially_confirmed","failed","cancelled","expired")
     fun sameSelection(group: DoseGroup, proposal: JSONObject, selected: Set<String>): Boolean {
         val items=proposal.getJSONArray("items")

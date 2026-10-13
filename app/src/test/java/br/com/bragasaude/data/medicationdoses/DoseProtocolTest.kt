@@ -32,5 +32,14 @@ class DoseProtocolTest {
         val text=DoseProtocol.summary(JSONObject().put("counts",JSONObject().put("recorded",8).put("already_recorded",1)
             .put("excluded",1).put("blocked",2)))
         assertTrue(text.contains("8 registros novos"));assertTrue(text.contains("2 precisam de revisão"))
+    }    @Test fun regimenReviewSurvivesNextDayButNotQuantityChanges() {
+        val first=group()
+        val next=JSONObject(first.payload).put("local_date","2026-10-14").put("group_id","tomorrow")
+        val items=next.getJSONArray("items")
+        for(i in 0 until items.length()) items.getJSONObject(i).put("occurrence_id","next-$i").put("scheduled_at","2026-10-14T11:00:00Z")
+        assertEquals(DoseProtocol.reviewDigest(first),DoseProtocol.reviewDigest(DoseGroup.parse(next)))
+        next.getJSONArray("items").getJSONObject(0).put("dose_units",8)
+        assertNotEquals(DoseProtocol.reviewDigest(first),DoseProtocol.reviewDigest(DoseGroup.parse(next)))
     }
+
 }

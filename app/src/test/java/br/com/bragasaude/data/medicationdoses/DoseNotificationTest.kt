@@ -57,10 +57,12 @@ class DoseNotificationTest {
     }
     @Test fun quickConfirmationRequiresExactlyReviewedDigest() {
         val row=row()
-        context.getSharedPreferences("dose_preferences",Context.MODE_PRIVATE).edit().putString("direct:patient:group","digest").commit()
+        context.getSharedPreferences("dose_preferences",Context.MODE_PRIVATE).edit().putString(DoseProtocol.reviewKey("patient",DoseGroup.parse(JSONObject(row.payload))),DoseProtocol.reviewDigest(DoseGroup.parse(JSONObject(row.payload)))).commit()
         DoseAlarmScheduler.reconcile(context,listOf(row),"patient",emptyMap(),setOf("group"))
         assertTrue(manager.activeNotifications.first().notification.actions.any { it.title.toString()=="Tomei todos" })
-        val changed=row.copy(payload=JSONObject(row.payload).put("schedule_digest","changed").toString())
+        val payload=JSONObject(row.payload).put("schedule_digest","changed")
+        payload.getJSONArray("items").getJSONObject(0).put("schedule_revision",2)
+        val changed=row.copy(payload=payload.toString())
         DoseAlarmScheduler.reconcile(context,listOf(changed),"patient",emptyMap())
         assertFalse(manager.activeNotifications.first().notification.actions.any { it.title.toString()=="Tomei todos" })
     }
