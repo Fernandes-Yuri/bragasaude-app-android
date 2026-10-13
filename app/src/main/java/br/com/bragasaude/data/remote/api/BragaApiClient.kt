@@ -16,6 +16,8 @@ import br.com.bragasaude.util.safeNullableString
 import br.com.bragasaude.util.BragaTime
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import br.com.bragasaude.data.remote.network.GatewayConnection
+import br.com.bragasaude.data.remote.network.GatewayTlsPolicy
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.BufferedReader
@@ -49,7 +51,8 @@ class BragaApiClient @Inject constructor(
     // em producao, mas nada impedia (race de concorrencia se um dia mutassem).
     // Imutavel; producao vem do @BaseUrl (BuildConfig) e testes injetam o mock.
     @BaseUrl private val _baseUrl: String = DEFAULT_BASE_URL,
-    private val authService: AuthService
+    private val authService: AuthService,
+    private val httpClient: OkHttpClient = GatewayTlsPolicy.defaultClient()
 ) {
     companion object {
         private const val TAG = "BragaApiClient"
@@ -575,7 +578,7 @@ class BragaApiClient @Inject constructor(
         var conn: HttpURLConnection? = null
         try {
             val urlString = "$baseUrl/api/app/latest"
-            conn = (URL(urlString).openConnection() as HttpURLConnection).apply {
+            conn = openConnection(URL(urlString)).apply {
                 requestMethod = "GET"
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
@@ -1010,7 +1013,7 @@ class BragaApiClient @Inject constructor(
             try {
                 require(path.startsWith("/api/"))
                 val target="$baseUrl$path"
-                val conn=(URL(target).openConnection() as HttpURLConnection).apply {
+                val conn=openConnection(URL(target)).apply {
                     requestMethod=method; connectTimeout=CONNECT_TIMEOUT_MS; readTimeout=READ_TIMEOUT_MS
                     instanceFollowRedirects=false; setRequestProperty("Accept","application/json")
                     attachIdentity(target)
@@ -1031,7 +1034,7 @@ class BragaApiClient @Inject constructor(
         var conn: HttpURLConnection? = null
         return try {
             val url = URL(urlString)
-            conn = (url.openConnection() as HttpURLConnection).apply {
+            conn = openConnection(url).apply {
                 requestMethod = "POST"
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
@@ -1063,7 +1066,7 @@ class BragaApiClient @Inject constructor(
         var conn: HttpURLConnection? = null
         return try {
             val url = URL(urlString)
-            conn = (url.openConnection() as HttpURLConnection).apply {
+            conn = openConnection(url).apply {
                 requestMethod = "POST"
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
@@ -1095,7 +1098,7 @@ class BragaApiClient @Inject constructor(
         var conn: HttpURLConnection? = null
         return try {
             val url = URL(urlString)
-            conn = (url.openConnection() as HttpURLConnection).apply {
+            conn = openConnection(url).apply {
                 requestMethod = "GET"
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
@@ -1124,7 +1127,7 @@ class BragaApiClient @Inject constructor(
         var conn: HttpURLConnection? = null
         return try {
             val url = URL(urlString)
-            conn = (url.openConnection() as HttpURLConnection).apply {
+            conn = openConnection(url).apply {
                 requestMethod = "GET"
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
@@ -1152,7 +1155,7 @@ class BragaApiClient @Inject constructor(
         var conn: HttpURLConnection? = null
         return try {
             val url = URL(urlString)
-            conn = (url.openConnection() as HttpURLConnection).apply {
+            conn = openConnection(url).apply {
                 requestMethod = "DELETE"
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
@@ -1306,7 +1309,7 @@ class BragaApiClient @Inject constructor(
         var conn: HttpURLConnection? = null
         try {
             val url = URL("$baseUrl/api/family/patients/$patientId/medications/photo")
-            conn = (url.openConnection() as HttpURLConnection).apply {
+            conn = openConnection(url).apply {
                 requestMethod = "POST"
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
@@ -1355,7 +1358,7 @@ class BragaApiClient @Inject constructor(
         var conn: HttpURLConnection? = null
         try {
             val url = URL("$baseUrl/api/profile/$userId/avatar")
-            conn = (url.openConnection() as HttpURLConnection).apply {
+            conn = openConnection(url).apply {
                 requestMethod = "POST"
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = 45000
@@ -1397,7 +1400,7 @@ class BragaApiClient @Inject constructor(
         var conn: HttpURLConnection? = null
         try {
             val url = URL("$baseUrl/api/profile/$userId/avatar")
-            conn = (url.openConnection() as HttpURLConnection).apply {
+            conn = openConnection(url).apply {
                 requestMethod = "DELETE"
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
@@ -1436,7 +1439,7 @@ class BragaApiClient @Inject constructor(
         var conn: HttpURLConnection? = null
         try {
             val url = URL("$baseUrl/api/family/patients/$patientId/prescriptions/analyze")
-            conn = (url.openConnection() as HttpURLConnection).apply {
+            conn = openConnection(url).apply {
                 requestMethod = "POST"
                 connectTimeout = 30000
                 readTimeout = 45000
@@ -1529,7 +1532,7 @@ class BragaApiClient @Inject constructor(
         var conn: HttpURLConnection? = null
         try {
             val url = URL("$baseUrl/api/family/patients/$patientId/medications/batch")
-            conn = (url.openConnection() as HttpURLConnection).apply {
+            conn = openConnection(url).apply {
                 requestMethod = "POST"
                 connectTimeout = 15000
                 readTimeout = 20000
@@ -1787,7 +1790,7 @@ class BragaApiClient @Inject constructor(
     private fun getBytes(urlString: String): ByteArray? {
         var conn: HttpURLConnection? = null
         return try {
-            conn = (URL(urlString).openConnection() as HttpURLConnection).apply {
+            conn = openConnection(URL(urlString)).apply {
                 requestMethod = "GET"
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
@@ -1808,12 +1811,7 @@ class BragaApiClient @Inject constructor(
         }
     }
 
-    private val okHttpClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(CONNECT_TIMEOUT_MS.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
-            .readTimeout(READ_TIMEOUT_MS.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
-            .build()
-    }
+    private fun openConnection(url: URL): HttpURLConnection = GatewayConnection(url, httpClient)
 
     private fun patchJson(urlString: String, json: JSONObject): Boolean {
         val token = authService.getTokenBlocking()
@@ -1828,7 +1826,7 @@ class BragaApiClient @Inject constructor(
             requestBuilder.header("Authorization", "Bearer $token")
         }
         return try {
-            okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
+            httpClient.newBuilder().followRedirects(false).followSslRedirects(false).build().newCall(requestBuilder.build()).execute().use { response ->
                 response.isSuccessful
             }
         } catch (e: Exception) {

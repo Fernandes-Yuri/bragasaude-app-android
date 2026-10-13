@@ -8,7 +8,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.serialization.json.Json
-import okhttp3.CertificatePinner
+import br.com.bragasaude.data.remote.network.GatewayTlsPolicy
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
@@ -50,11 +50,7 @@ object NetworkModule {
             //                leaf for renovado, mas não se a CA raiz mudar.
             // RENOVAÇÃO: o leaf Let's Encrypt expira em ~90 dias. Sempre que trocar,
             // atualize o pin primário; o de backup cobre a transição.
-            val certificatePinner = CertificatePinner.Builder()
-                .add("api.bragasaude.online", "sha256/u5RhQ4d7GV6gMQo1uHKCPtHTCSOQn6UZYiQilLwCi8I=")
-                .add("api.bragasaude.online", "sha256/brzvtCELCIZUo4sD/qPX0ccRtPsd3DY6RfmxpOU9oB4=")
-                .build()
-            builder.certificatePinner(certificatePinner)
+            GatewayTlsPolicy.configure(builder, release = true)
         } else {
             // AUD-AN35: nível BODY loga o header Authorization (Bearer token) e
             // corpos clínicos no logcat. Builds debug rodam em aparelhos de
@@ -62,17 +58,18 @@ object NetworkModule {
             // token de sessão. Redire as headers e mantém o corpo em HEADERS.
             val logger = HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.HEADERS
+                redactHeader("Authorization")
             }
             builder.addInterceptor(logger)
         }
 
-        return builder.build()
+        return builder.followRedirects(false).followSslRedirects(false).build()
     }
 
     // AUD-AN32: provideRetrofit / provideBragaApiService removidos — cadeia
     // Retrofit morta (BragaApiService tinha contrato incompatível com o gateway
     // real: "api/profile/sync" vs "api/sync/profile", e DTOs com campos
-    // inexistentes). O app usa BragaApiClient (HttpURLConnection). Se a
+    // inexistentes). O app usa BragaApiClient pelo transporte OkHttp compartilhado. Se a
     // migração Retrofit for retomada, reconstrua a interface a partir do
     // contrato real do gateway; NÃO confie nas rotas de BragaApiService.kt.
 
