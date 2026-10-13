@@ -34,7 +34,8 @@ class SyncWorker @AssistedInject constructor(
     private val familyDao: FamilyDao,
     private val auditLogDao: AuditLogDao,
     private val symptomsDiaryDao: SymptomsDiaryDao,
-    private val bleTelemetryReceiptDao: BleTelemetryReceiptDao
+    private val bleTelemetryReceiptDao: BleTelemetryReceiptDao,
+    private val doseRepository: br.com.bragasaude.data.medicationdoses.MedicationDoseRepository
 ) : CoroutineWorker(appContext, workerParams) {
 
     companion object {
@@ -51,6 +52,7 @@ class SyncWorker @AssistedInject constructor(
         if (!safeSync { syncBiometry() }) hasErrors = true
         if (!safeSync { syncMedications() }) hasErrors = true
         if (!safeSync { syncMedicationLogs() }) hasErrors = true
+        doseRepository.enqueue()
         if (!safeSync { syncSymptomsDiary() }) hasErrors = true
         if (!safeSync { syncBleTelemetry() }) hasErrors = true
         if (!safeSync { syncDailyMetrics() }) hasErrors = true

@@ -103,8 +103,8 @@ class CareOsViewModel @Inject constructor(
                                 (0 until arr.length()).map { arr.getString(it) }.toSet()
                             }.getOrDefault(emptySet())
                             val defaults = when (binding.caregiverRole) {
-                                "ADMIN_CHILD" -> setOf("care:read", "medication:write", "medical:share", "emergency:share")
-                                "PROFESSIONAL_NURSE" -> setOf("care:read", "medication:write")
+                                "ADMIN_CHILD" -> setOf("care:read", "medication:write", "medication:take", "medical:share", "emergency:share")
+                                "PROFESSIONAL_NURSE" -> setOf("care:read", "medication:write", "medication:take")
                                 else -> setOf("care:read")
                             }
                             val permissions = defaults + explicit
@@ -114,7 +114,7 @@ class CareOsViewModel @Inject constructor(
                                     name = binding.patientName?.takeIf(String::isNotBlank)
                                         ?: "Familiar ${binding.patientUserId.takeLast(6)}",
                                     canWriteMedication = "medication:write" in permissions,
-                                    canTakeMedication = false, // Apenas o próprio paciente pode confirmar que tomou a dose
+                                    canTakeMedication = "medication:take" in permissions,
                                     canShareMedical = "medical:share" in permissions,
                                     canShareEmergency = "emergency:share" in permissions,
                                     role = binding.caregiverRole
@@ -205,30 +205,8 @@ class CareOsViewModel @Inject constructor(
 
     // ==================== ESTOQUE + DOSES ====================
 
-    companion object {
-        const val DOSE_COOLDOWN_MILLIS = 23L * 3600L * 1000L // Bloqueio de segurança de 23h
-    }
-
-    /**
-     * Verifica se a dose já foi registrada nas últimas 23 horas.
-     */
-    fun isDoseBlocked(medId: String): Boolean {
-        val lastTaken = _ui.value.lastTakenMillisByMed[medId] ?: return false
-        val elapsed = System.currentTimeMillis() - lastTaken
-        return elapsed in 0 until DOSE_COOLDOWN_MILLIS
-    }
-
-    /**
-     * Retorna a quantidade de horas restantes até desbloquear a próxima dose.
-     */
-    fun hoursUntilNextDose(medId: String): Int {
-        val lastTaken = _ui.value.lastTakenMillisByMed[medId] ?: return 0
-        val elapsed = System.currentTimeMillis() - lastTaken
-        val remaining = DOSE_COOLDOWN_MILLIS - elapsed
-        return if (remaining > 0) {
-            ((remaining + 3599999L) / 3600000L).toInt().coerceAtLeast(1)
-        } else 0
-    }
+    fun isDoseBlocked(medId: String): Boolean = false // Eligibility is per scheduled occurrence, checked in the repository/gateway.
+    fun hoursUntilNextDose(medId: String): Int = 0
 
     /**
      * Registra a toma com trava de segurança de 23h e sem áudio invasivo.
@@ -239,11 +217,6 @@ class CareOsViewModel @Inject constructor(
             val actor = authenticatedUserId ?: return@launch requireAuthentication()
             if (!_ui.value.selectedPatient.canTakeMedication) {
                 _ui.update { it.copy(message = "Seu vínculo permite visualizar, mas não registrar doses.") }
-                return@launch
-            }
-            if (isDoseBlocked(medId)) {
-                val hours = hoursUntilNextDose(medId)
-                _ui.update { it.copy(message = "Esta dose já foi registrada hoje. Próxima liberação em ${hours}h.") }
                 return@launch
             }
             _ui.value = _ui.value.copy(loading = true, message = null)

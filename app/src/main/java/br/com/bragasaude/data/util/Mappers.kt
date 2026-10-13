@@ -202,6 +202,7 @@ fun MedicationEntity.toRemote() = RemoteMedication(
 )
 
 fun RemoteMedicationLog.toEntity() = MedicationLogEntity(
+    actorId = actorId, unitsTaken = unitsTaken,
     id = id ?: java.util.UUID.randomUUID().toString(),
     userId = userId,
     medicationId = medicationId,

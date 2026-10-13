@@ -787,7 +787,9 @@ class BragaApiClient @Inject constructor(
                         userId = obj.getString("user_id"),
                         medicationId = obj.getString("medication_id"),
                         takenAt = obj.getString("taken_at"),
-                        scheduledFor = obj.optString("scheduled_for", null)
+                        scheduledFor = obj.optString("scheduled_for", null),
+                        actorId = if(obj.isNull("actor_id")) null else obj.getString("actor_id"),
+                        unitsTaken = obj.optInt("units_taken",1)
                     )
                 )
             }
@@ -999,6 +1001,29 @@ class BragaApiClient @Inject constructor(
     }
 
     data class ApiResponse(val body: JSONObject?, val code: Int, val errorDetail: String?)
+
+    suspend fun doseRequest(method: String, path: String, payload: JSONObject? = null): ApiResponse =
+        withContext(Dispatchers.IO) {
+            var connection: HttpURLConnection? = null
+            try {
+                require(path.startsWith("/api/"))
+                val target="$baseUrl$path"
+                val conn=(URL(target).openConnection() as HttpURLConnection).apply {
+                    requestMethod=method; connectTimeout=CONNECT_TIMEOUT_MS; readTimeout=READ_TIMEOUT_MS
+                    instanceFollowRedirects=false; setRequestProperty("Accept","application/json")
+                    attachIdentity(target)
+                    if(payload!=null) { doOutput=true; setRequestProperty("Content-Type","application/json; charset=utf-8") }
+                }
+                connection=conn
+                if(payload!=null) OutputStreamWriter(conn.outputStream,Charsets.UTF_8).use { it.write(payload.toString()) }
+                val code=conn.responseCode
+                val stream=if(code in 200..299) conn.inputStream else conn.errorStream
+                val body=stream?.bufferedReader()?.use { it.readText() }?.takeIf { it.isNotBlank() }?.let(::JSONObject)
+                ApiResponse(body,code,body?.optJSONObject("detail")?.optString("message") ?: body?.optString("detail"))
+            } catch(e: kotlinx.coroutines.CancellationException) { throw e
+            } catch(e: Exception) { ApiResponse(null,0,"Sem conexão. A operação permanece salva.")
+            } finally { connection?.disconnect() }
+        }
 
     private fun postJsonDetailed(urlString: String, json: JSONObject): ApiResponse {
         var conn: HttpURLConnection? = null
@@ -1554,7 +1579,7 @@ class BragaApiClient @Inject constructor(
                 }
                 val res = postJsonDetailed("$baseUrl/api/medications/$medicationId/take", json)
                 when (res.code) {
-                    in 200..299 -> TakeMedicationResult.Success
+                    in 200..299 -> if(res.body?.optString("status") == "already_recorded") TakeMedicationResult.AlreadyTaken else TakeMedicationResult.Success
                     409 -> {
                         val detail = res.errorDetail.orEmpty()
                         if (detail.contains("confirmad", ignoreCase = true) ||

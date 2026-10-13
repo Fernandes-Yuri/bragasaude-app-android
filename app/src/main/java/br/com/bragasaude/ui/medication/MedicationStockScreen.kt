@@ -65,6 +65,7 @@ fun MedicationStockScreen(
     viewModel: CareOsViewModel = hiltViewModel()
 ) {
     val ui by viewModel.ui.collectAsState()
+    val doseContext = androidx.compose.ui.platform.LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     var showAddChoice by remember { mutableStateOf(false) }
     var showManualAddDialog by remember { mutableStateOf(false) }
@@ -386,6 +387,13 @@ fun MedicationStockScreen(
                             }
                         }
                     }
+                    item {
+                        br.com.bragasaude.ui.medication.doses.MedicationDosePanel(
+                            patientId=ui.selectedPatient.id,
+                            canTake=ui.selectedPatient.canTakeMedication,
+                            canEdit=ui.selectedPatient.canWriteMedication,
+                            medications=ui.medications.map { it.id to it.name })
+                    }
                     items(ui.medications, key = { it.id }) { med ->
                         MedicationStockCard(
                             medication = med,
@@ -393,7 +401,12 @@ fun MedicationStockScreen(
                             isCritical = viewModel.isStockCritical(med),
                             isDoseBlocked = viewModel.isDoseBlocked(med.id),
                             hoursUntilNextDose = viewModel.hoursUntilNextDose(med.id),
-                            onTake = { viewModel.takeDose(med.id) },
+                            onTake = {
+                                doseContext.startActivity(android.content.Intent(doseContext,br.com.bragasaude.ui.medication.doses.MedicationDoseActivity::class.java)
+                                    .putExtra("patient",ui.selectedPatient.id)
+                                    .putExtra("canTake",ui.selectedPatient.canTakeMedication)
+                                    .putExtra("canEdit",ui.selectedPatient.canWriteMedication))
+                            },
                             onSendReminder = {
                                 val times = MedicationSchedule.times(med.scheduleTimes, med.scheduleTime)
                                 viewModel.sendMedicationReminder(med.name, times)
@@ -617,60 +630,10 @@ private fun MedicationStockCard(
     var showRestock by remember { mutableStateOf(false) }
     var restockQty by remember { mutableStateOf(medication.totalUnits.toString()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showTakeConfirmDialog by remember { mutableStateOf(false) }
     var showEditSchedule by remember { mutableStateOf(false) }
     var showCalendarPrompt by remember { mutableStateOf(false) }
     val currentTimes = remember(medication.scheduleTimes, medication.scheduleTime) {
         MedicationSchedule.times(medication.scheduleTimes, medication.scheduleTime)
-    }
-
-    if (showTakeConfirmDialog) {
-        BragaAlertDialog(
-            onDismissRequest = { showTakeConfirmDialog = false },
-            icon = {
-                Icon(
-                    Icons.Filled.CheckCircle,
-                    contentDescription = null,
-                    tint = BragaEmerald,
-                    modifier = Modifier.size(36.dp)
-                )
-            },
-            title = {
-                Text(
-                    "Confirmar dose",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    color = BragaTextPrimary
-                )
-            },
-            text = {
-                Text(
-                    "Você confirma que tomou a dose de ${medication.name}? O registro será concluído e o botão ficará bloqueado por 23h.",
-                    fontSize = 15.sp,
-                    color = BragaTextSecondary
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showTakeConfirmDialog = false
-                        onTake()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) {
-                    Text("Confirmar", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showTakeConfirmDialog = false },
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) {
-                    Text("Cancelar", color = BragaTextSecondary)
-                }
-            }
-        )
     }
 
     if (showDeleteConfirm) {
@@ -948,8 +911,8 @@ private fun MedicationStockCard(
                         }
                     } else {
                         Button(
-                            onClick = { showTakeConfirmDialog = true },
-                            enabled = !loading && medication.currentUnits > 0,
+                            onClick = onTake,
+                            enabled = !loading,
                             colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
                             modifier = Modifier
                                 .weight(1f)
@@ -957,7 +920,7 @@ private fun MedicationStockCard(
                         ) {
                             Icon(Icons.Filled.CheckCircle, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Tomar dose", color = Color.White, fontSize = 16.sp)
+                            Text("Ver doses por horário", color = Color.White, fontSize = 16.sp)
                         }
                     }
                 } else {

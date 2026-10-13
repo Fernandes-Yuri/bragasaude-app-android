@@ -37,7 +37,8 @@ class MedicationRepository @Inject constructor(
     private val medicationDao: MedicationDao,
     private val medicationLogDao: MedicationLogDao,
     private val careAuditDao: CareAuditDao,
-    private val syncScheduler: SyncScheduler
+    private val syncScheduler: SyncScheduler,
+    private val doseRepository: br.com.bragasaude.data.medicationdoses.MedicationDoseRepository
 ) {
     private val guestId = BragaConstants.GUEST_UID
 
@@ -161,7 +162,7 @@ class MedicationRepository @Inject constructor(
         medicationDao.insert(updatedMed)
 
         // 3) Reagenda notificações afetuosas e alarmes
-        MedicationNotificationScheduler.scheduleMedicationNotifications(context, updatedMed)
+        syncAlarmsWithDatabase(updatedMed.userId)
         syncAlarmsWithDatabase(patientId)
 
         // 4) Registra auditoria
@@ -203,8 +204,11 @@ class MedicationRepository @Inject constructor(
         try {
             val medications = medicationDao.getAllSync(userId)
             MedicationAlarmReceiver.cancelAllAlarms(context, medications)
-            MedicationAlarmReceiver.scheduleAllAlarms(context, userId, medications)
-            MedicationNotificationScheduler.rescheduleAll(context, medications)
+            medications.forEach { MedicationNotificationScheduler.cancelMedicationAlarms(context,it.id) }
+            if(userId != guestId) {
+                try { doseRepository.refresh(userId) } catch(e: kotlinx.coroutines.CancellationException) { throw e }
+                catch(_:Exception) { doseRepository.reschedule() }
+            }
         } catch (e: Exception) {
             android.util.Log.e("MedAlarm", "Erro ao sincronizar alarmes: ${e.message}", e)
         }
@@ -302,7 +306,6 @@ class MedicationRepository @Inject constructor(
         )
         return when (result) {
             is BragaApiClient.TakeMedicationResult.Success -> {
-                medicationDao.decrementUnits(medId, units.coerceAtLeast(1))
                 medicationLogDao.markSynced(logId)
                 syncStockFromServer(userId)
                 recordAudit(userId, "MEDICATION_TAKEN", "${med.name} registrado", actorId)

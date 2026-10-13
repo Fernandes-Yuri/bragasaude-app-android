@@ -41,7 +41,7 @@ class MedicationRepositoryTest {
 
     @Before
     fun setup() {
-        repository = MedicationRepository(context, api, medicationDao, logDao, auditDao, scheduler)
+        repository = MedicationRepository(context, api, medicationDao, logDao, auditDao, scheduler, mockk(relaxed = true))
         coEvery { medicationDao.getById("med-1") } returns medication
         coEvery { logDao.insertOnce(any()) } returns 1L
     }
@@ -57,15 +57,16 @@ class MedicationRepositoryTest {
     }
 
     @Test
-    fun `successful dose decrements local stock exactly once`() = runBlocking {
+    fun `successful dose applies authoritative stock without local debit`() = runBlocking {
         coEvery { api.takeMedication(any(), any()) } returns BragaApiClient.TakeMedicationResult.Success
-        coEvery { api.getMedicationStock("patient-1") } returns emptyList()
+        coEvery { api.getMedicationStock("patient-1") } returns listOf(MedicationStockItem(id="med-1",name=medication.name,currentUnits=9))
         coEvery { medicationDao.getAllSync("patient-1") } returns listOf(medication)
 
         val result = repository.takeDose("patient-1", "med-1", "08:00")
 
         assertTrue(result is BragaApiClient.TakeMedicationResult.Success)
-        coVerify(exactly = 1) { medicationDao.decrementUnits("med-1", 1) }
+        coVerify(exactly = 0) { medicationDao.decrementUnits(any(), any()) }
+        coVerify(exactly = 1) { medicationDao.applyAuthoritativeStock("med-1",9) }
         coVerify(exactly = 1) { logDao.markSynced(any()) }
         verify(exactly = 1) { scheduler.scheduleSync(any()) }
     }

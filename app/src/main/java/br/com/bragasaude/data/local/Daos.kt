@@ -283,6 +283,9 @@ interface MedicationDao {
 
 @Dao
 interface MedicationLogDao {
+    @Query("DELETE FROM medication_logs_local WHERE userId=:patient AND id=:id")
+    suspend fun deleteCanonicalCacheLog(patient:String,id:String)
+
     @Query("SELECT * FROM medication_logs_local WHERE userId = :userId AND medicationId = :medId AND unitsTaken > 0 AND takenAt >= :startInclusiveMillis AND takenAt < :endExclusiveMillis ORDER BY takenAt DESC, id DESC")
     suspend fun getForMemory(userId: String, medId: String, startInclusiveMillis: Long, endExclusiveMillis: Long): List<MedicationLogEntity>
     @Insert(onConflict = OnConflictStrategy.IGNORE)

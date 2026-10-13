@@ -6,6 +6,7 @@ import androidx.room.TypeConverters
 
 @Database(
     entities = [
+        DoseGroupEntity::class, DoseIntentEntity::class, DoseReservationEntity::class, DoseScheduleEntity::class,
         VitalSignEntity::class,
         ProfileEntity::class,
         FoodEntity::class,
@@ -38,11 +39,12 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 53, // Apelido local e alterações pendentes do mural
+    version = 54, // Apelido local e alterações pendentes do mural
     exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class BragaDatabase : RoomDatabase() {
+    abstract fun medicationDoseDao(): MedicationDoseDao
     abstract fun orbChatDao(): OrbChatDao
     abstract fun vitalSignDao(): VitalSignDao
     abstract fun profileDao(): ProfileDao
