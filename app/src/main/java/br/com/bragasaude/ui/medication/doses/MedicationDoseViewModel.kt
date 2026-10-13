@@ -31,6 +31,7 @@ class MedicationDoseViewModel @Inject constructor(private val repository:Medicat
                         val groups=rows.map { DoseGroup.parse(JSONObject(it.payload)) }
                         _state.update { it.copy(groups=groups,intents=intents,reserved=repository.reservations(patient)) }
                     }
+            } catch(e:kotlinx.coroutines.CancellationException) { throw e
             } catch(e:Exception) { _state.update { it.copy(message=e.message) } }
         }
         refresh()

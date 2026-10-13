@@ -57,6 +57,7 @@ class DoseQueuePersistenceTest {
         mockkStatic(WorkManager::class)
         every { WorkManager.getInstance(any()) } returns wm
         coEvery { api.getMedicationStock(any()) } returns emptyList()
+        coEvery { api.getMedicationLogs(any(),any()) } returns emptyList()
         coEvery { api.doseRequest(any(),any(),any()) } coAnswers {
             val method=firstArg<String>();val path=secondArg<String>();val body=thirdArg<JSONObject?>()
             when {

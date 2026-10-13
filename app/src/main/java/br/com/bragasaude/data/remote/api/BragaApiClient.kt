@@ -787,7 +787,9 @@ class BragaApiClient @Inject constructor(
                         userId = obj.getString("user_id"),
                         medicationId = obj.getString("medication_id"),
                         takenAt = obj.getString("taken_at"),
-                        scheduledFor = obj.optString("scheduled_for", null)
+                        scheduledFor = obj.optString("scheduled_for", null),
+                        actorId = if(obj.isNull("actor_id")) null else obj.getString("actor_id"),
+                        unitsTaken = obj.optInt("units_taken",1)
                     )
                 )
             }

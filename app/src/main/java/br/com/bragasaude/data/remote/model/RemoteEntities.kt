@@ -41,7 +41,9 @@ data class RemoteMedicationLog(
     @SerialName("user_id") val userId: String,
     @SerialName("medication_id") val medicationId: String,
     @SerialName("taken_at") val takenAt: String,
-    @SerialName("scheduled_for") val scheduledFor: String? = null
+    @SerialName("scheduled_for") val scheduledFor: String? = null,
+    @SerialName("actor_id") val actorId: String? = null,
+    @SerialName("units_taken") val unitsTaken: Int = 1
 )
 
 

@@ -65,6 +65,7 @@ fun MedicationStockScreen(
     viewModel: CareOsViewModel = hiltViewModel()
 ) {
     val ui by viewModel.ui.collectAsState()
+    val doseContext = androidx.compose.ui.platform.LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     var showAddChoice by remember { mutableStateOf(false) }
     var showManualAddDialog by remember { mutableStateOf(false) }
@@ -400,7 +401,12 @@ fun MedicationStockScreen(
                             isCritical = viewModel.isStockCritical(med),
                             isDoseBlocked = viewModel.isDoseBlocked(med.id),
                             hoursUntilNextDose = viewModel.hoursUntilNextDose(med.id),
-                            onTake = { viewModel.takeDose(med.id) },
+                            onTake = {
+                                doseContext.startActivity(android.content.Intent(doseContext,br.com.bragasaude.ui.medication.doses.MedicationDoseActivity::class.java)
+                                    .putExtra("patient",ui.selectedPatient.id)
+                                    .putExtra("canTake",ui.selectedPatient.canTakeMedication)
+                                    .putExtra("canEdit",ui.selectedPatient.canWriteMedication))
+                            },
                             onSendReminder = {
                                 val times = MedicationSchedule.times(med.scheduleTimes, med.scheduleTime)
                                 viewModel.sendMedicationReminder(med.name, times)

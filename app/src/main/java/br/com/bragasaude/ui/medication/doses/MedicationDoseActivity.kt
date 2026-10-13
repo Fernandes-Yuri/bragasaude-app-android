@@ -22,8 +22,9 @@ class MedicationDoseActivity:ComponentActivity() {
         setContent { BragasaudeTheme {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 TextButton(onClick={finish()}) { Text("Voltar") }
-                if(actor==null || actor!=patient) Text("Entre na conta deste paciente para abrir a notificação.")
-                else MedicationDosePanel(patientId=actor,canTake=true,canEdit=true)
+                if(actor==null || patient==null) Text("Entre na conta deste paciente para abrir a notificação.")
+                else MedicationDosePanel(patientId=patient,canTake=actor==patient || intent.getBooleanExtra("canTake",false),
+                    canEdit=actor==patient || intent.getBooleanExtra("canEdit",false))
             }
         } }
     }

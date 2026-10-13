@@ -8,6 +8,7 @@ import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.ui.medication.doses.DoseAlarmScheduler
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
@@ -105,7 +106,11 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
             val reserved=dao.reserved(group.patientId).toSet()
             require(selected.none { it in reserved }) { "Já existe uma confirmação salva para esta dose." }
             for(occurrence in selected) dao.reserve(DoseReservationEntity(group.patientId,occurrence,id))
-            dao.putIntent(DoseIntentEntity(id,actor,group.patientId,group.id,group.payload,
+            val candidates=group.items.filter { it.eligible && it.occurrenceId !in reserved }.map { it.occurrenceId }.toSet()
+            val items=JSONObject(group.payload).getJSONArray("items")
+            val exactSnapshot=JSONObject(group.payload).put("items",JSONArray((0 until items.length()).map { items.getJSONObject(it) }
+                .filter { it.getString("occurrence_id") in candidates })).toString()
+            dao.putIntent(DoseIntentEntity(id,actor,group.patientId,group.id,exactSnapshot,
                 JSONArray(selected.sorted()).toString(),id,UUID.randomUUID().toString(),Instant.now().toString()))
         }
         enqueue(); reschedule()
@@ -119,6 +124,9 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
     }
     private suspend fun resolved(intent:DoseIntentEntity,result:JSONObject) {
         val resultItems=result.optJSONArray("items") ?: JSONArray()
+        val authoritativeLogs=try { api.getMedicationLogs(intent.patientId,90).orEmpty().associateBy { it.id } }
+            catch(e:kotlinx.coroutines.CancellationException) { throw e } catch(_:Exception) { emptyMap() }
+        val previousLogs=database.medicationLogDao().getAllLogs(intent.patientId).first()
         database.withTransaction {
             dao.release(intent.id)
             for(index in 0 until resultItems.length()) {
@@ -129,14 +137,24 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
                 val instant=Instant.parse(item.getString("scheduled_at"))
                 val local=instant.atZone(ZoneId.of(result.getString("timezone")))
                 val units=item.optInt("recorded_units",item.optInt("dose_units",1))
+                val logId=item.getString("log_id")
+                val remote=authoritativeLogs[logId]
+                for(old in previousLogs.filter { it.medicationId==item.getString("medication_id") }) {
+                    val oldInstant=runCatching { Instant.parse(old.careOsScheduledFor ?: old.scheduledFor) }.getOrElse {
+                        runCatching { LocalDateTime.parse(old.scheduledFor).atZone(ZoneId.of(result.getString("timezone"))).toInstant() }.getOrNull()
+                    }
+                    if(old.id!=logId && oldInstant==instant) database.medicationLogDao().deleteCanonicalCacheLog(intent.patientId,old.id)
+                }
                 database.medicationLogDao().insertOnce(MedicationLogEntity(
-                    id=item.getString("log_id"),userId=intent.patientId,medicationId=item.getString("medication_id"),
-                    takenAt=Date.from(Instant.parse(intent.declaredAt)),scheduledFor="${local.toLocalDate()}T${local.toLocalTime()}",
-                    actorId=intent.actorId,unitsTaken=units,careOsScheduledFor=instant.toString(),pendingSync=false))
+                    id=logId,userId=intent.patientId,medicationId=item.getString("medication_id"),
+                    takenAt=Date.from(runCatching { Instant.parse(remote?.takenAt) }.getOrDefault(Instant.parse(intent.declaredAt))),scheduledFor="${local.toLocalDate()}T${local.toLocalTime()}",
+                    actorId=remote?.actorId ?: if(item.getString("status")=="recorded") intent.actorId else null,unitsTaken=remote?.unitsTaken ?: units,careOsScheduledFor=instant.toString(),pendingSync=false))
             }
             dao.putIntent(intent.copy(state="RESOLVED",result=result.toString(),message=DoseProtocol.summary(result)))
         }
-        api.getMedicationStock(intent.patientId).forEach { item -> item.id?.let { database.medicationDao().applyAuthoritativeStock(it,item.currentUnits) } }
+        try {
+            api.getMedicationStock(intent.patientId).forEach { item -> item.id?.let { database.medicationDao().applyAuthoritativeStock(it,item.currentUnits) } }
+        } catch(e:kotlinx.coroutines.CancellationException) { throw e } catch(_:Exception) { }
     }
     suspend fun flush():Boolean=lock.withLock {
         val actor=auth.currentUser?.uid ?: return@withLock true
