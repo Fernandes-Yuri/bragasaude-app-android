@@ -377,7 +377,7 @@ jobs:
             --output verified-release.json
           SOURCE_SHA=$(python3 -c "import json;print(json.load(open('verified-release.json'))['source_sha'])")
           git merge-base --is-ancestor "$SOURCE_SHA" origin/master
-          python3 .github/scripts/check_release_tag.py verified-release.json "$GITHUB_REPOSITORY"
+          python3 .github/scripts/check_release_tag.py release-manifest.json "$GITHUB_REPOSITORY"
 
       - name: Credenciais AWS (entrega via SSM)
         uses: aws-actions/configure-aws-credentials@v4

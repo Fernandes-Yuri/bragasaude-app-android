@@ -34,7 +34,11 @@ def inspect_apk(apk, variant, policy=None):
     apk = Path(apk)
     # Falha criptográfica nunca é convertida em artifact elegível a release.
     signature = invoke([tool('apksigner'), 'verify', '--print-certs', str(apk)])
-    signers = re.findall(r'Signer #\d+ certificate SHA-256 digest:\s*([a-fA-F0-9]{64})', signature)
+    # v3.1 descreve faixas de SDK em vez de "#1" e pode repetir a mesma chave.
+    # Source Stamp não é o assinante do APK e fica fora da seleção.
+    signers = sorted(set(value.lower() for value in re.findall(
+        r'^Signer(?: #\d+| \(.*\)) certificate SHA-256 digest:\s*([a-fA-F0-9]{64})\s*$',
+        signature, re.MULTILINE)))
     if len(signers) != 1:
         raise ValueError('APK precisa de um único certificado aprovado')
     analyzer = tool('apkanalyzer')
@@ -80,7 +84,7 @@ def validate_promotion(apk, manifest, origin, jobs, repository, current_run_id):
         raise ValueError('Manifesto ausente, desconhecido ou incompleto')
     if manifest['variant'] != 'release' or manifest['debuggable'] is not False:
         raise ValueError('Artifact de diagnóstico não é release')
-    if origin.get('head_repository', {}).get('full_name') != repository or origin.get('path') != '.github/workflows/android-apk.yml':
+    if (origin.get('head_repository') or {}).get('full_name') != repository or origin.get('path') != '.github/workflows/android-apk.yml':
         raise ValueError('Origem de workflow/repositório não autorizada')
     if origin.get('id') != manifest['run_id'] or origin.get('head_sha') != manifest['source_sha']:
         raise ValueError('Commit/run diverge do manifesto do APK')

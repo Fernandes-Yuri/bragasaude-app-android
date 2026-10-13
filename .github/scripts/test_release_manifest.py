@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import release_manifest as gate
 import publish_apk
+from check_release_tag import check_release_tag
 
 CERT = json.loads(gate.POLICY.read_text())['certificate_sha256']
 INFO = {'package_name': 'br.com.bragasaude', 'variant': 'release', 'debuggable': False,
@@ -91,6 +92,31 @@ class GateTests(unittest.TestCase):
             self.assertEqual(target.read_bytes(), content)
             self.assertEqual(old.read_bytes(), b'old')
             self.assertFalse(list(Path(temp).glob('*.tmp')))
+
+    def test_v31_sdk_ranges_deduplicate_same_signer_but_reject_mixed_keys(self):
+        with tempfile.TemporaryDirectory() as temp:
+            apk = Path(temp) / 'fixture.apk'; apk.write_bytes(b'synthetic')
+            def output(args):
+                if args[0] == 'apksigner':
+                    return (f'Signer (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: {CERT}\n'
+                            f'Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: {CERT}\n'
+                            f'Source Stamp Signer certificate SHA-256 digest: {"0" * 64}')
+                return {'application-id': 'br.com.bragasaude', 'debuggable': 'false',
+                        'version-name': '1.7.1', 'version-code': '32', 'min-sdk': '26'}[args[2]]
+            with patch.object(gate, 'tool', side_effect=lambda name: name), patch.object(gate, 'invoke', side_effect=output):
+                self.assertEqual(gate.inspect_apk(apk, 'release')['certificate_sha256'], CERT)
+            mixed = f'Signer #1 certificate SHA-256 digest: {CERT}\nSigner #2 certificate SHA-256 digest: {"0" * 64}'
+            with patch.object(gate, 'tool', side_effect=lambda name: name), patch.object(gate, 'invoke', return_value=mixed), self.assertRaises(ValueError):
+                gate.inspect_apk(apk, 'release')
+
+    def test_published_tags_cannot_receive_other_apk_or_manifest_bytes(self):
+        release = {'assets': [{'name': 'app-release.apk', 'digest': 'sha256:' + INFO['sha256']},
+                              {'name': 'release-manifest.json', 'digest': 'sha256:' + 'b' * 64}]}
+        check_release_tag(release, MANIFEST, 'b' * 64)
+        with self.assertRaises(ValueError):
+            check_release_tag(release, MANIFEST, 'c' * 64)
+        with self.assertRaises(ValueError):
+            check_release_tag(release, {**MANIFEST, 'sha256': 'd' * 64}, 'b' * 64)
 
 
 if __name__ == '__main__':
