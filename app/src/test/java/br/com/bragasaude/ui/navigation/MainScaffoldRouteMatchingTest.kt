@@ -45,11 +45,14 @@ class MainScaffoldRouteMatchingTest {
     @Test fun `orbe aparece nas visoes gerais com argumentos de navegacao`() {
         assertTrue(shouldShowAssistantOrb("Screen\$Home"))
         assertTrue(shouldShowAssistantOrb("Screen\$Report"))
-        assertTrue(shouldShowAssistantOrb("Screen\$CaregiverDashboard"))
         assertTrue(shouldShowAssistantOrb("Screen\$Nutrition?searchFood=arroz"))
         assertTrue(shouldShowAssistantOrb("Screen\$Hydration?initialMl=200"))
         assertTrue(shouldShowAssistantOrb("Screen\$Steps"))
         assertTrue(shouldShowAssistantOrb("Screen\$Reminders"))
+    }
+
+    @Test fun `orbe nao cobre informacoes no painel de acompanhamento`() {
+        assertFalse(shouldShowAssistantOrb("Screen\$CaregiverDashboard"))
     }
 
     @Test fun `orbe fica oculta em exames formularios conversas e telas administrativas`() {

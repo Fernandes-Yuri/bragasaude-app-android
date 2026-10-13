@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -40,6 +39,7 @@ import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Medication
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -50,6 +50,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -92,19 +94,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import br.com.bragasaude.data.local.FamilyBindingEntity
 import br.com.bragasaude.data.local.GroceryListItemEntity
 import java.util.*
 
-/**
- * Painel do Cuidador — acompanhamento sobrio e profissional do familiar idoso.
- *
- * Design nivel Apple Health / Google Health:
- * - Metricas vitais em mini-cards com barras lineares de progresso
- * - Atalhos em chips horizontais com icones vetoriais
- * - Lista de compras com checklist clean e tachado suave
- * - Zero emojis
- * - Bordas sutis, tipografia hierarquica, layout respirado
- */
+/** Painel de cuidado familiar, com foco em identificação do paciente e leitura rápida dos dados. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CaregiverDashboardScreen(
@@ -150,6 +144,7 @@ fun CaregiverDashboardScreen(
     var showAppointmentDialog by remember { mutableStateOf(false) }
     var showNoteDialog by remember { mutableStateOf(false) }
     var showFamilyPostDialog by remember { mutableStateOf(false) }
+    var showDashboardMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -158,8 +153,11 @@ fun CaregiverDashboardScreen(
                 title = {
                     Text(
                         "Acompanhamento",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 },
                 navigationIcon = {
@@ -171,11 +169,31 @@ fun CaregiverDashboardScreen(
                     IconButton(onClick = onOpenChat) {
                         Icon(Icons.Default.Forum, contentDescription = "Conversar no chat")
                     }
-                    IconButton(onClick = onConnectFamily) {
-                        Icon(Icons.Default.PersonAdd, contentDescription = "Conectar familiar")
-                    }
-                    IconButton(onClick = { viewModel.refreshPatientData() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Atualizar dados agora")
+                    Box {
+                        IconButton(onClick = { showDashboardMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Mais opções")
+                        }
+                        DropdownMenu(
+                            expanded = showDashboardMenu,
+                            onDismissRequest = { showDashboardMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Conectar familiar") },
+                                leadingIcon = { Icon(Icons.Default.PersonAdd, contentDescription = null) },
+                                onClick = {
+                                    showDashboardMenu = false
+                                    onConnectFamily()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Atualizar dados") },
+                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                onClick = {
+                                    showDashboardMenu = false
+                                    viewModel.refreshPatientData()
+                                }
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -209,13 +227,13 @@ fun CaregiverDashboardScreen(
                     .padding(innerPadding)
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(vertical = 8.dp)
+                contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
             ) {
                 // Seletor quando acompanha mais de um familiar
                 if (watchedPatients.size > 1) {
                     item {
                         PatientSelectorRow(
-                            count = watchedPatients.size,
+                            patients = watchedPatients,
                             selectedIndex = watchedPatients.indexOfFirst { it.patientUserId == dashboard.patientUserId },
                             onSelect = { viewModel.selectPatient(watchedPatients[it]) }
                         )
@@ -418,7 +436,7 @@ fun CaregiverDashboardScreen(
 
 @Composable
 private fun PatientSelectorRow(
-    count: Int,
+    patients: List<FamilyBindingEntity>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit
 ) {
@@ -426,16 +444,20 @@ private fun PatientSelectorRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        repeat(count) { index ->
+    repeat(patients.size) { index ->
             val isSelected = index == selectedIndex
+        val patientName = patients[index].patientName?.trim()?.takeIf { it.isNotEmpty() }
+            ?: "Pessoa ${index + 1}"
             FilterChip(
                 selected = isSelected,
                 onClick = { onSelect(index) },
                 label = {
                     Text(
-                        "Familiar ${index + 1}",
+                        patientName,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 },
                 leadingIcon = if (isSelected) {
@@ -783,46 +805,43 @@ private fun QuickActionsChips(
 ) {
     Column {
         Text(
-            "Acoes rapidas",
+            "Ações rápidas",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 10.dp)
         )
 
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(end = 8.dp)
-        ) {
-            item {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionChip(
                     icon = Icons.Default.Medication,
-                    label = "Medicacao",
+                    label = "Medicação",
                     accent = Color(0xFFE65100),
+                    modifier = Modifier.weight(1f),
                     onClick = onMedicationReminder
                 )
-            }
-            item {
                 ActionChip(
                     icon = Icons.Default.CalendarMonth,
                     label = "Consulta",
                     accent = Color(0xFF6A1B9A),
+                    modifier = Modifier.weight(1f),
                     onClick = onAppointment
                 )
             }
-            item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionChip(
                     icon = Icons.AutoMirrored.Filled.Message,
                     label = "Mensagem",
                     accent = Color(0xFFAD1457),
+                    modifier = Modifier.weight(1f),
                     onClick = onCareNote
                 )
-            }
-            item {
                 ActionChip(
                     icon = Icons.Default.Group,
-                    label = "Familia",
+                    label = "Família",
                     accent = Color(0xFF2E7D32),
+                    modifier = Modifier.weight(1f),
                     onClick = onFamilyPost
                 )
             }
@@ -835,6 +854,7 @@ private fun ActionChip(
     icon: ImageVector,
     label: String,
     accent: Color,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Surface(
@@ -842,11 +862,12 @@ private fun ActionChip(
         shape = RoundedCornerShape(12.dp),
         color = accent.copy(alpha = 0.06f),
         border = BorderStroke(1.dp, accent.copy(alpha = 0.2f)),
-        modifier = Modifier.heightIn(min = 48.dp)
+        modifier = modifier.fillMaxWidth().heightIn(min = 48.dp)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
             Icon(
                 icon,
@@ -859,7 +880,9 @@ private fun ActionChip(
                 label,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = accent
+                color = accent,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
