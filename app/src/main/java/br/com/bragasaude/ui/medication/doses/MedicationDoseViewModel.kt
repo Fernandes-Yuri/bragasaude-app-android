@@ -49,7 +49,8 @@ class MedicationDoseViewModel @Inject constructor(private val repository:Medicat
     fun discardDraft()=run {
         val medication=requireNotNull(_state.value.scheduleMedication)
         repository.discardDraft(medication)
-        _state.update { it.copy(schedule=repository.schedule(it.patient,medication)) }
+        val schedule=repository.schedule(_state.value.patient,medication)
+        _state.update { it.copy(schedule=schedule) }
         "Programação remota recuperada."
     }
     fun closeEditor() { _state.update { it.copy(schedule=null,scheduleMedication=null) } }

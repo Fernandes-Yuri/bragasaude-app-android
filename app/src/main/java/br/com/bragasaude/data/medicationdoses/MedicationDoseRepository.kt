@@ -136,7 +136,7 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
             }
             dao.putIntent(intent.copy(state="RESOLVED",result=result.toString(),message=DoseProtocol.summary(result)))
         }
-        api.getMedicationStock(intent.patientId).forEach { database.medicationDao().applyAuthoritativeStock(it.id,it.currentUnits) }
+        api.getMedicationStock(intent.patientId).forEach { item -> item.id?.let { database.medicationDao().applyAuthoritativeStock(it,item.currentUnits) } }
     }
     suspend fun flush():Boolean=lock.withLock {
         val actor=auth.currentUser?.uid ?: return@withLock true
