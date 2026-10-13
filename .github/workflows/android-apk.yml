@@ -411,21 +411,4 @@ jobs:
         run: python3 .github/scripts/ssm_release.py --manifest verified-release.json
 
   release-policy:
-    name: Verificar política de release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: android-actions/setup-android@v4
-        with:
-          packages: 'build-tools;35.0.0'
-      - name: Regressões de proveniência e staging
-        run: python3 -m unittest discover -s .github/scripts -p 'test_release_manifest.py' -v
-      - name: Prova com assinatura real e APKs negativos
-        run: |
-          curl -fL --retry 3 -o baseline.apk \
-            https://github.com/Fernandes-Yuri/bragasaude-app-android/releases/download/v1.7.1-build32/app-release.apk
-          python3 .github/scripts/test_release_apk_real.py baseline.apk
+    uses: ./.github/workflows/release-policy.yml
