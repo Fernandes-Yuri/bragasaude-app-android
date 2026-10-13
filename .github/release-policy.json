@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "package_name": "br.com.bragasaude",
+  "certificate_sha256": "a3a1c2f78dabb70decb230861005ab64c73adaa3640937c2a9f21ba6d5b82069",
+  "baseline": "v1.7.1-build32",
+  "baseline_apk_sha256": "721a9e07d7dc5d48b007bbf7f858dc2c69881d1c64b3f6e98a81e567934a043e"
+}
