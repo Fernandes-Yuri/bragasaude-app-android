@@ -52,10 +52,11 @@ class DoseQueuePersistenceTest {
     }
     @Before fun before() {
         context.deleteDatabase("dose-test.db")
+        every { auth.addAuthStateListener(any()) } just Runs
         every { auth.currentUser } returns user
         every { user.uid } answers { actor }
-        mockkStatic(WorkManager::class)
-        every { WorkManager.getInstance(any()) } returns wm
+        mockkObject(WorkManager.Companion)
+        every { WorkManager.getInstance(context) } returns wm
         coEvery { api.getMedicationStock(any()) } returns emptyList()
         coEvery { api.getMedicationLogs(any(),any()) } returns emptyList()
         coEvery { api.doseRequest(any(),any(),any()) } coAnswers {
@@ -93,7 +94,7 @@ class DoseQueuePersistenceTest {
         db.medicationDoseDao().putGroup(DoseGroupEntity("patient",group.id,"patient",group.date,group.instant.toEpochMilli(),group.payload,System.currentTimeMillis()))
         return group
     }
-    @After fun after() { db.close();context.deleteDatabase("dose-test.db");unmockkStatic(WorkManager::class) }
+    @After fun after() { if(this::db.isInitialized) db.close();context.deleteDatabase("dose-test.db");unmockkObject(WorkManager.Companion) }
     @Test fun twelveDosesAndExclusionsProduceOneBatchAndOnlySelectedLogs()=runBlocking {
         val group=cache();val selected=group.items.dropLast(2).map { it.occurrenceId }.toSet()
         repo.submit(group,selected)

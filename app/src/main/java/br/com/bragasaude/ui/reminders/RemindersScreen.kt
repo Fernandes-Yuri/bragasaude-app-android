@@ -128,6 +128,11 @@ fun RemindersScreen(
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    item {
+                        viewModel.authenticatedPatientId?.let { patient ->
+                            br.com.bragasaude.ui.medication.doses.MedicationDosePanel(patientId=patient,canTake=true,canEdit=true)
+                        }
+                    }
                     items(medicationItems, key = { it.first.id ?: it.first.name }) { (med, taken, available, doses) ->
                         MedicationCard(
                             med = med,

@@ -9,6 +9,10 @@ import br.com.bragasaude.ui.medication.doses.DoseAlarmScheduler
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
@@ -26,6 +30,21 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
     private val database:BragaDatabase,private val api:BragaApiClient,private val auth:FirebaseAuth) {
     private val dao get()=database.medicationDoseDao()
     private val lock=Mutex()
+    init {
+        var priorActor:String?=null
+        auth.addAuthStateListener { firebase ->
+            val current=firebase.currentUser?.uid
+            if(current!=priorActor) {
+                val previous=priorActor;priorActor=current
+                CoroutineScope(SupervisorJob()+Dispatchers.IO).launch {
+                    try {
+                        previous?.let { WorkManager.getInstance(context).cancelUniqueWork("medication-dose-sync-$it") }
+                        reschedule();if(current!=null) enqueue()
+                    } catch(e:kotlinx.coroutines.CancellationException) { throw e } catch(_:Exception) { }
+                }
+            }
+        }
+    }
     fun actor()=auth.currentUser?.uid ?: throw IllegalStateException("Entre na sua conta para registrar doses.")
     fun groups(patient:String)=dao.groups(actor(),patient)
     fun intents(patient:String)=dao.intents(actor(),patient)
@@ -48,6 +67,7 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
     suspend fun refresh(patient:String,horizon:Int=7) {
         val actor=actor()
         val capabilities=request("GET","/api/medication-dose-capabilities")
+        require(capabilities.optInt("medication_batch_contract")==1) { "Atualize o app para usar este contrato de medicação." }
         if(!capabilities.optBoolean("enabled")) throw DoseApiException("CONTRACT_DISABLED",503,"Confirmação coletiva temporariamente indisponível.")
         var today:LocalDate?=null
         for(offset in 0 until horizon) {
@@ -145,7 +165,7 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
                     }
                     if(old.id!=logId && oldInstant==instant) database.medicationLogDao().deleteCanonicalCacheLog(intent.patientId,old.id)
                 }
-                database.medicationLogDao().insertOnce(MedicationLogEntity(
+                database.medicationLogDao().insert(MedicationLogEntity(
                     id=logId,userId=intent.patientId,medicationId=item.getString("medication_id"),
                     takenAt=Date.from(runCatching { Instant.parse(remote?.takenAt) }.getOrDefault(Instant.parse(intent.declaredAt))),scheduledFor="${local.toLocalDate()}T${local.toLocalTime()}",
                     actorId=remote?.actorId ?: if(item.getString("status")=="recorded") intent.actorId else null,unitsTaken=remote?.unitsTaken ?: units,careOsScheduledFor=instant.toString(),pendingSync=false))

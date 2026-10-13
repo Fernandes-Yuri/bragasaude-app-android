@@ -23,6 +23,8 @@ import org.json.JSONObject
 fun MedicationDosePanel(patientId:String,canTake:Boolean,canEdit:Boolean,medications:List<Pair<String,String>> = emptyList(),
     viewModel:MedicationDoseViewModel=hiltViewModel()) {
     val state by viewModel.state.collectAsState()
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while(true) { nowMillis=System.currentTimeMillis();kotlinx.coroutines.delay(30_000) } }
     LaunchedEffect(patientId) { viewModel.open(patientId) }
     val lifecycle=androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycle,patientId) {
@@ -40,6 +42,14 @@ fun MedicationDosePanel(patientId:String,canTake:Boolean,canEdit:Boolean,medicat
             Text("Permita alarmes exatos nas configurações para avisos no horário previsto.")
         if(!androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled())
             Text("As notificações estão desativadas. Consulte os horários nesta tela.")
+        var preAlert by remember { mutableStateOf(context.getSharedPreferences("dose_preferences",android.content.Context.MODE_PRIVATE).getBoolean("pre_alert",false)) }
+        Row {
+            Checkbox(checked=preAlert,onCheckedChange={value ->
+                preAlert=value;context.getSharedPreferences("dose_preferences",android.content.Context.MODE_PRIVATE).edit().putBoolean("pre_alert",value).apply()
+                viewModel.reconcileAlarms()
+            })
+            Text("Receber também um pré-aviso de 15 minutos")
+        }
         state.message?.let { Text(it,style=MaterialTheme.typography.bodyLarge) }
         val todayGroups=state.groups.filter { it.date==LocalDate.now(ZoneId.of(it.zone)).toString() }
         if(todayGroups.isEmpty()) Text("Nenhum grupo disponível. Atualize a programação ou confira o cadastro.")
@@ -85,12 +95,12 @@ fun MedicationDosePanel(patientId:String,canTake:Boolean,canEdit:Boolean,medicat
                         })
                         Text("Revisei este grupo; permitir confirmar diretamente na notificação.")
                     }
-                    Button(onClick={viewModel.submit(group,selected)},enabled=canTake && !state.busy && selected.isNotEmpty() && !group.instant.isAfter(Instant.now()),
+                    Button(onClick={viewModel.submit(group,selected)},enabled=canTake && !state.busy && selected.isNotEmpty() && !group.instant.isAfter(Instant.ofEpochMilli(nowMillis)),
                         modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {
                         Text(if(selected.size==available.size && available.size==group.items.size) "Tomei todos"
                             else "Confirmar ${selected.size} selecionados")
                     }
-                    if(group.instant.isAfter(Instant.now())) Text("A confirmação será liberada no horário desta dose.")
+                    if(group.instant.isAfter(Instant.ofEpochMilli(nowMillis))) Text("A confirmação será liberada no horário desta dose.")
                 }
             }
         }

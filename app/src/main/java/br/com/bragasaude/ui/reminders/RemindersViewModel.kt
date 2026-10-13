@@ -28,6 +28,7 @@ class RemindersViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
+    val authenticatedPatientId: String? get() = auth.currentUser?.uid
     private val userId = auth.currentUser?.uid ?: br.com.bragasaude.util.BragaConstants.GUEST_UID
 
     /**

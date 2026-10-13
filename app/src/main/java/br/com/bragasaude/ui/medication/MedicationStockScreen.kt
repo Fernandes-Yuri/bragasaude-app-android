@@ -630,60 +630,10 @@ private fun MedicationStockCard(
     var showRestock by remember { mutableStateOf(false) }
     var restockQty by remember { mutableStateOf(medication.totalUnits.toString()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showTakeConfirmDialog by remember { mutableStateOf(false) }
     var showEditSchedule by remember { mutableStateOf(false) }
     var showCalendarPrompt by remember { mutableStateOf(false) }
     val currentTimes = remember(medication.scheduleTimes, medication.scheduleTime) {
         MedicationSchedule.times(medication.scheduleTimes, medication.scheduleTime)
-    }
-
-    if (showTakeConfirmDialog) {
-        BragaAlertDialog(
-            onDismissRequest = { showTakeConfirmDialog = false },
-            icon = {
-                Icon(
-                    Icons.Filled.CheckCircle,
-                    contentDescription = null,
-                    tint = BragaEmerald,
-                    modifier = Modifier.size(36.dp)
-                )
-            },
-            title = {
-                Text(
-                    "Confirmar dose",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    color = BragaTextPrimary
-                )
-            },
-            text = {
-                Text(
-                    "Você confirma que tomou a dose de ${medication.name}? Somente esta ocorrência será registrada; os outros horários permanecem independentes.",
-                    fontSize = 15.sp,
-                    color = BragaTextSecondary
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showTakeConfirmDialog = false
-                        onTake()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) {
-                    Text("Confirmar", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showTakeConfirmDialog = false },
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) {
-                    Text("Cancelar", color = BragaTextSecondary)
-                }
-            }
-        )
     }
 
     if (showDeleteConfirm) {
@@ -961,8 +911,8 @@ private fun MedicationStockCard(
                         }
                     } else {
                         Button(
-                            onClick = { showTakeConfirmDialog = true },
-                            enabled = !loading && medication.currentUnits > 0,
+                            onClick = onTake,
+                            enabled = !loading,
                             colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
                             modifier = Modifier
                                 .weight(1f)
@@ -970,7 +920,7 @@ private fun MedicationStockCard(
                         ) {
                             Icon(Icons.Filled.CheckCircle, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Tomar dose", color = Color.White, fontSize = 16.sp)
+                            Text("Ver doses por horário", color = Color.White, fontSize = 16.sp)
                         }
                     }
                 } else {
