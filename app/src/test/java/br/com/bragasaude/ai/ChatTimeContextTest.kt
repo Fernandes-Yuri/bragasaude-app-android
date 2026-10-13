@@ -21,4 +21,15 @@ class ChatTimeContextTest {
         assertEquals(3, ChatTimeContext.suggestions(LocalTime.MIDNIGHT).size)
         listOf(5, 11, 15, 19).forEach { assertEquals(4, ChatTimeContext.suggestions(LocalTime.of(it, 0)).size) }
     }
+
+    @Test fun `sugestoes por horario nao orientam tomada de medicamento`() {
+        listOf(0, 5, 11, 15, 18, 22).forEach { hour ->
+            val suggestions = ChatTimeContext.suggestions(LocalTime.of(hour, 30))
+            assertTrue(suggestions.none { suggestion ->
+                suggestion.contains("remédio", ignoreCase = true) ||
+                    suggestion.contains("medicamento", ignoreCase = true)
+            })
+        }
+        assertFalse(ChatTimeContext.suggestions(LocalTime.of(12, 30)).contains("Remédio pós-almoço"))
+    }
 }

@@ -97,9 +97,11 @@ fun HistoryMetricsSection(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "Histórico de Medições",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
+                            "Medições recentes",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
@@ -252,36 +254,39 @@ private fun BPRecordRow(record: VitalSignEntity) {
     val systolic = record.systolicPressure ?: 0
     val diastolic = record.diastolicPressure ?: 0
     val classification = BloodPressureParser.classify(systolic, diastolic)
-    val dateStr = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(record.measuredAt)
+    val dateStr = SimpleDateFormat("dd/MM · HH:mm", Locale.getDefault()).format(record.measuredAt)
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(classification.category.displayColor.copy(alpha = 0.08f))
             .border(1.dp, classification.category.displayColor.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            dateStr,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f, fill = false),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(
-            "$systolic/$diastolic mmHg",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = classification.category.displayColor,
-            modifier = Modifier.weight(1f, fill = false),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(Modifier.weight(1f))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                dateStr,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "$systolic/$diastolic mmHg",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = classification.category.displayColor,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+        Spacer(Modifier.height(4.dp))
         ChipLabel(classification.category.displayName, color = classification.category.displayColor)
     }
 }
@@ -290,35 +295,38 @@ private fun BPRecordRow(record: VitalSignEntity) {
 private fun GlucoseRecordRow(record: VitalSignEntity) {
     val glucose = record.glucoseLevel ?: 0
     val classification = GlucoseClassifier.classify(glucose, GlucoseContext.FASTING)
-    val dateStr = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(record.measuredAt)
+    val dateStr = SimpleDateFormat("dd/MM · HH:mm", Locale.getDefault()).format(record.measuredAt)
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(classification.category.displayColor.copy(alpha = 0.08f))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        Text(
-            dateStr,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f, fill = false),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(
-            "$glucose mg/dL",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = classification.category.displayColor,
-            modifier = Modifier.weight(1f, fill = false),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(Modifier.weight(1f))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                dateStr,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "$glucose mg/dL",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = classification.category.displayColor,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+        Spacer(Modifier.height(4.dp))
         ChipLabel(classification.category.displayName, color = classification.category.displayColor)
     }
 }
@@ -329,9 +337,20 @@ private fun ConsistencyBar(label: String, percentage: Int, daysMet: Int, totalDa
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text(label, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.weight(1f))
-            Text("${percentage}%", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = color)
+            Text(
+                label,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                if (totalDays > 0) "${percentage}%" else "—",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
         }
         Spacer(Modifier.height(4.dp))
         LinearProgressIndicator(
@@ -341,7 +360,12 @@ private fun ConsistencyBar(label: String, percentage: Int, daysMet: Int, totalDa
             trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
         Spacer(Modifier.height(2.dp))
-        Text("$daysMet de $totalDays dias", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+        Text(
+            if (totalDays > 0) "$daysMet de $totalDays ${if (totalDays == 1) "dia" else "dias"}"
+            else "Sem registros no período",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+        )
     }
 }
 

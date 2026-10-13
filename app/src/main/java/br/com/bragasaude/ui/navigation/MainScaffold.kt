@@ -162,7 +162,6 @@ internal fun shouldShowAssistantOrb(currentRoute: String?): Boolean =
     listOf(
         Screen.Home,
         Screen.Report,
-        Screen.CaregiverDashboard,
         Screen.Nutrition(),
         Screen.Hydration(),
         Screen.Steps,
