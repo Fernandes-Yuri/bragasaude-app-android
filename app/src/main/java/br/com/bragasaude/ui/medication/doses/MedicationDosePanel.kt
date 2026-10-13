@@ -51,7 +51,8 @@ fun MedicationDosePanel(patientId:String,canTake:Boolean,canEdit:Boolean,medicat
             Text("Receber também um pré-aviso de 15 minutos")
         }
         state.message?.let { Text(it,style=MaterialTheme.typography.bodyLarge) }
-        val todayGroups=state.groups.filter { it.date==LocalDate.now(ZoneId.of(it.zone)).toString() }
+        state.selectedDate?.let { Text("Revisando o dia $it");TextButton(onClick={viewModel.today()}) { Text("Voltar para hoje") } }
+        val todayGroups=state.groups.filter { it.date==(state.selectedDate ?: LocalDate.now(ZoneId.of(it.zone)).toString()) }
         if(todayGroups.isEmpty()) Text("Nenhum grupo disponível. Atualize a programação ou confira o cadastro.")
         todayGroups.forEach { group ->
             val available=group.items.filter { it.eligible && it.occurrenceId !in state.reserved }
@@ -112,6 +113,7 @@ fun MedicationDosePanel(patientId:String,canTake:Boolean,canEdit:Boolean,medicat
                 "CANCELLED" -> "Proposta cancelada."
                 else -> "Confirmação salva; aguardando sincronização.${intent.message?.let { " $it" } ?: ""}"
             })
+            if(intent.state=="REVIEW") TextButton(onClick={viewModel.review(intent)},enabled=!state.busy) { Text("Revisar esta confirmação") }
             if(intent.state in setOf("PENDING","WAITING")) TextButton(onClick={viewModel.cancel(intent.id)}) { Text("Cancelar proposta") }
         }
         if(canEdit && medications.isNotEmpty()) {

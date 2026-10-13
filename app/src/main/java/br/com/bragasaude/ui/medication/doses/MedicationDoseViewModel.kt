@@ -14,7 +14,7 @@ import javax.inject.Inject
 
 data class DoseScreenState(val groups:List<DoseGroup> = emptyList(),val intents:List<DoseIntentEntity> = emptyList(),
     val reserved:Set<String> = emptySet(),val busy:Boolean=false,val message:String?=null,
-    val schedule:JSONObject?=null,val scheduleMedication:String?=null,val patient:String="")
+    val selectedDate:String?=null,val schedule:JSONObject?=null,val scheduleMedication:String?=null,val patient:String="")
 @HiltViewModel
 class MedicationDoseViewModel @Inject constructor(private val repository:MedicationDoseRepository):ViewModel() {
     private val _state=MutableStateFlow(DoseScreenState())
@@ -37,10 +37,17 @@ class MedicationDoseViewModel @Inject constructor(private val repository:Medicat
         refresh()
     }
     fun refresh()=run {
-        repository.refresh(_state.value.patient)
+        val current=_state.value
+        repository.refresh(current.patient,if(current.selectedDate==null) 7 else 1,current.selectedDate)
         repository.enqueue()
         "Programação atualizada."
     }
+    fun review(intent:DoseIntentEntity) {
+        val group=DoseGroup.parse(JSONObject(intent.snapshot))
+        _state.update { it.copy(selectedDate=group.date) }
+        refresh()
+    }
+    fun today() { _state.update { it.copy(selectedDate=null) };refresh() }
     fun submit(group:DoseGroup,selected:Set<String>)=run { repository.submit(group,selected) }
     fun reconcileAlarms()=run { repository.reschedule();"Preferência de avisos salva." }
     fun cancel(id:String)=run { repository.cancel(id);"Cancelamento solicitado." }

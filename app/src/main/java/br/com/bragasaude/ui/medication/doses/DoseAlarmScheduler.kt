@@ -24,7 +24,7 @@ object DoseAlarmScheduler {
         if(Build.VERSION.SDK_INT<31 || alarms.canScheduleExactAlarms()) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pending)
         else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pending)
     }
-    fun reconcile(context:Context,rows:List<DoseGroupEntity>,actor:String?,reserved:Map<String,Set<String>>) {
+    fun reconcile(context:Context,rows:List<DoseGroupEntity>,actor:String?,reserved:Map<String,Set<String>>,reopen:Set<String> = emptySet()) {
         val prefs=context.getSharedPreferences("dose_alarms",Context.MODE_PRIVATE)
         val manager=context.getSystemService(NotificationManager::class.java)
         if(Build.VERSION.SDK_INT>=26) manager.createNotificationChannel(NotificationChannel(CHANNEL,"Medicamentos por horário",NotificationManager.IMPORTANCE_HIGH))
@@ -44,8 +44,12 @@ object DoseAlarmScheduler {
                     val early=at-15*60_000L
                     if(early>System.currentTimeMillis()) pending(context,row.actorId,row.groupId,"PRE")?.let { schedule(context,early,it) }
                 }
-            } else if(key in prior && group.instant.atZone(java.time.ZoneId.of(group.zone)).toLocalDate()==
-                Instant.now().atZone(java.time.ZoneId.of(group.zone)).toLocalDate()) current.add(key)
+            } else if((key in prior || group.id in reopen) && group.instant.atZone(java.time.ZoneId.of(group.zone)).toLocalDate()==
+                Instant.now().atZone(java.time.ZoneId.of(group.zone)).toLocalDate()) {
+                current.add(key)
+                val until=context.getSharedPreferences("dose_alarms",Context.MODE_PRIVATE).getLong("snooze:$key",0)
+                if(until<=System.currentTimeMillis()) show(context,row,false,reserved[row.patientId].orEmpty())
+            }
         }
         for(key in prior-current) {
             val actorKey=key.substringBefore('|');val group=key.substringAfter('|')
@@ -66,7 +70,7 @@ object DoseAlarmScheduler {
         val message=remaining.joinToString("\n") { "${it.name}: ${it.units?.let { n -> "$n unidade(s)" } ?: "conferir quantidade"}${it.instruction?.let { text -> " - $text" } ?: ""}" }
         val builder=NotificationCompat.Builder(context,CHANNEL).setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("${group.patientName} - ${group.time}").setContentText("${remaining.size} medicamentos${if(pre) " em 15 minutos" else " previstos"}")
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message)).setContentIntent(open).setAutoCancel(false)
+            .setOnlyAlertOnce(true).setStyle(NotificationCompat.BigTextStyle().bigText(message)).setContentIntent(open).setAutoCancel(false)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
         if(!pre) {
             // Full review is always one collective acceptance. Avoid accepting truncated notification contents.
@@ -85,6 +89,8 @@ object DoseAlarmScheduler {
         catch(_:SecurityException) { }
     }
     fun snooze(context:Context,actor:String,group:String) {
+        context.getSharedPreferences("dose_alarms",Context.MODE_PRIVATE).edit()
+            .putLong("snooze:$actor|$group",System.currentTimeMillis()+10*60_000L).apply()
         pending(context,actor,group,"REMIND")?.let { schedule(context,System.currentTimeMillis()+10*60_000L,it) }
         context.getSystemService(NotificationManager::class.java).cancel("$actor|$group",0)
     }

@@ -64,12 +64,12 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,30,java.util.concurrent.TimeUnit.SECONDS).build()
         wm.enqueueUniqueWork("medication-dose-sync-$actor",ExistingWorkPolicy.APPEND_OR_REPLACE,work)
     }
-    suspend fun refresh(patient:String,horizon:Int=7) {
+    suspend fun refresh(patient:String,horizon:Int=7,date:String?=null) {
         val actor=actor()
         val capabilities=request("GET","/api/medication-dose-capabilities")
         require(capabilities.optInt("medication_batch_contract")==1) { "Atualize o app para usar este contrato de medicação." }
         if(!capabilities.optBoolean("enabled")) throw DoseApiException("CONTRACT_DISABLED",503,"Confirmação coletiva temporariamente indisponível.")
-        var today:LocalDate?=null
+        var today:LocalDate?=date?.let(LocalDate::parse)
         for(offset in 0 until horizon) {
             val query=if(today==null) "" else "?date=${today!!.plusDays(offset.toLong())}"
             val response=request("GET","/api/family/patients/$patient/medication-dose-groups$query")
@@ -179,6 +179,7 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
     suspend fun flush():Boolean=lock.withLock {
         val actor=auth.currentUser?.uid ?: return@withLock true
         var complete=true
+        val resolvedGroups=mutableSetOf<String>()
         for(original in dao.pending(actor)) {
             if(auth.currentUser?.uid!=actor) return@withLock false
             var intent=original
@@ -187,7 +188,7 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
                 if(remote!=null) {
                     remote=request("GET","/api/medication-dose-batches/${remote.getString("batch_id")}")
                     if(remote.getString("state") in DoseProtocol.terminal && remote.getString("state")!="expired") {
-                        resolved(intent,remote); continue
+                        resolved(intent,remote);resolvedGroups.add(intent.groupId); continue
                     }
                 }
                 if(intent.state=="CANCEL_REQUESTED") {
@@ -214,6 +215,7 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
                     .put("confirmation_id",intent.confirmationId).put("snapshot_digest",remote.getString("snapshot_digest"))
                     .put("selected_occurrence_ids",JSONArray(selected.sorted())).put("declared_taken_at",intent.declaredAt))
                 resolved(intent,result)
+                resolvedGroups.add(intent.groupId)
             } catch(e: kotlinx.coroutines.CancellationException) { throw e
             } catch(e:Exception) {
                 val retry=e is DoseApiException && (e.http==0 || e.http>=500 || e.code=="PROPOSAL_EXPIRED")
@@ -227,9 +229,9 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
         }
         val patients=(listOf(actor)+dao.allGroups(actor).map { it.patientId }).distinct()
         for(patient in patients) try { refresh(patient) } catch(e:kotlinx.coroutines.CancellationException) { throw e } catch(_:Exception) { }
-        reschedule(); complete
+        reschedule(resolvedGroups); complete
     }
-    suspend fun reschedule() {
+    suspend fun reschedule(reopen:Set<String> = emptySet()) {
         val actor=auth.currentUser?.uid
         val rows=if(actor==null) emptyList() else dao.allGroups(actor)
         val reserved=rows.map { it.patientId }.distinct().associateWith { dao.reserved(it).toSet() }
@@ -240,6 +242,6 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
             meds.forEach { br.com.bragasaude.ui.medication.MedicationNotificationScheduler.cancelMedicationAlarms(context,it.id) }
         }
         context.getSharedPreferences("dose_preferences",Context.MODE_PRIVATE).edit().putString("last_actor",actor).apply()
-        DoseAlarmScheduler.reconcile(context,rows,actor,reserved)
+        DoseAlarmScheduler.reconcile(context,rows,actor,reserved,reopen)
     }
 }
