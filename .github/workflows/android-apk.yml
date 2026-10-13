@@ -95,7 +95,7 @@ jobs:
           packages: 'platform-tools'
 
       - name: Plataforma de compilação (compileSdk 35)
-        run: yes | sdkmanager --install "platforms;android-35"
+        run: yes | sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
 
       # Wrapper unix (./gradlew) NÃO está no repositório — só gradlew.bat.
       # A action oficial provê o Gradle 9.5.0 (mesma versão do wrapper).
@@ -170,6 +170,23 @@ jobs:
             echo "retention=30" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Verificar APK e gerar manifesto de origem
+        env:
+          APK_PATH: ${{ steps.apk.outputs.path }}
+          APK_VARIANT: ${{ steps.apk.outputs.variant }}
+        run: |
+          python3 .github/scripts/release_manifest.py --apk "$APK_PATH" \
+            --variant "${APK_VARIANT%% *}" --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
+            --output release-manifest.json
+
+      - name: Salvar manifesto junto à run do APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: braga-release-manifest
+          path: release-manifest.json
+          retention-days: ${{ steps.apk.outputs.retention }}
+          if-no-files-found: error
+
       - name: Salvar APK como artifact (descartável)
         uses: actions/upload-artifact@v4
         with:
@@ -232,7 +249,7 @@ jobs:
           packages: 'platform-tools'
 
       - name: Plataforma de compilação (compileSdk 35)
-        run: yes | sdkmanager --install "platforms;android-35"
+        run: yes | sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
 
       - name: Gradle 9.5.0
         uses: gradle/actions/setup-gradle@v4
@@ -309,19 +326,26 @@ jobs:
   # ---------------------------------------------------------------------------
   release:
     name: Publicar GitHub Release
-    needs: [build, unit-tests, versao_nova]
+    needs: [build, unit-tests, versao_nova, release-policy]
     if: |
-      (github.event_name == 'workflow_dispatch' && inputs.destino == 'lancar-release') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master' && inputs.destino == 'lancar-release') ||
       (github.event_name == 'push' && github.ref == 'refs/heads/master' && needs.versao_nova.outputs.publicar == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Ler versão do app
-        id: versao
-        run: |
-          echo "name=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts | head -n 1)" >> "$GITHUB_OUTPUT"
-          echo "code=$(grep -oP 'versionCode = \K\d+' app/build.gradle.kts | head -n 1)"   >> "$GITHUB_OUTPUT"
+      - name: JDK para inspeção do APK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Ferramentas Android de verificação
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'build-tools;35.0.0'
 
       # run_id_testada vazio = promove a build desta própria run.
       - name: Baixar APK (da run testada ou da atual)
@@ -331,31 +355,30 @@ jobs:
           run-id: ${{ inputs.run_id_testada || github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Criar GitHub Release com o APK
-        uses: softprops/action-gh-release@v2
+      - name: Baixar manifesto da mesma run
+        uses: actions/download-artifact@v4
         with:
-          tag_name: v${{ steps.versao.outputs.name }}-build${{ steps.versao.outputs.code }}
-          name: BragaSaude v${{ steps.versao.outputs.name }} (build ${{ steps.versao.outputs.code }})
-          files: app-release.apk
-          generate_release_notes: true
-          prerelease: false
-          body: |
-            ## 📦 Release oficial — BragaSaude v${{ steps.versao.outputs.name }}
+          name: braga-release-manifest
+          run-id: ${{ inputs.run_id_testada || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            APK assinado, compilado no GitHub Actions (run #${{ github.run_id }}).
+      - name: Validar origem, testes, assinatura e metadados reais do APK
+        id: versao
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.run_id_testada || github.run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" > origin.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100&filter=latest" > jobs.json
+          python3 .github/scripts/release_manifest.py --apk app-release.apk \
+            --validate-manifest release-manifest.json --origin origin.json --jobs jobs.json \
+            --output verified-release.json
+          SOURCE_SHA=$(python3 -c "import json;print(json.load(open('verified-release.json'))['source_sha'])")
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/master
+          python3 .github/scripts/check_release_tag.py verified-release.json "$GITHUB_REPOSITORY"
 
-            > ⚠️ Assinatura nova (D46): usuários da v1.1.2 precisam **desinstalar e reinstalar**.
-            > Comunique o backup dos dados locais antes (LGPD).
-
-      # Entrega no gateway (libera o download em https://api.bragasaude.online).
-      #
-      # A porta 22 (SSH/SCP) esta FECHADA para a rede: o appleboy/scp antigo
-      # morria com "dial tcp 18.220.67.189:22: i/o timeout" (run 36630084026).
-      # A entrega agora usa AWS SSM Run Command, mesmo padrao do deploy.yml do
-      # gateway-api. O APK e baixado na propria EC2 a partir da release publica
-      # no GitHub (repo publico) - sem transferencia por SSH.
-      #
-      # Credencial: IAM gha-bragasaude-android-ssm (permissao minima SSM).
       - name: Credenciais AWS (entrega via SSM)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -363,144 +386,46 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2
 
-      - name: Entregar release no gateway (SSM Run Command)
-        env:
-          ADMIN_TOKEN: ${{ secrets.ADMIN_API_TOKEN }}
-          VERSAO: ${{ steps.versao.outputs.name }}
-          BUILD: ${{ steps.versao.outputs.code }}
+      - name: Confirmar contrato privado do gateway antes de publicar
+        run: python3 .github/scripts/ssm_release.py
+
+      - name: Criar GitHub Release com o APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.versao.outputs.version_name }}-build${{ steps.versao.outputs.version_code }}
+          name: BragaSaude v${{ steps.versao.outputs.version_name }} (build ${{ steps.versao.outputs.version_code }})
+          files: |
+            app-release.apk
+            release-manifest.json
+          generate_release_notes: true
+          prerelease: false
+          body: |
+            ## 📦 Release oficial — BragaSaude v${{ steps.versao.outputs.version_name }}
+
+            APK verificado, produzido na run #${{ steps.versao.outputs.run_id }}, commit ${{ steps.versao.outputs.source_sha }}. SHA256: ${{ steps.versao.outputs.sha256 }}.
+
+            > ⚠️ Assinatura nova (D46): usuários da v1.1.2 precisam **desinstalar e reinstalar**.
+            > Comunique o backup dos dados locais antes (LGPD).
+
+      - name: Publicar arquivo imutável e catálogo transacional no gateway
+        run: python3 .github/scripts/ssm_release.py --manifest verified-release.json
+
+  release-policy:
+    name: Verificar política de release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'build-tools;35.0.0'
+      - name: Regressões de proveniência e staging
+        run: python3 -m unittest discover -s .github/scripts -p 'test_release_manifest.py' -v
+      - name: Prova com assinatura real e APKs negativos
         run: |
-          set -euo pipefail
-
-          # 1) Script que roda NA EC2 como ec2-user (mesma logica do fluxo ssh
-          #    antigo: baixa a release, copia, registra no RDS, retencao, OTA).
-          cat > /tmp/inner.sh << 'SSMEOF'
-          set -euo pipefail
-          cd /home/ec2-user/braga-gateway
-          # Fonte da verdade: o .env do proprio servidor (o secret antigo
-          # RDS_DATABASE_URL tinha senha desatualizada — InvalidPasswordError
-          # na run 36638524499 — e foi removido do repo em 30/09/2026).
-          # Nao usar source .env: a linha 6 tem senha de app do Gmail sem
-          # aspas e quebra o shell.
-          export DATABASE_URL="$(grep -m1 '^DATABASE_URL=' .env | cut -d= -f2- || true)"
-          if [ -z "$DATABASE_URL" ]; then
-            echo "ERRO: DATABASE_URL ausente no .env do servidor" >&2
-            exit 1
-          fi
-          V='__VERSAO__'
-          C='__BUILD__'
-          TAG="v${V}-build${C}"
-          REL_DIR="/home/ec2-user/braga-gateway/releases"
-          SRC="$REL_DIR/app-release.apk"
-          VERSIONED="$REL_DIR/BragaSaude-${TAG}-release.apk"
-          SERVED="$REL_DIR/BragaSaude.apk"
-
-          echo "== Baixando APK da release publica ${TAG} =="
-          curl -fsSL --retry 3 --retry-delay 2 -o "$SRC" \
-            "https://github.com/Fernandes-Yuri/bragasaude-app-android/releases/download/${TAG}/app-release.apk"
-          cp -f "$SRC" "$VERSIONED"
-          cp -f "$SRC" "$SERVED"
-          SHA=$(sha256sum "$VERSIONED" | awk '{print toupper($1)}')
-          SIZE=$(stat -c%s "$VERSIONED")
-          echo "Release ${TAG}: ${SIZE} bytes, sha256=${SHA}"
-
-          # Registra no RDS (is_active=true) e desativa as anteriores.
-          venv/bin/python - "$V" "$C" "$SIZE" "$SHA" <<'PYEOF'
-          import asyncio, os, sys
-          version_name, code, size, sha = sys.argv[1:5]
-          async def main():
-              import asyncpg
-              p = await asyncpg.connect(os.environ['DATABASE_URL'], ssl='require')
-              await p.execute('UPDATE app_releases SET is_active = FALSE')
-              changelog = 'Release v' + version_name + ' (build ' + code + ') entregue pelo CI.'
-              await p.execute(
-                  "INSERT INTO app_releases (version_name, version_code, release_type,"
-                  " filename, file_size_bytes, sha256_hash, changelog, min_android_sdk, is_active)"
-                  " VALUES ($1, $2, 'release', 'BragaSaude.apk', $3, $4, $5, 26, TRUE)"
-                  " ON CONFLICT (version_code) DO UPDATE SET is_active = TRUE,"
-                  " file_size_bytes = EXCLUDED.file_size_bytes, sha256_hash = EXCLUDED.sha256_hash,"
-                  " changelog = EXCLUDED.changelog",
-                  'v' + version_name, int(code), int(size), sha, changelog)
-              await p.close()
-          asyncio.run(main())
-          PYEOF
-          echo "RELEASE REGISTRADA NO RDS"
-
-          # Retencao D52: mantem so os 3 APKs mais recentes.
-          venv/bin/python - <<'PYEOF'
-          import asyncio, os, sys
-          sys.path.insert(0, '/home/ec2-user/braga-gateway/scripts/server')
-          async def main():
-              import asyncpg
-              from release_retention import purge_old_releases
-              pool = await asyncpg.create_pool(os.environ['DATABASE_URL'], min_size=1, max_size=2)
-              res = await purge_old_releases(pool, '/home/ec2-user/braga-gateway/releases', keep=3)
-              print('[RETENTION]', res)
-              await pool.close()
-          asyncio.run(main())
-          PYEOF
-
-          # Push de "nova versao" para os aparelhos (doc 10 1B). Exige o
-          # header administrativo (AUD-G01: vindo do tunel, todo peer parece
-          # 127.0.0.1 — localhost nao autentica). Falha aqui nao derruba a
-          # release: o APK ja esta servido e registrado.
-          ADMIN_TOKEN='__ADMIN_TOKEN__'
-          if [ -z "$ADMIN_TOKEN" ]; then
-            echo "NOTIFY UPDATE: pulado — secret ADMIN_API_TOKEN ausente"
-          else
-            NOTIFY_RESP=$(curl -sS -m 20 -X POST http://127.0.0.1:8080/api/app/notify-update \
-              -H "Content-Type: application/json" \
-              -H "Authorization: Bearer $ADMIN_TOKEN" \
-              -d "{\"version_name\":\"v$V\",\"version_code\":$C,\"title\":\"Nova Atualizacao do Braga Saude Disponivel!\",\"message\":\"Versao $V disponivel no Braga Saude. Toque para atualizar!\",\"download_url\":\"https://api.bragasaude.online/api/app/download\"}" 2>&1) || true
-            echo "NOTIFY UPDATE: $NOTIFY_RESP"
-          fi
-          echo "DEPLOY OTA CONCLUIDO"
-          SSMEOF
-
-          # 2) Injeta versao/URL sem ecoar valores no log.
-          python3 - << 'PY'
-          import os
-          p = '/tmp/inner.sh'
-          s = open(p).read()
-          s = s.replace('__VERSAO__', os.environ['VERSAO'])
-          s = s.replace('__BUILD__', os.environ['BUILD'])
-          s = s.replace('__ADMIN_TOKEN__', os.environ.get('ADMIN_TOKEN', ''))
-          open(p, 'w').write(s)
-          PY
-
-          # 3) Empacota como comando SSM: wrapper cria o script e delega ao ec2-user.
-          {
-            echo "cat > /tmp/promote-inner.sh <<'INNER'"
-            cat /tmp/inner.sh
-            echo "INNER"
-            echo "chown ec2-user:ec2-user /tmp/promote-inner.sh"
-            echo "runuser -u ec2-user -- bash /tmp/promote-inner.sh"
-            echo "rc=\$?"
-            echo "rm -f /tmp/promote-inner.sh"
-            echo "exit \$rc"
-          } > /tmp/cmd.sh
-          jq -n --arg cmd "$(cat /tmp/cmd.sh)" '{commands: [$cmd]}' > /tmp/ssm_params.json
-          rm -f /tmp/inner.sh /tmp/cmd.sh
-
-          # 4) Dispara e acompanha (mesmo fluxo do deploy.yml do gateway-api).
-          COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "i-04728dd8094ed0e78" \
-            --document-name "AWS-RunShellScript" \
-            --parameters file:///tmp/ssm_params.json \
-            --query Command.CommandId \
-            --output text)
-          rm -f /tmp/ssm_params.json
-          echo "Comando SSM disparado com ID: $COMMAND_ID"
-
-          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "i-04728dd8094ed0e78" || true
-
-          STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "i-04728dd8094ed0e78" --query "Status" --output text)
-          echo "Status final: $STATUS"
-
-          echo "=== SAIDA PADRAO (STDOUT) ==="
-          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "i-04728dd8094ed0e78" --query "StandardOutputContent" --output text
-
-          if [ "$STATUS" != "Success" ]; then
-            echo "=== ERRO (STDERR) ==="
-            aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "i-04728dd8094ed0e78" --query "StandardErrorContent" --output text
-            exit 1
-          fi
+          curl -fL --retry 3 -o baseline.apk \
+            https://github.com/Fernandes-Yuri/bragasaude-app-android/releases/download/v1.7.1-build32/app-release.apk
+          python3 .github/scripts/test_release_apk_real.py baseline.apk
