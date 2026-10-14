@@ -11,7 +11,6 @@ async function main() {
   await require(tools + "requireAuth").requireAuth({ ...session, project });
   const { Client } = require(tools + "apiv2");
   const iam = require(tools + "gcp/iam");
-  const manager = require(tools + "gcp/resourceManager");
   const rules = require(tools + "gcp/rules");
 
   // O banco default já bloqueia clientes. Não publicar regras que sobrescrevam
@@ -24,21 +23,21 @@ async function main() {
     throw new Error("Regras Firestore precisam de revisão antes de ativar a fila.");
   }
 
-  try {
-    await iam.getServiceAccount(project, accountId);
-  } catch (error) {
-    if (error.status !== 404 && error.context?.response?.statusCode !== 404) throw error;
+  const iamClient = new Client({ urlPrefix: "https://iam.googleapis.com", apiVersion: "v1" });
+  const existingAccount = await iamClient.get(
+    `/projects/${project}/serviceAccounts/${accountId}@${project}.iam.gserviceaccount.com`,
+    { resolveOnHTTPError: true }
+  );
+  if (existingAccount.status === 404) {
     await iam.createServiceAccount(project, accountId,
       "Worker de expurgo após exclusão Firebase Auth - DT-001", "Account deletion worker");
+  } else if (existingAccount.status !== 200) {
+    throw new Error(`Consulta de identidade IAM falhou: ${existingAccount.status}`);
   }
-  await manager.addServiceAccountToRoles(project, accountId,
-    ["roles/datastore.user", "roles/firebaseauth.viewer", "roles/logging.logWriter"]);
-
-  const iamClient = new Client({ urlPrefix: "https://iam.googleapis.com", apiVersion: "v1" });
   const roleName = `projects/${project}/roles/accountDeletionStorage`;
   const role = {
     title: "Account deletion storage", description: "Listar objetos e excluir prefixos de conta - DT-001",
-    includedPermissions: ["storage.objects.list", "storage.objects.delete"], stage: "GA",
+    includedPermissions: ["storage.buckets.get", "storage.objects.list", "storage.objects.delete"], stage: "GA",
   };
   const existing = await iamClient.get(`/${roleName}`, { resolveOnHTTPError: true });
   if (existing.status === 404) {
@@ -50,14 +49,22 @@ async function main() {
       { queryParams: { updateMask: "title,description,includedPermissions,stage" } });
   }
 
-  const storage = new Client({ urlPrefix: "https://storage.googleapis.com", apiVersion: "storage/v1" });
+  // Escopo no recurso via condição IAM; também funciona se o bucket ainda não
+  // existe. Nunca criar um bucket vazio apenas para concluir uma exclusão.
+  const manager = new Client({ urlPrefix: "https://cloudresourcemanager.googleapis.com", apiVersion: "v1" });
   const resource = `projects/_/buckets/${bucket}`;
-  const response = await storage.get(`/b/${bucket}/iam`, { queryParams: { optionsRequestedPolicyVersion: 3 } });
+  const response = await manager.post(`/projects/${project}:getIamPolicy`, { options: { requestedPolicyVersion: 3 } });
   const policy = response.body;
   policy.version = 3;
   policy.bindings ||= [];
+  const member = `serviceAccount:${accountId}@${project}.iam.gserviceaccount.com`;
+  for (const role of ["roles/datastore.user", "roles/firebaseauth.viewer", "roles/logging.logWriter"]) {
+    const previous = policy.bindings.find(b => b.role === role && !b.condition);
+    if (!previous) policy.bindings.push({ role, members: [member] });
+    else if (!previous.members.includes(member)) previous.members.push(member);
+  }
   const binding = {
-    role: roleName, members: [`serviceAccount:${accountId}@${project}.iam.gserviceaccount.com`],
+    role: roleName, members: [member],
     condition: {
       title: "account-deletion-prefixes",
       expression: `resource.name == '${resource}' || resource.name.startsWith('${resource}/objects/exams/') || resource.name.startsWith('${resource}/objects/uploads/')`,
@@ -65,7 +72,7 @@ async function main() {
   };
   const previous = policy.bindings.find(b => b.role === roleName && b.condition?.title === binding.condition.title);
   if (previous) Object.assign(previous, binding); else policy.bindings.push(binding);
-  await storage.put(`/b/${bucket}/iam`, policy);
+  await manager.post(`/projects/${project}:setIamPolicy`, { policy });
   console.log("Identidade configurada; fila protegida e exclusão Storage limitada a exams/ e uploads/.");
 }
 

@@ -36,7 +36,13 @@ async function purge(userId) {
       });
       return response.data;
     },
-    deletePrefix: (prefix) => getStorage().bucket().deleteFiles({ prefix }),
+    deletePrefix: async (prefix) => {
+      const bucket = getStorage().bucket();
+      // O projeto pode nunca ter usado Firebase Storage. Ausência confirmada
+      // do bucket significa ausência de arquivos; 403/timeout continuam falhando.
+      if (!(await bucket.exists())[0]) return;
+      await bucket.deleteFiles({ prefix });
+    },
   });
 }
 
