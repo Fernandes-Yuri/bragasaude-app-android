@@ -2,7 +2,6 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as functions from "firebase-functions";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
-import * as crypto from "crypto";
 // Firebase Data Connect JavaScript SDK — funções geradas automaticamente
 import { getDataConnect } from "firebase/data-connect";
 import { connectorConfig } from "@bragasaude/dataconnect";
@@ -458,109 +457,8 @@ const legacyWeeklyLeagueCloseJob = onSchedule(
 
 void legacyWeeklyLeagueCloseJob;
 
-/**
- * [F3] DIREITO AO ESQUECIMENTO (LGPD)
- * Trigger nativo do Firebase Auth — executa automaticamente quando um usuário
- * é excluído. NÃO é um endpoint HTTP; impossível de invocar externamente.
- */
-export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
-    const userId = user.uid;
-    const startTime = Date.now();
-
-    try {
-        logger.info(`Cleaning up data for deleted user: ${userId}`);
-
-        // --- FASE A: Remoção via Firebase Data Connect (backend PostgreSQL) ---
-        // Ordem de exclusão respeitando integridade referencial (PostgreSQL)
-        // 1. Reações e Posts Sociais
-        await deleteUserSocialReactionsAdmin(userId);
-        await deleteUserSocialPostsAdmin(userId);
-
-        // 2. Ligas e Medalhas
-        await deleteUserLeagueMembershipsAdmin(userId);
-        await deleteUserMilestonesAdmin(userId);
-
-        // 3. Dados Clínicos e Perfil
-        await deleteUserClinicalDataAdmin(userId);
-        await deleteUserProfileAdmin(userId);
-
-        logger.info(`Data purged successfully for user ${userId} (local DC helpers, ${Date.now() - startTime}ms)`);
-
-    } catch (error) {
-        logger.error("Error in local data cleanup", error);
-    }
-
-    // --- FASE B: Exclusão em cascata completa via Webservice HTTP ---
-    // O Cloud Function aciona o endpoint seguro que apaga:
-    //   - Todas as tabelas relacionadas ao usuário no PostgreSQL (via Data Connect)
-    //   - Arquivos do Storage Firebase (exams/ e uploads/)
-    //   - Registro de auditoria LGPD (user_deletion_log)
-    try {
-        await triggerCascadeDeletion(userId);
-        logger.info(`Cascade deletion completed for user ${userId} (${Date.now() - startTime}ms total)`);
-    } catch (error) {
-        logger.error("Error triggering cascade deletion (may retry automatically or require manual action)", error);
-        // NÃO rejeita o trigger — os dados locais já foram limpos acima.
-        // O endpoint HTTP pode falhar se o webservice estiver indisponível temporariamente.
-    }
-});
-
-// --- CASCADE DELETION VIA WEBSERVICE ---
-
-const WEBSERVICE_CASCADE_URL = process.env.WEBSERVICE_CASCADE_URL || 'https://api.bragasaude.app/api/admin/delete-user-data';
-
-/**
- * Gera HMAC token para autenticação entre Cloud Function e Webservice.
- * Mesma lógica do adminAuth.ts no webservice.
- */
-function generateDeleteToken(userId: string): string {
-    const secret = process.env.ADMIN_SESSION_SECRET || process.env.ADMIN_PASSWORD || '';
-    if (!secret) {
-        throw new Error('ADMIN_SESSION_SECRET or ADMIN_PASSWORD must be configured for cascade deletion');
-    }
-
-    const payload: { userId: string; timestamp: number; exp: number } = {
-        userId,
-        timestamp: Date.now(),
-        exp: Date.now() + 5 * 60 * 1000 // 5 minutos de validade
-    };
-
-    const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
-    const signature = crypto
-        .createHmac('sha256', secret)
-        .update(payloadBase64)
-        .digest('base64url');
-
-    return `${payloadBase64}.${signature}`;
-}
-
-/**
- * Aciona a exclusão em cascata completa via endpoint HTTP seguro do Webservice.
- * Remove todas as tabelas relacionadas ao usuário, arquivos do Storage,
- * e registra a exclusão no log de auditoria LGPD.
- */
-async function triggerCascadeDeletion(userId: string): Promise<void> {
-    const token = generateDeleteToken(userId);
-
-    const response = await fetch(WEBSERVICE_CASCADE_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ userId }),
-        signal: AbortSignal.timeout(30000) // timeout de 30s
-    });
-
-    if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        logger.warn(`Cascade deletion returned ${response.status}: ${text}`);
-        throw new Error(`Cascade deletion failed with status ${response.status}: ${text}`);
-    }
-
-    const result = await response.json() as { success: boolean; deletedTables: string[]; storageFilesDeleted: number };
-    logger.info(`Cascade result: tables=${result.deletedTables.length}, files=${result.storageFilesDeleted}`);
-}
+// Exclusão Auth ativa: ../functions-deletion/index.js (firebase.json, DT-001).
+// O antigo trigger com helpers simulados foi aposentado.
 
 // --- HELPER FUNCTIONS (SIMULANDO CHAMADAS AO DATA CONNECT VIA SERVICE ACCOUNT) ---
 
@@ -595,30 +493,6 @@ async function closeCycleAdminLegacy(cycleId: string) {
 
 async function createNextCycleAdminLegacy(lastEndTime: Date) {
     logger.info("Admin: Creating next league cycle");
-}
-
-async function deleteUserSocialReactionsAdmin(userId: string) {
-    logger.info(`Admin: Deleting reactions for user ${userId}`);
-}
-
-async function deleteUserSocialPostsAdmin(userId: string) {
-    logger.info(`Admin: Deleting posts for user ${userId}`);
-}
-
-async function deleteUserLeagueMembershipsAdmin(userId: string) {
-    logger.info(`Admin: Deleting league memberships for user ${userId}`);
-}
-
-async function deleteUserMilestonesAdmin(userId: string) {
-    logger.info(`Admin: Deleting milestones for user ${userId}`);
-}
-
-async function deleteUserClinicalDataAdmin(userId: string) {
-    logger.info(`Admin: Deleting all clinical data (vitals, exams, etc) for user ${userId}`);
-}
-
-async function deleteUserProfileAdmin(userId: string) {
-    logger.info(`Admin: Deleting profile for user ${userId}`);
 }
 
 function isVitalsWithinTarget(data: any): boolean {
