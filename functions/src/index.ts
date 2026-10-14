@@ -457,7 +457,7 @@ const legacyWeeklyLeagueCloseJob = onSchedule(
 
 void legacyWeeklyLeagueCloseJob;
 
-// Exclusão Auth ativa: ../functions-deletion/index.js (firebase.json, DT-001).
+// Exclusão Auth ativa: gateway-api/services/firebase_account_reconciliation.py (DT-001).
 // O antigo trigger com helpers simulados foi aposentado.
 
 // --- HELPER FUNCTIONS (SIMULANDO CHAMADAS AO DATA CONNECT VIA SERVICE ACCOUNT) ---
