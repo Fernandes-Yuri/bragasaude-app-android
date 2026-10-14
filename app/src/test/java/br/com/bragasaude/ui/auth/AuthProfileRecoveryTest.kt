@@ -75,4 +75,14 @@ class AuthProfileRecoveryTest {
         assertNull(vm.isProfileComplete.value)
         assertNull(vm.hasAcceptedConsent.value)
     }
+    @Test fun hangingProfileLookupShowsRetryInsteadOfInfiniteSpinner() = runTest(dispatcher) {
+        // D-NEWUSER: lookup que nunca responde deve virar tela de retry em 30s,
+        // nunca spinner infinito.
+        coEvery { repository.refreshProfileForLogin(any()) } coAnswers { awaitCancellation() }
+        vm.retryProfile()
+        advanceTimeBy(31_000L)
+        runCurrent()
+        assertNull(vm.isProfileComplete.value)
+        assertNotNull(vm.profileError.value)
+    }
 }
