@@ -1,20 +1,23 @@
 "use strict";
 
 const functions = require("firebase-functions/v1");
-const admin = require("firebase-admin");
+const { initializeApp } = require("firebase-admin/app");
+const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
+const { getStorage } = require("firebase-admin/storage");
 const { GoogleAuth } = require("google-auth-library");
 const { createHash } = require("node:crypto");
 const { GATEWAY_URL, purgeAccount, attemptJob, retryDelayMs } = require("./worker");
 
-admin.initializeApp({ storageBucket: "braga-saude.firebasestorage.app" });
-const db = admin.firestore();
+initializeApp({ storageBucket: "braga-saude.firebasestorage.app" });
+const db = getFirestore();
 const jobs = db.collection("account_deletion_jobs");
 const identity = new GoogleAuth();
 const account = "account-deletion@braga-saude.iam.gserviceaccount.com";
 
 async function assertDeleted(userId) {
   try {
-    await admin.auth().getUser(userId);
+    await getAuth().getUser(userId);
   } catch (error) {
     if (error.code === "auth/user-not-found") return;
     throw new Error("firebase_verification_unavailable");
@@ -33,7 +36,7 @@ async function purge(userId) {
       });
       return response.data;
     },
-    deletePrefix: (prefix) => admin.storage().bucket().deleteFiles({ prefix }),
+    deletePrefix: (prefix) => getStorage().bucket().deleteFiles({ prefix }),
   });
 }
 
@@ -42,9 +45,9 @@ async function attempt(jobId) {
     load: async (id) => (await jobs.doc(id).get()).data(),
     purge,
     complete: (id) => jobs.doc(id).update({
-      state: "completed", completedAt: admin.firestore.FieldValue.serverTimestamp(),
-      nextAttemptAt: admin.firestore.FieldValue.delete(),
-      userId: admin.firestore.FieldValue.delete(),
+      state: "completed", completedAt: FieldValue.serverTimestamp(),
+      nextAttemptAt: FieldValue.delete(),
+      userId: FieldValue.delete(),
     }),
     fail: async (id) => {
       await db.runTransaction(async (tx) => {
@@ -53,8 +56,8 @@ async function attempt(jobId) {
         if (!snapshot.exists || snapshot.get("state") === "completed") return;
         const attempts = (snapshot.get("attempts") || 0) + 1;
         tx.update(ref, {
-          attempts, state: "pending", lastFailureAt: admin.firestore.FieldValue.serverTimestamp(),
-          nextAttemptAt: admin.firestore.Timestamp.fromMillis(Date.now() + retryDelayMs(attempts)),
+          attempts, state: "pending", lastFailureAt: FieldValue.serverTimestamp(),
+          nextAttemptAt: Timestamp.fromMillis(Date.now() + retryDelayMs(attempts)),
         });
       });
       // Não registrar UID, resposta HTTP, Authorization ou objeto de erro.
@@ -72,8 +75,8 @@ exports.onUserDeleted = functions.region("us-central1").runWith({
     if ((await tx.get(ref)).exists) return;
     tx.create(ref, {
       userId: user.uid, state: "pending", attempts: 0,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      nextAttemptAt: admin.firestore.Timestamp.now(),
+      createdAt: FieldValue.serverTimestamp(),
+      nextAttemptAt: Timestamp.now(),
     });
   });
   try {
@@ -88,7 +91,7 @@ exports.onUserDeleted = functions.region("us-central1").runWith({
 exports.retryAccountDeletions = functions.region("us-central1").runWith({
   serviceAccount: account, timeoutSeconds: 540, memory: "256MB",
 }).pubsub.schedule("every 5 minutes").onRun(async () => {
-  const pending = await jobs.where("nextAttemptAt", "<=", admin.firestore.Timestamp.now()).limit(10).get();
+  const pending = await jobs.where("nextAttemptAt", "<=", Timestamp.now()).limit(10).get();
   for (const job of pending.docs) {
     try { await attempt(job.id); } catch { /* job persistido; próxima rodada repete */ }
   }
