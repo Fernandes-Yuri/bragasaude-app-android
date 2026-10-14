@@ -774,7 +774,14 @@ class AuthViewModel @Inject constructor(
             } catch (e: Exception) {
                 android.util.Log.w("AuthViewModel", "Erro ao fechar DB antes de apagar: ${e.message}")
             }
-            database.clearAllTables()
+            // clearAllTables fora de try abortava o signOut quando o banco já
+            // estava fechado (botão "Sair" morto). Falha aqui não pode impedir
+            // o logout: o deleteDatabase abaixo garante a limpeza total.
+            try {
+                database.clearAllTables()
+            } catch (e: Exception) {
+                android.util.Log.w("AuthViewModel", "Erro ao limpar tabelas (banco pode já estar fechado): ${e.message}")
+            }
             
             // Apagar o arquivo inteiro do banco Room para garantir limpeza total
             try {
@@ -851,7 +858,13 @@ class AuthViewModel @Inject constructor(
             } catch (e: Exception) {
                 android.util.Log.w("AuthViewModel", "Erro ao fechar DB antes de apagar: ${e.message}")
             }
-            database.clearAllTables()
+            // Mesmo motivo do signOut: clearAllTables fora de try abortava a
+            // exclusão quando o banco já estava fechado.
+            try {
+                database.clearAllTables()
+            } catch (e: Exception) {
+                android.util.Log.w("AuthViewModel", "Erro ao limpar tabelas no deleteAccount (banco pode já estar fechado): ${e.message}")
+            }
             try {
                 appContext.deleteDatabase(BragaDatabase.DATABASE_NAME)
             } catch (e: Exception) {
