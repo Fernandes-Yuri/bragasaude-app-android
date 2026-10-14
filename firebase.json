@@ -1,7 +1,0 @@
-{
-  "functions": [{
-    "source": "functions-deletion",
-    "codebase": "account-deletion",
-    "ignore": ["node_modules", "test", "firebase-debug.log", "firebase-debug.*.log", ".git"]
-  }]
-}
