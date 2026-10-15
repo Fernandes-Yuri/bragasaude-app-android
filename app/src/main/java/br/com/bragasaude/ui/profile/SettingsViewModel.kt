@@ -223,11 +223,10 @@ class SettingsViewModel @Inject constructor(
                     } catch (e: Exception) {
                         android.util.Log.w("SettingsViewModel", "Erro ao cancelar workers no deleteAccount: ${e.message}")
                     }
-                    database.clearAllTables()
                     try {
-                        appContext.deleteDatabase(BragaDatabase.DATABASE_NAME)
+                        database.clearAllTables()
                     } catch (e: Exception) {
-                        android.util.Log.w("SettingsViewModel", "Erro ao apagar DB no deleteAccount: ${e.message}")
+                        android.util.Log.e("SettingsViewModel", "Erro ao limpar tabelas no deleteAccount: ${e.message}", e)
                     }
                     try {
                         appContext.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)

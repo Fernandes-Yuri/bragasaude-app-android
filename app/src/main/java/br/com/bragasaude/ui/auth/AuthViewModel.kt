@@ -794,21 +794,18 @@ class AuthViewModel @Inject constructor(
             }
             
             // Limpar todas as tabelas locais (exceto catálogo de alimentos persistido)
-            // AUD-AN17: fechar a conexão ANTES de apagar o arquivo, senão o fd aberto
-            // do SupportOpenHelperFactory segura o inode desvinculado e a próxima
-            // sessão perde tudo o que gravar.
+            // AUD-AN17 corrigido: Room gerencia o ciclo de vida do SQLite sob Hilt @Singleton.
+            // NUNCA chamar database.close() ou appContext.deleteDatabase():
+            // 1) database.close() antes de clearAllTables() causa IllegalStateException
+            //    ("attempt to re-open an already-closed object").
+            // 2) deleteDatabase() com o app em execução desvincula o inode no disco e
+            //    quebra qualquer acesso subsequente na mesma sessão.
+            // clearAllTables() executa DELETE FROM em todas as tabelas registradas mantendo
+            // a conexão e a integridade da instância Singleton.
             try {
-                database.close()
+                database.clearAllTables()
             } catch (e: Exception) {
-                android.util.Log.w("AuthViewModel", "Erro ao fechar DB antes de apagar: ${e.message}")
-            }
-            database.clearAllTables()
-            
-            // Apagar o arquivo inteiro do banco Room para garantir limpeza total
-            try {
-                appContext.deleteDatabase(BragaDatabase.DATABASE_NAME)
-            } catch (e: Exception) {
-                android.util.Log.w("AuthViewModel", "Erro ao apagar DB Room: ${e.message}")
+                android.util.Log.e("AuthViewModel", "Erro ao limpar tabelas locais no signOut: ${e.message}", e)
             }
             
             // Limpar SharedPreferences com dados de sessão
@@ -870,20 +867,12 @@ class AuthViewModel @Inject constructor(
             } catch (e: Exception) {
                 android.util.Log.w("AuthViewModel", "Erro ao cancelar workers no deleteAccount: ${e.message}")
             }
-            // AUD-AN17: FECHAR a conexão Room/SQLCipher ANTES de clearAllTables() e
-            // deleteDatabase(). Sem isso o SupportOpenHelperFactory mantém o fd aberto
-            // sobre o inode desvinculado; a nova sessão escreve no inode órfão e os
-            // dados (vitals, medicações, biometria) somem quando o processo reinicia.
+            // AUD-AN17 corrigido: clearAllTables() esvazia todas as tabelas do Room (LGPD)
+            // sem fechar a conexão nem desvincular o arquivo no disco enquanto a aplicação roda.
             try {
-                database.close()
+                database.clearAllTables()
             } catch (e: Exception) {
-                android.util.Log.w("AuthViewModel", "Erro ao fechar DB antes de apagar: ${e.message}")
-            }
-            database.clearAllTables()
-            try {
-                appContext.deleteDatabase(BragaDatabase.DATABASE_NAME)
-            } catch (e: Exception) {
-                android.util.Log.w("AuthViewModel", "Erro ao apagar DB no deleteAccount: ${e.message}")
+                android.util.Log.e("AuthViewModel", "Erro ao limpar tabelas no deleteAccount: ${e.message}", e)
             }
             try {
                 appContext.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
