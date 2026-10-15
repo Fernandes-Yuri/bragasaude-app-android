@@ -65,8 +65,32 @@ fun GroceryListBottomSheet(
     onResize: () -> Unit = { onGenerateList(true) },
     isLoading: Boolean = false,
     weeklyPreferences: br.com.bragasaude.domain.WeeklyGroceryPreferences = br.com.bragasaude.domain.WeeklyGroceryPreferences(),
+    publishedPacks: List<br.com.bragasaude.data.remote.model.PublishedGroceryPack> = emptyList(),
+    adoptedPack: br.com.bragasaude.data.remote.model.PublishedGroceryPack? = null,
+    onAdoptPack: (br.com.bragasaude.data.remote.model.PublishedGroceryPack) -> Unit = {},
+    retailCards: List<br.com.bragasaude.data.local.GroceryRetailCardEntity> = emptyList(),
+    weeklyGoal: br.com.bragasaude.domain.GroceryWeeklyGoal = br.com.bragasaude.domain.GroceryWeeklyGoal(),
+    retailLoading: Boolean = false,
+    retailMessage: String? = null,
+    basketComparison: br.com.bragasaude.data.remote.model.BasketComparisonResultDto? = null,
+    basketMessage: String? = null,
+    onRefreshRetail: () -> Unit = {},
+    onAddCard: (br.com.bragasaude.data.local.GroceryRetailCardEntity) -> Unit = {},
+    onDecrementCard: (String) -> Unit = {},
     onGenerateListWithPreferences: ((preserveManual: Boolean, preferences: br.com.bragasaude.domain.WeeklyGroceryPreferences) -> Unit)? = null
 ) {
+    var pendingPack by remember { mutableStateOf<br.com.bragasaude.data.remote.model.PublishedGroceryPack?>(null) }
+    var showCatalog by remember { mutableStateOf(false) }
+    var showShelf by remember { mutableStateOf(true) }
+    pendingPack?.let { selected ->
+        BragaAlertDialog(
+            onDismissRequest = { pendingPack = null },
+            title = { Text("Iniciar lista deste supermercado?") },
+            text = { Text("O pack de ${selected.marketName} será sua nova lista. A lista atual será substituída; o estoque já registrado na despensa será mantido.") },
+            confirmButton = { TextButton(onClick = { onAdoptPack(selected); pendingPack = null; showShelf = false; showCatalog = false }) { Text("Iniciar nova lista") } },
+            dismissButton = { TextButton(onClick = { pendingPack = null }) { Text("Cancelar") } }
+        )
+    }
     var reportingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var manualEditingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var isCreatingManual by remember { mutableStateOf(false) }
@@ -289,6 +313,21 @@ fun GroceryListBottomSheet(
                 }
             }
 
+            GroceryWeeklyGoalBar(weeklyGoal)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = showShelf, onClick = { showShelf = true; showCatalog = false }, label = { Text("Packs") })
+                FilterChip(selected = showCatalog, onClick = { showShelf = false; showCatalog = true }, label = { Text("Catálogo") })
+                FilterChip(selected = !showShelf && !showCatalog, onClick = { showShelf = false; showCatalog = false }, label = { Text("Minha lista") })
+            }
+            if (showShelf) {
+                PublishedGroceryPacksScreen(publishedPacks, retailLoading, retailMessage ?: groceryMessage,
+                    onRefreshRetail, { pendingPack = it }, Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp))
+            } else if (showCatalog) {
+                Text("Catálogo atual de produtos. As compras são organizadas pelos packs de cada supermercado.", style = MaterialTheme.typography.bodySmall)
+                GroceryMarketShelfScreen(retailCards, groceryList, retailLoading, retailMessage,
+                    onRefreshRetail, onAddCard, onDecrementCard,
+                    Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp), allowSelection = false)
+            } else {
             // 2. Barra de Ações Rápidas (Proporcionais 1:1, Sem Quebra de Linha e com Planejador Semanal Contextual)
             val hasItems = groceryList.isNotEmpty()
             val needsResize = plan?.isManuallyModified == true || (plan != null && plan.coveragePercent < WeeklyGroceryEngine.MIN_ENERGY_COVERAGE_PERCENT)
@@ -303,6 +342,7 @@ fun GroceryListBottomSheet(
                 else -> Icons.Default.AutoAwesome
             }
 
+            if (adoptedPack == null) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -379,16 +419,23 @@ fun GroceryListBottomSheet(
                 }
             }
 
+            }
+
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f, fill = false),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (plan != null) {
+                if (adoptedPack != null) {
+                    item { AdoptedGroceryPackCard(adoptedPack, totalCost, !adoptedPack.validToday() || publishedPacks.none { it.publicationId == adoptedPack.publicationId && it.id == adoptedPack.id }) }
+                } else {
+                    item { GroceryBasketComparisonCard(basketComparison, basketMessage, groceryList.count { it.retailCardId == null }) }
+                }
+                if (plan != null && groceryList.all { it.retailCardId == null }) {
                     item { WeeklyGrocerySummaryCard(plan, onResize) }
                 }
-                val checkedSlugs = groceryList.filter { it.isCheckedInPantry }.map { it.foodId }.toSet()
+                val checkedSlugs = groceryList.filter { it.isCheckedInPantry }.map { it.linkedIngredientSlug ?: it.foodId }.toSet()
                 val trackedStock = pantryStock.filter { it.ingredientSlug in checkedSlugs }
                 if (trackedStock.isNotEmpty()) {
                     item {
@@ -396,7 +443,7 @@ fun GroceryListBottomSheet(
                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text("Saldo estimado da despensa", style = MaterialTheme.typography.titleMedium)
                                 trackedStock.forEach { stock ->
-                                    val row = groceryList.first { it.foodId == stock.ingredientSlug }
+                                    val row = groceryList.first { (it.linkedIngredientSlug ?: it.foodId) == stock.ingredientSlug }
                                     val shortage = br.com.bragasaude.domain.GroceryConsumption.insufficient(stock.availableAmount,
                                         row.plannedWeeklyAmount, br.com.bragasaude.domain.GroceryWeek.daysRemaining())
                                     val amount = when (stock.unit) {
@@ -617,7 +664,7 @@ fun GroceryListBottomSheet(
                                 GroceryItemRow(
                                     item = entry,
                                     onToggle = { checked -> onToggleItem(entry.remoteId, checked) },
-                                    onEdit = { manualEditingItem = entry },
+                                    onEdit = { if (entry.retailCardId != null) showShelf = true else manualEditingItem = entry },
                                     onDelete = { onRemoveItem(entry.remoteId) }
                                 )
                                 communityPrices.filter { it.foodName.equals(entry.foodName, ignoreCase = true) }.forEach { price ->
@@ -632,7 +679,7 @@ fun GroceryListBottomSheet(
                                         modifier = Modifier.padding(horizontal = 12.dp)
                                     )
                                 }
-                                TextButton(
+                                if (entry.retailCardId == null) TextButton(
                                     onClick = { onStartContribution(); reportingItem = entry },
                                     modifier = Modifier.heightIn(min = 36.dp)
                                 ) {
@@ -644,6 +691,7 @@ fun GroceryListBottomSheet(
                 }
 
                 item { Spacer(Modifier.height(16.dp)) }
+            }
             }
         }
     }

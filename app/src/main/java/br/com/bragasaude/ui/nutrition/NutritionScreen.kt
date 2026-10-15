@@ -3,6 +3,7 @@ package br.com.bragasaude.ui.nutrition
 import br.com.bragasaude.ui.components.BragaAlertDialog
 import br.com.bragasaude.ui.components.BragaFormSheet
 
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -1002,8 +1003,37 @@ fun NutritionScreen(
 
     if (showGroceryBottomSheet) {
         val context = LocalContext.current
+        val publishedPacks by viewModel.publishedPacks.collectAsState()
+        val adoptedPack by viewModel.adoptedPack.collectAsState()
+        val publicationLoading by viewModel.publicationLoading.collectAsState()
+        val publicationMessage by viewModel.publicationMessage.collectAsState()
+        val publicationLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        LaunchedEffect(publicationLifecycle) {
+            publicationLifecycle.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                while (true) {
+                    viewModel.refreshPublishedPacks()
+                    kotlinx.coroutines.delay(15_000)
+                }
+            }
+        }
+        val retailCards by viewModel.retailCards.collectAsState()
+        val weeklyGoal by viewModel.weeklyGroceryGoal.collectAsState()
+        val basketComparison by viewModel.basketComparison.collectAsState()
+        val basketMessage by viewModel.basketMessage.collectAsState()
         GroceryListBottomSheet(
             groceryList = groceryList,
+            publishedPacks = publishedPacks,
+            adoptedPack = adoptedPack,
+            onAdoptPack = viewModel::adoptPublishedPack,
+            retailCards = retailCards,
+            weeklyGoal = weeklyGoal,
+            retailLoading = publicationLoading,
+            retailMessage = publicationMessage,
+            basketComparison = basketComparison,
+            basketMessage = basketMessage,
+            onRefreshRetail = { viewModel.refreshPublishedPacks() },
+            onAddCard = viewModel::addOrIncrementCard,
+            onDecrementCard = viewModel::decrementCard,
             manualIngredients = manualIngredients,
             onDismiss = { showGroceryBottomSheet = false },
             onToggleItem = { id, isChecked -> viewModel.togglePantryItem(id, isChecked) },

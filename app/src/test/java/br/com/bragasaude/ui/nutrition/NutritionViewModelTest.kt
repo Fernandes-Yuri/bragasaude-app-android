@@ -36,6 +36,7 @@ class NutritionViewModelTest {
     private lateinit var profileRepo: ProfileRepository
     private lateinit var vitalsRepo: VitalsRepository
     private lateinit var groceryRepo: GroceryRepository
+    private val retailRepo = mockk<br.com.bragasaude.data.remote.repository.GroceryRetailRepository>(relaxed = true)
     private lateinit var weeklyRepo: WeeklyGrocerySummaryRepository
     private lateinit var auth: FirebaseAuth
     private lateinit var context: Context
@@ -87,6 +88,9 @@ class NutritionViewModelTest {
 
         every { vitalsRepo.getVitalSigns(any()) } returns flowOf(emptyList())
         every { groceryRepo.getGroceryList(any()) } returns flowOf(emptyList())
+        every { retailRepo.publications() } returns flowOf(emptyList())
+        every { retailRepo.adopted(any()) } returns flowOf(null)
+        every { retailRepo.observe() } returns flowOf(emptyList())
         every { groceryRepo.getPantryItems(any()) } returns flowOf(emptyList())
         every { weeklyRepo.stock(any()) } returns flowOf(emptyList())
         every { weeklyRepo.meals(any(), any()) } returns flowOf(emptyList())
@@ -123,7 +127,7 @@ class NutritionViewModelTest {
             every { profileRepo.getProfile("test_user_id") } returns profileFlow
 
             val model = NutritionViewModel(
-                catalogRepo, nutritionRepo, profileRepo, vitalsRepo, groceryRepo, weeklyRepo, auth, context
+                catalogRepo, nutritionRepo, profileRepo, vitalsRepo, groceryRepo, retailRepo, weeklyRepo, auth, context
             )
             vm = model
 
@@ -156,7 +160,7 @@ class NutritionViewModelTest {
             every { profileRepo.getProfile("test_user_id") } returns flowOf(null)
 
             val model = NutritionViewModel(
-                catalogRepo, nutritionRepo, profileRepo, vitalsRepo, groceryRepo, weeklyRepo, auth, context
+                catalogRepo, nutritionRepo, profileRepo, vitalsRepo, groceryRepo, retailRepo, weeklyRepo, auth, context
             )
             vm = model
 
@@ -187,7 +191,7 @@ class NutritionViewModelTest {
             every { profileRepo.getProfile("test_user_id") } returns flowOf(null)
 
             val model = NutritionViewModel(
-                catalogRepo, nutritionRepo, profileRepo, vitalsRepo, groceryRepo, weeklyRepo, auth, context
+                catalogRepo, nutritionRepo, profileRepo, vitalsRepo, groceryRepo, retailRepo, weeklyRepo, auth, context
             )
             vm = model
 
