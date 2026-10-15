@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.auth
+package br.com.bragasaude.ui.auth
 
 import br.com.bragasaude.data.local.BragaDatabase
 import br.com.bragasaude.data.remote.repository.ProfileRepository
@@ -206,5 +206,55 @@ class AuthViewModelTest {
             viewModel.authState.value is AuthViewModel.AuthState.Error
         )
         verify(exactly = 0) { auth.fetchSignInMethodsForEmail(any<String>()) }
+    }
+
+    // ==================================================================
+    // SignOut & DeleteAccount: Room Singleton preservado (sem database.close/deleteDatabase)
+    // ==================================================================
+    @Test
+    fun `signOut flushes movements, cancels alarms, clears all tables and never closes database`() = kotlinx.coroutines.test.runTest {
+        val fakeUser = mockk<FirebaseUser>(relaxed = true)
+        every { fakeUser.uid } returns "test-uid"
+        every { auth.currentUser } returns fakeUser
+
+        val prefs = mockk<android.content.SharedPreferences>(relaxed = true)
+        val editor = mockk<android.content.SharedPreferences.Editor>(relaxed = true)
+        every { appContext.getSharedPreferences(any(), any()) } returns prefs
+        every { prefs.edit() } returns editor
+        every { editor.clear() } returns editor
+
+        viewModel.signOut()
+
+        verify(exactly = 1) { movementManager.flush() }
+        coVerify(exactly = 1) { medicationRepository.cancelAllUserAlarms("test-uid") }
+        verify(exactly = 1) { database.clearAllTables() }
+        verify(exactly = 0) { database.close() }
+        verify(exactly = 0) { appContext.deleteDatabase(any()) }
+        verify(exactly = 1) { auth.signOut() }
+        assertEquals(AppSessionStatus.NotAuthenticated, viewModel.sessionStatus.value)
+    }
+
+    @Test
+    fun `deleteAccount clears remote, clears local tables and deletes user without closing database`() = kotlinx.coroutines.test.runTest {
+        val fakeUser = mockk<FirebaseUser>(relaxed = true)
+        every { fakeUser.uid } returns "test-uid"
+        every { auth.currentUser } returns fakeUser
+        coEvery { repository.deleteProfileRemotely("test-uid") } returns true
+        every { fakeUser.delete() } returns Tasks.forResult(null)
+
+        val prefs = mockk<android.content.SharedPreferences>(relaxed = true)
+        val editor = mockk<android.content.SharedPreferences.Editor>(relaxed = true)
+        every { appContext.getSharedPreferences(any(), any()) } returns prefs
+        every { prefs.edit() } returns editor
+        every { editor.clear() } returns editor
+
+        viewModel.deleteAccount()
+
+        coVerify(exactly = 1) { repository.deleteProfileRemotely("test-uid") }
+        verify(exactly = 1) { database.clearAllTables() }
+        verify(exactly = 0) { database.close() }
+        verify(exactly = 0) { appContext.deleteDatabase(any()) }
+        verify(exactly = 1) { fakeUser.delete() }
+        assertEquals(AppSessionStatus.NotAuthenticated, viewModel.sessionStatus.value)
     }
 }

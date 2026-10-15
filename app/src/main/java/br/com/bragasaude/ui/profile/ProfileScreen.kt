@@ -18,6 +18,7 @@ import br.com.bragasaude.data.util.HealthFormatter
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Person
@@ -224,9 +225,17 @@ fun ProfileScreen(
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
         topBar = {
             if (onBack != null) {
-                TopAppBar(title = { Text("Meu cadastro") }, navigationIcon = {
-                    TextButton(onClick = { showLeaveDialog = true }) { Text("Voltar") }
-                })
+                TopAppBar(
+                    title = { Text("Meu cadastro") },
+                    navigationIcon = {
+                        IconButton(onClick = { showLeaveDialog = true }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Voltar"
+                            )
+                        }
+                    }
+                )
             }
         },
         bottomBar = {
@@ -280,7 +289,7 @@ fun ProfileScreen(
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-                        enabled = fullName.isNotBlank() && profile != null
+                        enabled = fullName.isNotBlank() && !isLoading
                     ) {
                         Text(if (profile?.selfCareSetupPending == true) "Ativar autocuidado" else "Salvar perfil")
                     }

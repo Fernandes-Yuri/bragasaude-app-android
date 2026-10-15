@@ -16,6 +16,7 @@ keystore.properties
 _commit*.txt
 logcat*.txt
 *.log
+test_lab_results/
 
 
 # Dependências e saídas geradas das funções

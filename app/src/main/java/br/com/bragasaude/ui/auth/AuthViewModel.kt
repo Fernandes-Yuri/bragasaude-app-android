@@ -149,6 +149,25 @@ class AuthViewModel @Inject constructor(
     fun retryProfile() { auth.currentUser?.uid?.let { checkProfile(it, force = true) } }
 
     /**
+     * D-NEWUSER: o sync pós-login nunca pode travar a tela de entrada.
+     * Roda com teto de 45s e falha isolada; o perfil é resolvido em paralelo
+     * pelo checkProfile (ouvinte de auth), que tem tela de retry em erro.
+     * TimeoutCancellationException é tratado aqui para não cair no catch
+     * genérico dos chamadores (que mostraria "erro" com login já válido).
+     */
+    private suspend fun syncAfterLogin(userId: String) {
+        try {
+            withTimeout(45_000L) { syncManager.downloadAllUserData(userId) }
+        } catch (e: TimeoutCancellationException) {
+            android.util.Log.w("AuthViewModel", "Sync pós-login estourou 45s; segue sem bloquear a entrada.")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("AuthViewModel", "Sync pós-login falhou sem bloquear a entrada: ${e.message}")
+        }
+    }
+
+    /**
      * G2 (doc 10 §3.2): registra o token FCM no gateway sempre que há um usuário
      * autenticado. Antes o registro só ocorria em onNewToken (rotação de token),
      * deixando o aparelho sem receber push até a próxima rotação.
@@ -234,10 +253,19 @@ class AuthViewModel @Inject constructor(
                     }
                 }
                 render()
+                // D-NEWUSER: teto de 30s na resolução do perfil. Sem isso, uma
+                // chamada travada deixava o spinner "Acessando seu espaço de
+                // saúde..." para sempre. Timeout vira Unavailable (tela de
+                // retry), nunca spinner infinito. TimeoutCancellationException
+                // vem antes de CancellationException (é subclasse).
                 val result = try {
-                    repository.refreshProfileForLogin(userId)
+                    withTimeout(30_000L) { repository.refreshProfileForLogin(userId) }
+                } catch (e: TimeoutCancellationException) {
+                    android.util.Log.w("AuthViewModel", "Perfil estourou 30s para login; mostra retry.")
+                    ProfileLookup.Unavailable()
                 } catch (e: CancellationException) { throw e }
                 catch (_: Exception) { ProfileLookup.Unavailable() }
+                android.util.Log.d("AuthViewModel", "Perfil resolvido para login: ${result::class.simpleName}")
                 render(result)
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) {
@@ -397,7 +425,7 @@ class AuthViewModel @Inject constructor(
                 val user = result.user
                 val userId = user?.uid
                 if (userId != null) {
-                    syncManager.downloadAllUserData(userId)
+                    syncAfterLogin(userId)
 
                     // 1. E-mail de boas-vindas assíncrono — SOMENTE na primeira vez que a
                     // conta Google entra no app (D-AUTH2). Antes o disparo era cego: todo
@@ -572,7 +600,7 @@ class AuthViewModel @Inject constructor(
                         phone = if (pending.phoneNumber.isNotBlank()) pending.phoneNumber else null
                     )
                     repository.saveProfile(profile)
-                    syncManager.downloadAllUserData(userId)
+                    syncAfterLogin(userId)
 
                     // Envia e-mail de boas-vindas
                     apiClient.sendWelcomeEmail(pending.email)
@@ -600,7 +628,7 @@ class AuthViewModel @Inject constructor(
                 val user = result.user
                 if (user != null) {
                     val userId = user.uid
-                    syncManager.downloadAllUserData(userId)
+                    syncAfterLogin(userId)
                     _authState.value = AuthState.Idle
                 }
             } catch (e: Exception) {
@@ -766,21 +794,18 @@ class AuthViewModel @Inject constructor(
             }
             
             // Limpar todas as tabelas locais (exceto catálogo de alimentos persistido)
-            // AUD-AN17: fechar a conexão ANTES de apagar o arquivo, senão o fd aberto
-            // do SupportOpenHelperFactory segura o inode desvinculado e a próxima
-            // sessão perde tudo o que gravar.
+            // AUD-AN17 corrigido: Room gerencia o ciclo de vida do SQLite sob Hilt @Singleton.
+            // NUNCA chamar database.close() ou appContext.deleteDatabase():
+            // 1) database.close() antes de clearAllTables() causa IllegalStateException
+            //    ("attempt to re-open an already-closed object").
+            // 2) deleteDatabase() com o app em execução desvincula o inode no disco e
+            //    quebra qualquer acesso subsequente na mesma sessão.
+            // clearAllTables() executa DELETE FROM em todas as tabelas registradas mantendo
+            // a conexão e a integridade da instância Singleton.
             try {
-                database.close()
+                database.clearAllTables()
             } catch (e: Exception) {
-                android.util.Log.w("AuthViewModel", "Erro ao fechar DB antes de apagar: ${e.message}")
-            }
-            database.clearAllTables()
-            
-            // Apagar o arquivo inteiro do banco Room para garantir limpeza total
-            try {
-                appContext.deleteDatabase(BragaDatabase.DATABASE_NAME)
-            } catch (e: Exception) {
-                android.util.Log.w("AuthViewModel", "Erro ao apagar DB Room: ${e.message}")
+                android.util.Log.e("AuthViewModel", "Erro ao limpar tabelas locais no signOut: ${e.message}", e)
             }
             
             // Limpar SharedPreferences com dados de sessão
@@ -842,20 +867,12 @@ class AuthViewModel @Inject constructor(
             } catch (e: Exception) {
                 android.util.Log.w("AuthViewModel", "Erro ao cancelar workers no deleteAccount: ${e.message}")
             }
-            // AUD-AN17: FECHAR a conexão Room/SQLCipher ANTES de clearAllTables() e
-            // deleteDatabase(). Sem isso o SupportOpenHelperFactory mantém o fd aberto
-            // sobre o inode desvinculado; a nova sessão escreve no inode órfão e os
-            // dados (vitals, medicações, biometria) somem quando o processo reinicia.
+            // AUD-AN17 corrigido: clearAllTables() esvazia todas as tabelas do Room (LGPD)
+            // sem fechar a conexão nem desvincular o arquivo no disco enquanto a aplicação roda.
             try {
-                database.close()
+                database.clearAllTables()
             } catch (e: Exception) {
-                android.util.Log.w("AuthViewModel", "Erro ao fechar DB antes de apagar: ${e.message}")
-            }
-            database.clearAllTables()
-            try {
-                appContext.deleteDatabase(BragaDatabase.DATABASE_NAME)
-            } catch (e: Exception) {
-                android.util.Log.w("AuthViewModel", "Erro ao apagar DB no deleteAccount: ${e.message}")
+                android.util.Log.e("AuthViewModel", "Erro ao limpar tabelas no deleteAccount: ${e.message}", e)
             }
             try {
                 appContext.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)

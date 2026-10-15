@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.registration
+package br.com.bragasaude.ui.registration
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
