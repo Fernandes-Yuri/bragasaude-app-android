@@ -16,6 +16,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -43,6 +46,9 @@ fun LoginScreen(
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val isKeyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val credentialManager = CredentialManager.create(context)
     val authState by viewModel.authState.collectAsState()
     var emailMode by remember { mutableStateOf("login") } // "login", "signup" ou "forgot"
@@ -144,15 +150,17 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(32.dp)
+            verticalArrangement = Arrangement.spacedBy(if (isKeyboardVisible) 12.dp else 32.dp)
         ) {
             item {
-                Spacer(Modifier.height(40.dp))
+                Spacer(Modifier.height(if (isKeyboardVisible) 0.dp else 40.dp))
                 // Logo Branding - Escudo com Ritmo Cardíaco
                 br.com.bragasaude.ui.components.ShieldEcgIcon(
-                    sizeDp = 120.dp
+                    sizeDp = if (isKeyboardVisible) 48.dp else 120.dp
                 )
             }
 
@@ -160,18 +168,20 @@ fun LoginScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = stringResource(R.string.app_name_new),
-                        style = MaterialTheme.typography.displaySmall,
+                        style = if (isKeyboardVisible) MaterialTheme.typography.titleLarge else MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.slogan),
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray
-                    )
+                    if (!isKeyboardVisible) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.slogan),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.Gray
+                        )
+                    }
                 }
             }
 
@@ -477,20 +487,15 @@ fun LoginScreen(
                                         verticalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
                                         Text(
-                                            text = "Validação Obrigatória de Segurança",
+                                            text = "Confirme seu e-mail",
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.primary
                                         )
                                         Text(
-                                            text = "Vamos enviar um código de 6 dígitos para o seu e-mail para ativar a conta:",
+                                            text = "Enviaremos um código de 6 dígitos para confirmar seu e-mail e ativar a conta.",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Text(
-                                            text = "O código de 6 dígitos será enviado para o e-mail digitado acima.",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                 }
@@ -500,9 +505,14 @@ fun LoginScreen(
                                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                                     TextButton(
                                         onClick = { emailMode = "forgot" },
-                                        contentPadding = PaddingValues(0.dp)
+                                        modifier = Modifier.heightIn(min = 48.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp)
                                     ) {
-                                        Text("Esqueci minha senha", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                        Text(
+                                            "Esqueci minha senha",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
                                     }
                                 }
                             }
@@ -530,7 +540,7 @@ fun LoginScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Text(
-                                    if (emailMode == "login") "Entrar" else "Receber Código e Ativar Conta",
+                                    if (emailMode == "login") "Entrar" else "Receber código",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 16.sp,
                                     maxLines = 1,
@@ -552,6 +562,8 @@ fun LoginScreen(
                         // Botão Secundário: GOOGLE
                         OutlinedButton(
                             onClick = {
+                                focusManager.clearFocus(force = true)
+                                keyboardController?.hide()
                                 triggerGoogleFlow(context, scope, credentialManager) { idToken ->
                                     viewModel.signInWithGoogle(idToken)
                                 }
@@ -642,6 +654,8 @@ fun LoginScreen(
                     Button(
                         onClick = {
                             googleAccountConflictMessage = null
+                            focusManager.clearFocus(force = true)
+                            keyboardController?.hide()
                             triggerGoogleFlow(context, scope, credentialManager) { idToken ->
                                 viewModel.signInWithGoogle(idToken)
                             }

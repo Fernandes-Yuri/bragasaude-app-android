@@ -43,8 +43,17 @@ fun PrivacyPolicyScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                Text("Relógios e Health Connect", style = MaterialTheme.typography.titleMedium)
-                Text("Com sua autorização, lemos passos, frequência cardíaca e saturação de oxigênio compartilhados com Health Connect. Batimentos e SpO₂ são armazenados neste celular, na sua conta, com horário e origem, e podem integrar o relatório que você escolher compartilhar. Passos integram suas métricas de atividade sincronizadas. Você pode revogar as permissões no Health Connect. A revogação não apaga o histórico já importado; a exclusão da conta remove os dados locais.")
+                Text(
+                    "Relógios e Health Connect",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Com sua autorização, lemos passos, frequência cardíaca e saturação de oxigênio compartilhados com Health Connect. Batimentos e SpO₂ são armazenados neste celular, na sua conta, com horário e origem, e podem integrar o relatório que você escolher compartilhar. Passos integram suas métricas de atividade sincronizadas. Você pode revogar as permissões no Health Connect. A revogação não apaga o histórico já importado; a exclusão da conta remove os dados locais.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             item {
                 Surface(

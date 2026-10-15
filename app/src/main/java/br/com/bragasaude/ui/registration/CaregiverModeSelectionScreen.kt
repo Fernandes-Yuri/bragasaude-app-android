@@ -83,7 +83,7 @@ fun CaregiverModeSelectionScreen(
             // Opção A: HYBRID
             ModeOptionCard(
                 icon = Icons.Default.Favorite,
-                title = "Acompanhar\n&\nCuidar de mim",
+                title = "Cuidar de mim e acompanhar meu familiar",
                 subtitle = "Quero monitorar minha própria saúde também (pressão, passos, hidratação) e acompanhar meu familiar.",
                 badge = "Experiência completa",
                 selected = selectedMode == "HYBRID",
@@ -157,6 +157,7 @@ private fun ModeOptionCard(
 
                 Spacer(Modifier.width(16.dp))
                 RadioButton(selected = selected, onClick = null)
+                Spacer(Modifier.width(8.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(

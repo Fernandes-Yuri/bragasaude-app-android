@@ -360,7 +360,7 @@ fun ProfileScreen(
                                         selected = gender == option,
                                         onClick = { gender = option },
                                         label = { Text(option) },
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                                     )
                                 }
                             }
@@ -370,7 +370,7 @@ fun ProfileScreen(
                                         selected = gender == option,
                                         onClick = { gender = option },
                                         label = { Text(option) },
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                                     )
                                 }
                             }
