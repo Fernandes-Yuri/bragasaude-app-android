@@ -398,7 +398,7 @@ class NutritionViewModel @Inject constructor(
         if (_publicationLoading.value) return
         _publicationLoading.value = true
         viewModelScope.launch {
-            try { retailRepository.refreshPublications(); _publicationMessage.value = null }
+            try { retailRepository.refreshPublications(); retailRepository.refresh(); _publicationMessage.value = null }
             catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (_: Exception) { _publicationMessage.value = "Sem conexão. Exibindo a última edição salva; confira a validade antes de comprar." }
             finally { _publicationLoading.value = false }

@@ -80,13 +80,14 @@ fun GroceryListBottomSheet(
     onGenerateListWithPreferences: ((preserveManual: Boolean, preferences: br.com.bragasaude.domain.WeeklyGroceryPreferences) -> Unit)? = null
 ) {
     var pendingPack by remember { mutableStateOf<br.com.bragasaude.data.remote.model.PublishedGroceryPack?>(null) }
+    var showCatalog by remember { mutableStateOf(false) }
     var showShelf by remember { mutableStateOf(true) }
     pendingPack?.let { selected ->
         BragaAlertDialog(
             onDismissRequest = { pendingPack = null },
             title = { Text("Iniciar lista deste supermercado?") },
             text = { Text("O pack de ${selected.marketName} será sua nova lista. A lista atual será substituída; o estoque já registrado na despensa será mantido.") },
-            confirmButton = { TextButton(onClick = { onAdoptPack(selected); pendingPack = null; showShelf = false }) { Text("Iniciar nova lista") } },
+            confirmButton = { TextButton(onClick = { onAdoptPack(selected); pendingPack = null; showShelf = false; showCatalog = false }) { Text("Iniciar nova lista") } },
             dismissButton = { TextButton(onClick = { pendingPack = null }) { Text("Cancelar") } }
         )
     }
@@ -314,12 +315,18 @@ fun GroceryListBottomSheet(
 
             GroceryWeeklyGoalBar(weeklyGoal)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = showShelf, onClick = { showShelf = true }, label = { Text("Vitrine") })
-                FilterChip(selected = !showShelf, onClick = { showShelf = false }, label = { Text("Minha lista (${groceryList.size})") })
+                FilterChip(selected = showShelf, onClick = { showShelf = true; showCatalog = false }, label = { Text("Packs") })
+                FilterChip(selected = showCatalog, onClick = { showShelf = false; showCatalog = true }, label = { Text("Catálogo") })
+                FilterChip(selected = !showShelf && !showCatalog, onClick = { showShelf = false; showCatalog = false }, label = { Text("Minha lista") })
             }
             if (showShelf) {
                 PublishedGroceryPacksScreen(publishedPacks, retailLoading, retailMessage ?: groceryMessage,
                     onRefreshRetail, { pendingPack = it }, Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp))
+            } else if (showCatalog) {
+                Text("Catálogo atual de produtos. As compras são organizadas pelos packs de cada supermercado.", style = MaterialTheme.typography.bodySmall)
+                GroceryMarketShelfScreen(retailCards, groceryList, retailLoading, retailMessage,
+                    onRefreshRetail, onAddCard, onDecrementCard,
+                    Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp), allowSelection = false)
             } else {
             // 2. Barra de Ações Rápidas (Proporcionais 1:1, Sem Quebra de Linha e com Planejador Semanal Contextual)
             val hasItems = groceryList.isNotEmpty()

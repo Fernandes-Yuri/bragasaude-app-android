@@ -55,7 +55,8 @@ fun GroceryMarketShelfScreen(
     cards: List<GroceryRetailCardEntity>, rows: List<GroceryListItemEntity>,
     loading: Boolean, message: String?, onRetry: () -> Unit,
     onAdd: (GroceryRetailCardEntity) -> Unit, onDecrement: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    allowSelection: Boolean = true
 ) {
     var category by remember { mutableStateOf("Todos") }
     var query by remember { mutableStateOf("") }
@@ -96,14 +97,14 @@ fun GroceryMarketShelfScreen(
                                 GroceryMarketLink(market.optString("market_name"), market.optString("market_logo_url"), market.optString("website_url"))
                             }
                         }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        if (allowSelection) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             TextButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onDecrement(card.id) },
                                 enabled = count > 0 && !locked, contentPadding = PaddingValues(0.dp), modifier = Modifier.semantics { contentDescription = "Remover uma embalagem de ${card.name}" }.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) { Text("−", modifier = Modifier, style = MaterialTheme.typography.titleLarge) }
                             Text("$count")
                             TextButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onAdd(card) },
                                 enabled = count < 999 && !locked, contentPadding = PaddingValues(0.dp), modifier = Modifier.semantics { contentDescription = "Adicionar uma embalagem de ${card.name}" }.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) { Text("+", style = MaterialTheme.typography.titleLarge) }
                         }
-                        if (locked) Text("Comprado. Desmarque na lista para alterar.", style = MaterialTheme.typography.bodySmall)
+                        if (locked && allowSelection) Text("Comprado. Desmarque na lista para alterar.", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
