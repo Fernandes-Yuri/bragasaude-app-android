@@ -362,7 +362,15 @@ data class GroceryListItemEntity(
     val isCheckedInPantry: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     @androidx.room.ColumnInfo(defaultValue = "0") val isManual: Boolean = false,
-    @androidx.room.ColumnInfo(defaultValue = "0") val plannedWeeklyAmount: Double = 0.0
+    @androidx.room.ColumnInfo(defaultValue = "0") val plannedWeeklyAmount: Double = 0.0,
+    val retailCardId: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "1") val quantity: Int = 1,
+    @androidx.room.ColumnInfo(defaultValue = "''") val packageDisplay: String = "",
+    @androidx.room.ColumnInfo(defaultValue = "0") val kcalPerUnit: Double = 0.0,
+    @androidx.room.ColumnInfo(defaultValue = "0") val packageNetValue: Double = 0.0,
+    val packageUnit: String? = null,
+    val linkedIngredientSlug: String? = null,
+    val imageUrl: String? = null
 )
 
 /**

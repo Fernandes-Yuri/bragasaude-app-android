@@ -507,6 +507,27 @@ object Migrations {
         }
     }
 
+    val MIGRATION_54_55 = object : Migration(54, 55) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN retailCardId TEXT")
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1")
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN packageDisplay TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN kcalPerUnit REAL NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN packageNetValue REAL NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN packageUnit TEXT")
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN linkedIngredientSlug TEXT")
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN imageUrl TEXT")
+            db.execSQL("CREATE TABLE IF NOT EXISTS grocery_retail_cards_local (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, category TEXT NOT NULL, imageUrl TEXT NOT NULL, packageDisplay TEXT NOT NULL, packageNetValue REAL NOT NULL, packageUnit TEXT NOT NULL, kcalPerPackage REAL NOT NULL, carbsG REAL NOT NULL, proteinG REAL NOT NULL, fatG REAL NOT NULL, priceAvg REAL NOT NULL, linkedIngredientSlug TEXT, marketsJson TEXT NOT NULL, clinicalTagsJson TEXT NOT NULL)")
+        }
+    }
+
+    val MIGRATION_55_56 = object : Migration(55, 56) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS grocery_publication_cache (id INTEGER NOT NULL PRIMARY KEY, payload TEXT NOT NULL, fetchedAt INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS grocery_adopted_pack (userId TEXT NOT NULL PRIMARY KEY, payload TEXT NOT NULL, adoptedAt INTEGER NOT NULL)")
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -536,6 +557,8 @@ object Migrations {
         MIGRATION_50_51,
         MIGRATION_51_52,
         MIGRATION_52_53,
-        MIGRATION_53_54
+        MIGRATION_53_54,
+        MIGRATION_54_55,
+        MIGRATION_55_56
     )
 }

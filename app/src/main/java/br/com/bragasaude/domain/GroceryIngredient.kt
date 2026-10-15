@@ -63,7 +63,7 @@ object GroceryPurchasePlanner {
 
     fun canonicalize(items: List<GroceryListItemEntity>, catalog: GroceryIngredientCatalog): List<GroceryListItemEntity> {
         val transformed = items.flatMap { old ->
-            val ingredients = catalog.forFood(old.foodId, old.foodName)
+            val ingredients = if (old.retailCardId != null) emptyList() else catalog.forFood(old.foodId, old.foodName)
             if (ingredients.isEmpty()) listOf(old) else ingredients.mapIndexed { index, ingredient ->
                 val alreadyCanonical = old.foodId == ingredient.slug && old.foodName == ingredient.name
                 val amount = if (alreadyCanonical) {

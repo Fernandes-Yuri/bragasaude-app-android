@@ -81,6 +81,25 @@ class GroceryRepository @Inject constructor(
         }
     }
 
+    suspend fun changeCard(userId: String, card: br.com.bragasaude.data.local.GroceryRetailCardEntity, delta: Int) {
+        groceryListDao.rewriteGroceryList(userId) { rows ->
+            val old = rows.firstOrNull { it.retailCardId == card.id }
+            check(old?.isCheckedInPantry != true) { "Desmarque o produto comprado antes de alterar a quantidade." }
+            val count = ((old?.quantity ?: 0) + delta).coerceIn(0, 999)
+            val kept = rows.filterNot { it.remoteId == old?.remoteId }
+            if (count == 0) kept else kept + GroceryListItemEntity(
+                remoteId = old?.remoteId ?: UUID.randomUUID().toString(), userId = userId,
+                weekStartDate = old?.weekStartDate ?: br.com.bragasaude.domain.GroceryWeek.start(),
+                foodId = card.id, foodName = card.name, category = card.category,
+                suggestedServingWeekGrams = 0, purchaseWeightGrams = if (card.packageUnit == "g") (card.packageNetValue * count).toInt() else 0,
+                purchaseUnitText = "$count × ${card.packageDisplay}", estimatedPriceBrl = card.priceAvg * count,
+                isManual = true, retailCardId = card.id, quantity = count, packageDisplay = card.packageDisplay,
+                kcalPerUnit = card.kcalPerPackage, packageNetValue = card.packageNetValue,
+                packageUnit = card.packageUnit, linkedIngredientSlug = card.linkedIngredientSlug, imageUrl = card.imageUrl
+            )
+        }
+    }
+
     suspend fun removeItem(userId: String, id: String) {
         groceryListDao.rewriteGroceryList(userId) { rows -> rows.filterNot { it.remoteId == id } }
     }

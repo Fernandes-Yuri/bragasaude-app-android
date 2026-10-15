@@ -1977,6 +1977,30 @@ class BragaApiClient @Inject constructor(
 
     data class CanonicalGroceryPrice(val unit: String, val average: Double, val source: String)
 
+    suspend fun getGroceryPublications(): JSONObject = withContext(Dispatchers.IO) {
+        getJson("$baseUrl/api/catalog/grocery/publications", strict = true)
+            ?: throw java.io.IOException("Packs publicados indisponíveis")
+    }
+    suspend fun getGroceryPublicationRevision(): JSONObject = withContext(Dispatchers.IO) {
+        getJson("$baseUrl/api/catalog/grocery/publications/revision", strict = true)
+            ?: throw java.io.IOException("Packs publicados indisponíveis")
+    }
+
+    suspend fun getGroceryRetailCards(): List<GroceryRetailCardEntity> = withContext(Dispatchers.IO) {
+        val rows = getJsonArray("$baseUrl/api/catalog/grocery/cards")
+            ?: throw java.io.IOException("Catálogo indisponível")
+        (0 until rows.length()).map { GroceryRetailCardDto.parse(rows.getJSONObject(it)) }
+    }
+
+    suspend fun compareGroceryBasket(items: List<BasketItemDto>): BasketComparisonResultDto = withContext(Dispatchers.IO) {
+        val payload = JSONObject().put("items", JSONArray().apply {
+            items.forEach { put(JSONObject().put("card_id", it.cardId).put("quantity", it.quantity)) }
+        })
+        val result = postJsonDetailed("$baseUrl/api/catalog/grocery/basket-comparison", payload)
+        if (result.code !in 200..299 || result.body == null) throw java.io.IOException("Comparação indisponível")
+        BasketComparisonResultDto.parse(result.body)
+    }
+
     suspend fun getGroceryPrices(): Map<String, Double> = withContext(Dispatchers.IO) {
         try {
             val o = getJson("$baseUrl/api/catalog/grocery-prices") ?: return@withContext emptyMap()

@@ -50,16 +50,21 @@ class WeeklyGrocerySummaryRepository @Inject constructor(private val database: B
         val item = groceries.getGrocerySnapshot(userId).firstOrNull { it.remoteId == id } ?: return@withTransaction
         if (item.isCheckedInPantry == checked) return@withTransaction
         groceries.updateCheckedStatus(id, checked)
-        val ingredient = catalog.ingredients.firstOrNull { it.slug == item.foodId } ?: return@withTransaction
+        val slug = if (item.retailCardId != null) item.linkedIngredientSlug else item.foodId
+        val ingredient = catalog.ingredients.firstOrNull { it.slug == slug } ?: return@withTransaction
         val amount = GroceryPurchasePlanner.parseAmount(item.purchaseUnitText.substringBefore(' '), ingredient.unit)
             ?: item.purchaseWeightGrams.takeIf { ingredient.unit == "kg" && it > 0 }
-        val internalAmount = (if (ingredient.unit == "kg") item.purchaseWeightGrams else amount ?: 0).toDouble()
+        val internalAmount = if (item.retailCardId != null) {
+            val compatible = when (ingredient.unit) { "kg" -> "g"; "L" -> "ml"; else -> "un" }
+            if (item.packageUnit != compatible) return@withTransaction
+            item.quantity * item.packageNetValue
+        } else (if (ingredient.unit == "kg") item.purchaseWeightGrams else amount ?: 0).toDouble()
 
-        val existingStock = pantry.stock(userId, item.foodId)
+        val existingStock = pantry.stock(userId, ingredient.slug)
         if (checked) {
             // Reabastece o saldo na despensa: soma à quantidade existente ou cria se for novo
             val updatedAmount = (existingStock?.availableAmount ?: 0.0) + internalAmount
-            pantry.upsert(GroceryPantryStockEntity(userId, item.foodId, ingredient.unit, updatedAmount))
+            pantry.upsert(GroceryPantryStockEntity(userId, ingredient.slug, ingredient.unit, updatedAmount))
         } else if (existingStock != null) {
             // Desmarcar estorna a quantidade da compra correspondente
             val updatedAmount = (existingStock.availableAmount - internalAmount).coerceAtLeast(0.0)
