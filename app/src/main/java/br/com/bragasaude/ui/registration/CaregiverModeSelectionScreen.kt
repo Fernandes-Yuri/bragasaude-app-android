@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.registration
+package br.com.bragasaude.ui.registration
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
@@ -83,7 +83,7 @@ fun CaregiverModeSelectionScreen(
             // Opção A: HYBRID
             ModeOptionCard(
                 icon = Icons.Default.Favorite,
-                title = "Acompanhar + Cuidar de mim",
+                title = "Acompanhar\n&\nCuidar de mim",
                 subtitle = "Quero monitorar minha própria saúde também (pressão, passos, hidratação) e acompanhar meu familiar.",
                 badge = "Experiência completa",
                 selected = selectedMode == "HYBRID",
