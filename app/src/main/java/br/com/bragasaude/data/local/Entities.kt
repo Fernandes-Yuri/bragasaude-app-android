@@ -351,7 +351,7 @@ data class PostReactionEntity(
 data class GroceryListItemEntity(
     @PrimaryKey val remoteId: String,
     val userId: String,
-    val weekStartDate: String, // yyyy-MM-dd
+    val weekStartDate: String, // yyyy-MM-dd: início do período de compra
     val foodId: String,
     val foodName: String,
     val category: String, // "Hortifruti & Feira", "Cereais & Graos", "Acougue & Ovos", "Mercearia & Chas"
@@ -370,7 +370,8 @@ data class GroceryListItemEntity(
     @androidx.room.ColumnInfo(defaultValue = "0") val packageNetValue: Double = 0.0,
     val packageUnit: String? = null,
     val linkedIngredientSlug: String? = null,
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "7") val planningDays: Int = 7
 )
 
 /**

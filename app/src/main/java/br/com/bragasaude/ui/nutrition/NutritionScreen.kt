@@ -555,7 +555,7 @@ fun NutritionScreen(
                                 Spacer(Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Planeje sua lista da semana",
+                                        text = "Planeje suas compras",
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = BragaTextPrimary
@@ -1027,6 +1027,7 @@ fun NutritionScreen(
             onAdoptPack = viewModel::adoptPublishedPack,
             retailCards = retailCards,
             weeklyGoal = weeklyGoal,
+            onPlanningDaysChange = viewModel::changePlanningDays,
             retailLoading = publicationLoading,
             retailMessage = publicationMessage,
             basketComparison = basketComparison,

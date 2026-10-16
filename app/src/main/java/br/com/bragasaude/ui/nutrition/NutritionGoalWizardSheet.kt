@@ -404,7 +404,7 @@ private fun StepBudgetSelection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(
-            text = "Qual padrão de compras você prefere para a semana?",
+            text = "Qual padrão de compras você prefere para suas compras?",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = BragaTextPrimary
@@ -604,7 +604,7 @@ private fun StepSummaryAndConfirm(
                     )
                 }
                 Text(
-                    text = "A lista semanal de compras será calibrada para cobrir estas $calculatedKcal kcal/dia com até ${budget.maxBasketSize} itens essenciais.",
+                    text = "A lista de compras será calibrada para cobrir estas $calculatedKcal kcal/dia com até ${budget.maxBasketSize} itens essenciais.",
                     style = MaterialTheme.typography.bodySmall,
                     color = BragaTextSecondary
                 )

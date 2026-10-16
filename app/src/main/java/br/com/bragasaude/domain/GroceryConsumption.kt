@@ -121,12 +121,12 @@ object GroceryConsumption {
         return IngredientConsumption(amounts, limitations, structured)
     }
 
-    fun insufficient(available: Double, weeklyDemand: Double, daysRemaining: Int): Boolean =
-        weeklyDemand > 0 && available + 0.000001 < weeklyDemand * daysRemaining.coerceIn(0, 7) / 7.0
+    fun insufficient(available: Double, weeklyDemand: Double, daysRemaining: Int, planningDays: Int = 7): Boolean =
+        weeklyDemand > 0 && available + 0.000001 < weeklyDemand * daysRemaining.coerceIn(0, GroceryPlanningPeriod.validated(planningDays)) / planningDays.toDouble()
 }
 
 object WeeklyGroceryPlanValidity {
     fun needsResize(plan: WeeklyGroceryPlanResult, dailyTarget: Double, weight: Double?): Boolean =
-        !plan.isManuallyModified && (kotlin.math.abs(plan.targetWeeklyCalories - dailyTarget * 7) > 1.0 ||
+        !plan.isManuallyModified && (kotlin.math.abs(plan.targetWeeklyCalories - dailyTarget * plan.planningDays) > 1.0 ||
             (plan.profileWeight != null && plan.profileWeight != weight))
 }

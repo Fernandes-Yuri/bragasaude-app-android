@@ -15,7 +15,8 @@ data class PublishedGroceryPack(
     val name: String, val description: String, val coverUrl: String?, val category: String,
     val region: String, val startsOn: String, val endsOn: String, val marketName: String,
     val marketLogo: String, val marketUrl: String, val total: Double,
-    val items: List<PublishedPackItem>, val rawJson: String, val comparisons: List<PublishedMarketComparison> = emptyList()
+    val items: List<PublishedPackItem>, val rawJson: String, val comparisons: List<PublishedMarketComparison> = emptyList(),
+    val planningDays: Int = 7
 ) {
     fun validToday(): Boolean {
         val today = LocalDate.now(ZoneId.of("America/Sao_Paulo"))
@@ -24,7 +25,7 @@ data class PublishedGroceryPack(
     fun listItems(userId: String): List<GroceryListItemEntity> = items.map { item ->
         val c = item.card
         GroceryListItemEntity(remoteId = UUID.randomUUID().toString(), userId = userId,
-            weekStartDate = br.com.bragasaude.domain.GroceryWeek.start(), foodId = c.id,
+            weekStartDate = LocalDate.now().toString(), planningDays = planningDays, foodId = c.id,
             foodName = c.name, category = c.category, suggestedServingWeekGrams = 0,
             purchaseWeightGrams = if (c.packageUnit == "g") (c.packageNetValue * item.quantity).toInt() else 0,
             purchaseUnitText = "${item.quantity} × ${c.packageDisplay}", estimatedPriceBrl = item.price * item.quantity,
@@ -73,7 +74,8 @@ data class PublishedGroceryPack(
                 if (pack.optString("pack_type") == "category") pack.optString("category") else "Cesta completa da seleção",
                 edition.getString("region"), edition.getString("starts_on"), edition.getString("ends_on"),
                 market.getString("name"), market.getString("logo_url"), market.getString("website_url"),
-                preview.getDouble("total_brl"), items, raw, ranked)
+                preview.getDouble("total_brl"), items, raw, ranked,
+                br.com.bragasaude.domain.GroceryPlanningPeriod.validated(pack.optInt("planning_days", 7)))
         }
         fun fromFeed(feed: JSONObject): List<PublishedGroceryPack> {
             val publications = feed.getJSONArray("publications")

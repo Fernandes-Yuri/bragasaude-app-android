@@ -34,14 +34,14 @@ import org.json.JSONArray
 fun GroceryWeeklyGoalBar(goal: GroceryWeeklyGoal) {
     val number = remember { NumberFormat.getIntegerInstance(Locale("pt", "BR")) }
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Meta da semana: ${number.format(goal.accumulated)} / ${number.format(goal.target)} kcal (${(goal.fraction * 100).toInt()}%)",
+        Text("Meta de ${goal.planningDays} dias: ${number.format(goal.accumulated)} / ${number.format(goal.target)} kcal (${(goal.fraction * 100).toInt()}%)",
             style = MaterialTheme.typography.labelLarge)
         Box(Modifier.fillMaxWidth().height(12.dp).border(1.dp, BragaEmerald, RoundedCornerShape(6.dp))) {
             if (goal.fraction > 0) Box(Modifier.fillMaxWidth(goal.fraction.toFloat().coerceIn(0f, 1f)).fillMaxHeight()
                 .background(Brush.horizontalGradient(listOf(BragaEmerald, BragaEmeraldDark)), RoundedCornerShape(6.dp)))
         }
         Text(when {
-            goal.withinTarget -> "Na faixa da meta semanal (90% a 110%)"
+            goal.withinTarget -> "Na faixa da meta do período (90% a 110%)"
             goal.accumulated > goal.target -> "${number.format(goal.accumulated - goal.target)} kcal acima da meta"
             else -> "Faltam ${number.format(goal.remaining)} kcal"
         }, style = MaterialTheme.typography.bodySmall)

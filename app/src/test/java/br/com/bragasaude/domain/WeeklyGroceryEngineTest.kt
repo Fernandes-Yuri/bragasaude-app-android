@@ -536,4 +536,26 @@ class WeeklyGroceryEngineTest {
                 plan.limitations.any { it.contains("Preço estimado não disponível") })
         }
     }
+
+    @Test fun planningPeriodsScaleConsumptionBeforePurchaseRounding() {
+        val (foods, ingredients) = createTestCatalog()
+        val weekly = WeeklyGroceryEngine.planWeeklyGrocery("u", emptyList(), null, foods,
+            ingredientCatalog = ingredients, targetCalories = 2000.0,
+            preferences = WeeklyGroceryPreferences(planningDays = 7))
+        for (days in listOf(14, 30)) {
+            val plan = WeeklyGroceryEngine.planWeeklyGrocery("u", emptyList(), null, foods,
+                ingredientCatalog = ingredients, targetCalories = 2000.0,
+                preferences = WeeklyGroceryPreferences(planningDays = days))
+            assertEquals(2000.0 * days, plan.targetWeeklyCalories, 0.001)
+            assertEquals(days, plan.planningDays)
+            assertTrue(plan.items.isNotEmpty())
+            assertTrue(plan.items.all { it.planningDays == days && it.weekStartDate == plan.periodStartDate })
+            // A 30-day horizon must use 30/7, not four rounded weekly baskets.
+            assertEquals(weekly.plannedWeeklyCalories * days / 7.0, plan.plannedWeeklyCalories, 50.0)
+            for (row in plan.items) {
+                val before = weekly.items.first { it.foodId == row.foodId }
+                assertEquals(before.plannedWeeklyAmount * days / 7.0, row.plannedWeeklyAmount, 5.0)
+            }
+        }
+    }
 }

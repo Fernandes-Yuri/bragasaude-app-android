@@ -17,6 +17,14 @@ class WeeklyGrocerySummaryRepository @Inject constructor(private val database: B
     fun observe(userId: String, week: String) = combine(summaries.observe(userId, week), groceries.getGroceryList(userId)) { summary, items ->
         summary?.result(items)
     }
+    fun observeLatest(userId: String) = combine(summaries.observeLatest(userId), groceries.getGroceryList(userId)) { summary, items ->
+        summary?.result(items)
+    }
+    suspend fun changePeriod(userId: String, days: Int) = database.withTransaction {
+        GroceryPlanningPeriod.validated(days)
+        groceries.rewriteGroceryList(userId) { rows -> rows.map { it.copy(planningDays = days, weekStartDate = LocalDate.now().toString()) } }
+        summaries.invalidateAll(userId, "Período alterado para $days dias. Quantidades preservadas; redimensione para revisar o consumo planejado.")
+    }
     fun stock(userId: String) = pantry.observe(userId)
     fun meals(userId: String, day: String) = pantry.meals(userId, day)
 
@@ -28,19 +36,19 @@ class WeeklyGrocerySummaryRepository @Inject constructor(private val database: B
             val old = existing.firstOrNull { it.foodId == row.foodId }
             row.copy(isCheckedInPantry = old?.isCheckedInPantry == true)
         }
-        val result = plan.copy(items = generated + manual,
+        val result = plan.copy(items = (generated + manual).map { it.copy(planningDays = plan.planningDays, weekStartDate = plan.periodStartDate) },
             isManuallyModified = manual.isNotEmpty(),
             statusMessage = if (manual.isEmpty()) plan.statusMessage else "Itens manuais preservados. Cobertura anterior não validada para a lista modificada.")
         groceries.rewriteGroceryList(userId) { result.items }
-        summaries.upsert(WeeklyGrocerySummaryEntity.from(userId, GroceryWeek.start(), result))
+        summaries.upsert(WeeklyGrocerySummaryEntity.from(userId, plan.periodStartDate, result))
     }
 
     suspend fun modify(userId: String, message: String, operation: suspend () -> Unit) = database.withTransaction {
         operation()
-        summaries.invalidate(userId, GroceryWeek.start(), message)
+        summaries.invalidateAll(userId, message)
     }
 
-    suspend fun invalidate(userId: String, message: String) = summaries.invalidate(userId, GroceryWeek.start(), message)
+    suspend fun invalidate(userId: String, message: String) = summaries.invalidateAll(userId, message)
     suspend fun clear(userId: String) = database.withTransaction {
         groceries.clearGroceryList(userId)
         summaries.clear(userId)

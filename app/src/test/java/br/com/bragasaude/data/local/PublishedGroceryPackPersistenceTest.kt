@@ -32,13 +32,13 @@ class PublishedGroceryPackPersistenceTest {
     }
     @Before fun before() { context.deleteDatabase("published-test.db"); open() }
     @After fun after() { db.close(); context.deleteDatabase("published-test.db") }
-    private fun feed(version: Long, market: String = "a"): JSONObject {
+    private fun feed(version: Long, market: String = "a", planningDays: Int = 7): JSONObject {
         val product = JSONObject().put("id", "butter").put("name", "Manteiga").put("category", "Laticínios")
             .put("image_url", "https://example.org/butter.png").put("package_display", "Pote 200g")
             .put("package_net_value", 200).put("package_unit", "g").put("kcal_per_package", 1400)
             .put("carbs_g", 0).put("protein_g", 1).put("fat_g", 160).put("price_avg", 12.9)
         val quote = JSONObject().put("market_id", market).put("price", 10.0).put("conditions", "Oferta na loja").put("confirmed", true).put("minimum_quantity", 1)
-        val pack = JSONObject().put("id", "pack").put("market_id", "a").put("name", "Pack da semana").put("pack_type", "complete")
+        val pack = JSONObject().put("planning_days", planningDays).put("id", "pack").put("market_id", "a").put("name", "Pack da semana").put("pack_type", "complete")
         val preview = JSONObject().put("pack", pack).put("market", JSONObject().put("name", "Mercado A")
             .put("logo_url", "https://example.org/logo.png").put("website_url", "https://example.org"))
             .put("total_brl", 20.0).put("items", JSONArray().put(JSONObject().put("product", product).put("quote", quote).put("quantity", 2)))
@@ -50,7 +50,7 @@ class PublishedGroceryPackPersistenceTest {
     @Test fun adoptionUsesMarketPriceAndFeedUpdatesPreserveExistingCheckedList() = runBlocking {
         val api = mockk<BragaApiClient>()
         coEvery { api.getGroceryPublicationRevision() } returns JSONObject().put("revision", 1).put("business_date", date)
-        coEvery { api.getGroceryPublications() } returns feed(1)
+        coEvery { api.getGroceryPublications() } returns feed(1, planningDays = 30)
         val repo = GroceryRetailRepository(db, api)
         repo.refreshPublications()
         val pack = repo.publications().first().single()
@@ -58,6 +58,8 @@ class PublishedGroceryPackPersistenceTest {
         val item = db.groceryListDao().getGrocerySnapshot("u").single()
         assertEquals(20.0, item.estimatedPriceBrl, 0.001)
         assertEquals(2, item.quantity)
+        assertEquals(30, item.planningDays)
+        assertEquals(30, pack.planningDays)
         db.groceryListDao().updateCheckedStatus(item.remoteId, true)
         coEvery { api.getGroceryPublicationRevision() } returns JSONObject().put("revision", 2).put("business_date", date)
         coEvery { api.getGroceryPublications() } returns feed(2)
@@ -67,6 +69,8 @@ class PublishedGroceryPackPersistenceTest {
         assertEquals("publication-1", repo.adopted("u").first()!!.publicationId)
         db.close(); open()
         assertEquals("publication-1", GroceryRetailRepository(db, api).adopted("u").first()!!.publicationId)
+        assertEquals(30, db.groceryListDao().getGrocerySnapshot("u").single().planningDays)
+        assertEquals(30, GroceryRetailRepository(db, api).adopted("u").first()!!.planningDays)
         assertNull(GroceryRetailRepository(db, api).adopted("other").first())
     }
 

@@ -31,7 +31,7 @@ fun WeeklyGrocerySummaryCard(
         ) {
             // 1. Título do card e valores calóricos
             Text(
-                text = if (plan.isManuallyModified) "Último planejamento • cobertura invalidada" else "Resumo estimado para 7 dias",
+                text = if (plan.isManuallyModified) "Último planejamento • cobertura invalidada" else "Resumo estimado para ${plan.planningDays} dias",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )

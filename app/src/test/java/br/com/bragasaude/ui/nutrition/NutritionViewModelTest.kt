@@ -95,6 +95,7 @@ class NutritionViewModelTest {
         every { weeklyRepo.stock(any()) } returns flowOf(emptyList())
         every { weeklyRepo.meals(any(), any()) } returns flowOf(emptyList())
         every { weeklyRepo.observe(any(), any()) } returns flowOf(null)
+        every { weeklyRepo.observeLatest(any()) } returns flowOf(null)
         every { catalogRepo.getMealRules() } returns flowOf(emptyList())
         every { catalogRepo.getFoodCatalog() } returns flowOf(sampleFoodCatalog)
         val dummyManifest = br.com.bragasaude.domain.GroceryIngredientCatalog(ingredients = emptyList(), components = emptyMap())
