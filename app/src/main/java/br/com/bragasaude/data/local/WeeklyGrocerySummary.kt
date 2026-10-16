@@ -68,8 +68,8 @@ data class WeeklyGrocerySummaryEntity(
             statusMessage = statusMessage,
             isManuallyModified = isManuallyModified,
             profileWeight = profileWeight,
-            planningDays = planningDays,
-            periodStartDate = weekStartDate
+            planningDays = items.firstOrNull()?.planningDays ?: planningDays,
+            periodStartDate = items.firstOrNull()?.weekStartDate ?: weekStartDate
         )
     }
     companion object {
@@ -120,6 +120,16 @@ interface WeeklyGrocerySummaryDao {
     fun observeLatest(userId: String): Flow<WeeklyGrocerySummaryEntity?>
     @Query("UPDATE weekly_grocery_summary_local SET isManuallyModified = 1, statusMessage = :message WHERE userId = :userId")
     suspend fun invalidateAll(userId: String, message: String)
+    @Query("""
+        UPDATE weekly_grocery_summary_local
+        SET planningDays = :days,
+            targetWeeklyCalories = CASE WHEN planningDays > 0 THEN targetWeeklyCalories * :days / planningDays ELSE targetWeeklyCalories END,
+            coveragePercent = CASE WHEN targetWeeklyCalories > 0 AND planningDays > 0 THEN (plannedWeeklyCalories / (targetWeeklyCalories * :days / planningDays)) * 100.0 ELSE coveragePercent END,
+            isManuallyModified = 1,
+            statusMessage = :message
+        WHERE userId = :userId
+    """)
+    suspend fun updatePeriod(userId: String, days: Int, message: String)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(summary: WeeklyGrocerySummaryEntity)
     @Query("UPDATE weekly_grocery_summary_local SET isManuallyModified = 1, statusMessage = :message WHERE userId = :userId AND weekStartDate = :week")
     suspend fun invalidate(userId: String, week: String, message: String)

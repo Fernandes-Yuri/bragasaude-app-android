@@ -22,8 +22,10 @@ class WeeklyGrocerySummaryRepository @Inject constructor(private val database: B
     }
     suspend fun changePeriod(userId: String, days: Int) = database.withTransaction {
         GroceryPlanningPeriod.validated(days)
-        groceries.rewriteGroceryList(userId) { rows -> rows.map { it.copy(planningDays = days, weekStartDate = LocalDate.now().toString()) } }
-        summaries.invalidateAll(userId, "Período alterado para $days dias. Quantidades preservadas; redimensione para revisar o consumo planejado.")
+        val anchor = groceries.getGrocerySnapshot(userId).firstOrNull()?.weekStartDate?.takeIf { it.isNotBlank() }
+            ?: LocalDate.now().toString()
+        groceries.rewriteGroceryList(userId) { rows -> rows.map { it.copy(planningDays = days, weekStartDate = anchor) } }
+        summaries.updatePeriod(userId, days, "Período alterado para $days dias. Quantidades preservadas; redimensione para revisar o consumo planejado.")
     }
     fun stock(userId: String) = pantry.observe(userId)
     fun meals(userId: String, day: String) = pantry.meals(userId, day)
