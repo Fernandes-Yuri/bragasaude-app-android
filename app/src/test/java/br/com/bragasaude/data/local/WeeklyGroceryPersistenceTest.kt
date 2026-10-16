@@ -182,4 +182,21 @@ class WeeklyGroceryPersistenceTest {
         assertNull(repository.observe("u", GroceryWeek.start()).first())
     }
 
+
+    @Test fun monthlyPeriodAndAnchorSurviveReopeningAndManualChangesKeepStock() = runBlocking {
+        val monthly = plan().copy(planningDays = 30, periodStartDate = "2026-10-16", targetWeeklyCalories = 90000.0)
+        repository.save("u", monthly, false)
+        db.close(); open()
+        val restored = repository.observeLatest("u").first()!!
+        assertEquals(30, restored.planningDays)
+        assertEquals("2026-10-16", restored.periodStartDate)
+        assertEquals(30, restored.items.single().planningDays)
+        assertEquals(90000.0, restored.targetWeeklyCalories, 0.001)
+        repository.check("u", restored.items.single().remoteId, true, catalog)
+        val stock = db.groceryPantryDao().stock("u", "a")!!.availableAmount
+        repository.changePeriod("u", 14)
+        assertEquals(stock, db.groceryPantryDao().stock("u", "a")!!.availableAmount, 0.001)
+        assertEquals(14, db.groceryListDao().getGrocerySnapshot("u").single().planningDays)
+        assertTrue(repository.observeLatest("u").first()!!.isManuallyModified)
+    }
 }

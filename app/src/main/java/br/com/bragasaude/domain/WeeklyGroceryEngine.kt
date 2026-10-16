@@ -31,7 +31,7 @@ data class WeeklyGroceryPlanResult(
     val structuredLimitations: List<GroceryLimitation> = emptyList(),
     val purchaseStatus: PurchaseCalculationStatus = PurchaseCalculationStatus.CALCULABLE,
     val planningDays: Int = 7,
-    val periodStartDate: String = java.time.LocalDate.now().toString()
+    val periodStartDate: String = items.firstOrNull()?.weekStartDate ?: java.time.LocalDate.now().toString()
 )
 
 object WeeklyGroceryEngine {
