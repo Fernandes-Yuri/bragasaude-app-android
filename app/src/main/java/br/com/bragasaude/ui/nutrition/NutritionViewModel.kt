@@ -730,9 +730,8 @@ class NutritionViewModel @Inject constructor(
                 _dailyCalories.value = target
                 val persisted = _groceryPlanResult.value
                 if (changedWeight || (previousTarget != null && previousTarget != target) ||
-                    (previousTarget == null && persisted != null && !persisted.isManuallyModified &&
-                     (kotlin.math.abs(persisted.targetWeeklyCalories - target * 7) > 1.0 ||
-                      (persisted.profileWeight != null && persisted.profileWeight != weight)))) {
+                    (previousTarget == null && persisted != null &&
+                     br.com.bragasaude.domain.WeeklyGroceryPlanValidity.needsResize(persisted, target.toDouble(), weight))) {
                     changedTarget(target.toDouble())
                 }
 

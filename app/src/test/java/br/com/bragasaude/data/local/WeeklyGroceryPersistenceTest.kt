@@ -196,7 +196,13 @@ class WeeklyGroceryPersistenceTest {
         val stock = db.groceryPantryDao().stock("u", "a")!!.availableAmount
         repository.changePeriod("u", 14)
         assertEquals(stock, db.groceryPantryDao().stock("u", "a")!!.availableAmount, 0.001)
-        assertEquals(14, db.groceryListDao().getGrocerySnapshot("u").single().planningDays)
-        assertTrue(repository.observeLatest("u").first()!!.isManuallyModified)
+        val itemAfter = db.groceryListDao().getGrocerySnapshot("u").single()
+        assertEquals(14, itemAfter.planningDays)
+        assertEquals("2026-10-16", itemAfter.weekStartDate)
+        val summaryAfter = repository.observeLatest("u").first()!!
+        assertTrue(summaryAfter.isManuallyModified)
+        assertEquals(14, summaryAfter.planningDays)
+        assertEquals("2026-10-16", summaryAfter.periodStartDate)
+        assertEquals(42000.0, summaryAfter.targetWeeklyCalories, 0.001)
     }
 }

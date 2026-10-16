@@ -217,4 +217,48 @@ class NutritionViewModelTest {
             vm?.viewModelScope?.cancel()
         }
     }
+
+    @Test
+    fun monthlyPersistedPlanIsNotInvalidatedWhenProfileLoadsWithMatchingDailyTarget() = runTest(testDispatcher) {
+        var vm: NutritionViewModel? = null
+        try {
+            every { prefs.getBoolean("calorie_target_is_custom_test_user_id", false) } returns true
+            val profile = ProfileEntity(
+                userId = "test_user_id",
+                weight = 75.0,
+                dailyCalorieTarget = 2000.0
+            )
+            every { profileRepo.getProfile("test_user_id") } returns flowOf(profile)
+            val monthlyPlan = br.com.bragasaude.domain.WeeklyGroceryPlanResult(
+                items = emptyList(),
+                targetWeeklyCalories = 60000.0,
+                plannedWeeklyCalories = 59000.0,
+                coveragePercent = 98.3,
+                plannedProteinGrams = 1500.0,
+                plannedCarbsGrams = 7000.0,
+                plannedFatGrams = 1800.0,
+                foodVarietyCount = 12,
+                limitations = emptyList(),
+                statusMessage = "Planejado para 30 dias",
+                isManuallyModified = false,
+                profileWeight = 75.0,
+                planningDays = 30,
+                periodStartDate = "2026-10-16"
+            )
+            every { weeklyRepo.observeLatest("test_user_id") } returns flowOf(monthlyPlan)
+
+            val model = NutritionViewModel(
+                catalogRepo, nutritionRepo, profileRepo, vitalsRepo, groceryRepo, retailRepo, weeklyRepo, auth, context
+            )
+            vm = model
+
+            testScheduler.advanceTimeBy(300)
+            runCurrent()
+
+            coVerify(exactly = 0) { weeklyRepo.invalidate(any(), any()) }
+            assertEquals("Planejado para 30 dias", model.groceryMessage.value)
+        } finally {
+            vm?.viewModelScope?.cancel()
+        }
+    }
 }
