@@ -323,6 +323,10 @@ fun GroceryListBottomSheet(
                 }
             }
             if (weeklyGoal.planningDays > 7) Text("Planeje reposições de frutas, verduras e outros perecíveis durante o período.", style = MaterialTheme.typography.bodySmall)
+            groceryList.firstOrNull()?.let { first ->
+                val end = java.time.LocalDate.parse(first.weekStartDate).plusDays(first.planningDays.toLong() - 1)
+                Text("Período: ${first.weekStartDate} a $end", style = MaterialTheme.typography.bodySmall)
+            }
             GroceryWeeklyGoalBar(weeklyGoal)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = showShelf, onClick = { showShelf = true; showCatalog = false }, label = { Text("Packs") })

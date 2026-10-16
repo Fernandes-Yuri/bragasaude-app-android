@@ -965,10 +965,17 @@ class NutritionViewModel @Inject constructor(
 
     fun changePlanningDays(days: Int) {
         if (keepAdoptedMarket() || _isLoading.value) return
+        br.com.bragasaude.domain.GroceryPlanningPeriod.validated(days)
+        if ((groceryList.value.firstOrNull()?.planningDays ?: _weeklyPreferences.value.planningDays) == days) return
+        _isLoading.value = true
         viewModelScope.launch {
-            weeklyRepository.changePeriod(userId, days)
-            updateWeeklyPreferences(_weeklyPreferences.value.copy(planningDays = days))
-            _groceryMessage.value = "Planejamento para $days dias. Quantidades mantidas; use Planejar para recalcular sua lista."
+            try {
+                weeklyRepository.changePeriod(userId, days)
+                updateWeeklyPreferences(_weeklyPreferences.value.copy(planningDays = days))
+                _groceryMessage.value = "Planejamento para $days dias. Quantidades mantidas; use Planejar para recalcular sua lista."
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { _groceryMessage.value = "Não foi possível alterar o período. Tente novamente." }
+            finally { _isLoading.value = false }
         }
     }
 
