@@ -137,16 +137,16 @@ object GroceryPdfExporter {
         textPaint.color = Color.WHITE
         textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         textPaint.textSize = 18f
-        canvas.drawText("BRAGA SAÚDE • LISTA SEMANAL DE COMPRAS", 30f, 40f, textPaint)
+        canvas.drawText("BRAGA SAÚDE • LISTA DE COMPRAS", 30f, 40f, textPaint)
 
         textPaint.textSize = 11f
         textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-        canvas.drawText("Planejamento semanal de alimentos e custos estimados", 30f, 65f, textPaint)
+        canvas.drawText("Planejamento de ${items.first().planningDays} dias e custos estimados", 30f, 65f, textPaint)
 
         // 2. Resumo e custo estimado
         val y = 115f
         val totalCost = items.sumOf { it.estimatedPriceBrl }
-        val dailyAvg = totalCost / 7.0
+        val dailyAvg = totalCost / items.first().planningDays.toDouble()
 
         paint.color = Color.parseColor("#F1F8E9")
         val bgRect = RectF(30f, y - 15f, 565f, y + 45f)
@@ -188,7 +188,7 @@ object GroceryPdfExporter {
         textPaint.color = Color.WHITE
         textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         textPaint.textSize = 11f
-        canvas.drawText("BRAGA SAÚDE • LISTA SEMANAL DE COMPRAS (continuação)", 30f, 23f, textPaint)
+        canvas.drawText("BRAGA SAÚDE • LISTA DE COMPRAS (continuação)", 30f, 23f, textPaint)
         canvas.drawText("pág. $pageNum", 535f, 23f, textPaint)
 
         return 60f
@@ -266,7 +266,7 @@ object GroceryPdfExporter {
             type = "application/pdf"
             putExtra(Intent.EXTRA_STREAM, uri)
             putExtra(Intent.EXTRA_SUBJECT, "Lista Semanal de Compras • Braga Saúde")
-            putExtra(Intent.EXTRA_TEXT, "Segue a lista semanal de compras com margem de segurança do Braga Saúde.")
+            putExtra(Intent.EXTRA_TEXT, "Segue a lista de compras com margem de segurança do Braga Saúde.")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         val chooser = Intent.createChooser(intent, "Compartilhar Lista de Compras via...")

@@ -93,7 +93,8 @@ class NutritionViewModel @Inject constructor(
             budgetTier = tier,
             selectedProteins = if (proteinSet.isEmpty()) setOf(br.com.bragasaude.domain.GroceryProteinPreference.EGGS) else proteinSet,
             hasPantryStaples = hasStaples,
-            maxWeeklyBudgetReais = maxBudget
+            maxWeeklyBudgetReais = maxBudget,
+            planningDays = prefs.getInt("grocery_planning_days_$userId", 7).takeIf { it in br.com.bragasaude.domain.GroceryPlanningPeriod.options } ?: 7
         )
     }
 
@@ -105,6 +106,7 @@ class NutritionViewModel @Inject constructor(
             .putString("weekly_budget_tier_$userId", normalized.budgetTier.name)
             .putStringSet("weekly_proteins_$userId", normalized.selectedProteins.map { it.name }.toSet())
             .putBoolean("weekly_has_staples_$userId", normalized.hasPantryStaples)
+            .putInt("grocery_planning_days_$userId", normalized.planningDays)
         if (normalized.maxWeeklyBudgetReais != null && normalized.maxWeeklyBudgetReais > 0) {
             editor.putFloat("weekly_max_budget_$userId", normalized.maxWeeklyBudgetReais.toFloat())
         } else {
@@ -314,7 +316,7 @@ class NutritionViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 weeklyRepository.modify(userId, "Lista modificada manualmente; redimensione para revisar a cobertura. Itens manuais serão preservados.") {
-                    groceryRepository.putManualItem(userId, ingredient, amount, "Minha lista", replacingId)
+                    groceryRepository.putManualItem(userId, ingredient, amount, "Minha lista", replacingId, _weeklyPreferences.value.planningDays)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (_: Exception) { _groceryMessage.value = "Não foi possível salvar o item. Tente novamente." }
@@ -411,6 +413,7 @@ class NutritionViewModel @Inject constructor(
                 retailRepository.refreshPublications()
                 if (_isLoading.value) { _groceryMessage.value = "Aguarde o planejamento atual terminar antes de iniciar um pack."; return@launch }
                 retailRepository.adopt(userId, pack)
+                updateWeeklyPreferences(_weeklyPreferences.value.copy(planningDays = pack.planningDays))
                 _groceryMessage.value = "Lista iniciada com o pack de ${pack.marketName}."
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (_: Exception) { _groceryMessage.value = "Não foi possível iniciar este pack. Atualize a vitrine e tente novamente." }
@@ -432,8 +435,8 @@ class NutritionViewModel @Inject constructor(
                 (profile?.hasHypertension != true || "isHypertensionSafe" in allowed)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val weeklyGroceryGoal = combine(groceryList, dailyCalories) { rows, daily ->
-        br.com.bragasaude.domain.GroceryWeeklyGoal.calculate(daily.toDouble(), rows)
+    val weeklyGroceryGoal = combine(groceryList, dailyCalories, weeklyPreferences) { rows, daily, prefs ->
+        br.com.bragasaude.domain.GroceryWeeklyGoal.calculate(daily.toDouble(), rows, rows.firstOrNull()?.planningDays ?: prefs.planningDays)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), br.com.bragasaude.domain.GroceryWeeklyGoal())
     private val _retailMessage = MutableStateFlow<String?>(null)
     val retailMessage = _retailMessage.asStateFlow()
@@ -466,7 +469,7 @@ class NutritionViewModel @Inject constructor(
         if (keepAdoptedMarket()) return
         viewModelScope.launch {
             try {
-                groceryRepository.changeCard(userId, card, delta)
+                groceryRepository.changeCard(userId, card, delta, _weeklyPreferences.value.planningDays)
                 _groceryMessage.value = null
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: IllegalStateException) { _groceryMessage.value = e.message }
@@ -672,12 +675,9 @@ class NutritionViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            calendarDay.map { br.com.bragasaude.domain.GroceryWeek.start(it) }.distinctUntilChanged().collectLatest { week ->
-                weeklyRepository.observe(userId, week).collect { result ->
-                    _groceryPlanResult.value = result
-                    _groceryMessage.value = result?.statusMessage
-
-                }
+            weeklyRepository.observeLatest(userId).collect { result ->
+                _groceryPlanResult.value = result
+                _groceryMessage.value = result?.statusMessage
             }
         }
         val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
@@ -963,6 +963,15 @@ class NutritionViewModel @Inject constructor(
         }
     }
 
+    fun changePlanningDays(days: Int) {
+        if (keepAdoptedMarket() || _isLoading.value) return
+        viewModelScope.launch {
+            weeklyRepository.changePeriod(userId, days)
+            updateWeeklyPreferences(_weeklyPreferences.value.copy(planningDays = days))
+            _groceryMessage.value = "Planejamento para $days dias. Quantidades mantidas; use Planejar para recalcular sua lista."
+        }
+    }
+
     fun togglePantryItem(itemId: String, isChecked: Boolean) {
         viewModelScope.launch {
             weeklyRepository.check(userId, itemId, isChecked, _groceryIngredients.value ?: catalogRepository.fetchGroceryIngredients())
@@ -982,7 +991,7 @@ class NutritionViewModel @Inject constructor(
             try {
                 val existing = groceryList.value.map { it.foodName.lowercase() }.toSet()
                 weeklyRepository.modify(userId, "Lista modificada manualmente; redimensione para revisar a cobertura. Itens manuais serão preservados.") {
-                    clean.filter { it.lowercase() !in existing }.forEach { name -> groceryRepository.addItem(userId, name) }
+                    clean.filter { it.lowercase() !in existing }.forEach { name -> groceryRepository.addItem(userId, name, planningDays = _weeklyPreferences.value.planningDays) }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

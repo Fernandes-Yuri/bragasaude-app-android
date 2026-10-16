@@ -29,7 +29,9 @@ data class WeeklyGroceryPlanResult(
     val isManuallyModified: Boolean = false,
     val profileWeight: Double? = null,
     val structuredLimitations: List<GroceryLimitation> = emptyList(),
-    val purchaseStatus: PurchaseCalculationStatus = PurchaseCalculationStatus.CALCULABLE
+    val purchaseStatus: PurchaseCalculationStatus = PurchaseCalculationStatus.CALCULABLE,
+    val planningDays: Int = 7,
+    val periodStartDate: String = java.time.LocalDate.now().toString()
 )
 
 object WeeklyGroceryEngine {
@@ -92,13 +94,15 @@ object WeeklyGroceryEngine {
     ): WeeklyGroceryPlanResult {
         val effectivePrefs = preferences.normalized()
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val weekStartDate = GroceryWeek.start()
+        val weekStartDate = java.time.LocalDate.now().toString()
+        val planningDays = effectivePrefs.planningDays
 
         val limitations = mutableListOf<String>()
         val structuredLimitations = mutableListOf<GroceryLimitation>()
 
         val effectiveDailyCalories = targetCalories.takeIf { it.isFinite() && it > 0 }?.coerceAtLeast(500.0) ?: 1800.0
-        val targetWeeklyCalories = effectiveDailyCalories * 7.0
+        val baselineCalories = effectiveDailyCalories * 7.0
+        val targetWeeklyCalories = effectiveDailyCalories * planningDays
 
         // 1. Filtragem rigorosa por segurança clínica, alergias e preferências
         val safeCatalog = catalog.filter { food ->
@@ -128,6 +132,8 @@ object WeeklyGroceryEngine {
             return WeeklyGroceryPlanResult(
                 items = emptyList(),
                 targetWeeklyCalories = targetWeeklyCalories,
+                planningDays = planningDays,
+                periodStartDate = weekStartDate,
                 plannedWeeklyCalories = 0.0,
                 coveragePercent = 0.0,
                 plannedProteinGrams = 0.0,
@@ -150,10 +156,10 @@ object WeeklyGroceryEngine {
         val hasHighBp = sys > 130 || profile?.hasHypertension == true
 
         // 3. Distribuição energética entre os pilares nutricionais (7 dias)
-        val grainTargetKcal = targetWeeklyCalories * 0.45
-        val proteinTargetKcal = targetWeeklyCalories * 0.25
-        val produceTargetKcal = targetWeeklyCalories * 0.15
-        val pantryTargetKcal = targetWeeklyCalories * 0.15
+        val grainTargetKcal = baselineCalories * 0.45
+        val proteinTargetKcal = baselineCalories * 0.25
+        val produceTargetKcal = baselineCalories * 0.15
+        val pantryTargetKcal = baselineCalories * 0.15
 
         val plannedConsumptions = mutableListOf<PlannedConsumption>()
         val selectedCanonicalGroups = mutableSetOf<String>()
@@ -374,7 +380,7 @@ object WeeklyGroceryEngine {
         // 9. Calibração fina da meta calórica semanal
         val allEligibleCandidates = (grainsPool + proteinsPool + producePool + pantryPool).distinctBy { it.remoteId }
         calibrateTotalEnergy(
-            targetWeeklyKcal = targetWeeklyCalories,
+            targetWeeklyKcal = baselineCalories,
             plannedConsumptions = plannedConsumptions,
             candidatesPool = allEligibleCandidates,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
@@ -390,6 +396,17 @@ object WeeklyGroceryEngine {
             } else {
                 break
             }
+        }
+
+        // Scale consumption before yield conversion, margin and purchase rounding.
+        // Do not multiply an already rounded shopping basket.
+        if (planningDays != 7) {
+            plannedConsumptions.indices.forEach { i ->
+                val consumption = plannedConsumptions[i]
+                plannedConsumptions[i] = consumption.copy(weeklyGrams =
+                    kotlin.math.round(consumption.weeklyGrams * planningDays / 7.0).toInt())
+            }
+            limitations.add("Planejamento de $planningDays dias: organize reposições de perecíveis conforme conservação e disponibilidade.")
         }
 
         // 10. Conversão de consumo em demanda de ingredientes e consolidação canônica
@@ -438,6 +455,7 @@ object WeeklyGroceryEngine {
                 remoteId = UUID.randomUUID().toString(),
                 userId = userId,
                 weekStartDate = weekStartDate,
+                planningDays = planningDays,
                 foodId = ingredient.slug,
                 foodName = ingredient.name,
                 category = preferredCorridor,
@@ -514,7 +532,8 @@ object WeeklyGroceryEngine {
             coveragePercent = coveragePercent,
             itemCount = consolidatedItems.size,
             varietyCount = distinctFoodsCount,
-            limitations = limitations
+            limitations = limitations,
+            planningDays = planningDays
         )
 
         return WeeklyGroceryPlanResult(
@@ -530,6 +549,8 @@ object WeeklyGroceryEngine {
             structuredLimitations = consolidatedLimitations,
             purchaseStatus = purchaseStatus,
             statusMessage = statusMessage,
+            planningDays = planningDays,
+            periodStartDate = weekStartDate,
             profileWeight = profile?.weight
         )
     }
@@ -884,15 +905,16 @@ object WeeklyGroceryEngine {
         coveragePercent: Double,
         itemCount: Int,
         varietyCount: Int,
-        limitations: List<String>
+        limitations: List<String>,
+        planningDays: Int
     ): String {
         return if (coveragePercent < MIN_ENERGY_COVERAGE_PERCENT) {
             val deficit = (targetWeeklyCalories - plannedWeeklyCalories).toInt()
-            "Lista planejada para 7 dias com ${plannedWeeklyCalories.toInt()} kcal (${String.format(Locale.ROOT, "%.1f%%", coveragePercent)} da meta de ${targetWeeklyCalories.toInt()} kcal). Déficit de $deficit kcal devido a limites de porção e restrições do catálogo."
+            "Lista planejada para $planningDays dias com ${plannedWeeklyCalories.toInt()} kcal (${String.format(Locale.ROOT, "%.1f%%", coveragePercent)} da meta de ${targetWeeklyCalories.toInt()} kcal). Déficit de $deficit kcal devido a limites de porção e restrições do catálogo."
         } else if (coveragePercent > MAX_ENERGY_COVERAGE_PERCENT) {
-            "Lista planejada para 7 dias com ${plannedWeeklyCalories.toInt()} kcal (${String.format(Locale.ROOT, "%.1f%%", coveragePercent)} da meta de ${targetWeeklyCalories.toInt()} kcal) com $itemCount itens variados."
+            "Lista planejada para $planningDays dias com ${plannedWeeklyCalories.toInt()} kcal (${String.format(Locale.ROOT, "%.1f%%", coveragePercent)} da meta de ${targetWeeklyCalories.toInt()} kcal) com $itemCount itens variados."
         } else {
-            "Quantidades calculadas para a sua meta diária de ${targetDailyCalories.toInt()} kcal (7 dias: ${plannedWeeklyCalories.toInt()} kcal planejadas, $itemCount itens)."
+            "Quantidades calculadas para a sua meta diária de ${targetDailyCalories.toInt()} kcal ($planningDays dias: ${plannedWeeklyCalories.toInt()} kcal planejadas, $itemCount itens)."
         }
     }
 

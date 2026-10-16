@@ -1027,6 +1027,7 @@ fun NutritionScreen(
             onAdoptPack = viewModel::adoptPublishedPack,
             retailCards = retailCards,
             weeklyGoal = weeklyGoal,
+            onPlanningDaysChange = viewModel::changePlanningDays,
             retailLoading = publicationLoading,
             retailMessage = publicationMessage,
             basketComparison = basketComparison,

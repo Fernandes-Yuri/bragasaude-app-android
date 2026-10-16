@@ -32,13 +32,16 @@ class GroceryRepository @Inject constructor(
         userId: String,
         foodName: String,
         category: String = "Feira & Mercado",
-        purchaseUnitText: String = "1 un"
+        purchaseUnitText: String = "1 un",
+        planningDays: Int = 7
     ) {
+        val active = groceryListDao.getGrocerySnapshot(userId).firstOrNull()
         val now = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         val item = GroceryListItemEntity(
             remoteId = UUID.randomUUID().toString(),
             userId = userId,
-            weekStartDate = now,
+            weekStartDate = active?.weekStartDate ?: now,
+            planningDays = active?.planningDays ?: planningDays,
             foodId = UUID.randomUUID().toString(),
             foodName = foodName,
             category = category,
@@ -58,7 +61,8 @@ class GroceryRepository @Inject constructor(
         ingredient: br.com.bragasaude.domain.GroceryIngredient,
         amount: Int,
         category: String,
-        replacingId: String? = null
+        replacingId: String? = null,
+        planningDays: Int = 7
     ) {
         groceryListDao.rewriteGroceryList(userId) { existing ->
             val old = existing.firstOrNull { it.remoteId == replacingId }
@@ -66,7 +70,8 @@ class GroceryRepository @Inject constructor(
             val item = GroceryListItemEntity(
                 remoteId = old?.remoteId ?: UUID.randomUUID().toString(),
                 userId = userId,
-                weekStartDate = old?.weekStartDate ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()),
+                weekStartDate = old?.weekStartDate ?: existing.firstOrNull()?.weekStartDate ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()),
+                planningDays = old?.planningDays ?: existing.firstOrNull()?.planningDays ?: planningDays,
                 foodId = ingredient.slug,
                 foodName = ingredient.name,
                 category = category,
@@ -81,7 +86,7 @@ class GroceryRepository @Inject constructor(
         }
     }
 
-    suspend fun changeCard(userId: String, card: br.com.bragasaude.data.local.GroceryRetailCardEntity, delta: Int) {
+    suspend fun changeCard(userId: String, card: br.com.bragasaude.data.local.GroceryRetailCardEntity, delta: Int, planningDays: Int = 7) {
         groceryListDao.rewriteGroceryList(userId) { rows ->
             val old = rows.firstOrNull { it.retailCardId == card.id }
             check(old?.isCheckedInPantry != true) { "Desmarque o produto comprado antes de alterar a quantidade." }
@@ -89,7 +94,8 @@ class GroceryRepository @Inject constructor(
             val kept = rows.filterNot { it.remoteId == old?.remoteId }
             if (count == 0) kept else kept + GroceryListItemEntity(
                 remoteId = old?.remoteId ?: UUID.randomUUID().toString(), userId = userId,
-                weekStartDate = old?.weekStartDate ?: br.com.bragasaude.domain.GroceryWeek.start(),
+                weekStartDate = old?.weekStartDate ?: rows.firstOrNull()?.weekStartDate ?: java.time.LocalDate.now().toString(),
+                planningDays = old?.planningDays ?: rows.firstOrNull()?.planningDays ?: planningDays,
                 foodId = card.id, foodName = card.name, category = card.category,
                 suggestedServingWeekGrams = 0, purchaseWeightGrams = if (card.packageUnit == "g") (card.packageNetValue * count).toInt() else 0,
                 purchaseUnitText = "$count × ${card.packageDisplay}", estimatedPriceBrl = card.priceAvg * count,

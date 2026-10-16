@@ -70,6 +70,7 @@ fun GroceryListBottomSheet(
     onAdoptPack: (br.com.bragasaude.data.remote.model.PublishedGroceryPack) -> Unit = {},
     retailCards: List<br.com.bragasaude.data.local.GroceryRetailCardEntity> = emptyList(),
     weeklyGoal: br.com.bragasaude.domain.GroceryWeeklyGoal = br.com.bragasaude.domain.GroceryWeeklyGoal(),
+    onPlanningDaysChange: (Int) -> Unit = {},
     retailLoading: Boolean = false,
     retailMessage: String? = null,
     basketComparison: br.com.bragasaude.data.remote.model.BasketComparisonResultDto? = null,
@@ -124,7 +125,7 @@ fun GroceryListBottomSheet(
     }
 
     val totalCost = groceryList.filter { it.estimatedPriceBrl > 0.0 }.sumOf { it.estimatedPriceBrl }
-    val dailyAvg = if (totalCost > 0.0) totalCost / 7.0 else 0.0
+    val dailyAvg = if (totalCost > 0.0) totalCost / weeklyGoal.planningDays.toDouble() else 0.0
     val checkedCount = groceryList.count { it.isCheckedInPantry }
     val grouped = remember(groceryList) { groceryList.groupBy { it.category } }
 
@@ -141,7 +142,7 @@ fun GroceryListBottomSheet(
             },
             title = {
                 Text(
-                    "Planejamento semanal com IA",
+                    "Planejamento de compras",
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleLarge
                 )
@@ -153,9 +154,9 @@ fun GroceryListBottomSheet(
                 ) {
                     Text(
                         text = if (plan != null)
-                            "Meta semanal calculada: ${plan.targetWeeklyCalories.toInt()} kcal (${plan.plannedWeeklyCalories.toInt()} kcal planejadas para 7 dias). Escolha como deseja atualizar:"
+                            "Meta do período: ${plan.targetWeeklyCalories.toInt()} kcal (${plan.plannedWeeklyCalories.toInt()} kcal planejadas para ${plan.planningDays} dias). Escolha como deseja atualizar:"
                         else
-                            "Sua lista já possui alimentos cadastrados. Escolha como deseja atualizar o seu planejamento semanal:",
+                            "Sua lista já possui alimentos cadastrados. Escolha como deseja atualizar o seu planejamento de compras:",
                         style = MaterialTheme.typography.bodyMedium,
                         color = BragaTextSecondary
                     )
@@ -199,7 +200,7 @@ fun GroceryListBottomSheet(
                                 )
                                 Spacer(Modifier.height(2.dp))
                                 Text(
-                                    "Ajusta porções para a meta de 7 dias mantendo itens adicionados manualmente.",
+                                    "Ajusta porções para a meta do período escolhido mantendo itens adicionados manualmente.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = BragaTextSecondary
                                 )
@@ -239,14 +240,14 @@ fun GroceryListBottomSheet(
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    "Gerar nova variedade semanal",
+                                    "Gerar nova variedade para o período",
                                     fontWeight = FontWeight.SemiBold,
                                     color = BragaTextPrimary,
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                                 Spacer(Modifier.height(2.dp))
                                 Text(
-                                    "Cria uma nova seleção completa de alimentos para a semana inteira.",
+                                    "Cria uma nova seleção completa de alimentos para o período escolhido.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = BragaTextSecondary
                                 )
@@ -313,6 +314,15 @@ fun GroceryListBottomSheet(
                 }
             }
 
+            Text("Período da lista", style = MaterialTheme.typography.labelLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                br.com.bragasaude.domain.GroceryPlanningPeriod.options.forEach { days ->
+                    FilterChip(selected = weeklyGoal.planningDays == days,
+                        enabled = adoptedPack == null && !isLoading,
+                        onClick = { onPlanningDaysChange(days) }, label = { Text("$days dias") })
+                }
+            }
+            if (weeklyGoal.planningDays > 7) Text("Planeje reposições de frutas, verduras e outros perecíveis durante o período.", style = MaterialTheme.typography.bodySmall)
             GroceryWeeklyGoalBar(weeklyGoal)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = showShelf, onClick = { showShelf = true; showCatalog = false }, label = { Text("Packs") })
@@ -321,7 +331,7 @@ fun GroceryListBottomSheet(
             }
             if (showShelf) {
                 PublishedGroceryPacksScreen(publishedPacks, retailLoading, retailMessage ?: groceryMessage,
-                    onRefreshRetail, { pendingPack = it }, Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp))
+                    onRefreshRetail, { pendingPack = it }, Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp), planningDays = weeklyGoal.planningDays)
             } else if (showCatalog) {
                 Text("Catálogo atual de produtos. As compras são organizadas pelos packs de cada supermercado.", style = MaterialTheme.typography.bodySmall)
                 GroceryMarketShelfScreen(retailCards, groceryList, retailLoading, retailMessage,
@@ -445,7 +455,7 @@ fun GroceryListBottomSheet(
                                 trackedStock.forEach { stock ->
                                     val row = groceryList.first { (it.linkedIngredientSlug ?: it.foodId) == stock.ingredientSlug }
                                     val shortage = br.com.bragasaude.domain.GroceryConsumption.insufficient(stock.availableAmount,
-                                        row.plannedWeeklyAmount, br.com.bragasaude.domain.GroceryWeek.daysRemaining())
+                                        row.plannedWeeklyAmount, br.com.bragasaude.domain.GroceryPlanningPeriod.daysRemaining(row.weekStartDate, row.planningDays), row.planningDays)
                                     val amount = when (stock.unit) {
                                         "kg" -> "${stock.availableAmount.toInt()} g"
                                         "L" -> String.format(Locale.getDefault(), "%.2f L", stock.availableAmount / 1000)
@@ -488,7 +498,7 @@ fun GroceryListBottomSheet(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("Estimativa da semana", style = MaterialTheme.typography.labelLarge, color = BragaTextSecondary)
+                                    Text("Estimativa do período", style = MaterialTheme.typography.labelLarge, color = BragaTextSecondary)
                                     TextButton(
                                         onClick = onClearList,
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
@@ -633,7 +643,7 @@ fun GroceryListBottomSheet(
                                             color = BragaEmeraldDark
                                         )
                                         Spacer(Modifier.width(8.dp))
-                                        Text("Planejando lista semanal...", color = BragaEmeraldDark)
+                                        Text("Planejando lista de compras...", color = BragaEmeraldDark)
                                     } else {
                                         Icon(
                                             Icons.Default.AutoAwesome,
@@ -642,7 +652,7 @@ fun GroceryListBottomSheet(
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Spacer(Modifier.width(8.dp))
-                                        Text("Planejar lista semanal com IA", color = BragaEmeraldDark)
+                                        Text("Planejar lista de compras com IA", color = BragaEmeraldDark)
                                     }
                                 }
                             }

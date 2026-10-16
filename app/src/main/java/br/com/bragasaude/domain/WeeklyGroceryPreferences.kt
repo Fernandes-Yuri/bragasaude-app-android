@@ -60,7 +60,8 @@ data class WeeklyGroceryPreferences(
     val budgetTier: GroceryBudgetTier = GroceryBudgetTier.MODERATE,
     val selectedProteins: Set<GroceryProteinPreference> = emptySet(),
     val hasPantryStaples: Boolean = false,
-    val maxWeeklyBudgetReais: Double? = null
+    val maxWeeklyBudgetReais: Double? = null,
+    val planningDays: Int = 7
 ) {
     val isUltraEconomic: Boolean get() = budgetTier == GroceryBudgetTier.ULTRA_ECONOMIC
     val isEconomic: Boolean get() = budgetTier == GroceryBudgetTier.ECONOMIC || budgetTier == GroceryBudgetTier.ULTRA_ECONOMIC
@@ -70,6 +71,7 @@ data class WeeklyGroceryPreferences(
      * Quando apenas ovos forem selecionados, adiciona proteína carnívora como principal.
      */
     fun normalized(): WeeklyGroceryPreferences {
+        GroceryPlanningPeriod.validated(planningDays)
         val hasCarnivorous = selectedProteins.any {
             it == GroceryProteinPreference.POULTRY || it == GroceryProteinPreference.FISH || it == GroceryProteinPreference.BEEF
         }
