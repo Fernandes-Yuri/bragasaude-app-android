@@ -576,6 +576,7 @@ fun LoginScreen(
                             Text("Continuar com o Google", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                         }
 
+
                         // Alternar entre Entrar e Cadastrar
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
