@@ -576,6 +576,22 @@ fun LoginScreen(
                             Text("Continuar com o Google", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                         }
 
+                        if (br.com.bragasaude.BuildConfig.DEBUG) {
+                            OutlinedButton(
+                                onClick = {
+                                    focusManager.clearFocus(force = true)
+                                    keyboardController?.hide()
+                                    viewModel.signInWithEmail("carlos.paciente@bragasaude.com", "Braga@2026")
+                                },
+                                modifier = Modifier.fillMaxWidth().height(54.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Text("Entrar como Carlos (Teste)", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            }
+                        }
+
                         // Alternar entre Entrar e Cadastrar
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
