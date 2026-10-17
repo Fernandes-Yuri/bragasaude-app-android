@@ -146,10 +146,9 @@ fun AppContent(activity: MainActivity) {
                     mutableStateOf(seen && (seenFor == null || seenFor == userRole))
                 }
                 var hasAcceptedTermsBeforeAuth by remember {
-                    mutableStateOf(prefs.getBoolean("terms_accepted_before_auth", false) || br.com.bragasaude.BuildConfig.DEBUG)
+                    mutableStateOf(prefs.getBoolean("terms_accepted_before_auth", false))
                 }
 
-                val bypassOnboarding = br.com.bragasaude.BuildConfig.DEBUG
                 when (val status = sessionStatus) {
                         is AppSessionStatus.Authenticated -> {
                             when {
@@ -158,15 +157,15 @@ fun AppContent(activity: MainActivity) {
                                     onRetry = authViewModel::retryProfile,
                                     onSignOut = { sessionScope.launch { authViewModel.signOut() } }
                                 )
-                                !bypassOnboarding && (hasAcceptedConsent == null || isProfileComplete == null) ->
+                                hasAcceptedConsent == null || isProfileComplete == null ->
                                     LoadingOverlay(onExit = { sessionScope.launch { authViewModel.signOut() } })
-                                !bypassOnboarding && hasAcceptedConsent == false -> ConsentFlow(
+                                hasAcceptedConsent == false -> ConsentFlow(
                                     legalSubView = legalSubView,
                                     onSetLegalSubView = { legalSubView = it },
                                     onConsentAccepted = { authViewModel.setConsentAccepted() },
                                     isPostLogin = true
                                 )
-                                !bypassOnboarding && isProfileComplete == false -> {
+                                isProfileComplete == false -> {
                                     val effectiveRole = tempRole ?: userRole
                                     when {
                                         effectiveRole.isNullOrEmpty() -> RoleSelectionScreen(
@@ -208,13 +207,13 @@ fun AppContent(activity: MainActivity) {
                                         )
                                     }
                                 }
-                                !bypassOnboarding && !hasSeenTutorial -> br.com.bragasaude.ui.onboarding.OnboardingTourScreen(
+                                !hasSeenTutorial -> br.com.bragasaude.ui.onboarding.OnboardingTourScreen(
                                     userRole = userRole,
                                     totpSecret = whatsappTotpSecret,
                                     whatsappPhone = whatsappPhone,
                                     onFinishTour = { hasSeenTutorial = true }
                                 )
-                                isProfileComplete == true || bypassOnboarding -> {
+                                isProfileComplete == true -> {
                                     // Permissões e serviço de rastreamento
                                     LaunchedEffect(Unit) {
                                         mainViewModel.permissionRequestSignal.collect {

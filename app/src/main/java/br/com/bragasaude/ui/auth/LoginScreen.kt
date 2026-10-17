@@ -194,22 +194,6 @@ fun LoginScreen(
 
                 Spacer(Modifier.height(16.dp))
 
-                if (br.com.bragasaude.BuildConfig.DEBUG) {
-                    Button(
-                        onClick = {
-                            focusManager.clearFocus(force = true)
-                            keyboardController?.hide()
-                            viewModel.signInWithEmail("carlos.paciente@bragasaude.com", "Braga@2026")
-                        },
-                        modifier = Modifier.fillMaxWidth().height(54.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("Entrar como Carlos (Teste)", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    }
-                    Spacer(Modifier.height(16.dp))
-                }
-
                 if (authState is AuthViewModel.AuthState.Loading) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
