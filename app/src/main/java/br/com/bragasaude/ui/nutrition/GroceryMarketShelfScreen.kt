@@ -82,20 +82,24 @@ fun GroceryMarketShelfScreen(
                 val locked = row?.isCheckedInPantry == true
                 Card(shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                     Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        AsyncImage(model = card.imageUrl, contentDescription = card.name,
-                            modifier = Modifier.fillMaxWidth().height(108.dp), contentScale = ContentScale.Fit)
+                        if (card.imageUrl.isBlank()) {
+                            Box(Modifier.fillMaxWidth().height(108.dp), contentAlignment = Alignment.Center) {
+                                Text("Sem foto", style = MaterialTheme.typography.bodySmall)
+                            }
+                        } else {
+                            AsyncImage(model = card.imageUrl, contentDescription = card.name,
+                                modifier = Modifier.fillMaxWidth().height(108.dp), contentScale = ContentScale.Fit)
+                        }
                         Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
                             Text(card.packageDisplay, Modifier.padding(4.dp), style = MaterialTheme.typography.labelSmall)
                         }
                         Text(card.name, style = MaterialTheme.typography.titleSmall, minLines = 2)
-                        Text(money.format(card.priceAvg), fontWeight = FontWeight.Bold)
+                        Text("Referência: ${money.format(card.priceAvg)}", fontWeight = FontWeight.Bold)
                         Text("+ ${card.kcalPerPackage.toInt()} kcal / embalagem", style = MaterialTheme.typography.bodySmall)
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            val markets = remember(card.marketsJson) { JSONArray(card.marketsJson) }
-                            for (i in 0 until markets.length()) {
-                                val market = markets.getJSONObject(i)
-                                GroceryMarketLink(market.optString("market_name"), market.optString("market_logo_url"), market.optString("website_url"))
-                            }
+                        val sources = remember(card.marketsJson) { JSONArray(card.marketsJson) }
+                        if (sources.length() > 0) {
+                            val source = sources.getJSONObject(0)
+                            Text("Fonte: ${source.optString("market_name")} • ${source.optString("last_updated").take(10)}", style = MaterialTheme.typography.bodySmall)
                         }
                         if (allowSelection) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             TextButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onDecrement(card.id) },

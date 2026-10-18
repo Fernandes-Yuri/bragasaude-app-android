@@ -5,7 +5,6 @@ import androidx.room.Room
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.model.PublishedGroceryPack
 import br.com.bragasaude.data.remote.repository.GroceryRetailRepository
-import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
@@ -47,43 +46,18 @@ class PublishedGroceryPackPersistenceTest {
             JSONObject().put("id", "publication-$version").put("version", version).put("edition", edition).put("packs", JSONArray().put(preview))))
     }
 
-    @Test fun adoptionUsesMarketPriceAndFeedUpdatesPreserveExistingCheckedList() = runBlocking {
+    @Test fun legacyAdoptionSurvivesRestartAndCanBeClearedWithoutLosingPantry() = runBlocking {
         val api = mockk<BragaApiClient>()
-        coEvery { api.getGroceryPublicationRevision() } returns JSONObject().put("revision", 1).put("business_date", date)
-        coEvery { api.getGroceryPublications() } returns feed(1, planningDays = 30)
-        val repo = GroceryRetailRepository(db, api)
-        repo.refreshPublications()
-        val pack = repo.publications().first().single()
-        repo.adopt("u", pack)
-        val item = db.groceryListDao().getGrocerySnapshot("u").single()
-        assertEquals(20.0, item.estimatedPriceBrl, 0.001)
-        assertEquals(2, item.quantity)
-        assertEquals(30, item.planningDays)
-        assertEquals(30, pack.planningDays)
-        db.groceryListDao().updateCheckedStatus(item.remoteId, true)
-        coEvery { api.getGroceryPublicationRevision() } returns JSONObject().put("revision", 2).put("business_date", date)
-        coEvery { api.getGroceryPublications() } returns feed(2)
-        repo.refreshPublications()
-        assertTrue(db.groceryListDao().getGrocerySnapshot("u").single().isCheckedInPantry)
-        assertEquals(item.remoteId, db.groceryListDao().getGrocerySnapshot("u").single().remoteId)
-        assertEquals("publication-1", repo.adopted("u").first()!!.publicationId)
-        db.close(); open()
-        assertEquals("publication-1", GroceryRetailRepository(db, api).adopted("u").first()!!.publicationId)
-        assertEquals(30, db.groceryListDao().getGrocerySnapshot("u").single().planningDays)
-        assertEquals(30, GroceryRetailRepository(db, api).adopted("u").first()!!.planningDays)
-        assertNull(GroceryRetailRepository(db, api).adopted("other").first())
-    }
-
-    @Test fun withdrawnPackCannotBeAdoptedAndClearingListPreservesPantry() = runBlocking {
-        val api = mockk<BragaApiClient>()
-        val repo = GroceryRetailRepository(db, api)
-        val original = feed(1)
-        db.groceryPublicationDao().save(GroceryPublicationCache(payload = original.toString(), fetchedAt = 0))
-        val pack = PublishedGroceryPack.fromFeed(original).single()
-        repo.adopt("u", pack)
+        val pack = PublishedGroceryPack.fromFeed(feed(1)).single()
+        // Simulate data written by the previous app version; there is no new adoption API.
+        db.groceryListDao().rewriteGroceryList("u") { pack.listItems("u") }
+        db.groceryPublicationDao().adopt(GroceryAdoptedPack("u", pack.rawJson, 0))
         db.groceryPantryDao().upsert(GroceryPantryStockEntity("u", "butter", "kg", 400.0))
-        db.groceryPublicationDao().save(GroceryPublicationCache(payload = JSONObject().put("publications", JSONArray()).toString(), fetchedAt = 0))
-        try { repo.adopt("u", pack); fail("Withdrawn pack must not be adopted") } catch (_: IllegalArgumentException) { }
+        db.close(); open()
+        val repo = GroceryRetailRepository(db, api)
+        assertEquals("publication-1", repo.adopted("u").first()!!.publicationId)
+        assertEquals(20.0, db.groceryListDao().getGrocerySnapshot("u").single().estimatedPriceBrl, 0.001)
+        assertNull(repo.adopted("other").first())
         repo.clearAdoptedList("u")
         assertTrue(db.groceryListDao().getGrocerySnapshot("u").isEmpty())
         assertNull(repo.adopted("u").first())

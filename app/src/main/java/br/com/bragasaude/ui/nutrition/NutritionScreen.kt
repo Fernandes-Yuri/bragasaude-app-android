@@ -1003,36 +1003,19 @@ fun NutritionScreen(
 
     if (showGroceryBottomSheet) {
         val context = LocalContext.current
-        val publishedPacks by viewModel.publishedPacks.collectAsState()
-        val adoptedPack by viewModel.adoptedPack.collectAsState()
-        val publicationLoading by viewModel.publicationLoading.collectAsState()
-        val publicationMessage by viewModel.publicationMessage.collectAsState()
-        val publicationLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
-        LaunchedEffect(publicationLifecycle) {
-            publicationLifecycle.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
-                while (true) {
-                    viewModel.refreshPublishedPacks()
-                    kotlinx.coroutines.delay(15_000)
-                }
-            }
-        }
+        LaunchedEffect(Unit) { viewModel.refreshRetailCards() }
         val retailCards by viewModel.retailCards.collectAsState()
         val weeklyGoal by viewModel.weeklyGroceryGoal.collectAsState()
-        val basketComparison by viewModel.basketComparison.collectAsState()
-        val basketMessage by viewModel.basketMessage.collectAsState()
+        val retailLoading by viewModel.retailLoading.collectAsState()
+        val retailMessage by viewModel.retailMessage.collectAsState()
         GroceryListBottomSheet(
             groceryList = groceryList,
-            publishedPacks = publishedPacks,
-            adoptedPack = adoptedPack,
-            onAdoptPack = viewModel::adoptPublishedPack,
             retailCards = retailCards,
             weeklyGoal = weeklyGoal,
             onPlanningDaysChange = viewModel::changePlanningDays,
-            retailLoading = publicationLoading,
-            retailMessage = publicationMessage,
-            basketComparison = basketComparison,
-            basketMessage = basketMessage,
-            onRefreshRetail = { viewModel.refreshPublishedPacks() },
+            retailLoading = retailLoading,
+            retailMessage = retailMessage,
+            onRefreshRetail = { viewModel.refreshRetailCards() },
             onAddCard = viewModel::addOrIncrementCard,
             onDecrementCard = viewModel::decrementCard,
             manualIngredients = manualIngredients,

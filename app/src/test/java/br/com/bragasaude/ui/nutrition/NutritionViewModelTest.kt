@@ -88,7 +88,6 @@ class NutritionViewModelTest {
 
         every { vitalsRepo.getVitalSigns(any()) } returns flowOf(emptyList())
         every { groceryRepo.getGroceryList(any()) } returns flowOf(emptyList())
-        every { retailRepo.publications() } returns flowOf(emptyList())
         every { retailRepo.adopted(any()) } returns flowOf(null)
         every { retailRepo.observe() } returns flowOf(emptyList())
         every { groceryRepo.getPantryItems(any()) } returns flowOf(emptyList())

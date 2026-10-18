@@ -65,33 +65,17 @@ fun GroceryListBottomSheet(
     onResize: () -> Unit = { onGenerateList(true) },
     isLoading: Boolean = false,
     weeklyPreferences: br.com.bragasaude.domain.WeeklyGroceryPreferences = br.com.bragasaude.domain.WeeklyGroceryPreferences(),
-    publishedPacks: List<br.com.bragasaude.data.remote.model.PublishedGroceryPack> = emptyList(),
-    adoptedPack: br.com.bragasaude.data.remote.model.PublishedGroceryPack? = null,
-    onAdoptPack: (br.com.bragasaude.data.remote.model.PublishedGroceryPack) -> Unit = {},
     retailCards: List<br.com.bragasaude.data.local.GroceryRetailCardEntity> = emptyList(),
     weeklyGoal: br.com.bragasaude.domain.GroceryWeeklyGoal = br.com.bragasaude.domain.GroceryWeeklyGoal(),
     onPlanningDaysChange: (Int) -> Unit = {},
     retailLoading: Boolean = false,
     retailMessage: String? = null,
-    basketComparison: br.com.bragasaude.data.remote.model.BasketComparisonResultDto? = null,
-    basketMessage: String? = null,
     onRefreshRetail: () -> Unit = {},
     onAddCard: (br.com.bragasaude.data.local.GroceryRetailCardEntity) -> Unit = {},
     onDecrementCard: (String) -> Unit = {},
     onGenerateListWithPreferences: ((preserveManual: Boolean, preferences: br.com.bragasaude.domain.WeeklyGroceryPreferences) -> Unit)? = null
 ) {
-    var pendingPack by remember { mutableStateOf<br.com.bragasaude.data.remote.model.PublishedGroceryPack?>(null) }
-    var showCatalog by remember { mutableStateOf(false) }
-    var showShelf by remember { mutableStateOf(true) }
-    pendingPack?.let { selected ->
-        BragaAlertDialog(
-            onDismissRequest = { pendingPack = null },
-            title = { Text("Iniciar lista deste supermercado?") },
-            text = { Text("O pack de ${selected.marketName} será sua nova lista. A lista atual será substituída; o estoque já registrado na despensa será mantido.") },
-            confirmButton = { TextButton(onClick = { onAdoptPack(selected); pendingPack = null; showShelf = false; showCatalog = false }) { Text("Iniciar nova lista") } },
-            dismissButton = { TextButton(onClick = { pendingPack = null }) { Text("Cancelar") } }
-        )
-    }
+    var showCatalog by remember { mutableStateOf(true) }
     var reportingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var manualEditingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var isCreatingManual by remember { mutableStateOf(false) }
@@ -318,7 +302,7 @@ fun GroceryListBottomSheet(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 br.com.bragasaude.domain.GroceryPlanningPeriod.options.forEach { days ->
                     FilterChip(selected = weeklyGoal.planningDays == days,
-                        enabled = adoptedPack == null && !isLoading,
+                        enabled = !isLoading,
                         onClick = { onPlanningDaysChange(days) }, label = { Text("$days dias") })
                 }
             }
@@ -329,18 +313,14 @@ fun GroceryListBottomSheet(
             }
             GroceryWeeklyGoalBar(weeklyGoal)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = showShelf, onClick = { showShelf = true; showCatalog = false }, label = { Text("Packs") })
-                FilterChip(selected = showCatalog, onClick = { showShelf = false; showCatalog = true }, label = { Text("Catálogo") })
-                FilterChip(selected = !showShelf && !showCatalog, onClick = { showShelf = false; showCatalog = false }, label = { Text("Minha lista") })
+                FilterChip(selected = showCatalog, onClick = { showCatalog = true }, label = { Text("Mercadinho") })
+                FilterChip(selected = !showCatalog, onClick = { showCatalog = false }, label = { Text("Minha lista") })
             }
-            if (showShelf) {
-                PublishedGroceryPacksScreen(publishedPacks, retailLoading, retailMessage ?: groceryMessage,
-                    onRefreshRetail, { pendingPack = it }, Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp), planningDays = weeklyGoal.planningDays)
-            } else if (showCatalog) {
-                Text("Catálogo atual de produtos. As compras são organizadas pelos packs de cada supermercado.", style = MaterialTheme.typography.bodySmall)
+            Text("Estimativa orçamentária. O app não vende produtos nem garante ofertas ou disponibilidade. Valores e lojas são referências de pesquisa e podem variar por região e data.", style = MaterialTheme.typography.bodySmall)
+            if (showCatalog) {
                 GroceryMarketShelfScreen(retailCards, groceryList, retailLoading, retailMessage,
                     onRefreshRetail, onAddCard, onDecrementCard,
-                    Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp), allowSelection = false)
+                    Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp), allowSelection = true)
             } else {
             // 2. Barra de Ações Rápidas (Proporcionais 1:1, Sem Quebra de Linha e com Planejador Semanal Contextual)
             val hasItems = groceryList.isNotEmpty()
@@ -356,7 +336,6 @@ fun GroceryListBottomSheet(
                 else -> Icons.Default.AutoAwesome
             }
 
-            if (adoptedPack == null) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -433,19 +412,12 @@ fun GroceryListBottomSheet(
                 }
             }
 
-            }
-
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f, fill = false),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (adoptedPack != null) {
-                    item { AdoptedGroceryPackCard(adoptedPack, totalCost, !adoptedPack.validToday() || publishedPacks.none { it.publicationId == adoptedPack.publicationId && it.id == adoptedPack.id }) }
-                } else {
-                    item { GroceryBasketComparisonCard(basketComparison, basketMessage, groceryList.count { it.retailCardId == null }) }
-                }
                 if (plan != null && groceryList.all { it.retailCardId == null }) {
                     item { WeeklyGrocerySummaryCard(plan, onResize) }
                 }
@@ -678,7 +650,7 @@ fun GroceryListBottomSheet(
                                 GroceryItemRow(
                                     item = entry,
                                     onToggle = { checked -> onToggleItem(entry.remoteId, checked) },
-                                    onEdit = { if (entry.retailCardId != null) showShelf = true else manualEditingItem = entry },
+                                    onEdit = { if (entry.retailCardId != null) showCatalog = true else manualEditingItem = entry },
                                     onDelete = { onRemoveItem(entry.remoteId) }
                                 )
                                 communityPrices.filter { it.foodName.equals(entry.foodName, ignoreCase = true) }.forEach { price ->

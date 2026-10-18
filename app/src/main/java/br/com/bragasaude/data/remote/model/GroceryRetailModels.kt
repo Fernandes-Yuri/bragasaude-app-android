@@ -4,26 +4,6 @@ import br.com.bragasaude.data.local.GroceryRetailCardEntity
 import org.json.JSONObject
 import org.json.JSONArray
 
-data class BasketItemDto(val cardId: String, val quantity: Int)
-data class GroceryMarketTotal(
-    val marketId: String, val name: String, val logoUrl: String, val websiteUrl: String,
-    val totalBrl: Double, val missingItemsCount: Int, val isBestDeal: Boolean, val savings: Double
-) {
-    companion object {
-        fun parse(o: JSONObject) = GroceryMarketTotal(o.getString("market_id"), o.getString("market_name"),
-            o.getString("market_logo_url"), o.getString("website_url"), o.getDouble("total_brl"),
-            o.getInt("missing_items_count"), o.getBoolean("is_best_deal"), o.getDouble("savings_vs_highest_brl"))
-    }
-}
-data class BasketComparisonResultDto(val rankings: List<GroceryMarketTotal>) {
-    companion object {
-        fun parse(o: JSONObject): BasketComparisonResultDto {
-            val rows = o.getJSONArray("market_rankings")
-            return BasketComparisonResultDto((0 until rows.length()).map { GroceryMarketTotal.parse(rows.getJSONObject(it)) })
-        }
-    }
-}
-
 object GroceryRetailCardDto {
     fun parse(o: JSONObject) = GroceryRetailCardEntity(
         id = o.getString("id"), name = o.getString("name"), category = o.getString("category"),
