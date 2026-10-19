@@ -22,12 +22,13 @@ class RetiredChannelMigrationTest {
 
     @After fun cleanup() { context.deleteDatabase(name) }
 
-    @Test fun upgradeRemovesChannelColumnsAndPreservesLocalProfile() = runBlocking {
+    @Test fun upgradeRemovesChannelColumnsAndPreservesLocalProfile() = runBlocking<Unit> {
         context.deleteDatabase(name)
         val profile = ProfileEntity(userId = "test-user", fullName = "Perfil de teste",
             pendingSync = true, communityNickname = "Comunidade",
             emergencyContactPhone = "synthetic", customPhotoUri = "content://test/avatar")
-        open().use { db -> db.profileDao().insert(profile) }
+        val initial = open()
+        try { initial.profileDao().insert(profile) } finally { initial.close() }
         // Reconstitui a estrutura 58 da tabela, com os dois campos antigos.
         SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
             db.execSQL("ALTER TABLE profiles_local ADD COLUMN whatsappTotpSecret TEXT")
@@ -35,7 +36,8 @@ class RetiredChannelMigrationTest {
             db.execSQL("UPDATE profiles_local SET whatsappTotpSecret='synthetic', whatsappPhone='synthetic'")
             db.version = 58
         }
-        open().use { db ->
+        val db = open()
+        try {
             assertEquals(profile, db.profileDao().getProfileOneShot("test-user"))
             val columns = mutableSetOf<String>()
             db.openHelper.readableDatabase.query("PRAGMA table_info(profiles_local)").use { cursor ->
@@ -44,6 +46,6 @@ class RetiredChannelMigrationTest {
             assertFalse(columns.contains("whatsappTotpSecret"))
             assertFalse(columns.contains("whatsappPhone"))
             assertTrue(columns.contains("emergencyContactPhone"))
-        }
+        } finally { db.close() }
     }
 }
