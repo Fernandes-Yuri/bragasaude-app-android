@@ -73,7 +73,7 @@ internal fun NutritionContent(
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             item(key = "mealSelector") {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf("Café da Manhã" to "Café", "Almoço" to "Almoço",
                         "Lanche da Tarde" to "Lanche", "Jantar" to "Jantar").forEach { (meal, label) ->
                         FilterChip(

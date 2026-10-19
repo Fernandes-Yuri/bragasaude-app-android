@@ -54,11 +54,14 @@ class NutritionContentTest {
         assertTrue("Registro deve vir antes das calorias", action.bottom < summary.top)
         compose.onNodeWithText("Criar Manual").assertDoesNotExist()
         compose.onNodeWithText("Ainda sem registros").assertIsDisplayed()
+        val breakfast = compose.onNodeWithContentDescription("Café da Manhã").fetchSemanticsNode().boundsInRoot
+        val dinner = compose.onNodeWithContentDescription("Jantar").fetchSemanticsNode().boundsInRoot
+        assertEquals("Filtros devem caber em uma linha em 360 dp", breakfast.top, dinner.top, 1f)
         screenshot("01-primeiro-acesso")
     }
 
     @Test fun switching_meals_and_removing_food_keeps_registration_available() {
-        val state = mutableStateOf(NutritionContentState(meals = listOf(
+        val state = mutableStateOf(NutritionContentState(consumedCalories = 180.0, meals = listOf(
             MealLogItem(id = "lunch", mealType = "Almoço", foodName = "Arroz com feijão", portionGrams = 150, kcal = 180.0)
         )))
         render(state = state, onSelectMeal = { state.value = state.value.copy(selectedMeal = it) },
@@ -141,10 +144,12 @@ class NutritionContentTest {
         // PixelCopy espera um frame de hardware que o Robolectric não produz.
         // Desenha a janela real com o Canvas nativo, inclusive o painel de detalhes.
         compose.runOnIdle {
-            val view = WindowInspector.getGlobalWindowViews().last()
+            val windows = WindowInspector.getGlobalWindowViews()
+            val view = windows.first()
             assertTrue(view.width > 0 && view.height > 0)
             val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-            view.draw(Canvas(bitmap))
+            val canvas = Canvas(bitmap)
+            windows.forEach { it.draw(canvas) }
             val file = File("build/outputs/nutrition-review/$name.png")
             requireNotNull(file.parentFile).mkdirs()
             file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
