@@ -396,15 +396,17 @@ fun NutritionScreen(
                             proteinG = customFoodProtein.toDoubleOrNull(),
                             fatG = customFoodFat.toDoubleOrNull()
                         )
+                        viewModel.onSearchQueryChanged(customFoodName)
                         customFoodName = ""
                         customFoodKcal = ""
                         customFoodCarbs = ""
                         customFoodProtein = ""
                         customFoodFat = ""
                         showCustomFoodDialog = false
+                        showFoodSelectorDialog = true
                     }
                 }) {
-                    Text("Salvar e Registrar")
+                    Text("Salvar alimento")
                 }
             },
             dismissButton = {

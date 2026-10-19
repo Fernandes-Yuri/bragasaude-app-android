@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -205,7 +206,9 @@ internal fun NutritionContent(
 @Composable
 private fun NutritionSectionToggle(title: String, expanded: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().nutritionLink(onClick).padding(vertical = 12.dp),
+        Modifier.fillMaxWidth().nutritionLink(onClick)
+            .semantics { stateDescription = if (expanded) "Expandido" else "Recolhido" }
+            .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))

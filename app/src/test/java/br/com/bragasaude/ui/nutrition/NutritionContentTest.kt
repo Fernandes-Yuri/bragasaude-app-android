@@ -137,7 +137,7 @@ class NutritionContentTest {
     }
 
     private fun screenshot(name: String) {
-        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+        val bitmap = compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
         val file = File("build/outputs/nutrition-review/$name.png")
         file.parentFile.mkdirs()
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
