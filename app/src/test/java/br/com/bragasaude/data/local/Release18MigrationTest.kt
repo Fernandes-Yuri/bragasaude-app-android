@@ -45,7 +45,7 @@ class Release18MigrationTest {
                     val fields = entity.getJSONArray("fields")
                     repeat(fields.length()) { n ->
                         val field = fields.getJSONObject(n)
-                        if (field.getBoolean("notNull")) {
+                        if (field.optBoolean("notNull", false)) {
                             val column = field.getString("columnName")
                             when (field.getString("affinity")) {
                                 "TEXT" -> profile.put(column, "")
