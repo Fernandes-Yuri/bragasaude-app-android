@@ -2,10 +2,11 @@ package br.com.bragasaude.ui.nutrition
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.inspector.WindowInspector
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
@@ -137,9 +138,17 @@ class NutritionContentTest {
     }
 
     private fun screenshot(name: String) {
-        val bitmap = compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
-        val file = File("build/outputs/nutrition-review/$name.png")
-        file.parentFile.mkdirs()
-        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        // PixelCopy espera um frame de hardware que o Robolectric não produz.
+        // Desenha a janela real com o Canvas nativo, inclusive o painel de detalhes.
+        compose.runOnIdle {
+            val view = WindowInspector.getGlobalWindowViews().last()
+            assertTrue(view.width > 0 && view.height > 0)
+            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            view.draw(Canvas(bitmap))
+            val file = File("build/outputs/nutrition-review/$name.png")
+            requireNotNull(file.parentFile).mkdirs()
+            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
     }
 }
