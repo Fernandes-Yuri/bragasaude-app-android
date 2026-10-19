@@ -649,6 +649,7 @@ fun GroceryListBottomSheet(
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 GroceryItemRow(
                                     item = entry,
+                                    imageUrl = retailCards.firstOrNull { it.id == entry.retailCardId }?.imageUrl ?: entry.imageUrl,
                                     onToggle = { checked -> onToggleItem(entry.remoteId, checked) },
                                     onEdit = { if (entry.retailCardId != null) showCatalog = true else manualEditingItem = entry },
                                     onDelete = { onRemoveItem(entry.remoteId) }
@@ -703,7 +704,8 @@ fun GroceryItemRow(
     item: GroceryListItemEntity,
     onToggle: (Boolean) -> Unit,
     onEdit: () -> Unit = {},
-    onDelete: () -> Unit = {}
+    onDelete: () -> Unit = {},
+    imageUrl: String? = item.imageUrl
 ) {
     Card(
         modifier = Modifier
@@ -731,6 +733,11 @@ fun GroceryItemRow(
             )
 
             Spacer(modifier = Modifier.width(8.dp))
+
+            if (item.retailCardId != null) {
+                GroceryProductImage(imageUrl, item.foodName, Modifier.size(56.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+            }
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(

@@ -42,7 +42,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 57, // Publicações e packs adotados offline
+    version = 58, // Nutrientes completos do catálogo disponíveis offline
     exportSchema = true
 )
 @TypeConverters(Converters::class)
