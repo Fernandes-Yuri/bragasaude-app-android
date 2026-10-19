@@ -535,6 +535,13 @@ object Migrations {
         }
     }
 
+    val MIGRATION_57_58 = object : Migration(57, 58) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE grocery_retail_cards_local ADD COLUMN fiberG REAL")
+            db.execSQL("ALTER TABLE grocery_retail_cards_local ADD COLUMN nutritionFactsJson TEXT NOT NULL DEFAULT '[]'")
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -567,6 +574,7 @@ object Migrations {
         MIGRATION_53_54,
         MIGRATION_54_55,
         MIGRATION_55_56,
-        MIGRATION_56_57
+        MIGRATION_56_57,
+        MIGRATION_57_58
     )
 }

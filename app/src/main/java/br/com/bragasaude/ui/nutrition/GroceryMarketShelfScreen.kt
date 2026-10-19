@@ -16,11 +16,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
-import coil3.compose.AsyncImage
+import br.com.bragasaude.data.remote.model.GroceryRetailCardDto
 import br.com.bragasaude.data.local.GroceryRetailCardEntity
 import br.com.bragasaude.data.local.GroceryListItemEntity
 import br.com.bragasaude.domain.GroceryWeeklyGoal
@@ -82,20 +81,23 @@ fun GroceryMarketShelfScreen(
                 val locked = row?.isCheckedInPantry == true
                 Card(shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                     Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (card.imageUrl.isBlank()) {
-                            Box(Modifier.fillMaxWidth().height(108.dp), contentAlignment = Alignment.Center) {
-                                Text("Sem foto", style = MaterialTheme.typography.bodySmall)
-                            }
-                        } else {
-                            AsyncImage(model = card.imageUrl, contentDescription = card.name,
-                                modifier = Modifier.fillMaxWidth().height(108.dp), contentScale = ContentScale.Fit)
-                        }
-                        Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
-                            Text(card.packageDisplay, Modifier.padding(4.dp), style = MaterialTheme.typography.labelSmall)
-                        }
+                        GroceryProductImage(card.imageUrl, card.name, Modifier.fillMaxWidth().height(108.dp))
                         Text(card.name, style = MaterialTheme.typography.titleSmall, minLines = 2)
                         Text("Referência: ${money.format(card.priceAvg)}", fontWeight = FontWeight.Bold)
                         Text("+ ${card.kcalPerPackage.toInt()} kcal / embalagem", style = MaterialTheme.typography.bodySmall)
+                        val facts = remember(card.nutritionFactsJson) { GroceryRetailCardDto.nutritionFacts(card) }
+                        var showNutrition by remember(card.id) { mutableStateOf(false) }
+                        TextButton(onClick = { showNutrition = !showNutrition }) {
+                            Text(if (showNutrition) "Ocultar nutrientes" else "Informações nutricionais")
+                        }
+                        if (showNutrition) {
+                            Text("Por embalagem de ${card.packageDisplay}", style = MaterialTheme.typography.labelMedium)
+                            if (facts.isEmpty()) Text("Nutrientes não informados.", style = MaterialTheme.typography.bodySmall)
+                            val number = remember { NumberFormat.getNumberInstance(Locale("pt", "BR")).apply { maximumFractionDigits = 2 } }
+                            facts.forEach { fact ->
+                                Text("${fact.label}: ${number.format(fact.value)} ${fact.unit}", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
                         val sources = remember(card.marketsJson) { JSONArray(card.marketsJson) }
                         if (sources.length() > 0) {
                             val source = sources.getJSONObject(0)

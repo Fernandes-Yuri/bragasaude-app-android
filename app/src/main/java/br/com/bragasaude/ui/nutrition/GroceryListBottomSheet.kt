@@ -732,6 +732,11 @@ fun GroceryItemRow(
 
             Spacer(modifier = Modifier.width(8.dp))
 
+            if (item.retailCardId != null) {
+                GroceryProductImage(item.imageUrl, item.foodName, Modifier.size(56.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.foodName,

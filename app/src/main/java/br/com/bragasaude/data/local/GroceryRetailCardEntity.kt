@@ -19,7 +19,9 @@ data class GroceryRetailCardEntity(
     val priceAvg: Double,
     val linkedIngredientSlug: String?,
     val marketsJson: String,
-    val clinicalTagsJson: String
+    val clinicalTagsJson: String,
+    val fiberG: Double? = null,
+    @ColumnInfo(defaultValue = "'[]'") val nutritionFactsJson: String = "[]"
 )
 
 @Dao

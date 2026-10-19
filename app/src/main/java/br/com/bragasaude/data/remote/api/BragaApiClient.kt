@@ -1123,12 +1123,16 @@ class BragaApiClient @Inject constructor(
         }
     }
 
-    private fun getJsonArray(urlString: String): JSONArray? {
+    private fun getJsonArray(urlString: String, fresh: Boolean = false): JSONArray? {
         var conn: HttpURLConnection? = null
         return try {
             val url = URL(urlString)
             conn = openConnection(url).apply {
                 requestMethod = "GET"
+                if (fresh) {
+                    useCaches = false
+                    setRequestProperty("Cache-Control", "no-cache")
+                }
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
                 setRequestProperty("Accept", "application/json")
@@ -1978,7 +1982,7 @@ class BragaApiClient @Inject constructor(
     data class CanonicalGroceryPrice(val unit: String, val average: Double, val source: String)
 
     suspend fun getGroceryRetailCards(): List<GroceryRetailCardEntity> = withContext(Dispatchers.IO) {
-        val rows = getJsonArray("$baseUrl/api/catalog/grocery/cards")
+        val rows = getJsonArray("$baseUrl/api/catalog/grocery/cards", fresh = true)
             ?: throw java.io.IOException("Catálogo indisponível")
         (0 until rows.length()).map { GroceryRetailCardDto.parse(rows.getJSONObject(it)) }
     }
