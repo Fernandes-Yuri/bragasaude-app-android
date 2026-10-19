@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Whatsapp
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material3.*
@@ -64,29 +63,6 @@ fun SettingsScreen(
     val autoMorningCheckinEnabled by viewModel.autoMorningCheckinEnabled.collectAsState()
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
-
-    // Quando o ViewModel monta o link do WhatsApp (TOTP atual), abre e consome.
-    val waLink by viewModel.openWhatsAppLinkEvent.collectAsState()
-    LaunchedEffect(waLink) {
-        waLink?.let { url ->
-            runCatching {
-                context.startActivity(
-                    android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                        .apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
-                )
-            }
-            viewModel.consumeOpenWhatsAppLink()
-        }
-    }
-
-    // Avisa quando o vínculo ainda não está pronto (antes o botão era mudo).
-    val waError by viewModel.whatsappLinkError.collectAsState()
-    LaunchedEffect(waError) {
-        waError?.let { msg ->
-            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
-            viewModel.consumeWhatsappLinkError()
-        }
-    }
 
     var showEmergencyDialog by remember { mutableStateOf(false) }
     var showStepGoalDialog by remember { mutableStateOf(false) }
@@ -149,9 +125,9 @@ fun SettingsScreen(
                         )
                     }
 
-                    // WhatsApp e Emergência
+                    // Contato de emergência
                     Text(
-                        "WhatsApp e Emergência",
+                        "Contato de emergência",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = BragaTextPrimary,
@@ -164,15 +140,6 @@ fun SettingsScreen(
                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                     ) {
                         Column {
-                            val linkedPhone = profile?.whatsappPhone
-                            val hasWhatsapp = !linkedPhone.isNullOrBlank()
-                            SettingsItem(
-                                title = if (hasWhatsapp) "Meu WhatsApp" else "Vincular meu WhatsApp",
-                                subtitle = if (hasWhatsapp) "$linkedPhone • Toque para vincular de novo" else "Abre o WhatsApp com o código pronto. É só enviar.",
-                                icon = Icons.Default.Whatsapp,
-                                onClick = { viewModel.openWhatsAppLink() }
-                            )
-                            HorizontalDivider(color = BragaMintBorder.copy(alpha = 0.3f), thickness = 0.8.dp)
                             SettingsItem(
                                 title = "Parente Próximo de Confiança",
                                 subtitle = profile?.emergencyContactName ?: "Não cadastrado",

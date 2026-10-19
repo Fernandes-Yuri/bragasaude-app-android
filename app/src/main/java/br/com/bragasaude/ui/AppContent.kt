@@ -60,8 +60,6 @@ fun AppContent(activity: MainActivity) {
     val userRole by authViewModel.userRole.collectAsState()
     val caregiverMode by authViewModel.caregiverMode.collectAsState()
     val needsSelfCare by authViewModel.needsSelfCare.collectAsState()
-    val whatsappTotpSecret by authViewModel.whatsappTotpSecret.collectAsState()
-    val whatsappPhone by authViewModel.whatsappPhone.collectAsState()
     var tempRole by rememberSaveable { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
@@ -209,8 +207,6 @@ fun AppContent(activity: MainActivity) {
                                 }
                                 !hasSeenTutorial -> br.com.bragasaude.ui.onboarding.OnboardingTourScreen(
                                     userRole = userRole,
-                                    totpSecret = whatsappTotpSecret,
-                                    whatsappPhone = whatsappPhone,
                                     onFinishTour = { hasSeenTutorial = true }
                                 )
                                 isProfileComplete == true -> {
