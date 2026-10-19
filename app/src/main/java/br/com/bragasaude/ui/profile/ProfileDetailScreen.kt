@@ -46,7 +46,6 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Whatsapp
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.Diversity3
 import br.com.bragasaude.ui.components.BragaActionCard
@@ -92,29 +91,6 @@ fun ProfileDetailScreen(
     val measurementError by profileViewModel.saveError.collectAsState()
     val context = LocalContext.current
 
-    // Quando o ViewModel monta o link do WhatsApp (TOTP atual), abre e consome.
-    val waLink by profileViewModel.openWhatsAppLinkEvent.collectAsState()
-    LaunchedEffect(waLink) {
-        waLink?.let { url ->
-            runCatching {
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                        .apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
-                )
-            }
-            profileViewModel.consumeOpenWhatsAppLink()
-        }
-    }
-
-    // Avisa o usuário quando o vínculo ainda não está pronto (antes o botão era mudo).
-    val waError by profileViewModel.whatsappLinkError.collectAsState()
-    LaunchedEffect(waError) {
-        waError?.let { msg ->
-            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-            profileViewModel.consumeWhatsappLinkError()
-        }
-    }
-    
     // Launcher para escolher foto da galeria — sobe ao gateway (moderação no gateway)
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -765,86 +741,6 @@ fun ProfileDetailScreen(
                     }
                 }
             }
-
-            // WhatsApp: o vínculo é feito pelo fluxo TOTP temporário (até a Meta
-            // liberar template). O card abre o WhatsApp com o código pronto —
-            // nunca mais pede número nem OTP por texto.
-            item {
-                val linkedPhone = profile?.whatsappPhone
-                val hasWhatsapp = !linkedPhone.isNullOrBlank()
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp)
-                        .clickable {
-                            // Abre o WhatsApp com o código TOTP atual (fluxo novo).
-                            profileViewModel.openWhatsAppLink()
-                        },
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (hasWhatsapp) BragaMint.copy(alpha = 0.35f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, if (hasWhatsapp) BragaEmerald.copy(alpha = 0.5f) else BragaMintBorder)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = if (hasWhatsapp) BragaEmerald else MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Default.Whatsapp,
-                                    contentDescription = "WhatsApp",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(14.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = if (hasWhatsapp) "Meu WhatsApp" else "Vincular seu WhatsApp",
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = BragaTextPrimary
-                                )
-                                if (hasWhatsapp) {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = BragaEmerald.copy(alpha = 0.15f)
-                                    ) {
-                                        Text(
-                                            text = "Conectado",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = BragaEmerald,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = if (hasWhatsapp) "$linkedPhone • Toque para vincular de novo" else "Toque para abrir o WhatsApp com o código pronto. É só enviar a mensagem.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = BragaTextSecondary
-                            )
-                        }
-                    }
-                }
-            }
-
-            // (O card de WhatsApp acima já abre o fluxo TOTP. Mantivemos só ele:
-            // um único caminho, sem pedir número nem OTP por texto.)
 
             item {
                 Text(

@@ -1,7 +1,6 @@
 package br.com.bragasaude.ui.auth
 
 import android.net.Uri
-import br.com.bragasaude.data.util.WhatsAppLinkTotp
 import br.com.bragasaude.domain.ProfileOnboarding
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -68,16 +67,6 @@ class AuthViewModel @Inject constructor(
 
     private val _caregiverMode = MutableStateFlow<String?>(null)
     val caregiverMode = _caregiverMode.asStateFlow()
-
-    private val _suggestPhoneLink = MutableStateFlow(false)
-    val suggestPhoneLink = _suggestPhoneLink.asStateFlow()
-
-    // Vínculo WhatsApp por TOTP: segredo "sob o capo" + número já vinculado.
-    // O app calcula o código no ato do clique; ver wa_link_totp.py no gateway.
-    private val _whatsappTotpSecret = MutableStateFlow<String?>(null)
-    val whatsappTotpSecret = _whatsappTotpSecret.asStateFlow()
-    private val _whatsappPhone = MutableStateFlow<String?>(null)
-    val whatsappPhone = _whatsappPhone.asStateFlow()
 
     data class PendingRegistration(
         val email: String,
@@ -212,9 +201,6 @@ class AuthViewModel @Inject constructor(
                 val local = repository.getProfileOneShotLocal(userId)
                 currentCoroutineContext().ensureActive()
                 if (auth.currentUser?.uid != userId) return@withLock
-                // Segredo TOTP e número vinculado (vínculo WhatsApp temporário).
-                _whatsappTotpSecret.value = local?.whatsappTotpSecret
-                _whatsappPhone.value = local?.whatsappPhone
                 when (val resolution = resolveLoginProfile(local, remote)) {
                     LoginProfileResolution.Loading -> {
                         _isProfileComplete.value = null
@@ -438,13 +424,6 @@ class AuthViewModel @Inject constructor(
                         }
                     }
 
-                    // 2. Verifica se o usuário tem telefone cadastrado; se não tiver, sugere WhatsApp (opcional)
-                    val profile = repository.getProfileOneShotLocal(userId)
-                    val hasPhone = !profile?.phone.isNullOrBlank()
-                    if (!hasPhone) {
-                        _suggestPhoneLink.value = true
-                    }
-
                     _authState.value = AuthState.Idle
                 } else {
                     _authState.value = AuthState.Error("Não foi possível autenticar com o Google.")
@@ -453,58 +432,6 @@ class AuthViewModel @Inject constructor(
                 _authState.value = AuthState.Error(e.message ?: "Erro ao autenticar com o Google")
             }
         }
-    }
-
-    fun dismissPhoneLinkSuggestion() {
-        _suggestPhoneLink.value = false
-    }
-
-    // --- Vínculo de WhatsApp (fluxo TOTP temporário) ---
-    // O fluxo antigo de OTP por texto foi removido: a Meta não aprova template
-    // e o código nunca chegava ao usuário. Agora abrimos o WhatsApp com o
-    // código TOTP atual pronto para enviar.
-
-    private val _openWhatsAppLink = MutableStateFlow<String?>(null)
-    val openWhatsAppLinkEvent = _openWhatsAppLink.asStateFlow()
-
-    // Feedback para o usuário quando o link não pode ser aberto ainda.
-    private val _whatsappLinkError = MutableStateFlow<String?>(null)
-    val whatsappLinkError = _whatsappLinkError.asStateFlow()
-
-    /**
-     * Monta o link wa.me com o código TOTP atual da conta.
-     *
-     * Sem segredo (perfil ainda não sincronizou), avisa o usuário em vez de
-     * ficar mudo e tenta sincronizar com o backend.
-     */
-    fun openWhatsAppLink(businessPhone: String = "5511967808252") {
-        val userId = auth.currentUser?.uid ?: return
-        viewModelScope.launch {
-            val current = repository.getProfileOneShotLocal(userId)?.toRemote()
-            val secret = current?.whatsappTotpSecret
-            if (secret.isNullOrBlank()) {
-                _whatsappLinkError.value =
-                    "Seu vínculo ainda não está pronto. Aguarde um segundo e toque novamente."
-                try {
-                    repository.syncProfile(userId)
-                } catch (_: Exception) { }
-                return@launch
-            }
-            _whatsappLinkError.value = null
-            val code = WhatsAppLinkTotp.currentCode(secret)
-            val text = Uri.encode("Olá Braga, eu desejo vincular meu número a minha conta. Esta é minha credencial: $code")
-            _openWhatsAppLink.value = "https://wa.me/$businessPhone?text=$text"
-        }
-    }
-
-    /** Consome o evento (a tela já abriu o link). */
-    fun consumeOpenWhatsAppLink() {
-        _openWhatsAppLink.value = null
-    }
-
-    /** Consome a mensagem de erro (a tela já mostrou). */
-    fun consumeWhatsappLinkError() {
-        _whatsappLinkError.value = null
     }
 
     fun signUpWithGoogle(idToken: String) {
@@ -523,9 +450,7 @@ class AuthViewModel @Inject constructor(
      * Inicia cadastro direto: valida conflitos de conta (Google vs Direto vs Deletada)
      * e dispara OTP obrigatório por e-mail.
      *
-     * O canal WhatsApp foi removido (18/09/2026): a Meta não aprova template de
-     * autenticação e o código nunca chegava. O vínculo de WhatsApp é feito depois,
-     * pelo fluxo TOTP (botão "Vincular meu WhatsApp").
+     * A autenticação por código usa exclusivamente e-mail.
      */
     fun signUpWithEmail(email: String, password: String, phoneNumber: String = "") {
         viewModelScope.launch {
@@ -658,8 +583,6 @@ class AuthViewModel @Inject constructor(
     /**
      * Envia código OTP de 6 dígitos para o e-mail fornecido.
      *
-     * Canal WhatsApp removido (18/09/2026): a Meta não aprova template.
-     * O vínculo de WhatsApp é feito depois, pelo fluxo TOTP.
      */
     fun sendOtpCode(identifier: String) {
         viewModelScope.launch {

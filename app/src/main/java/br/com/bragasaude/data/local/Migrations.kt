@@ -542,6 +542,16 @@ object Migrations {
         }
     }
 
+    /** 58 -> 59: remove os dados locais do antigo vínculo de atendimento. */
+    val MIGRATION_58_59 = object : Migration(58, 59) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""CREATE TABLE IF NOT EXISTS `profiles_without_channel` (`userId` TEXT NOT NULL, `fullName` TEXT, `birthDate` TEXT, `weightGoal` REAL, `dailyCalorieTarget` REAL, `hydrationTargetMl` INTEGER, `stepGoal` INTEGER, `hasDiabetes` INTEGER NOT NULL, `diabetesType` TEXT, `foodAllergies` TEXT NOT NULL, `customFoodRestrictions` TEXT, `hasHypertension` INTEGER NOT NULL, `hasThyroidIssue` INTEGER NOT NULL, `hasRenalIssue` INTEGER NOT NULL, `hasBoneIssue` INTEGER NOT NULL, `hasMuscularIssue` INTEGER NOT NULL, `pointsDiscipline` INTEGER NOT NULL, `currentXp` INTEGER NOT NULL, `totalXp` INTEGER NOT NULL, `currentLevel` INTEGER NOT NULL, `currentStreak` INTEGER NOT NULL, `lastXpAt` INTEGER, `showInFeed` INTEGER NOT NULL, `gender` TEXT, `weight` REAL, `height` REAL, `isSmoker` INTEGER NOT NULL, `activityLevel` TEXT, `emergencyContactName` TEXT, `emergencyContactRelation` TEXT, `emergencyContactPhone` TEXT, `phone` TEXT, `notificationsEnabled` INTEGER NOT NULL, `locationEnabled` INTEGER NOT NULL, `sleepStartTime` TEXT, `sleepEndTime` TEXT, `consentAcceptedAt` INTEGER, `updatedAt` INTEGER, `pendingSync` INTEGER NOT NULL, `userRole` TEXT, `basicProfileComplete` INTEGER NOT NULL, `selfCareComplete` INTEGER NOT NULL, `selfCareSetupPending` INTEGER NOT NULL, `caregiverMode` TEXT, `avatarIdentifier` TEXT, `customPhotoUri` TEXT, `communityNickname` TEXT, PRIMARY KEY(`userId`))""")
+            db.execSQL("""INSERT INTO profiles_without_channel (`userId`, `fullName`, `birthDate`, `weightGoal`, `dailyCalorieTarget`, `hydrationTargetMl`, `stepGoal`, `hasDiabetes`, `diabetesType`, `foodAllergies`, `customFoodRestrictions`, `hasHypertension`, `hasThyroidIssue`, `hasRenalIssue`, `hasBoneIssue`, `hasMuscularIssue`, `pointsDiscipline`, `currentXp`, `totalXp`, `currentLevel`, `currentStreak`, `lastXpAt`, `showInFeed`, `gender`, `weight`, `height`, `isSmoker`, `activityLevel`, `emergencyContactName`, `emergencyContactRelation`, `emergencyContactPhone`, `phone`, `notificationsEnabled`, `locationEnabled`, `sleepStartTime`, `sleepEndTime`, `consentAcceptedAt`, `updatedAt`, `pendingSync`, `userRole`, `basicProfileComplete`, `selfCareComplete`, `selfCareSetupPending`, `caregiverMode`, `avatarIdentifier`, `customPhotoUri`, `communityNickname`) SELECT `userId`, `fullName`, `birthDate`, `weightGoal`, `dailyCalorieTarget`, `hydrationTargetMl`, `stepGoal`, `hasDiabetes`, `diabetesType`, `foodAllergies`, `customFoodRestrictions`, `hasHypertension`, `hasThyroidIssue`, `hasRenalIssue`, `hasBoneIssue`, `hasMuscularIssue`, `pointsDiscipline`, `currentXp`, `totalXp`, `currentLevel`, `currentStreak`, `lastXpAt`, `showInFeed`, `gender`, `weight`, `height`, `isSmoker`, `activityLevel`, `emergencyContactName`, `emergencyContactRelation`, `emergencyContactPhone`, `phone`, `notificationsEnabled`, `locationEnabled`, `sleepStartTime`, `sleepEndTime`, `consentAcceptedAt`, `updatedAt`, `pendingSync`, `userRole`, `basicProfileComplete`, `selfCareComplete`, `selfCareSetupPending`, `caregiverMode`, `avatarIdentifier`, `customPhotoUri`, `communityNickname` FROM profiles_local""")
+            db.execSQL("DROP TABLE profiles_local")
+            db.execSQL("ALTER TABLE profiles_without_channel RENAME TO profiles_local")
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -575,6 +585,7 @@ object Migrations {
         MIGRATION_54_55,
         MIGRATION_55_56,
         MIGRATION_56_57,
-        MIGRATION_57_58
+        MIGRATION_57_58,
+        MIGRATION_58_59
     )
 }

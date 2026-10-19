@@ -32,8 +32,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 data class SyncProfileResult(
-    val success: Boolean,
-    val returnedSecret: String? = null
+    val success: Boolean
 )
 
 /**
@@ -131,16 +130,10 @@ class BragaApiClient @Inject constructor(
                 put("customFoodRestrictions", p.customFoodRestrictions ?: JSONObject.NULL)
                 put("caregiverMode", p.caregiverMode ?: JSONObject.NULL)
                 if (p.avatarIdentifier != null) put("avatarIdentifier", p.avatarIdentifier)
-                // Segredo TOTP do vínculo de WhatsApp (app gera; gateway só guarda).
-                if (!p.whatsappTotpSecret.isNullOrBlank()) {
-                    put("totpSecret", p.whatsappTotpSecret)
-                }
             }
             val res = postJson("$baseUrl/api/sync/profile", json)
             if (res?.optString("status") == "success") {
-                val returnedSecret = res.optString("totpSecret").takeIf { it.isNotBlank() }
-                    ?: res.optString("totp_secret").takeIf { it.isNotBlank() }
-                return@withContext SyncProfileResult(success = true, returnedSecret = returnedSecret)
+                return@withContext SyncProfileResult(success = true)
             }
             return@withContext SyncProfileResult(success = false)
         } catch (e: Exception) {
@@ -201,11 +194,6 @@ class BragaApiClient @Inject constructor(
                 customFoodRestrictions = res.nullableString("custom_food_restrictions"),
                 caregiverMode = res.nullableString("caregiver_mode"),
                 avatarIdentifier = res.nullableString("avatar_identifier"),
-                // Segredo TOTP do vínculo de WhatsApp. Sem ler este campo, o
-                // app nunca fica sabendo do segredo que o backend garante — e o
-                // botão "Vincular meu WhatsApp" não tem ação (ProfileViewModel
-                // sai quando o segredo é null).
-                whatsappTotpSecret = res.nullableString("totp_secret")
             ))
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
