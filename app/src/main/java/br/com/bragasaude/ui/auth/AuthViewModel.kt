@@ -68,9 +68,6 @@ class AuthViewModel @Inject constructor(
     private val _caregiverMode = MutableStateFlow<String?>(null)
     val caregiverMode = _caregiverMode.asStateFlow()
 
-    private val _suggestPhoneLink = MutableStateFlow(false)
-    val suggestPhoneLink = _suggestPhoneLink.asStateFlow()
-
     data class PendingRegistration(
         val email: String,
         val password: String,
@@ -427,13 +424,6 @@ class AuthViewModel @Inject constructor(
                         }
                     }
 
-                    // 2. Verifica se o usuário tem telefone cadastrado; se não tiver, sugere WhatsApp (opcional)
-                    val profile = repository.getProfileOneShotLocal(userId)
-                    val hasPhone = !profile?.phone.isNullOrBlank()
-                    if (!hasPhone) {
-                        _suggestPhoneLink.value = true
-                    }
-
                     _authState.value = AuthState.Idle
                 } else {
                     _authState.value = AuthState.Error("Não foi possível autenticar com o Google.")
@@ -442,10 +432,6 @@ class AuthViewModel @Inject constructor(
                 _authState.value = AuthState.Error(e.message ?: "Erro ao autenticar com o Google")
             }
         }
-    }
-
-    fun dismissPhoneLinkSuggestion() {
-        _suggestPhoneLink.value = false
     }
 
     fun signUpWithGoogle(idToken: String) {
@@ -464,9 +450,7 @@ class AuthViewModel @Inject constructor(
      * Inicia cadastro direto: valida conflitos de conta (Google vs Direto vs Deletada)
      * e dispara OTP obrigatório por e-mail.
      *
-     * O canal WhatsApp foi removido (18/09/2026): a Meta não aprova template de
-     * autenticação e o código nunca chegava. O vínculo de WhatsApp é feito depois,
-     * pelo fluxo TOTP (botão "Vincular meu WhatsApp").
+     * A autenticação por código usa exclusivamente e-mail.
      */
     fun signUpWithEmail(email: String, password: String, phoneNumber: String = "") {
         viewModelScope.launch {
@@ -599,8 +583,6 @@ class AuthViewModel @Inject constructor(
     /**
      * Envia código OTP de 6 dígitos para o e-mail fornecido.
      *
-     * Canal WhatsApp removido (18/09/2026): a Meta não aprova template.
-     * O vínculo de WhatsApp é feito depois, pelo fluxo TOTP.
      */
     fun sendOtpCode(identifier: String) {
         viewModelScope.launch {
