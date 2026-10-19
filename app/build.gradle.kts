@@ -195,6 +195,8 @@ dependencies {
     // QR Code Scanning (Intents integrados)
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.junit)
     testImplementation("org.robolectric:robolectric:4.16.1")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
