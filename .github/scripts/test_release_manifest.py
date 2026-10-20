@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
+from zipfile import ZipFile
 
 import release_manifest as gate
 import publish_apk
@@ -28,6 +29,27 @@ class GateTests(unittest.TestCase):
         with patch.object(gate, 'inspect_apk', return_value=actual or INFO):
             return gate.validate_promotion('app-release.apk', manifest or MANIFEST,
                 origin or ORIGIN, jobs if jobs is not None else JOBS, ORIGIN['head_repository']['full_name'], current)
+
+    def test_release_abis_reject_intel_missing_arm_and_empty_apks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            apk = Path(temp) / 'fixture.apk'
+            cases = [
+                ('arm64-v8a', 'armeabi-v7a'),
+                ('arm64-v8a', 'armeabi-v7a', 'x86'),
+                ('arm64-v8a', 'armeabi-v7a', 'x86_64'),
+                ('arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'),
+                ('arm64-v8a',), (),
+            ]
+            for abis in cases:
+                with self.subTest(abis=abis):
+                    with ZipFile(apk, 'w') as archive:
+                        for abi in abis:
+                            archive.writestr(f'lib/{abi}/libfixture.so', b'synthetic')
+                    if set(abis) == {'arm64-v8a', 'armeabi-v7a'}:
+                        gate.check_release_abis(apk)
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'ABIs encontradas'):
+                            gate.check_release_abis(apk)
 
     def test_old_apk_uses_own_metadata_not_current_checkout(self):
         result = self.validate()
@@ -63,7 +85,10 @@ class GateTests(unittest.TestCase):
 
     def test_inspector_rejects_unsigned_debug_wrong_certificate_or_package(self):
         with tempfile.TemporaryDirectory() as temp:
-            apk = Path(temp) / 'fixture.apk'; apk.write_bytes(b'synthetic')
+            apk = Path(temp) / 'fixture.apk'
+            with ZipFile(apk, 'w') as archive:
+                for abi in ('arm64-v8a', 'armeabi-v7a'):
+                    archive.writestr(f'lib/{abi}/libfixture.so', b'synthetic')
             def output(args):
                 if args[0] == 'apksigner':
                     return f'Signer #1 certificate SHA-256 digest: {CERT}'
@@ -95,7 +120,10 @@ class GateTests(unittest.TestCase):
 
     def test_v31_sdk_ranges_deduplicate_same_signer_but_reject_mixed_keys(self):
         with tempfile.TemporaryDirectory() as temp:
-            apk = Path(temp) / 'fixture.apk'; apk.write_bytes(b'synthetic')
+            apk = Path(temp) / 'fixture.apk'
+            with ZipFile(apk, 'w') as archive:
+                for abi in ('arm64-v8a', 'armeabi-v7a'):
+                    archive.writestr(f'lib/{abi}/libfixture.so', b'synthetic')
             def output(args):
                 if args[0] == 'apksigner':
                     return (f'Signer (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: {CERT}\n'
