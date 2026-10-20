@@ -313,6 +313,8 @@ object WeeklyGroceryEngine {
             )
         }
 
+        val effectiveBasketLimit = effectivePrefs.effectiveMaxBasketSize
+
         // 5. Dimensionamento do Pilar 1: Grãos, Cereais, Tubérculos e Raízes
         val existingGrainKcal = plannedConsumptions.filter { it.corridor == CORRIDOR_GRAOS }.sumOf { it.plannedCalories }
         val remainingGrainKcal = (grainTargetKcal - existingGrainKcal).coerceAtLeast(0.0)
@@ -326,7 +328,8 @@ object WeeklyGroceryEngine {
             destConsumptions = plannedConsumptions,
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit,
+            planningDays = planningDays
         )
 
         // 6. Dimensionamento do Pilar 2: Proteínas (Animais/Vegetais, Leguminosas, Laticínios, Ovos)
@@ -343,7 +346,8 @@ object WeeklyGroceryEngine {
             preferFish = hasHighBp,
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit,
+            planningDays = planningDays
         )
 
         // 7. Dimensionamento do Pilar 3: Hortifruti (Frutas, Folhosos, Legumes)
@@ -359,7 +363,8 @@ object WeeklyGroceryEngine {
             orderFn = ::orderPool,
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit,
+            planningDays = planningDays
         )
 
         // 8. Dimensionamento do Pilar 4: Mercearia, Gorduras Boas, Sementes, Temperos e Chás
@@ -374,7 +379,8 @@ object WeeklyGroceryEngine {
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
             isPantry = true,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit,
+            planningDays = planningDays
         )
 
         // 9. Calibração fina da meta calórica semanal
@@ -384,11 +390,11 @@ object WeeklyGroceryEngine {
             plannedConsumptions = plannedConsumptions,
             candidatesPool = allEligibleCandidates,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit
         )
 
         // Garantia de respeito estrito ao maxBasketSize
-        while (plannedConsumptions.size > effectivePrefs.budgetTier.maxBasketSize && plannedConsumptions.size > 1) {
+        while (plannedConsumptions.size > effectiveBasketLimit && plannedConsumptions.size > 1) {
             val nonStapleMinKcal = plannedConsumptions.filterNot { isStapleEnergyFood(it.food) || isCarnivorousProtein(it.food) }
                 .minByOrNull { it.plannedCalories }
             if (nonStapleMinKcal != null) {
@@ -567,7 +573,8 @@ object WeeklyGroceryEngine {
         isEconomic: Boolean = false,
         isUltraEconomic: Boolean = false,
         isPantry: Boolean = false,
-        maxBasketSize: Int = Int.MAX_VALUE
+        maxBasketSize: Int = Int.MAX_VALUE,
+        planningDays: Int = 7
     ) {
         if (candidates.isEmpty() || targetKcal <= 0.0) return
 
@@ -579,18 +586,20 @@ object WeeklyGroceryEngine {
 
         val remainingSlots = (maxBasketSize - destConsumptions.size).coerceAtLeast(0)
         val countToTake = when {
-            isPantry && isUltraEconomic -> 0
-            isPantry && isEconomic -> 1
-            isUltraEconomic && corridor == CORRIDOR_GRAOS -> 2
-            isUltraEconomic && corridor == CORRIDOR_PROTEINAS -> 2
+            isPantry && isUltraEconomic -> if (planningDays >= 28) 1 else 0
+            isPantry && isEconomic -> if (planningDays >= 28) 2 else 1
+            isUltraEconomic && corridor == CORRIDOR_GRAOS -> if (planningDays >= 28) 3 else 2
+            isUltraEconomic && corridor == CORRIDOR_PROTEINAS -> if (planningDays >= 28) 3 else 2
             isUltraEconomic -> 1
-            isEconomic -> 2
+            isEconomic && corridor == CORRIDOR_GRAOS -> if (planningDays >= 28) 4 else if (planningDays >= 14) 3 else 2
+            isEconomic && corridor == CORRIDOR_PROTEINAS -> if (planningDays >= 28) 4 else if (planningDays >= 14) 3 else 2
+            isEconomic -> if (planningDays >= 28) 3 else 2
             dailyCalorieTarget >= 3500.0 -> 6
             dailyCalorieTarget >= 2500.0 -> 5
-            else -> 4
+            else -> if (planningDays >= 28) 5 else 4
         }.coerceAtMost(sortedCandidates.size)
          .coerceAtMost(if (remainingSlots > 0) remainingSlots else 0)
-         .coerceAtLeast(if (isPantry && isUltraEconomic) 0 else if (remainingSlots > 0) 1 else 0)
+         .coerceAtLeast(if (isPantry && isUltraEconomic && planningDays < 28) 0 else if (remainingSlots > 0) 1 else 0)
 
         if (countToTake <= 0) return
 
@@ -668,7 +677,8 @@ object WeeklyGroceryEngine {
         orderFn: (List<FoodEntity>) -> List<FoodEntity> = { it },
         isEconomic: Boolean = false,
         isUltraEconomic: Boolean = false,
-        maxBasketSize: Int = Int.MAX_VALUE
+        maxBasketSize: Int = Int.MAX_VALUE,
+        planningDays: Int = 7
     ) {
         if (candidates.isEmpty()) return
 
@@ -681,7 +691,10 @@ object WeeklyGroceryEngine {
 
         val remainingSlots = (maxBasketSize - destConsumptions.size).coerceAtLeast(0)
         val frutasCount = when {
+            isUltraEconomic && planningDays >= 28 -> 2
             isUltraEconomic -> 1
+            planningDays >= 28 -> 3
+            isEconomic && planningDays >= 14 -> 2
             isEconomic -> 2
             dailyCalorieTarget >= 2800.0 -> 3
             else -> 2
@@ -705,7 +718,8 @@ object WeeklyGroceryEngine {
         } else {
             folhasPool
         }
-        val folhasCount = 1.coerceAtMost(maxOf(1, (maxBasketSize - destConsumptions.size - frutas.size).coerceAtLeast(0)))
+        val targetFolhasCount = if (planningDays >= 28 && remainingSlots >= 6) 2 else 1
+        val folhasCount = targetFolhasCount.coerceAtMost(maxOf(1, (maxBasketSize - destConsumptions.size - frutas.size).coerceAtLeast(0)))
         val folhas = selectDiverseFoods(
             candidates = folhasCandidates,
             count = folhasCount,
@@ -714,7 +728,10 @@ object WeeklyGroceryEngine {
         )
 
         val legumesCount = when {
+            isUltraEconomic && planningDays >= 28 -> 2
             isUltraEconomic -> 1
+            planningDays >= 28 -> 3
+            isEconomic && planningDays >= 14 -> 2
             isEconomic -> 2
             else -> 2
         }.coerceAtMost(maxOf(1, (maxBasketSize - destConsumptions.size - frutas.size - folhas.size).coerceAtLeast(0)))

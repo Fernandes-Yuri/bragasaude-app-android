@@ -14,6 +14,7 @@ import br.com.bragasaude.domain.GroceryLimitationFormatter
 import br.com.bragasaude.domain.PurchaseCalculationStatus
 import br.com.bragasaude.domain.WeeklyGroceryEngine
 import br.com.bragasaude.domain.WeeklyGroceryPlanResult
+import br.com.bragasaude.ui.theme.BragaEmeraldDark
 import java.util.Locale
 
 @Composable
@@ -39,6 +40,16 @@ fun WeeklyGrocerySummaryCard(
                 text = "${plan.plannedWeeklyCalories.toInt()} kcal planejadas / ${plan.targetWeeklyCalories.toInt()} kcal de meta",
                 style = MaterialTheme.typography.bodyMedium
             )
+            val totalEstimatedCost = plan.items.sumOf { it.estimatedPriceBrl }
+            if (totalEstimatedCost > 0.0) {
+                val dailyAvg = totalEstimatedCost / plan.planningDays.toDouble()
+                Text(
+                    text = String.format(Locale.getDefault(), "Total estimado: R$ %.2f (~R$ %.2f/dia)", totalEstimatedCost, dailyAvg),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = BragaEmeraldDark
+                )
+            }
 
             // 2. Cobertura energética estimada (consumo planejado, sem margem de compra)
             if (!plan.isManuallyModified) {

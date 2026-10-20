@@ -368,4 +368,29 @@ class WeeklyGroceryEnginePreferencesTest {
         assertFalse(WeeklyGroceryEngine.isEggProtein(peixe))
         assertFalse(WeeklyGroceryEngine.isEggProtein(arroz))
     }
+
+    @Test
+    fun planWeeklyGrocery_with30DaysPlan_generatesAdequateVarietyAndPlausibleCost() {
+        val (foods, catalog) = createTestCatalog()
+        val prefs = WeeklyGroceryPreferences(
+            budgetTier = GroceryBudgetTier.ECONOMIC,
+            selectedProteins = setOf(GroceryProteinPreference.EGGS, GroceryProteinPreference.POULTRY),
+            planningDays = 30
+        )
+        val plan = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "user_30_days",
+            vitals = emptyList(),
+            profile = null,
+            catalog = foods,
+            ingredientCatalog = catalog,
+            targetCalories = 2000.0,
+            preferences = prefs
+        )
+
+        assertTrue("Plano de 30 dias deve conter variedade adequada (> 10 itens), obteve ${plan.items.size}", plan.items.size > 10)
+        assertTrue("Plano de 30 dias deve respeitar o teto economico para 30 dias (<= 28 itens), obteve ${plan.items.size}", plan.items.size <= 28)
+
+        val totalCost = plan.items.sumOf { it.estimatedPriceBrl }
+        assertTrue("Custo total para 30 dias deve ser realista (abaixo de R$ 800,00), obteve R$ $totalCost", totalCost < 800.0)
+    }
 }
