@@ -275,6 +275,15 @@ jobs:
           path: app/build/reports/tests/testDebugUnitTest/
           retention-days: 14
 
+      - name: Publicar capturas da alimentação
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: revisao-visual-alimentacao
+          path: app/build/outputs/nutrition-review/
+          retention-days: 14
+          if-no-files-found: warn
+
       - name: Publicar schemas Room gerados
         if: always()
         uses: actions/upload-artifact@v4
