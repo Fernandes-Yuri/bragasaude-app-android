@@ -18,7 +18,7 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [26, 30, 31, 35], application = Application::class)
+@Config(sdk = [34], application = Application::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class SplashLogoTest {
     @Test fun launch_icon_preserves_transparent_corners_inside_the_platform_safe_circle() {
@@ -51,5 +51,36 @@ class SplashLogoTest {
         requireNotNull(file.parentFile).mkdirs()
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         bitmap.recycle()
+    }
+}
+
+/** Resource selection is checked without sharing native graphics across SDK sandboxes. */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [26, 30, 31, 35], application = Application::class)
+@GraphicsMode(GraphicsMode.Mode.LEGACY)
+class SplashThemeCompatibilityTest {
+    @Test fun launch_theme_selects_a_supported_icon_without_an_external_background() {
+        verifyTheme()
+    }
+
+    @Test fun night_theme_keeps_the_same_transparent_icon_background() {
+        RuntimeEnvironment.setQualifiers("+night")
+        verifyTheme()
+    }
+
+    private fun verifyTheme() {
+        val context = ContextThemeWrapper(ApplicationProvider.getApplicationContext<Application>(), R.style.Theme_Bragasaude_Splash)
+        val attributes = context.obtainStyledAttributes(intArrayOf(
+            androidx.core.splashscreen.R.attr.windowSplashScreenAnimatedIcon,
+            androidx.core.splashscreen.R.attr.windowSplashScreenIconBackgroundColor
+        ))
+        val iconId = attributes.getResourceId(0, 0)
+        assertNotEquals(0, iconId)
+        assertEquals(Color.TRANSPARENT, attributes.getColor(1, Color.MAGENTA))
+        attributes.recycle()
+        val resource = android.util.TypedValue()
+        context.resources.getValue(iconId, resource, true)
+        val expected = if (RuntimeEnvironment.getApiLevel() >= 31) "ic_logo_braga_animated.xml" else "ic_logo_braga_splash.xml"
+        assertTrue("Expected $expected, got ${resource.string}", resource.string.toString().endsWith(expected))
     }
 }
