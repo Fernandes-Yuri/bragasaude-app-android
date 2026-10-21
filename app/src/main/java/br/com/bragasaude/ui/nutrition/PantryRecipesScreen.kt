@@ -496,16 +496,18 @@ private fun NutritionNote(benefit: String) {
 internal fun RecipeMealTabs(tabs: List<MealTab>, selectedIndex: Int, onSelect: (Int) -> Unit) {
     TabRow(selectedTabIndex = selectedIndex) {
         tabs.forEachIndexed { index, tab ->
-            Tab(
-                selected = selectedIndex == index,
-                onClick = { onSelect(index) },
-                text = { Text(tab.label, maxLines = 1, style = MaterialTheme.typography.labelMedium) },
-                icon = {
+            Tab(selected = selectedIndex == index, onClick = { onSelect(index) }) {
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     MEAL_TAB_ICONS[tab.key]?.let { icon ->
                         Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.height(4.dp))
                     }
+                    Text(tab.label, maxLines = 1, style = MaterialTheme.typography.labelMedium)
                 }
-            )
+            }
         }
     }
 }

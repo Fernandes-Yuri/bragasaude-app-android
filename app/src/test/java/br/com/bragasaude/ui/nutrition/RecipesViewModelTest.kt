@@ -9,7 +9,8 @@ import com.google.firebase.auth.FirebaseAuth
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.*
@@ -50,7 +51,7 @@ class RecipesViewModelTest {
             assertTrue(model.snackRecipes.value.isEmpty())
             verify(exactly = 0) { grocery.getPantryItems(any()) }
         } finally {
-            vm?.viewModelScope?.cancel()
+            vm?.viewModelScope?.coroutineContext?.get(Job)?.cancelAndJoin()
             Dispatchers.resetMain()
         }
     }
@@ -81,7 +82,7 @@ class RecipesViewModelTest {
             assertNotNull(eggRecipe)
             assertEquals(br.com.bragasaude.data.local.model.RecipeReadinessStatus.READY_TO_COOK, eggRecipe!!.readinessStatus)
         } finally {
-            vm?.viewModelScope?.cancel()
+            vm?.viewModelScope?.coroutineContext?.get(Job)?.cancelAndJoin()
             Dispatchers.resetMain()
         }
     }

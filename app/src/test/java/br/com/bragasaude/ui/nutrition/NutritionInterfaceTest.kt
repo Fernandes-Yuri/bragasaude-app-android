@@ -110,6 +110,8 @@ class NutritionInterfaceTest {
                 WeeklyGroceryPreferencesSheet(WeeklyGroceryPreferences(), {}, {})
             }
         }
+        compose.onNodeWithTag("quickBudgets").performScrollTo()
+        screenshot("14-orcamento-atalhos")
         listOf("80", "120", "160", "200").forEach { amount ->
             compose.onNodeWithText("R$ $amount").performScrollTo().assertIsDisplayed().performClick()
             assertSingleLine("R$ $amount")
