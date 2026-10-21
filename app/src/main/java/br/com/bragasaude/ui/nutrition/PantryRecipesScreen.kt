@@ -17,9 +17,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -37,8 +45,6 @@ import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -127,25 +133,8 @@ fun PantryRecipesScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Abas de navegacao com icones vetoriais
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(mealTabs.size) { index ->
-                    val tab = mealTabs[index]
-                    val tabIcon = MEAL_TAB_ICONS[tab.key]
-                    FilterChip(
-                        selected = pagerState.currentPage == index,
-                        onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
-                        modifier = Modifier.heightIn(min = 48.dp),
-                        shape = RoundedCornerShape(24.dp),
-                        label = { Text(tab.label, style = MaterialTheme.typography.bodyMedium) },
-                        leadingIcon = {
-                            if (tabIcon != null) Icon(tabIcon, contentDescription = null, modifier = Modifier.size(20.dp))
-                        }
-                    )
-                }
+            RecipeMealTabs(mealTabs, pagerState.currentPage) { index ->
+                scope.launch { pagerState.animateScrollToPage(index) }
             }
 
             // Conteudo das abas
@@ -506,16 +495,40 @@ private fun NutritionNote(benefit: String) {
  *
  * Ao marcar, o texto recebe tachado suave e opacity reduzida.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RecipeStepItem(
+internal fun RecipeMealTabs(tabs: List<MealTab>, selectedIndex: Int, onSelect: (Int) -> Unit) {
+    TabRow(selectedTabIndex = selectedIndex) {
+        tabs.forEachIndexed { index, tab ->
+            Tab(
+                selected = selectedIndex == index,
+                onClick = { onSelect(index) },
+                text = { Text(tab.label, maxLines = 1, style = MaterialTheme.typography.labelMedium) },
+                icon = {
+                    MEAL_TAB_ICONS[tab.key]?.let { icon ->
+                        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+internal fun RecipeStepItem(
     stepNumber: Int,
     stepText: String,
     isChecked: Boolean,
     onToggle: () -> Unit
 ) {
+    val indicatorColor by animateColorAsState(
+        if (isChecked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+        label = "recipeStepColor"
+    )
     Surface(
-        onClick = onToggle,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth()
+            .toggleable(value = isChecked, role = Role.Checkbox, onValueChange = { onToggle() })
+            .semantics { contentDescription = "Passo $stepNumber: $stepText" },
         shape = RoundedCornerShape(10.dp),
         color = if (isChecked)
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
@@ -524,46 +537,26 @@ private fun RecipeStepItem(
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxWidth().heightIn(min = 48.dp)
                 .padding(vertical = 6.dp, horizontal = 2.dp),
             verticalAlignment = Alignment.Top
         ) {
-            Checkbox(
-                checked = isChecked,
-                onCheckedChange = { onToggle() },
-                colors = CheckboxDefaults.colors(
-                    checkedColor = MaterialTheme.colorScheme.primary,
-                    uncheckedColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
-                    checkmarkColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                modifier = Modifier.size(22.dp)
-            )
-
-            Spacer(Modifier.width(10.dp))
-
-            // Numero do passo
-            Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = if (isChecked)
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
-                else
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                modifier = Modifier.padding(top = 1.dp)
-            ) {
-                Text(
-                    text = stepNumber.toString(),
-                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isChecked)
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    else
-                        MaterialTheme.colorScheme.primary,
-                    fontSize = 16.sp
-                )
+            Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                Surface(shape = CircleShape, color = indicatorColor, modifier = Modifier.size(32.dp)) {
+                    Crossfade(targetState = isChecked, label = "recipeStepCheck") { checked ->
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            if (checked) {
+                                Icon(Icons.Default.Check, contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
+                            } else {
+                                Text(stepNumber.toString(), fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                        }
+                    }
+                }
             }
-
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(8.dp))
 
             // Texto do passo
             Text(
@@ -575,7 +568,7 @@ private fun RecipeStepItem(
                 else
                     MaterialTheme.colorScheme.onSurface,
                 textDecoration = if (isChecked) TextDecoration.LineThrough else null,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).padding(top = 5.dp)
             )
         }
     }

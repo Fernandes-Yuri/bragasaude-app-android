@@ -121,6 +121,16 @@ class NutritionContentTest {
         compose.onNodeWithText("Meta calculada a partir do seu perfil").assertIsDisplayed()
     }
 
+    @Test fun empty_daily_total_has_no_colored_progress_marker() {
+        val state = mutableStateOf(NutritionContentState())
+        render(state = state)
+        val progress = SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.ProgressBarRangeInfo)
+        compose.onAllNodes(progress).assertCountEquals(0)
+        compose.runOnIdle { state.value = state.value.copy(consumedCalories = 100.0) }
+        compose.onNodeWithTag("nutritionContent").performScrollToNode(progress)
+        compose.onNode(progress).assertIsDisplayed()
+    }
+
     private fun render(
         state: MutableState<NutritionContentState> = mutableStateOf(NutritionContentState()),
         fontScale: Float = 1f, dark: Boolean = false,

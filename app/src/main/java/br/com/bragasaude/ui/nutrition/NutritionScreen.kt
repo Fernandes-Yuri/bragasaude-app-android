@@ -178,32 +178,35 @@ fun NutritionScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                     Text(selectedMealTab, style = MaterialTheme.typography.bodyMedium)
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { viewModel.onSearchQueryChanged(it) },
-                        placeholder = { Text("Buscar (ex: Arroz, Frango, Banana...)") },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = {
-                                    viewModel.onSearchQueryChanged("")
+                    if (selectedFoodForPortion == null) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { viewModel.onSearchQueryChanged(it) },
+                            placeholder = { Text("Buscar alimento", maxLines = 1) },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = {
+                                        viewModel.onSearchQueryChanged("")
+                                        keyboardController?.hide()
+                                        focusManager.clearFocus()
+                                    }) {
+                                        Icon(Icons.Default.Close, contentDescription = "Limpar busca")
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(
+                                onSearch = {
                                     keyboardController?.hide()
                                     focusManager.clearFocus()
-                                }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Limpar busca")
                                 }
-                            }
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                            }
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                    }
 
                     val selectedFood = selectedFoodForPortion
                     if (selectedFood != null) {

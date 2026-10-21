@@ -69,7 +69,7 @@ internal fun NutritionContent(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding).testTag("nutritionContent"),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             item(key = "mealSelector") {
@@ -136,11 +136,13 @@ internal fun NutritionContent(
                             Icon(Icons.Default.Edit, contentDescription = "Ajustar meta diária")
                         }
                     }
-                    LinearProgressIndicator(
-                        progress = { if (state.targetCalories > 0) (state.consumedCalories / state.targetCalories).toFloat().coerceIn(0f, 1f) else 0f },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = if (state.consumedCalories > state.targetCalories) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                    )
+                    if (state.consumedCalories > 0) {
+                        LinearProgressIndicator(
+                            progress = { if (state.targetCalories > 0) (state.consumedCalories / state.targetCalories).toFloat().coerceIn(0f, 1f) else 0f },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = if (state.consumedCalories > state.targetCalories) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
             item(key = "suggestionsToggle") {

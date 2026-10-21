@@ -213,7 +213,8 @@ private fun AnimatedAudioWaveBar(delay: Int) {
 fun DraggableAiAssistantFab(
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: VoiceHealthViewModel = hiltViewModel()
+    viewModel: VoiceHealthViewModel = hiltViewModel(),
+    docked: Boolean = false
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
@@ -286,9 +287,9 @@ fun DraggableAiAssistantFab(
 
     BoxWithConstraints(modifier = modifier) {
         val density = LocalDensity.current
-        val fabSizePx = with(density) { 62.dp.toPx() }
+        val fabSizePx = with(density) { 72.dp.toPx() }
         val marginPx = with(density) { 16.dp.toPx() }
-        val navBarClearancePx = with(density) { 92.dp.toPx() }
+        val navBarClearancePx = with(density) { (if (docked) 12.dp else 92.dp).toPx() }
         val screenWidthPx = constraints.maxWidth.toFloat()
         val maxX = (screenWidthPx - fabSizePx).coerceAtLeast(0f)
         val maxY = (constraints.maxHeight.toFloat() - fabSizePx).coerceAtLeast(0f)
@@ -299,12 +300,9 @@ fun DraggableAiAssistantFab(
         val scope = rememberCoroutineScope()
 
         LaunchedEffect(maxX, maxY) {
-            if (maxX > 0f && offsetX.value == 0f) {
-                offsetX.snapTo((maxX - marginPx).coerceAtLeast(0f))
-            }
-            if (maxY > 0f && offsetY.value == 0f) {
-                offsetY.snapTo((maxY - navBarClearancePx).coerceIn(0f, maxY))
-            }
+            // Re-clamp after rotation or resizing, including an assistant the user dragged.
+            offsetX.snapTo(offsetX.value.coerceIn(0f, maxX))
+            offsetY.snapTo(offsetY.value.coerceIn(0f, maxY))
         }
 
         // Pulso suave de convite ao toque em IDLE
@@ -434,9 +432,9 @@ fun DraggableAiAssistantFab(
 
         val isModalOpen = LocalBragaModalState.current.isOpen
         val isKeyboardOpen = WindowInsets.isImeVisible
-        val shouldHideOrbVisuals = (isModalOpen || isKeyboardOpen) && !isLiveMode && !showEmergencyDialog
+        val shouldHideOrbVisuals = (isModalOpen || isKeyboardOpen) && !showEmergencyDialog
         LaunchedEffect(shouldHideOrbVisuals) {
-            if (shouldHideOrbVisuals) viewModel.onHostStopped()
+            if (shouldHideOrbVisuals && !isLiveMode) viewModel.onHostStopped()
         }
 
         if (!shouldHideOrbVisuals) {
