@@ -752,6 +752,21 @@ fun GroceryItemRow(
                     style = MaterialTheme.typography.bodyMedium,
                     color = BragaTextSecondary
                 )
+                val isPerishable = item.category == WeeklyGroceryEngine.CORRIDOR_HORTIFRUTI
+                if (isPerishable && item.planningDays > 7) {
+                    val weeks = (item.planningDays / 7).coerceAtLeast(1)
+                    val parsedVal = item.purchaseUnitText.substringBefore(' ').toDoubleOrNull()
+                    val unit = item.purchaseUnitText.substringAfter(' ', "")
+                    if (parsedVal != null && unit.isNotBlank()) {
+                        val weeklyPart = parsedVal / weeks
+                        val weeklyText = if (unit == "g") "${weeklyPart.toInt()} g" else if (unit == "L") String.format(Locale.ROOT, "%.2f L", weeklyPart) else "${weeklyPart.toInt()} un"
+                        Text(
+                            text = "Feira semanal: ~$weeklyText / semana ($weeks reposições)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BragaEmerald
+                        )
+                    }
+                }
                 if (item.estimatedPriceBrl > 0.0) {
                     Text(
                         text = String.format(Locale.getDefault(), "Estimado: R$ %.2f", item.estimatedPriceBrl),

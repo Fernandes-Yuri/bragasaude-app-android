@@ -8,10 +8,9 @@ import org.junit.Test
 class WeeklyGroceryPreferencesTest {
 
     @Test
-    fun recommendedPreferences_isUltraEconomicAndContainsEggsAndPoultry() {
+    fun recommendedPreferences_isEconomicAndContainsEggsAndPoultry() {
         val prefs = WeeklyGroceryPreferences.RECOMMENDED
-        assertEquals(GroceryBudgetTier.ULTRA_ECONOMIC, prefs.budgetTier)
-        assertTrue(prefs.isUltraEconomic)
+        assertEquals(GroceryBudgetTier.ECONOMIC, prefs.budgetTier)
         assertTrue(prefs.isEconomic)
         assertTrue(prefs.selectedProteins.contains(GroceryProteinPreference.EGGS))
         assertTrue(prefs.selectedProteins.contains(GroceryProteinPreference.POULTRY))
@@ -67,6 +66,25 @@ class WeeklyGroceryPreferencesTest {
         assertEquals(20, GroceryBudgetTier.MODERATE.maxBasketSize)
         assertEquals(35, GroceryBudgetTier.FREE.maxBasketSize)
         assertEquals(GroceryBudgetTier.MODERATE, GroceryBudgetTier.BALANCED)
+    }
+
+    @Test
+    fun maxBasketSizeFor_scalesWithPlanningDays() {
+        assertEquals(10, GroceryBudgetTier.ULTRA_ECONOMIC.maxBasketSizeFor(7))
+        assertEquals(16, GroceryBudgetTier.ULTRA_ECONOMIC.maxBasketSizeFor(14))
+        assertEquals(22, GroceryBudgetTier.ULTRA_ECONOMIC.maxBasketSizeFor(30))
+
+        assertEquals(15, GroceryBudgetTier.ECONOMIC.maxBasketSizeFor(7))
+        assertEquals(20, GroceryBudgetTier.ECONOMIC.maxBasketSizeFor(14))
+        assertEquals(28, GroceryBudgetTier.ECONOMIC.maxBasketSizeFor(30))
+
+        assertEquals(20, GroceryBudgetTier.MODERATE.maxBasketSizeFor(7))
+        assertEquals(26, GroceryBudgetTier.MODERATE.maxBasketSizeFor(14))
+        assertEquals(34, GroceryBudgetTier.MODERATE.maxBasketSizeFor(30))
+
+        assertEquals(35, GroceryBudgetTier.FREE.maxBasketSizeFor(7))
+        assertEquals(36, GroceryBudgetTier.FREE.maxBasketSizeFor(14))
+        assertEquals(45, GroceryBudgetTier.FREE.maxBasketSizeFor(30))
     }
 
     @Test

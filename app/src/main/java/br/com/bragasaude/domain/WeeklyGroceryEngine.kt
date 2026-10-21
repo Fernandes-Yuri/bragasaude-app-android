@@ -313,6 +313,8 @@ object WeeklyGroceryEngine {
             )
         }
 
+        val effectiveBasketLimit = effectivePrefs.effectiveMaxBasketSize
+
         // 5. Dimensionamento do Pilar 1: Grãos, Cereais, Tubérculos e Raízes
         val existingGrainKcal = plannedConsumptions.filter { it.corridor == CORRIDOR_GRAOS }.sumOf { it.plannedCalories }
         val remainingGrainKcal = (grainTargetKcal - existingGrainKcal).coerceAtLeast(0.0)
@@ -326,7 +328,7 @@ object WeeklyGroceryEngine {
             destConsumptions = plannedConsumptions,
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit
         )
 
         // 6. Dimensionamento do Pilar 2: Proteínas (Animais/Vegetais, Leguminosas, Laticínios, Ovos)
@@ -343,7 +345,7 @@ object WeeklyGroceryEngine {
             preferFish = hasHighBp,
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit
         )
 
         // 7. Dimensionamento do Pilar 3: Hortifruti (Frutas, Folhosos, Legumes)
@@ -359,7 +361,7 @@ object WeeklyGroceryEngine {
             orderFn = ::orderPool,
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit
         )
 
         // 8. Dimensionamento do Pilar 4: Mercearia, Gorduras Boas, Sementes, Temperos e Chás
@@ -374,7 +376,7 @@ object WeeklyGroceryEngine {
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
             isPantry = true,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit
         )
 
         // 9. Calibração fina da meta calórica semanal
@@ -384,11 +386,11 @@ object WeeklyGroceryEngine {
             plannedConsumptions = plannedConsumptions,
             candidatesPool = allEligibleCandidates,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit
         )
 
         // Garantia de respeito estrito ao maxBasketSize
-        while (plannedConsumptions.size > effectivePrefs.budgetTier.maxBasketSize && plannedConsumptions.size > 1) {
+        while (plannedConsumptions.size > effectiveBasketLimit && plannedConsumptions.size > 1) {
             val nonStapleMinKcal = plannedConsumptions.filterNot { isStapleEnergyFood(it.food) || isCarnivorousProtein(it.food) }
                 .minByOrNull { it.plannedCalories }
             if (nonStapleMinKcal != null) {

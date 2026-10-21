@@ -26,6 +26,18 @@ class GroceryPurchasePlannerTest {
         assertEquals(500, GroceryPurchasePlanner.quantity(ingredient("L", minimum = 500), 100))
     }
 
+    @Test fun normalizesCommercialPacksToAvoidAstronomicalCosts() {
+        val eggsPack = GroceryIngredient("ovo-caipira", "Ovo Caipira", "un", 1, 1, emptyList(), emptyList(), 13.90)
+        // 90 ovos para 30 dias não devem custar R$ 1.251,00, e sim o valor de mercado (bandeja de 10 por R$ 13,90 ~ R$ 1,39 cada)
+        val costFor90Eggs = GroceryPurchasePlanner.cost(eggsPack, 90)
+        assertTrue("Custo de 90 ovos deve ser realista (~R$ 125), obteve $costFor90Eggs", costFor90Eggs in 40.0..130.0)
+
+        val rice5kgPack = GroceryIngredient("arroz-tipo-1", "Arroz Branco Tipo 1", "kg", 1000, 1000, emptyList(), emptyList(), 21.90)
+        // 5kg de arroz não devem custar 5 * 21.90 = R$ 109,50 (saco de 5kg a R$ 21,90 sai ~R$ 4,38/kg)
+        val costFor5kgRice = GroceryPurchasePlanner.cost(rice5kgPack, 5000)
+        assertTrue("Custo de 5kg de arroz deve ficar em torno de R$ 22, obteve $costFor5kgRice", costFor5kgRice in 15.0..30.0)
+    }
+
     private fun old(id: String, foodId: String, name: String, checked: Boolean) = GroceryListItemEntity(
         id, "user", "2026-10-06", foodId, name, "Feira", 200, 200, "1 pacote", 16.0, checked)
 
