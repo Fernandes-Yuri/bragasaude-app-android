@@ -110,7 +110,8 @@ android {
             isReturnDefaultValues = true
             all {
                 it.maxHeapSize = "768m"
-                it.jvmArgs("-XX:MaxMetaspaceSize=256m", "-Dfile.encoding=UTF-8")
+                // Robolectric loads separate Android framework classes for each supported SDK.
+                it.jvmArgs("-XX:MaxMetaspaceSize=768m", "-Dfile.encoding=UTF-8")
             }
         }
     }
