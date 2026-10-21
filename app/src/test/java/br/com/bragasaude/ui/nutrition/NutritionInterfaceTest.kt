@@ -40,6 +40,7 @@ class NutritionInterfaceTest {
                 }, selected) { selected = it }
             }
         }
+        screenshot("08-abas-receitas")
         labels.forEachIndexed { index, label ->
             compose.onNodeWithText(label).assertIsDisplayed().performClick()
             compose.runOnIdle { assertEquals(index, selected) }
@@ -49,7 +50,6 @@ class NutritionInterfaceTest {
         val last = compose.onNodeWithText("Jantar").fetchSemanticsNode().boundsInRoot
         assertEquals(first.top, last.top, 1f)
         assertTrue(last.right <= 360f)
-        screenshot("08-abas-receitas")
     }
 
     @Test fun recipe_step_has_one_toggle_and_remains_reversible() {
@@ -114,6 +114,7 @@ class NutritionInterfaceTest {
         screenshot("14-orcamento-atalhos")
         listOf("80", "120", "160", "200").forEach { amount ->
             compose.onNodeWithText("R$ $amount").performScrollTo().assertIsDisplayed().performClick()
+            compose.onNodeWithText("R$ $amount").assertIsSelected()
             assertSingleLine("R$ $amount")
         }
     }
@@ -152,8 +153,15 @@ class NutritionInterfaceTest {
     private fun assertSingleLine(text: String) {
         val layouts = mutableListOf<TextLayoutResult>()
         compose.onNodeWithText(text).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
-        assertEquals(1, layouts.single().lineCount)
-        assertFalse(layouts.single().hasVisualOverflow)
+        val layout = layouts.single()
+        val dimensions = "$text: box=${layout.size}, line=${layout.getLineLeft(0)}..${layout.getLineRight(0)}, bottom=${layout.getLineBottom(0)}"
+        assertEquals(dimensions, 1, layout.lineCount)
+        assertFalse(dimensions, layout.isLineEllipsized(0))
+        assertEquals(dimensions, text.length, layout.getLineEnd(0, visibleEnd = true))
+        // Native glyph metrics may differ from integer pixel bounds by less than one pixel.
+        assertTrue(dimensions, layout.getLineLeft(0) >= -1f)
+        assertTrue(dimensions, layout.getLineRight(0) <= layout.size.width + 1f)
+        assertTrue(dimensions, layout.getLineBottom(0) <= layout.size.height + 1f)
     }
 
     private fun renderGrocery() {
