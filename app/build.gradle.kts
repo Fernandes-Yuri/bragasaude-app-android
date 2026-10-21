@@ -31,8 +31,8 @@ android {
         applicationId = "br.com.bragasaude"
         minSdk = 26
         targetSdk = 35
-        versionCode = 37
-        versionName = "1.9.0"
+        versionCode = 38
+        versionName = "1.9.1"
 
         buildConfigField("String", "BASE_URL", "\"https://api.bragasaude.online\"")
 
@@ -110,7 +110,8 @@ android {
             isReturnDefaultValues = true
             all {
                 it.maxHeapSize = "768m"
-                it.jvmArgs("-XX:MaxMetaspaceSize=256m", "-Dfile.encoding=UTF-8")
+                // Robolectric loads separate Android framework classes for each supported SDK.
+                it.jvmArgs("-XX:MaxMetaspaceSize=768m", "-Dfile.encoding=UTF-8")
             }
         }
     }

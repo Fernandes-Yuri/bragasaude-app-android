@@ -18,6 +18,10 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -25,6 +29,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -76,6 +81,7 @@ fun GroceryListBottomSheet(
     onGenerateListWithPreferences: ((preserveManual: Boolean, preferences: br.com.bragasaude.domain.WeeklyGroceryPreferences) -> Unit)? = null
 ) {
     var showCatalog by remember { mutableStateOf(true) }
+    var showPlanningDetails by remember { mutableStateOf(false) }
     var reportingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var manualEditingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var isCreatingManual by remember { mutableStateOf(false) }
@@ -256,429 +262,426 @@ fun GroceryListBottomSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
         ) {
-            // 1. Cabeçalho Principal (Título + Contador de itens + Compartilhar PDF + Botão fechar)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Lista de compras",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = BragaTextPrimary
-                    )
-                    Text(
-                        text = if (groceryList.isEmpty()) "Nenhum item na lista no momento"
-                               else "${groceryList.size} alimento(s) • $checkedCount comprado(s)",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = BragaTextSecondary
-                    )
+            val planningHeader: @Composable () -> Unit = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Lista de compras", style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold)
+                            Text("${groceryList.size} itens · $checkedCount comprados",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        IconButton(onClick = { showPlanningDetails = !showPlanningDetails }) {
+                            Icon(if (showPlanningDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (showPlanningDetails) "Recolher resumo do plano" else "Ver resumo do plano")
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        br.com.bragasaude.domain.GroceryPlanningPeriod.options.forEach { days ->
+                            FilterChip(selected = weeklyGoal.planningDays == days, enabled = !isLoading,
+                                onClick = { onPlanningDaysChange(days) }, label = { Text("$days dias", maxLines = 1) })
+                        }
+                    }
+                    if (showPlanningDetails) {
+                        Column(Modifier.testTag("groceryPlanDetails"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (weeklyGoal.planningDays > 7) Text("Planeje reposições de frutas, verduras e outros perecíveis durante o período.", style = MaterialTheme.typography.bodySmall)
+                            groceryList.firstOrNull()?.let { first ->
+                                val end = java.time.LocalDate.parse(first.weekStartDate).plusDays(first.planningDays.toLong() - 1)
+                                Text("Período: ${first.weekStartDate} a $end", style = MaterialTheme.typography.bodySmall)
+                            }
+                            GroceryWeeklyGoalBar(weeklyGoal)
+                            Text("Estimativa orçamentária. O app não vende produtos nem garante ofertas ou disponibilidade. Valores e lojas são referências de pesquisa e podem variar por região e data.", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            }
+            // Compact, opaque navigation remains separate from both scrolling lists.
+            Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    FilterChip(selected = showCatalog, onClick = { showCatalog = true }, label = { Text("Mercadinho", maxLines = 1) })
+                    FilterChip(selected = !showCatalog, onClick = { showCatalog = false }, label = { Text("Minha lista", maxLines = 1) })
+                    Spacer(Modifier.weight(1f))
                     if (groceryList.isNotEmpty()) {
                         IconButton(onClick = onExportPdf) {
-                            Icon(
-                                Icons.Default.Share,
-                                contentDescription = "Compartilhar lista em PDF",
-                                tint = BragaEmeraldDark
-                            )
+                            Icon(Icons.Default.Share, contentDescription = "Compartilhar lista em PDF")
                         }
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Fechar lista de compras",
-                            tint = BragaTextSecondary
-                        )
+                        Icon(Icons.Default.Close, contentDescription = "Fechar lista de compras")
                     }
                 }
             }
-
-            Text("Período da lista", style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                br.com.bragasaude.domain.GroceryPlanningPeriod.options.forEach { days ->
-                    FilterChip(selected = weeklyGoal.planningDays == days,
-                        enabled = !isLoading,
-                        onClick = { onPlanningDaysChange(days) }, label = { Text("$days dias") })
-                }
-            }
-            if (weeklyGoal.planningDays > 7) Text("Planeje reposições de frutas, verduras e outros perecíveis durante o período.", style = MaterialTheme.typography.bodySmall)
-            groceryList.firstOrNull()?.let { first ->
-                val end = java.time.LocalDate.parse(first.weekStartDate).plusDays(first.planningDays.toLong() - 1)
-                Text("Período: ${first.weekStartDate} a $end", style = MaterialTheme.typography.bodySmall)
-            }
-            GroceryWeeklyGoalBar(weeklyGoal)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = showCatalog, onClick = { showCatalog = true }, label = { Text("Mercadinho") })
-                FilterChip(selected = !showCatalog, onClick = { showCatalog = false }, label = { Text("Minha lista") })
-            }
-            Text("Estimativa orçamentária. O app não vende produtos nem garante ofertas ou disponibilidade. Valores e lojas são referências de pesquisa e podem variar por região e data.", style = MaterialTheme.typography.bodySmall)
             if (showCatalog) {
                 GroceryMarketShelfScreen(retailCards, groceryList, retailLoading, retailMessage,
                     onRefreshRetail, onAddCard, onDecrementCard,
-                    Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp), allowSelection = true)
+                    Modifier.fillMaxWidth().weight(1f), allowSelection = true,
+                    header = planningHeader)
             } else {
-            // 2. Barra de Ações Rápidas (Proporcionais 1:1, Sem Quebra de Linha e com Planejador Semanal Contextual)
-            val hasItems = groceryList.isNotEmpty()
-            val needsResize = plan?.isManuallyModified == true || (plan != null && plan.coveragePercent < WeeklyGroceryEngine.MIN_ENERGY_COVERAGE_PERCENT)
-            val buttonLabel = when {
-                isLoading -> "Planejando..."
-                !hasItems -> "Planejar com IA"
-                needsResize -> "Recalcular meta"
-                else -> "Opções com IA"
-            }
-            val buttonIcon = when {
-                needsResize -> Icons.Default.Refresh
-                else -> Icons.Default.AutoAwesome
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = { isCreatingManual = true },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(46.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "Adicionar",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
-                    )
+                // 2. Barra de Ações Rápidas (Proporcionais 1:1, Sem Quebra de Linha e com Planejador Semanal Contextual)
+                val hasItems = groceryList.isNotEmpty()
+                val needsResize = plan?.isManuallyModified == true || (plan != null && plan.coveragePercent < WeeklyGroceryEngine.MIN_ENERGY_COVERAGE_PERCENT)
+                val buttonLabel = when {
+                    isLoading -> "Planejando..."
+                    !hasItems -> "Planejar com IA"
+                    needsResize -> "Recalcular meta"
+                    else -> "Opções com IA"
+                }
+                val buttonIcon = when {
+                    needsResize -> Icons.Default.Refresh
+                    else -> Icons.Default.AutoAwesome
                 }
 
-                OutlinedButton(
-                    onClick = {
-                        if (isLoading) return@OutlinedButton
-                        if (!hasItems) {
-                            pendingPreserveManual = false
-                            showPreferencesSheet = true
-                        } else {
-                            showPlanOptionsDialog = true
-                        }
-                    },
-                    enabled = !isLoading,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(46.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(
-                        if (needsResize) 1.5.dp else 1.dp,
-                        if (needsResize) BragaEmerald else BragaMintBorder
-                    ),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (needsResize) BragaMintSurface else BragaMintSurface.copy(alpha = 0.5f)
-                    ),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = BragaEmeraldDark
-                        )
-                        Spacer(Modifier.width(6.dp))
-                    } else {
-                        Icon(
-                            buttonIcon,
-                            contentDescription = null,
-                            tint = BragaEmeraldDark,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                    }
-                    Text(
-                        buttonLabel,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = BragaEmeraldDark,
-                        maxLines = 1
-                    )
-                }
-            }
-
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = false),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                if (plan != null && groceryList.all { it.retailCardId == null }) {
-                    item { WeeklyGrocerySummaryCard(plan, onResize) }
-                }
-                val checkedSlugs = groceryList.filter { it.isCheckedInPantry }.map { it.linkedIngredientSlug ?: it.foodId }.toSet()
-                val trackedStock = pantryStock.filter { it.ingredientSlug in checkedSlugs }
-                if (trackedStock.isNotEmpty()) {
-                    item {
-                        Card(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("Saldo estimado da despensa", style = MaterialTheme.typography.titleMedium)
-                                trackedStock.forEach { stock ->
-                                    val row = groceryList.first { (it.linkedIngredientSlug ?: it.foodId) == stock.ingredientSlug }
-                                    val shortage = br.com.bragasaude.domain.GroceryConsumption.insufficient(stock.availableAmount,
-                                        row.plannedWeeklyAmount, br.com.bragasaude.domain.GroceryPlanningPeriod.daysRemaining(row.weekStartDate, row.planningDays), row.planningDays)
-                                    val amount = when (stock.unit) {
-                                        "kg" -> "${stock.availableAmount.toInt()} g"
-                                        "L" -> String.format(Locale.getDefault(), "%.2f L", stock.availableAmount / 1000)
-                                        else -> String.format(Locale.getDefault(), "%.1f un", stock.availableAmount)
-                                    }
-                                    Text("${row.foodName}: $amount" + if (shortage) " • insuficiente para os dias restantes" else "")
-                                }
-                                Text("Baixa estimada pelos registros de refeições; não representa medição do estoque.", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-                }
-                if (groceryMessage != null && (plan == null || groceryMessage != plan.statusMessage)) {
-                    item {
-                        Surface(
+                Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { isCreatingManual = true },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
                             shape = RoundedCornerShape(12.dp),
-                            color = BragaMintSurface,
-                            border = BorderStroke(1.dp, BragaMintBorder)
+                            contentPadding = PaddingValues(horizontal = 8.dp)
                         ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
                             Text(
-                                groceryMessage,
-                                modifier = Modifier.padding(12.dp),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = BragaEmeraldDark
+                                "Adicionar",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                if (isLoading) return@OutlinedButton
+                                if (!hasItems) {
+                                    pendingPreserveManual = false
+                                    showPreferencesSheet = true
+                                } else {
+                                    showPlanOptionsDialog = true
+                                }
+                            },
+                            enabled = !isLoading,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(
+                                if (needsResize) 1.5.dp else 1.dp,
+                                if (needsResize) BragaEmerald else BragaMintBorder
+                            ),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (needsResize) BragaMintSurface else BragaMintSurface.copy(alpha = 0.5f)
+                            ),
+                            contentPadding = PaddingValues(horizontal = 8.dp)
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = BragaEmeraldDark
+                                )
+                                Spacer(Modifier.width(6.dp))
+                            } else {
+                                Icon(
+                                    buttonIcon,
+                                    contentDescription = null,
+                                    tint = BragaEmeraldDark,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                            }
+                            Text(
+                                buttonLabel,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = BragaEmeraldDark,
+                                maxLines = 1
                             )
                         }
                     }
+
                 }
 
-                if (groceryList.isNotEmpty()) {
-                    item {
-                        Card(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
-                            border = BorderStroke(1.dp, BragaMintBorder)
-                        ) {
-                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text("Estimativa do período", style = MaterialTheme.typography.labelLarge, color = BragaTextSecondary)
-                                    TextButton(
-                                        onClick = onClearList,
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                                    ) {
-                                        Text("Limpar lista", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f).testTag("groceryItems"),
+                    contentPadding = PaddingValues(vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item(key = "planningHeader") { planningHeader() }
+                    if (plan != null && groceryList.all { it.retailCardId == null }) {
+                        item { WeeklyGrocerySummaryCard(plan, onResize) }
+                    }
+                    val checkedSlugs = groceryList.filter { it.isCheckedInPantry }.map { it.linkedIngredientSlug ?: it.foodId }.toSet()
+                    val trackedStock = pantryStock.filter { it.ingredientSlug in checkedSlugs }
+                    if (trackedStock.isNotEmpty()) {
+                        item {
+                            Card(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("Saldo estimado da despensa", style = MaterialTheme.typography.titleMedium)
+                                    trackedStock.forEach { stock ->
+                                        val row = groceryList.first { (it.linkedIngredientSlug ?: it.foodId) == stock.ingredientSlug }
+                                        val shortage = br.com.bragasaude.domain.GroceryConsumption.insufficient(stock.availableAmount,
+                                            row.plannedWeeklyAmount, br.com.bragasaude.domain.GroceryPlanningPeriod.daysRemaining(row.weekStartDate, row.planningDays), row.planningDays)
+                                        val amount = when (stock.unit) {
+                                            "kg" -> "${stock.availableAmount.toInt()} g"
+                                            "L" -> String.format(Locale.getDefault(), "%.2f L", stock.availableAmount / 1000)
+                                            else -> String.format(Locale.getDefault(), "%.1f un", stock.availableAmount)
+                                        }
+                                        Text("${row.foodName}: $amount" + if (shortage) " • insuficiente para os dias restantes" else "")
                                     }
+                                    Text("Baixa estimada pelos registros de refeições; não representa medição do estoque.", style = MaterialTheme.typography.bodySmall)
                                 }
+                            }
+                        }
+                    }
+                    if (groceryMessage != null && (plan == null || groceryMessage != plan.statusMessage)) {
+                        item {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = BragaMintSurface,
+                                border = BorderStroke(1.dp, BragaMintBorder)
+                            ) {
                                 Text(
-                                    String.format(Locale.getDefault(), "R$ %.2f", totalCost),
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BragaTextPrimary
-                                )
-                                Text(
-                                    String.format(Locale.getDefault(), "Média de R$ %.2f por dia • %d de %d itens comprados", dailyAvg, checkedCount, groceryList.size),
+                                    groceryMessage,
+                                    modifier = Modifier.padding(12.dp),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = BragaEmeraldDark
                                 )
+                            }
+                        }
+                    }
 
-                                val maxBudget = weeklyPreferences.maxWeeklyBudgetReais
-                                if (maxBudget != null && maxBudget > 0.0) {
-                                    val isOverBudget = totalCost > maxBudget
-                                    val diff = kotlin.math.abs(totalCost - maxBudget)
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = if (isOverBudget) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f) else BragaEmerald.copy(alpha = 0.12f),
-                                        border = BorderStroke(1.dp, if (isOverBudget) MaterialTheme.colorScheme.error.copy(alpha = 0.5f) else BragaEmerald.copy(alpha = 0.3f)),
-                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                    if (groceryList.isNotEmpty()) {
+                        item {
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                                border = BorderStroke(1.dp, BragaMintBorder)
+                            ) {
+                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        Text("Estimativa do período", style = MaterialTheme.typography.labelLarge, color = BragaTextSecondary)
+                                        TextButton(
+                                            onClick = onClearList,
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                         ) {
-                                            Text(
-                                                text = if (isOverBudget) "Excede o teto em R$ ${String.format(Locale.getDefault(), "%.2f", diff)}"
-                                                       else "Dentro do teto (R$ ${String.format(Locale.getDefault(), "%.2f", diff)} livres)",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = if (isOverBudget) MaterialTheme.colorScheme.error else BragaEmeraldDark
-                                            )
-                                            Text(
-                                                text = "Teto: R$ ${String.format(Locale.getDefault(), "%.2f", maxBudget)}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = BragaTextSecondary
-                                            )
+                                            Text("Limpar lista", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+                                    Text(
+                                        String.format(Locale.getDefault(), "R$ %.2f", totalCost),
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BragaTextPrimary
+                                    )
+                                    Text(
+                                        String.format(Locale.getDefault(), "Média de R$ %.2f por dia • %d de %d itens comprados", dailyAvg, checkedCount, groceryList.size),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = BragaEmeraldDark
+                                    )
+
+                                    val maxBudget = weeklyPreferences.maxWeeklyBudgetReais
+                                    if (maxBudget != null && maxBudget > 0.0) {
+                                        val isOverBudget = totalCost > maxBudget
+                                        val diff = kotlin.math.abs(totalCost - maxBudget)
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (isOverBudget) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f) else BragaEmerald.copy(alpha = 0.12f),
+                                            border = BorderStroke(1.dp, if (isOverBudget) MaterialTheme.colorScheme.error.copy(alpha = 0.5f) else BragaEmerald.copy(alpha = 0.3f)),
+                                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(
+                                                    text = if (isOverBudget) "Excede o teto em R$ ${String.format(Locale.getDefault(), "%.2f", diff)}"
+                                                           else "Dentro do teto (R$ ${String.format(Locale.getDefault(), "%.2f", diff)} livres)",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = if (isOverBudget) MaterialTheme.colorScheme.error else BragaEmeraldDark
+                                                )
+                                                Text(
+                                                    text = "Teto: R$ ${String.format(Locale.getDefault(), "%.2f", maxBudget)}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = BragaTextSecondary
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                item {
-                    Text(
-                        br.com.bragasaude.domain.GROCERY_PRICE_NOTICE,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = BragaTextSecondary
-                    )
-                }
-
-                if (suggestedItems.isNotEmpty()) {
                     item {
-                        Card(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
-                            border = BorderStroke(1.dp, BragaMintBorder)
-                        ) {
-                            Column(
-                                Modifier.fillMaxWidth().padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Text("Sugestões do Assistente", style = MaterialTheme.typography.titleSmall, color = BragaEmeraldDark)
-                                Text(suggestedItems.joinToString(", "), style = MaterialTheme.typography.bodyMedium)
-                                Button(
-                                    onClick = { onAddSuggested(suggestedItems) },
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
-                                ) {
-                                    Text("Adicionar sugestões (${suggestedItems.size})", style = MaterialTheme.typography.bodyMedium)
-                                }
-                            }
-                        }
+                        Text(
+                            br.com.bragasaude.domain.GROCERY_PRICE_NOTICE,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BragaTextSecondary
+                        )
                     }
-                }
 
-                if (groceryList.isEmpty()) {
-                    item {
-                        Card(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = BragaCardSurface),
-                            border = BorderStroke(1.dp, BragaCardBorder),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                Modifier.fillMaxWidth().padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    if (suggestedItems.isNotEmpty()) {
+                        item {
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                                border = BorderStroke(1.dp, BragaMintBorder)
                             ) {
-                                Icon(
-                                    Icons.Default.ShoppingCart,
-                                    contentDescription = null,
-                                    tint = BragaEmerald,
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Text(
-                                    "Sua lista está livre para você montar",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BragaTextPrimary
-                                )
-                                Text(
-                                    "Você pode adicionar quantos alimentos quiser do catálogo ou gerar uma lista automática sugerida com um clique.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = BragaTextSecondary,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Button(
-                                    onClick = { isCreatingManual = true },
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
+                                Column(
+                                    Modifier.fillMaxWidth().padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("Adicionar alimentos manualmente")
-                                }
-                                OutlinedButton(
-                                    onClick = {
-                                        pendingPreserveManual = false
-                                        showPreferencesSheet = true
-                                    },
-                                    enabled = !isLoading,
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                    border = BorderStroke(1.dp, BragaMintBorder)
-                                ) {
-                                    if (isLoading) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(18.dp),
-                                            strokeWidth = 2.dp,
-                                            color = BragaEmeraldDark
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text("Planejando lista de compras...", color = BragaEmeraldDark)
-                                    } else {
-                                        Icon(
-                                            Icons.Default.AutoAwesome,
-                                            contentDescription = null,
-                                            tint = BragaEmeraldDark,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text("Planejar lista de compras com IA", color = BragaEmeraldDark)
+                                    Text("Sugestões do Assistente", style = MaterialTheme.typography.titleSmall, color = BragaEmeraldDark)
+                                    Text(suggestedItems.joinToString(", "), style = MaterialTheme.typography.bodyMedium)
+                                    Button(
+                                        onClick = { onAddSuggested(suggestedItems) },
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
+                                    ) {
+                                        Text("Adicionar sugestões (${suggestedItems.size})", style = MaterialTheme.typography.bodyMedium)
                                     }
                                 }
                             }
                         }
                     }
-                } else {
-                    grouped.forEach { (category, entries) ->
+
+                    if (groceryList.isEmpty()) {
                         item {
-                            Text(
-                                category,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = BragaEmeraldDark,
-                                modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
-                            )
-                        }
-                        items(entries, key = { it.remoteId }) { entry ->
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                GroceryItemRow(
-                                    item = entry,
-                                    imageUrl = retailCards.firstOrNull { it.id == entry.retailCardId }?.imageUrl ?: entry.imageUrl,
-                                    onToggle = { checked -> onToggleItem(entry.remoteId, checked) },
-                                    onEdit = { if (entry.retailCardId != null) showCatalog = true else manualEditingItem = entry },
-                                    onDelete = { onRemoveItem(entry.remoteId) }
-                                )
-                                communityPrices.filter { it.foodName.equals(entry.foodName, ignoreCase = true) }.forEach { price ->
-                                    Text(
-                                        String.format(
-                                            Locale.getDefault(),
-                                            "Referência da comunidade: R$ %.2f/%s (%d pessoas)",
-                                            price.average, price.unit, price.contributors
-                                        ),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = BragaTextSecondary,
-                                        modifier = Modifier.padding(horizontal = 12.dp)
-                                    )
-                                }
-                                if (entry.retailCardId == null) TextButton(
-                                    onClick = { onStartContribution(); reportingItem = entry },
-                                    modifier = Modifier.heightIn(min = 36.dp)
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = BragaCardSurface),
+                                border = BorderStroke(1.dp, BragaCardBorder),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    Modifier.fillMaxWidth().padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    Text("Informar quanto paguei", style = MaterialTheme.typography.labelMedium)
+                                    Icon(
+                                        Icons.Default.ShoppingCart,
+                                        contentDescription = null,
+                                        tint = BragaEmerald,
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                    Text(
+                                        "Sua lista está livre para você montar",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BragaTextPrimary
+                                    )
+                                    Text(
+                                        "Você pode adicionar quantos alimentos quiser do catálogo ou gerar uma lista automática sugerida com um clique.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = BragaTextSecondary,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    Button(
+                                        onClick = { isCreatingManual = true },
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Adicionar alimentos manualmente")
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            pendingPreserveManual = false
+                                            showPreferencesSheet = true
+                                        },
+                                        enabled = !isLoading,
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                        border = BorderStroke(1.dp, BragaMintBorder)
+                                    ) {
+                                        if (isLoading) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(18.dp),
+                                                strokeWidth = 2.dp,
+                                                color = BragaEmeraldDark
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("Planejando lista de compras...", color = BragaEmeraldDark)
+                                        } else {
+                                            Icon(
+                                                Icons.Default.AutoAwesome,
+                                                contentDescription = null,
+                                                tint = BragaEmeraldDark,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("Planejar lista de compras com IA", color = BragaEmeraldDark)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        grouped.forEach { (category, entries) ->
+                            item {
+                                Text(
+                                    category,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BragaEmeraldDark,
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
+                                )
+                            }
+                            items(entries, key = { it.remoteId }) { entry ->
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    GroceryItemRow(
+                                        item = entry,
+                                        imageUrl = retailCards.firstOrNull { it.id == entry.retailCardId }?.imageUrl ?: entry.imageUrl,
+                                        onToggle = { checked -> onToggleItem(entry.remoteId, checked) },
+                                        onEdit = { if (entry.retailCardId != null) showCatalog = true else manualEditingItem = entry },
+                                        onDelete = { onRemoveItem(entry.remoteId) }
+                                    )
+                                    communityPrices.filter { it.foodName.equals(entry.foodName, ignoreCase = true) }.forEach { price ->
+                                        Text(
+                                            String.format(
+                                                Locale.getDefault(),
+                                                "Referência da comunidade: R$ %.2f/%s (%d pessoas)",
+                                                price.average, price.unit, price.contributors
+                                            ),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = BragaTextSecondary,
+                                            modifier = Modifier.padding(horizontal = 12.dp)
+                                        )
+                                    }
+                                    if (entry.retailCardId == null) TextButton(
+                                        onClick = { onStartContribution(); reportingItem = entry },
+                                        modifier = Modifier.heightIn(min = 36.dp)
+                                    ) {
+                                        Text("Informar quanto paguei", style = MaterialTheme.typography.labelMedium)
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                item { Spacer(Modifier.height(16.dp)) }
-            }
+                    item { Spacer(Modifier.height(16.dp)) }
+                }
             }
         }
     }

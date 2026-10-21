@@ -2,6 +2,7 @@ package br.com.bragasaude.ui.nutrition
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -13,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -221,7 +223,7 @@ fun WeeklyGroceryPreferencesSheet(
                     // Chips de atalho rápido
                     val quickBudgets = listOf("80", "120", "160", "200")
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().testTag("quickBudgets").horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         quickBudgets.forEach { amount ->
@@ -229,8 +231,7 @@ fun WeeklyGroceryPreferencesSheet(
                             FilterChip(
                                 selected = isSelected,
                                 onClick = { maxBudgetInput = amount },
-                                label = { Text("R$ $amount", style = MaterialTheme.typography.labelSmall) },
-                                modifier = Modifier.weight(1f),
+                                label = { Text("R$ $amount", style = MaterialTheme.typography.labelSmall, maxLines = 1) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = BragaEmerald,
                                     selectedLabelColor = Color.White,
