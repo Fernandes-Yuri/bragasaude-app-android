@@ -104,6 +104,37 @@ class NutritionInterfaceTest {
         screenshot("12-lista-paisagem")
     }
 
+    @Test fun catalog_opens_with_two_complete_uniform_cards_and_collapsed_plan() {
+        renderGrocery(multipleProducts = true)
+        compose.onNodeWithTag("groceryPlanDetails").assertDoesNotExist()
+        compose.onNodeWithTag("retailCard-card").assertIsDisplayed()
+        compose.onNodeWithTag("retailCard-meat").assertIsDisplayed()
+        val first = compose.onNodeWithTag("retailCard-card").fetchSemanticsNode().boundsInRoot
+        val second = compose.onNodeWithTag("retailCard-meat").fetchSemanticsNode().boundsInRoot
+        assertEquals(first.top, second.top, 1f)
+        assertEquals(first.height, second.height, 1f)
+        assertTrue("Cards should remain compact: $first", first.height <= 320f)
+        assertTrue("First row must fit without scrolling: $first", first.bottom < 780f)
+        compose.onNodeWithText("1 kg").assertIsDisplayed()
+        compose.onNodeWithText("500 g").assertIsDisplayed()
+        screenshot("15-catalogo-primeira-tela")
+        compose.onNodeWithContentDescription("Ver resumo do plano").performClick()
+        compose.onNodeWithTag("groceryPlanDetails").assertExists()
+        compose.onNodeWithContentDescription("Recolher resumo do plano").performClick()
+        compose.onNodeWithTag("groceryPlanDetails").assertDoesNotExist()
+    }
+
+    @Test fun catalog_keeps_sources_and_nutrients_in_product_details() {
+        renderGrocery(multipleProducts = true)
+        compose.onNodeWithTag("retailCard-meat").performClick()
+        compose.onNodeWithText("Embalagem: 500 g").assertIsDisplayed()
+        compose.onNodeWithText("Informações nutricionais").assertIsDisplayed()
+        compose.onNodeWithText("Fonte: Mercado com nome extenso · 2026-10-18").performScrollTo().assertIsDisplayed()
+        screenshot("16-detalhes-do-produto")
+        compose.onNodeWithText("Fechar").performClick()
+        compose.onNodeWithTag("retailCard-meat").assertIsDisplayed()
+    }
+
     @Test fun quick_budgets_remain_single_line_and_update_the_selection() {
         compose.setContent {
             BragasaudeTheme(forceThemeMode = "LIGHT") {
@@ -164,15 +195,20 @@ class NutritionInterfaceTest {
         assertTrue(dimensions, layout.getLineBottom(0) <= layout.size.height + 1f)
     }
 
-    private fun renderGrocery() {
+    private fun renderGrocery(multipleProducts: Boolean = false) {
         val row = GroceryListItemEntity("row", "user", "2026-10-19", "rice", "Arroz da lista",
             "Cereais", 500, 1000, "1 pacote", 8.0, retailCardId = "card")
         val card = GroceryRetailCardEntity("card", "Arroz do catálogo", "Cereais", "", "1 kg", 1.0,
             "kg", 3600.0, 800.0, 70.0, 10.0, 8.0, null, "[]", "[]")
+        val products = if (multipleProducts) listOf(card,
+            card.copy(id = "meat", name = "Músculo Bovino Magro", packageDisplay = "500 g", priceAvg = 16.99,
+                marketsJson = """[{"market_name":"Mercado com nome extenso","last_updated":"2026-10-18"}]"""),
+            card.copy(id = "coconut", name = "Água de Coco Kero Coco 1l", packageDisplay = "1 L")
+        ) else listOf(card)
         compose.setContent {
             BragasaudeTheme(forceThemeMode = "LIGHT") {
                 GroceryListBottomSheet(listOf(row), {}, { _, _ -> }, {}, {},
-                    retailCards = listOf(card), weeklyGoal = GroceryWeeklyGoal(12600.0))
+                    retailCards = products, weeklyGoal = GroceryWeeklyGoal(12600.0, planningDays = if (multipleProducts) 30 else 7))
             }
         }
     }

@@ -7,15 +7,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import br.com.bragasaude.ui.theme.BragaTextSecondary
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 
 @Composable
 fun GroceryProductImage(url: String?, name: String, modifier: Modifier = Modifier) {
     var failed by remember(url) { mutableStateOf(false) }
-    Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+    Box(modifier.background(Color.White), contentAlignment = Alignment.Center) {
         if (url.isNullOrBlank() || failed) {
-            Text("Sem foto", style = MaterialTheme.typography.bodySmall)
+            Text("Sem foto", style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary)
         } else {
             AsyncImage(
                 model = url,

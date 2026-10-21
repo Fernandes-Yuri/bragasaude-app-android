@@ -18,6 +18,10 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -77,6 +81,7 @@ fun GroceryListBottomSheet(
     onGenerateListWithPreferences: ((preserveManual: Boolean, preferences: br.com.bragasaude.domain.WeeklyGroceryPreferences) -> Unit)? = null
 ) {
     var showCatalog by remember { mutableStateOf(true) }
+    var showPlanningDetails by remember { mutableStateOf(false) }
     var reportingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var manualEditingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var isCreatingManual by remember { mutableStateOf(false) }
@@ -258,45 +263,38 @@ fun GroceryListBottomSheet(
                 .padding(horizontal = 20.dp)
         ) {
             val planningHeader: @Composable () -> Unit = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Lista de compras",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = BragaTextPrimary
-                            )
-                            Text(
-                                text = if (groceryList.isEmpty()) "Nenhum item na lista no momento"
-                                       else "${groceryList.size} alimento(s) • $checkedCount comprado(s)",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = BragaTextSecondary
-                            )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Lista de compras", style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold)
+                            Text("${groceryList.size} itens · $checkedCount comprados",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        IconButton(onClick = { showPlanningDetails = !showPlanningDetails }) {
+                            Icon(if (showPlanningDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (showPlanningDetails) "Recolher resumo do plano" else "Ver resumo do plano")
                         }
                     }
-
-                    Text("Período da lista", style = MaterialTheme.typography.labelLarge)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         br.com.bragasaude.domain.GroceryPlanningPeriod.options.forEach { days ->
-                            FilterChip(selected = weeklyGoal.planningDays == days,
-                                enabled = !isLoading,
-                                onClick = { onPlanningDaysChange(days) }, label = { Text("$days dias") })
+                            FilterChip(selected = weeklyGoal.planningDays == days, enabled = !isLoading,
+                                onClick = { onPlanningDaysChange(days) }, label = { Text("$days dias", maxLines = 1) })
                         }
                     }
-                    if (weeklyGoal.planningDays > 7) Text("Planeje reposições de frutas, verduras e outros perecíveis durante o período.", style = MaterialTheme.typography.bodySmall)
-                    groceryList.firstOrNull()?.let { first ->
-                        val end = java.time.LocalDate.parse(first.weekStartDate).plusDays(first.planningDays.toLong() - 1)
-                        Text("Período: ${first.weekStartDate} a $end", style = MaterialTheme.typography.bodySmall)
+                    if (showPlanningDetails) {
+                        Column(Modifier.testTag("groceryPlanDetails"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (weeklyGoal.planningDays > 7) Text("Planeje reposições de frutas, verduras e outros perecíveis durante o período.", style = MaterialTheme.typography.bodySmall)
+                            groceryList.firstOrNull()?.let { first ->
+                                val end = java.time.LocalDate.parse(first.weekStartDate).plusDays(first.planningDays.toLong() - 1)
+                                Text("Período: ${first.weekStartDate} a $end", style = MaterialTheme.typography.bodySmall)
+                            }
+                            GroceryWeeklyGoalBar(weeklyGoal)
+                            Text("Estimativa orçamentária. O app não vende produtos nem garante ofertas ou disponibilidade. Valores e lojas são referências de pesquisa e podem variar por região e data.", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
-                    GroceryWeeklyGoalBar(weeklyGoal)
-                    Text("Estimativa orçamentária. O app não vende produtos nem garante ofertas ou disponibilidade. Valores e lojas são referências de pesquisa e podem variar por região e data.", style = MaterialTheme.typography.bodySmall)
                 }
             }
             // Compact, opaque navigation remains separate from both scrolling lists.
