@@ -490,11 +490,7 @@ private fun NutritionNote(benefit: String) {
     }
 }
 
-/**
- * Item individual do passo a passo com checkbox interativo.
- *
- * Ao marcar, o texto recebe tachado suave e opacity reduzida.
- */
+/** Quatro refeições visíveis sem cortar o último rótulo. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RecipeMealTabs(tabs: List<MealTab>, selectedIndex: Int, onSelect: (Int) -> Unit) {

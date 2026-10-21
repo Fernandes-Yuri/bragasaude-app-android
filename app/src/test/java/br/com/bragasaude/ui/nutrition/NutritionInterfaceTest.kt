@@ -1,6 +1,10 @@
 package br.com.bragasaude.ui.nutrition
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.inspector.WindowInspector
+import java.io.File
 import androidx.compose.runtime.*
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
@@ -31,7 +35,9 @@ class NutritionInterfaceTest {
         val labels = listOf("Café", "Almoço", "Lanche", "Jantar")
         compose.setContent {
             BragasaudeTheme(forceThemeMode = "LIGHT") {
-                RecipeMealTabs(labels.map { MealTab("", it, "") }, selected) { selected = it }
+                RecipeMealTabs(labels.zip(listOf("BREAKFAST", "LUNCH", "SNACK", "DINNER")) { label, key ->
+                    MealTab(key, label, "")
+                }, selected) { selected = it }
             }
         }
         labels.forEachIndexed { index, label ->
@@ -43,6 +49,7 @@ class NutritionInterfaceTest {
         val last = compose.onNodeWithText("Jantar").fetchSemanticsNode().boundsInRoot
         assertEquals(first.top, last.top, 1f)
         assertTrue(last.right <= 360f)
+        screenshot("08-abas-receitas")
     }
 
     @Test fun recipe_step_has_one_toggle_and_remains_reversible() {
@@ -55,6 +62,7 @@ class NutritionInterfaceTest {
         compose.onAllNodes(isToggleable()).assertCountEquals(1)
         compose.onNode(isToggleable()).assertIsOff().performClick().assertIsOn()
         compose.onNodeWithText("1").assertDoesNotExist()
+        screenshot("09-passo-concluido")
         compose.onNode(isToggleable()).performClick().assertIsOff()
         compose.onNodeWithText("1").assertIsDisplayed()
     }
@@ -68,6 +76,7 @@ class NutritionInterfaceTest {
         compose.onNodeWithText("Período da lista").assertIsNotDisplayed()
         val actionAfter = compose.onNodeWithText("Adicionar").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertEquals(actionBefore, actionAfter)
+        screenshot("10-lista-rolada")
         assertTrue(compose.onNodeWithText("Arroz da lista").fetchSemanticsNode().boundsInRoot.top >= actionAfter.bottom)
         compose.onNodeWithContentDescription("Fechar lista de compras").assertIsDisplayed()
     }
@@ -78,6 +87,7 @@ class NutritionInterfaceTest {
         compose.onNodeWithText("Arroz do catálogo").assertIsDisplayed()
         compose.onNodeWithText("Período da lista").assertIsNotDisplayed()
         compose.onNodeWithText("Minha lista").assertIsDisplayed()
+        screenshot("11-catalogo-rolado")
         compose.onNodeWithContentDescription("Fechar lista de compras").assertIsDisplayed()
     }
 
@@ -91,6 +101,7 @@ class NutritionInterfaceTest {
         compose.onNodeWithTag("groceryItems").performScrollToNode(hasText("Arroz da lista"))
         compose.onNodeWithText("Arroz da lista").assertIsDisplayed()
         compose.onNodeWithText("Adicionar").assertIsDisplayed()
+        screenshot("12-lista-paisagem")
     }
 
     @Test fun quick_budgets_remain_single_line_and_update_the_selection() {
@@ -116,9 +127,24 @@ class NutritionInterfaceTest {
         val back = compose.onNodeWithText("Voltar").fetchSemanticsNode().boundsInRoot
         val apply = compose.onNodeWithText("Aplicar Estratégia").fetchSemanticsNode().boundsInRoot
         assertEquals(back.width, apply.width, 1f)
+        screenshot("13-planejamento-confirmar")
         compose.onNodeWithText("Tenho uma meta específica prescrita por nutricionista")
             .performScrollTo().performClick()
         compose.onAllNodes(isToggleable()).filter(isOn()).assertCountEquals(1)
+    }
+
+    private fun screenshot(name: String) {
+        compose.runOnIdle {
+            val windows = WindowInspector.getGlobalWindowViews()
+            val view = windows.first()
+            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            windows.forEach { it.draw(canvas) }
+            val file = File("build/outputs/nutrition-review/$name.png")
+            requireNotNull(file.parentFile).mkdirs()
+            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
     }
 
     private fun assertSingleLine(text: String) {
