@@ -130,6 +130,44 @@ class SmokingSupportInterfaceTest {
         verify(exactly = 0) { vm.saveDay(any(), any(), any(), any()) }
         verify(exactly = 0) { vm.recordCraving(any(), any()) }
     }
+    @Test fun pauseOffersGuidanceAndSwitchingActivityDoesNotRecordAnything() {
+        var recorded = false
+        var closed = false
+        compose.setContent {
+            BragasaudeTheme(forceThemeMode = "LIGHT") {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    SmokingPause(null, false, onClose = { closed = true }, onRecord = { recorded = true })
+                }
+            }
+        }
+        compose.onNodeWithTag("pauseActivity-WATER").performScrollTo().performClick()
+        compose.onNodeWithTag("currentPauseActivity").performScrollTo().assertTextEquals("Água em pequenos goles")
+        compose.onNodeWithTag("pauseGuidance").assertTextContains("Se beber água agora", substring = true)
+        compose.onNodeWithText("Começar pausa de 2 minutos").performScrollTo().performClick()
+        compose.onNodeWithTag("pauseCountdown").assertIsDisplayed()
+        compose.onNodeWithTag("pauseActivity-WALK").performScrollTo().performClick()
+        compose.onNodeWithTag("currentPauseActivity").performScrollTo().assertTextEquals("Caminhar devagar")
+        compose.onNodeWithTag("pauseGuidance").assertTextContains("trecho curto e plano", substring = true)
+        screenshot("07-pausa-caminhada")
+        compose.runOnIdle { assertFalse(recorded); assertFalse(closed) }
+        compose.onNodeWithText("Encerrar pausa").performScrollTo().performClick()
+        compose.runOnIdle { assertTrue(closed); assertFalse(recorded) }
+    }
+    @Test fun activityCardsAndGuidanceFitDarkThemeAndLargeFont() {
+        compose.setContent {
+            BragasaudeTheme(forceThemeMode = "DARK") {
+                CompositionLocalProvider(LocalDensity provides Density(1f, 1.4f)) {
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                        SmokingPause(null, false, onClose = {}, onRecord = {})
+                    }
+                }
+            }
+        }
+        compose.onNodeWithTag("pauseActivity-HANDS").performScrollTo().performClick()
+        compose.onNodeWithTag("currentPauseActivity").performScrollTo().assertTextEquals("Ocupar as mãos")
+        compose.onNodeWithTag("pauseGuidance").assertIsDisplayed()
+        screenshot("08-pausa-escuro-fonte-ampliada")
+    }
     private fun screenshot(name: String) {
         compose.runOnIdle {
             val windows = WindowInspector.getGlobalWindowViews()

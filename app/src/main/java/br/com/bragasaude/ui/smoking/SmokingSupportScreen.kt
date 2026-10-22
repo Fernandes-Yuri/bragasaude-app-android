@@ -1,7 +1,10 @@
 package br.com.bragasaude.ui.smoking
 
-import android.os.SystemClock
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,6 +31,7 @@ import br.com.bragasaude.data.local.smoking.*
 import br.com.bragasaude.domain.smoking.*
 import br.com.bragasaude.ui.components.BragaAlertDialog
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 @Composable
@@ -45,12 +49,15 @@ fun SmokingSupportScreen(onBack: () -> Unit, viewModel: SmokingSupportViewModel 
     // Drafts belong to this owner and disappear on account changes or screen exit.
     key(state.ownerId) {
         var page by remember { mutableStateOf("main") }
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+        LaunchedEffect(page) { listState.scrollToItem(0) }
         var editingDay by remember { mutableStateOf<SmokingDailyEntry?>(null) }
         var confirmation by remember { mutableStateOf<String?>(null) }
         var dayToDelete by remember { mutableStateOf<SmokingDailyEntry?>(null) }
         val leavePage = { page = "main"; viewModel.clearMessage() }
         BackHandler(page != "main") { leavePage() }
-        SmokingSupportLayout(onBack = { if (page == "main") onBack() else leavePage() }) {
+        SmokingSupportLayout(onBack = { if (page == "main") onBack() else leavePage() }, listState = listState) {
             if (!state.loaded && state.ownerId != null) {
                 item { CircularProgressIndicator(Modifier.padding(24.dp)) }
             } else when (page) {
@@ -65,7 +72,7 @@ fun SmokingSupportScreen(onBack: () -> Unit, viewModel: SmokingSupportViewModel 
                     }
                 }
                 "pause" -> item {
-                    SmokingPause(state.plan?.personalReason, busy, onClose = leavePage, onRecord = { intensity ->
+                    SmokingPause(state.plan?.personalReason, busy, onActivitySelected = { scope.launch { listState.animateScrollToItem(0) } }, onClose = leavePage, onRecord = { intensity ->
                         viewModel.recordCraving(intensity, leavePage)
                     })
                 }
@@ -158,17 +165,24 @@ fun SmokingSupportScreen(onBack: () -> Unit, viewModel: SmokingSupportViewModel 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SmokingSupportLayout(onBack: () -> Unit, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
-    Scaffold(topBar = { TopAppBar(title = { Text("Sem cigarro", style = MaterialTheme.typography.titleLarge) }, navigationIcon = {
+private fun SmokingSupportLayout(onBack: () -> Unit, listState: LazyListState, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
+    Scaffold(containerColor = MaterialTheme.colorScheme.background, topBar = { TopAppBar(
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background, scrolledContainerColor = MaterialTheme.colorScheme.background),
+        title = { Text("Sem cigarro", style = MaterialTheme.typography.titleLarge) }, navigationIcon = {
         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar") }
     }) }) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding).imePadding().padding(horizontal = 16.dp).testTag("smokingContent"), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
+        LazyColumn(Modifier.fillMaxSize().padding(padding).imePadding().padding(horizontal = 16.dp).testTag("smokingContent"), verticalArrangement = Arrangement.spacedBy(16.dp), state = listState, content = content)
     }
 }
 
 @Composable
 internal fun SupportCard(content: @Composable ColumnScope.() -> Unit) {
-    Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content) }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content) }
 }
 
 @Composable
@@ -178,7 +192,7 @@ internal fun SmokingHelp() {
         Text("Apoio e tratamento gratuito", style = MaterialTheme.typography.titleMedium)
         Text(SmokingSupportContent.treatment)
         Text(SmokingSupportContent.products)
-        Text("Fonte: INCA — Tratamento do tabagismo. Conteúdo local v1, conferido em 22/10/2026.", style = MaterialTheme.typography.bodySmall)
+        Text("Fonte: INCA — Tratamento do tabagismo. Conteúdo local v2, conferido em 22/10/2026.", style = MaterialTheme.typography.bodySmall)
         TextButton(onClick = { uri.openUri(SmokingSupportContent.sourceUrl) }) { Text("Consultar fonte do INCA (internet)") }
     }
 }
@@ -241,37 +255,5 @@ internal fun SmokingDayForm(entry: SmokingDailyEntry?, today: LocalDate, busy: B
         if (smoked == true) OutlinedTextField(value = quantity, onValueChange = { quantity = it.take(10) }, enabled = !busy, label = { Text("Quantidade de cigarros (opcional)") }, supportingText = { Text("Deixe em branco se não souber a quantidade.") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
         Text(SmokingSupportContent.products, style = MaterialTheme.typography.bodySmall)
         Button(onClick = { smoked?.let { onSave(date, it, quantity) } }, enabled = smoked != null && !busy, modifier = Modifier.fillMaxWidth()) { Text("Salvar meu dia") }
-    }
-}
-
-@Composable
-private fun SmokingPause(reason: String?, busy: Boolean, onClose: () -> Unit, onRecord: (CravingIntensity) -> Unit) {
-    var deadline by remember { mutableStateOf<Long?>(null) }
-    var remaining by remember { mutableIntStateOf(120) }
-    var intensity by remember { mutableStateOf<CravingIntensity?>(null) }
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(deadline, lifecycle) {
-        val end = deadline ?: return@LaunchedEffect
-        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                remaining = ((end - SystemClock.elapsedRealtime()).coerceAtLeast(0) + 999).div(1000).toInt()
-                if (remaining == 0) break
-                delay(250)
-            }
-        }
-    }
-    SupportCard {
-        Text("Uma pausa para você", style = MaterialTheme.typography.titleLarge)
-        reason?.let { Text("Meu motivo: $it") }
-        Text(SmokingSupportContent.pause)
-        if (deadline != null) Text(if (remaining == 0) "O tempo da pausa terminou. Você decide seu próximo passo." else "Pausa: ${remaining / 60}:${(remaining % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.titleMedium)
-        if (deadline == null) OutlinedButton(onClick = { deadline = SystemClock.elapsedRealtime() + 120_000 }, modifier = Modifier.fillMaxWidth()) { Text("Começar pausa de 2 minutos") }
-        Text("Se quiser, registre como está a vontade agora. Esse registro não é um diagnóstico nem um dia sem fumar.")
-        CravingIntensity.entries.forEach { value ->
-            val label = when (value) { CravingIntensity.LOW -> "Baixa"; CravingIntensity.MEDIUM -> "Média"; CravingIntensity.HIGH -> "Alta" }
-            ChoiceRow(label, intensity == value) { intensity = value }
-        }
-        Button(onClick = { intensity?.let(onRecord) }, enabled = intensity != null && !busy, modifier = Modifier.fillMaxWidth()) { Text("Registrar vontade e encerrar") }
-        TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Pular e encerrar") }
     }
 }
