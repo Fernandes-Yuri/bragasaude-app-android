@@ -37,7 +37,7 @@ internal fun SmokingPause(
 ) {
     var deadline by remember { mutableStateOf<Long?>(null) }
     var remaining by remember { mutableIntStateOf(120) }
-    var selected by remember { mutableStateOf(SmokingPauseActivity.NOTICE) }
+    var selected by remember { mutableStateOf<SmokingPauseActivity?>(null) }
     var remainingAtSelection by remember { mutableIntStateOf(120) }
     var showRecord by remember { mutableStateOf(false) }
     var intensity by remember { mutableStateOf<CravingIntensity?>(null) }
@@ -57,9 +57,10 @@ internal fun SmokingPause(
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SupportCard {
             Text("Uma pausa para você", style = MaterialTheme.typography.titleLarge)
-            Text(SmokingSupportContent.pause)
             if (deadline == null) {
-                Button(onClick = { remaining = 120; deadline = now() + 120_000 }, modifier = Modifier.fillMaxWidth()) { Text("Começar pausa de 2 minutos") }
+                Text(SmokingSupportContent.pause)
+                if (selected == null) Text("Toque em uma sugestão abaixo para ver como experimentar. O contador é opcional.", style = MaterialTheme.typography.bodyMedium)
+                else Button(onClick = { remaining = 120; remainingAtSelection = 120; deadline = now() + 120_000 }, modifier = Modifier.fillMaxWidth()) { Text("Começar pausa de 2 minutos") }
             } else {
                 Text("${remaining / 60}:${(remaining % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.testTag("pauseCountdown"))
                 LinearProgressIndicator(progress = { (120 - remaining) / 120f }, modifier = Modifier.fillMaxWidth())
@@ -67,17 +68,17 @@ internal fun SmokingPause(
             }
             TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Encerrar pausa") }
         }
-        SupportCard {
-            val step = ((remainingAtSelection - remaining) / 30).coerceIn(0, selected.steps.lastIndex)
-            Text(selected.title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("currentPauseActivity"))
-            Text(selected.guidance, style = MaterialTheme.typography.bodyMedium)
+        selected?.let { activity -> SupportCard {
+            val step = ((remainingAtSelection - remaining) / 30).coerceIn(0, activity.steps.lastIndex)
+            Text(activity.title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("currentPauseActivity"))
+            Text(activity.guidance, style = MaterialTheme.typography.bodyMedium)
             HorizontalDivider()
-            Text(if (deadline == null) "Para experimentar agora" else if (remaining == 0) "Você decide o próximo passo" else "Ideia ${step + 1} de ${selected.steps.size}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Text(if (deadline != null && remaining == 0) "Você pode encerrar ou continuar essa ideia por conta própria, se estiver confortável. Não é preciso completar as etapas." else selected.steps[step], style = MaterialTheme.typography.bodyLarge, modifier = Modifier.testTag("pauseGuidance"))
+            Text(if (deadline == null) "Para experimentar agora" else if (remaining == 0) "Você decide o próximo passo" else "Ideia ${step + 1} de ${activity.steps.size}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text(if (deadline != null && remaining == 0) "Você pode encerrar ou continuar essa ideia por conta própria, se estiver confortável. Não é preciso completar as etapas." else activity.steps[step], style = MaterialTheme.typography.bodyLarge, modifier = Modifier.testTag("pauseGuidance"))
             Text("Os dois minutos organizam a pausa, sem garantir que a vontade passe.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        } }
         reason?.let { SupportCard { Text("Meu motivo", style = MaterialTheme.typography.titleMedium); Text(it) } }
-        Text("Escolha outra ideia, se quiser", style = MaterialTheme.typography.titleMedium)
+        Text(if (selected == null) "Qual ideia combina com você agora?" else "Escolha outra ideia, se quiser", style = MaterialTheme.typography.titleMedium)
         SmokingPauseActivity.entries.forEach { activity ->
             SmokingActivityCard(activity, selected == activity) {
                 selected = activity
