@@ -552,6 +552,17 @@ object Migrations {
         }
     }
 
+    /** Additive migration. Existing health and profile tables are untouched. */
+    val MIGRATION_59_60 = object : Migration(59, 60) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS smoking_settings_local (userId TEXT NOT NULL PRIMARY KEY, offerDecision TEXT NOT NULL, enabled INTEGER NOT NULL, acceptedVersion INTEGER, acceptedAt INTEGER, updatedAt INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS smoking_plan_local (userId TEXT NOT NULL PRIMARY KEY, startedOn TEXT NOT NULL, quitTargetOn TEXT, personalReason TEXT, triggers TEXT NOT NULL, stage TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, FOREIGN KEY(userId) REFERENCES smoking_settings_local(userId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS smoking_daily_local (userId TEXT NOT NULL, localDate TEXT NOT NULL, smoked INTEGER NOT NULL, cigaretteCount INTEGER, zoneId TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(userId, localDate), FOREIGN KEY(userId) REFERENCES smoking_settings_local(userId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS smoking_craving_local (id TEXT NOT NULL PRIMARY KEY, userId TEXT NOT NULL, occurredAt INTEGER NOT NULL, zoneId TEXT NOT NULL, intensity TEXT, FOREIGN KEY(userId) REFERENCES smoking_settings_local(userId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_smoking_craving_local_userId ON smoking_craving_local(userId)")
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -586,6 +597,7 @@ object Migrations {
         MIGRATION_55_56,
         MIGRATION_56_57,
         MIGRATION_57_58,
-        MIGRATION_58_59
+        MIGRATION_58_59,
+        MIGRATION_59_60
     )
 }

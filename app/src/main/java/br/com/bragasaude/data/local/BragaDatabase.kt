@@ -1,11 +1,13 @@
 package br.com.bragasaude.data.local
 
+import br.com.bragasaude.data.local.smoking.*
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 @Database(
     entities = [
+        SmokingSupportSettings::class, SmokingSupportPlan::class, SmokingDailyEntry::class, SmokingCravingEntry::class,
         DoseGroupEntity::class, DoseIntentEntity::class, DoseReservationEntity::class, DoseScheduleEntity::class,
         VitalSignEntity::class,
         ProfileEntity::class,
@@ -43,11 +45,12 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 59, // Retirada do vínculo antigo de atendimento
+    version = 60, // Apoio local e opcional para parar de fumar
     exportSchema = true
 )
-@TypeConverters(Converters::class)
+@TypeConverters(Converters::class, SmokingSupportConverters::class)
 abstract class BragaDatabase : RoomDatabase() {
+    abstract fun smokingSupportDao(): SmokingSupportDao
     abstract fun medicationDoseDao(): MedicationDoseDao
     abstract fun orbChatDao(): OrbChatDao
     abstract fun vitalSignDao(): VitalSignDao

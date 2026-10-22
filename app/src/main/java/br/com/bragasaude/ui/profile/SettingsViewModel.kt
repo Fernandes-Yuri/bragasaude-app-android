@@ -31,6 +31,7 @@ class SettingsViewModel @Inject constructor(
     private val movementManager: br.com.bragasaude.data.util.MovementManager,
     private val medicationRepository: MedicationRepository,
     private val apiClient: br.com.bragasaude.data.remote.api.BragaApiClient,
+    private val smokingSession: br.com.bragasaude.data.local.smoking.SmokingSupportSession,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -119,6 +120,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun logout(onComplete: () -> Unit) {
+        smokingSession.closeForCleanup()
         viewModelScope.launch {
             try {
                 val userId = auth.currentUser?.uid
@@ -138,6 +140,7 @@ class SettingsViewModel @Inject constructor(
                     }
                 }
 
+                withContext(Dispatchers.IO) { database.clearAllTables() }
                 auth.signOut()
                 _profile.value = null
                 onComplete()
@@ -157,6 +160,7 @@ class SettingsViewModel @Inject constructor(
             try {
                 val user = auth.currentUser ?: run { onComplete(); return@launch }
                 val userId = user.uid
+                smokingSession.closeForCleanup()
                 movementManager.flush()
 
                 try {

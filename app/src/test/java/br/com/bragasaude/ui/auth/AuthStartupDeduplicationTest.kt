@@ -32,7 +32,7 @@ class AuthStartupDeduplicationTest {
             coEvery { repository.refreshProfileForLogin("u") } returns ProfileLookup.Unavailable()
             val vm = AuthViewModel(auth, mockk<BragaDatabase>(relaxed = true), repository,
                 mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
-                mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+                mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
             store.put("vm", vm)
             advanceUntilIdle()
             coVerify(exactly = 1) { repository.refreshProfileForLogin("u") }
