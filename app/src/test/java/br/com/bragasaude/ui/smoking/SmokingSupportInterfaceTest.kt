@@ -12,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import java.util.concurrent.atomic.AtomicLong
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
@@ -133,22 +135,34 @@ class SmokingSupportInterfaceTest {
     @Test fun pauseOffersGuidanceAndSwitchingActivityDoesNotRecordAnything() {
         var recorded = false
         var closed = false
+        val elapsed = AtomicLong(1_000)
         compose.setContent {
             BragasaudeTheme(forceThemeMode = "LIGHT") {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    SmokingPause(null, false, onClose = { closed = true }, onRecord = { recorded = true })
+                    SmokingPause(null, false, onClose = { closed = true }, onRecord = { recorded = true }, monotonicMillis = { elapsed.get() })
                 }
             }
         }
-        compose.onNodeWithTag("pauseActivity-WATER").performScrollTo().performClick()
+        compose.onNodeWithTag("pauseActivity-WATER").performScrollTo().assertIsDisplayed()
+        screenshot("09-ideias-disponiveis")
+        compose.onNodeWithTag("pauseActivity-WATER").performClick()
         compose.onNodeWithTag("currentPauseActivity").performScrollTo().assertTextEquals("Água em pequenos goles")
         compose.onNodeWithTag("pauseGuidance").assertTextContains("Se beber água agora", substring = true)
         compose.onNodeWithText("Começar pausa de 2 minutos").performScrollTo().performClick()
         compose.onNodeWithTag("pauseCountdown").assertIsDisplayed()
+        elapsed.set(31_000)
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onNodeWithTag("pauseCountdown").fetchSemanticsNode().config[SemanticsProperties.Text].single().text == "1:30"
+        }
         compose.onNodeWithTag("pauseActivity-WALK").performScrollTo().performClick()
         compose.onNodeWithTag("currentPauseActivity").performScrollTo().assertTextEquals("Caminhar devagar")
         compose.onNodeWithTag("pauseGuidance").assertTextContains("trecho curto e plano", substring = true)
         screenshot("07-pausa-caminhada")
+        compose.onNodeWithTag("pauseCountdown").assertTextEquals("1:30")
+        elapsed.set(121_000)
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onNodeWithTag("pauseCountdown").fetchSemanticsNode().config[SemanticsProperties.Text].single().text == "0:00"
+        }
         compose.runOnIdle { assertFalse(recorded); assertFalse(closed) }
         compose.onNodeWithText("Encerrar pausa").performScrollTo().performClick()
         compose.runOnIdle { assertTrue(closed); assertFalse(recorded) }
