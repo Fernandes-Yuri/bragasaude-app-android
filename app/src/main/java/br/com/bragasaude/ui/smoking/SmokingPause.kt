@@ -15,7 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -43,7 +42,6 @@ internal fun SmokingPause(
     var intensity by remember { mutableStateOf<CravingIntensity?>(null) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val now by rememberUpdatedState(monotonicMillis)
-    val uri = LocalUriHandler.current
     val startPause = {
         remaining = 120
         remainingAtSelection = 120
@@ -76,8 +74,11 @@ internal fun SmokingPause(
         }
         selected?.let { activity -> SupportCard {
             val step = ((remainingAtSelection - remaining) / 30).coerceIn(0, activity.steps.lastIndex)
-            Text(activity.title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("currentPauseActivity"))
-            Text(activity.guidance, style = MaterialTheme.typography.bodyMedium)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(activity.title, Modifier.weight(1f).testTag("currentPauseActivity"), style = MaterialTheme.typography.titleLarge)
+                SmokingInfoButton("Orientações: ${activity.title}", activity.guidance)
+            }
+            Text(activity.essentialGuidance, style = MaterialTheme.typography.bodyMedium)
             HorizontalDivider()
             Text(if (deadline == null) "Para experimentar agora" else if (remaining == 0) "Você decide o próximo passo" else "Ideia ${step + 1} de ${activity.steps.size}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             Text(activity.steps[step], style = MaterialTheme.typography.bodyLarge, modifier = Modifier.testTag("pauseGuidance"))
@@ -106,8 +107,10 @@ internal fun SmokingPause(
             }
             TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Pular e encerrar") }
         }
-        Text("Sugestões adaptadas de OMS — Quick tips; conteúdo local v2, conferido em 22/10/2026. As etapas são ideias para organizar a atenção, não um tratamento.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        TextButton(onClick = { uri.openUri(SmokingSupportContent.pauseSourceUrl) }) { Text("Consultar fonte da OMS (internet)") }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Sobre estas sugestões", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+            SmokingInfoButton("Fontes e limites das sugestões", "Sugestões adaptadas de OMS — Quick tips; conteúdo local v3, conferido em 22/10/2026. As etapas são ideias para organizar a atenção, não um tratamento. A pausa não garante que a vontade passe.", SmokingSupportContent.pauseSourceUrl)
+        }
     }
 }
 
