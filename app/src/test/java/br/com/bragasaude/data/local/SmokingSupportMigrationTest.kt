@@ -30,7 +30,7 @@ class SmokingSupportMigrationTest {
                     val entity = entities.getJSONObject(i)
                     val table = entity.getString("tableName")
                     old.execSQL(entity.getString("createSql").replace("\${TABLE_NAME}", table))
-                    val indices = entity.getJSONArray("indices")
+                    val indices = entity.optJSONArray("indices") ?: org.json.JSONArray()
                     for (j in 0 until indices.length()) old.execSQL(indices.getJSONObject(j).getString("createSql").replace("\${TABLE_NAME}", table))
                     if (table in seeds) {
                         val fields = entity.getJSONArray("fields")
