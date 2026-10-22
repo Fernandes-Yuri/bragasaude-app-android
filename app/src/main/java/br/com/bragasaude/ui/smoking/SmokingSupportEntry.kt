@@ -1,6 +1,9 @@
 package br.com.bragasaude.ui.smoking
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SmokeFree
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -40,13 +43,11 @@ fun SmokingProfileSaveOffer(onOpen: () -> Unit, viewModel: SmokingSupportViewMod
     )
 }
 
-/** No startup offer here: the home shortcut exists only after explicit activation. */
+/** Header action appears only after activation and does not push the health cards down. */
 @Composable
-fun SmokingHomeCard(onOpen: () -> Unit, viewModel: SmokingSupportViewModel = hiltViewModel()) {
+fun SmokingHomeAction(onOpen: () -> Unit, viewModel: SmokingSupportViewModel = hiltViewModel()) {
     val state by viewModel.snapshot.collectAsState()
-    if (state.enabled) SupportCard {
-        Text("Meu caminho sem cigarro", style = MaterialTheme.typography.titleMedium)
-        Text("Um espaço para seguir no seu ritmo.")
-        OutlinedButton(onClick = onOpen, modifier = Modifier.fillMaxWidth()) { Text("Abrir meu apoio") }
+    if (state.enabled) IconButton(onClick = onOpen) {
+        Icon(Icons.Default.SmokeFree, contentDescription = "Meu caminho sem cigarro", tint = Color.White)
     }
 }

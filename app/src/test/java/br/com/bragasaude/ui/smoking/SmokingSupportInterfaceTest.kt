@@ -182,6 +182,33 @@ class SmokingSupportInterfaceTest {
         compose.onNodeWithTag("pauseGuidance").assertIsDisplayed()
         screenshot("08-pausa-escuro-fonte-ampliada")
     }
+    @Test fun homeHeaderOnlyShowsCompactActionWhenSupportIsEnabled() {
+        val vm = vm()
+        val state = MutableStateFlow(SmokingSupportSnapshot(ownerId = "owner", loaded = true))
+        every { vm.snapshot } returns state
+        var opened = false
+        compose.setContent {
+            BragasaudeTheme(forceThemeMode = "LIGHT") {
+                br.com.bragasaude.ui.components.EmeraldHeaderBanner(
+                    title = "teste", greetingPrefix = "Boa noite,", avatarInitials = "TE",
+                    trailingContent = { SmokingHomeAction(onOpen = { opened = true }, viewModel = vm) }
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("Meu caminho sem cigarro").assertDoesNotExist()
+        compose.runOnIdle {
+            state.value = state.value.copy(
+                settings = SmokingSupportSettings("owner", br.com.bragasaude.domain.smoking.OfferDecision.ACCEPTED, true, 1, 1, 1),
+                plan = SmokingSupportPlan("owner", "2026-10-20", stage = br.com.bragasaude.domain.smoking.PreparationStage.STARTED, createdAt = 1, updatedAt = 1)
+            )
+        }
+        compose.onNodeWithContentDescription("Meu caminho sem cigarro").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertTrue(opened) }
+        compose.onNodeWithText("Um espaço para seguir no seu ritmo.").assertDoesNotExist()
+        screenshot("10-atalho-no-cabecalho")
+        compose.runOnIdle { state.value = state.value.copy(settings = state.value.settings!!.copy(enabled = false)) }
+        compose.onNodeWithContentDescription("Meu caminho sem cigarro").assertDoesNotExist()
+    }
     private fun screenshot(name: String) {
         compose.runOnIdle {
             val windows = WindowInspector.getGlobalWindowViews()

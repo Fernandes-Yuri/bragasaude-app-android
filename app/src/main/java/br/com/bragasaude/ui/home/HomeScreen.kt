@@ -172,22 +172,25 @@ fun HomeScreen(
                 photoUrl = avatarPhotoUrl,
                 onAvatarClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Profile) },
                 trailingContent = {
-                    IconButton(onClick = onNavigateToNotifications) {
-                        BadgedBox(
-                            badge = {
-                                if (hasUnreadAlerts) {
-                                    Badge(
-                                        containerColor = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.offset(x = (-4).dp, y = 4.dp)
-                                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        br.com.bragasaude.ui.smoking.SmokingHomeAction(onOpen = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.SmokingSupport) })
+                        IconButton(onClick = onNavigateToNotifications) {
+                            BadgedBox(
+                                badge = {
+                                    if (hasUnreadAlerts) {
+                                        Badge(
+                                            containerColor = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.offset(x = (-4).dp, y = 4.dp)
+                                        )
+                                    }
                                 }
+                            ) {
+                                Icon(
+                                    Icons.Default.Notifications,
+                                    contentDescription = "Notificações",
+                                    tint = Color.White
+                                )
                             }
-                        ) {
-                            Icon(
-                                Icons.Default.Notifications,
-                                contentDescription = "Notificações",
-                                tint = Color.White
-                            )
                         }
                     }
                 }
@@ -208,7 +211,6 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item { Spacer(Modifier.height(4.dp)) }
-                item { br.com.bragasaude.ui.smoking.SmokingHomeCard(onOpen = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.SmokingSupport) }) }
 
 
                 // 1. Atalhos Rápidos de Navegação — topo visível
