@@ -34,8 +34,11 @@ fun ConnectedUserAvatar(
     val session by viewModel.session.collectAsState()
     val identity = session.avatars[userId]
     val lifecycleOwner = LocalLifecycleOwner.current
+    val previousDescriptor = remember(userId, session.userId) { mutableStateOf(photoUrl to avatarIdentifier) }
     LaunchedEffect(userId, session.userId, photoUrl, avatarIdentifier) {
-        if (!userId.isNullOrBlank()) viewModel.load(userId)
+        val changed = previousDescriptor.value != (photoUrl to avatarIdentifier)
+        previousDescriptor.value = photoUrl to avatarIdentifier
+        if (!userId.isNullOrBlank()) viewModel.load(userId, force = changed)
     }
     DisposableEffect(lifecycleOwner, userId) {
         val observer = LifecycleEventObserver { _, event ->
