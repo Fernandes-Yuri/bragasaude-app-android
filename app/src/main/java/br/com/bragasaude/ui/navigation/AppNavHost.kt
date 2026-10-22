@@ -216,10 +216,10 @@ fun AppNavHost(
             ProfileScreen(onBack = navigateBack, onProfileSaved = navigateBack)
         }
         composable<Screen.League> {
-            SocialFeedScreen(onBack = navigateBack)
+            SocialFeedScreen(onBack = navigateBack, onManagePhoto = { navController.navigate(Screen.Profile) })
         }
         composable<Screen.SocialFeed> {
-            SocialFeedScreen(onBack = navigateBack)
+            SocialFeedScreen(onBack = navigateBack, onManagePhoto = { navController.navigate(Screen.Profile) })
         }
         composable<Screen.FamilyConnect> {
             FamilyConnectScreen(onClose = navigateBack)

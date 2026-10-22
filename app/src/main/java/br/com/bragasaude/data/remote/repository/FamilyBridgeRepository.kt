@@ -215,22 +215,38 @@ class FamilyBridgeRepository @Inject constructor(
         }
     }
 
+    private suspend fun requireConversationAccess(patientUserId: String): String {
+        val userId = auth.currentUser?.uid
+        check(!userId.isNullOrBlank() && userId != br.com.bragasaude.util.BragaConstants.GUEST_UID) {
+            "Entre na sua conta para conversar com a família."
+        }
+        check(patientUserId.isNotBlank() && (patientUserId == userId ||
+            familyDao.existsActiveLink(patientUserId, userId) != null)) {
+            "Vínculo indisponível. Atualize sua família."
+        }
+        check(auth.currentUser?.uid == userId) { "Sua conta mudou. Abra a conversa novamente." }
+        return userId
+    }
+
     suspend fun createFamilyMessage(
         patientUserId: String,
         senderName: String,
         messageText: String,
         iconType: String = "LOVE"
     ): FamilyMessageEntity {
+        val userId = requireConversationAccess(patientUserId)
+        val cleanText = messageText.trim()
+        require(cleanText.isNotEmpty() && cleanText.length <= 2000) { "Escreva uma mensagem de até 2000 caracteres." }
         val localId = UUID.randomUUID().toString()
         val message = FamilyMessageEntity(
             id = localId,
             patientUserId = patientUserId,
             senderName = senderName,
-            messageText = messageText,
+            messageText = cleanText,
             iconType = iconType,
             isRead = false,
             sentAt = System.currentTimeMillis(),
-            senderUserId = auth.currentUser?.uid,
+            senderUserId = userId,
             remoteId = null,
             pendingSync = true
         )
@@ -238,11 +254,15 @@ class FamilyBridgeRepository @Inject constructor(
 
         try {
             val remoteId = apiClient.syncFamilyMessage(message)
+            check(auth.currentUser?.uid == userId) { "Sua conta mudou. Abra a conversa novamente." }
             if (remoteId != null) {
                 familyDao.markMessageSynced(localId, remoteId)
                 return message.copy(remoteId = remoteId, pendingSync = false)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
+            check(auth.currentUser?.uid == userId) { "Sua conta mudou. Abra a conversa novamente." }
             android.util.Log.w("FamilyBridgeRepo", "Mensagem salva localmente, pendente de sync: ${e.message}")
             syncScheduler.scheduleSync()
         }
@@ -278,8 +298,11 @@ class FamilyBridgeRepository @Inject constructor(
     }
 
     suspend fun syncFamilyMessages(patientUserId: String): Result<String?> = runCatching {
+        val userId = requireConversationAccess(patientUserId)
         val now = System.currentTimeMillis()
         val remote = apiClient.getFamilyMessages(patientUserId)
+        check(requireConversationAccess(patientUserId) == userId) { "Sua conta mudou." }
+        check(remote.all { it.patientUserId == patientUserId }) { "Mensagens de outra conversa foram recusadas." }
         for (msg in remote) {
             when {
                 // D47: tombstone propagado pelo outro aparelho — remover a cópia local
@@ -418,7 +441,8 @@ class FamilyBridgeRepository @Inject constructor(
      */
     suspend fun deleteMessage(messageId: String) {
         val local = familyDao.getMessageById(messageId) ?: return
-        check(local.senderUserId == auth.currentUser?.uid) { "Só quem enviou pode apagar a mensagem." }
+        val userId = auth.currentUser?.uid
+        check(!userId.isNullOrBlank() && local.senderUserId == userId) { "Só quem enviou pode apagar a mensagem." }
         // Keep a content-free tombstone until expiry, including ambiguous/in-flight uploads.
         familyDao.softDeleteMessage(messageId)
         try {
@@ -460,72 +484,28 @@ class FamilyBridgeRepository @Inject constructor(
         familyDao.purgeExpiredMessages()
     }
 
-suspend fun sendMessageBidirectional(
+    suspend fun sendMessageBidirectional(
         bindingId: String,
         recipientId: String,
         senderName: String,
         messageText: String,
         iconType: String = "CUSTOM"
     ): FamilyMessageEntity {
-        val binding = familyDao.getBindingById(bindingId) ?: throw IllegalStateException("Vínculo não encontrado")
-        val messageId = UUID.randomUUID().toString()
-        val message = FamilyMessageEntity(
-            id = messageId,
-            patientUserId = binding.patientUserId,
-            senderName = senderName,
-            messageText = messageText,
-            iconType = iconType,
-            isRead = false,
-            sentAt = System.currentTimeMillis(),
-            senderUserId = auth.currentUser?.uid,
-            remoteId = null,
-            pendingSync = true
-        )
-        familyDao.insertMessage(message)
-
-        try {
-            val remoteId = apiClient.syncFamilyMessage(message)
-            if (remoteId != null) {
-                familyDao.markMessageSynced(messageId, remoteId)
-            }
-        } catch (e: Exception) {
-            android.util.Log.w("FamilyBridgeRepo", "Aviso ao sincronizar mensagem bidirecional: ${e.message}")
-        }
-        syncScheduler.scheduleSync()
-        return message
+        val binding = familyDao.getBindingById(bindingId) ?: error("Vínculo não encontrado")
+        val userId = auth.currentUser?.uid
+        check(binding.status == "ACTIVE" && userId != null &&
+            userId in listOf(binding.patientUserId, binding.caregiverUserId)) { "Vínculo indisponível." }
+        val expectedRecipient = if (userId == binding.patientUserId) binding.caregiverUserId else binding.patientUserId
+        check(recipientId == expectedRecipient) { "Destinatário não corresponde à conversa." }
+        // O contrato atual é um grupo por paciente, compartilhado pelos vínculos ativos.
+        return createFamilyMessage(binding.patientUserId, senderName, messageText, iconType)
     }
 
-    suspend fun sendPatientReplyMessage(
-        bindingId: String,
-        messageText: String
-    ): FamilyMessageEntity {
-        val binding = familyDao.getBindingById(bindingId) ?: throw IllegalStateException("Vínculo não encontrado")
-        val messageId = UUID.randomUUID().toString()
-        val message = FamilyMessageEntity(
-            id = messageId,
-            patientUserId = binding.patientUserId,
-            // AUD-AN(B): segundo elvis inalcançável — "Paciente" ?: "Usuário"
-            // nunca disparava (o primeiro ?: já devolve não-null). Removido.
-            senderName = auth.currentUser?.displayName ?: "Paciente",
-            messageText = messageText,
-            iconType = "CUSTOM",
-            isRead = false,
-            sentAt = System.currentTimeMillis(),
-            senderUserId = auth.currentUser?.uid,
-            remoteId = null,
-            pendingSync = true
-        )
-        familyDao.insertMessage(message)
-
-        try {
-            val remoteId = apiClient.syncFamilyMessage(message)
-            if (remoteId != null) {
-                familyDao.markMessageSynced(messageId, remoteId)
-            }
-        } catch (e: Exception) {
-            android.util.Log.w("FamilyBridgeRepo", "Aviso ao sincronizar resposta do paciente: ${e.message}")
-        }
-        return message
+    suspend fun sendPatientReplyMessage(bindingId: String, messageText: String): FamilyMessageEntity {
+        val binding = familyDao.getBindingById(bindingId) ?: error("Vínculo não encontrado")
+        check(binding.status == "ACTIVE" && auth.currentUser?.uid == binding.patientUserId) { "Vínculo indisponível." }
+        return createFamilyMessage(binding.patientUserId,
+            auth.currentUser?.displayName ?: "Paciente", messageText, "CUSTOM")
     }
 
     /** ---------- CONSULTAS MÉDICAS ---------- */
