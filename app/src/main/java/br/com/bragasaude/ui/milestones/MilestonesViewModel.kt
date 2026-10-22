@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.remote.model.RemoteMilestone
 import br.com.bragasaude.data.remote.repository.MilestonesRepository
-import br.com.bragasaude.data.remote.repository.ProfileRepository
 import br.com.bragasaude.data.util.toRemote
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.google.firebase.auth.FirebaseAuth
@@ -18,15 +17,11 @@ import br.com.bragasaude.util.BragaConstants
 @HiltViewModel
 class MilestonesViewModel @Inject constructor(
     private val milestonesRepository: MilestonesRepository,
-    private val profileRepository: ProfileRepository,
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
     private val _milestones = MutableStateFlow<List<RemoteMilestone>>(emptyList())
     val milestones = _milestones.asStateFlow()
-
-    private val _points = MutableStateFlow(0)
-    val points = _points.asStateFlow()
 
     init {
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
@@ -34,12 +29,6 @@ class MilestonesViewModel @Inject constructor(
         viewModelScope.launch {
             milestonesRepository.getMilestones(userId).collectLatest { entities ->
                 _milestones.value = entities.map { it.toRemote() }
-            }
-        }
-
-        viewModelScope.launch {
-            profileRepository.getProfile(userId).collectLatest { profile ->
-                _points.value = profile?.pointsDiscipline ?: 0
             }
         }
     }

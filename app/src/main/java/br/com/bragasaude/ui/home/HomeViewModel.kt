@@ -140,13 +140,8 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Data Flow para UI e Score
-        // AUD-AN10: movementManager.currentSteps emite a CADA PASSO. Sem debounce,
-        // HealthScoreCalculator.calculate() rodava por passo (caro) e o
-        // collectLatest da análise de alertas era cancelado a cada passo — se os
-        // passos chegassem mais rápido que a análise, _clinicalAlerts NUNCA
-        // atualizava durante uma caminhada. Debounce de 2s: a score e os alertas
-        // acompanham o ritmo da caminhada sem serem interrompidos.
+        // Evita cancelar a análise de alertas a cada passo durante uma caminhada.
+        // O debounce mantém a atualização dos dados de movimento e dos alertas.
         val debouncedSteps = movementManager.currentSteps.debounce(2_000)
 
         val healthDataFlow = combine(

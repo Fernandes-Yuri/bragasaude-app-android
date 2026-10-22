@@ -17,6 +17,7 @@ import androidx.room.TypeConverters
         MedicationLogEntity::class,
         DailyMetricsEntity::class,
         FeedbackEntity::class,
+        // Tabelas legadas mantidas para compatibilidade do schema 59, sem DAOs ativos.
         LeagueCycleEntity::class,
         LeagueMembershipEntity::class,
         SocialPostEntity::class,
@@ -59,9 +60,7 @@ abstract class BragaDatabase : RoomDatabase() {
     abstract fun milestoneDao(): MilestoneDao
     abstract fun dailyMetricsDao(): DailyMetricsDao
     abstract fun feedbackDao(): FeedbackDao
-    abstract fun leagueDao(): LeagueDao
     abstract fun socialFeedDao(): SocialFeedDao
-    abstract fun xpAwardDao(): XpAwardDao
     abstract fun groceryPublicationDao(): GroceryPublicationDao
     abstract fun groceryRetailCardDao(): GroceryRetailCardDao
     abstract fun groceryListDao(): GroceryListDao

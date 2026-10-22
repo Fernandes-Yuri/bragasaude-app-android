@@ -315,7 +315,7 @@ class BragaLocalAiClient @Inject constructor(
                     // REAL de 25 (choque severo) virava 250; (2) uma PA de 8
                     // legitima (crienca) virava 80. Reusa o normalizador
                     // CANONICO do app (BloodPressureParser, mesma regra do
-                    // parser de voz e do HealthScoreCalculator): <30 e >0.
+                    // parser de voz): <30 e >0.
                     sistolica = sistolica?.let { BloodPressureParser.normalizePressure(it) }
                     diastolica = diastolica?.let { BloodPressureParser.normalizePressure(it) }
 
