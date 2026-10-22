@@ -189,13 +189,11 @@ class SocialFeedRepository @Inject constructor(
         // A publicação aparece imediatamente, mas só permanece se o servidor confirmar.
         requireSession(userId)
         socialFeedDao.insertPost(post)
-        if (userId == guestId) {
-            socialFeedDao.deletePostById(post.id)
-            throw IllegalStateException("Entre na sua conta para publicar uma conquista.")
-        }
 
         val remoteId = try {
             apiClient.syncSocialPost(post)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             null
         }

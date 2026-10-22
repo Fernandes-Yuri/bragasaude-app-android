@@ -158,8 +158,14 @@ class SocialFeedViewModel @Inject constructor(
             _feedError.value = null
             try {
                 telemetryService.logEvent(currentUserId, "SOCIAL_FEED", "REFRESH")
-                socialFeedRepository.getCommunityNickname(userId)
-                socialFeedRepository.refreshAuthorPhoto(userId)
+                try {
+                    socialFeedRepository.getCommunityNickname(userId)
+                    socialFeedRepository.refreshAuthorPhoto(userId)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // Metadados do autor não impedem a leitura do mural.
+                }
                 socialFeedRepository.fetchGlobalFeed(currentUserId = userId)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
