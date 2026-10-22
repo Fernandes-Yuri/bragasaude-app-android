@@ -32,7 +32,8 @@ class ProfileViewModel @Inject constructor(
     private val auth: FirebaseAuth,
     private val database: BragaDatabase,
     private val apiClient: BragaApiClient,
-    private val smokingSupport: br.com.bragasaude.data.local.smoking.SmokingSupportRepository
+    private val smokingSupport: br.com.bragasaude.data.local.smoking.SmokingSupportRepository,
+    private val socialFeedRepository: br.com.bragasaude.data.remote.repository.SocialFeedRepository
 ) : ViewModel() {
 
     private val _profile = MutableStateFlow<RemoteProfile?>(null)
@@ -443,6 +444,21 @@ class ProfileViewModel @Inject constructor(
             } finally {
                 _avatarUploading.value = false
             }
+        }
+    }
+
+    fun shareGoogleAvatarPhoto() {
+        val userId = auth.currentUser?.uid ?: return
+        if (_avatarUploading.value) return
+        _avatarUploading.value = true
+        viewModelScope.launch {
+            try {
+                socialFeedRepository.shareGooglePhoto(userId)
+                if (auth.currentUser?.uid == userId) _avatarMessage.value = "Foto compartilhada no perfil, mural e conexões familiares."
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+              catch (e: Exception) {
+                if (auth.currentUser?.uid == userId) _avatarMessage.value = e.message ?: "Não foi possível compartilhar a foto."
+            } finally { _avatarUploading.value = false }
         }
     }
 

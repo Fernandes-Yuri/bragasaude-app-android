@@ -82,6 +82,7 @@ fun ProfileDetailScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showAvatarDialog by remember { mutableStateOf(false) }
+    var showGooglePhotoConfirm by remember { mutableStateOf(false) }
     val communityNickname by profileViewModel.communityNickname.collectAsState()
     val communitySaving by profileViewModel.communitySaving.collectAsState()
     val communityError by profileViewModel.communityError.collectAsState()
@@ -219,6 +220,19 @@ fun ProfileDetailScreen(
         )
     }
 
+    if (showGooglePhotoConfirm) {
+        br.com.bragasaude.ui.components.BragaAlertDialog(
+            onDismissRequest = { showGooglePhotoConfirm = false },
+            title = { Text("Compartilhar foto Google?") },
+            text = { Text("A imagem será enviada à Braga Saúde para verificação e ficará visível no seu perfil, mural e conexões familiares.") },
+            confirmButton = { TextButton(onClick = {
+                showGooglePhotoConfirm = false
+                profileViewModel.shareGoogleAvatarPhoto()
+            }) { Text("Compartilhar foto") } },
+            dismissButton = { TextButton(onClick = { showGooglePhotoConfirm = false }) { Text("Agora não") } }
+        )
+    }
+
     // Diálogo de escolha de avatar/foto de perfil
     if (showAvatarDialog) {
         BragaFormSheet(
@@ -236,6 +250,14 @@ fun ProfileDetailScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(if (avatarUploading) "Enviando..." else "Escolher da Galeria")
+                    }
+                    if (!googleAvatarUrl.isNullOrBlank()) {
+                        OutlinedButton(onClick = { showGooglePhotoConfirm = true }, enabled = !avatarUploading,
+                            modifier = Modifier.fillMaxWidth()) { Text("Compartilhar foto Google") }
+                        if (customPhotoUri.isNullOrBlank() && profile?.avatarIdentifier == null) {
+                            Text("A foto Google aparece só para você até ser compartilhada.",
+                                style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     if (avatarUploading) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
