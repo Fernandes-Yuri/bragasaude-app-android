@@ -23,7 +23,8 @@ class SocialFeedRepository @Inject constructor(
     private val profileDao: ProfileDao,
     private val apiClient: BragaApiClient,
     private val syncScheduler: SyncScheduler,
-    private val auth: com.google.firebase.auth.FirebaseAuth
+    private val auth: com.google.firebase.auth.FirebaseAuth,
+    private val familyDao: br.com.bragasaude.data.local.FamilyDao
 ) {
     private val guestId = BragaConstants.GUEST_UID
 
@@ -33,11 +34,15 @@ class SocialFeedRepository @Inject constructor(
 
     fun getGlobalFeed(currentUserId: String? = null): Flow<List<SocialPostEntity>> {
         val posts = socialFeedDao.getGlobalFeed()
-        if (currentUserId == null || currentUserId == guestId) return posts
-        return combine(posts, profileDao.getProfile(currentUserId)) { feed, profile ->
-            feed.map { post ->
-                if (post.userId == currentUserId) post.withProfileAvatar(profile) else post
-            }
+        if (currentUserId == null || currentUserId == guestId) return kotlinx.coroutines.flow.flowOf(emptyList())
+        return combine(posts, profileDao.getProfile(currentUserId),
+            familyDao.getActiveBindingsForPatient(currentUserId),
+            familyDao.getActiveBindingsForCaregiver(currentUserId)) { feed, profile, caregivers, patients ->
+            val familyAuthors = (caregivers + patients).filter { it.status == "ACTIVE" &&
+                currentUserId in listOf(it.patientUserId, it.caregiverUserId) }
+                .flatMap { listOf(it.patientUserId, it.caregiverUserId) }.toSet()
+            feed.filter { post -> br.com.bragasaude.domain.canDisplayCachedSocialPost(post, currentUserId, familyAuthors) }
+                .map { post -> if (post.userId == currentUserId) post.withProfileAvatar(profile) else post }
         }
     }
 
