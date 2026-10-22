@@ -17,7 +17,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +70,13 @@ fun SmokingSupportScreen(onBack: () -> Unit, viewModel: SmokingSupportViewModel 
                         viewModel.saveDay(date, smoked, quantity) { page = "main" }
                     }
                 }
+                "settings" -> item {
+                    SupportCard {
+                        SmokingInfoHeading("Gerenciar apoio", "Sobre desativar e apagar", "Desativar mantém seu diário e oculta o atalho da tela inicial. Apagar remove o plano e os registros deste apoio. Os dados das outras áreas são mantidos.")
+                        if (state.enabled) OutlinedButton(onClick = { confirmation = "disable" }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Desativar apoio") }
+                        OutlinedButton(onClick = { confirmation = "erase" }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Apagar dados do apoio") }
+                    }
+                }
                 "pause" -> item {
                     SmokingPause(state.plan?.personalReason, busy, onActivitySelected = { scope.launch { listState.animateScrollToItem(0) } }, onClose = leavePage, onRecord = { intensity ->
                         viewModel.recordCraving(intensity, leavePage)
@@ -83,9 +89,8 @@ fun SmokingSupportScreen(onBack: () -> Unit, viewModel: SmokingSupportViewModel 
                         val zeroDays = state.days.count { !it.smoked && it.localDate >= start.toString() && it.localDate <= today.toString() }
                         item {
                             SupportCard {
-                                Text("Um dia de cada vez", style = MaterialTheme.typography.titleLarge)
+                                SmokingInfoHeading("Um dia de cada vez", "Como contamos seus dias", "Contamos somente os dias em que você confirmou que não fumou, a partir do início do plano. Dias sem registro são desconhecidos; o número não mede abstinência contínua.")
                                 Text("Dias registrados sem fumar: $zeroDays", style = MaterialTheme.typography.titleMedium)
-                                Text("Contamos somente os dias em que você confirmou que não fumou. Dias sem registro são desconhecidos.")
                                 if (state.days.none { it.localDate == today.toString() }) Text("Você ainda não registrou como foi hoje.")
                                 Button(onClick = { editingDay = state.days.firstOrNull { it.localDate == today.toString() }; page = "day" }, modifier = Modifier.fillMaxWidth()) { Text("Registrar meu dia") }
                                 OutlinedButton(onClick = { page = "pause" }, modifier = Modifier.fillMaxWidth()) { Text("Estou com vontade agora") }
@@ -118,29 +123,20 @@ fun SmokingSupportScreen(onBack: () -> Unit, viewModel: SmokingSupportViewModel 
                         }
                     } else {
                         item {
-                            SupportCard {
-                                Text("Apoio para parar de fumar, no seu ritmo", style = MaterialTheme.typography.titleLarge)
-                                Text("Organize seu plano pessoal, registre como foi seu dia e encontre uma pausa nos momentos de vontade. Você também pode usar este apoio se já parou de fumar.")
-                                Text(SmokingSupportContent.limits)
-                                Text(SmokingSupportContent.privacy)
-                                if (state.ownerId == null) Text("Para ativar e guardar seu acompanhamento, entre em uma conta própria. O conteúdo de ajuda está disponível abaixo.")
-                                else if (state.plan != null) {
-                                    Text("Seu histórico foi mantido. Ao reativar, você continua o plano anterior.")
-                                    Button(enabled = !busy, onClick = {
-                                        viewModel.savePlan(state.plan!!.startedOn.let { LocalDate.parse(it).format(smokingDateFormat) }, "", "", emptySet(), PreparationStage.PREPARING, false, {})
-                                    }, modifier = Modifier.fillMaxWidth()) { Text("Ativar meu apoio") }
-                                } else Button(onClick = { page = "plan" }, modifier = Modifier.fillMaxWidth(), enabled = !busy) { Text("Preparar meu plano") }
-                            }
+                            SmokingIntroduction(
+                                authenticated = state.ownerId != null, hasPlan = state.plan != null, busy = busy,
+                                onPrepare = { page = "plan" },
+                                onResume = {
+                                    state.plan?.let { plan ->
+                                        viewModel.savePlan(LocalDate.parse(plan.startedOn).format(smokingDateFormat), "", "", emptySet(), PreparationStage.PREPARING, false, {})
+                                    }
+                                }
+                            )
                         }
                     }
                     item { SmokingHelp() }
                     if (state.ownerId != null && (state.settings != null || state.plan != null)) item {
-                        SupportCard {
-                            Text("Meu acompanhamento", style = MaterialTheme.typography.titleMedium)
-                            Text("Desativar mantém seu diário e oculta o acesso da tela inicial. Apagar remove o plano e os registros deste apoio. Uma nova ativação continua disponível aqui.")
-                            if (state.enabled) OutlinedButton(onClick = { confirmation = "disable" }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Desativar apoio") }
-                            OutlinedButton(onClick = { confirmation = "erase" }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Apagar dados do apoio") }
-                        }
+                        TextButton(onClick = { page = "settings" }, modifier = Modifier.fillMaxWidth()) { Text("Gerenciar apoio") }
                     }
                 }
             }
@@ -150,7 +146,7 @@ fun SmokingSupportScreen(onBack: () -> Unit, viewModel: SmokingSupportViewModel 
         if (confirmation != null) BragaAlertDialog(
             onDismissRequest = { confirmation = null },
             title = { Text(if (confirmation == "erase") "Apagar dados deste apoio?" else "Desativar apoio?") },
-            text = { Text(if (confirmation == "erase") "O plano, o diário e os registros de vontade serão removidos deste celular. Os dados das outras áreas serão mantidos. Esta ação não pode ser desfeita." else "Seu histórico será mantido, e o cartão sairá da tela inicial. Você pode reativar nas Configurações, no Perfil ou em Planos.") },
+            text = { Text(if (confirmation == "erase") "O plano, o diário e os registros de vontade serão removidos deste celular. Os dados das outras áreas serão mantidos. Esta ação não pode ser desfeita." else "Seu histórico será mantido, e o atalho sairá da tela inicial. Você pode reativar nas Configurações, no Perfil ou em Planos.") },
             confirmButton = { TextButton(enabled = !busy, onClick = { if (confirmation == "erase") viewModel.erase() else viewModel.disable(); confirmation = null }) { Text("Confirmar") } },
             dismissButton = { TextButton(onClick = { confirmation = null }) { Text("Cancelar") } }
         )
@@ -187,13 +183,9 @@ internal fun SupportCard(content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 internal fun SmokingHelp() {
-    val uri = LocalUriHandler.current
     SupportCard {
-        Text("Apoio e tratamento gratuito", style = MaterialTheme.typography.titleMedium)
-        Text(SmokingSupportContent.treatment)
-        Text(SmokingSupportContent.products)
-        Text("Fonte: INCA — Tratamento do tabagismo. Conteúdo local v2, conferido em 22/10/2026.", style = MaterialTheme.typography.bodySmall)
-        TextButton(onClick = { uri.openUri(SmokingSupportContent.sourceUrl) }) { Text("Consultar fonte do INCA (internet)") }
+        SmokingInfoHeading("Apoio e tratamento gratuito", "Como buscar atendimento no SUS", SmokingSupportContent.treatment + "\n\nFonte: INCA — Tratamento do tabagismo. Conteúdo local v3, conferido em 22/10/2026.", SmokingSupportContent.sourceUrl)
+        Text("Procure uma UBS e pergunte pelo tratamento para parar de fumar no SUS.")
     }
 }
 
@@ -229,7 +221,13 @@ internal fun SmokingPlanForm(plan: SmokingSupportPlan?, today: LocalDate, editin
                 Text(triggerLabel(trigger), Modifier.padding(start = 8.dp))
             }
         }
-        if (!editing) { Text(SmokingSupportContent.privacy); Text(SmokingSupportContent.limits) }
+        if (!editing) {
+            Text(SmokingSupportContent.localNotice)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Apoio opcional, sem garantia de resultado.", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                SmokingInfoButton("Privacidade e limites do apoio", SmokingSupportContent.privacy + "\n\n" + SmokingSupportContent.limits)
+            }
+        }
         Button(onClick = { onSave(start, target, reason, triggers, stage) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (editing) "Salvar meu plano" else "Ativar meu apoio") }
     }
 }
@@ -253,7 +251,10 @@ internal fun SmokingDayForm(entry: SmokingDailyEntry?, today: LocalDate, busy: B
         ChoiceRow("Não fumei", smoked == false) { smoked = false }
         ChoiceRow("Fumei", smoked == true) { smoked = true }
         if (smoked == true) OutlinedTextField(value = quantity, onValueChange = { quantity = it.take(10) }, enabled = !busy, label = { Text("Quantidade de cigarros (opcional)") }, supportingText = { Text("Deixe em branco se não souber a quantidade.") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
-        Text(SmokingSupportContent.products, style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Registro de cigarros", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+            SmokingInfoButton("O que o diário acompanha", SmokingSupportContent.products)
+        }
         Button(onClick = { smoked?.let { onSave(date, it, quantity) } }, enabled = smoked != null && !busy, modifier = Modifier.fillMaxWidth()) { Text("Salvar meu dia") }
     }
 }

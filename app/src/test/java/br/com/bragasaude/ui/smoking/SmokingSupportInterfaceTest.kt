@@ -1,5 +1,6 @@
 package br.com.bragasaude.ui.smoking
 
+import androidx.compose.material.icons.filled.Bloodtype
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -212,6 +213,49 @@ class SmokingSupportInterfaceTest {
         screenshot("10-atalho-no-cabecalho")
         compose.runOnIdle { state.value = state.value.copy(settings = state.value.settings!!.copy(enabled = false)) }
         compose.onNodeWithContentDescription("Meu caminho sem cigarro").assertDoesNotExist()
+    }
+    @Test fun introductionKeepsPrimaryActionAndLocalDataNoticeVisibleWhileDetailsOpenFromInfo() {
+        val vm = vm()
+        compose.setContent { BragasaudeTheme(forceThemeMode = "LIGHT") { SmokingSupportScreen(onBack = {}, viewModel = vm) } }
+        compose.onNodeWithText("Preparar meu plano").assertIsDisplayed()
+        compose.onNodeWithText(SmokingSupportContent.localNotice).assertIsDisplayed()
+        compose.onNodeWithText(SmokingSupportContent.privacy, substring = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Privacidade e limites do apoio").performClick()
+        compose.onNodeWithText(SmokingSupportContent.privacy, substring = true).assertExists()
+        screenshot("11-informacoes-privacidade")
+        compose.onNodeWithText("Entendi").performClick()
+        compose.onNodeWithText("Preparar meu plano").assertIsDisplayed()
+        verify(exactly = 0) { vm.savePlan(any(), any(), any(), any(), any(), any(), any()) }
+    }
+    @Test fun helpKeepsDetailedSourceInInfoSheet() {
+        compose.setContent { BragasaudeTheme(forceThemeMode = "LIGHT") { SmokingHelp() } }
+        compose.onNodeWithText(SmokingSupportContent.treatment).assertDoesNotExist()
+        screenshot("12-ajuda-resumida")
+        compose.onNodeWithContentDescription("Como buscar atendimento no SUS").performClick()
+        compose.onNodeWithText(SmokingSupportContent.treatment, substring = true).assertExists()
+        compose.onNodeWithText("Consultar fonte (internet)").assertExists()
+        compose.onNodeWithText("Entendi").assertIsDisplayed()
+    }
+    @Test fun oxygenAndGlucoseUseDistinctMetricSymbols() {
+        compose.setContent {
+            BragasaudeTheme(forceThemeMode = "LIGHT") {
+                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    br.com.bragasaude.ui.components.BragaMetricCard(
+                        label = "Glicemia", value = "—", unit = "mg/dL",
+                        icon = androidx.compose.material.icons.Icons.Default.Bloodtype,
+                        modifier = Modifier.weight(1f), onClick = {}
+                    )
+                    br.com.bragasaude.ui.components.BragaMetricCard(
+                        label = "Oxigenação", value = "—", unit = "SpO₂ • %",
+                        iconPainter = androidx.compose.ui.res.painterResource(br.com.bragasaude.R.drawable.ic_lungs),
+                        modifier = Modifier.weight(1f), onClick = {}
+                    )
+                }
+            }
+        }
+        compose.onNodeWithText("Glicemia").assertIsDisplayed()
+        compose.onNodeWithText("Oxigenação").assertIsDisplayed()
+        screenshot("13-glicemia-e-oxigenacao")
     }
     private fun screenshot(name: String) {
         compose.runOnIdle {

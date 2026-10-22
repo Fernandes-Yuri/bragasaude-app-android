@@ -1,7 +1,8 @@
 package br.com.bragasaude.ui.smoking
 
-/** Local editorial version 2. Reviewed against the linked INCA page on 22/10/2026. */
+/** Local editorial version 3. Reviewed against the linked INCA page on 22/10/2026. */
 internal object SmokingSupportContent {
+    const val localNotice = "Plano e diário ficam neste celular. Sair da conta ou reinstalar apaga esses registros."
     const val sourceUrl = "https://www.gov.br/inca/pt-br/assuntos/gestor-e-profissional-de-saude/programa-nacional-de-controle-do-tabagismo/tratamento"
     const val privacy = "Seu plano, diário e registros de vontade ficam apenas neste celular, no banco protegido do aplicativo. Não são enviados à nuvem nem compartilhados com familiares. Eles não voltam automaticamente em outro aparelho, após reinstalação ou logout. A informação ‘Sou fumante’ do seu perfil continua com a sincronização própria do cadastro."
     const val limits = "Este apoio é gratuito e opcional. Ajuda você a organizar sua jornada; não faz diagnóstico, não prescreve medicamentos e não garante que você pare de fumar. Ativar não solicita contato nem autoriza compartilhamento."

@@ -423,7 +423,7 @@ fun HomeScreen(
                             label = "Oxigenação",
                             value = oxygenReadings.firstOrNull()?.value?.let { String.format(java.util.Locale.getDefault(), "%.1f", it) } ?: "—",
                             unit = if (oxygenReadings.isEmpty()) "Registrar medição" else "% • " + java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(oxygenReadings.first().measuredAt)),
-                            icon = Icons.Default.Bloodtype,
+                            iconPainter = painterResource(R.drawable.ic_lungs),
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.HealthReadings("OXYGEN_SATURATION")) }
                         )

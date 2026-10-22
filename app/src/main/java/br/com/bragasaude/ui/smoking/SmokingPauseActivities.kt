@@ -52,5 +52,12 @@ internal enum class SmokingPauseActivity(
             "Se quiser, mude o desenho ou a dobra. Pode também apenas segurar um objeto confortável nas mãos.",
             "Observe o que fez e decida se quer continuar por conta própria, trocar de ideia ou encerrar."
         )
-    )
+    );
+
+    val essentialGuidance: String get() = when (this) {
+        WATER -> "Respeite sua orientação de líquidos. Não há quantidade para cumprir."
+        WALK -> "Caminhe só se já for seguro para você. Pare se houver desconforto."
+        NOTICE -> "Você pode experimentar sentado, no seu ritmo."
+        HANDS -> "Escolha algo simples e confortável para as mãos."
+    }
 }
