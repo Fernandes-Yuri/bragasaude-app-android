@@ -48,12 +48,13 @@ class SocialFeedRepository @Inject constructor(
     }
 
     suspend fun fetchGlobalFeed(limit: Int = 20, offset: Int = 0, currentUserId: String): Int {
+        require(limit in 1..100 && offset == 0) { "Atualização do mural exige a primeira página, com até 100 publicações." }
         requireSession(currentUserId)
         val expected = socialFeedDao.getCachedPosts().associateBy { it.id }
         val posts = apiClient.getSocialFeed(currentUserId, limit)
         requireSession(currentUserId)
         if (posts.isNotEmpty()) {
-            socialFeedDao.cacheRemotePosts(posts, expected)
+            socialFeedDao.cacheRemotePosts(posts, expected, firstPageLimit = limit)
         }
         return posts.size
     }
