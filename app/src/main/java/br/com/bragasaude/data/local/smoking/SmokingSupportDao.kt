@@ -3,9 +3,19 @@ package br.com.bragasaude.data.local.smoking
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
+data class SmokingSupportRecord(
+    @Embedded val settings: SmokingSupportSettings,
+    @Relation(parentColumn = "userId", entityColumn = "userId") val plans: List<SmokingSupportPlan>,
+    @Relation(parentColumn = "userId", entityColumn = "userId") val days: List<SmokingDailyEntry>,
+    @Relation(parentColumn = "userId", entityColumn = "userId") val cravings: List<SmokingCravingEntry>
+)
+
 /** All operations explicitly scope the owner; no selected-patient dependency. */
 @Dao
 interface SmokingSupportDao {
+    @Transaction
+    @Query("SELECT * FROM smoking_settings_local WHERE userId = :userId")
+    fun observeRecord(userId: String): Flow<SmokingSupportRecord?>
     @Query("SELECT * FROM smoking_settings_local WHERE userId = :userId")
     fun observeSettings(userId: String): Flow<SmokingSupportSettings?>
     @Query("SELECT * FROM smoking_plan_local WHERE userId = :userId")

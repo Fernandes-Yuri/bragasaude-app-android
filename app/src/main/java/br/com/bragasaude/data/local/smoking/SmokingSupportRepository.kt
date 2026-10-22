@@ -34,11 +34,11 @@ class SmokingSupportRepository @Inject constructor(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val snapshot: Flow<SmokingSupportSnapshot> = session.owners.flatMapLatest { owner ->
-        if (owner == null) flowOf(SmokingSupportSnapshot()) else combine(
-            dao.observeSettings(owner), dao.observePlan(owner), dao.observeDays(owner), dao.observeCravings(owner)
-        ) { settings, plan, days, cravings ->
+        if (owner == null) flowOf(SmokingSupportSnapshot()) else dao.observeRecord(owner).map { record ->
             if (owner != session.currentUserId()) SmokingSupportSnapshot()
-            else SmokingSupportSnapshot(owner, settings, plan, days, cravings)
+            else SmokingSupportSnapshot(owner, record?.settings, record?.plans?.singleOrNull(),
+                record?.days.orEmpty().sortedByDescending { it.localDate },
+                record?.cravings.orEmpty().sortedByDescending { it.occurredAt })
         }.onStart { emit(SmokingSupportSnapshot(ownerId = owner)) }
     }
 
