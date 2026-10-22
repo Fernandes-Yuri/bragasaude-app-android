@@ -389,68 +389,6 @@ interface FeedbackDao {
 }
 
 @Dao
-interface LeagueDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertCycle(cycle: LeagueCycleEntity)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertMembership(membership: LeagueMembershipEntity)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertMemberships(memberships: List<LeagueMembershipEntity>)
-
-    @Query("SELECT * FROM league_cycles_local WHERE level = :level AND status = 'active' LIMIT 1")
-    fun getActiveCycle(level: Int): Flow<LeagueCycleEntity?>
-
-    @Query("SELECT * FROM league_cycles_local WHERE level = :level AND status = 'active' LIMIT 1")
-    suspend fun getActiveCycleOneShot(level: Int): LeagueCycleEntity?
-
-    @Query("SELECT * FROM league_cycles_local WHERE id = :cycleId LIMIT 1")
-    suspend fun getCycleOneShot(cycleId: String): LeagueCycleEntity?
-
-    @Query("SELECT * FROM league_memberships_local WHERE userId = :userId AND leagueCycleId = :cycleId LIMIT 1")
-    fun getMyMembership(userId: String, cycleId: String): Flow<LeagueMembershipEntity?>
-
-    @Query("SELECT * FROM league_memberships_local WHERE userId = :userId AND leagueCycleId = :cycleId LIMIT 1")
-    suspend fun getMyMembershipOneShot(userId: String, cycleId: String): LeagueMembershipEntity?
-
-    @Query("SELECT * FROM league_memberships_local WHERE leagueCycleId = :cycleId ORDER BY xpEarned DESC")
-    fun getRanking(cycleId: String): Flow<List<LeagueMembershipEntity>>
-
-    @Query("SELECT * FROM league_memberships_local WHERE leagueCycleId = :cycleId ORDER BY xpEarned DESC")
-    suspend fun getRankingOneShot(cycleId: String): List<LeagueMembershipEntity>
-
-    @Query("SELECT * FROM league_memberships_local WHERE pendingSync = 1")
-    suspend fun getPendingSyncMemberships(): List<LeagueMembershipEntity>
-
-    @Query("DELETE FROM league_memberships_local WHERE leagueCycleId = :cycleId")
-    suspend fun deleteByCycle(cycleId: String)
-
-    @Query("DELETE FROM league_memberships_local WHERE userId = :userId")
-    suspend fun deleteByUser(userId: String)
-}
-
-@Dao
-interface XpAwardDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(award: XpAwardEntity)
-
-    /** Ações já concedidas hoje para um usuário (anti-farming). */
-    @Query("SELECT actionType FROM xp_awards_local WHERE userId = :userId AND date = :date")
-    suspend fun getAwardedActionTypes(userId: String, date: String): List<String>
-
-    @Query("SELECT * FROM xp_awards_local WHERE userId = :userId AND date = :date ORDER BY awardedAt DESC")
-    fun getAwardsForDay(userId: String, date: String): Flow<List<XpAwardEntity>>
-
-    /** XP total concedido em um intervalo (usado no encerramento de ciclo da liga). */
-    @Query("SELECT COALESCE(SUM(xp), 0) FROM xp_awards_local WHERE userId = :userId AND date BETWEEN :startDate AND :endDate")
-    suspend fun sumXpBetween(userId: String, startDate: String, endDate: String): Int
-
-    @Query("DELETE FROM xp_awards_local WHERE userId = :userId")
-    suspend fun deleteByUser(userId: String)
-}
-
-@Dao
 interface SocialFeedDao {
     @Transaction
     suspend fun cacheRemotePosts(posts: List<SocialPostEntity>, expected: Map<String, SocialPostEntity>) {

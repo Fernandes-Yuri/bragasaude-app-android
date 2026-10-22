@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.milestones
+package br.com.bragasaude.ui.milestones
 
 import br.com.bragasaude.ui.components.BragaAlertDialog
 
@@ -11,10 +11,8 @@ import androidx.compose.material.icons.Icons
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,7 +30,6 @@ fun MilestonesScreen(
     viewModel: MilestonesViewModel = hiltViewModel()
 ) {
     val milestones by viewModel.milestones.collectAsState()
-    val points by viewModel.points.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -44,21 +41,6 @@ fun MilestonesScreen(
         item {
             Text("Suas Conquistas", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
-            
-            // Points Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, br.com.bragasaude.ui.theme.BragaEmeraldDark))).padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(Icons.Default.EmojiEvents, contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
-                    Text("$points", color = Color.White, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold)
-                    Text("Pontos de Disciplina", color = Color.White)
-                }
-            }
         }
 
         item {

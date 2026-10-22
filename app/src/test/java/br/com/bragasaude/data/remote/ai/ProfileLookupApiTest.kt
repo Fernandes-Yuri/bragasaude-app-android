@@ -53,4 +53,35 @@ class ProfileLookupApiTest {
         closedServer.shutdown()
         assertTrue(deadApi.getProfileLookup("owner") is ProfileLookup.Unavailable)
     }
+    @Test fun legacyPointsAreNotSentWhenSyncingHealthProfile() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"status":"success"}"""))
+        val result = api.syncProfile(br.com.bragasaude.data.local.ProfileEntity(
+            userId = "owner", isSmoker = true, hasDiabetes = true,
+            pointsDiscipline = 100, currentXp = 200, totalXp = 300,
+            currentLevel = 8, currentStreak = 7, lastXpAt = java.util.Date(1)
+        ))
+        assertTrue(result.success)
+        val request = server.takeRequest()
+        assertEquals("/api/sync/profile", request.path)
+        val body = org.json.JSONObject(request.body.readUtf8())
+        assertTrue(body.getBoolean("isSmoker"))
+        assertTrue(body.getBoolean("hasDiabetes"))
+        for (key in listOf("pointsDiscipline", "currentXp", "totalXp", "currentLevel", "currentStreak", "lastXpAt")) {
+            assertFalse("Campo legado enviado: $key", body.has(key))
+        }
+    }
+    @Test fun legacyPointsInServerResponseDoNotAffectHealthProfile() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"id":"owner","is_smoker":true,"has_diabetes":true,"current_xp":500,"current_level":8,"points_discipline":100}"""))
+        val result = api.getProfileLookup("owner") as ProfileLookup.Found
+        assertTrue(result.profile.isSmoker)
+        assertTrue(result.profile.hasDiabetes)
+        val encoded = kotlinx.serialization.json.Json.encodeToString(
+            br.com.bragasaude.data.remote.model.RemoteProfile.serializer(), result.profile
+        )
+        val body = org.json.JSONObject(encoded)
+        for (key in listOf("points_discipline", "current_xp", "total_xp", "current_level", "current_streak", "last_xp_at")) {
+            assertFalse("Campo legado exposto: $key", body.has(key))
+        }
+    }
+
 }

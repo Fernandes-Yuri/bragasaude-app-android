@@ -114,10 +114,6 @@ class BragaApiClient @Inject constructor(
                 if (p.phone != null) put("phone", p.phone)
                 put("notificationsEnabled", p.notificationsEnabled)
                 put("locationEnabled", p.locationEnabled)
-                put("currentXp", p.currentXp)
-                put("totalXp", p.totalXp)
-                put("currentLevel", p.currentLevel)
-                put("currentStreak", p.currentStreak)
                 put("showInFeed", p.showInFeed)
                 put("userRole", p.userRole ?: JSONObject.NULL)
                 put("consentAcceptedAt", p.consentAcceptedAt?.let { isoFormat.format(it) } ?: JSONObject.NULL)
@@ -179,10 +175,6 @@ class BragaApiClient @Inject constructor(
                 consentAcceptedAt = res.nullableString("consent_accepted_at"),
                 notificationsEnabled = res.optBoolean("notifications_enabled", true),
                 locationEnabled = res.optBoolean("location_enabled", true),
-                currentXp = res.optInt("current_xp", 0),
-                totalXp = res.optInt("total_xp", 0),
-                currentLevel = res.optInt("current_level", 1),
-                currentStreak = res.optInt("current_streak", 0),
                 showInFeed = res.optBoolean("show_in_feed", true),
                 userRole = res.nullableString("user_role"),
                 basicProfileComplete = res.optBoolean("basic_profile_complete", false),

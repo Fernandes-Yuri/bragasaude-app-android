@@ -27,7 +27,7 @@ import br.com.bragasaude.domain.MedicationSchedule
  * mesmo em modo Doze (Android 6+).
  *
  * Ações da notificação:
- * - ACTION_TAKEN: registra dose tomada + concede XP (via goAsync, sem travar UI)
+ * - ACTION_TAKEN: registra dose tomada (via goAsync, sem travar UI)
  * - ACTION_SNOOZE: adia 15 min (re-agenda o alarme)
  */
 class MedicationAlarmReceiver : BroadcastReceiver() {
@@ -275,7 +275,7 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
     }
 
     /**
-     * TASK-MED-02: registra a dose tomada + concede XP sem travar a UI.
+     * TASK-MED-02: registra a dose tomada sem travar a UI.
      * Usa goAsync() para executar em background.
      */
     private fun handleDoseTaken(context: Context, intent: Intent) {
