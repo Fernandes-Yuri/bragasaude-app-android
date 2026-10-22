@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.profile
+package br.com.bragasaude.ui.profile
 
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.repository.*
@@ -28,7 +28,7 @@ class ProfileCaregivingTest {
             coEvery { repository.getProfileOneShotLocal("same-user") } returns base
             val saved = slot<RemoteProfile>()
             coEvery { repository.saveProfile(capture(saved)) } just Runs
-            val vm = ProfileViewModel(repository, feedback, auth, mockk<BragaDatabase>(), mockk<BragaApiClient>(relaxed = true))
+            val vm = ProfileViewModel(repository, feedback, auth, mockk<BragaDatabase>(), mockk<BragaApiClient>(relaxed = true), mockk(relaxed = true))
             var completed = false
             vm.saveCaregiverProfile("Maria", "VIEWER_ONLY") { completed = it }
             advanceUntilIdle()

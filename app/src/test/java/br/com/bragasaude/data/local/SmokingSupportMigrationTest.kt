@@ -34,7 +34,7 @@ class SmokingSupportMigrationTest {
                     for (j in 0 until indices.length()) old.execSQL(indices.getJSONObject(j).getString("createSql").replace("\${TABLE_NAME}", table))
                     if (table in seeds) {
                         val fields = entity.getJSONArray("fields")
-                        val required = (0 until fields.length()).map { fields.getJSONObject(it) }.filter { it.getBoolean("notNull") }
+                        val required = (0 until fields.length()).map { fields.getJSONObject(it) }.filter { it.optBoolean("notNull", false) }
                         val columns = required.joinToString(",") { "`${it.getString("columnName")}`" }
                         val values = required.joinToString(",") { if (it.getString("affinity") == "TEXT") "'fixture'" else "1" }
                         old.execSQL("INSERT INTO `$table` ($columns) VALUES ($values)")

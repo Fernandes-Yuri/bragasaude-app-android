@@ -31,7 +31,8 @@ class ProfileViewModel @Inject constructor(
     private val feedbackRepository: FeedbackRepository,
     private val auth: FirebaseAuth,
     private val database: BragaDatabase,
-    private val apiClient: BragaApiClient
+    private val apiClient: BragaApiClient,
+    private val smokingSupport: br.com.bragasaude.data.local.smoking.SmokingSupportRepository
 ) : ViewModel() {
 
     private val _profile = MutableStateFlow<RemoteProfile?>(null)
@@ -219,6 +220,10 @@ class ProfileViewModel @Inject constructor(
                     selfCareSetupPending = false
                 )
                 repository.saveProfile(newProfile)
+                // An optional offer must never make a successfully saved profile look like a failure.
+                try { smokingSupport.offerAfterProfileSaved() }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { /* Manual discovery remains available. */ }
                 onSaved()
                 onComplete()
             } catch (e: Exception) {
