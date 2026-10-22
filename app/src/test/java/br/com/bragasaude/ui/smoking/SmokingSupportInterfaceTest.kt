@@ -164,6 +164,10 @@ class SmokingSupportInterfaceTest {
             compose.onNodeWithTag("pauseCountdown").fetchSemanticsNode().config[SemanticsProperties.Text].single().text == "0:00"
         }
         compose.runOnIdle { assertFalse(recorded); assertFalse(closed) }
+        compose.onNodeWithTag("pauseActivity-HANDS").performScrollTo().performClick()
+        compose.onNodeWithTag("pauseGuidance").performScrollTo().assertTextContains("Se tiver papel por perto", substring = true)
+        compose.onNodeWithText("Começar outra pausa").performScrollTo().performClick()
+        compose.onNodeWithTag("pauseCountdown").assertTextEquals("2:00")
         compose.onNodeWithText("Encerrar pausa").performScrollTo().performClick()
         compose.runOnIdle { assertTrue(closed); assertFalse(recorded) }
     }

@@ -44,6 +44,11 @@ internal fun SmokingPause(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val now by rememberUpdatedState(monotonicMillis)
     val uri = LocalUriHandler.current
+    val startPause = {
+        remaining = 120
+        remainingAtSelection = 120
+        deadline = now() + 120_000
+    }
     LaunchedEffect(deadline, lifecycle) {
         val end = deadline ?: return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -60,11 +65,12 @@ internal fun SmokingPause(
             if (deadline == null) {
                 Text(SmokingSupportContent.pause)
                 if (selected == null) Text("Toque em uma sugestão abaixo para ver como experimentar. O contador é opcional.", style = MaterialTheme.typography.bodyMedium)
-                else Button(onClick = { remaining = 120; remainingAtSelection = 120; deadline = now() + 120_000 }, modifier = Modifier.fillMaxWidth()) { Text("Começar pausa de 2 minutos") }
+                else Button(onClick = startPause, modifier = Modifier.fillMaxWidth()) { Text("Começar pausa de 2 minutos") }
             } else {
                 Text("${remaining / 60}:${(remaining % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.testTag("pauseCountdown"))
                 LinearProgressIndicator(progress = { (120 - remaining) / 120f }, modifier = Modifier.fillMaxWidth())
                 Text(if (remaining == 0) "O tempo terminou. A vontade pode continuar; você pode tentar outra ideia ou buscar apoio." else "Siga a ideia abaixo no seu ritmo. Você não precisa acompanhar cada etapa.")
+                if (remaining == 0) OutlinedButton(onClick = startPause, modifier = Modifier.fillMaxWidth()) { Text("Começar outra pausa") }
             }
             TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Encerrar pausa") }
         }
@@ -74,7 +80,7 @@ internal fun SmokingPause(
             Text(activity.guidance, style = MaterialTheme.typography.bodyMedium)
             HorizontalDivider()
             Text(if (deadline == null) "Para experimentar agora" else if (remaining == 0) "Você decide o próximo passo" else "Ideia ${step + 1} de ${activity.steps.size}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Text(if (deadline != null && remaining == 0) "Você pode encerrar ou continuar essa ideia por conta própria, se estiver confortável. Não é preciso completar as etapas." else activity.steps[step], style = MaterialTheme.typography.bodyLarge, modifier = Modifier.testTag("pauseGuidance"))
+            Text(activity.steps[step], style = MaterialTheme.typography.bodyLarge, modifier = Modifier.testTag("pauseGuidance"))
             Text("Os dois minutos organizam a pausa, sem garantir que a vontade passe.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } }
         reason?.let { SupportCard { Text("Meu motivo", style = MaterialTheme.typography.titleMedium); Text(it) } }
