@@ -12,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import java.util.concurrent.atomic.AtomicLong
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
@@ -129,6 +131,87 @@ class SmokingSupportInterfaceTest {
         compose.onNodeWithText("Pular e encerrar").performScrollTo().performClick()
         verify(exactly = 0) { vm.saveDay(any(), any(), any(), any()) }
         verify(exactly = 0) { vm.recordCraving(any(), any()) }
+    }
+    @Test fun pauseOffersGuidanceAndSwitchingActivityDoesNotRecordAnything() {
+        var recorded = false
+        var closed = false
+        val elapsed = AtomicLong(1_000)
+        compose.setContent {
+            BragasaudeTheme(forceThemeMode = "LIGHT") {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    SmokingPause(null, false, onClose = { closed = true }, onRecord = { recorded = true }, monotonicMillis = { elapsed.get() })
+                }
+            }
+        }
+        compose.onNodeWithTag("pauseActivity-WATER").performScrollTo().assertIsDisplayed()
+        screenshot("09-ideias-disponiveis")
+        compose.onNodeWithTag("pauseActivity-WATER").performClick()
+        compose.onNodeWithTag("currentPauseActivity").performScrollTo().assertTextEquals("Água em pequenos goles")
+        compose.onNodeWithTag("pauseGuidance").assertTextContains("Se beber água agora", substring = true)
+        compose.onNodeWithText("Começar pausa de 2 minutos").performScrollTo().performClick()
+        compose.onNodeWithTag("pauseCountdown").assertIsDisplayed()
+        elapsed.set(31_000)
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onNodeWithTag("pauseCountdown").fetchSemanticsNode().config[SemanticsProperties.Text].single().text == "1:30"
+        }
+        compose.onNodeWithTag("pauseActivity-WALK").performScrollTo().performClick()
+        compose.onNodeWithTag("currentPauseActivity").performScrollTo().assertTextEquals("Caminhar devagar")
+        compose.onNodeWithTag("pauseGuidance").assertTextContains("trecho curto e plano", substring = true)
+        screenshot("07-pausa-caminhada")
+        compose.onNodeWithTag("pauseCountdown").assertTextEquals("1:30")
+        elapsed.set(121_000)
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onNodeWithTag("pauseCountdown").fetchSemanticsNode().config[SemanticsProperties.Text].single().text == "0:00"
+        }
+        compose.runOnIdle { assertFalse(recorded); assertFalse(closed) }
+        compose.onNodeWithTag("pauseActivity-HANDS").performScrollTo().performClick()
+        compose.onNodeWithTag("pauseGuidance").performScrollTo().assertTextContains("Se tiver papel por perto", substring = true)
+        compose.onNodeWithText("Começar outra pausa").performScrollTo().performClick()
+        compose.onNodeWithTag("pauseCountdown").assertTextEquals("2:00")
+        compose.onNodeWithText("Encerrar pausa").performScrollTo().performClick()
+        compose.runOnIdle { assertTrue(closed); assertFalse(recorded) }
+    }
+    @Test fun activityCardsAndGuidanceFitDarkThemeAndLargeFont() {
+        compose.setContent {
+            BragasaudeTheme(forceThemeMode = "DARK") {
+                CompositionLocalProvider(LocalDensity provides Density(1f, 1.4f)) {
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                        SmokingPause(null, false, onClose = {}, onRecord = {})
+                    }
+                }
+            }
+        }
+        compose.onNodeWithTag("pauseActivity-HANDS").performScrollTo().performClick()
+        compose.onNodeWithTag("currentPauseActivity").performScrollTo().assertTextEquals("Ocupar as mãos")
+        compose.onNodeWithTag("pauseGuidance").assertIsDisplayed()
+        screenshot("08-pausa-escuro-fonte-ampliada")
+    }
+    @Test fun homeHeaderOnlyShowsCompactActionWhenSupportIsEnabled() {
+        val vm = vm()
+        val state = MutableStateFlow(SmokingSupportSnapshot(ownerId = "owner", loaded = true))
+        every { vm.snapshot } returns state
+        var opened = false
+        compose.setContent {
+            BragasaudeTheme(forceThemeMode = "LIGHT") {
+                br.com.bragasaude.ui.components.EmeraldHeaderBanner(
+                    title = "teste", greetingPrefix = "Boa noite,", avatarInitials = "TE",
+                    trailingContent = { SmokingHomeAction(onOpen = { opened = true }, viewModel = vm) }
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("Meu caminho sem cigarro").assertDoesNotExist()
+        compose.runOnIdle {
+            state.value = state.value.copy(
+                settings = SmokingSupportSettings("owner", br.com.bragasaude.domain.smoking.OfferDecision.ACCEPTED, true, 1, 1, 1),
+                plan = SmokingSupportPlan("owner", "2026-10-20", stage = br.com.bragasaude.domain.smoking.PreparationStage.STARTED, createdAt = 1, updatedAt = 1)
+            )
+        }
+        compose.onNodeWithContentDescription("Meu caminho sem cigarro").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertTrue(opened) }
+        compose.onNodeWithText("Um espaço para seguir no seu ritmo.").assertDoesNotExist()
+        screenshot("10-atalho-no-cabecalho")
+        compose.runOnIdle { state.value = state.value.copy(settings = state.value.settings!!.copy(enabled = false)) }
+        compose.onNodeWithContentDescription("Meu caminho sem cigarro").assertDoesNotExist()
     }
     private fun screenshot(name: String) {
         compose.runOnIdle {

@@ -1,11 +1,12 @@
 package br.com.bragasaude.ui.smoking
 
-/** Local editorial version 1. Reviewed against the linked INCA page on 22/10/2026. */
+/** Local editorial version 2. Reviewed against the linked INCA page on 22/10/2026. */
 internal object SmokingSupportContent {
     const val sourceUrl = "https://www.gov.br/inca/pt-br/assuntos/gestor-e-profissional-de-saude/programa-nacional-de-controle-do-tabagismo/tratamento"
     const val privacy = "Seu plano, diário e registros de vontade ficam apenas neste celular, no banco protegido do aplicativo. Não são enviados à nuvem nem compartilhados com familiares. Eles não voltam automaticamente em outro aparelho, após reinstalação ou logout. A informação ‘Sou fumante’ do seu perfil continua com a sincronização própria do cadastro."
     const val limits = "Este apoio é gratuito e opcional. Ajuda você a organizar sua jornada; não faz diagnóstico, não prescreve medicamentos e não garante que você pare de fumar. Ativar não solicita contato nem autoriza compartilhamento."
     const val treatment = "O SUS oferece tratamento para quem deseja parar de fumar. Procure sua Unidade Básica de Saúde (UBS) e pergunte como acessar o tratamento do tabagismo no seu município. A equipe pode orientar o cuidado adequado para você."
-    const val pause = "Escolha algo simples para este momento: releia seu motivo, mude de ambiente ou ocupe as mãos com uma atividade de que goste. Você pode encerrar quando quiser. A pausa de dois minutos é apenas uma forma de organizar seu tempo, sem promessa terapêutica."
+    const val pause = "Escolha uma ideia para ocupar a atenção por um momento. Ela pode ou não ajudar você agora. Troque de atividade ou encerre quando quiser."
+    const val pauseSourceUrl = "https://www.who.int/campaigns/world-no-tobacco-day/2021/quitting-toolkit/quick-tips"
     const val products = "O diário acompanha cigarros. Outros produtos, como vape, palheiro ou charuto, não são convertidos em quantidades equivalentes aqui."
 }
