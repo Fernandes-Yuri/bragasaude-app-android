@@ -298,6 +298,8 @@ class FamilyBridgeRepositoryTest {
             id="message", patientUserId="patient", senderName="", messageText="",
             iconType="LOVE", senderUserId="caregiver-1", deletedAt=1L
         )
+        coEvery { familyDao.existsActiveLink("patient", "caregiver-1") } returns pendingBinding().copy(
+            patientUserId = "patient", caregiverUserId = "caregiver-1", status = "ACTIVE")
         coEvery { familyDao.getMessageById("message") } returns message
         coEvery { apiClient.getFamilyMessages("patient") } returns listOf(message.copy(deletedAt=null, messageText="old"))
         assertTrue(repository.syncFamilyMessages("patient").isSuccess)
@@ -324,4 +326,50 @@ class FamilyBridgeRepositoryTest {
             id="message", patientUserId="patient", senderName="Me", messageText="Hi", iconType="LOVE", sentAt=123L)
         assertEquals(86400123L, message.expiresAt)
     }
+    @Test fun blocksSendingWithoutActiveLinkBeforeWritingOrCallingServer() = runBlocking {
+        coEvery { familyDao.existsActiveLink("patient", "caregiver-1") } returns null
+        val result = runCatching { repository.createFamilyMessage("patient", "Nome", "Olá") }
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { familyDao.insertMessage(any()) }
+        coVerify(exactly = 0) { apiClient.syncFamilyMessage(any()) }
+    }
+
+    @Test fun refusesMessagesFromAnotherGroupBeforeCaching() = runBlocking {
+        coEvery { familyDao.existsActiveLink("patient", "caregiver-1") } returns pendingBinding().copy(status="ACTIVE")
+        coEvery { apiClient.getFamilyMessages("patient") } returns listOf(
+            br.com.bragasaude.data.local.FamilyMessageEntity(id="wrong", patientUserId="another-patient",
+                senderName="Outro", messageText="Privado", iconType="CUSTOM"))
+        assertTrue(repository.syncFamilyMessages("patient").isFailure)
+        coVerify(exactly=0) { familyDao.insertMessage(any()) }
+    }
+
+    @Test fun patientReplySchedulesRetryWhenOffline() = runBlocking {
+        every { auth.currentUser?.uid } returns "patient-1"
+        coEvery { familyDao.getBindingById("binding-id") } returns pendingBinding().copy(
+            caregiverUserId="caregiver-1", status="ACTIVE")
+        coEvery { apiClient.syncFamilyMessage(any()) } returns null
+        val result = repository.sendPatientReplyMessage("binding-id", " Olá ")
+        assertTrue(result.pendingSync)
+        assertEquals("Olá", result.messageText)
+        verify { syncScheduler.scheduleSync(any()) }
+    }
+
+    @Test fun revokedBindingCannotSendThroughBidirectionalShortcut() = runBlocking {
+        coEvery { familyDao.getBindingById("binding-id") } returns pendingBinding().copy(
+            caregiverUserId="caregiver-1", status="REVOKED")
+        assertTrue(runCatching { repository.sendMessageBidirectional("binding-id", "patient-1", "Nome", "Olá") }.isFailure)
+        coVerify(exactly=0) { familyDao.insertMessage(any()) }
+    }
+
+    @Test fun accountSwitchDuringDownloadCannotRepopulatePreviousConversation() = runBlocking {
+        coEvery { familyDao.existsActiveLink("patient", "caregiver-1") } returns pendingBinding().copy(status="ACTIVE")
+        coEvery { apiClient.getFamilyMessages("patient") } coAnswers {
+            every { auth.currentUser?.uid } returns "other-account"
+            emptyList()
+        }
+        coEvery { familyDao.existsActiveLink("patient", "other-account") } returns null
+        assertTrue(repository.syncFamilyMessages("patient").isFailure)
+        coVerify(exactly=0) { familyDao.insertMessage(any()) }
+    }
+
 }

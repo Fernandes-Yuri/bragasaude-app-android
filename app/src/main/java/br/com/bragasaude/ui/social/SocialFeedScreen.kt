@@ -79,6 +79,7 @@ import java.util.*
 @Composable
 fun SocialFeedScreen(
     onBack: () -> Unit,
+    onManagePhoto: () -> Unit = {},
     viewModel: SocialFeedViewModel = hiltViewModel()
 ) {
     val posts by viewModel.posts.collectAsState()
@@ -289,7 +290,7 @@ fun SocialFeedScreen(
                                 onDelete = { deletingPost = post },
                                 nowMillis = nowMillis,
                                 post = post,
-                                fallbackPhotoUrl = viewModel.currentUserPhotoUrl.takeIf { post.userId == viewModel.currentUserId },
+                                fallbackPhotoUrl = null,
                                 reactions = reactions,
                                 selectedReaction = selectedReaction,
                                 onReact = { reactionType ->
@@ -327,6 +328,7 @@ fun SocialFeedScreen(
         CreateAchievementBottomSheet(
             templates = viewModel.achievementTemplates,
             author = author,
+            onManagePhoto = { showCreateSheet = false; onManagePhoto() },
             publishState = publishState,
             onDismiss = {
                 if (publishState != SocialFeedViewModel.PublishState.Loading) {
@@ -663,6 +665,7 @@ private fun SocialPostCard(
 private fun CreateAchievementBottomSheet(
     templates: List<AchievementTemplate>,
     author: SocialPostAuthor,
+    onManagePhoto: () -> Unit,
     publishState: SocialFeedViewModel.PublishState,
     onDismiss: () -> Unit,
     onPublish: (title: String, description: String, postType: String, isPublic: Boolean) -> Unit
@@ -688,6 +691,11 @@ private fun CreateAchievementBottomSheet(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onManagePhoto, enabled = publishState != SocialFeedViewModel.PublishState.Loading) {
+                    Text("Alterar foto do mural")
+                }
+                Text("Para aparecer para outras pessoas, escolha uma foto no perfil. A foto Google não é compartilhada automaticamente.",
+                    style = MaterialTheme.typography.bodySmall)
                 Text(
                     text = "Compartilhar Conquista",
                     style = MaterialTheme.typography.headlineSmall,

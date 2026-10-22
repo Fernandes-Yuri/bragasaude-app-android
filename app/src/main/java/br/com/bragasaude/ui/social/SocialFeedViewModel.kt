@@ -9,6 +9,10 @@ import br.com.bragasaude.data.remote.service.TelemetryService
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,15 +44,14 @@ data class SocialPostAuthor(
 internal fun resolveSocialPostAuthor(
     profile: ProfileEntity?,
     accountName: String?,
-    googlePhotoUrl: String?,
     nickname: String
 ): SocialPostAuthor = SocialPostAuthor(
     name = br.com.bragasaude.domain.communityDisplayName(profile?.fullName?.takeIf { it.isNotBlank() } ?: accountName, nickname),
-    photoUrl = profile?.customPhotoUri?.takeIf { it.isNotBlank() } ?: googlePhotoUrl,
-    fallbackPhotoUrl = googlePhotoUrl,
+    photoUrl = br.com.bragasaude.data.util.sharedSocialPhotoUrl(profile?.customPhotoUri),
     avatarIdentifier = profile?.avatarIdentifier
 )
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class SocialFeedViewModel @Inject constructor(
     private val socialFeedRepository: SocialFeedRepository,
@@ -67,21 +70,33 @@ class SocialFeedViewModel @Inject constructor(
     val currentUserId: String
         get() = auth.currentUser?.uid ?: guestId
 
-    val currentUserPhotoUrl: String?
-        get() = auth.currentUser?.photoUrl?.toString()
+    private val accountId = MutableStateFlow(currentUserId)
+    private val authListener = FirebaseAuth.AuthStateListener {
+        val uid = currentUserId
+        if (accountId.value != uid) {
+            accountId.value = uid
+            _publishState.value = PublishState.Idle
+            _feedError.value = null
+            refresh()
+        }
+    }
 
-    val posts: StateFlow<List<SocialPostEntity>> = socialFeedRepository.getGlobalFeed(currentUserId, currentUserPhotoUrl)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(30000), emptyList())
+    val posts: StateFlow<List<SocialPostEntity>> = accountId.flatMapLatest { uid ->
+        flow {
+            emit(emptyList<SocialPostEntity>())
+            if (uid != guestId) emitAll(socialFeedRepository.getGlobalFeed(uid))
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(30_000), emptyList())
 
-    private val _communityNickname = MutableStateFlow("")
-    val author: StateFlow<SocialPostAuthor> = combine(
-        socialFeedRepository.getAuthorProfile(currentUserId), _communityNickname
-    ) { profile, nickname ->
-        resolveSocialPostAuthor(profile, auth.currentUser?.displayName, currentUserPhotoUrl, profile?.communityNickname ?: nickname)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(30_000), SocialPostAuthor(
-        name = br.com.bragasaude.domain.communityDisplayName(auth.currentUser?.displayName),
-        photoUrl = currentUserPhotoUrl
-    ))
+    val author: StateFlow<SocialPostAuthor> = accountId.flatMapLatest { uid ->
+        flow {
+            emit(SocialPostAuthor())
+            if (uid != guestId) emitAll(socialFeedRepository.getAuthorProfile(uid).map { profile ->
+                if (currentUserId == uid) resolveSocialPostAuthor(profile, auth.currentUser?.displayName,
+                    profile?.communityNickname.orEmpty()) else SocialPostAuthor()
+            })
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(30_000), SocialPostAuthor())
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -130,25 +145,26 @@ class SocialFeedViewModel @Inject constructor(
     )
 
     init {
-        viewModelScope.launch {
-            try {
-                _communityNickname.value = socialFeedRepository.getCommunityNickname(currentUserId)
-            } catch (_: Exception) {
-                // O perfil local continua disponível se a rede falhar.
-            }
-        }
+        auth.addAuthStateListener(authListener)
         refresh()
         telemetryService.logEvent(currentUserId, "SOCIAL_FEED", "OPEN")
     }
 
     fun refresh() {
+        val userId = currentUserId
+        if (userId == guestId) return
         viewModelScope.launch {
             _isRefreshing.value = true
             _feedError.value = null
             try {
                 telemetryService.logEvent(currentUserId, "SOCIAL_FEED", "REFRESH")
-                socialFeedRepository.fetchGlobalFeed(currentUserId = currentUserId)
+                socialFeedRepository.getCommunityNickname(userId)
+                socialFeedRepository.refreshAuthorPhoto(userId)
+                socialFeedRepository.fetchGlobalFeed(currentUserId = userId)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (currentUserId != userId) return@launch
                 android.util.Log.w("SocialFeedVM", "Refresh failed: ${e.message}")
                 _feedError.value = e.message ?: "Não foi possível atualizar o mural."
             } finally {
@@ -240,6 +256,11 @@ class SocialFeedViewModel @Inject constructor(
             catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: Exception) { _feedError.value = e.message ?: "Não foi possível excluir." }
         }
+    }
+
+    override fun onCleared() {
+        auth.removeAuthStateListener(authListener)
+        super.onCleared()
     }
 
     fun clearPublishState() {

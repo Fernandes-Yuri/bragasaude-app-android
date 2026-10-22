@@ -83,11 +83,15 @@ fun FamilyChatScreen(
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        viewModel.setChatScreenVisible(lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))
+        onDispose {
+            viewModel.setChatScreenVisible(false)
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     var messageText by remember(patientId) { mutableStateOf("") }
-    var isSending by remember { mutableStateOf(false) }
+    var isSending by remember(patientId, currentUserId) { mutableStateOf(false) }
     // D47: mensagem aguardando confirmação de exclusão (toque longo)
     var messagePendingDelete by remember { mutableStateOf<FamilyMessageEntity?>(null) }
     var showProfileBottomSheet by remember { mutableStateOf(false) }
@@ -229,6 +233,13 @@ fun FamilyChatScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
+
+            Text(
+                text = "Grupo da família: as mensagens são compartilhadas com os participantes vinculados a esta pessoa.",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             // D47: aviso permanente de retenção — as mensagens vivem por 24 horas
             FamilyRetentionNotice(
