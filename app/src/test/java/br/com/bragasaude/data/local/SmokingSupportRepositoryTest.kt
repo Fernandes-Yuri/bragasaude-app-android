@@ -63,6 +63,32 @@ class SmokingSupportRepositoryTest {
         assertNull(db.smokingSupportDao().settings("A"))
         assertNull(db.smokingSupportDao().plan("A"))
     }
+    @Test fun offerOnlyFollowsOwnSuccessfulSaveAndDeclineIsPersistent() = runBlocking {
+        val dao = db.profileDao()
+        dao.insert(ProfileEntity(userId = "A", isSmoker = true, userRole = "PATIENT"))
+        assertNull(repo.offerRequest.value)
+        repo.offerAfterProfileSaved()
+        assertEquals("A", repo.offerRequest.value)
+        repo.declineOffer(); repo.consumeOfferRequest()
+        repo.offerAfterProfileSaved()
+        assertNull(repo.offerRequest.value)
+        owners.value = "B"
+        dao.insert(ProfileEntity(userId = "B", isSmoker = true, userRole = "CAREGIVER", caregiverMode = "VIEWER_ONLY"))
+        repo.offerAfterProfileSaved()
+        assertNull(repo.offerRequest.value)
+        dao.insert(ProfileEntity(userId = "B", isSmoker = true, userRole = "CAREGIVER", caregiverMode = "HYBRID"))
+        repo.offerAfterProfileSaved()
+        assertEquals("B", repo.offerRequest.value)
+        assertNull(db.smokingSupportDao().plan("B"))
+    }
+    @Test fun editingPlanPreservesDiaryAndOriginalStart() = runBlocking {
+        activate(); repo.saveDay(date, false, null)
+        repo.updatePlan(date.plusDays(10), "Meu motivo", setOf(SmokingTrigger.COFFEE), PreparationStage.PREPARING)
+        val plan = db.smokingSupportDao().plan("A")!!
+        assertEquals(date.toString(), plan.startedOn)
+        assertEquals("Meu motivo", plan.personalReason)
+        assertNotNull(db.smokingSupportDao().day("A", date.toString()))
+    }
     @Test fun invalidMutationDoesNotDamagePreviousDayOrPlan() = runBlocking {
         activate(); repo.saveDay(date, false, null)
         try { repo.saveDay(date, true, 0); fail("Zero inválido") } catch (_: IllegalArgumentException) { }

@@ -38,7 +38,8 @@ fun NutritionScreen(
     openGroceryList: Boolean = false,
     suggestedGroceryItems: List<String> = emptyList(),
     viewModel: NutritionViewModel = hiltViewModel(),
-    onNavigateToPantryRecipes: () -> Unit = {}
+    onNavigateToPantryRecipes: () -> Unit = {},
+    onSmokingSupport: () -> Unit = {}
 ) {
     val dailyCal by viewModel.dailyCalories.collectAsState()
     val consumedCal by viewModel.totalCaloriesConsumed.collectAsState()
@@ -143,7 +144,8 @@ fun NutritionScreen(
                     portionGrams = option.servingSizeGrams
                 )
             },
-            onDismissSuggestion = { viewModel.dismissOrSwapSuggestion(it.name) }
+            onDismissSuggestion = { viewModel.dismissOrSwapSuggestion(it.name) },
+            onSmokingSupport = onSmokingSupport
         )
     }
 

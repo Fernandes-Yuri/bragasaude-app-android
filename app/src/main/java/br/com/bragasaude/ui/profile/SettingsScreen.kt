@@ -54,6 +54,7 @@ fun SettingsScreen(
     onNavigateToTerms: () -> Unit = {},
     onNavigateToPrivacy: () -> Unit = {},
     onNavigateToTutorial: () -> Unit = {},
+    onSmokingSupport: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val profile by viewModel.profile.collectAsState()
@@ -67,6 +68,7 @@ fun SettingsScreen(
     var showEmergencyDialog by remember { mutableStateOf(false) }
     var showStepGoalDialog by remember { mutableStateOf(false) }
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
     var deleteConfirmationText by remember { mutableStateOf("") }
 
     val userName = profile?.fullName?.takeIf { it.isNotBlank() } ?: "Meu perfil"
@@ -102,6 +104,8 @@ fun SettingsScreen(
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    br.com.bragasaude.ui.smoking.SmokingSupportEntry(onOpen = onSmokingSupport)
+
                     // Metas de Saúde
                     Text(
                         "Metas de Saúde Personalizadas",
@@ -287,7 +291,7 @@ fun SettingsScreen(
                                 title = "Sair da Conta",
                                 subtitle = "Encerrar sessão no dispositivo atual.",
                                 icon = Icons.AutoMirrored.Filled.ExitToApp,
-                                onClick = { viewModel.logout(onLogout) }
+                                onClick = { showLogoutDialog = true }
                             )
                             HorizontalDivider(color = BragaMintBorder.copy(alpha = 0.3f), thickness = 0.8.dp)
                             SettingsItem(
@@ -311,13 +315,21 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp), tint = BragaTextSecondary)
                         Spacer(Modifier.width(8.dp))
-                        Text("Braga Saúde • Versão 1.2.0 (Build 42)", style = MaterialTheme.typography.labelSmall, color = BragaTextSecondary)
+                        Text("Braga Saúde • Versão ${br.com.bragasaude.BuildConfig.VERSION_NAME} (Build ${br.com.bragasaude.BuildConfig.VERSION_CODE})", style = MaterialTheme.typography.labelSmall, color = BragaTextSecondary)
                     }
                     Spacer(Modifier.height(24.dp))
                 }
             }
         }
     }
+
+    if (showLogoutDialog) BragaAlertDialog(
+        onDismissRequest = { showLogoutDialog = false },
+        title = { Text("Sair da conta?") },
+        text = { Text("Os registros locais deste aparelho serão removidos. O plano e o diário de apoio para parar de fumar não são sincronizados e não voltarão após entrar novamente.") },
+        confirmButton = { TextButton(onClick = { showLogoutDialog = false; viewModel.logout(onLogout) }) { Text("Sair da conta") } },
+        dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Continuar no aplicativo") } }
+    )
 
     if (showDeleteAccountDialog) {
         val isConfirmed = deleteConfirmationText.trim().equals("deletar meu perfil", ignoreCase = true)

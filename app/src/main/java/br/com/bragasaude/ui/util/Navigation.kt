@@ -22,6 +22,7 @@ import kotlinx.serialization.Serializable
     @Serializable data object Biometry : Screen
     @Serializable data object Exams : Screen
     @Serializable data object Notifications : Screen
+    @Serializable data object SmokingSupport : Screen
     @Serializable data object Settings : Screen
     @Serializable data object Feedback : Screen
     @Deprecated("Liga Semanal desativada por D61; rota preservada apenas para compatibilidade")

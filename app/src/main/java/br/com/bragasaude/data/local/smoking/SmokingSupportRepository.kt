@@ -14,6 +14,7 @@ import javax.inject.Singleton
 
 data class SmokingSupportSnapshot(
     val ownerId: String? = null,
+    val loaded: Boolean = false,
     val settings: SmokingSupportSettings? = null,
     val plan: SmokingSupportPlan? = null,
     val days: List<SmokingDailyEntry> = emptyList(),
@@ -36,7 +37,7 @@ class SmokingSupportRepository @Inject constructor(
     val snapshot: Flow<SmokingSupportSnapshot> = session.owners.flatMapLatest { owner ->
         if (owner == null) flowOf(SmokingSupportSnapshot()) else dao.observeRecord(owner).map { record ->
             if (owner != session.currentUserId()) SmokingSupportSnapshot()
-            else SmokingSupportSnapshot(owner, record?.settings, record?.plans?.singleOrNull(),
+            else SmokingSupportSnapshot(owner, true, record?.settings, record?.plans?.singleOrNull(),
                 record?.days.orEmpty().sortedByDescending { it.localDate },
                 record?.cravings.orEmpty().sortedByDescending { it.occurredAt })
         }.onStart { emit(SmokingSupportSnapshot(ownerId = owner)) }
@@ -51,6 +52,27 @@ class SmokingSupportRepository @Inject constructor(
             // Roll back if logout/login occurred while waiting for Room.
             check(owner == session.currentUserId()) { "A sessão mudou." }
         }
+    }
+
+    private val _offerRequest = MutableStateFlow<String?>(null)
+    val offerRequest: StateFlow<String?> = _offerRequest.asStateFlow()
+
+    /** Called only after a successful save of the owner's own profile. Never on sync/startup. */
+    suspend fun offerAfterProfileSaved() {
+        val owner = session.currentUserId() ?: return
+        val profile = database.profileDao().getProfileOneShot(owner) ?: return
+        val eligible = profile.isSmoker && (profile.userRole != "CAREGIVER" || profile.caregiverMode == "HYBRID")
+        val decision = dao.settings(owner)?.offerDecision ?: OfferDecision.UNSEEN
+        if (eligible && decision == OfferDecision.UNSEEN && session.currentUserId() == owner) _offerRequest.value = owner
+    }
+
+    fun consumeOfferRequest() { _offerRequest.value = null }
+
+    suspend fun updatePlan(target: LocalDate?, reason: String?, triggers: Set<SmokingTrigger>, stage: PreparationStage) = mutate { owner, now, _, rules ->
+        val plan = requireActivePlan(owner)
+        rules.validatePlan(LocalDate.parse(plan.startedOn), target, reason, triggers)
+        dao.savePlan(plan.copy(quitTargetOn = target?.toString(), personalReason = reason?.trim()?.takeIf { it.isNotEmpty() },
+            triggers = triggers.sortedBy { it.name }.joinToString(",") { it.name }, stage = stage, updatedAt = now))
     }
 
     suspend fun declineOffer() = mutate { owner, now, _, _ ->

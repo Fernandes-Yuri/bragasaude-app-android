@@ -208,6 +208,8 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item { Spacer(Modifier.height(4.dp)) }
+                item { br.com.bragasaude.ui.smoking.SmokingHomeCard(onOpen = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.SmokingSupport) }) }
+
 
                 // 1. Atalhos Rápidos de Navegação — topo visível
                 item {

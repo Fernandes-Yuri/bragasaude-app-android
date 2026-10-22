@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.legal
+package br.com.bragasaude.ui.legal
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -42,6 +42,12 @@ fun PrivacyPolicyScreen(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            item {
+                Text("Meu caminho sem cigarro", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                Text(br.com.bragasaude.ui.smoking.SmokingSupportContent.privacy, style = MaterialTheme.typography.bodyMedium)
+                Text("Você pode desativar ou apagar apenas os dados desse apoio. Nenhum conteúdo do diário ou de vontade de fumar é enviado à análise de uso ou incluído em relatórios compartilhados.", style = MaterialTheme.typography.bodyMedium)
+            }
             item {
                 Text(
                     "Relógios e Health Connect",

@@ -63,6 +63,7 @@ fun AppNavHost(
     caregiverMode: String?,
     modifier: Modifier = Modifier
 ) {
+    val smokingViewModel: br.com.bragasaude.ui.smoking.SmokingSupportViewModel = hiltViewModel()
     val appContext = LocalContext.current.applicationContext
     val globalCareViewModel: CareOsViewModel = hiltViewModel()
     val careState by globalCareViewModel.ui.collectAsState()
@@ -77,6 +78,11 @@ fun AppNavHost(
             ) { launchSingleTop = true }
         }
     }
+
+    br.com.bragasaude.ui.smoking.SmokingProfileSaveOffer(
+        onOpen = { navController.navigate(Screen.SmokingSupport) { launchSingleTop = true } },
+        viewModel = smokingViewModel
+    )
 
     NavHost(
         navController = navController,
@@ -110,7 +116,8 @@ fun AppNavHost(
             CareModulesScreen(
                 onMedicationStock = { navController.navigate(Screen.MedicationStock) },
                 onCareWall = { navController.navigate(Screen.CareWall) },
-                onDoctorMode = { navController.navigate(Screen.DoctorMode) }
+                onDoctorMode = { navController.navigate(Screen.DoctorMode) },
+                onSmokingSupport = { navController.navigate(Screen.SmokingSupport) }
             )
         }
         composable<Screen.Milestones> { MilestonesScreen() }
@@ -146,6 +153,9 @@ fun AppNavHost(
         composable<Screen.Notifications> {
             NotificationsScreen(onBack = navigateBack)
         }
+        composable<Screen.SmokingSupport> {
+            br.com.bragasaude.ui.smoking.SmokingSupportScreen(onBack = navigateBack)
+        }
         composable<Screen.Settings> {
             SettingsScreen(
                 onBack = navigateBack,
@@ -158,7 +168,8 @@ fun AppNavHost(
                 onNavigateToFeedback = { navController.navigate(Screen.Feedback) },
                 onNavigateToTerms = { navController.navigate(Screen.TermsOfUse) },
                 onNavigateToPrivacy = { navController.navigate(Screen.PrivacyPolicy) },
-                onNavigateToTutorial = { navController.navigate(Screen.OnboardingTour) }
+                onNavigateToTutorial = { navController.navigate(Screen.OnboardingTour) },
+                onSmokingSupport = { navController.navigate(Screen.SmokingSupport) }
             )
         }
         composable<Screen.TermsOfUse> {
@@ -179,7 +190,8 @@ fun AppNavHost(
                 searchFood = nutrition.searchFood,
                 openGroceryList = nutrition.openGroceryList,
                 suggestedGroceryItems = nutrition.groceryItems,
-                onNavigateToPantryRecipes = { navController.navigate(Screen.PantryRecipes) }
+                onNavigateToPantryRecipes = { navController.navigate(Screen.PantryRecipes) },
+                onSmokingSupport = { navController.navigate(Screen.SmokingSupport) }
             )
         }
         composable<Screen.Report> {
@@ -196,7 +208,8 @@ fun AppNavHost(
                 onEditProfile = { navController.navigate(Screen.ProfileEdit) },
                 onNavigateToSettings = { navController.navigate(Screen.Settings) },
                 onAddCaregiving = { navController.navigate(Screen.CaregiverRegistration) },
-                onNavigateToWearables = { navController.navigate(Screen.Wearables) }
+                onNavigateToWearables = { navController.navigate(Screen.Wearables) },
+                onSmokingSupport = { navController.navigate(Screen.SmokingSupport) }
             )
         }
         composable<Screen.ProfileEdit> {

@@ -70,6 +70,7 @@ fun ProfileDetailScreen(
     onNavigateToSettings: () -> Unit = {},
     onAddCaregiving: () -> Unit = {},
     onNavigateToWearables: () -> Unit = {},
+    onSmokingSupport: () -> Unit = {},
     profileViewModel: ProfileViewModel = hiltViewModel(),
     authViewModel: AuthViewModel = hiltViewModel()
 ) {
@@ -79,6 +80,7 @@ fun ProfileDetailScreen(
     val sessionStatus by authViewModel.sessionStatus.collectAsState()
     val scope = rememberCoroutineScope()
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
     var showAvatarDialog by remember { mutableStateOf(false) }
     val communityNickname by profileViewModel.communityNickname.collectAsState()
     val communitySaving by profileViewModel.communitySaving.collectAsState()
@@ -616,6 +618,8 @@ fun ProfileDetailScreen(
                 }
             }
 
+            item { br.com.bragasaude.ui.smoking.SmokingSupportEntry(onOpen = onSmokingSupport) }
+
             // Seção Dados Pessoais - oculta para cuidadores VIEWER_ONLY
             if (!isViewerOnlyCaregiver) {
                 item {
@@ -639,26 +643,7 @@ fun ProfileDetailScreen(
                                 p?.activityLevel?.takeIf { it.isNotBlank() }?.let { "Atividade Física" to br.com.bragasaude.data.util.HealthFormatter.formatActivityLevel(it) }
                             )
                             items.forEachIndexed { index, (label, value) ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        label,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        modifier = Modifier.weight(1f, fill = false)
-                                    )
-                                    Text(
-                                        value,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = Color.Gray,
-                                        modifier = Modifier.weight(1f, fill = false),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.End
-                                    )
-                                }
+                                ProfileDataRow(label, value)
                                 if (index < items.size - 1) {
                                     HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
                                 }
@@ -778,7 +763,7 @@ fun ProfileDetailScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    scope.launch { authViewModel.signOut() }
+                                    showLogoutDialog = true
                                 }
                                 .padding(16.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -792,6 +777,14 @@ fun ProfileDetailScreen(
             
             item { Spacer(Modifier.height(40.dp)) }
         }
+
+        if (showLogoutDialog) BragaAlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("Sair da conta?") },
+            text = { Text("Os registros locais deste aparelho serão removidos. O plano e o diário de apoio para parar de fumar não são sincronizados e não voltarão após entrar novamente.") },
+            confirmButton = { TextButton(onClick = { showLogoutDialog = false; scope.launch { authViewModel.signOut() } }) { Text("Sair da conta") } },
+            dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Continuar no aplicativo") } }
+        )
 
         if (showDeleteDialog) {
             BragaAlertDialog(
@@ -862,5 +855,15 @@ fun ProfileInfoCard(items: List<ProfileInfoItem>) {
                 }
             }
         }
+    }
+}
+
+
+/** Values wrap at large font sizes and on narrow screens, without hiding information. */
+@Composable
+internal fun ProfileDataRow(label: String, value: String) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }
