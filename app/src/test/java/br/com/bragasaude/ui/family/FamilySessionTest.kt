@@ -54,6 +54,7 @@ class FamilySessionTest {
             assertNull(vm.chatPatientId.value)
         } finally {
             store.clear()
+            runCurrent()
             Dispatchers.resetMain()
         }
     }
