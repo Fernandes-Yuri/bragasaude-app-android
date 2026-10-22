@@ -28,7 +28,7 @@ internal fun parseSmokingDate(value: String): LocalDate = try { LocalDate.parse(
 @OptIn(ExperimentalCoroutinesApi::class)
 class SmokingSupportViewModel @Inject constructor(
     private val repository: SmokingSupportRepository,
-    session: SmokingSupportSession,
+    private val session: SmokingSupportSession,
     database: BragaDatabase,
     @SmokingClock private val clock: Clock,
     @SmokingZone private val zones: Provider<ZoneId>
@@ -38,7 +38,7 @@ class SmokingSupportViewModel @Inject constructor(
         if (owner == null) flowOf(null) else database.profileDao().getProfile(owner)
     }
     val offerEligible = combine(snapshot, ownerProfile) { state, profile ->
-        state.loaded && state.ownerId != null && profile?.userId == state.ownerId && profile.isSmoker &&
+        state.loaded && state.ownerId != null && profile != null && profile.userId == state.ownerId && profile.isSmoker &&
             (profile.userRole != "CAREGIVER" || profile.caregiverMode == "HYBRID") &&
             (state.settings?.offerDecision ?: OfferDecision.UNSEEN) == OfferDecision.UNSEEN
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -64,13 +64,21 @@ class SmokingSupportViewModel @Inject constructor(
     fun clearMessage() { _message.value = null }
     private fun perform(success: String? = null, onDone: () -> Unit = {}, work: suspend () -> Unit) {
         if (_busy.value) return
+        val actor = session.currentUserId() ?: return
         _busy.value = true
         _message.value = null
         viewModelScope.launch {
-            try { work(); if (success != null) _message.value = success; onDone() }
+            try {
+                check(actor == session.currentUserId())
+                work()
+                if (actor == session.currentUserId()) {
+                    if (success != null) _message.value = success
+                    onDone()
+                }
+            }
             catch (e: CancellationException) { throw e }
-            catch (e: IllegalArgumentException) { _message.value = e.message ?: "Confira os campos e tente novamente." }
-            catch (_: Exception) { _message.value = "Não foi possível concluir. Tente novamente." }
+            catch (e: IllegalArgumentException) { if (actor == session.currentUserId()) _message.value = e.message ?: "Confira os campos e tente novamente." }
+            catch (_: Exception) { if (actor == session.currentUserId()) _message.value = "Não foi possível concluir. Tente novamente." }
             finally { _busy.value = false }
         }
     }

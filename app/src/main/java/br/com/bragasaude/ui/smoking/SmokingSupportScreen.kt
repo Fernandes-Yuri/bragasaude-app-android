@@ -158,7 +158,7 @@ fun SmokingSupportScreen(onBack: () -> Unit, viewModel: SmokingSupportViewModel 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SmokingSupportLayout(onBack: () -> Unit, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
-    Scaffold(topBar = { TopAppBar(title = { Text("Meu caminho sem cigarro", style = MaterialTheme.typography.titleLarge) }, navigationIcon = {
+    Scaffold(topBar = { TopAppBar(title = { Text("Sem cigarro", style = MaterialTheme.typography.titleLarge) }, navigationIcon = {
         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar") }
     }) }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding).imePadding().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)

@@ -1,6 +1,10 @@
 package br.com.bragasaude.ui.smoking
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.inspector.WindowInspector
+import java.io.File
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -43,10 +47,13 @@ class SmokingSupportInterfaceTest {
     @Test fun existingAccountCanDiscoverAndExplicitlyActivateWithoutSmokerPrecondition() {
         val vm = vm()
         compose.setContent { BragasaudeTheme { SmokingSupportScreen(onBack = {}, viewModel = vm) } }
+        screenshot("01-apresentacao")
         verify(exactly = 0) { vm.savePlan(any(), any(), any(), any(), any(), any(), any()) }
         compose.onNodeWithText("Preparar meu plano").performScrollTo().performClick()
         verify(exactly = 0) { vm.savePlan(any(), any(), any(), any(), any(), any(), any()) }
-        compose.onNodeWithText("Ativar meu apoio").performScrollTo().performClick()
+        compose.onNodeWithText("Ativar meu apoio").performScrollTo().assertIsDisplayed()
+        screenshot("02-confirmacao-plano")
+        compose.onNodeWithText("Ativar meu apoio").performClick()
         verify(exactly = 1) { vm.savePlan("22/10/2026", "", "", emptySet(), any(), false, any()) }
     }
     @Test fun guestReadsHelpWithoutActivationOrSensitiveDiary() {
@@ -81,8 +88,36 @@ class SmokingSupportInterfaceTest {
         }
         val layouts = mutableListOf<TextLayoutResult>()
         compose.onNodeWithText(value).assertIsDisplayed().performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        screenshot("03-atividade-fonte-ampliada")
         assertTrue(layouts.isNotEmpty())
         assertFalse(layouts.single().hasVisualOverflow)
         assertFalse((0 until layouts.single().lineCount).any { layouts.single().isLineEllipsized(it) })
     }
+    @Test fun planConfirmationFitsDarkThemeWithLargeFont() {
+        val vm = vm()
+        compose.setContent {
+            BragasaudeTheme(forceThemeMode = "DARK") {
+                CompositionLocalProvider(LocalDensity provides Density(1f, 1.4f)) {
+                    SmokingSupportScreen(onBack = {}, viewModel = vm)
+                }
+            }
+        }
+        compose.onNodeWithText("Preparar meu plano").performScrollTo().performClick()
+        compose.onNodeWithText("Ativar meu apoio").performScrollTo().assertIsDisplayed()
+        screenshot("04-plano-escuro-fonte-ampliada")
+    }
+    private fun screenshot(name: String) {
+        compose.runOnIdle {
+            val windows = WindowInspector.getGlobalWindowViews()
+            val view = windows.first()
+            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            windows.forEach { it.draw(canvas) }
+            val file = File("build/outputs/smoking-review/$name.png")
+            requireNotNull(file.parentFile).mkdirs()
+            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
+    }
+
 }
