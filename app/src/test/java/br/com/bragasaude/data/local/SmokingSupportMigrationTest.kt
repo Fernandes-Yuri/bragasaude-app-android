@@ -47,7 +47,7 @@ class SmokingSupportMigrationTest {
             try {
                 // Opening invokes Room's full generated schema validation.
                 val sql = upgraded.openHelper.writableDatabase
-                assertEquals(60, sql.version)
+                assertEquals(61, sql.version)
                 for (table in seeds) sql.query("SELECT COUNT(*) FROM `$table`").use { c ->
                     assertTrue(c.moveToFirst()); assertEquals(1, c.getInt(0))
                 }

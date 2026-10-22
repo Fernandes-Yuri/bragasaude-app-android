@@ -20,7 +20,9 @@ object GroceryRetailCardDto {
             marketsJson = o.optJSONArray("markets")?.toString() ?: "[]",
             clinicalTagsJson = o.optJSONArray("clinical_tags")?.toString() ?: "[]",
             fiberG = facts.firstOrNull { it.getString("key") == "fiber" }?.getDouble("value"),
-            nutritionFactsJson = JSONArray(facts).toString()
+            nutritionFactsJson = JSONArray(facts).toString(),
+            imageCredit = if (o.isNull("image_credit")) null else o.optString("image_credit").trim().ifEmpty { null },
+            imageCreditUrl = if (o.isNull("image_credit_url")) null else o.optString("image_credit_url").trim().ifEmpty { null }
         )
     }
 
