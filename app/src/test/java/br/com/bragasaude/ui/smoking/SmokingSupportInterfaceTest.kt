@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicLong
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Density
 import br.com.bragasaude.data.local.smoking.*
 import br.com.bragasaude.ui.profile.ProfileDataRow
