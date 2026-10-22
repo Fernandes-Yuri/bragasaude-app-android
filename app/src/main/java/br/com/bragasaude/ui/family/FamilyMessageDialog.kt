@@ -76,7 +76,7 @@ fun FamilyMessageDialog(
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            "Canal direto com $patientName",
+                            "Grupo da família de $patientName",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary,

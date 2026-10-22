@@ -43,6 +43,7 @@ object FamilyNotificationService {
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "Mensagens e bilhetes de carinho entre você e sua família"
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
             enableVibration(true)
             enableLights(true)
             vibrationPattern = longArrayOf(0, 300, 100, 300)
@@ -55,6 +56,7 @@ object FamilyNotificationService {
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "Avisos de acompanhamento e sinais vitais da pessoa acompanhada"
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
             enableVibration(true)
             enableLights(true)
             lightColor = android.graphics.Color.YELLOW
@@ -86,6 +88,12 @@ object FamilyNotificationService {
 
         val builder = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
             .setSmallIcon(R.drawable.ic_shield_ecg)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(NotificationCompat.Builder(context, CHANNEL_MESSAGES)
+                .setSmallIcon(R.drawable.ic_shield_ecg)
+                .setContentTitle("Braga Saúde")
+                .setContentText("Você recebeu uma mensagem da família.")
+                .build())
             .setContentTitle("Mensagem de $senderName")
             .setContentText(messageText)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
