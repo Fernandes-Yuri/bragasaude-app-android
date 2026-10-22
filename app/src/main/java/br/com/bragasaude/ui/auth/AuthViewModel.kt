@@ -43,6 +43,7 @@ class AuthViewModel @Inject constructor(
     private val medicationRepository: br.com.bragasaude.data.remote.repository.MedicationRepository,
     private val apiClient: br.com.bragasaude.data.remote.api.BragaApiClient,
     private val notificationClient: NotificationClient,
+    private val smokingSession: br.com.bragasaude.data.local.smoking.SmokingSupportSession,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -692,6 +693,7 @@ class AuthViewModel @Inject constructor(
     }
 
     suspend fun signOut() {
+        smokingSession.closeForCleanup()
         movementManager.flush()
         
         // Cancelar todos os alarmes de medicação antes do logout (TASK-MED-02)
@@ -761,6 +763,7 @@ class AuthViewModel @Inject constructor(
     suspend fun deleteAccount() {
         val user = auth.currentUser ?: return
         val userId = user.uid
+        smokingSession.closeForCleanup()
         movementManager.flush()
 
         // Cancelar alarmes de medicação antes de deletar conta (TASK-MED-02)

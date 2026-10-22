@@ -52,6 +52,9 @@ object DatabaseModule {
     }
 
     @Provides
+    fun provideSmokingSupportDao(database: BragaDatabase): br.com.bragasaude.data.local.smoking.SmokingSupportDao = database.smokingSupportDao()
+
+    @Provides
     fun provideBiometryDao(database: BragaDatabase): BiometryDao {
         return database.biometryDao()
     }
