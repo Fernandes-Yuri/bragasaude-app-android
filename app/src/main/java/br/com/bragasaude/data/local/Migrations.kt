@@ -563,6 +563,27 @@ object Migrations {
         }
     }
 
+    /** 60 -> 61: adiciona metadados aditivos de crédito e licença às imagens do catálogo. */
+    val MIGRATION_60_61 = object : Migration(60, 61) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            val columns = mutableSetOf<String>()
+            runCatching {
+                db.query("PRAGMA table_info(grocery_retail_cards_local)").use { cursor ->
+                    val nameIndex = cursor.getColumnIndex("name")
+                    while (cursor.moveToNext()) {
+                        if (nameIndex != -1) columns.add(cursor.getString(nameIndex).lowercase())
+                    }
+                }
+            }
+            if ("imagecredit" !in columns) {
+                db.execSQL("ALTER TABLE grocery_retail_cards_local ADD COLUMN imageCredit TEXT")
+            }
+            if ("imagecrediturl" !in columns) {
+                db.execSQL("ALTER TABLE grocery_retail_cards_local ADD COLUMN imageCreditUrl TEXT")
+            }
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -598,6 +619,7 @@ object Migrations {
         MIGRATION_56_57,
         MIGRATION_57_58,
         MIGRATION_58_59,
-        MIGRATION_59_60
+        MIGRATION_59_60,
+        MIGRATION_60_61
     )
 }

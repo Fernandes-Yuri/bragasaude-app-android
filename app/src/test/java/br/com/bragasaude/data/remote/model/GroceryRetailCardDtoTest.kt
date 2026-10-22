@@ -44,4 +44,31 @@ class GroceryRetailCardDtoTest {
         GroceryRetailCardDto.parse(product().put("nutrition_facts", JSONArray().put(
             JSONObject().put("key", "sodium").put("label", "Sódio").put("unit", "mg").put("value", -1))))
     }
+
+    @Test fun imageCreditAndUrlAreParsedAndNormalizedWhenPresent() {
+        val json = product()
+            .put("image_credit", "Foto por Fulano / CC BY-SA 4.0")
+            .put("image_credit_url", "https://commons.wikimedia.org/wiki/File:Arroz.jpg")
+        val card = GroceryRetailCardDto.parse(json)
+        assertEquals("Foto por Fulano / CC BY-SA 4.0", card.imageCredit)
+        assertEquals("https://commons.wikimedia.org/wiki/File:Arroz.jpg", card.imageCreditUrl)
+    }
+
+    @Test fun imageCreditAndUrlHandleMissingNullOrBlankAsNull() {
+        val legacy = GroceryRetailCardDto.parse(product())
+        assertNull(legacy.imageCredit)
+        assertNull(legacy.imageCreditUrl)
+
+        val nulls = GroceryRetailCardDto.parse(product()
+            .put("image_credit", JSONObject.NULL)
+            .put("image_credit_url", JSONObject.NULL))
+        assertNull(nulls.imageCredit)
+        assertNull(nulls.imageCreditUrl)
+
+        val blanks = GroceryRetailCardDto.parse(product()
+            .put("image_credit", "   ")
+            .put("image_credit_url", ""))
+        assertNull(blanks.imageCredit)
+        assertNull(blanks.imageCreditUrl)
+    }
 }

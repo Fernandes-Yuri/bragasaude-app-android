@@ -3,19 +3,23 @@ package br.com.bragasaude.ui.nutrition
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.ui.text.style.TextOverflow
+import br.com.bragasaude.ui.components.BragaAlertDialog
 import br.com.bragasaude.ui.components.BragaFormSheet
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Brush
@@ -27,6 +31,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import br.com.bragasaude.data.remote.model.GroceryRetailCardDto
@@ -69,6 +74,7 @@ fun GroceryMarketShelfScreen(
     header: @Composable () -> Unit = {}
 ) {
     var detailCard by remember { mutableStateOf<GroceryRetailCardEntity?>(null) }
+    var creditCard by remember { mutableStateOf<GroceryRetailCardEntity?>(null) }
     var category by remember { mutableStateOf("Todos") }
     var query by remember { mutableStateOf("") }
     val haptic = LocalHapticFeedback.current
@@ -111,9 +117,42 @@ fun GroceryMarketShelfScreen(
                 Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Box {
                         GroceryProductImage(card.imageUrl, card.name, Modifier.fillMaxWidth().height(88.dp))
-                        Icon(Icons.Default.Info, contentDescription = "Ver detalhes de ${card.name}",
-                            tint = BragaTextSecondary,
-                            modifier = Modifier.align(Alignment.TopEnd).size(18.dp))
+                        if (!card.imageCredit.isNullOrBlank()) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(4.dp)
+                                    .sizeIn(minWidth = 44.dp, minHeight = 44.dp)
+                                    .clickable(
+                                        role = Role.Button,
+                                        onClickLabel = "Ver créditos da imagem de ${card.name}",
+                                        onClick = { creditCard = card }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Black.copy(alpha = 0.35f),
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Default.Info,
+                                            contentDescription = "Créditos da imagem de ${card.name}",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = "Ver detalhes de ${card.name}",
+                                tint = BragaTextSecondary,
+                                modifier = Modifier.align(Alignment.TopEnd).size(18.dp)
+                            )
+                        }
                     }
                     Text(card.name, style = MaterialTheme.typography.titleSmall,
                         minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -163,6 +202,9 @@ fun GroceryMarketShelfScreen(
                     if (rows.any { it.retailCardId == card.id && it.isCheckedInPantry }) {
                         Text("Comprado. Desmarque na lista para alterar a quantidade.")
                     }
+                    if (!card.imageCredit.isNullOrBlank()) {
+                        Text("Crédito da imagem: ${card.imageCredit}", style = MaterialTheme.typography.bodySmall)
+                    }
                     Text("Valores de referência por embalagem; podem variar por loja, região e data.",
                         style = MaterialTheme.typography.bodySmall)
                 }
@@ -170,4 +212,44 @@ fun GroceryMarketShelfScreen(
         )
     }
 
+    creditCard?.let { card ->
+        val uriHandler = LocalUriHandler.current
+        BragaAlertDialog(
+            onDismissRequest = { creditCard = null },
+            title = { Text("Crédito da imagem") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(card.name, style = MaterialTheme.typography.titleSmall)
+                    Text(card.imageCredit.orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                    if (!card.imageCreditUrl.isNullOrBlank()) {
+                        Text(
+                            card.imageCreditUrl.orEmpty(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BragaTextSecondary
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (!card.imageCreditUrl.isNullOrBlank()) {
+                    TextButton(onClick = {
+                        runCatching { uriHandler.openUri(card.imageCreditUrl.orEmpty()) }
+                    }) {
+                        Text("Ver fonte e licença")
+                    }
+                } else {
+                    TextButton(onClick = { creditCard = null }) {
+                        Text("OK")
+                    }
+                }
+            },
+            dismissButton = if (!card.imageCreditUrl.isNullOrBlank()) {
+                {
+                    TextButton(onClick = { creditCard = null }) {
+                        Text("Fechar")
+                    }
+                }
+            } else null
+        )
+    }
 }

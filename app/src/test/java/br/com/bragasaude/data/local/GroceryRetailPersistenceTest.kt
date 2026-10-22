@@ -81,4 +81,22 @@ class GroceryRetailPersistenceTest {
         catch (_: java.io.IOException) { }
         assertEquals(card, db.groceryRetailCardDao().observe().first().single())
     }
+
+    @Test fun imageCreditFieldsSurvivePersistenceAndReopen() = runBlocking {
+        val creditedCard = card.copy(
+            id = "rice-credited",
+            imageCredit = "Foto por Fulano / CC BY-SA 4.0",
+            imageCreditUrl = "https://commons.wikimedia.org/wiki/File:Arroz.jpg"
+        )
+        db.groceryRetailCardDao().replace(listOf(card, creditedCard))
+        db.close(); open()
+        val observed = db.groceryRetailCardDao().observe().first()
+        val retrieved = observed.first { it.id == "rice-credited" }
+        assertEquals("Foto por Fulano / CC BY-SA 4.0", retrieved.imageCredit)
+        assertEquals("https://commons.wikimedia.org/wiki/File:Arroz.jpg", retrieved.imageCreditUrl)
+
+        val uncredited = observed.first { it.id == card.id }
+        assertNull(uncredited.imageCredit)
+        assertNull(uncredited.imageCreditUrl)
+    }
 }

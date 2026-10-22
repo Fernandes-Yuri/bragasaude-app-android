@@ -45,7 +45,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 60, // Apoio local e opcional para parar de fumar
+    version = 61, // Créditos e licenças de imagens do catálogo de compras
     exportSchema = true
 )
 @TypeConverters(Converters::class, SmokingSupportConverters::class)
