@@ -136,20 +136,7 @@ fun FamilyChatScreen(
                             .padding(vertical = 4.dp, horizontal = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = BragaMint,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = currentConversation?.avatarLetter ?: "F",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BragaEmerald
-                                )
-                            }
-                        }
+                        FamilyConversationAvatar(currentConversation, 36.dp)
                         Spacer(Modifier.width(10.dp))
                         Column {
                             Text(
@@ -459,20 +446,7 @@ private fun ChatBubble(
     ) {
         // Avatar
         if (!isFromMe) {
-            Surface(
-                shape = CircleShape,
-                color = BragaMint,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        message.senderName.firstOrNull()?.uppercase()?.toString() ?: "?",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = BragaEmerald
-                    )
-                }
-            }
+            br.com.bragasaude.ui.components.ConnectedUserAvatar(message.senderUserId, message.senderName, 36.dp)
             Spacer(Modifier.width(8.dp))
         }
         

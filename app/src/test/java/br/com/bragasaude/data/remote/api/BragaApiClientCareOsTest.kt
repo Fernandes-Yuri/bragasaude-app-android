@@ -516,5 +516,21 @@ class BragaApiClientCareOsTest {
         assertEquals(first.toString(), retry.toString())
         assertEquals("captura", first.getString("screenshotBase64"))
     }
+    @Test fun `avatar metadata uses authenticated visual endpoint and preserves null removal`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"id":"other","photo_url":"https://api.bragasaude.online/api/files/avatars/other/f.jpg","avatar_identifier":null}"""))
+        val result = api.getProfileAvatar("other")
+        assertEquals("https://api.bragasaude.online/api/files/avatars/other/f.jpg", result.photoUrl)
+        val request = server.takeRequest()
+        assertEquals("/api/profile/other/avatar", request.path)
+        assertEquals("Bearer care-os-token", request.getHeader("Authorization"))
+        server.enqueue(MockResponse().setBody("""{"id":"other","photo_url":null,"avatar_identifier":"Star"}"""))
+        assertNull(api.getProfileAvatar("other").photoUrl)
+    }
+
+    @Test fun `avatar metadata rejects different author`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"id":"another","photo_url":null,"avatar_identifier":null}"""))
+        assertTrue(runCatching { api.getProfileAvatar("expected") }.isFailure)
+    }
+
 }
 

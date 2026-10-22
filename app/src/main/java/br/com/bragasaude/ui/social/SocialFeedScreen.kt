@@ -513,6 +513,7 @@ private fun SocialPostCard(
                 ) {
                     SocialAuthorAvatar(
                         name = post.userName,
+                        userId = post.userId,
                         photo = post.userAvatarUrl,
                         avatarIdentifier = post.userAvatarIdentifier,
                         fallbackPhotoUrl = fallbackPhotoUrl,
@@ -1032,48 +1033,15 @@ private fun getPostTypeBadge(postType: String): PostBadgeInfo {
 @Composable
 private fun SocialAuthorAvatar(
     name: String?,
+    userId: String? = null,
     photo: String?,
     avatarIdentifier: String?,
     fallbackPhotoUrl: String?,
     size: androidx.compose.ui.unit.Dp
 ) {
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(BragaMint),
-        contentAlignment = Alignment.Center
-    ) {
-        val photoCandidates = remember(photo, fallbackPhotoUrl) {
-            listOfNotNull(photo, fallbackPhotoUrl).filter { it.isNotBlank() }.distinct()
-        }
-        var photoIndex by remember(photoCandidates) { mutableIntStateOf(0) }
-        val photoUrl = photoCandidates.getOrNull(photoIndex)
-        val avatarIcon = when (avatarIdentifier) {
-            "Person" -> Icons.Default.Person
-            "Favorite" -> Icons.Default.Favorite
-            "Accessibility" -> Icons.Default.AccessibilityNew
-            "Star" -> Icons.Default.Star
-            else -> null
-        }
-        when {
-            avatarIcon != null -> Icon(avatarIcon, contentDescription = null, tint = BragaEmeraldDark)
-            photoUrl != null -> AsyncImage(
-                model = photoUrl,
-                contentDescription = "Foto de perfil",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                onError = { photoIndex++ }
-            )
-            else -> Text(
-                text = name?.trim()?.takeIf { it.isNotEmpty() }?.take(1)?.uppercase(Locale.ROOT) ?: "C",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                fontSize = 17.sp,
-                color = BragaEmeraldDark
-            )
-        }
-    }
+    if (userId == null) br.com.bragasaude.ui.components.SharedProfileAvatar(name, photo, avatarIdentifier, size)
+    else br.com.bragasaude.ui.components.ConnectedUserAvatar(userId, name, size,
+        photoUrl = photo, avatarIdentifier = avatarIdentifier)
 }
 
 /**

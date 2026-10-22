@@ -487,20 +487,7 @@ private fun CaregiverListItem(
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                shape = CircleShape,
-                color = BragaMint,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = initials,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = BragaEmerald
-                    )
-                }
-            }
+            br.com.bragasaude.ui.components.ConnectedUserAvatar(binding.caregiverUserId, displayName, 48.dp)
 
             Spacer(Modifier.width(12.dp))
 
