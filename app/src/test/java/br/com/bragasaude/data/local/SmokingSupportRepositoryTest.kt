@@ -57,6 +57,12 @@ class SmokingSupportRepositoryTest {
         assertNull(db.smokingSupportDao().plan("A"))
         assertEquals(OfferDecision.DECLINED, db.smokingSupportDao().settings("A")!!.offerDecision)
     }
+    @Test fun sessionChangeDuringMutationRollsBackWrites() = runBlocking {
+        every { session.currentUserId() } returnsMany listOf("A", "A", null)
+        try { activate(); fail("Sessão mudou") } catch (_: IllegalStateException) { }
+        assertNull(db.smokingSupportDao().settings("A"))
+        assertNull(db.smokingSupportDao().plan("A"))
+    }
     @Test fun invalidMutationDoesNotDamagePreviousDayOrPlan() = runBlocking {
         activate(); repo.saveDay(date, false, null)
         try { repo.saveDay(date, true, 0); fail("Zero inválido") } catch (_: IllegalArgumentException) { }
