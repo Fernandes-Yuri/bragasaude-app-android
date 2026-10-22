@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -161,7 +162,7 @@ private fun SmokingSupportLayout(onBack: () -> Unit, content: androidx.compose.f
     Scaffold(topBar = { TopAppBar(title = { Text("Sem cigarro", style = MaterialTheme.typography.titleLarge) }, navigationIcon = {
         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar") }
     }) }) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding).imePadding().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
+        LazyColumn(Modifier.fillMaxSize().padding(padding).imePadding().padding(horizontal = 16.dp).testTag("smokingContent"), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
     }
 }
 

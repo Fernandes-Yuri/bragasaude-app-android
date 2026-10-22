@@ -61,7 +61,8 @@ class SmokingSupportInterfaceTest {
         compose.setContent { BragasaudeTheme { SmokingSupportScreen(onBack = {}, viewModel = vm) } }
         compose.onNodeWithText("Preparar meu plano").assertDoesNotExist()
         compose.onNodeWithText("Registrar meu dia").assertDoesNotExist()
-        compose.onNodeWithText("Apoio e tratamento gratuito").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("smokingContent").performScrollToNode(hasText("Apoio e tratamento gratuito"))
+        compose.onNodeWithText("Apoio e tratamento gratuito").assertIsDisplayed()
     }
     @Test fun dayRequiresExplicitAnswerAndUnknownPositiveQuantityRemainsBlank() {
         var response: Pair<Boolean, String>? = null
@@ -90,7 +91,13 @@ class SmokingSupportInterfaceTest {
         compose.onNodeWithText(value).assertIsDisplayed().performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
         screenshot("03-atividade-fonte-ampliada")
         assertTrue(layouts.isNotEmpty())
-        assertFalse(layouts.single().hasVisualOverflow)
+        val layout = layouts.single()
+        assertEquals(value.length, layout.getLineEnd(layout.lineCount - 1, visibleEnd = true))
+        // Native glyph metrics can exceed rounded integer bounds by a fraction of a pixel.
+        for (line in 0 until layout.lineCount) {
+            assertTrue(layout.getLineRight(line) <= layout.size.width + 1f)
+            assertTrue(layout.getLineBottom(line) <= layout.size.height + 1f)
+        }
         assertFalse((0 until layouts.single().lineCount).any { layouts.single().isLineEllipsized(it) })
     }
     @Test fun planConfirmationFitsDarkThemeWithLargeFont() {
@@ -105,6 +112,23 @@ class SmokingSupportInterfaceTest {
         compose.onNodeWithText("Preparar meu plano").performScrollTo().performClick()
         compose.onNodeWithText("Ativar meu apoio").performScrollTo().assertIsDisplayed()
         screenshot("04-plano-escuro-fonte-ampliada")
+    }
+    @Test fun pauseNeverCreatesADayAndUnknownDatesDoNotCountAsAbstinence() {
+        val vm = vm()
+        every { vm.snapshot } returns MutableStateFlow(SmokingSupportSnapshot(
+            ownerId = "owner", loaded = true,
+            settings = SmokingSupportSettings("owner", br.com.bragasaude.domain.smoking.OfferDecision.ACCEPTED, true, 1, 1, 1),
+            plan = SmokingSupportPlan("owner", "2026-10-20", stage = br.com.bragasaude.domain.smoking.PreparationStage.STARTED, createdAt = 1, updatedAt = 1),
+            days = listOf(SmokingDailyEntry("owner", "2026-10-20", false, 0, "UTC", 1, 1))
+        ))
+        compose.setContent { BragasaudeTheme { SmokingSupportScreen(onBack = {}, viewModel = vm) } }
+        compose.onNodeWithText("Dias registrados sem fumar: 1").assertIsDisplayed()
+        screenshot("05-painel")
+        compose.onNodeWithText("Estou com vontade agora").performScrollTo().performClick()
+        screenshot("06-pausa")
+        compose.onNodeWithText("Pular e encerrar").performScrollTo().performClick()
+        verify(exactly = 0) { vm.saveDay(any(), any(), any(), any()) }
+        verify(exactly = 0) { vm.recordCraving(any(), any()) }
     }
     private fun screenshot(name: String) {
         compose.runOnIdle {
