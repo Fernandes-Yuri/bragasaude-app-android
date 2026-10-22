@@ -11,6 +11,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -229,12 +231,20 @@ class SmokingSupportInterfaceTest {
         verify(exactly = 0) { vm.savePlan(any(), any(), any(), any(), any(), any(), any()) }
     }
     @Test fun helpKeepsDetailedSourceInInfoSheet() {
-        compose.setContent { BragasaudeTheme(forceThemeMode = "LIGHT") { SmokingHelp() } }
+        val opened = mutableListOf<String>()
+        val handler = object : UriHandler { override fun openUri(uri: String) { opened += uri } }
+        compose.setContent { CompositionLocalProvider(LocalUriHandler provides handler) {
+            BragasaudeTheme(forceThemeMode = "LIGHT") { SmokingHelp() }
+        } }
+        compose.onNodeWithText("Procurar UBS próxima no Maps").performClick()
+        assertEquals(listOf(SmokingSupportContent.mapsUrl), opened)
         compose.onNodeWithText(SmokingSupportContent.treatment).assertDoesNotExist()
         screenshot("12-ajuda-resumida")
         compose.onNodeWithContentDescription("Como buscar atendimento no SUS").performClick()
         compose.onNodeWithText(SmokingSupportContent.treatment, substring = true).assertExists()
-        compose.onNodeWithText("Consultar fonte (internet)").assertExists()
+        compose.onNodeWithText("Consultar fonte do INCA").performClick()
+        assertEquals(SmokingSupportContent.sourceUrl, opened.last())
+        screenshot("14-ajuda-fonte-inca-e-maps")
         compose.onNodeWithText("Entendi").assertIsDisplayed()
     }
     @Test fun oxygenAndGlucoseUseDistinctMetricSymbols() {

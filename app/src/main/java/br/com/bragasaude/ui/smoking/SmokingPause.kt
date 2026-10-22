@@ -109,7 +109,7 @@ internal fun SmokingPause(
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Sobre estas sugestões", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-            SmokingInfoButton("Fontes e limites das sugestões", "Sugestões adaptadas de OMS — Quick tips; conteúdo local v3, conferido em 22/10/2026. As etapas são ideias para organizar a atenção, não um tratamento. A pausa não garante que a vontade passe.", SmokingSupportContent.pauseSourceUrl)
+            SmokingInfoButton("Fontes e limites das sugestões", "Sugestões adaptadas de OMS — Quick tips; conteúdo local v3, conferido em 22/10/2026. As etapas são ideias para organizar a atenção, não um tratamento. A pausa não garante que a vontade passe.", SmokingSupportContent.pauseSourceUrl, sourceLabel = "Consultar orientações da OMS")
         }
     }
 }
