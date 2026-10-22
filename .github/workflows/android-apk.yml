@@ -94,8 +94,8 @@ jobs:
         with:
           packages: 'platform-tools'
 
-      - name: Plataforma de compilação (compileSdk 35)
-        run: yes | sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+      - name: Plataforma de compilação (compileSdk 36)
+        run: yes | sdkmanager --install "platforms;android-36" "build-tools;35.0.0"
 
       # Wrapper unix (./gradlew) NÃO está no repositório — só gradlew.bat.
       # A action oficial provê o Gradle 9.5.0 (mesma versão do wrapper).
@@ -149,7 +149,7 @@ jobs:
             echo "variant=debug (bloqueio de modo desenvolvedor desativado)" >> "$GITHUB_OUTPUT"
             echo "retention=7" >> "$GITHUB_OUTPUT"
           else
-            gradle assembleRelease --no-daemon --stacktrace \
+            gradle assembleRelease bundleRelease --no-daemon --stacktrace \
               -Dorg.gradle.java.installations.paths="$JDK_PATHS"
             # Se gerou unsigned, padroniza o nome para upload sem quebra.
             if [ ! -f app/build/outputs/apk/release/app-release.apk ]; then
@@ -188,6 +188,22 @@ jobs:
           name: ${{ steps.apk.outputs.artifact }}
           path: ${{ steps.apk.outputs.path }}
           retention-days: ${{ steps.apk.outputs.retention }}
+          if-no-files-found: error
+
+      - name: Verificar AAB e registrar origem
+        if: steps.apk.outputs.artifact == 'braga-release-apk'
+        run: |
+          python3 .github/scripts/bundle_manifest.py
+
+      - name: Salvar AAB candidato para teste interno
+        if: steps.apk.outputs.artifact == 'braga-release-apk'
+        uses: actions/upload-artifact@v4
+        with:
+          name: braga-release-aab
+          path: |
+            app/build/outputs/bundle/release/app-release.aab
+            bundle-manifest.json
+          retention-days: 30
           if-no-files-found: error
 
       - name: Salvar APK dos testes instrumentados
@@ -243,8 +259,8 @@ jobs:
         with:
           packages: 'platform-tools'
 
-      - name: Plataforma de compilação (compileSdk 35)
-        run: yes | sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+      - name: Plataforma de compilação (compileSdk 36)
+        run: yes | sdkmanager --install "platforms;android-36" "build-tools;35.0.0"
 
       - name: Gradle 9.5.0
         uses: gradle/actions/setup-gradle@v4

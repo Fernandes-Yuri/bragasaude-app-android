@@ -25,12 +25,12 @@ val hasKeystore = if (keystorePropertiesFile != null && keystorePropertiesFile.e
 
 android {
     namespace = "br.com.bragasaude"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "br.com.bragasaude"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 39
         versionName = "1.9.2"
 
