@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -72,7 +73,7 @@ fun SmokingSupportScreen(onBack: () -> Unit, viewModel: SmokingSupportViewModel 
                 }
                 "settings" -> item {
                     SupportCard {
-                        SmokingInfoHeading("Gerenciar apoio", "Sobre desativar e apagar", "Desativar mantém seu diário e oculta o atalho da tela inicial. Apagar remove o plano e os registros deste apoio. Os dados das outras áreas são mantidos.")
+                        SmokingInfoHeading("Gerenciar apoio", "Sobre desativar e apagar", "Desativar mantém seu diário e oculta o atalho da tela inicial. " + SmokingSupportContent.eraseNotice)
                         if (state.enabled) OutlinedButton(onClick = { confirmation = "disable" }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Desativar apoio") }
                         OutlinedButton(onClick = { confirmation = "erase" }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Apagar dados do apoio") }
                     }
@@ -146,8 +147,8 @@ fun SmokingSupportScreen(onBack: () -> Unit, viewModel: SmokingSupportViewModel 
         if (confirmation != null) BragaAlertDialog(
             onDismissRequest = { confirmation = null },
             title = { Text(if (confirmation == "erase") "Apagar dados deste apoio?" else "Desativar apoio?") },
-            text = { Text(if (confirmation == "erase") "O plano, o diário e os registros de vontade serão removidos deste celular. Os dados das outras áreas serão mantidos. Esta ação não pode ser desfeita." else "Seu histórico será mantido, e o atalho sairá da tela inicial. Você pode reativar nas Configurações, no Perfil ou em Planos.") },
-            confirmButton = { TextButton(enabled = !busy, onClick = { if (confirmation == "erase") viewModel.erase() else viewModel.disable(); confirmation = null }) { Text("Confirmar") } },
+            text = { Text(if (confirmation == "erase") SmokingSupportContent.eraseNotice else "Seu histórico será mantido, e o atalho sairá da tela inicial. Você pode reativar nas Configurações, no Perfil ou em Planos.") },
+            confirmButton = { TextButton(enabled = !busy, onClick = { if (confirmation == "erase") viewModel.erase() else viewModel.disable(); confirmation = null }) { Text(if (confirmation == "erase") "Apagar dados locais" else "Desativar") } },
             dismissButton = { TextButton(onClick = { confirmation = null }) { Text("Cancelar") } }
         )
         dayToDelete?.let { day -> BragaAlertDialog(
@@ -183,9 +184,14 @@ internal fun SupportCard(content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 internal fun SmokingHelp() {
+    val uri = LocalUriHandler.current
+    val mapsAction: @Composable () -> Unit = {
+        TextButton(onClick = { uri.openUri(SmokingSupportContent.mapsUrl) }) { Text("Procurar UBS próxima no Maps") }
+    }
     SupportCard {
-        SmokingInfoHeading("Apoio e tratamento gratuito", "Como buscar atendimento no SUS", SmokingSupportContent.treatment + "\n\nFonte: INCA — Tratamento do tabagismo. Conteúdo local v3, conferido em 22/10/2026.", SmokingSupportContent.sourceUrl)
+        SmokingInfoHeading("Apoio e tratamento gratuito", "Como buscar atendimento no SUS", SmokingSupportContent.treatment + "\n\nFonte: INCA — Tratamento do tabagismo. Conteúdo local v3, conferido em 22/10/2026.", SmokingSupportContent.sourceUrl, sourceLabel = "Consultar fonte do INCA", action = mapsAction)
         Text("Procure uma UBS e pergunte pelo tratamento para parar de fumar no SUS.")
+        mapsAction()
     }
 }
 

@@ -2,6 +2,8 @@ package br.com.bragasaude.ui.smoking
 
 /** Local editorial version 3. Reviewed against the linked INCA page on 22/10/2026. */
 internal object SmokingSupportContent {
+    const val eraseNotice = "O plano, o diário e os registros de vontade ficam só neste celular e não são enviados ao servidor. Apagar remove esses dados de forma definitiva. A informação ‘Sou fumante’ do perfil tem sincronização própria e não será alterada, assim como os dados das outras áreas."
+    const val mapsUrl = "https://www.google.com/maps/search/?api=1&query=UBS+perto+de+mim"
     const val localNotice = "Plano e diário ficam neste celular. Sair da conta ou reinstalar apaga esses registros."
     const val sourceUrl = "https://www.gov.br/inca/pt-br/assuntos/gestor-e-profissional-de-saude/programa-nacional-de-controle-do-tabagismo/tratamento"
     const val privacy = "Seu plano, diário e registros de vontade ficam apenas neste celular, no banco protegido do aplicativo. Não são enviados à nuvem nem compartilhados com familiares. Eles não voltam automaticamente em outro aparelho, após reinstalação ou logout. A informação ‘Sou fumante’ do seu perfil continua com a sincronização própria do cadastro."
