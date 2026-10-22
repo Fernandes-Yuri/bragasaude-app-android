@@ -71,7 +71,7 @@ class ProfileLookupApiTest {
         }
     }
     @Test fun legacyPointsInServerResponseDoNotAffectHealthProfile() = runBlocking {
-        server.enqueue(MockResponse().setBody("""{"id":"owner","is_smoker":true,"has_diabetes":true,"current_xp":500,"current_level":8,"points_discipline":100}"""))
+        server.enqueue(MockResponse().setBody("""{"id":"owner","is_smoker":true,"has_diabetes":true,"current_xp":500,"current_level":8,"points_discipline":100,"basic_profile_complete":true,"self_care_complete":true,"self_care_setup_pending":false}"""))
         val result = api.getProfileLookup("owner") as ProfileLookup.Found
         assertTrue(result.profile.isSmoker)
         assertTrue(result.profile.hasDiabetes)
