@@ -98,6 +98,29 @@ class SocialFeedViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(30_000), SocialPostAuthor())
 
+    val hasGooglePhoto: Boolean get() = !auth.currentUser?.photoUrl?.toString().isNullOrBlank()
+    private val _isSharingPhoto = MutableStateFlow(false)
+    val isSharingPhoto = _isSharingPhoto.asStateFlow()
+    private val _photoNotice = MutableStateFlow<String?>(null)
+    val photoNotice = _photoNotice.asStateFlow()
+    fun clearPhotoNotice() { _photoNotice.value = null }
+
+    fun shareGooglePhoto() {
+        if (_isSharingPhoto.value) return
+        val userId = currentUserId
+        _isSharingPhoto.value = true
+        viewModelScope.launch {
+            try {
+                socialFeedRepository.shareGooglePhoto(userId)
+                if (currentUserId == userId) _photoNotice.value = "Foto compartilhada no perfil e no mural."
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (currentUserId == userId) _feedError.value = e.message ?: "Não foi possível compartilhar a foto."
+            } finally { _isSharingPhoto.value = false }
+        }
+    }
+
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
     private val _publishState = MutableStateFlow<PublishState>(PublishState.Idle)

@@ -84,6 +84,9 @@ fun SocialFeedScreen(
 ) {
     val posts by viewModel.posts.collectAsState()
     val author by viewModel.author.collectAsState()
+    val isSharingPhoto by viewModel.isSharingPhoto.collectAsState()
+    val photoNotice by viewModel.photoNotice.collectAsState()
+    var confirmGooglePhoto by remember { mutableStateOf(false) }
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner) {
@@ -98,6 +101,9 @@ fun SocialFeedScreen(
     val publishState by viewModel.publishState.collectAsState()
     val feedError by viewModel.feedError.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(photoNotice) {
+        photoNotice?.let { snackbarHostState.showSnackbar(it); viewModel.clearPhotoNotice() }
+    }
     var searchQuery by remember { mutableStateOf("") }
     var showCreateSheet by remember { mutableStateOf(false) }
     var editingPost by remember { mutableStateOf<SocialPostEntity?>(null) }
@@ -324,11 +330,26 @@ fun SocialFeedScreen(
         )
     }
 
+    if (confirmGooglePhoto) {
+        BragaAlertDialog(
+            onDismissRequest = { confirmGooglePhoto = false },
+            title = { Text("Compartilhar sua foto Google?") },
+            text = { Text("A foto será enviada à Braga Saúde para verificação e ficará visível no seu perfil e nas publicações. Você pode alterá-la ou removê-la no perfil.") },
+            confirmButton = { TextButton(onClick = {
+                confirmGooglePhoto = false
+                viewModel.shareGooglePhoto()
+            }) { Text("Usar minha foto") } },
+            dismissButton = { TextButton(onClick = { confirmGooglePhoto = false }) { Text("Agora não") } }
+        )
+    }
+
     if (showCreateSheet) {
         CreateAchievementBottomSheet(
             templates = viewModel.achievementTemplates,
             author = author,
             onManagePhoto = { showCreateSheet = false; onManagePhoto() },
+            onShareGooglePhoto = if (viewModel.hasGooglePhoto) ({ confirmGooglePhoto = true }) else null,
+            isSharingPhoto = isSharingPhoto,
             publishState = publishState,
             onDismiss = {
                 if (publishState != SocialFeedViewModel.PublishState.Loading) {
@@ -666,6 +687,8 @@ private fun CreateAchievementBottomSheet(
     templates: List<AchievementTemplate>,
     author: SocialPostAuthor,
     onManagePhoto: () -> Unit,
+    onShareGooglePhoto: (() -> Unit)?,
+    isSharingPhoto: Boolean,
     publishState: SocialFeedViewModel.PublishState,
     onDismiss: () -> Unit,
     onPublish: (title: String, description: String, postType: String, isPublic: Boolean) -> Unit
@@ -691,6 +714,12 @@ private fun CreateAchievementBottomSheet(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (onShareGooglePhoto != null) {
+                    TextButton(onClick = onShareGooglePhoto,
+                        enabled = !isSharingPhoto && publishState != SocialFeedViewModel.PublishState.Loading) {
+                        Text(if (isSharingPhoto) "Compartilhando foto…" else "Usar minha foto Google no mural")
+                    }
+                }
                 TextButton(onClick = onManagePhoto, enabled = publishState != SocialFeedViewModel.PublishState.Loading) {
                     Text("Alterar foto do mural")
                 }
@@ -949,7 +978,7 @@ private fun CreateAchievementBottomSheet(
                         isPublic
                     )
                 },
-                enabled = publishState != SocialFeedViewModel.PublishState.Loading,
+                enabled = !isSharingPhoto && publishState != SocialFeedViewModel.PublishState.Loading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 52.dp),

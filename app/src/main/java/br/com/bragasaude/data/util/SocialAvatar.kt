@@ -20,3 +20,11 @@ fun SocialPostEntity.withProfileAvatar(profile: ProfileEntity?): SocialPostEntit
     return copy(userAvatarIdentifier = profile.avatarIdentifier,
         userAvatarUrl = sharedSocialPhotoUrl(profile.customPhotoUri))
 }
+
+/** Importação restrita à origem de fotos Google, sem redirecionamentos ou credenciais. */
+fun googlePhotoDownloadUrl(value: String?): String? {
+    val url = value?.toHttpUrlOrNull() ?: return null
+    return value.takeIf { url.scheme == "https" && url.port == 443 &&
+        (url.host == "googleusercontent.com" || url.host.endsWith(".googleusercontent.com")) &&
+        url.username.isEmpty() && url.password.isEmpty() }
+}

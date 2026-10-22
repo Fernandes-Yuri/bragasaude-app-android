@@ -31,4 +31,13 @@ class SocialAvatarTest {
         assertNull(sharedSocialPhotoUrl(photo.replace("https:", "http:")))
         assertNull(sharedSocialPhotoUrl("https://api.bragasaude.online/api/profile/autor"))
     }
+    @Test fun importacaoGoogleNaoAceitaOutraOrigemOuCredenciaisNaUrl() {
+        val google = "https://lh3.googleusercontent.com/a/foto=s96-c"
+        assertEquals(google, googlePhotoDownloadUrl(google))
+        assertNull(googlePhotoDownloadUrl("https://googleusercontent.com.evil.test/foto"))
+        assertNull(googlePhotoDownloadUrl("https://usuario:senha@lh3.googleusercontent.com/foto"))
+        assertNull(googlePhotoDownloadUrl("http://lh3.googleusercontent.com/foto"))
+        assertNull(googlePhotoDownloadUrl("file:///foto"))
+    }
+
 }
