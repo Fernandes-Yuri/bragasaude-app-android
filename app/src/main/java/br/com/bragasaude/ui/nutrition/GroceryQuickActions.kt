@@ -18,9 +18,10 @@ internal fun GroceryQuickActions(days: Int, loading: Boolean, onDays: (Int) -> U
     onChoosePeriod: () -> Unit, onAdd: () -> Unit, onPlan: () -> Unit) {
     val fontScale = LocalDensity.current.fontScale
     BoxWithConstraints(Modifier.fillMaxWidth().testTag("groceryQuickActions")) {
+        val showPeriodChips = maxWidth >= 300.dp && fontScale <= 1.1f
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (maxWidth >= 300.dp && fontScale <= 1.1f) {
+            if (showPeriodChips) {
                 GroceryPlanningPeriod.options.forEach { option ->
                     FilterChip(selected = days == option, enabled = !loading, onClick = { onDays(option) },
                         label = { Text("$option dias", style = MaterialTheme.typography.labelSmall, maxLines = 1) },
