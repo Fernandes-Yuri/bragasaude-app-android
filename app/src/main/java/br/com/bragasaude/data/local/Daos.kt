@@ -422,7 +422,7 @@ interface SocialFeedDao {
                 (complete || (oldest != null && cached.createdAt > oldest))
         }.forEach { cached ->
             // Comparação dentro da transação: não apagar edição ou publicação concorrente.
-            if (getPostById(cached.id) == cached && !hasPendingReactions(cached.id)) {
+            if (getPostById(cached.id) == cached) {
                 deleteCachedReactionsForPost(cached.id)
                 deletePostById(cached.id)
             }
@@ -432,7 +432,8 @@ interface SocialFeedDao {
     @Query("SELECT EXISTS(SELECT 1 FROM post_reactions_local WHERE postId = :postId AND pendingSync = 1)")
     suspend fun hasPendingReactions(postId: String): Boolean
 
-    @Query("DELETE FROM post_reactions_local WHERE postId = :postId AND pendingSync = 0")
+    // Reações de uma publicação ausente na página confirmada não podem ressuscitar seu card.
+    @Query("DELETE FROM post_reactions_local WHERE postId = :postId")
     suspend fun deleteCachedReactionsForPost(postId: String)
 
     @Transaction
