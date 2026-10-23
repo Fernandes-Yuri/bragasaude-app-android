@@ -5,6 +5,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReportReadingsTest {
+    @Test fun bmiUsesWeightAndHeightAndReferencesHaveExplicitBoundaries() {
+        assertEquals(25.0, reportBmi(100f, 200f)!!, 0.0001)
+        assertNull(reportBmi(70f, 0f))
+        assertNull(reportBmi(Float.NaN, 170f))
+        assertEquals("Baixo peso", adultBmiReference(18.4))
+        assertEquals("Peso adequado", adultBmiReference(18.5))
+        assertEquals("Sobrepeso", adultBmiReference(25.0))
+        assertEquals("Obesidade", adultBmiReference(30.0))
+        assertEquals("Dentro da referência geral", pressureReference(119, 79))
+        assertEquals("Faixa de atenção", pressureReference(120, 80))
+        assertEquals("Acima da referência geral", pressureReference(140, 80))
+        assertEquals("Conferir leitura baixa", pressureReference(85, 50))
+        assertNull(reportAge(null, "2026-10-23T10:00:00Z"))
+        assertEquals(36, reportAge("1990-01-01", "2026-10-23T10:00:00Z"))
+    }
     @Test fun latestMeasurementIsChosenIndependentlyForEachSignal() {
         val pressure = RemoteVitalSign(userId = "u", systolicPressure = 120, diastolicPressure = 80,
             heartRate = 65, measuredAt = "2026-10-20T10:00:00Z")

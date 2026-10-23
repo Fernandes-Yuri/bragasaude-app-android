@@ -121,9 +121,9 @@ class NutritionInterfaceTest {
         compose.onNodeWithText("1 kg").assertIsDisplayed()
         compose.onNodeWithText("500 g").assertIsDisplayed()
         screenshot("15-catalogo-primeira-tela")
-        compose.onNodeWithContentDescription("Ver resumo do plano").performClick()
+        compose.onNodeWithText("Ver resumo do plano").performClick()
         compose.onNodeWithTag("groceryPlanDetails").assertExists()
-        compose.onNodeWithContentDescription("Recolher resumo do plano").performClick()
+        compose.onNodeWithText("Recolher resumo do plano").performClick()
         compose.onNodeWithTag("groceryPlanDetails").assertDoesNotExist()
     }
 
@@ -191,8 +191,6 @@ class NutritionInterfaceTest {
                 GroceryListBottomSheet(emptyList(), {}, { _, _ -> }, {}, {}, onPlanningDaysChange = { selected = it })
             }
         }
-        compose.onNodeWithText("7 dias").performClick()
-        compose.onNodeWithText("Período da lista").assertIsDisplayed()
         compose.onNodeWithText("30 dias").performClick()
         compose.runOnIdle { assertEquals(30, selected) }
         compose.onNodeWithText("Período da lista").assertDoesNotExist()

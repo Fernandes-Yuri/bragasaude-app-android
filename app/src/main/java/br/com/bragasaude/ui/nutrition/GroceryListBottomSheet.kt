@@ -266,17 +266,8 @@ fun GroceryListBottomSheet(
         ) {
             val planningHeader: @Composable () -> Unit = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("${groceryList.size} itens · $checkedCount comprados",
-                            Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick = { choosingPeriod = true }, enabled = !isLoading) {
-                            Text("${weeklyGoal.planningDays} dias")
-                        }
-                        IconButton(onClick = { showPlanningDetails = !showPlanningDetails }) {
-                            Icon(if (showPlanningDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = if (showPlanningDetails) "Recolher resumo do plano" else "Ver resumo do plano")
-                        }
+                    TextButton(onClick = { showPlanningDetails = !showPlanningDetails }) {
+                        Text(if (showPlanningDetails) "Recolher resumo do plano" else "Ver resumo do plano")
                     }
                     if (showPlanningDetails) {
                         Column(Modifier.testTag("groceryPlanDetails"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -308,105 +299,17 @@ fun GroceryListBottomSheet(
                     }
                 }
             }
+            GroceryQuickActions(weeklyGoal.planningDays, isLoading, onPlanningDaysChange,
+                { choosingPeriod = true }, { isCreatingManual = true }, {
+                    if (groceryList.isEmpty()) { pendingPreserveManual = false; showPreferencesSheet = true }
+                    else showPlanOptionsDialog = true
+                })
             if (showCatalog) {
                 GroceryMarketShelfScreen(retailCards, groceryList, retailLoading, retailMessage,
                     onRefreshRetail, onAddCard, onDecrementCard,
                     Modifier.fillMaxWidth().weight(1f), allowSelection = true,
                     header = planningHeader)
             } else {
-                // 2. Barra de Ações Rápidas (Proporcionais 1:1, Sem Quebra de Linha e com Planejador Semanal Contextual)
-                val hasItems = groceryList.isNotEmpty()
-                val needsResize = plan?.isManuallyModified == true || (plan != null && plan.coveragePercent < WeeklyGroceryEngine.MIN_ENERGY_COVERAGE_PERCENT)
-                val buttonLabel = when {
-                    isLoading -> "Planejando..."
-                    !hasItems -> "Planejar com IA"
-                    needsResize -> "Recalcular meta"
-                    else -> "Opções com IA"
-                }
-                val buttonIcon = when {
-                    needsResize -> Icons.Default.Refresh
-                    else -> Icons.Default.AutoAwesome
-                }
-
-                Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Button(
-                            onClick = { isCreatingManual = true },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                            shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp)
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                "Adicionar",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1
-                            )
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                if (isLoading) return@OutlinedButton
-                                if (!hasItems) {
-                                    pendingPreserveManual = false
-                                    showPreferencesSheet = true
-                                } else {
-                                    showPlanOptionsDialog = true
-                                }
-                            },
-                            enabled = !isLoading,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(
-                                if (needsResize) 1.5.dp else 1.dp,
-                                if (needsResize) BragaEmerald else BragaMintBorder
-                            ),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (needsResize) BragaMintSurface else BragaMintSurface.copy(alpha = 0.5f)
-                            ),
-                            contentPadding = PaddingValues(horizontal = 8.dp)
-                        ) {
-                            if (isLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = BragaEmeraldDark
-                                )
-                                Spacer(Modifier.width(6.dp))
-                            } else {
-                                Icon(
-                                    buttonIcon,
-                                    contentDescription = null,
-                                    tint = BragaEmeraldDark,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                            }
-                            Text(
-                                buttonLabel,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = BragaEmeraldDark,
-                                maxLines = 1
-                            )
-                        }
-                    }
-
-                }
-
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()

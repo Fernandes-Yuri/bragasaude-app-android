@@ -31,6 +31,7 @@ class ProfileAvatarRecoveryTest {
         db.clearAllTables()
         assertNull(db.profileDao().getProfileOneShot("owner"))
         val api = mockk<BragaApiClient>()
+        coEvery { api.reactivateAccount(any()) } returns true
         coEvery { api.getProfileLookup("owner") } returns ProfileLookup.Found(RemoteProfile(id = "owner", photoUrl = photo))
         val repo = ProfileRepository(api, db.profileDao(), mockk(relaxed = true), mockk(relaxed = true))
         repo.refreshProfileForLogin("owner")

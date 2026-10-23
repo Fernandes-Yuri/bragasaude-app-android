@@ -112,6 +112,38 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    private val _accountBusy = MutableStateFlow(false)
+    val accountBusy = _accountBusy.asStateFlow()
+    private val _accountError = MutableStateFlow<String?>(null)
+    val accountError = _accountError.asStateFlow()
+
+    fun deactivateAccount(onComplete: () -> Unit) {
+        if (_accountBusy.value) return
+        val uid = auth.currentUser?.uid ?: return
+        _accountBusy.value = true
+        _accountError.value = null
+        viewModelScope.launch {
+            try {
+                movementManager.flush()
+                check(apiClient.deactivateAccount(uid)) { "Não foi possível pausar a conta. Tente novamente com conexão." }
+                check(auth.currentUser?.uid == uid) { "Sua sessão mudou. Entre novamente." }
+                smokingSession.closeForCleanup()
+                appContext.getSharedPreferences("account_pause", Context.MODE_PRIVATE).edit().putBoolean(uid, true).apply()
+                try { medicationRepository.cancelAllUserAlarms(uid) } catch (_: Exception) { }
+                withContext(Dispatchers.IO) {
+                    try { WorkManager.getInstance(appContext).cancelAllWork().result.get() } catch (_: Exception) { }
+                }
+                // Pausa preserva o Room cifrado, inclusive o diário que existe só neste aparelho.
+                auth.signOut()
+                _profile.value = null
+                _photoUrl.value = null
+                onComplete()
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { _accountError.value = e.message ?: "Não foi possível pausar a conta." }
+            finally { _accountBusy.value = false }
+        }
+    }
+
     fun logout(onComplete: () -> Unit) {
         smokingSession.closeForCleanup()
         viewModelScope.launch {
@@ -153,7 +185,6 @@ class SettingsViewModel @Inject constructor(
             try {
                 val user = auth.currentUser ?: run { onComplete(); return@launch }
                 val userId = user.uid
-                smokingSession.closeForCleanup()
                 movementManager.flush()
 
                 try {
@@ -164,9 +195,11 @@ class SettingsViewModel @Inject constructor(
 
                 val remoteDeleted = profileRepository.deleteProfileRemotely(userId)
                 if (!remoteDeleted) {
-                    android.util.Log.w("SettingsViewModel", "Delete remoto falhou para $userId.")
+                    _accountError.value = "A exclusão não foi confirmada no servidor. Seus dados foram preservados; tente novamente com conexão."
+                    return@launch
                 }
 
+                smokingSession.closeForCleanup()
                 withContext(Dispatchers.IO) {
                     try {
                         WorkManager.getInstance(appContext).cancelAllWork()

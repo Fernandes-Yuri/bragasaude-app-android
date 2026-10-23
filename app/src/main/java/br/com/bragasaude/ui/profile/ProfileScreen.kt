@@ -313,12 +313,7 @@ fun ProfileScreen(
             }
 
             item {
-                Card(
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFFF3F4F6))
-                ) {
+                WhiteProfileDataCard {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text("Dados Pessoais", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         
@@ -404,12 +399,7 @@ fun ProfileScreen(
 
             if (!isCaregiver) {
                 item {
-                    Card(
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFFF3F4F6))
-                ) {
+                    WhiteProfileDataCard {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text("Estilo de Vida e Saúde", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         
@@ -555,12 +545,7 @@ fun ProfileScreen(
             }
 
             item {
-                Card(
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFFF3F4F6))
-                ) {
+                WhiteProfileDataCard {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Contato de Emergência", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         OutlinedTextField(
@@ -599,12 +584,7 @@ fun ProfileScreen(
             }
 
             item {
-                Card(
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFFF3F4F6))
-                ) {
+                WhiteProfileDataCard {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Ciclo de Sono (Não incomodar)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -642,6 +622,25 @@ fun ProfileScreen(
             }
             
             item { Spacer(Modifier.height(32.dp)) }
+        }
+    }
+}
+
+
+/** Superfície branca do cadastro, com texto/inputs escuros mesmo no tema noturno. */
+@Composable
+private fun WhiteProfileDataCard(content: @Composable () -> Unit) {
+    val white = androidx.compose.ui.graphics.Color.White
+    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(
+        surface = white,
+        onSurface = br.com.bragasaude.ui.theme.BragaTextPrimary,
+        onSurfaceVariant = br.com.bragasaude.ui.theme.BragaTextSecondary
+    )) {
+        Card(shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = white),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, br.com.bragasaude.ui.theme.BragaMintBorder.copy(alpha = 0.5f))) {
+            content()
         }
     }
 }

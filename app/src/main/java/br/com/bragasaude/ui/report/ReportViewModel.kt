@@ -26,6 +26,9 @@ class ReportViewModel @Inject constructor(
     private val pdfGenerator: PdfReportGenerator
 ) : ViewModel() {
 
+    val profile = profileRepository.getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     private val _latestBiometry = MutableStateFlow<RemoteBiometry?>(null)
     val latestBiometry = _latestBiometry.asStateFlow()
 
