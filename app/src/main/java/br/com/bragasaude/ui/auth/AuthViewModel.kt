@@ -198,6 +198,16 @@ class AuthViewModel @Inject constructor(
                 if (update != null) remote = update
                 currentCoroutineContext().ensureActive()
                 if (auth.currentUser?.uid != userId) return@withLock
+                val pausePrefs = appContext.getSharedPreferences("account_pause", Context.MODE_PRIVATE)
+                if (pausePrefs.getBoolean(userId, false)) {
+                    if (remote is ProfileLookup.Found) pausePrefs.edit().remove(userId).apply()
+                    else {
+                        _isProfileComplete.value = null
+                        _hasAcceptedConsent.value = null
+                        if (remote != null) _profileError.value = "Faça um novo login com conexão para reativar sua conta pausada."
+                        return@withLock
+                    }
+                }
                 // Read the current row instead of applying an older Flow emission.
                 val local = repository.getProfileOneShotLocal(userId)
                 currentCoroutineContext().ensureActive()
@@ -763,7 +773,6 @@ class AuthViewModel @Inject constructor(
     suspend fun deleteAccount() {
         val user = auth.currentUser ?: return
         val userId = user.uid
-        smokingSession.closeForCleanup()
         movementManager.flush()
 
         // Cancelar alarmes de medicação antes de deletar conta (TASK-MED-02)
@@ -776,11 +785,10 @@ class AuthViewModel @Inject constructor(
         // 1. NUVEM PRIMEIRO (LGPD)
         val remoteDeleted = repository.deleteProfileRemotely(userId)
         if (!remoteDeleted) {
-            android.util.Log.w(
-                "AuthViewModel",
-                "Delete remoto falhou para $userId. Dados Postgres podem persistir até novo retry manual."
-            )
+            _authState.value = AuthState.Error("A exclusão não foi confirmada no servidor. Tente novamente com conexão.")
+            return
         }
+        smokingSession.closeForCleanup()
 
         // 2. ROOM LOCAL + WORKERS + PREFERENCES
         withContext(Dispatchers.IO) {

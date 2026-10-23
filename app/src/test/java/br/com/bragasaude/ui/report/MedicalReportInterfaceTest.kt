@@ -41,7 +41,7 @@ class MedicalReportInterfaceTest {
         screenshot("01-registros-vitais")
         compose.onNodeWithTag("reportContent").performScrollToNode(hasText("Peso: 72,0 kg"))
         compose.onNodeWithText("Peso: 72,0 kg").assertIsDisplayed()
-        compose.onNodeWithText("IMC registrado: 26,4 kg/m²").assertIsDisplayed()
+        compose.onNodeWithText("IMC calculado: 26,4 kg/m²").assertIsDisplayed()
         screenshot("02-resumo-corporal")
         compose.onNodeWithTag("reportContent").performScrollToNode(hasText("Baixar Relatório em PDF"))
         compose.onNodeWithText("Baixar Relatório em PDF").performClick()

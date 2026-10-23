@@ -28,6 +28,9 @@ class ProfileRepository @Inject constructor(
         (apiClient.getProfileLookup(userId) as? br.com.bragasaude.data.remote.model.ProfileLookup.Found)?.profile
 
     suspend fun refreshProfileForLogin(userId: String): br.com.bragasaude.data.remote.model.ProfileLookup {
+        if (userId != guestId && !apiClient.reactivateAccount(userId)) {
+            return br.com.bragasaude.data.remote.model.ProfileLookup.Unavailable(403)
+        }
         val before = profileDao.getProfileOneShot(userId)
         val result = apiClient.getProfileLookup(userId)
         kotlinx.coroutines.currentCoroutineContext().ensureActive()

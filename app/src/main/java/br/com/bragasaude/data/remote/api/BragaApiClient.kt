@@ -1170,6 +1170,14 @@ class BragaApiClient @Inject constructor(
     }
 
 
+    suspend fun deactivateAccount(userId: String): Boolean = withContext(Dispatchers.IO) {
+        postJson("$baseUrl/api/profile/$userId/deactivate", JSONObject())?.optBoolean("success") == true
+    }
+
+    suspend fun reactivateAccount(userId: String): Boolean = withContext(Dispatchers.IO) {
+        postJson("$baseUrl/api/profile/$userId/reactivate", JSONObject())?.optBoolean("success") == true
+    }
+
     // ==================== CARE OS — D62 (FIRST CONTRACT) ====================
     // Contratos canônicos de scripts/server/openapi_care_os.json. Tipos estritos
     // em data/remote/model/RemoteEntities.kt — sem "achismo" de dados.

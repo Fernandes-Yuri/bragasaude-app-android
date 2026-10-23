@@ -12,8 +12,18 @@ import org.junit.Test
 import org.junit.Assert.*
 
 class ProfileRepositoryRefreshTest {
+    @Test fun failedReactivationDoesNotQueryOrCacheProfile() = runTest {
+        val api = mockk<BragaApiClient>()
+        val dao = mockk<ProfileDao>(relaxed = true)
+        coEvery { api.reactivateAccount("owner") } returns false
+        val repo = ProfileRepository(api, dao, mockk(relaxed = true), mockk(relaxed = true))
+        assertEquals(ProfileLookup.Unavailable(403), repo.refreshProfileForLogin("owner"))
+        coVerify(exactly = 0) { api.getProfileLookup(any()) }
+        coVerify(exactly = 0) { dao.cacheRemoteProfile(any(), any()) }
+    }
     @Test fun authoritativeFlagsAreCachedWithOriginalSnapshot() = runTest {
         val api = mockk<BragaApiClient>()
+        coEvery { api.reactivateAccount(any()) } returns true
         val dao = mockk<ProfileDao>(relaxed = true)
         val old = ProfileEntity(userId = "owner", pendingSync = false)
         coEvery { dao.getProfileOneShot("owner") } returns old
@@ -26,6 +36,7 @@ class ProfileRepositoryRefreshTest {
     }
     @Test fun freshLoginPassesPublishedPhotoToCacheWithoutUploadingIt() = runTest {
         val api = mockk<BragaApiClient>()
+        coEvery { api.reactivateAccount(any()) } returns true
         val dao = mockk<ProfileDao>(relaxed = true)
         coEvery { dao.getProfileOneShot("owner") } returns null
         val photo = "https://api.bragasaude.online/api/files/avatars/owner/photo.jpg"
@@ -37,6 +48,7 @@ class ProfileRepositoryRefreshTest {
     }
     @Test fun failedFetchNeverWritesLocalProfile() = runTest {
         val api = mockk<BragaApiClient>()
+        coEvery { api.reactivateAccount(any()) } returns true
         val dao = mockk<ProfileDao>(relaxed = true)
         coEvery { api.getProfileLookup("owner") } returns ProfileLookup.Unavailable(503)
         val repo = ProfileRepository(api, dao, mockk(relaxed = true), mockk(relaxed = true))
@@ -45,6 +57,7 @@ class ProfileRepositoryRefreshTest {
     }
     @Test fun cancellationIsNotConvertedToMissingProfile() = runTest {
         val api = mockk<BragaApiClient>()
+        coEvery { api.reactivateAccount(any()) } returns true
         val dao = mockk<ProfileDao>(relaxed = true)
         coEvery { api.getProfileLookup("owner") } throws CancellationException()
         val repo = ProfileRepository(api, dao, mockk(relaxed = true), mockk(relaxed = true))

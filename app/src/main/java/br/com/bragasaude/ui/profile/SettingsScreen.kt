@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.HeadsetMic
+import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
@@ -60,10 +61,17 @@ fun SettingsScreen(
     val profile by viewModel.profile.collectAsState()
     val photoUrl by viewModel.photoUrl.collectAsState()
     val isSaving by viewModel.isSaving.collectAsState()
+    val accountBusy by viewModel.accountBusy.collectAsState()
+    val accountError by viewModel.accountError.collectAsState()
+    var showPauseDialog by remember { mutableStateOf(false) }
     val voiceAssistantEnabled by viewModel.voiceAssistantEnabled.collectAsState()
     val voiceConfirmationEnabled by viewModel.voiceConfirmationEnabled.collectAsState()
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
+
+    LaunchedEffect(accountError) {
+        accountError?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show() }
+    }
 
     var showEmergencyDialog by remember { mutableStateOf(false) }
     var showStepGoalDialog by remember { mutableStateOf(false) }
@@ -284,6 +292,13 @@ fun SettingsScreen(
                             )
                             HorizontalDivider(color = BragaMintBorder.copy(alpha = 0.3f), thickness = 0.8.dp)
                             SettingsItem(
+                                title = "Pausar conta temporariamente",
+                                subtitle = "Preservar seus registros e interromper os avisos.",
+                                icon = androidx.compose.material.icons.Icons.Default.PauseCircle,
+                                onClick = { if (!accountBusy) showPauseDialog = true }
+                            )
+                            HorizontalDivider(color = BragaMintBorder.copy(alpha = 0.3f), thickness = 0.8.dp)
+                            SettingsItem(
                                 title = "Sair da Conta",
                                 subtitle = "Encerrar sessão no dispositivo atual.",
                                 icon = Icons.AutoMirrored.Filled.ExitToApp,
@@ -318,6 +333,18 @@ fun SettingsScreen(
             }
         }
     }
+
+    if (showPauseDialog) BragaAlertDialog(
+        onDismissRequest = { if (!accountBusy) showPauseDialog = false },
+        title = { Text("Pausar sua conta?") },
+        text = { Text("Seus registros sincronizados ficam salvos e os avisos serão interrompidos. O diário local permanece neste aparelho. Para retornar, faça um novo login com o método que você já usa.") },
+        confirmButton = {
+            TextButton(enabled = !accountBusy, onClick = { viewModel.deactivateAccount { showPauseDialog = false; onLogout() } }) {
+                Text(if (accountBusy) "Pausando..." else "Pausar conta")
+            }
+        },
+        dismissButton = { TextButton(enabled = !accountBusy, onClick = { showPauseDialog = false }) { Text("Continuar usando") } }
+    )
 
     if (showLogoutDialog) BragaAlertDialog(
         onDismissRequest = { showLogoutDialog = false },

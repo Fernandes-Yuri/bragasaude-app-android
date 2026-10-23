@@ -315,9 +315,9 @@ fun ProfileScreen(
             item {
                 Card(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFFF3F4F6))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, br.com.bragasaude.ui.theme.BragaMintBorder.copy(alpha = 0.5f))
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text("Dados Pessoais", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -406,9 +406,9 @@ fun ProfileScreen(
                 item {
                     Card(
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFFF3F4F6))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, br.com.bragasaude.ui.theme.BragaMintBorder.copy(alpha = 0.5f))
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text("Estilo de Vida e Saúde", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -557,9 +557,9 @@ fun ProfileScreen(
             item {
                 Card(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFFF3F4F6))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, br.com.bragasaude.ui.theme.BragaMintBorder.copy(alpha = 0.5f))
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Contato de Emergência", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
@@ -601,9 +601,9 @@ fun ProfileScreen(
             item {
                 Card(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFFF3F4F6))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, br.com.bragasaude.ui.theme.BragaMintBorder.copy(alpha = 0.5f))
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Ciclo de Sono (Não incomodar)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)

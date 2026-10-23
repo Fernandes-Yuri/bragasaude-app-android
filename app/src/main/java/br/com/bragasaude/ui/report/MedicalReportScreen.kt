@@ -39,6 +39,7 @@ fun MedicalReportScreen(
     val isGeneratingPdf by viewModel.isGeneratingPdf.collectAsState()
     val vitals by viewModel.vitalsHistory.collectAsState()
     val biometry by viewModel.latestBiometry.collectAsState()
+    val profile by viewModel.profile.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
@@ -69,7 +70,7 @@ fun MedicalReportScreen(
         }
     }
 
-    MedicalReportContent(vitals, biometry, isGeneratingPdf, snackbarHostState, onBack, viewModel::generatePdfReport)
+    MedicalReportContent(vitals, biometry, isGeneratingPdf, snackbarHostState, onBack, viewModel::generatePdfReport, profile?.birthDate)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,7 +81,8 @@ internal fun MedicalReportContent(
     isGeneratingPdf: Boolean,
     snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
-    onExport: () -> Unit
+    onExport: () -> Unit,
+    birthDate: String? = null
 ) {
     Scaffold(
         topBar = {
@@ -118,8 +120,8 @@ internal fun MedicalReportContent(
                 .fillMaxSize().testTag("reportContent")
                 .padding(innerPadding)
         ) {
-            item { ReportVitalsSummary(vitals) }
-            item { ReportBodySummary(biometry) }
+            item { ReportVitalsSummary(vitals, birthDate) }
+            item { ReportBodySummary(biometry, birthDate) }
             // CARD DE EXPORTAÇÃO DO RELATÓRIO CLÍNICO (30 DIAS)
             item {
                 Card(
