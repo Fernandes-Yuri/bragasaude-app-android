@@ -8,8 +8,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import br.com.bragasaude.data.remote.model.RemoteBiometry
-import br.com.bragasaude.data.remote.model.RemoteVitalSign
 import br.com.bragasaude.ui.theme.BragasaudeTheme
 import org.junit.Assert.*
 import org.junit.Rule
@@ -26,40 +24,34 @@ import java.io.File
 class MedicalReportInterfaceTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun reportShowsRealRecordsAndExportRemainsAccessible() {
+    @Test fun reportExplainsItsPurposeBeforeExportAndDoesNotShowMeasurementPanels() {
         var exports = 0
         compose.setContent {
             BragasaudeTheme(forceThemeMode = "LIGHT") {
-                MedicalReportContent(listOf(RemoteVitalSign(userId = "u", systolicPressure = 120, diastolicPressure = 80,
-                    glucoseLevel = 95, heartRate = 65, hydrationMl = 250, measuredAt = "2026-10-23T10:00:00Z")),
-                    RemoteBiometry(userId = "u", weight = 72f, height = 165f, imc = 26.4f, measuredAt = "2026-10-22T10:00:00Z"),
-                    false, remember { SnackbarHostState() }, {}, { exports++ }, birthDate = "1990-01-01")
+                MedicalReportContent(false, remember { SnackbarHostState() }, {}, { exports++ })
             }
         }
-        compose.onNodeWithText("120/80 mmHg").assertIsDisplayed()
-        compose.onNodeWithText("95 mg/dL").assertIsDisplayed()
-        compose.onNodeWithText("Faixa de atenção").assertIsDisplayed()
-        screenshot("01-registros-vitais")
-        compose.onNodeWithTag("reportContent").performScrollToNode(hasText("Peso: 72,0 kg"))
-        compose.onNodeWithText("Peso: 72,0 kg").assertIsDisplayed()
-        compose.onNodeWithText("IMC calculado: 26,4 kg/m²").assertIsDisplayed()
-        screenshot("02-resumo-corporal")
-        compose.onNodeWithTag("reportContent").performScrollToNode(hasText("Baixar Relatório em PDF"))
-        compose.onNodeWithText("Baixar Relatório em PDF").performClick()
+        compose.onNodeWithText("Seus registros contam uma história").assertIsDisplayed()
+        compose.onNodeWithText("Leve para a consulta").assertIsDisplayed()
+        compose.onNodeWithText("Reveja o período com calma").assertIsDisplayed()
+        compose.onNodeWithText("Últimos registros vitais").assertDoesNotExist()
+        compose.onNodeWithText("Resumo corporal").assertDoesNotExist()
+        screenshot("01-por-que-usar-o-pdf")
+        compose.onNodeWithTag("reportContent").performScrollToNode(hasText("Baixar relatório em PDF"))
+        compose.onNodeWithText("Baixar relatório em PDF").performClick()
         compose.runOnIdle { assertEquals(1, exports) }
+        screenshot("02-exportar-relatorio")
     }
 
-    @Test fun emptyReportExplainsMissingDataWithoutZeroMeasurements() {
+    @Test fun generationPreventsDuplicateExportWithoutHidingTheExplanation() {
         compose.setContent {
             BragasaudeTheme(forceThemeMode = "LIGHT") {
-                MedicalReportContent(emptyList(), null, true, remember { SnackbarHostState() }, {}, {})
+                MedicalReportContent(true, remember { SnackbarHostState() }, {}, {})
             }
         }
-        compose.onAllNodesWithText("Sem registro").assertCountEquals(4)
-        compose.onNodeWithContentDescription("Exportar PDF de 30 Dias").assertDoesNotExist()
-        compose.onNodeWithTag("reportContent").performScrollToNode(hasText("Nenhuma medida corporal registrada.", substring = true))
-        compose.onNodeWithText("Nenhuma medida corporal registrada.", substring = true).assertIsDisplayed()
-        screenshot("03-sem-registros")
+        compose.onNodeWithText("Seus registros contam uma história").assertIsDisplayed()
+        compose.onNodeWithTag("reportContent").performScrollToNode(hasText("Gerando relatório..."))
+        compose.onNodeWithText("Gerando relatório...").assertIsNotEnabled()
     }
 
     private fun screenshot(name: String) {

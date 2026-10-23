@@ -141,7 +141,7 @@ class CommunityPersistenceTest {
         assertEquals(edited, dao.getPostById(edited.id))
     }
 
-    @Test fun reconciliationPreservesQueuedEditsCreatesDeletionsAndPendingReactions() = runBlocking {
+    @Test fun reconciliationPreservesPostMutationsAndRemovesReactionsOfAbsentPosts() = runBlocking {
         val dao = db.socialFeedDao()
         val visible = cached("visible", 100)
         val edit = cached("edit", 50).copy(pendingMutation="EDIT")
@@ -151,8 +151,9 @@ class CommunityPersistenceTest {
         dao.insertPosts(listOf(visible, edit, create, deletion, reacting))
         dao.insertReaction(PostReactionEntity(id="queued", postId=reacting.id, userId="u", pendingSync=true))
         dao.cacheRemotePosts(listOf(visible), dao.getCachedPosts().associateBy { it.id }, firstPageLimit=20)
-        listOf(edit, create, deletion, reacting).forEach { assertEquals(it, dao.getPostById(it.id)) }
-        assertEquals(1, dao.getPendingReactions().size)
+        listOf(edit, create, deletion).forEach { assertEquals(it, dao.getPostById(it.id)) }
+        assertNull(dao.getPostById(reacting.id))
+        assertTrue(dao.getPendingReactions().isEmpty())
     }
 
     @Test fun lateResponsePreservesAcknowledgedEditAndNewPostCreatedDuringRequest() = runBlocking {

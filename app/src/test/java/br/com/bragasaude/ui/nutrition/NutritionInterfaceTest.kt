@@ -70,14 +70,14 @@ class NutritionInterfaceTest {
     @Test fun grocery_list_scrolls_past_planning_details_while_actions_stay_fixed() {
         renderGrocery()
         compose.onNodeWithText("Minha lista").performClick()
-        val actionBefore = compose.onNodeWithText("Adicionar").fetchSemanticsNode().boundsInRoot
+        val actionBefore = compose.onNodeWithText("Adicionar item").fetchSemanticsNode().boundsInRoot
         compose.onNodeWithTag("groceryItems").performScrollToNode(hasText("Arroz da lista"))
         compose.onNodeWithText("Arroz da lista").assertIsDisplayed()
         compose.onNodeWithText("Período da lista").assertIsNotDisplayed()
-        val actionAfter = compose.onNodeWithText("Adicionar").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val actionAfter = compose.onNodeWithText("Adicionar item").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertEquals(actionBefore, actionAfter)
         screenshot("10-lista-rolada")
-        assertTrue(compose.onNodeWithText("Arroz da lista").fetchSemanticsNode().boundsInRoot.top >= actionAfter.bottom)
+        assertTrue(compose.onNodeWithText("Arroz da lista").fetchSemanticsNode().boundsInRoot.bottom <= actionAfter.top)
         compose.onNodeWithContentDescription("Fechar lista de compras").assertIsDisplayed()
     }
 
@@ -102,7 +102,7 @@ class NutritionInterfaceTest {
         compose.onNodeWithText("Minha lista").performClick()
         compose.onNodeWithTag("groceryItems").performScrollToNode(hasText("Arroz da lista"))
         compose.onNodeWithText("Arroz da lista").assertIsDisplayed()
-        compose.onNodeWithText("Adicionar").assertIsDisplayed()
+        compose.onNodeWithText("Adicionar item").assertIsDisplayed()
         screenshot("12-lista-paisagem")
     }
 
@@ -121,9 +121,11 @@ class NutritionInterfaceTest {
         compose.onNodeWithText("1 kg").assertIsDisplayed()
         compose.onNodeWithText("500 g").assertIsDisplayed()
         screenshot("15-catalogo-primeira-tela")
-        compose.onNodeWithText("Ver resumo do plano").performClick()
+        compose.onNodeWithContentDescription("Opções da lista").performClick()
+        compose.onNodeWithText("Mostrar resumo do plano").performClick()
         compose.onNodeWithTag("groceryPlanDetails").assertExists()
-        compose.onNodeWithText("Recolher resumo do plano").performClick()
+        compose.onNodeWithContentDescription("Opções da lista").performClick()
+        compose.onNodeWithText("Ocultar resumo do plano").performClick()
         compose.onNodeWithTag("groceryPlanDetails").assertDoesNotExist()
     }
 
@@ -191,9 +193,25 @@ class NutritionInterfaceTest {
                 GroceryListBottomSheet(emptyList(), {}, { _, _ -> }, {}, {}, onPlanningDaysChange = { selected = it })
             }
         }
+        compose.onNodeWithContentDescription("Opções da lista").performClick()
+        compose.onNodeWithText("Alterar período de compras").performClick()
         compose.onNodeWithText("30 dias").performClick()
         compose.runOnIdle { assertEquals(30, selected) }
         compose.onNodeWithText("Período da lista").assertDoesNotExist()
+    }
+
+    @Test fun listActionsAreGroupedAndPdfExportRemainsAvailable() {
+        var exported = 0
+        renderGrocery(onExport = { exported++ })
+        compose.onNodeWithText("30 dias").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Opções da lista").performClick()
+        compose.onNodeWithText("Alterar período de compras").assertIsDisplayed()
+        compose.onNodeWithText("Planejamento com IA").assertIsDisplayed()
+        compose.onNodeWithText("Mostrar resumo do plano").assertIsDisplayed()
+        screenshot("18-opcoes-da-lista")
+        compose.onNodeWithText("Compartilhar lista em PDF").performClick()
+        compose.runOnIdle { assertEquals(1, exported) }
+        compose.onNodeWithText("Adicionar item").assertIsDisplayed()
     }
 
     private fun screenshot(name: String) {
@@ -224,7 +242,7 @@ class NutritionInterfaceTest {
         assertTrue(dimensions, layout.getLineBottom(0) <= layout.size.height + 1f)
     }
 
-    private fun renderGrocery(multipleProducts: Boolean = false) {
+    private fun renderGrocery(multipleProducts: Boolean = false, onExport: () -> Unit = {}) {
         val row = GroceryListItemEntity("row", "user", "2026-10-19", "rice", "Arroz da lista",
             "Cereais", 500, 1000, "1 pacote", 8.0, retailCardId = "card")
         val card = GroceryRetailCardEntity("card", "Arroz do catálogo", "Cereais", "", "1 kg", 1.0,
@@ -236,7 +254,7 @@ class NutritionInterfaceTest {
         ) else listOf(card)
         compose.setContent {
             BragasaudeTheme(forceThemeMode = "LIGHT") {
-                GroceryListBottomSheet(listOf(row), {}, { _, _ -> }, {}, {},
+                GroceryListBottomSheet(listOf(row), {}, { _, _ -> }, {}, onExport,
                     retailCards = products, weeklyGoal = GroceryWeeklyGoal(12600.0, planningDays = if (multipleProducts) 30 else 7))
             }
         }

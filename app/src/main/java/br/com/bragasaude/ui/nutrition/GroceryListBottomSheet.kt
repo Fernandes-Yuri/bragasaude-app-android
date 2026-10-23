@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -84,6 +85,7 @@ fun GroceryListBottomSheet(
     var showCatalog by rememberSaveable { mutableStateOf(false) }
     var showPlanningDetails by rememberSaveable { mutableStateOf(false) }
     var choosingPeriod by rememberSaveable { mutableStateOf(false) }
+    var showListActions by rememberSaveable { mutableStateOf(false) }
     var reportingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var manualEditingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var isCreatingManual by remember { mutableStateOf(false) }
@@ -266,9 +268,6 @@ fun GroceryListBottomSheet(
         ) {
             val planningHeader: @Composable () -> Unit = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = { showPlanningDetails = !showPlanningDetails }) {
-                        Text(if (showPlanningDetails) "Recolher resumo do plano" else "Ver resumo do plano")
-                    }
                     if (showPlanningDetails) {
                         Column(Modifier.testTag("groceryPlanDetails"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (weeklyGoal.planningDays > 7) Text("Planeje reposições de frutas, verduras e outros perecíveis durante o período.", style = MaterialTheme.typography.bodySmall)
@@ -289,21 +288,14 @@ fun GroceryListBottomSheet(
                     FilterChip(selected = !showCatalog, onClick = { showCatalog = false }, label = { Text("Minha lista", maxLines = 1) })
                     FilterChip(selected = showCatalog, onClick = { showCatalog = true }, label = { Text("Mercadinho", maxLines = 1) })
                     Spacer(Modifier.weight(1f))
-                    if (groceryList.isNotEmpty()) {
-                        IconButton(onClick = onExportPdf) {
-                            Icon(Icons.Default.Share, contentDescription = "Compartilhar lista em PDF")
-                        }
+                    IconButton(onClick = { showListActions = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Opções da lista")
                     }
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, contentDescription = "Fechar lista de compras")
                     }
                 }
             }
-            GroceryQuickActions(weeklyGoal.planningDays, isLoading, onPlanningDaysChange,
-                { choosingPeriod = true }, { isCreatingManual = true }, {
-                    if (groceryList.isEmpty()) { pendingPreserveManual = false; showPreferencesSheet = true }
-                    else showPlanOptionsDialog = true
-                })
             if (showCatalog) {
                 GroceryMarketShelfScreen(retailCards, groceryList, retailLoading, retailMessage,
                     onRefreshRetail, onAddCard, onDecrementCard,
@@ -582,9 +574,42 @@ fun GroceryListBottomSheet(
 
                     item { Spacer(Modifier.height(16.dp)) }
                 }
+                Button(onClick = { isCreatingManual = true }, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).heightIn(min = 52.dp)) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Adicionar item")
+                }
             }
         }
     }
+
+    if (showListActions) br.com.bragasaude.ui.components.BragaFormSheet(
+        onDismissRequest = { showListActions = false },
+        title = { Text("Opções da lista") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("${groceryList.size} itens · ${weeklyGoal.planningDays} dias", style = MaterialTheme.typography.bodyMedium)
+                TextButton(onClick = { showListActions = false; isCreatingManual = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Adicionar item manualmente")
+                }
+                TextButton(enabled = !isLoading, onClick = { showListActions = false; choosingPeriod = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Alterar período de compras")
+                }
+                TextButton(enabled = !isLoading, onClick = {
+                    showListActions = false
+                    if (groceryList.isEmpty()) { pendingPreserveManual = false; showPreferencesSheet = true }
+                    else showPlanOptionsDialog = true
+                }, modifier = Modifier.fillMaxWidth()) { Text("Planejamento com IA") }
+                TextButton(onClick = { showListActions = false; showPlanningDetails = !showPlanningDetails }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (showPlanningDetails) "Ocultar resumo do plano" else "Mostrar resumo do plano")
+                }
+                TextButton(enabled = groceryList.isNotEmpty(), onClick = { showListActions = false; onExportPdf() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Compartilhar lista em PDF")
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { showListActions = false }) { Text("Fechar opções") } }
+    )
 
     if (choosingPeriod) br.com.bragasaude.ui.components.BragaFormSheet(
         onDismissRequest = { choosingPeriod = false },
