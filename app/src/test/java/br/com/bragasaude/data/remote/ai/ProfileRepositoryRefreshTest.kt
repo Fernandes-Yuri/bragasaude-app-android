@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.ai
+package br.com.bragasaude.data.remote.ai
 
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.api.BragaApiClient
@@ -22,6 +22,17 @@ class ProfileRepositoryRefreshTest {
         val repo = ProfileRepository(api, dao, mockk<SyncScheduler>(relaxed = true), mockk(relaxed = true))
         repo.refreshProfileForLogin("owner")
         coVerify { dao.cacheRemoteProfile(match { it.basicProfileComplete && it.selfCareComplete && !it.pendingSync }, old) }
+        coVerify(exactly = 0) { api.syncProfile(any()) }
+    }
+    @Test fun freshLoginPassesPublishedPhotoToCacheWithoutUploadingIt() = runTest {
+        val api = mockk<BragaApiClient>()
+        val dao = mockk<ProfileDao>(relaxed = true)
+        coEvery { dao.getProfileOneShot("owner") } returns null
+        val photo = "https://api.bragasaude.online/api/files/avatars/owner/photo.jpg"
+        coEvery { api.getProfileLookup("owner") } returns ProfileLookup.Found(RemoteProfile(id = "owner", photoUrl = photo))
+        val repo = ProfileRepository(api, dao, mockk(relaxed = true), mockk(relaxed = true))
+        repo.refreshProfileForLogin("owner")
+        coVerify { dao.cacheRemoteProfile(match { it.userId == "owner" && it.customPhotoUri == photo }, null) }
         coVerify(exactly = 0) { api.syncProfile(any()) }
     }
     @Test fun failedFetchNeverWritesLocalProfile() = runTest {

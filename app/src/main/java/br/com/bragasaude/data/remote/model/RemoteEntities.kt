@@ -89,6 +89,7 @@ data class RemoteProfile(
     @SerialName("self_care_setup_pending") val selfCareSetupPending: Boolean = false,
     @SerialName("caregiver_mode") val caregiverMode: String? = null,
     @SerialName("avatar_identifier") val avatarIdentifier: String? = null,
+    @SerialName("photo_url") val photoUrl: String? = null,
 )
 
 @Serializable
