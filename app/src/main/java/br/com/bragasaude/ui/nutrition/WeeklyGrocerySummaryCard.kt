@@ -1,6 +1,7 @@
 package br.com.bragasaude.ui.nutrition
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -25,7 +26,9 @@ fun WeeklyGrocerySummaryCard(
 ) {
     var isDetailsExpanded by rememberSaveable { mutableStateOf(false) }
 
-    Card(modifier = modifier.fillMaxWidth()) {
+    Card(modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)

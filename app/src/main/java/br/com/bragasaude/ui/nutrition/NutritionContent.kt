@@ -51,8 +51,7 @@ internal fun NutritionContent(
     onOpenGrocery: () -> Unit,
     onAddSuggestion: (SuggestedFoodOption) -> Unit,
     onDismissSuggestion: (SuggestedFoodOption) -> Unit,
-    modifier: Modifier = Modifier,
-    onSmokingSupport: (() -> Unit)? = null
+    modifier: Modifier = Modifier
 ) {
     var showSuggestions by rememberSaveable { mutableStateOf(false) }
     var showPlan by rememberSaveable { mutableStateOf(false) }
@@ -165,14 +164,6 @@ internal fun NutritionContent(
             item(key = "planningLinks") {
                 Column {
                     HorizontalDivider()
-                    onSmokingSupport?.let { open ->
-                        ListItem(
-                            headlineContent = { Text("Apoio para parar de fumar") },
-                            trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth().nutritionLink(open),
-                            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.background)
-                        )
-                    }
                     ListItem(
                         headlineContent = { Text("Receitas") },
                         leadingContent = { Icon(Icons.Default.RestaurantMenu, contentDescription = null) },
