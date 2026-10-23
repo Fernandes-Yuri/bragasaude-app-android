@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -31,6 +33,11 @@ class GroceryQuickActionsTest {
                 GroceryQuickActions(7, false, { days = it }, {}, { added = true }, { planned = true })
             }
         } }
+        listOf("7 dias", "14 dias", "30 dias").forEach { label ->
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(label).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            assertFalse("Período cortado: $label", layouts.single().hasVisualOverflow)
+        }
         compose.onNodeWithText("14 dias").assertIsDisplayed().performClick()
         compose.onNodeWithText("Adicionar").assertIsDisplayed().performClick()
         compose.onNodeWithContentDescription("Opções de planejamento com IA").assertIsDisplayed().performClick()

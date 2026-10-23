@@ -33,11 +33,12 @@ class MedicalReportInterfaceTest {
                 MedicalReportContent(listOf(RemoteVitalSign(userId = "u", systolicPressure = 120, diastolicPressure = 80,
                     glucoseLevel = 95, heartRate = 65, hydrationMl = 250, measuredAt = "2026-10-23T10:00:00Z")),
                     RemoteBiometry(userId = "u", weight = 72f, height = 165f, imc = 26.4f, measuredAt = "2026-10-22T10:00:00Z"),
-                    false, remember { SnackbarHostState() }, {}, { exports++ })
+                    false, remember { SnackbarHostState() }, {}, { exports++ }, birthDate = "1990-01-01")
             }
         }
         compose.onNodeWithText("120/80 mmHg").assertIsDisplayed()
         compose.onNodeWithText("95 mg/dL").assertIsDisplayed()
+        compose.onNodeWithText("Faixa de atenção").assertIsDisplayed()
         screenshot("01-registros-vitais")
         compose.onNodeWithTag("reportContent").performScrollToNode(hasText("Peso: 72,0 kg"))
         compose.onNodeWithText("Peso: 72,0 kg").assertIsDisplayed()
