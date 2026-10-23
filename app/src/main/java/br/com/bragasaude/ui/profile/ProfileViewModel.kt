@@ -221,10 +221,6 @@ class ProfileViewModel @Inject constructor(
                     selfCareSetupPending = false
                 )
                 repository.saveProfile(newProfile)
-                // An optional offer must never make a successfully saved profile look like a failure.
-                try { smokingSupport.offerAfterProfileSaved() }
-                catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                catch (_: Exception) { /* Manual discovery remains available. */ }
                 onSaved()
                 onComplete()
             } catch (e: Exception) {

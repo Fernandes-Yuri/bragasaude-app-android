@@ -58,6 +58,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val profile by viewModel.profile.collectAsState()
+    val photoUrl by viewModel.photoUrl.collectAsState()
     val isSaving by viewModel.isSaving.collectAsState()
     val voiceAssistantEnabled by viewModel.voiceAssistantEnabled.collectAsState()
     val voiceConfirmationEnabled by viewModel.voiceConfirmationEnabled.collectAsState()
@@ -92,6 +93,10 @@ fun SettingsScreen(
                     title = "Configurações",
                     subtitle = "Preferências e Conta • $userName",
                     avatarInitials = initials,
+                    avatarContent = {
+                        br.com.bragasaude.ui.components.SharedProfileAvatar(userName, photoUrl,
+                            profile?.avatarIdentifier, 48.dp)
+                    },
                     onBack = onBack
                 )
             }

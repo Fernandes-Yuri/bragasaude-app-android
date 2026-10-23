@@ -184,6 +184,20 @@ class NutritionInterfaceTest {
         screenshot("17-lista-cards")
     }
 
+    @Test fun periodChangesThroughCompactSelectorWithoutCrowdingTheList() {
+        var selected = 0
+        compose.setContent {
+            BragasaudeTheme(forceThemeMode = "LIGHT") {
+                GroceryListBottomSheet(emptyList(), {}, { _, _ -> }, {}, {}, onPlanningDaysChange = { selected = it })
+            }
+        }
+        compose.onNodeWithText("7 dias").performClick()
+        compose.onNodeWithText("Período da lista").assertIsDisplayed()
+        compose.onNodeWithText("30 dias").performClick()
+        compose.runOnIdle { assertEquals(30, selected) }
+        compose.onNodeWithText("Período da lista").assertDoesNotExist()
+    }
+
     private fun screenshot(name: String) {
         compose.runOnIdle {
             val windows = WindowInspector.getGlobalWindowViews()

@@ -82,7 +82,8 @@ fun GroceryListBottomSheet(
     onGenerateListWithPreferences: ((preserveManual: Boolean, preferences: br.com.bragasaude.domain.WeeklyGroceryPreferences) -> Unit)? = null
 ) {
     var showCatalog by rememberSaveable { mutableStateOf(false) }
-    var showPlanningDetails by remember { mutableStateOf(false) }
+    var showPlanningDetails by rememberSaveable { mutableStateOf(false) }
+    var choosingPeriod by rememberSaveable { mutableStateOf(false) }
     var reportingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var manualEditingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var isCreatingManual by remember { mutableStateOf(false) }
@@ -266,23 +267,15 @@ fun GroceryListBottomSheet(
             val planningHeader: @Composable () -> Unit = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Lista de compras", style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold)
-                            Text("${groceryList.size} itens · $checkedCount comprados",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${groceryList.size} itens · $checkedCount comprados",
+                            Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick = { choosingPeriod = true }, enabled = !isLoading) {
+                            Text("${weeklyGoal.planningDays} dias")
                         }
                         IconButton(onClick = { showPlanningDetails = !showPlanningDetails }) {
                             Icon(if (showPlanningDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                 contentDescription = if (showPlanningDetails) "Recolher resumo do plano" else "Ver resumo do plano")
-                        }
-                    }
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        br.com.bragasaude.domain.GroceryPlanningPeriod.options.forEach { days ->
-                            FilterChip(selected = weeklyGoal.planningDays == days, enabled = !isLoading,
-                                onClick = { onPlanningDaysChange(days) }, label = { Text("$days dias", maxLines = 1) })
                         }
                     }
                     if (showPlanningDetails) {
@@ -422,7 +415,7 @@ fun GroceryListBottomSheet(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item(key = "planningHeader") { planningHeader() }
-                    if (plan != null && groceryList.all { it.retailCardId == null }) {
+                    if (showPlanningDetails && plan != null && groceryList.all { it.retailCardId == null }) {
                         item { WeeklyGrocerySummaryCard(plan, onResize) }
                     }
                     val checkedSlugs = groceryList.filter { it.isCheckedInPantry }.map { it.linkedIngredientSlug ?: it.foodId }.toSet()
@@ -535,7 +528,8 @@ fun GroceryListBottomSheet(
 
                     item {
                         Text(
-                            br.com.bragasaude.domain.GROCERY_PRICE_NOTICE,
+                            if (showPlanningDetails) br.com.bragasaude.domain.GROCERY_PRICE_NOTICE
+                            else "Preços estimados. Valores e disponibilidade podem variar.",
                             style = MaterialTheme.typography.bodySmall,
                             color = BragaTextSecondary
                         )
@@ -688,6 +682,22 @@ fun GroceryListBottomSheet(
             }
         }
     }
+
+    if (choosingPeriod) br.com.bragasaude.ui.components.BragaFormSheet(
+        onDismissRequest = { choosingPeriod = false },
+        title = { Text("Período da lista") },
+        text = {
+            Column {
+                br.com.bragasaude.domain.GroceryPlanningPeriod.options.forEach { days ->
+                    TextButton(onClick = { onPlanningDaysChange(days); choosingPeriod = false },
+                        enabled = !isLoading, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text("$days dias" + if (weeklyGoal.planningDays == days) " · selecionado" else "")
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { choosingPeriod = false }) { Text("Fechar") } }
+    )
 
     if (showPreferencesSheet) {
         WeeklyGroceryPreferencesSheet(

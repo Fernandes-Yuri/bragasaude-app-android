@@ -37,6 +37,8 @@ class SettingsViewModel @Inject constructor(
 
     private val _profile = MutableStateFlow<RemoteProfile?>(null)
     val profile = _profile.asStateFlow()
+    private val _photoUrl = MutableStateFlow<String?>(null)
+    val photoUrl = _photoUrl.asStateFlow()
 
     private val _isSaving = MutableStateFlow(false)
     val isSaving = _isSaving.asStateFlow()
@@ -57,6 +59,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             profileRepository.getProfile(userId).collectLatest { entity ->
                 _profile.value = entity?.toRemote()
+                _photoUrl.value = entity?.customPhotoUri
             }
         }
     }

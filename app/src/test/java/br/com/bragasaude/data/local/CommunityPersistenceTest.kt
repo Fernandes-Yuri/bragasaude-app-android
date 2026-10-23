@@ -127,6 +127,20 @@ class CommunityPersistenceTest {
         assertEquals(post, dao.getPostById(post.id))
     }
 
+    @Test fun confirmedEmptyFeedRemovesSyncedPostsButPreservesPendingLocalWork() = runBlocking {
+        val dao = db.socialFeedDao()
+        val synced = cached("deleted-author", 1)
+        val pending = cached("pending", 2).copy(pendingSync = true)
+        val edited = cached("edited", 3).copy(pendingMutation = "EDIT")
+        dao.insertPosts(listOf(synced, pending, edited))
+        dao.insertReaction(PostReactionEntity(id = "synced-reaction", postId = synced.id, userId = "u"))
+        dao.cacheRemotePosts(emptyList(), dao.getCachedPosts().associateBy { it.id }, firstPageLimit = 20, confirmedEmpty = true)
+        assertNull(dao.getPostById(synced.id))
+        assertTrue(dao.getReactionsForPost(synced.id).first().isEmpty())
+        assertEquals(pending, dao.getPostById(pending.id))
+        assertEquals(edited, dao.getPostById(edited.id))
+    }
+
     @Test fun reconciliationPreservesQueuedEditsCreatesDeletionsAndPendingReactions() = runBlocking {
         val dao = db.socialFeedDao()
         val visible = cached("visible", 100)
