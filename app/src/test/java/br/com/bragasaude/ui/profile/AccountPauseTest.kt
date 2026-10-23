@@ -39,7 +39,7 @@ class AccountPauseTest {
             every { repo.getProfile("owner") } returns flowOf(ProfileEntity(userId = "owner"))
             val alarms = mockk<MedicationRepository>(relaxed = true)
             val session = mockk<SmokingSupportSession>(relaxed = true)
-            val context = RuntimeEnvironment.getApplication<Application>()
+            val context = RuntimeEnvironment.getApplication()
             val model = SettingsViewModel(repo, auth, db, mockk<MovementManager>(relaxed = true), alarms, api, session, context)
             var completed = false
             model.deactivateAccount { completed = true }
