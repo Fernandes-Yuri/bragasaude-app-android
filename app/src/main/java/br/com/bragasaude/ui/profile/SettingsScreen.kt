@@ -339,7 +339,11 @@ fun SettingsScreen(
         title = { Text("Pausar sua conta?") },
         text = { Text("Seus registros sincronizados ficam salvos e os avisos serão interrompidos. O diário local permanece neste aparelho. Para retornar, faça um novo login com o método que você já usa.") },
         confirmButton = {
-            TextButton(enabled = !accountBusy, onClick = { viewModel.deactivateAccount { showPauseDialog = false; onLogout() } }) {
+            TextButton(enabled = !accountBusy, onClick = { viewModel.deactivateAccount {
+                showPauseDialog = false
+                android.widget.Toast.makeText(context, "Sua conta está pausada. Estaremos aqui quando você quiser voltar.", android.widget.Toast.LENGTH_LONG).show()
+                onLogout()
+            } }) {
                 Text(if (accountBusy) "Pausando..." else "Pausar conta")
             }
         },
