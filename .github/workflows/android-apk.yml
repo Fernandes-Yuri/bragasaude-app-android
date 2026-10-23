@@ -309,6 +309,15 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
+      - name: Publicar revisão visual familiar
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: revisao-visual-familia
+          path: app/build/outputs/family-review/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Publicar schemas Room gerados
         if: always()
         uses: actions/upload-artifact@v4

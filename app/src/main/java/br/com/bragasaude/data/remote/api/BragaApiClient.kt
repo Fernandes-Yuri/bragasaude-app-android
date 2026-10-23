@@ -43,6 +43,8 @@ data class SyncProfileResult(
  * regras vivem no gateway, que é quem fala com o PostgreSQL/RDS. Este
  * cliente trata apenas de transporte, autenticação e serialização.
  */
+data class ProfileAvatarIdentity(val photoUrl: String?, val avatarIdentifier: String?)
+
 @Singleton
 class BragaApiClient @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -1400,17 +1402,19 @@ class BragaApiClient @Inject constructor(
         }
     }
 
-    /** Lê a photo_url do perfil (qualquer familiar pode ler; falha → null). */
-    suspend fun fetchProfilePhotoUrl(userId: String): String? = withContext(Dispatchers.IO) {
-        try {
-            val res = getJson("$baseUrl/api/profile/$userId", strict = true) ?: return@withContext null
-            res.optString("photo_url", null)?.takeIf(String::isNotBlank)
-                ?: res.optString("photoUrl", null)?.takeIf(String::isNotBlank)
-        } catch (e: Exception) {
-            Log.w(TAG, "Falha ao ler foto do perfil: ${e.message}")
-            null
-        }
+    suspend fun getProfileAvatar(userId: String): ProfileAvatarIdentity = withContext(Dispatchers.IO) {
+        val result = getJson("$baseUrl/api/profile/$userId/avatar", strict = true)
+            ?: throw java.io.IOException("Foto de perfil indisponível.")
+        require(result.optString("id") == userId) { "Identidade da foto divergente." }
+        ProfileAvatarIdentity(br.com.bragasaude.data.util.sharedSocialPhotoUrl(result.safeNullableString("photo_url")),
+            result.safeNullableString("avatar_identifier"))
     }
+
+    /** Consulta somente identidade visual; não lê dados clínicos de outros usuários. */
+    suspend fun fetchProfilePhotoUrl(userId: String): String? = try {
+        getProfileAvatar(userId).photoUrl
+    } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+      catch (_: Exception) { null }
 
     suspend fun analyzePrescription(
         patientId: String,
