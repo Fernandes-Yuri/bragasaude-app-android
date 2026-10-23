@@ -36,6 +36,8 @@ class GroceryShoppingCardTest {
         compose.onAllNodes(isToggleable()).assertCountEquals(1)
         compose.onNode(isToggleable()).performClick().assertIsOn()
         compose.onNodeWithText("Comprado").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Editar Arroz integral").assertIsNotEnabled()
+        compose.onNode(isToggleable()).performClick().assertIsOff()
         compose.onNodeWithContentDescription("Editar Arroz integral").performClick()
         compose.onNodeWithText("−").assertIsNotEnabled()
         compose.onNodeWithText("+").performClick()

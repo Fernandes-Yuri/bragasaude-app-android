@@ -75,13 +75,15 @@ internal fun GroceryShoppingCard(
                     Text(if (item.isCheckedInPantry) "Comprado" else "Marcar comprado", style = MaterialTheme.typography.bodyMedium)
                 }
                 IconButton(onClick = { if (item.retailCardId != null) editingQuantity = true else onEdit() },
-                    enabled = item.retailCardId == null || (onIncrease != null && onDecrease != null)) {
+                    enabled = item.retailCardId == null || (!item.isCheckedInPantry && onIncrease != null && onDecrease != null)) {
                     Icon(Icons.Default.Edit, contentDescription = "Editar ${item.foodName}")
                 }
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, contentDescription = "Remover ${item.foodName}", tint = MaterialTheme.colorScheme.error)
                 }
             }
+            if (item.retailCardId != null && item.isCheckedInPantry) Text(
+                "Desmarque como comprado para ajustar a quantidade.", style = MaterialTheme.typography.bodySmall)
             if (item.retailCardId != null && retailCard == null) Text(
                 "Atualize o mercadinho para ajustar a quantidade.", style = MaterialTheme.typography.bodySmall)
         }
@@ -93,10 +95,10 @@ internal fun GroceryShoppingCard(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Período: ${item.planningDays} dias")
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = { onDecrease?.invoke() }, enabled = item.quantity > 1 && onDecrease != null,
+                    TextButton(onClick = { onDecrease?.invoke() }, enabled = !item.isCheckedInPantry && item.quantity > 1 && onDecrease != null,
                         modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) { Text("−") }
                     Text("${item.quantity} embalagem(ns)")
-                    TextButton(onClick = { onIncrease?.invoke() }, enabled = item.quantity < 999 && onIncrease != null,
+                    TextButton(onClick = { onIncrease?.invoke() }, enabled = !item.isCheckedInPantry && item.quantity < 999 && onIncrease != null,
                         modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) { Text("+") }
                 }
                 Text(if (item.estimatedPriceBrl > 0.0) "Estimado: ${money.format(item.estimatedPriceBrl)}" else "Preço não informado")
