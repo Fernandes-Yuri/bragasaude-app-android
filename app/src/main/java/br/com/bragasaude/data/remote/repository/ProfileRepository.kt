@@ -17,7 +17,8 @@ import br.com.bragasaude.util.BragaConstants
 class ProfileRepository @Inject constructor(
     private val apiClient: BragaApiClient,
     private val profileDao: ProfileDao,
-    private val syncScheduler: SyncScheduler
+    private val syncScheduler: SyncScheduler,
+    private val avatarUploader: br.com.bragasaude.data.avatar.AvatarPhotoUploader
 ) {
     private val guestId = BragaConstants.GUEST_UID
 
@@ -93,8 +94,7 @@ class ProfileRepository @Inject constructor(
     // A photo_url do servidor vive em customPhotoUri local e fica FORA do
     // upsert de perfil — o sync existente nunca apaga a foto.
 
-    suspend fun uploadAvatarPhoto(userId: String, fileName: String, mimeType: String, bytes: ByteArray) =
-        apiClient.uploadProfileAvatar(userId, fileName, mimeType, bytes)
+    suspend fun uploadAvatarPhoto(userId: String, bytes: ByteArray) = avatarUploader.upload(userId, bytes)
 
     suspend fun persistServerAvatar(userId: String, photoUrl: String) {
         profileDao.updateAvatar(userId, null, photoUrl)

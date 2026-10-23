@@ -25,7 +25,8 @@ class SocialFeedRepository @Inject constructor(
     private val apiClient: BragaApiClient,
     private val syncScheduler: SyncScheduler,
     private val auth: com.google.firebase.auth.FirebaseAuth,
-    private val familyDao: br.com.bragasaude.data.local.FamilyDao
+    private val familyDao: br.com.bragasaude.data.local.FamilyDao,
+    private val avatarUploader: br.com.bragasaude.data.avatar.AvatarPhotoUploader
 ) {
     private val guestId = BragaConstants.GUEST_UID
 
@@ -96,26 +97,10 @@ class SocialFeedRepository @Inject constructor(
                 output.toByteArray()
             }
         }
-        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        require(bounds.outWidth > 0 && bounds.outHeight > 0 &&
-            bounds.outWidth.toLong() * bounds.outHeight <= 16_000_000) { "Foto inválida. Escolha outra imagem no perfil." }
-        var sample = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 512) sample *= 2
-        val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
-            android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) ?: error("Foto inválida.")
-        val jpeg = try {
-            java.io.ByteArrayOutputStream().use { output ->
-                check(bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, output)) { "Foto inválida." }
-                output.toByteArray()
-            }
-        } finally { bitmap.recycle() }
-        kotlinx.coroutines.currentCoroutineContext().ensureActive()
-        requireSession(userId)
-        val result = apiClient.uploadProfileAvatar(userId, "avatar.jpg", "image/jpeg", jpeg)
+        val result = avatarUploader.upload(userId, bytes)
         requireSession(userId)
         val shared = sharedSocialPhotoUrl(result.photoUrl)
-            ?: error(if (result.code == 422) "Foto não aprovada. Escolha outra imagem no perfil."
+            ?: error(result.detail ?: if (result.code == 422) "Foto não aprovada. Escolha outra imagem no perfil."
                 else "Não foi possível compartilhar a foto agora. Tente novamente.")
         profileDao.updateAvatar(userId, null, shared)
     }

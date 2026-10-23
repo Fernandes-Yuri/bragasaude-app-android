@@ -380,49 +380,17 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    // Redimensiona para máx. 512px em JPEG 85 — reduz o tamanho antes do envio.
-    private fun resizeAvatar(context: Context, uri: Uri): Pair<ByteArray?, String> {
-        val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
-        if (mime != "image/jpeg" && mime != "image/png" && mime != "image/webp") {
-            return null to mime
-        }
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-        val maxDim = maxOf(bounds.outWidth, bounds.outHeight).coerceAtLeast(1)
-        var sample = 1
-        while (maxDim / sample > 512) sample *= 2
-        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-        val bmp = context.contentResolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, opts)
-        } ?: return null to mime
-        val scale = minOf(1f, 512f / maxOf(bmp.width, bmp.height).coerceAtLeast(1))
-        val resized = if (scale < 1f) {
-            Bitmap.createScaledBitmap(
-                bmp,
-                (bmp.width * scale).toInt().coerceAtLeast(1),
-                (bmp.height * scale).toInt().coerceAtLeast(1),
-                true
-            )
-        } else bmp
-        val out = java.io.ByteArrayOutputStream()
-        resized.compress(Bitmap.CompressFormat.JPEG, 85, out)
-        if (resized !== bmp) bmp.recycle()
-        return out.toByteArray() to "image/jpeg"
-    }
-
     fun uploadAvatarPhoto(context: Context, uri: Uri) {
         val userId = auth.currentUser?.uid ?: return
+        if (_avatarUploading.value) return
+        _avatarUploading.value = true
         viewModelScope.launch {
-            _avatarUploading.value = true
             try {
-                val (bytes, mime) = withContext(Dispatchers.IO) { resizeAvatar(context, uri) }
-                if (bytes == null) {
-                    _avatarMessage.value = "Formato não suportado — use JPEG, PNG ou WebP."
-                    return@launch
+                val bytes = withContext(Dispatchers.IO) {
+                    br.com.bragasaude.data.avatar.LocalAvatarPhotoProcessor.readSource(context, uri)
                 }
-                val result = withContext(Dispatchers.IO) {
-                    repository.uploadAvatarPhoto(userId, "avatar.jpg", mime, bytes)
-                }
+                val result = repository.uploadAvatarPhoto(userId, bytes)
+                check(auth.currentUser?.uid == userId) { "Sua conta mudou. Abra o perfil novamente." }
                 val url = result.photoUrl
                 if (!url.isNullOrBlank()) {
                     repository.persistServerAvatar(userId, url)
@@ -432,15 +400,17 @@ class ProfileViewModel @Inject constructor(
                 } else {
                     _avatarMessage.value = when (result.code) {
                         422 -> result.detail ?: "Foto não aprovada. Escolha outra imagem."
-                        503 -> "Não foi possível verificar a foto agora. Tente novamente em instantes."
+                        503 -> result.detail ?: "A verificação de publicação está indisponível. Tente novamente em instantes."
                         413 -> "A foto excede o limite de 5 MB."
                         415 -> "Formato não suportado — use JPEG, PNG ou WebP."
                         0 -> "Sem conexão. Tente novamente."
                         else -> result.detail ?: "Não foi possível enviar a foto de perfil."
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _avatarMessage.value = "Não foi possível enviar a foto de perfil."
+                if (auth.currentUser?.uid == userId) _avatarMessage.value = e.message ?: "Não foi possível enviar a foto de perfil."
             } finally {
                 _avatarUploading.value = false
             }

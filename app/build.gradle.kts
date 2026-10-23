@@ -187,6 +187,7 @@ dependencies {
 
     // OCR de imagem On-Device — Google ML Kit Text Recognition (D49 / Fase 1)
     implementation(libs.mlkit.text.recognition)
+    implementation(libs.mlkit.face.detection)
 
 
     // Movement & GPS

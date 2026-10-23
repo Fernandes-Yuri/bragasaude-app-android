@@ -19,7 +19,7 @@ class ProfileRepositoryRefreshTest {
         coEvery { dao.getProfileOneShot("owner") } returns old
         coEvery { api.getProfileLookup("owner") } returns ProfileLookup.Found(
             RemoteProfile(id = "owner", basicProfileComplete = true, selfCareComplete = true))
-        val repo = ProfileRepository(api, dao, mockk<SyncScheduler>(relaxed = true))
+        val repo = ProfileRepository(api, dao, mockk<SyncScheduler>(relaxed = true), mockk(relaxed = true))
         repo.refreshProfileForLogin("owner")
         coVerify { dao.cacheRemoteProfile(match { it.basicProfileComplete && it.selfCareComplete && !it.pendingSync }, old) }
         coVerify(exactly = 0) { api.syncProfile(any()) }
@@ -28,7 +28,7 @@ class ProfileRepositoryRefreshTest {
         val api = mockk<BragaApiClient>()
         val dao = mockk<ProfileDao>(relaxed = true)
         coEvery { api.getProfileLookup("owner") } returns ProfileLookup.Unavailable(503)
-        val repo = ProfileRepository(api, dao, mockk(relaxed = true))
+        val repo = ProfileRepository(api, dao, mockk(relaxed = true), mockk(relaxed = true))
         assertEquals(ProfileLookup.Unavailable(503), repo.refreshProfileForLogin("owner"))
         coVerify(exactly = 0) { dao.cacheRemoteProfile(any(), any()) }
     }
@@ -36,7 +36,7 @@ class ProfileRepositoryRefreshTest {
         val api = mockk<BragaApiClient>()
         val dao = mockk<ProfileDao>(relaxed = true)
         coEvery { api.getProfileLookup("owner") } throws CancellationException()
-        val repo = ProfileRepository(api, dao, mockk(relaxed = true))
+        val repo = ProfileRepository(api, dao, mockk(relaxed = true), mockk(relaxed = true))
         try { repo.refreshProfileForLogin("owner"); fail("Expected cancellation") }
         catch (_: CancellationException) { }
         coVerify(exactly = 0) { dao.cacheRemoteProfile(any(), any()) }

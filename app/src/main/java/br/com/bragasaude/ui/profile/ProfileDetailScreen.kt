@@ -249,7 +249,7 @@ fun ProfileDetailScreen(
                         enabled = !avatarUploading,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (avatarUploading) "Enviando..." else "Escolher da Galeria")
+                        Text(if (avatarUploading) "Conferindo e enviando…" else "Escolher da Galeria")
                     }
                     if (!googleAvatarUrl.isNullOrBlank()) {
                         OutlinedButton(onClick = { showGooglePhotoConfirm = true }, enabled = !avatarUploading,
