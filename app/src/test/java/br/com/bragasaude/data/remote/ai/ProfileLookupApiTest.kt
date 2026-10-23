@@ -1,5 +1,6 @@
 package br.com.bragasaude.data.remote.ai
 
+import br.com.bragasaude.data.util.toEntity
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.model.ProfileLookup
 import br.com.bragasaude.data.remote.auth.AuthService
@@ -41,6 +42,19 @@ class ProfileLookupApiTest {
         val result = api.getProfileLookup("owner") as ProfileLookup.Found
         assertTrue(result.profile.basicProfileComplete)
         assertTrue(result.profile.selfCareComplete)
+    }
+    @Test fun uploadedPhotoIsRecoveredFromLoginResponse() = runBlocking {
+        val photo = "https://api.bragasaude.online/api/files/avatars/owner/photo.jpg"
+        server.enqueue(MockResponse().setBody("""{"id":"owner","photo_url":"$photo","basic_profile_complete":true,"self_care_complete":true,"self_care_setup_pending":false}"""))
+        val result = api.getProfileLookup("owner") as ProfileLookup.Found
+        assertEquals(photo, result.profile.photoUrl)
+        assertEquals(photo, result.profile.toEntity().customPhotoUri)
+    }
+    @Test fun absentOrRemovedPhotoDoesNotBecomeLiteralNull() = runBlocking {
+        for (field in listOf("", ",\"photo_url\":null", ",\"photo_url\":\"null\"", ",\"photo_url\":\" \"")) {
+            server.enqueue(MockResponse().setBody("""{"id":"owner","basic_profile_complete":true,"self_care_complete":true,"self_care_setup_pending":false$field}"""))
+            assertNull((api.getProfileLookup("owner") as ProfileLookup.Found).profile.photoUrl)
+        }
     }
     @Test fun malformedResponseIsUnavailable() = runBlocking {
         server.enqueue(MockResponse().setBody("{}"))

@@ -651,7 +651,7 @@ fun GroceryListBottomSheet(
                             }
                             items(entries, key = { it.remoteId }) { entry ->
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    val retailCard = retailCards.firstOrNull { it.id == entry.retailCardId }
+                                    val retailCard = resolveShoppingRetailCard(entry, retailCards)
                                     GroceryShoppingCard(
                                         item = entry, retailCard = retailCard,
                                         onToggle = { checked -> onToggleItem(entry.remoteId, checked) },

@@ -188,6 +188,7 @@ class BragaApiClient @Inject constructor(
                 customFoodRestrictions = res.nullableString("custom_food_restrictions"),
                 caregiverMode = res.nullableString("caregiver_mode"),
                 avatarIdentifier = res.nullableString("avatar_identifier"),
+                photoUrl = res.nullableString("photo_url"),
             ))
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

@@ -115,7 +115,9 @@ interface ProfileDao {
         if (current != expected || current?.pendingSync == true) {
             return current
         }
-        val merged = remote.copy(customPhotoUri = current?.customPhotoUri, communityNickname = current?.communityNickname)
+        // O snapshot remoto inclui a foto publicada, inclusive null após remoção.
+        // A comparação acima protege uma alteração local feita durante a consulta.
+        val merged = remote.copy(communityNickname = current?.communityNickname)
         insert(merged)
         return merged
     }
