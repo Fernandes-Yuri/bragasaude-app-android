@@ -36,7 +36,15 @@ class GroceryQuickActionsTest {
         listOf("7 dias", "14 dias", "30 dias").forEach { label ->
             val layouts = mutableListOf<TextLayoutResult>()
             compose.onNodeWithText(label).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
-            assertFalse("Período cortado: $label", layouts.single().hasVisualOverflow)
+            val layout = layouts.single()
+            val dimensions = "$label: box=${layout.size}, right=${layout.getLineRight(0)}, bottom=${layout.getLineBottom(0)}"
+            assertEquals(dimensions, 1, layout.lineCount)
+            assertFalse(dimensions, layout.isLineEllipsized(0))
+            assertEquals(dimensions, label.length, layout.getLineEnd(0, visibleEnd = true))
+            // Native glyph metrics can differ from integer pixel bounds by less than one pixel.
+            assertTrue(dimensions, layout.getLineLeft(0) >= -1f)
+            assertTrue(dimensions, layout.getLineRight(0) <= layout.size.width + 1f)
+            assertTrue(dimensions, layout.getLineBottom(0) <= layout.size.height + 1f)
         }
         compose.onNodeWithText("14 dias").assertIsDisplayed().performClick()
         compose.onNodeWithText("Adicionar").assertIsDisplayed().performClick()
