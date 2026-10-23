@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,6 +37,8 @@ fun MedicalReportScreen(
 ) {
     val context = LocalContext.current
     val isGeneratingPdf by viewModel.isGeneratingPdf.collectAsState()
+    val vitals by viewModel.vitalsHistory.collectAsState()
+    val biometry by viewModel.latestBiometry.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
@@ -66,6 +69,19 @@ fun MedicalReportScreen(
         }
     }
 
+    MedicalReportContent(vitals, biometry, isGeneratingPdf, snackbarHostState, onBack, viewModel::generatePdfReport)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun MedicalReportContent(
+    vitals: List<br.com.bragasaude.data.remote.model.RemoteVitalSign>,
+    biometry: br.com.bragasaude.data.remote.model.RemoteBiometry?,
+    isGeneratingPdf: Boolean,
+    snackbarHostState: SnackbarHostState,
+    onBack: () -> Unit,
+    onExport: () -> Unit
+) {
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -77,7 +93,7 @@ fun MedicalReportScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { viewModel.generatePdfReport() },
+                        onClick = onExport,
                         enabled = !isGeneratingPdf
                     ) {
                         if (isGeneratingPdf) {
@@ -99,9 +115,11 @@ fun MedicalReportScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxSize().testTag("reportContent")
                 .padding(innerPadding)
         ) {
+            item { ReportVitalsSummary(vitals) }
+            item { ReportBodySummary(biometry) }
             // CARD DE EXPORTAÇÃO DO RELATÓRIO CLÍNICO (30 DIAS)
             item {
                 Card(
@@ -156,7 +174,7 @@ fun MedicalReportScreen(
                         Spacer(Modifier.height(16.dp))
 
                         Button(
-                            onClick = { viewModel.generatePdfReport() },
+                            onClick = onExport,
                             enabled = !isGeneratingPdf,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -181,7 +199,7 @@ fun MedicalReportScreen(
                 }
             }
 
-            item { Spacer(Modifier.height(80.dp)) }
+            item { Spacer(Modifier.height(8.dp)) }
         }
     }
 }

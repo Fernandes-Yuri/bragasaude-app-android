@@ -318,6 +318,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Publicar revisão visual de relatórios
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: revisao-visual-relatorios
+          path: app/build/outputs/report-review/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Publicar schemas Room gerados
         if: always()
         uses: actions/upload-artifact@v4

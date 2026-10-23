@@ -151,9 +151,8 @@ fun WeeklyGrocerySummaryCard(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
-                        TextButton(onClick = onResize) {
-                            Text("Redimensionar lista")
-                        }
+                        Text("Use as opções de planejamento no topo da lista para recalcular.",
+                            style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

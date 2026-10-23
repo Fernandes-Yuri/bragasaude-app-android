@@ -15,6 +15,25 @@ import org.junit.Assert.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProfileCaregivingTest {
+    @Test fun savingInitialSmokerProfileDoesNotOpenComplementaryOffer() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val repository = mockk<ProfileRepository>(relaxed = true)
+            val feedback = mockk<FeedbackRepository>(relaxed = true)
+            val auth = mockk<FirebaseAuth>(relaxed = true)
+            val smoking = mockk<br.com.bragasaude.data.local.smoking.SmokingSupportRepository>(relaxed = true)
+            every { auth.currentUser?.uid } returns "new-user"
+            every { repository.getProfile("new-user") } returns flowOf(null)
+            every { feedback.getUserFeedbacks("new-user") } returns flowOf(emptyList())
+            coEvery { repository.getProfileOneShotLocal("new-user") } returns null
+            val vm = ProfileViewModel(repository, feedback, auth, mockk(), mockk(relaxed = true), smoking, mockk(relaxed = true))
+            var completed = false
+            vm.saveProfile("Maria", null, null, 165.0, 72.0, isSmoker = true, onComplete = { completed = true })
+            advanceUntilIdle()
+            assertTrue(completed)
+            coVerify(exactly = 0) { smoking.offerAfterProfileSaved() }
+        } finally { Dispatchers.resetMain() }
+    }
     @Test fun `adding caregiving preserves identity biometrics and goals`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         try {

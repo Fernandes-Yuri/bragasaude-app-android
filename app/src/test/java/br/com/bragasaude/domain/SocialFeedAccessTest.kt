@@ -12,6 +12,9 @@ class SocialFeedAccessTest {
         assertFalse(canDisplayCachedSocialPost(post, "another-account", emptySet()))
         assertTrue(canDisplayCachedSocialPost(post, "author", emptySet()))
     }
+    @Test fun blankAuthorCannotAppearAsValidCommunityPost() {
+        assertFalse(canDisplayCachedSocialPost(post.copy(userId = "", visibility = "PUBLIC"), "u", emptySet()))
+    }
     @Test fun unknownVisibilityIsNeverTreatedAsPublic() {
         assertFalse(canDisplayCachedSocialPost(post.copy(visibility="UNKNOWN"), "caregiver", setOf("author")))
         assertTrue(canDisplayCachedSocialPost(post.copy(visibility="PUBLIC"), "caregiver", emptySet()))

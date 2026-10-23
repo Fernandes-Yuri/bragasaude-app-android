@@ -54,9 +54,8 @@ class SocialFeedRepository @Inject constructor(
         val expected = socialFeedDao.getCachedPosts().associateBy { it.id }
         val posts = apiClient.getSocialFeed(currentUserId, limit)
         requireSession(currentUserId)
-        if (posts.isNotEmpty()) {
-            socialFeedDao.cacheRemotePosts(posts, expected, firstPageLimit = limit)
-        }
+        // O gateway retorna 503 quando indisponível; 200 [] confirma mural vazio.
+        socialFeedDao.cacheRemotePosts(posts, expected, firstPageLimit = limit, confirmedEmpty = true)
         return posts.size
     }
 

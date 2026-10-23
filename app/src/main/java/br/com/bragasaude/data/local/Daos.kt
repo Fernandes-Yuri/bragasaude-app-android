@@ -395,30 +395,31 @@ interface SocialFeedDao {
     /**
      * Aplica uma página e reconcilia só a janela confirmada pelo servidor.
      * expected é o snapshot anterior à requisição: mudanças posteriores são preservadas.
-     * Lista vazia não confirma remoções: o contrato atual também retorna [] sem banco.
+     * Lista vazia só confirma remoções quando a chamada autoriza explicitamente a reconciliação.
      */
     @Transaction
     suspend fun cacheRemotePosts(
         posts: List<SocialPostEntity>,
         expected: Map<String, SocialPostEntity>,
-        firstPageLimit: Int? = null
+        firstPageLimit: Int? = null,
+        confirmedEmpty: Boolean = false
     ) {
         posts.forEach { remote ->
             val local = getPostById(remote.id)
             if (local == expected[remote.id] && local?.pendingSync != true &&
                 local?.pendingMutation.isNullOrEmpty() && local?.isVisible != false) insertPost(remote)
         }
-        if (firstPageLimit == null || posts.isEmpty()) return
+        if (firstPageLimit == null || (posts.isEmpty() && !confirmedEmpty)) return
         require(firstPageLimit in 1..100 && posts.size <= firstPageLimit)
         require(posts.map { it.id }.distinct().size == posts.size)
         require(posts.zipWithNext().all { (newer, older) -> newer.createdAt >= older.createdAt })
         val received = posts.map { it.id }.toSet()
         val complete = posts.size < firstPageLimit
-        val oldest = posts.last().createdAt
+        val oldest = posts.lastOrNull()?.createdAt
         expected.values.filter { cached ->
             cached.id !in received && cached.isVisible && !cached.pendingSync &&
                 cached.pendingMutation.isEmpty() && !cached.isFamilyPost &&
-                (complete || cached.createdAt > oldest)
+                (complete || (oldest != null && cached.createdAt > oldest))
         }.forEach { cached ->
             // Comparação dentro da transação: não apagar edição ou publicação concorrente.
             if (getPostById(cached.id) == cached && !hasPendingReactions(cached.id)) {
