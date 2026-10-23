@@ -28,8 +28,6 @@ import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Mic
-import br.com.bragasaude.ui.care.CareOsViewModel
-import br.com.bragasaude.ui.care.MorningCheckInSheet
 import br.com.bragasaude.ui.theme.BragaMintSurface
 import br.com.bragasaude.ui.theme.BragaMintBorder
 import androidx.compose.material3.*
@@ -104,64 +102,12 @@ fun HomeScreen(
     
     val isRefreshing by viewModel.isRefreshing.collectAsState()
 
-    val careViewModel: CareOsViewModel = hiltViewModel()
-    val careUi by careViewModel.ui.collectAsState()
-    var showMorningCheckIn by remember { mutableStateOf(false) }
-    var showCompletedCheckInDialog by remember { mutableStateOf(false) }
-    
     var showEmergencyDialog by remember { mutableStateOf(false) }
-
     val context = androidx.compose.ui.platform.LocalContext.current
-    // C37: leitura fresca a cada recomposição — sem remember para o toggle
-    // das Configurações valer na hora (remember antigo deixava o botão ilustrativo).
-    val autoMorningCheckinEnabled =
-        br.com.bragasaude.util.AppPreferences.isAutoMorningCheckinEnabled(context)
-    val useGooglePhoto = remember { br.com.bragasaude.util.AppPreferences.isUseGooglePhotoEnabled(context) }
-    val avatarPhotoUrl = if (useGooglePhoto) com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.photoUrl?.toString() else null
-
-    if (showMorningCheckIn) {
-        MorningCheckInSheet(
-            onDismiss = { showMorningCheckIn = false },
-            viewModel = careViewModel
-        )
-    }
-
-    if (showCompletedCheckInDialog) {
-        BragaAlertDialog(
-            onDismissRequest = { showCompletedCheckInDialog = false },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    tint = BragaEmerald,
-                    modifier = Modifier.size(36.dp)
-                )
-            },
-            title = {
-                Text(
-                    text = "Check-in de hoje realizado!",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = BragaTextPrimary
-                )
-            },
-            text = {
-                Text(
-                    text = "Sua rotina matinal já está em dia! Você já registrou como passou a noite e como está se sentindo hoje. Se sentir qualquer sintoma novo ao longo do dia, pode relatar para a assistente ou nos cuidados.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = BragaTextSecondary,
-                    lineHeight = 20.sp
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { showCompletedCheckInDialog = false }
-                ) {
-                    Text("Entendido", color = BragaEmerald, fontWeight = FontWeight.Bold)
-                }
-            },
-            )
-    }
+    val avatarProfile by viewModel.avatarProfile.collectAsState()
+    val useGooglePhoto = br.com.bragasaude.util.AppPreferences.isUseGooglePhotoEnabled(context)
+    val avatarPhotoUrl = resolveHomeAvatarPhoto(avatarProfile?.customPhotoUri,
+        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.photoUrl?.toString(), useGooglePhoto)
 
     Scaffold(
         topBar = {
@@ -169,7 +115,14 @@ fun HomeScreen(
                 greetingPrefix = getGreetingPrefix(),
                 title = userName.ifBlank { "Meu perfil" },
                 avatarInitials = userName.ifBlank { "BS" },
-                photoUrl = avatarPhotoUrl,
+                avatarContent = {
+                    Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = "Abrir perfil") {
+                        onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Profile)
+                    }) {
+                        br.com.bragasaude.ui.components.SharedProfileAvatar(userName, avatarPhotoUrl,
+                            avatarProfile?.avatarIdentifier, 48.dp)
+                    }
+                },
                 onAvatarClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Profile) },
                 trailingContent = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -256,117 +209,6 @@ fun HomeScreen(
                                     Spacer(Modifier.height(8.dp))
                                     Text(label, style = MaterialTheme.typography.labelSmall, color = BragaTextPrimary)
                                 }
-                            }
-                        }
-                    }
-                }
-
-                // Card Acolhedor de Check-in Matinal do Dia (C37) — só exibe com opt-in.
-                item {
-                    val checkInDone = careUi.checkInDoneToday
-                    if (autoMorningCheckinEnabled && !checkInDone) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
-                            border = BorderStroke(1.dp, BragaMintBorder)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = BragaEmerald,
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Default.Mic,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-                                }
-                                Spacer(Modifier.width(14.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Check-in de Hoje",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp,
-                                        color = BragaTextPrimary
-                                    )
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        text = "Conte para o Braga como você passou a noite e como está se sentindo.",
-                                        fontSize = 13.sp,
-                                        color = BragaTextSecondary,
-                                        lineHeight = 18.sp
-                                    )
-                                    Spacer(Modifier.height(10.dp))
-                                    Button(
-                                        onClick = { showMorningCheckIn = true },
-                                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                                        shape = RoundedCornerShape(12.dp),
-                                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                                        modifier = Modifier.heightIn(min = 44.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Mic,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = Color.White
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            text = "Conversar agora",
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color.White,
-                                            fontSize = 14.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    } else if (checkInDone) {
-                        // Estado concluído acolhedor (não reabre formulário de preenchimento)
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showCompletedCheckInDialog = true },
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = BragaCardSurface),
-                            border = BorderStroke(1.dp, BragaCardBorder)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = BragaEmerald,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    text = "Check-in de hoje realizado!",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = BragaTextPrimary,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    text = "Em dia",
-                                    fontSize = 13.sp,
-                                    color = BragaEmerald,
-                                    fontWeight = FontWeight.SemiBold
-                                )
                             }
                         }
                     }

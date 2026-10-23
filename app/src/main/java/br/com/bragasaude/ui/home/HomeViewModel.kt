@@ -84,6 +84,9 @@ class HomeViewModel @Inject constructor(
         .map { it?.stepGoal ?: 8000 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 8000)
 
+    val avatarProfile = profileRepository.getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     val profile: StateFlow<RemoteProfile?> = profileRepository
         .getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
         .map { it?.toRemote() }

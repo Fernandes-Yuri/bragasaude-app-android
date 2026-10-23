@@ -44,12 +44,6 @@ fun NotificationsScreen(onBack: () -> Unit, viewModel: HomeViewModel = hiltViewM
     val readAlerts by viewModel.readAlerts.collectAsState()
     val identifiedAt by viewModel.alertIdentifiedAt.collectAsState()
     var selectedAlert by rememberSaveable { mutableStateOf<String?>(null) }
-    val unreadCount = alerts.count { it !in readAlerts }
-    LaunchedEffect(alerts) {
-        if (alerts.isNotEmpty()) {
-            viewModel.markAlertsAsRead()
-        }
-    }
     val lifecycleOwner = LocalLifecycleOwner.current
     var batteryAllowed by remember(context) { mutableStateOf(BatteryOptimizationHelper.estaLiberado(context)) }
     var batteryGuidance by rememberSaveable { mutableStateOf<String?>(null) }
@@ -76,72 +70,14 @@ fun NotificationsScreen(onBack: () -> Unit, viewModel: HomeViewModel = hiltViewM
         batteryGuidance?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
     }
 
-    Scaffold(
-        containerColor = BragaBackground,
-        topBar = { EmeraldHeaderBanner(title = "Notificações", subtitle = "Seus avisos de cuidado", onBack = onBack) }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (!batteryAllowed) {
-                item {
-                    Card(
-                        onClick = openBatterySettings,
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                    ) {
-                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Default.NotificationsActive, contentDescription = null)
-                            Text("Receba os avisos com o app fechado", style = MaterialTheme.typography.titleSmall)
-                            Text(batteryGuidance ?: "Permita que o Braga Saúde continue ativo para acompanhar sua rotina. Na confirmação do Android, autorize o funcionamento em segundo plano.",
-                                style = MaterialTheme.typography.bodyMedium)
-                            Button(onClick = openBatterySettings, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
-                                Text("Permitir funcionamento em segundo plano", style = MaterialTheme.typography.bodyMedium)
-                            }
-                        }
-                    }
-                }
-            }
-            if (alerts.isEmpty()) {
-                item {
-                    Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(Icons.Default.NotificationsNone, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(56.dp))
-                        Text("Tudo tranquilo por aqui", style = MaterialTheme.typography.titleLarge)
-                        Text("Nenhum aviso pendente.", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            } else {
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(if (unreadCount > 0) "$unreadCount avisos para ler" else "Seus avisos estão em dia",
-                            style = MaterialTheme.typography.titleMedium)
-                        Text("Toque para ler. Os avisos ficam aqui até você dispensá-los.", style = MaterialTheme.typography.bodyMedium)
-                        if (unreadCount > 0) {
-                            TextButton(onClick = viewModel::markAlertsAsRead, modifier = Modifier.heightIn(min = 48.dp)) {
-                                Text("Marcar todos como lidos", style = MaterialTheme.typography.bodyMedium)
-                            }
-                        }
-                    }
-                }
-                items(alerts, key = { it }) { alert ->
-                    NotificationCard(
-                        message = alert.removePrefix("PERMISSION_NOTIFICATIONS:").removePrefix("PERMISSION_REQUIRED:").trim(),
-                        category = alertCategory(alert),
-                        unread = alert !in readAlerts,
-                        identifiedAt = identifiedAt[alert],
-                        onOpen = {
-                            viewModel.markAlertAsRead(alert)
-                            selectedAlert = alert
-                        },
-                        onDismiss = { viewModel.dismissAlert(alert) }
-                    )
-                }
-            }
-        }
-    }
+    NotificationsContent(
+        alerts = alerts, readAlerts = readAlerts, identifiedAt = identifiedAt,
+        batteryAllowed = batteryAllowed, batteryGuidance = batteryGuidance,
+        onBack = onBack, onBatterySettings = openBatterySettings,
+        onMarkAllRead = viewModel::markAlertsAsRead,
+        onOpen = { alert -> viewModel.markAlertAsRead(alert); selectedAlert = alert },
+        onDismiss = viewModel::dismissAlert
+    )
     selectedAlert?.let { alert ->
         val isNotificationPermission = alert.startsWith("PERMISSION_NOTIFICATIONS:")
         val isMonitoringPermission = alert.startsWith("PERMISSION_REQUIRED:")
@@ -165,6 +101,81 @@ fun NotificationsScreen(onBack: () -> Unit, viewModel: HomeViewModel = hiltViewM
                 }
             }
         )
+    }
+}
+
+@Composable
+internal fun NotificationsContent(
+    alerts: List<String>, readAlerts: Set<String>, identifiedAt: Map<String, Long>,
+    batteryAllowed: Boolean, batteryGuidance: String?, onBack: () -> Unit,
+    onBatterySettings: () -> Unit, onMarkAllRead: () -> Unit,
+    onOpen: (String) -> Unit, onDismiss: (String) -> Unit
+) {
+    var batteryExpanded by rememberSaveable { mutableStateOf(false) }
+    var batteryDismissed by rememberSaveable { mutableStateOf(false) }
+    val unread = alerts.filter { it !in readAlerts }
+    val previous = alerts.filter { it in readAlerts }
+    Scaffold(containerColor = BragaBackground,
+        topBar = { EmeraldHeaderBanner(title = "Notificações", subtitle = "Seus avisos de cuidado", onBack = onBack) }
+    ) { padding ->
+        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (!batteryAllowed && !batteryDismissed) item(key = "batteryGuidance") {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.BatteryStd, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Avisos em segundo plano", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                            IconButton(onClick = { batteryExpanded = !batteryExpanded }) {
+                                Icon(if (batteryExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (batteryExpanded) "Recolher orientação de bateria" else "Ver orientação de bateria")
+                            }
+                            IconButton(onClick = { batteryDismissed = true }) {
+                                Icon(Icons.Default.Close, contentDescription = "Dispensar orientação de bateria")
+                            }
+                        }
+                        if (batteryExpanded) {
+                            Text(batteryGuidance ?: "O Android pode limitar os avisos com o app fechado. Revise a bateria se os lembretes atrasarem.",
+                                style = MaterialTheme.typography.bodyMedium)
+                            TextButton(onClick = onBatterySettings) { Text("Configurar bateria") }
+                        }
+                    }
+                }
+            }
+            if (alerts.isEmpty()) item(key = "empty") {
+                Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Default.NotificationsNone, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(56.dp))
+                    Text("Tudo tranquilo por aqui", style = MaterialTheme.typography.titleLarge)
+                    Text("Nenhum aviso no momento.", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            if (unread.isNotEmpty()) {
+                item(key = "unreadHeading") {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Novas (${unread.size})", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        TextButton(onClick = onMarkAllRead) { Text("Marcar todas como lidas") }
+                    }
+                }
+                items(unread, key = { it }) { alert ->
+                    NotificationCard(alert.removePrefix("PERMISSION_NOTIFICATIONS:").removePrefix("PERMISSION_REQUIRED:").trim(),
+                        alertCategory(alert), true, identifiedAt[alert], { onOpen(alert) }, { onDismiss(alert) })
+                }
+            }
+            if (previous.isNotEmpty()) {
+                item(key = "readHeading") {
+                    Text(if (unread.isEmpty()) "Histórico de avisos" else "Lidas (${previous.size})",
+                        style = MaterialTheme.typography.titleMedium)
+                }
+                items(previous, key = { it }) { alert ->
+                    NotificationCard(alert.removePrefix("PERMISSION_NOTIFICATIONS:").removePrefix("PERMISSION_REQUIRED:").trim(),
+                        alertCategory(alert), false, identifiedAt[alert], { onOpen(alert) }, { onDismiss(alert) })
+                }
+            }
+        }
     }
 }
 

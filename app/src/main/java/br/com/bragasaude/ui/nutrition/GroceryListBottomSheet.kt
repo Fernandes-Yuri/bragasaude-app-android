@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -80,7 +81,7 @@ fun GroceryListBottomSheet(
     onDecrementCard: (String) -> Unit = {},
     onGenerateListWithPreferences: ((preserveManual: Boolean, preferences: br.com.bragasaude.domain.WeeklyGroceryPreferences) -> Unit)? = null
 ) {
-    var showCatalog by remember { mutableStateOf(true) }
+    var showCatalog by rememberSaveable { mutableStateOf(false) }
     var showPlanningDetails by remember { mutableStateOf(false) }
     var reportingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
     var manualEditingItem by remember { mutableStateOf<GroceryListItemEntity?>(null) }
@@ -301,8 +302,8 @@ fun GroceryListBottomSheet(
             Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    FilterChip(selected = showCatalog, onClick = { showCatalog = true }, label = { Text("Mercadinho", maxLines = 1) })
                     FilterChip(selected = !showCatalog, onClick = { showCatalog = false }, label = { Text("Minha lista", maxLines = 1) })
+                    FilterChip(selected = showCatalog, onClick = { showCatalog = true }, label = { Text("Mercadinho", maxLines = 1) })
                     Spacer(Modifier.weight(1f))
                     if (groceryList.isNotEmpty()) {
                         IconButton(onClick = onExportPdf) {
@@ -650,12 +651,14 @@ fun GroceryListBottomSheet(
                             }
                             items(entries, key = { it.remoteId }) { entry ->
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    GroceryItemRow(
-                                        item = entry,
-                                        imageUrl = retailCards.firstOrNull { it.id == entry.retailCardId }?.imageUrl ?: entry.imageUrl,
+                                    val retailCard = retailCards.firstOrNull { it.id == entry.retailCardId }
+                                    GroceryShoppingCard(
+                                        item = entry, retailCard = retailCard,
                                         onToggle = { checked -> onToggleItem(entry.remoteId, checked) },
-                                        onEdit = { if (entry.retailCardId != null) showCatalog = true else manualEditingItem = entry },
-                                        onDelete = { onRemoveItem(entry.remoteId) }
+                                        onEdit = { manualEditingItem = entry },
+                                        onDelete = { onRemoveItem(entry.remoteId) },
+                                        onIncrease = retailCard?.let { card -> { onAddCard(card) } },
+                                        onDecrease = retailCard?.let { card -> { onDecrementCard(card.id) } }
                                     )
                                     communityPrices.filter { it.foodName.equals(entry.foodName, ignoreCase = true) }.forEach { price ->
                                         Text(
@@ -699,118 +702,5 @@ fun GroceryListBottomSheet(
                 }
             }
         )
-    }
-}
-
-@Composable
-fun GroceryItemRow(
-    item: GroceryListItemEntity,
-    onToggle: (Boolean) -> Unit,
-    onEdit: () -> Unit = {},
-    onDelete: () -> Unit = {},
-    imageUrl: String? = item.imageUrl
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .toggleable(value = item.isCheckedInPantry, role = Role.Checkbox, onValueChange = onToggle),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (item.isCheckedInPantry) BragaMintSurface else BragaCardSurface
-        ),
-        border = if (item.isCheckedInPantry) BorderStroke(1.dp, BragaMintBorder) else BorderStroke(1.dp, BragaCardBorder)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Checkbox(
-                checked = item.isCheckedInPantry,
-                onCheckedChange = null,
-                colors = CheckboxDefaults.colors(
-                    checkedColor = BragaEmerald,
-                    uncheckedColor = BragaCardBorder
-                )
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            if (item.retailCardId != null) {
-                GroceryProductImage(imageUrl, item.foodName, Modifier.size(56.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.foodName,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    textDecoration = if (item.isCheckedInPantry) TextDecoration.LineThrough else TextDecoration.None,
-                    color = if (item.isCheckedInPantry) BragaTextSecondary else BragaTextPrimary
-                )
-                Text(
-                    text = "Comprar: ${item.purchaseUnitText}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = BragaTextSecondary
-                )
-                val isPerishable = item.category == WeeklyGroceryEngine.CORRIDOR_HORTIFRUTI
-                if (isPerishable && item.planningDays > 7) {
-                    val weeks = (item.planningDays / 7).coerceAtLeast(1)
-                    val parsedVal = item.purchaseUnitText.substringBefore(' ').toDoubleOrNull()
-                    val unit = item.purchaseUnitText.substringAfter(' ', "")
-                    if (parsedVal != null && unit.isNotBlank()) {
-                        val weeklyPart = parsedVal / weeks
-                        val weeklyText = if (unit == "g") "${weeklyPart.toInt()} g" else if (unit == "L") String.format(Locale.ROOT, "%.2f L", weeklyPart) else "${weeklyPart.toInt()} un"
-                        Text(
-                            text = "Feira semanal: ~$weeklyText / semana ($weeks reposições)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = BragaEmerald
-                        )
-                    }
-                }
-                if (item.estimatedPriceBrl > 0.0) {
-                    Text(
-                        text = String.format(Locale.getDefault(), "Estimado: R$ %.2f", item.estimatedPriceBrl),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (item.isCheckedInPantry) BragaTextSecondary else BragaEmeraldDark
-                    )
-                }
-            }
-
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(36.dp)
-            ) {
-                IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        Icons.Default.Edit,
-                        contentDescription = "Editar item",
-                        tint = BragaTextSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-
-            Spacer(Modifier.width(6.dp))
-
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
-                modifier = Modifier.size(36.dp)
-            ) {
-                IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Remover item",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-        }
     }
 }

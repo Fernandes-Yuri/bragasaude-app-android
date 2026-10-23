@@ -330,8 +330,10 @@ fun DraggableAiAssistantFab(
             } else {
                 showMic = true
                 while (true) {
-                    delay(2500)
-                    showMic = !showMic
+                    showMic = true
+                    delay(5500)
+                    showMic = false
+                    delay(1800)
                 }
             }
         }

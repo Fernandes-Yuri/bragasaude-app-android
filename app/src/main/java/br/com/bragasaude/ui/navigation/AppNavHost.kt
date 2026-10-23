@@ -47,8 +47,6 @@ import br.com.bragasaude.ui.devices.HealthReadingsScreen
 import br.com.bragasaude.ui.util.NotificationHelper
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
-import br.com.bragasaude.ui.care.CareOsViewModel
-import br.com.bragasaude.ui.care.MorningCheckInSheet
 
 /**
  * Declara todas as rotas de navegação da aplicação.
@@ -65,9 +63,6 @@ fun AppNavHost(
 ) {
     val smokingViewModel: br.com.bragasaude.ui.smoking.SmokingSupportViewModel = hiltViewModel()
     val appContext = LocalContext.current.applicationContext
-    val globalCareViewModel: CareOsViewModel = hiltViewModel()
-    val careState by globalCareViewModel.ui.collectAsState()
-    var dismissedCheckInFor by remember { mutableStateOf<String?>(null) }
 
     val navigateBack: () -> Unit = {
         if (navController.previousBackStackEntry != null) {
@@ -190,8 +185,7 @@ fun AppNavHost(
                 searchFood = nutrition.searchFood,
                 openGroceryList = nutrition.openGroceryList,
                 suggestedGroceryItems = nutrition.groceryItems,
-                onNavigateToPantryRecipes = { navController.navigate(Screen.PantryRecipes) },
-                onSmokingSupport = { navController.navigate(Screen.SmokingSupport) }
+                onNavigateToPantryRecipes = { navController.navigate(Screen.PantryRecipes) }
             )
         }
         composable<Screen.Report> {
@@ -307,21 +301,4 @@ fun AppNavHost(
         }
     }
 
-    // C37: Abertura automática no startup configurável pelo usuário (default = false).
-    // Leitura fresca a cada recomposição — sem remember para o toggle das
-    // Configurações valer na hora (remember antigo deixava o botão ilustrativo).
-    val navContext = androidx.compose.ui.platform.LocalContext.current
-    val autoMorningCheckinEnabled =
-        br.com.bragasaude.util.AppPreferences.isAutoMorningCheckinEnabled(navContext)
-    val selfCareEnabled = userRole == "PATIENT" || (userRole == "CAREGIVER" && caregiverMode == "HYBRID")
-    val selected = careState.selectedPatientId
-    if (autoMorningCheckinEnabled && selfCareEnabled && careState.isAuthenticated && careState.patients.isNotEmpty() &&
-        selected != null && careState.selectedPatient.role == "PATIENT" &&
-        !careState.checkInDoneToday && dismissedCheckInFor != selected
-    ) {
-        MorningCheckInSheet(
-            onDismiss = { dismissedCheckInFor = selected },
-            viewModel = globalCareViewModel
-        )
-    }
 }

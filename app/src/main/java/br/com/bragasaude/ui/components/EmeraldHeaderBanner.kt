@@ -53,7 +53,8 @@ fun EmeraldHeaderBanner(
     photoUrl: String? = null,
     onAvatarClick: (() -> Unit)? = null,
     trailingContent: (@Composable () -> Unit)? = null,
-    bottomContent: (@Composable () -> Unit)? = null
+    bottomContent: (@Composable () -> Unit)? = null,
+    avatarContent: (@Composable () -> Unit)? = null
 ) {
     BragaSubtleRipple(color = Color.White) {
         Box(
@@ -91,7 +92,10 @@ fun EmeraldHeaderBanner(
                             Spacer(Modifier.width(8.dp))
                         }
 
-                        if (!photoUrl.isNullOrBlank()) {
+                        if (avatarContent != null) {
+                            avatarContent()
+                            Spacer(Modifier.width(14.dp))
+                        } else if (!photoUrl.isNullOrBlank()) {
                             AsyncImage(
                                 model = photoUrl,
                                 contentDescription = "Foto de perfil",

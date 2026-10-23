@@ -155,13 +155,11 @@ class CareOsViewModel @Inject constructor(
                         Triple(meds, wall, lastTakenMap)
                     }
                 }.collect { (meds, wall, lastTakenMap) ->
-                    val selected = _ui.value.selectedPatientId
                     _ui.update {
                         it.copy(
                             medications = meds,
                             wall = wall,
-                            lastTakenMillisByMed = lastTakenMap,
-                            checkInDoneToday = selected?.let { id -> careOsRepository.hasCheckInForToday(id) } ?: false
+                            lastTakenMillisByMed = lastTakenMap
                         )
                     }
                 }
@@ -189,13 +187,11 @@ class CareOsViewModel @Inject constructor(
             careOsRepository.syncSymptomsDiary(id)
             val bulletin = careOsRepository.getDailyBulletin(id)
             val correlations = careOsRepository.getClinicalCorrelations(id)
-            val checkInDone = careOsRepository.hasCheckInForToday(id)
             _ui.update {
                 it.copy(
                     dailyBulletin = bulletin,
                     correlations = correlations?.correlations.orEmpty(),
-                    correlationsDisclaimer = correlations?.disclaimer,
-                    checkInDoneToday = checkInDone
+                    correlationsDisclaimer = correlations?.disclaimer
                 )
             }
         } catch (e: Exception) {
@@ -516,36 +512,6 @@ class CareOsViewModel @Inject constructor(
         }
     }
 
-    // ==================== CENA C37 — CHECK-IN MATINAL ====================
-
-    fun submitCheckIn(symptomsText: String, sleepQuality: Int?, disposition: Int?, inputMethod: String = "VOICE") {
-        viewModelScope.launch {
-            if (authenticatedUserId == null) return@launch requireAuthentication()
-            if (!_ui.value.selectedPatient.canTakeMedication) {
-                _ui.update { it.copy(message = "Seu vínculo não permite registrar o check-in deste paciente.") }
-                return@launch
-            }
-            if (symptomsText.isBlank()) {
-                _ui.value = _ui.value.copy(message = "Conte como você está se sentindo.")
-                return@launch
-            }
-            _ui.value = _ui.value.copy(loading = true, message = null)
-            val ok = careOsRepository.submitCheckIn(
-                patientId = patientId,
-                reportedBy = authenticatedUserId ?: patientId,
-                symptomsText = symptomsText,
-                sleepQuality = sleepQuality,
-                disposition = disposition,
-                inputMethod = inputMethod
-            )
-            _ui.value = _ui.value.copy(
-                loading = false,
-                checkInDoneToday = true,
-                message = if (ok) "Check-in registrado. Obrigado por compartilhar." else "Check-in salvo no aparelho; enviamos assim que a internet voltar."
-            )
-        }
-    }
-
     // ==================== MURAL ====================
 
     fun refreshWall() {
@@ -644,7 +610,6 @@ data class CareOsUiState(
     val medications: List<MedicationEntity> = emptyList(),
     val lastTakenMillisByMed: Map<String, Long> = emptyMap(),
     val wall: List<CareAuditEntity> = emptyList(),
-    val checkInDoneToday: Boolean = false,
     val message: String? = null,
     val isCelebrating: Boolean = false,
     val medicalAccess: MedicalAccessGrant? = null,

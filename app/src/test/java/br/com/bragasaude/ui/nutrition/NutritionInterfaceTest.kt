@@ -83,6 +83,7 @@ class NutritionInterfaceTest {
 
     @Test fun catalog_products_share_scroll_with_the_planning_header() {
         renderGrocery()
+        compose.onNodeWithText("Mercadinho").performClick()
         compose.onNodeWithTag("groceryCatalog").performScrollToNode(hasText("Arroz do catálogo"))
         compose.onNodeWithText("Arroz do catálogo").assertIsDisplayed()
         compose.onNodeWithText("Período da lista").assertIsNotDisplayed()
@@ -95,6 +96,7 @@ class NutritionInterfaceTest {
     @Config(qualifiers = "w800dp-h360dp-mdpi")
     fun grocery_actions_and_products_remain_accessible_in_landscape() {
         renderGrocery()
+        compose.onNodeWithText("Mercadinho").performClick()
         compose.onNodeWithTag("groceryCatalog").performScrollToNode(hasText("Arroz do catálogo"))
         compose.onNodeWithText("Arroz do catálogo").assertIsDisplayed()
         compose.onNodeWithText("Minha lista").performClick()
@@ -106,6 +108,7 @@ class NutritionInterfaceTest {
 
     @Test fun catalog_opens_with_two_complete_uniform_cards_and_collapsed_plan() {
         renderGrocery(multipleProducts = true)
+        compose.onNodeWithText("Mercadinho").performClick()
         compose.onNodeWithTag("groceryPlanDetails").assertDoesNotExist()
         compose.onNodeWithTag("retailCard-card").assertIsDisplayed()
         compose.onNodeWithTag("retailCard-meat").assertIsDisplayed()
@@ -126,6 +129,7 @@ class NutritionInterfaceTest {
 
     @Test fun catalog_keeps_sources_and_nutrients_in_product_details() {
         renderGrocery(multipleProducts = true)
+        compose.onNodeWithText("Mercadinho").performClick()
         compose.onNodeWithTag("retailCard-meat").performClick()
         compose.onNodeWithText("Embalagem: 500 g").assertIsDisplayed()
         compose.onNodeWithText("Informações nutricionais").assertIsDisplayed()
@@ -165,6 +169,19 @@ class NutritionInterfaceTest {
         compose.onNodeWithText("Tenho uma meta específica prescrita por nutricionista")
             .performScrollTo().performClick()
         compose.onAllNodes(isToggleable()).filter(isOn()).assertCountEquals(1)
+    }
+
+    @Test fun personal_list_opens_first_and_edits_quantity_without_switching_tabs() {
+        renderGrocery()
+        compose.onNodeWithText("Minha lista").assertIsSelected()
+        compose.onNodeWithTag("groceryCatalog").assertDoesNotExist()
+        compose.onNodeWithTag("groceryItems").performScrollToNode(hasText("Arroz da lista"))
+        compose.onNodeWithTag("shoppingCard-row").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Editar Arroz da lista").performClick()
+        compose.onNodeWithText("Quantidade de Arroz da lista").assertIsDisplayed()
+        compose.onNodeWithText("Concluir").performClick()
+        compose.onNodeWithText("Minha lista").assertIsSelected()
+        screenshot("17-lista-cards")
     }
 
     private fun screenshot(name: String) {
