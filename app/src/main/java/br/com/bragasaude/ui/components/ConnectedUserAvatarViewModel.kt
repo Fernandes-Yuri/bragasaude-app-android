@@ -13,7 +13,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class AvatarSession(val userId: String?, val avatars: Map<String, ProfileAvatarIdentity> = emptyMap())
+data class AvatarSession(
+    val userId: String?,
+    val avatars: Map<String, ProfileAvatarIdentity> = emptyMap(),
+    val revisions: Map<String, Long> = emptyMap()
+)
 
 @HiltViewModel
 class ConnectedUserAvatarViewModel @Inject constructor(
@@ -44,7 +48,9 @@ class ConnectedUserAvatarViewModel @Inject constructor(
             try {
                 val avatar = api.getProfileAvatar(userId)
                 if (auth.currentUser?.uid == uid && _session.value.userId == uid) {
-                    _session.value = _session.value.copy(avatars = _session.value.avatars + (userId to avatar))
+                    _session.value = _session.value.copy(
+                        avatars = _session.value.avatars + (userId to avatar),
+                        revisions = _session.value.revisions + (userId to ((_session.value.revisions[userId] ?: 0L) + 1L)))
                     loadedAt[userId] = System.nanoTime()
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {

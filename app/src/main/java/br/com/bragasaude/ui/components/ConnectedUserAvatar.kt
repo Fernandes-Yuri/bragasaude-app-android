@@ -50,12 +50,12 @@ fun ConnectedUserAvatar(
     SharedProfileAvatar(name,
         photoUrl = if (identity != null) identity.photoUrl else photoUrl,
         avatarIdentifier = if (identity != null) identity.avatarIdentifier else avatarIdentifier,
-        size = size)
+        size = size, reloadKey = session.revisions[userId])
 }
 
 @Composable
-internal fun SharedProfileAvatar(name: String?, photoUrl: String?, avatarIdentifier: String?, size: Dp) {
-    var failed by remember(photoUrl) { mutableStateOf(false) }
+internal fun SharedProfileAvatar(name: String?, photoUrl: String?, avatarIdentifier: String?, size: Dp, reloadKey: Any? = null) {
+    var failed by remember(photoUrl, reloadKey) { mutableStateOf(false) }
     val icon = when (avatarIdentifier) {
         "Person" -> Icons.Default.Person
         "Favorite" -> Icons.Default.Favorite
