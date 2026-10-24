@@ -242,9 +242,10 @@ fun AppNavHost(
             )
         }
         composable<Screen.CaregiverDashboard> {
+            val isRootDestination = userRole == "CAREGIVER" && caregiverMode != "HYBRID"
             CaregiverDashboardScreen(
-                onBack = navigateBack,
-                onConnectFamily = { navController.navigate(Screen.CaregiverRegistration) },
+                onBack = if (isRootDestination) null else navigateBack,
+                onConnectFamily = { navController.navigate(Screen.FamilyConnect) },
                 onOpenChat = { navController.navigate(Screen.FamilyInbox) }
             )
         }

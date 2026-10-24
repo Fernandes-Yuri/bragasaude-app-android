@@ -246,11 +246,18 @@ class SyncWorker @AssistedInject constructor(
 
     private suspend fun syncFamilyBindings() {
         val pending = familyDao.getPendingSyncBindings()
+        val now = System.currentTimeMillis()
         for (b in pending) {
+            if (b.expiresAt in 1 until now) {
+                familyDao.abandonBindingSync(b.id)
+                continue
+            }
             val remoteId = apiClient.syncFamilyBinding(b)
             if (remoteId != null) {
                 familyDao.markBindingSynced(b.id, remoteId)
-            } else throw java.io.IOException("Vínculo aguardando sincronização")
+            } else {
+                android.util.Log.w("SyncWorker", "Vínculo ${b.id} aguardando sincronização com o servidor.")
+            }
         }
     }
 

@@ -668,6 +668,10 @@ interface FamilyDao {
     @Query("UPDATE family_bindings_local SET remoteId = :remoteId, pendingSync = 0 WHERE id = :id")
     suspend fun markBindingSynced(id: String, remoteId: String)
 
+    /** Descarta marcação de sync pendente em vínculos inválidos ou expirados. */
+    @Query("UPDATE family_bindings_local SET pendingSync = 0 WHERE id = :id")
+    suspend fun abandonBindingSync(id: String)
+
     /** --- CONSULTAS MÉDICAS --- */
 
     /** Inserir nova consulta médica. */

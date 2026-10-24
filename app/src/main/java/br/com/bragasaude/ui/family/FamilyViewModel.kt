@@ -144,12 +144,11 @@ class FamilyViewModel @Inject constructor(
                 // Eu sou cuidador desta pessoa
                 val patientName = cachedProfiles[patientId]
                     ?: groupBindings.firstNotNullOfOrNull { it.patientName?.takeIf(String::isNotBlank) }
-                val rel = groupBindings.firstOrNull()?.caregiverRelation?.takeIf(String::isNotBlank) ?: "Familiar"
-                relationLabel = rel
+                relationLabel = "Paciente"
                 title = if (!patientName.isNullOrBlank()) {
-                    "$patientName ($rel)"
+                    patientName
                 } else {
-                    rel
+                    "Familiar em acompanhamento"
                 }
                 subtitle = "Você acompanha a saúde"
                 otherUserId = patientId
