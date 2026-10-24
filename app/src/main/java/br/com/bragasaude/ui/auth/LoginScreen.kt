@@ -2,6 +2,7 @@ package br.com.bragasaude.ui.auth
 
 import br.com.bragasaude.ui.components.BragaAlertDialog
 
+import android.provider.Settings
 import android.widget.Toast
 import br.com.bragasaude.data.util.HealthFormatter
 import androidx.compose.foundation.BorderStroke
@@ -14,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -21,8 +23,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -37,8 +42,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LoginScreen(
     viewModel: AuthViewModel = hiltViewModel(),
@@ -52,16 +59,30 @@ fun LoginScreen(
     val isKeyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val credentialManager = CredentialManager.create(context)
     val authState by viewModel.authState.collectAsState()
+
+    val isFirebaseTestLab = remember {
+        Settings.System.getString(context.contentResolver, "firebase.test.lab") == "true"
+    }
+
     var emailMode by rememberSaveable { mutableStateOf("login") } // "login", "signup" ou "forgot"
     var forgotStep by rememberSaveable { mutableStateOf(1) } // 1: e-mail, 2: código OTP, 3: nova senha
-    var email by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf(if (isFirebaseTestLab) "testebraga1@proton.me" else "") }
+    var password by rememberSaveable { mutableStateOf(if (isFirebaseTestLab) "fernandes3" else "") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
     var otpCode by rememberSaveable { mutableStateOf("") }
     var newPassword by rememberSaveable { mutableStateOf("") }
     var confirmNewPassword by rememberSaveable { mutableStateOf("") }
     var signupOtpCode by rememberSaveable { mutableStateOf("") }
     var googleAccountConflictMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(isFirebaseTestLab) {
+        if (isFirebaseTestLab) {
+            delay(1000)
+            if (emailMode == "login" && email.isNotBlank() && password.isNotBlank()) {
+                viewModel.signInWithEmail(email.trim(), password)
+            }
+        }
+    }
 
     // Observador de Erros e Mudanças de Estado
     LaunchedEffect(authState) {
@@ -164,7 +185,10 @@ fun LoginScreen(
     }
 
     Scaffold(
-        modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .semantics { testTagsAsResourceId = true },
         containerColor = br.com.bragasaude.ui.theme.Background
     ) { innerPadding ->
         LazyColumn(
@@ -515,7 +539,7 @@ fun LoginScreen(
                                 onValueChange = { email = it },
                                 label = { Text("E-mail") },
                                 singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().testTag("email_input"),
                                 shape = RoundedCornerShape(14.dp),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
                             )
@@ -526,7 +550,7 @@ fun LoginScreen(
                                 label = { Text("Senha") },
                                 singleLine = true,
                                 visualTransformation = PasswordVisualTransformation(),
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().testTag("password_input"),
                                 shape = RoundedCornerShape(14.dp)
                             )
 
@@ -610,7 +634,7 @@ fun LoginScreen(
                                     }
                                 },
                                 enabled = if (emailMode == "login") isLoginValid else isSignupValid,
-                                modifier = Modifier.fillMaxWidth().height(54.dp),
+                                modifier = Modifier.fillMaxWidth().height(54.dp).testTag("login_button"),
                                 shape = RoundedCornerShape(16.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
