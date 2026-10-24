@@ -205,7 +205,7 @@ class MedicationRepository @Inject constructor(
             val medications = medicationDao.getAllSync(userId)
             MedicationAlarmReceiver.cancelAllAlarms(context, medications)
             medications.forEach { MedicationNotificationScheduler.cancelMedicationAlarms(context,it.id) }
-            if(userId != guestId) {
+            if(userId != guestId && medications.isNotEmpty()) {
                 try { doseRepository.refresh(userId) } catch(e: kotlinx.coroutines.CancellationException) { throw e }
                 catch(_:Exception) { doseRepository.reschedule() }
             }

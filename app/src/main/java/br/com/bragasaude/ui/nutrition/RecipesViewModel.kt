@@ -2,6 +2,7 @@ package br.com.bragasaude.ui.nutrition
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import br.com.bragasaude.data.remote.repository.FamilyBridgeRepository
 import br.com.bragasaude.data.remote.repository.GroceryRepository
 import br.com.bragasaude.data.remote.repository.ProfileRepository
 import br.com.bragasaude.data.remote.repository.WeeklyGrocerySummaryRepository
@@ -14,6 +15,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -39,7 +43,8 @@ class RecipesViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
     private val recipeEngine: RecipeEngine,
     private val auth: FirebaseAuth,
-    private val weeklyGrocerySummaryRepository: WeeklyGrocerySummaryRepository
+    private val weeklyGrocerySummaryRepository: WeeklyGrocerySummaryRepository,
+    private val familyBridgeRepository: FamilyBridgeRepository? = null
 ) : ViewModel() {
 
     private val currentUserId: String
@@ -81,18 +86,37 @@ class RecipesViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                // Combina lista de compras, perfil e estoque físico de forma reativa
-                kotlinx.coroutines.flow.combine(
-                    groceryRepository.getGroceryList(currentUserId),
+                val bindingsFlow = familyBridgeRepository?.getActiveBindingsForCaregiver(currentUserId)
+                    ?: flowOf(emptyList())
+
+                combine(
                     profileRepository.getProfile(currentUserId),
-                    weeklyGrocerySummaryRepository.stock(currentUserId)
-                ) { pantryItems, profile, stock ->
-                    Triple(pantryItems, profile, stock)
+                    bindingsFlow
+                ) { myProfile, bindings ->
+                    val isViewerCaregiver = myProfile?.userRole == "CAREGIVER" && myProfile.caregiverMode == "VIEWER_ONLY"
+                    val targetUserId = if (isViewerCaregiver && bindings.isNotEmpty()) {
+                        bindings.first().patientUserId
+                    } else {
+                        currentUserId
+                    }
+                    targetUserId to (if (targetUserId == currentUserId) myProfile else null)
+                }.flatMapLatest { (targetUserId, myProfile) ->
+                    val effectiveProfileFlow = if (myProfile != null) {
+                        flowOf(myProfile)
+                    } else {
+                        profileRepository.getProfile(targetUserId)
+                    }
+                    combine(
+                        groceryRepository.getGroceryList(targetUserId),
+                        effectiveProfileFlow,
+                        weeklyGrocerySummaryRepository.stock(targetUserId)
+                    ) { pantryItems, profile, stock ->
+                        Triple(pantryItems, profile, stock)
+                    }
                 }.collectLatest { (pantryItems, profile, stock) ->
                     val hasManualList = pantryItems.any {
                         it.isManual || it.category == "Minha lista" || it.remoteId.contains(":manual:")
                     }
-                    // Calcula receitas para cada tipo de refeição com estoque real
                     _breakfastRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "BREAKFAST", includeMissing = hasManualList, pantryStock = stock)
                     _lunchRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "LUNCH", includeMissing = hasManualList, pantryStock = stock)
                     _snackRecipes.value = recipeEngine.findBestRecipes(pantryItems, profile, "SNACK", includeMissing = hasManualList, pantryStock = stock)

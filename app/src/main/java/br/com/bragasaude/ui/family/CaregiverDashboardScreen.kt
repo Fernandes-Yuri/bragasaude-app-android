@@ -102,7 +102,7 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CaregiverDashboardScreen(
-    onBack: () -> Unit,
+    onBack: (() -> Unit)? = null,
     onConnectFamily: () -> Unit = {},
     onOpenChat: () -> Unit = {},
     viewModel: CaregiverDashboardViewModel = hiltViewModel()
@@ -161,8 +161,10 @@ fun CaregiverDashboardScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
+                        }
                     }
                 },
                 actions = {
