@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.components
+package br.com.bragasaude.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -26,7 +26,7 @@ import br.com.bragasaude.ui.theme.BragaEmergencyOrange
 
 /**
  * Card de Emergência acolhedor presente na tela inicial.
- * Permite acionar o SOS / SAMU 192 ou ligar para o parente de confiança.
+ * Permite acionar o SOS / SAMU 192, CVV 188 (apoio emocional), UPA ou ligar para o parente de confiança.
  * Visual suavizado: fundo terracota claro com texto e ícone coral (menos agressivo).
  */
 @Composable

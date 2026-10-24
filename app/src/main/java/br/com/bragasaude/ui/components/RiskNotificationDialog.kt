@@ -93,7 +93,22 @@ fun RiskNotificationDialog(
                     Text("Emergência — 192")
                 }
 
-                // BOTÃO 2: Encontrar UPA mais próxima
+                // BOTÃO 2: Apoio Emocional — CVV 188
+                Button(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:188"))
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
+                ) {
+                    Icon(Icons.Default.Phone, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Apoio emocional — CVV 188")
+                }
+
+                // BOTÃO 3: Encontrar UPA mais próxima
                 Button(
                     onClick = {
                         val gmmIntentUri = Uri.parse("geo:0,0?q=UNIDADE+DE+PRONTO+ATENDIMENTO")
