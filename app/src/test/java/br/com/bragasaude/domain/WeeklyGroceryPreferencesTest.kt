@@ -96,4 +96,18 @@ class WeeklyGroceryPreferencesTest {
         assertFalse(freePrefs.isEconomic)
         assertFalse(freePrefs.isUltraEconomic)
     }
+
+    @Test
+    fun groceryPlanningPeriod_labelsAndBadgesAreConsistent() {
+        assertEquals("7 dias (Semanal)", GroceryPlanningPeriod.labelFor(7))
+        assertEquals("14 dias (Quinzenal)", GroceryPlanningPeriod.labelFor(14))
+        assertEquals("30 dias (Mensal)", GroceryPlanningPeriod.labelFor(30))
+
+        assertEquals("Recomendado", GroceryPlanningPeriod.badgeFor(7))
+        assertEquals("Recomendado", GroceryPlanningPeriod.badgeFor(14))
+        org.junit.Assert.assertNull(GroceryPlanningPeriod.badgeFor(30))
+
+        assertEquals(listOf("80", "120", "160", "200"), GroceryPlanningPeriod.quickBudgetsFor(7))
+        assertEquals(listOf("160", "240", "320", "400"), GroceryPlanningPeriod.quickBudgetsFor(14))
+    }
 }
