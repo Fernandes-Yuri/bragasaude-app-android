@@ -46,7 +46,6 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Whatsapp
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.Diversity3
 import br.com.bragasaude.ui.components.BragaActionCard
@@ -71,6 +70,7 @@ fun ProfileDetailScreen(
     onNavigateToSettings: () -> Unit = {},
     onAddCaregiving: () -> Unit = {},
     onNavigateToWearables: () -> Unit = {},
+    onSmokingSupport: () -> Unit = {},
     profileViewModel: ProfileViewModel = hiltViewModel(),
     authViewModel: AuthViewModel = hiltViewModel()
 ) {
@@ -80,7 +80,9 @@ fun ProfileDetailScreen(
     val sessionStatus by authViewModel.sessionStatus.collectAsState()
     val scope = rememberCoroutineScope()
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
     var showAvatarDialog by remember { mutableStateOf(false) }
+    var showGooglePhotoConfirm by remember { mutableStateOf(false) }
     val communityNickname by profileViewModel.communityNickname.collectAsState()
     val communitySaving by profileViewModel.communitySaving.collectAsState()
     val communityError by profileViewModel.communityError.collectAsState()
@@ -92,29 +94,6 @@ fun ProfileDetailScreen(
     val measurementError by profileViewModel.saveError.collectAsState()
     val context = LocalContext.current
 
-    // Quando o ViewModel monta o link do WhatsApp (TOTP atual), abre e consome.
-    val waLink by profileViewModel.openWhatsAppLinkEvent.collectAsState()
-    LaunchedEffect(waLink) {
-        waLink?.let { url ->
-            runCatching {
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                        .apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
-                )
-            }
-            profileViewModel.consumeOpenWhatsAppLink()
-        }
-    }
-
-    // Avisa o usuário quando o vínculo ainda não está pronto (antes o botão era mudo).
-    val waError by profileViewModel.whatsappLinkError.collectAsState()
-    LaunchedEffect(waError) {
-        waError?.let { msg ->
-            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-            profileViewModel.consumeWhatsappLinkError()
-        }
-    }
-    
     // Launcher para escolher foto da galeria — sobe ao gateway (moderação no gateway)
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -241,6 +220,19 @@ fun ProfileDetailScreen(
         )
     }
 
+    if (showGooglePhotoConfirm) {
+        br.com.bragasaude.ui.components.BragaAlertDialog(
+            onDismissRequest = { showGooglePhotoConfirm = false },
+            title = { Text("Compartilhar foto Google?") },
+            text = { Text("A imagem será enviada à Braga Saúde para verificação e ficará visível no seu perfil, mural e conexões familiares.") },
+            confirmButton = { TextButton(onClick = {
+                showGooglePhotoConfirm = false
+                profileViewModel.shareGoogleAvatarPhoto()
+            }) { Text("Compartilhar foto") } },
+            dismissButton = { TextButton(onClick = { showGooglePhotoConfirm = false }) { Text("Agora não") } }
+        )
+    }
+
     // Diálogo de escolha de avatar/foto de perfil
     if (showAvatarDialog) {
         BragaFormSheet(
@@ -257,7 +249,15 @@ fun ProfileDetailScreen(
                         enabled = !avatarUploading,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (avatarUploading) "Enviando..." else "Escolher da Galeria")
+                        Text(if (avatarUploading) "Conferindo e enviando…" else "Escolher da Galeria")
+                    }
+                    if (!googleAvatarUrl.isNullOrBlank()) {
+                        OutlinedButton(onClick = { showGooglePhotoConfirm = true }, enabled = !avatarUploading,
+                            modifier = Modifier.fillMaxWidth()) { Text("Compartilhar foto Google") }
+                        if (customPhotoUri.isNullOrBlank() && profile?.avatarIdentifier == null) {
+                            Text("A foto Google aparece só para você até ser compartilhada.",
+                                style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     if (avatarUploading) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -640,6 +640,8 @@ fun ProfileDetailScreen(
                 }
             }
 
+            item { br.com.bragasaude.ui.smoking.SmokingSupportEntry(onOpen = onSmokingSupport) }
+
             // Seção Dados Pessoais - oculta para cuidadores VIEWER_ONLY
             if (!isViewerOnlyCaregiver) {
                 item {
@@ -663,26 +665,7 @@ fun ProfileDetailScreen(
                                 p?.activityLevel?.takeIf { it.isNotBlank() }?.let { "Atividade Física" to br.com.bragasaude.data.util.HealthFormatter.formatActivityLevel(it) }
                             )
                             items.forEachIndexed { index, (label, value) ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        label,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        modifier = Modifier.weight(1f, fill = false)
-                                    )
-                                    Text(
-                                        value,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = Color.Gray,
-                                        modifier = Modifier.weight(1f, fill = false),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.End
-                                    )
-                                }
+                                ProfileDataRow(label, value)
                                 if (index < items.size - 1) {
                                     HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
                                 }
@@ -766,86 +749,6 @@ fun ProfileDetailScreen(
                 }
             }
 
-            // WhatsApp: o vínculo é feito pelo fluxo TOTP temporário (até a Meta
-            // liberar template). O card abre o WhatsApp com o código pronto —
-            // nunca mais pede número nem OTP por texto.
-            item {
-                val linkedPhone = profile?.whatsappPhone
-                val hasWhatsapp = !linkedPhone.isNullOrBlank()
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp)
-                        .clickable {
-                            // Abre o WhatsApp com o código TOTP atual (fluxo novo).
-                            profileViewModel.openWhatsAppLink()
-                        },
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (hasWhatsapp) BragaMint.copy(alpha = 0.35f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, if (hasWhatsapp) BragaEmerald.copy(alpha = 0.5f) else BragaMintBorder)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = if (hasWhatsapp) BragaEmerald else MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Default.Whatsapp,
-                                    contentDescription = "WhatsApp",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(14.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = if (hasWhatsapp) "Meu WhatsApp" else "Vincular seu WhatsApp",
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = BragaTextPrimary
-                                )
-                                if (hasWhatsapp) {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = BragaEmerald.copy(alpha = 0.15f)
-                                    ) {
-                                        Text(
-                                            text = "Conectado",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = BragaEmerald,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = if (hasWhatsapp) "$linkedPhone • Toque para vincular de novo" else "Toque para abrir o WhatsApp com o código pronto. É só enviar a mensagem.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = BragaTextSecondary
-                            )
-                        }
-                    }
-                }
-            }
-
-            // (O card de WhatsApp acima já abre o fluxo TOTP. Mantivemos só ele:
-            // um único caminho, sem pedir número nem OTP por texto.)
-
             item {
                 Text(
                     "Conta",
@@ -882,7 +785,7 @@ fun ProfileDetailScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    scope.launch { authViewModel.signOut() }
+                                    showLogoutDialog = true
                                 }
                                 .padding(16.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -896,6 +799,14 @@ fun ProfileDetailScreen(
             
             item { Spacer(Modifier.height(40.dp)) }
         }
+
+        if (showLogoutDialog) BragaAlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("Sair da conta?") },
+            text = { Text("Os registros locais deste aparelho serão removidos. O plano e o diário de apoio para parar de fumar não são sincronizados e não voltarão após entrar novamente.") },
+            confirmButton = { TextButton(onClick = { showLogoutDialog = false; scope.launch { authViewModel.signOut() } }) { Text("Sair da conta") } },
+            dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Continuar no aplicativo") } }
+        )
 
         if (showDeleteDialog) {
             BragaAlertDialog(
@@ -966,5 +877,15 @@ fun ProfileInfoCard(items: List<ProfileInfoItem>) {
                 }
             }
         }
+    }
+}
+
+
+/** Values wrap at large font sizes and on narrow screens, without hiding information. */
+@Composable
+internal fun ProfileDataRow(label: String, value: String) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }

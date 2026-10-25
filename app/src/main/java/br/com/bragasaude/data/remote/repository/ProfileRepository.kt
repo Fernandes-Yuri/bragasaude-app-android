@@ -17,7 +17,8 @@ import br.com.bragasaude.util.BragaConstants
 class ProfileRepository @Inject constructor(
     private val apiClient: BragaApiClient,
     private val profileDao: ProfileDao,
-    private val syncScheduler: SyncScheduler
+    private val syncScheduler: SyncScheduler,
+    private val avatarUploader: br.com.bragasaude.data.avatar.AvatarPhotoUploader
 ) {
     private val guestId = BragaConstants.GUEST_UID
 
@@ -27,6 +28,9 @@ class ProfileRepository @Inject constructor(
         (apiClient.getProfileLookup(userId) as? br.com.bragasaude.data.remote.model.ProfileLookup.Found)?.profile
 
     suspend fun refreshProfileForLogin(userId: String): br.com.bragasaude.data.remote.model.ProfileLookup {
+        if (userId != guestId && !apiClient.reactivateAccount(userId)) {
+            return br.com.bragasaude.data.remote.model.ProfileLookup.Unavailable(403)
+        }
         val before = profileDao.getProfileOneShot(userId)
         val result = apiClient.getProfileLookup(userId)
         kotlinx.coroutines.currentCoroutineContext().ensureActive()
@@ -45,16 +49,7 @@ class ProfileRepository @Inject constructor(
 
     suspend fun saveProfile(profile: RemoteProfile) {
         val existing = profileDao.getProfileOneShot(profile.id)
-        // Conta nasce com o segredo TOTP sob o capo (vínculo de WhatsApp). Só gera
-        // uma vez: regenerar invalidaria o código de um app já instalado.
-        val withTotp = if (existing?.whatsappTotpSecret.isNullOrBlank()
-            && profile.whatsappTotpSecret.isNullOrBlank()
-        ) {
-            profile.copy(whatsappTotpSecret = br.com.bragasaude.data.util.WhatsAppLinkTotp.generateSecret())
-        } else {
-            profile
-        }
-        val entity = withTotp.toEntity().copy(
+        val entity = profile.toEntity().copy(
             pendingSync = true,
             customPhotoUri = existing?.customPhotoUri,
             communityNickname = existing?.communityNickname
@@ -79,16 +74,8 @@ class ProfileRepository @Inject constructor(
             val syncResult = apiClient.syncProfile(entity)
             if (syncResult.success) {
                 val current = profileDao.getProfileOneShot(profile.id)
-                val returnedSecret = syncResult.returnedSecret
-                val mergedSecret = if (!returnedSecret.isNullOrBlank() && returnedSecret != entity.whatsappTotpSecret) {
-                    returnedSecret
-                } else {
-                    entity.whatsappTotpSecret
-                }
                 if (current == entity) {
-                    profileDao.insert(entity.copy(whatsappTotpSecret = mergedSecret, pendingSync = false))
-                } else if (!returnedSecret.isNullOrBlank() && current != null && current.whatsappTotpSecret != returnedSecret) {
-                    profileDao.insert(current.copy(whatsappTotpSecret = returnedSecret))
+                    profileDao.insert(entity.copy(pendingSync = false))
                 }
             } else {
                 triggerSync()
@@ -110,8 +97,7 @@ class ProfileRepository @Inject constructor(
     // A photo_url do servidor vive em customPhotoUri local e fica FORA do
     // upsert de perfil — o sync existente nunca apaga a foto.
 
-    suspend fun uploadAvatarPhoto(userId: String, fileName: String, mimeType: String, bytes: ByteArray) =
-        apiClient.uploadProfileAvatar(userId, fileName, mimeType, bytes)
+    suspend fun uploadAvatarPhoto(userId: String, bytes: ByteArray) = avatarUploader.upload(userId, bytes)
 
     suspend fun persistServerAvatar(userId: String, photoUrl: String) {
         profileDao.updateAvatar(userId, null, photoUrl)

@@ -2,6 +2,7 @@ package br.com.bragasaude.ui.auth
 
 import br.com.bragasaude.ui.components.BragaAlertDialog
 
+import android.provider.Settings
 import android.widget.Toast
 import br.com.bragasaude.data.util.HealthFormatter
 import androidx.compose.foundation.BorderStroke
@@ -12,13 +13,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -33,8 +42,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LoginScreen(
     viewModel: AuthViewModel = hiltViewModel(),
@@ -43,10 +54,35 @@ fun LoginScreen(
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val isKeyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val credentialManager = CredentialManager.create(context)
     val authState by viewModel.authState.collectAsState()
-    var emailMode by remember { mutableStateOf("login") } // "login", "signup" ou "forgot"
+
+    val isFirebaseTestLab = remember {
+        Settings.System.getString(context.contentResolver, "firebase.test.lab") == "true"
+    }
+
+    var emailMode by rememberSaveable { mutableStateOf("login") } // "login", "signup" ou "forgot"
+    var forgotStep by rememberSaveable { mutableStateOf(1) } // 1: e-mail, 2: código OTP, 3: nova senha
+    var email by rememberSaveable { mutableStateOf(if (isFirebaseTestLab) "testebraga1@proton.me" else "") }
+    var password by rememberSaveable { mutableStateOf(if (isFirebaseTestLab) "fernandes3" else "") }
+    var confirmPassword by rememberSaveable { mutableStateOf("") }
+    var otpCode by rememberSaveable { mutableStateOf("") }
+    var newPassword by rememberSaveable { mutableStateOf("") }
+    var confirmNewPassword by rememberSaveable { mutableStateOf("") }
+    var signupOtpCode by rememberSaveable { mutableStateOf("") }
     var googleAccountConflictMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(isFirebaseTestLab) {
+        if (isFirebaseTestLab) {
+            delay(1000)
+            if (emailMode == "login" && email.isNotBlank() && password.isNotBlank()) {
+                viewModel.signInWithEmail(email.trim(), password)
+            }
+        }
+    }
 
     // Observador de Erros e Mudanças de Estado
     LaunchedEffect(authState) {
@@ -113,6 +149,10 @@ fun LoginScreen(
                     "Código de verificação enviado para seu e-mail!",
                     Toast.LENGTH_SHORT
                 ).show()
+                if (emailMode == "forgot") {
+                    forgotStep = 2
+                    viewModel.clearAuthState()
+                }
             }
             is AuthViewModel.AuthState.OtpVerified -> {
                 Toast.makeText(
@@ -120,16 +160,24 @@ fun LoginScreen(
                     "Código verificado com sucesso!",
                     Toast.LENGTH_SHORT
                 ).show()
-                emailMode = "login"
+                if (emailMode == "forgot") {
+                    forgotStep = 3
+                } else {
+                    emailMode = "login"
+                }
                 viewModel.clearAuthState()
             }
             is AuthViewModel.AuthState.PasswordReset -> {
                 Toast.makeText(
                     context,
-                    "Senha redefinida com sucesso! Faça login.",
+                    "Senha redefinida com sucesso! Faça login com a nova senha.",
                     Toast.LENGTH_LONG
                 ).show()
                 emailMode = "login"
+                forgotStep = 1
+                otpCode = ""
+                newPassword = ""
+                confirmNewPassword = ""
                 viewModel.clearAuthState()
             }
             else -> {}
@@ -137,22 +185,27 @@ fun LoginScreen(
     }
 
     Scaffold(
-        modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .semantics { testTagsAsResourceId = true },
         containerColor = br.com.bragasaude.ui.theme.Background
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(32.dp)
+            verticalArrangement = Arrangement.spacedBy(if (isKeyboardVisible) 12.dp else 32.dp)
         ) {
             item {
-                Spacer(Modifier.height(40.dp))
+                Spacer(Modifier.height(if (isKeyboardVisible) 0.dp else 40.dp))
                 // Logo Branding - Escudo com Ritmo Cardíaco
                 br.com.bragasaude.ui.components.ShieldEcgIcon(
-                    sizeDp = 120.dp
+                    sizeDp = if (isKeyboardVisible) 48.dp else 120.dp
                 )
             }
 
@@ -160,49 +213,27 @@ fun LoginScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = stringResource(R.string.app_name_new),
-                        style = MaterialTheme.typography.displaySmall,
+                        style = if (isKeyboardVisible) MaterialTheme.typography.titleLarge else MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.slogan),
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray
-                    )
+                    if (!isKeyboardVisible) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.slogan),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.Gray
+                        )
+                    }
                 }
             }
 
             item {
-                var email by remember { mutableStateOf("") }
-                var password by remember { mutableStateOf("") }
-                var confirmPassword by remember { mutableStateOf("") }
-                var signupOtpCode by remember { mutableStateOf("") }
-                var signupOtpVerified by remember { mutableStateOf(false) }
-
                 Spacer(Modifier.height(16.dp))
 
-                if (authState is AuthViewModel.AuthState.Loading) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp)
-                    ) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            text = "Acessando sua conta com segurança...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else if (emailMode == "forgot") {
-                    var forgotStep by remember { mutableStateOf(1) }
-                    var otpCode by remember { mutableStateOf("") }
-                    var newPassword by remember { mutableStateOf("") }
-                    var confirmNewPassword by remember { mutableStateOf("") }
-
+                if (emailMode == "forgot") {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -230,19 +261,29 @@ fun LoginScreen(
                                     shape = RoundedCornerShape(14.dp),
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
                                 )
+                                val isSending = authState is AuthViewModel.AuthState.Loading
                                 Button(
                                     onClick = {
                                         if (email.isNotBlank()) {
-                                            viewModel.sendOtpCode(email)
-                                            forgotStep = 2
+                                            focusManager.clearFocus(force = true)
+                                            keyboardController?.hide()
+                                            viewModel.sendOtpCode(email.trim())
                                         }
                                     },
-                                    enabled = email.isNotBlank(),
+                                    enabled = email.isNotBlank() && !isSending,
                                     modifier = Modifier.fillMaxWidth().height(52.dp),
                                     shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                                 ) {
-                                    Text("Enviar código", fontWeight = FontWeight.Bold)
+                                    if (isSending) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(22.dp),
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Text("Enviar código", fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                             2 -> {
@@ -260,25 +301,54 @@ fun LoginScreen(
                                     shape = RoundedCornerShape(14.dp),
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                                 )
+                                val isVerifying = authState is AuthViewModel.AuthState.Loading
                                 Button(
                                     onClick = {
                                         if (otpCode.length == 6) {
-                                            viewModel.verifyOtpCode(email, otpCode)
-                                            forgotStep = 3
+                                            focusManager.clearFocus(force = true)
+                                            keyboardController?.hide()
+                                            viewModel.verifyOtpCode(email.trim(), otpCode.trim())
                                         }
                                     },
-                                    enabled = otpCode.length == 6,
+                                    enabled = otpCode.length == 6 && !isVerifying,
                                     modifier = Modifier.fillMaxWidth().height(52.dp),
                                     shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                                 ) {
-                                    Text("Verificar código", fontWeight = FontWeight.Bold)
+                                    if (isVerifying) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(22.dp),
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Text("Verificar código", fontWeight = FontWeight.Bold)
+                                    }
                                 }
-                                TextButton(
-                                    onClick = { viewModel.sendOtpCode(email) },
-                                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("Reenviar código", color = Color.Gray)
+                                    TextButton(
+                                        onClick = {
+                                            focusManager.clearFocus(force = true)
+                                            keyboardController?.hide()
+                                            viewModel.sendOtpCode(email.trim())
+                                        },
+                                        enabled = !isVerifying
+                                    ) {
+                                        Text("Reenviar código", color = MaterialTheme.colorScheme.primary)
+                                    }
+                                    TextButton(
+                                        onClick = {
+                                            forgotStep = 1
+                                            otpCode = ""
+                                        },
+                                        enabled = !isVerifying
+                                    ) {
+                                        Text("Alterar e-mail", color = Color.Gray)
+                                    }
                                 }
                             }
                             3 -> {
@@ -290,7 +360,7 @@ fun LoginScreen(
                                 OutlinedTextField(
                                     value = newPassword,
                                     onValueChange = { newPassword = it },
-                                    label = { Text("Nova senha") },
+                                    label = { Text("Nova senha (mínimo 6 caracteres)") },
                                     singleLine = true,
                                     visualTransformation = PasswordVisualTransformation(),
                                     modifier = Modifier.fillMaxWidth(),
@@ -305,31 +375,63 @@ fun LoginScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(14.dp)
                                 )
+                                val isResetting = authState is AuthViewModel.AuthState.Loading
+                                val isPasswordValid = newPassword.isNotBlank() &&
+                                    confirmNewPassword.isNotBlank() &&
+                                    newPassword == confirmNewPassword &&
+                                    newPassword.length >= 6
                                 Button(
                                     onClick = {
-                                        if (newPassword == confirmNewPassword && newPassword.length >= 6) {
+                                        if (isPasswordValid) {
+                                            focusManager.clearFocus(force = true)
+                                            keyboardController?.hide()
                                             viewModel.resetPasswordWithOtp(newPassword)
                                         }
                                     },
-                                    enabled = newPassword.isNotBlank() && confirmNewPassword.isNotBlank() &&
-                                        newPassword == confirmNewPassword && newPassword.length >= 6,
+                                    enabled = isPasswordValid && !isResetting,
                                     modifier = Modifier.fillMaxWidth().height(52.dp),
                                     shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                                 ) {
-                                    Text("Redefinir senha", fontWeight = FontWeight.Bold)
+                                    if (isResetting) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(22.dp),
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Text("Redefinir senha", fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
                         TextButton(
                             onClick = {
                                 emailMode = "login"
+                                forgotStep = 1
+                                otpCode = ""
+                                newPassword = ""
+                                confirmNewPassword = ""
                                 viewModel.clearPendingReset()
+                                viewModel.clearAuthState()
                             },
                             modifier = Modifier.align(Alignment.CenterHorizontally)
                         ) {
                             Text("Voltar ao login", color = Color.Gray)
                         }
+                    }
+                } else if (authState is AuthViewModel.AuthState.Loading) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp)
+                    ) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = "Acessando sua conta com segurança...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 } else {
                     // SELETOR DE MODO: ENTRAR VS CRIAR CONTA
@@ -437,7 +539,7 @@ fun LoginScreen(
                                 onValueChange = { email = it },
                                 label = { Text("E-mail") },
                                 singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().testTag("email_input"),
                                 shape = RoundedCornerShape(14.dp),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
                             )
@@ -448,7 +550,7 @@ fun LoginScreen(
                                 label = { Text("Senha") },
                                 singleLine = true,
                                 visualTransformation = PasswordVisualTransformation(),
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().testTag("password_input"),
                                 shape = RoundedCornerShape(14.dp)
                             )
 
@@ -477,20 +579,15 @@ fun LoginScreen(
                                         verticalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
                                         Text(
-                                            text = "Validação Obrigatória de Segurança",
+                                            text = "Confirme seu e-mail",
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.primary
                                         )
                                         Text(
-                                            text = "Vamos enviar um código de 6 dígitos para o seu e-mail para ativar a conta:",
+                                            text = "Enviaremos um código de 6 dígitos para confirmar seu e-mail e ativar a conta.",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Text(
-                                            text = "O código de 6 dígitos será enviado para o e-mail digitado acima.",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                 }
@@ -499,10 +596,22 @@ fun LoginScreen(
                             if (emailMode == "login") {
                                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                                     TextButton(
-                                        onClick = { emailMode = "forgot" },
-                                        contentPadding = PaddingValues(0.dp)
+                                        onClick = {
+                                            emailMode = "forgot"
+                                            forgotStep = 1
+                                            otpCode = ""
+                                            newPassword = ""
+                                            confirmNewPassword = ""
+                                            viewModel.clearAuthState()
+                                        },
+                                        modifier = Modifier.heightIn(min = 48.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp)
                                     ) {
-                                        Text("Esqueci minha senha", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                        Text(
+                                            "Esqueci minha senha",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
                                     }
                                 }
                             }
@@ -525,12 +634,12 @@ fun LoginScreen(
                                     }
                                 },
                                 enabled = if (emailMode == "login") isLoginValid else isSignupValid,
-                                modifier = Modifier.fillMaxWidth().height(54.dp),
+                                modifier = Modifier.fillMaxWidth().height(54.dp).testTag("login_button"),
                                 shape = RoundedCornerShape(16.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Text(
-                                    if (emailMode == "login") "Entrar" else "Receber Código e Ativar Conta",
+                                    if (emailMode == "login") "Entrar" else "Receber código",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 16.sp,
                                     maxLines = 1,
@@ -552,6 +661,8 @@ fun LoginScreen(
                         // Botão Secundário: GOOGLE
                         OutlinedButton(
                             onClick = {
+                                focusManager.clearFocus(force = true)
+                                keyboardController?.hide()
                                 triggerGoogleFlow(context, scope, credentialManager) { idToken ->
                                     viewModel.signInWithGoogle(idToken)
                                 }
@@ -563,6 +674,7 @@ fun LoginScreen(
                         ) {
                             Text("Continuar com o Google", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                         }
+
 
                         // Alternar entre Entrar e Cadastrar
                         Row(
@@ -642,6 +754,8 @@ fun LoginScreen(
                     Button(
                         onClick = {
                             googleAccountConflictMessage = null
+                            focusManager.clearFocus(force = true)
+                            keyboardController?.hide()
                             triggerGoogleFlow(context, scope, credentialManager) { idToken ->
                                 viewModel.signInWithGoogle(idToken)
                             }

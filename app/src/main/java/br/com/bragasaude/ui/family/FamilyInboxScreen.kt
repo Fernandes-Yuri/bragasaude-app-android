@@ -252,22 +252,7 @@ private fun FamilyConversationCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Avatar com inicial e clique para perfil
-            Surface(
-                shape = CircleShape,
-                color = BragaMint,
-                modifier = Modifier
-                    .size(50.dp)
-                    .clickable(onClick = onProfileClick)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = conversation.avatarLetter,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = BragaEmerald
-                    )
-                }
-            }
+            Box(Modifier.clickable(onClick = onProfileClick)) { FamilyConversationAvatar(conversation, 50.dp) }
 
             Spacer(Modifier.width(12.dp))
 

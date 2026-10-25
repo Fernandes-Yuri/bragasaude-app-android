@@ -32,8 +32,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 data class SyncProfileResult(
-    val success: Boolean,
-    val returnedSecret: String? = null
+    val success: Boolean
 )
 
 /**
@@ -44,6 +43,8 @@ data class SyncProfileResult(
  * regras vivem no gateway, que é quem fala com o PostgreSQL/RDS. Este
  * cliente trata apenas de transporte, autenticação e serialização.
  */
+data class ProfileAvatarIdentity(val photoUrl: String?, val avatarIdentifier: String?)
+
 @Singleton
 class BragaApiClient @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -115,10 +116,6 @@ class BragaApiClient @Inject constructor(
                 if (p.phone != null) put("phone", p.phone)
                 put("notificationsEnabled", p.notificationsEnabled)
                 put("locationEnabled", p.locationEnabled)
-                put("currentXp", p.currentXp)
-                put("totalXp", p.totalXp)
-                put("currentLevel", p.currentLevel)
-                put("currentStreak", p.currentStreak)
                 put("showInFeed", p.showInFeed)
                 put("userRole", p.userRole ?: JSONObject.NULL)
                 put("consentAcceptedAt", p.consentAcceptedAt?.let { isoFormat.format(it) } ?: JSONObject.NULL)
@@ -131,16 +128,10 @@ class BragaApiClient @Inject constructor(
                 put("customFoodRestrictions", p.customFoodRestrictions ?: JSONObject.NULL)
                 put("caregiverMode", p.caregiverMode ?: JSONObject.NULL)
                 if (p.avatarIdentifier != null) put("avatarIdentifier", p.avatarIdentifier)
-                // Segredo TOTP do vínculo de WhatsApp (app gera; gateway só guarda).
-                if (!p.whatsappTotpSecret.isNullOrBlank()) {
-                    put("totpSecret", p.whatsappTotpSecret)
-                }
             }
             val res = postJson("$baseUrl/api/sync/profile", json)
             if (res?.optString("status") == "success") {
-                val returnedSecret = res.optString("totpSecret").takeIf { it.isNotBlank() }
-                    ?: res.optString("totp_secret").takeIf { it.isNotBlank() }
-                return@withContext SyncProfileResult(success = true, returnedSecret = returnedSecret)
+                return@withContext SyncProfileResult(success = true)
             }
             return@withContext SyncProfileResult(success = false)
         } catch (e: Exception) {
@@ -186,10 +177,6 @@ class BragaApiClient @Inject constructor(
                 consentAcceptedAt = res.nullableString("consent_accepted_at"),
                 notificationsEnabled = res.optBoolean("notifications_enabled", true),
                 locationEnabled = res.optBoolean("location_enabled", true),
-                currentXp = res.optInt("current_xp", 0),
-                totalXp = res.optInt("total_xp", 0),
-                currentLevel = res.optInt("current_level", 1),
-                currentStreak = res.optInt("current_streak", 0),
                 showInFeed = res.optBoolean("show_in_feed", true),
                 userRole = res.nullableString("user_role"),
                 basicProfileComplete = res.optBoolean("basic_profile_complete", false),
@@ -201,11 +188,7 @@ class BragaApiClient @Inject constructor(
                 customFoodRestrictions = res.nullableString("custom_food_restrictions"),
                 caregiverMode = res.nullableString("caregiver_mode"),
                 avatarIdentifier = res.nullableString("avatar_identifier"),
-                // Segredo TOTP do vínculo de WhatsApp. Sem ler este campo, o
-                // app nunca fica sabendo do segredo que o backend garante — e o
-                // botão "Vincular meu WhatsApp" não tem ação (ProfileViewModel
-                // sai quando o segredo é null).
-                whatsappTotpSecret = res.nullableString("totp_secret")
+                photoUrl = res.nullableString("photo_url"),
             ))
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -1123,12 +1106,16 @@ class BragaApiClient @Inject constructor(
         }
     }
 
-    private fun getJsonArray(urlString: String): JSONArray? {
+    private fun getJsonArray(urlString: String, fresh: Boolean = false): JSONArray? {
         var conn: HttpURLConnection? = null
         return try {
             val url = URL(urlString)
             conn = openConnection(url).apply {
                 requestMethod = "GET"
+                if (fresh) {
+                    useCaches = false
+                    setRequestProperty("Cache-Control", "no-cache")
+                }
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
                 setRequestProperty("Accept", "application/json")
@@ -1182,6 +1169,14 @@ class BragaApiClient @Inject constructor(
         deleteRequest("$baseUrl/api/profile/$userId")
     }
 
+
+    suspend fun deactivateAccount(userId: String): Boolean = withContext(Dispatchers.IO) {
+        postJson("$baseUrl/api/profile/$userId/deactivate", JSONObject())?.optBoolean("success") == true
+    }
+
+    suspend fun reactivateAccount(userId: String): Boolean = withContext(Dispatchers.IO) {
+        postJson("$baseUrl/api/profile/$userId/reactivate", JSONObject())?.optBoolean("success") == true
+    }
 
     // ==================== CARE OS — D62 (FIRST CONTRACT) ====================
     // Contratos canônicos de scripts/server/openapi_care_os.json. Tipos estritos
@@ -1416,17 +1411,19 @@ class BragaApiClient @Inject constructor(
         }
     }
 
-    /** Lê a photo_url do perfil (qualquer familiar pode ler; falha → null). */
-    suspend fun fetchProfilePhotoUrl(userId: String): String? = withContext(Dispatchers.IO) {
-        try {
-            val res = getJson("$baseUrl/api/profile/$userId", strict = true) ?: return@withContext null
-            res.optString("photo_url", null)?.takeIf(String::isNotBlank)
-                ?: res.optString("photoUrl", null)?.takeIf(String::isNotBlank)
-        } catch (e: Exception) {
-            Log.w(TAG, "Falha ao ler foto do perfil: ${e.message}")
-            null
-        }
+    suspend fun getProfileAvatar(userId: String): ProfileAvatarIdentity = withContext(Dispatchers.IO) {
+        val result = getJson("$baseUrl/api/profile/$userId/avatar", strict = true)
+            ?: throw java.io.IOException("Foto de perfil indisponível.")
+        require(result.optString("id") == userId) { "Identidade da foto divergente." }
+        ProfileAvatarIdentity(br.com.bragasaude.data.util.sharedSocialPhotoUrl(result.safeNullableString("photo_url")),
+            result.safeNullableString("avatar_identifier"))
     }
+
+    /** Consulta somente identidade visual; não lê dados clínicos de outros usuários. */
+    suspend fun fetchProfilePhotoUrl(userId: String): String? = try {
+        getProfileAvatar(userId).photoUrl
+    } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+      catch (_: Exception) { null }
 
     suspend fun analyzePrescription(
         patientId: String,
@@ -1976,6 +1973,12 @@ class BragaApiClient @Inject constructor(
     }
 
     data class CanonicalGroceryPrice(val unit: String, val average: Double, val source: String)
+
+    suspend fun getGroceryRetailCards(): List<GroceryRetailCardEntity> = withContext(Dispatchers.IO) {
+        val rows = getJsonArray("$baseUrl/api/catalog/grocery/cards", fresh = true)
+            ?: throw java.io.IOException("Catálogo indisponível")
+        (0 until rows.length()).map { GroceryRetailCardDto.parse(rows.getJSONObject(it)) }
+    }
 
     suspend fun getGroceryPrices(): Map<String, Double> = withContext(Dispatchers.IO) {
         try {

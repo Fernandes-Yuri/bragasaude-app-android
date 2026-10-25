@@ -47,8 +47,6 @@ import br.com.bragasaude.ui.devices.HealthReadingsScreen
 import br.com.bragasaude.ui.util.NotificationHelper
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
-import br.com.bragasaude.ui.care.CareOsViewModel
-import br.com.bragasaude.ui.care.MorningCheckInSheet
 
 /**
  * Declara todas as rotas de navegação da aplicação.
@@ -63,10 +61,8 @@ fun AppNavHost(
     caregiverMode: String?,
     modifier: Modifier = Modifier
 ) {
+    val smokingViewModel: br.com.bragasaude.ui.smoking.SmokingSupportViewModel = hiltViewModel()
     val appContext = LocalContext.current.applicationContext
-    val globalCareViewModel: CareOsViewModel = hiltViewModel()
-    val careState by globalCareViewModel.ui.collectAsState()
-    var dismissedCheckInFor by remember { mutableStateOf<String?>(null) }
 
     val navigateBack: () -> Unit = {
         if (navController.previousBackStackEntry != null) {
@@ -77,6 +73,11 @@ fun AppNavHost(
             ) { launchSingleTop = true }
         }
     }
+
+    br.com.bragasaude.ui.smoking.SmokingProfileSaveOffer(
+        onOpen = { navController.navigate(Screen.SmokingSupport) { launchSingleTop = true } },
+        viewModel = smokingViewModel
+    )
 
     NavHost(
         navController = navController,
@@ -110,7 +111,8 @@ fun AppNavHost(
             CareModulesScreen(
                 onMedicationStock = { navController.navigate(Screen.MedicationStock) },
                 onCareWall = { navController.navigate(Screen.CareWall) },
-                onDoctorMode = { navController.navigate(Screen.DoctorMode) }
+                onDoctorMode = { navController.navigate(Screen.DoctorMode) },
+                onSmokingSupport = { navController.navigate(Screen.SmokingSupport) }
             )
         }
         composable<Screen.Milestones> { MilestonesScreen() }
@@ -146,6 +148,9 @@ fun AppNavHost(
         composable<Screen.Notifications> {
             NotificationsScreen(onBack = navigateBack)
         }
+        composable<Screen.SmokingSupport> {
+            br.com.bragasaude.ui.smoking.SmokingSupportScreen(onBack = navigateBack)
+        }
         composable<Screen.Settings> {
             SettingsScreen(
                 onBack = navigateBack,
@@ -158,7 +163,8 @@ fun AppNavHost(
                 onNavigateToFeedback = { navController.navigate(Screen.Feedback) },
                 onNavigateToTerms = { navController.navigate(Screen.TermsOfUse) },
                 onNavigateToPrivacy = { navController.navigate(Screen.PrivacyPolicy) },
-                onNavigateToTutorial = { navController.navigate(Screen.OnboardingTour) }
+                onNavigateToTutorial = { navController.navigate(Screen.OnboardingTour) },
+                onSmokingSupport = { navController.navigate(Screen.SmokingSupport) }
             )
         }
         composable<Screen.TermsOfUse> {
@@ -196,17 +202,18 @@ fun AppNavHost(
                 onEditProfile = { navController.navigate(Screen.ProfileEdit) },
                 onNavigateToSettings = { navController.navigate(Screen.Settings) },
                 onAddCaregiving = { navController.navigate(Screen.CaregiverRegistration) },
-                onNavigateToWearables = { navController.navigate(Screen.Wearables) }
+                onNavigateToWearables = { navController.navigate(Screen.Wearables) },
+                onSmokingSupport = { navController.navigate(Screen.SmokingSupport) }
             )
         }
         composable<Screen.ProfileEdit> {
             ProfileScreen(onBack = navigateBack, onProfileSaved = navigateBack)
         }
         composable<Screen.League> {
-            SocialFeedScreen(onBack = navigateBack)
+            SocialFeedScreen(onBack = navigateBack, onManagePhoto = { navController.navigate(Screen.Profile) })
         }
         composable<Screen.SocialFeed> {
-            SocialFeedScreen(onBack = navigateBack)
+            SocialFeedScreen(onBack = navigateBack, onManagePhoto = { navController.navigate(Screen.Profile) })
         }
         composable<Screen.FamilyConnect> {
             FamilyConnectScreen(onClose = navigateBack)
@@ -235,9 +242,10 @@ fun AppNavHost(
             )
         }
         composable<Screen.CaregiverDashboard> {
+            val isRootDestination = userRole == "CAREGIVER" && caregiverMode != "HYBRID"
             CaregiverDashboardScreen(
-                onBack = navigateBack,
-                onConnectFamily = { navController.navigate(Screen.CaregiverRegistration) },
+                onBack = if (isRootDestination) null else navigateBack,
+                onConnectFamily = { navController.navigate(Screen.FamilyConnect) },
                 onOpenChat = { navController.navigate(Screen.FamilyInbox) }
             )
         }
@@ -294,21 +302,4 @@ fun AppNavHost(
         }
     }
 
-    // C37: Abertura automática no startup configurável pelo usuário (default = false).
-    // Leitura fresca a cada recomposição — sem remember para o toggle das
-    // Configurações valer na hora (remember antigo deixava o botão ilustrativo).
-    val navContext = androidx.compose.ui.platform.LocalContext.current
-    val autoMorningCheckinEnabled =
-        br.com.bragasaude.util.AppPreferences.isAutoMorningCheckinEnabled(navContext)
-    val selfCareEnabled = userRole == "PATIENT" || (userRole == "CAREGIVER" && caregiverMode == "HYBRID")
-    val selected = careState.selectedPatientId
-    if (autoMorningCheckinEnabled && selfCareEnabled && careState.isAuthenticated && careState.patients.isNotEmpty() &&
-        selected != null && careState.selectedPatient.role == "PATIENT" &&
-        !careState.checkInDoneToday && dismissedCheckInFor != selected
-    ) {
-        MorningCheckInSheet(
-            onDismiss = { dismissedCheckInFor = selected },
-            viewModel = globalCareViewModel
-        )
-    }
 }

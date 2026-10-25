@@ -55,12 +55,6 @@ fun RemoteProfile.toEntity() = ProfileEntity(
     hasRenalIssue = hasRenalIssue,
     hasBoneIssue = hasBoneIssue,
     hasMuscularIssue = hasMuscularIssue,
-    pointsDiscipline = pointsDiscipline,
-    currentXp = currentXp,
-    totalXp = totalXp,
-    currentLevel = currentLevel,
-    currentStreak = currentStreak,
-    lastXpAt = lastXpAt?.let { parseDate(it) },
     showInFeed = showInFeed,
     gender = gender,
     weight = weight,
@@ -86,8 +80,7 @@ fun RemoteProfile.toEntity() = ProfileEntity(
     selfCareComplete = selfCareComplete,
     selfCareSetupPending = selfCareSetupPending,
     avatarIdentifier = avatarIdentifier,
-    whatsappTotpSecret = whatsappTotpSecret,
-    whatsappPhone = whatsappPhone
+    customPhotoUri = photoUrl
 )
 
 fun ProfileEntity.toRemote() = RemoteProfile(
@@ -104,12 +97,6 @@ fun ProfileEntity.toRemote() = RemoteProfile(
     hasRenalIssue = hasRenalIssue,
     hasBoneIssue = hasBoneIssue,
     hasMuscularIssue = hasMuscularIssue,
-    pointsDiscipline = pointsDiscipline,
-    currentXp = currentXp,
-    totalXp = totalXp,
-    currentLevel = currentLevel,
-    currentStreak = currentStreak,
-    lastXpAt = lastXpAt?.let { formatDate(it) },
     showInFeed = showInFeed,
     gender = gender,
     weight = weight,
@@ -134,9 +121,7 @@ fun ProfileEntity.toRemote() = RemoteProfile(
     basicProfileComplete = basicProfileComplete,
     selfCareComplete = selfCareComplete,
     selfCareSetupPending = selfCareSetupPending,
-    avatarIdentifier = avatarIdentifier,
-    whatsappTotpSecret = whatsappTotpSecret,
-    whatsappPhone = whatsappPhone
+    avatarIdentifier = avatarIdentifier
 )
 
 fun RemoteBiometry.toEntity() = BiometryEntity(

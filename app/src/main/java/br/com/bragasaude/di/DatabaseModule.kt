@@ -52,6 +52,9 @@ object DatabaseModule {
     }
 
     @Provides
+    fun provideSmokingSupportDao(database: BragaDatabase): br.com.bragasaude.data.local.smoking.SmokingSupportDao = database.smokingSupportDao()
+
+    @Provides
     fun provideBiometryDao(database: BragaDatabase): BiometryDao {
         return database.biometryDao()
     }
@@ -105,18 +108,8 @@ object DatabaseModule {
     }
 
     @Provides
-    fun provideLeagueDao(database: BragaDatabase): LeagueDao {
-        return database.leagueDao()
-    }
-
-    @Provides
     fun provideSocialFeedDao(database: BragaDatabase): SocialFeedDao {
         return database.socialFeedDao()
-    }
-
-    @Provides
-    fun provideXpAwardDao(database: BragaDatabase): XpAwardDao {
-        return database.xpAwardDao()
     }
 
     @Provides

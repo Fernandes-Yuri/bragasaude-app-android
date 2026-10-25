@@ -4,6 +4,8 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -173,14 +175,15 @@ fun NutritionGoalWizardSheet(
             // Navegação inferior (Voltar / Avançar / Confirmar)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (currentStep > 1) {
                     OutlinedButton(
                         onClick = { currentStep-- },
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, BragaMintBorder)
+                        border = BorderStroke(1.dp, BragaMintBorder),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
@@ -190,15 +193,15 @@ fun NutritionGoalWizardSheet(
                         Spacer(Modifier.width(6.dp))
                         Text("Voltar", color = BragaTextPrimary)
                     }
-                } else {
-                    Spacer(Modifier.width(8.dp))
                 }
 
                 if (currentStep < 4) {
                     Button(
                         onClick = { currentStep++ },
                         colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 12.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                     ) {
                         Text("Continuar", color = Color.White, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(6.dp))
@@ -216,11 +219,12 @@ fun NutritionGoalWizardSheet(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(if (currentStep > 1) 0.7f else 1f)
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 12.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                     ) {
                         Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Aplicar Estratégia", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Aplicar Estratégia", color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                     }
                 }
             }
@@ -404,7 +408,7 @@ private fun StepBudgetSelection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(
-            text = "Qual padrão de compras você prefere para a semana?",
+            text = "Qual padrão de compras você prefere para suas compras?",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = BragaTextPrimary
@@ -604,7 +608,7 @@ private fun StepSummaryAndConfirm(
                     )
                 }
                 Text(
-                    text = "A lista semanal de compras será calibrada para cobrir estas $calculatedKcal kcal/dia com até ${budget.maxBasketSize} itens essenciais.",
+                    text = "A lista de compras será calibrada para cobrir estas $calculatedKcal kcal/dia com até ${budget.maxBasketSize} itens essenciais.",
                     style = MaterialTheme.typography.bodySmall,
                     color = BragaTextSecondary
                 )
@@ -615,17 +619,17 @@ private fun StepSummaryAndConfirm(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onToggleManual(!isManualMode) },
+                .toggleable(value = isManualMode, role = Role.Checkbox, onValueChange = onToggleManual),
             shape = RoundedCornerShape(12.dp),
             color = Color.Transparent
         ) {
             Row(
-                modifier = Modifier.padding(vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Checkbox(
                     checked = isManualMode,
-                    onCheckedChange = { onToggleManual(it) },
+                    onCheckedChange = null,
                     colors = CheckboxDefaults.colors(checkedColor = BragaEmerald)
                 )
                 Spacer(Modifier.width(4.dp))

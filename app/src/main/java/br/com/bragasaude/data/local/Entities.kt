@@ -54,6 +54,7 @@ data class ProfileEntity(
     val hasRenalIssue: Boolean = false,
     val hasBoneIssue: Boolean = false,
     val hasMuscularIssue: Boolean = false,
+    // Colunas inertes do schema legado. Não usar em regras, UI ou sincronização.
     val pointsDiscipline: Int = 0,
     val currentXp: Int = 0,
     val totalXp: Int = 0,
@@ -85,14 +86,6 @@ data class ProfileEntity(
     val caregiverMode: String? = null,
     val avatarIdentifier: String? = null,
     val customPhotoUri: String? = null,
-    /**
-     * Segredo TOTP (base32) do vínculo de WhatsApp. A conta nasce com ele "sob o
-     * capo"; o app calcula o código atual no ato do clique, sem chamar o servidor.
-     * Arquitetura temporária até a Meta liberar o template de autenticação.
-     */
-    val whatsappTotpSecret: String? = null,
-    /**Número de WhatsApp vinculado (verificado pela Meta via webhook). */
-    val whatsappPhone: String? = null,
     val communityNickname: String? = null
 )
 
@@ -271,6 +264,7 @@ data class FeedbackEntity(
     val pendingSync: Boolean = true
 )
 
+// Estruturas legadas preservadas apenas para compatibilidade do banco instalado.
 @Entity(tableName = "league_cycles_local")
 data class LeagueCycleEntity(
     @PrimaryKey val id: String, // UUID
@@ -322,16 +316,12 @@ data class SocialPostEntity(
 
 )
 
-/**
- * Fase 3 - Registro de concessoes de XP (anti-farming).
- * Uma linha por (usuario, dia, tipo de acao): garante que cada tipo de acao
- * so rende XP uma vez por dia, mesmo que o usuario repita o registro.
- */
+// Tabela legada inerte, sem concessão de XP ou DAO ativo.
 @Entity(tableName = "xp_awards_local", primaryKeys = ["userId", "date", "actionType"])
 data class XpAwardEntity(
     val userId: String,
     val date: String, // yyyy-MM-dd
-    val actionType: String, // GamificationActionType.name
+    val actionType: String, // Identificador histórico
     val xp: Int,
     val awardedAt: Date = Date()
 )
@@ -354,7 +344,7 @@ data class PostReactionEntity(
 data class GroceryListItemEntity(
     @PrimaryKey val remoteId: String,
     val userId: String,
-    val weekStartDate: String, // yyyy-MM-dd
+    val weekStartDate: String, // yyyy-MM-dd: início do período de compra
     val foodId: String,
     val foodName: String,
     val category: String, // "Hortifruti & Feira", "Cereais & Graos", "Acougue & Ovos", "Mercearia & Chas"
@@ -365,7 +355,16 @@ data class GroceryListItemEntity(
     val isCheckedInPantry: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     @androidx.room.ColumnInfo(defaultValue = "0") val isManual: Boolean = false,
-    @androidx.room.ColumnInfo(defaultValue = "0") val plannedWeeklyAmount: Double = 0.0
+    @androidx.room.ColumnInfo(defaultValue = "0") val plannedWeeklyAmount: Double = 0.0,
+    val retailCardId: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "1") val quantity: Int = 1,
+    @androidx.room.ColumnInfo(defaultValue = "''") val packageDisplay: String = "",
+    @androidx.room.ColumnInfo(defaultValue = "0") val kcalPerUnit: Double = 0.0,
+    @androidx.room.ColumnInfo(defaultValue = "0") val packageNetValue: Double = 0.0,
+    val packageUnit: String? = null,
+    val linkedIngredientSlug: String? = null,
+    val imageUrl: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "7") val planningDays: Int = 7
 )
 
 /**

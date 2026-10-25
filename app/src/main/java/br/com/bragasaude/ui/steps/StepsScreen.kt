@@ -160,7 +160,7 @@ fun StepsScreen(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "Sinal de GPS/movimento em calibração. Caminhe em área aberta para validar os pontos na Liga.",
+                                text = "Sinal de GPS/movimento em calibração. Caminhe em área aberta para melhorar a estimativa da atividade.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

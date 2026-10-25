@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+from zipfile import ZipFile
 
 POLICY = Path(__file__).resolve().parents[1] / 'release-policy.json'
 FIELDS = ('package_name', 'variant', 'debuggable', 'version_name', 'version_code', 'min_android_sdk',
@@ -32,6 +33,15 @@ def tool(name):
 
 def invoke(args):
     return subprocess.run(args, check=True, capture_output=True, text=True).stdout.strip()
+
+
+def check_release_abis(apk):
+    with ZipFile(apk) as archive:
+        abis = {name.split('/')[1] for name in archive.namelist()
+                if name.startswith('lib/') and name.endswith('.so') and len(name.split('/')) == 3}
+    expected = {'arm64-v8a', 'armeabi-v7a'}
+    if abis != expected:
+        raise ValueError(f'Release deve conter apenas ARM32 e ARM64; ABIs encontradas: {sorted(abis)}')
 
 
 def inspect_apk(apk, variant, policy=None):
@@ -76,6 +86,8 @@ def inspect_apk(apk, variant, policy=None):
         raise ValueError('APK debug ou certificado de assinatura divergente')
     if variant not in {'debug', 'release'}:
         raise ValueError('Variante inválida')
+    if variant == 'release':
+        check_release_abis(apk)
     return result
 
 

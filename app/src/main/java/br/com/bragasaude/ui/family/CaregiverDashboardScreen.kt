@@ -102,7 +102,7 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CaregiverDashboardScreen(
-    onBack: () -> Unit,
+    onBack: (() -> Unit)? = null,
     onConnectFamily: () -> Unit = {},
     onOpenChat: () -> Unit = {},
     viewModel: CaregiverDashboardViewModel = hiltViewModel()
@@ -161,8 +161,10 @@ fun CaregiverDashboardScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
+                        }
                     }
                 },
                 actions = {
@@ -460,15 +462,10 @@ private fun PatientSelectorRow(
                         overflow = TextOverflow.Ellipsis
                     )
                 },
-                leadingIcon = if (isSelected) {
-                    {
-                        Icon(
-                            Icons.Default.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                } else null
+                leadingIcon = {
+                    br.com.bragasaude.ui.components.ConnectedUserAvatar(
+                        patients[index].patientUserId, patientName, 24.dp)
+                }
             )
         }
     }
@@ -477,91 +474,37 @@ private fun PatientSelectorRow(
 // ==================== CABECALHO DO PACIENTE ====================
 
 @Composable
-private fun PatientHeaderCard(state: CaregiverDashboardState) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Avatar
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(52.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
-
+internal fun PatientHeaderCard(
+    state: CaregiverDashboardState,
+    avatarContent: @Composable () -> Unit = {
+        br.com.bragasaude.ui.components.ConnectedUserAvatar(state.patientUserId, state.patientName, 52.dp)
+    }
+) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))) {
+        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.Top) {
+            avatarContent()
             Spacer(Modifier.width(16.dp))
-
             Column(Modifier.weight(1f)) {
-                Text(
-                    state.patientName.ifBlank { "Seu familiar" },
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                val displayRelation = state.caregiverRelation
-                    .replace("\"", "")
-                    .replace("'", "")
-                    .replace("(a)", "")
-                    .replace("(ã)", "")
-                    .trim()
-                    .lowercase()
-                Text(
-                    "Você acompanha como $displayRelation",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Badge de vinculo ativo
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = Color(0xFFE8F5E9),
-                border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.4f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = Color(0xFF4CAF50),
-                        modifier = Modifier.size(8.dp)
-                    ) {}
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "Ativo",
-                        color = Color(0xFF2E7D32),
+                Text(state.patientName.ifBlank { "Seu familiar" },
+                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface)
+                val relation = state.caregiverRelation.replace("\"", "").replace("'", "")
+                    .replace("(a)", "").replace("(ã)", "").trim().lowercase()
+                Text("Você acompanha como $relation", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+                Surface(shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer) {
+                    Text("Ativo", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                        color = MaterialTheme.colorScheme.onSecondaryContainer)
                 }
             }
         }
     }
 }
-
-// ==================== SINAIS VITAIS DE HOJE ====================
 
 @Composable
 private fun TodayVitalsCard(

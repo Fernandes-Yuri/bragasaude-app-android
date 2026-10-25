@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,150 +67,75 @@ fun MedicalReportScreen(
         }
     }
 
+    MedicalReportContent(isGeneratingPdf, snackbarHostState, onBack, viewModel::generatePdfReport)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun MedicalReportContent(
+    isGeneratingPdf: Boolean,
+    snackbarHostState: SnackbarHostState,
+    onBack: () -> Unit,
+    onExport: () -> Unit
+) {
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Dados e Relatórios", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.generatePdfReport() },
-                        enabled = !isGeneratingPdf
-                    ) {
-                        if (isGeneratingPdf) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        } else {
-                            Icon(Icons.Default.PictureAsPdf, contentDescription = "Exportar PDF de 30 Dias")
-                        }
-                    }
-                }
-            )
+            CenterAlignedTopAppBar(title = { Text("Dados e Relatórios", fontWeight = FontWeight.Bold) },
+                navigationIcon = { IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
+                } })
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
-        LazyColumn(
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            // CARD DE EXPORTAÇÃO DO RELATÓRIO CLÍNICO (30 DIAS)
+        LazyColumn(Modifier.fillMaxSize().padding(innerPadding).testTag("reportContent"),
+            contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(44.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                    Icon(
-                                        Icons.Default.PictureAsPdf,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "Relatório dos últimos 30 dias",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "Seus registros de autocuidado em um só lugar",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.outline
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.height(14.dp))
-
-                        Text(
-                            "Exporta os gráficos e registros dos últimos 30 dias de pressão arterial, glicemia, hidratação e atividade física em PDF. Não realiza diagnóstico nem substitui uma avaliação profissional.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Spacer(Modifier.height(16.dp))
-
-                        Button(
-                            onClick = { viewModel.generatePdfReport() },
-                            enabled = !isGeneratingPdf,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            if (isGeneratingPdf) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(22.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Text("Gerando Relatório...", fontWeight = FontWeight.Bold)
-                            } else {
-                                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(20.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text("Baixar Relatório em PDF", fontWeight = FontWeight.Bold)
-                            }
-                        }
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Default.PictureAsPdf, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
+                    Text("Seus registros contam uma história", style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold)
+                    Text("O PDF reúne o que você registrou nos últimos 30 dias. Assim, fica mais fácil levar essas informações para uma conversa sobre sua saúde.",
+                        style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), shape = RoundedCornerShape(20.dp)) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                        ReportBenefit("Leve para a consulta", "Mostre seus registros à equipe de saúde sem depender só da memória.")
+                        ReportBenefit("Reveja o período com calma", "Consulte datas, gráficos e anotações reunidos no mesmo documento.")
+                        ReportBenefit("Tenha seu histórico à mão", "Abra uma cópia organizada para acompanhar suas próximas conversas e consultas.")
                     }
                 }
             }
-
-            item { Spacer(Modifier.height(80.dp)) }
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), shape = RoundedCornerShape(20.dp)) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Seu relatório de 30 dias", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Inclui os registros disponíveis de pressão, glicemia, hidratação e atividade física. Quanto mais você registrar, mais completo ficará o relatório.",
+                            style = MaterialTheme.typography.bodyMedium)
+                        Button(onClick = onExport, enabled = !isGeneratingPdf, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+                            if (isGeneratingPdf) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary)
+                            else Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (isGeneratingPdf) "Gerando relatório..." else "Baixar relatório em PDF")
+                        }
+                        Text("O relatório organiza seus registros; ele não realiza diagnóstico nem substitui uma avaliação profissional.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-fun ChartCard(title: String, isVerified: Boolean = false, content: @Composable () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                if (isVerified) {
-                    Spacer(Modifier.width(8.dp))
-                    Icon(
-                        Icons.Default.CheckCircle,
-                        contentDescription = "Registro Conferido",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            content()
-        }
+private fun ReportBenefit(title: String, description: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

@@ -1,5 +1,6 @@
 package br.com.bragasaude.data.remote.ai
 
+import br.com.bragasaude.data.util.toEntity
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.model.ProfileLookup
 import br.com.bragasaude.data.remote.auth.AuthService
@@ -42,6 +43,19 @@ class ProfileLookupApiTest {
         assertTrue(result.profile.basicProfileComplete)
         assertTrue(result.profile.selfCareComplete)
     }
+    @Test fun uploadedPhotoIsRecoveredFromLoginResponse() = runBlocking {
+        val photo = "https://api.bragasaude.online/api/files/avatars/owner/photo.jpg"
+        server.enqueue(MockResponse().setBody("""{"id":"owner","photo_url":"$photo","basic_profile_complete":true,"self_care_complete":true,"self_care_setup_pending":false}"""))
+        val result = api.getProfileLookup("owner") as ProfileLookup.Found
+        assertEquals(photo, result.profile.photoUrl)
+        assertEquals(photo, result.profile.toEntity().customPhotoUri)
+    }
+    @Test fun absentOrRemovedPhotoDoesNotBecomeLiteralNull() = runBlocking {
+        for (field in listOf("", ",\"photo_url\":null", ",\"photo_url\":\"null\"", ",\"photo_url\":\" \"")) {
+            server.enqueue(MockResponse().setBody("""{"id":"owner","basic_profile_complete":true,"self_care_complete":true,"self_care_setup_pending":false$field}"""))
+            assertNull((api.getProfileLookup("owner") as ProfileLookup.Found).profile.photoUrl)
+        }
+    }
     @Test fun malformedResponseIsUnavailable() = runBlocking {
         server.enqueue(MockResponse().setBody("{}"))
         assertTrue(api.getProfileLookup("owner") is ProfileLookup.Unavailable)
@@ -53,4 +67,35 @@ class ProfileLookupApiTest {
         closedServer.shutdown()
         assertTrue(deadApi.getProfileLookup("owner") is ProfileLookup.Unavailable)
     }
+    @Test fun legacyPointsAreNotSentWhenSyncingHealthProfile() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"status":"success"}"""))
+        val result = api.syncProfile(br.com.bragasaude.data.local.ProfileEntity(
+            userId = "owner", isSmoker = true, hasDiabetes = true,
+            pointsDiscipline = 100, currentXp = 200, totalXp = 300,
+            currentLevel = 8, currentStreak = 7, lastXpAt = java.util.Date(1)
+        ))
+        assertTrue(result.success)
+        val request = server.takeRequest()
+        assertEquals("/api/sync/profile", request.path)
+        val body = org.json.JSONObject(request.body.readUtf8())
+        assertTrue(body.getBoolean("isSmoker"))
+        assertTrue(body.getBoolean("hasDiabetes"))
+        for (key in listOf("pointsDiscipline", "currentXp", "totalXp", "currentLevel", "currentStreak", "lastXpAt")) {
+            assertFalse("Campo legado enviado: $key", body.has(key))
+        }
+    }
+    @Test fun legacyPointsInServerResponseDoNotAffectHealthProfile() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"id":"owner","is_smoker":true,"has_diabetes":true,"current_xp":500,"current_level":8,"points_discipline":100,"basic_profile_complete":true,"self_care_complete":true,"self_care_setup_pending":false}"""))
+        val result = api.getProfileLookup("owner") as ProfileLookup.Found
+        assertTrue(result.profile.isSmoker)
+        assertTrue(result.profile.hasDiabetes)
+        val encoded = kotlinx.serialization.json.Json.encodeToString(
+            br.com.bragasaude.data.remote.model.RemoteProfile.serializer(), result.profile
+        )
+        val body = org.json.JSONObject(encoded)
+        for (key in listOf("points_discipline", "current_xp", "total_xp", "current_level", "current_streak", "last_xp_at")) {
+            assertFalse("Campo legado exposto: $key", body.has(key))
+        }
+    }
+
 }

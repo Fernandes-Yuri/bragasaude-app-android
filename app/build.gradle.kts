@@ -25,18 +25,19 @@ val hasKeystore = if (keystorePropertiesFile != null && keystorePropertiesFile.e
 
 android {
     namespace = "br.com.bragasaude"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "br.com.bragasaude"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 34
-        versionName = "1.7.3"
+        targetSdk = 36
+        versionCode = 39
+        versionName = "1.9.2"
 
         buildConfigField("String", "BASE_URL", "\"https://api.bragasaude.online\"")
 
         ndk {
+            // Distribuição para celulares ARM; suporte experimental a PrimeOS removido.
             abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))
         }
 
@@ -109,7 +110,8 @@ android {
             isReturnDefaultValues = true
             all {
                 it.maxHeapSize = "768m"
-                it.jvmArgs("-XX:MaxMetaspaceSize=256m", "-Dfile.encoding=UTF-8")
+                // Robolectric loads separate Android framework classes for each supported SDK.
+                it.jvmArgs("-XX:MaxMetaspaceSize=768m", "-Dfile.encoding=UTF-8")
             }
         }
     }
@@ -185,6 +187,7 @@ dependencies {
 
     // OCR de imagem On-Device — Google ML Kit Text Recognition (D49 / Fase 1)
     implementation(libs.mlkit.text.recognition)
+    implementation(libs.mlkit.face.detection)
 
 
     // Movement & GPS
@@ -195,6 +198,8 @@ dependencies {
     // QR Code Scanning (Intents integrados)
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.junit)
     testImplementation("org.robolectric:robolectric:4.16.1")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")

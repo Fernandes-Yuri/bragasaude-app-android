@@ -34,7 +34,7 @@ class CommunityNicknameTest {
         coEvery { dao.updateCommunityNickname("u", any()) } answers {
             local.value = local.value?.copy(communityNickname = secondArg())
         }
-        return ProfileViewModel(repository, feedback, auth, database, api)
+        return ProfileViewModel(repository, feedback, auth, database, api, mockk(relaxed = true), mockk(relaxed = true))
     }
 
     @Test fun `abrir perfil com apelido local nao chama rede`() = runTest {

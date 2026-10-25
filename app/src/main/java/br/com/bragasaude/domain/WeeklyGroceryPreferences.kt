@@ -36,6 +36,29 @@ enum class GroceryBudgetTier(
 
     val label: String get() = "$title ($subtitle)"
 
+    fun maxBasketSizeFor(days: Int): Int = when (this) {
+        ULTRA_ECONOMIC -> when {
+            days >= 28 -> 22
+            days >= 14 -> 16
+            else -> 10
+        }
+        ECONOMIC -> when {
+            days >= 28 -> 28
+            days >= 14 -> 20
+            else -> 15
+        }
+        MODERATE -> when {
+            days >= 28 -> 34
+            days >= 14 -> 26
+            else -> 20
+        }
+        FREE -> when {
+            days >= 28 -> 45
+            days >= 14 -> 36
+            else -> 35
+        }
+    }
+
     companion object {
         // Alias de compatibilidade retroativa para código legado
         val BALANCED: GroceryBudgetTier get() = MODERATE
@@ -65,12 +88,14 @@ data class WeeklyGroceryPreferences(
 ) {
     val isUltraEconomic: Boolean get() = budgetTier == GroceryBudgetTier.ULTRA_ECONOMIC
     val isEconomic: Boolean get() = budgetTier == GroceryBudgetTier.ECONOMIC || budgetTier == GroceryBudgetTier.ULTRA_ECONOMIC
+    val effectiveMaxBasketSize: Int get() = budgetTier.maxBasketSizeFor(planningDays)
 
     /**
      * Valida preferências garantindo que o ovo nunca fique isolado como única proteína.
      * Quando apenas ovos forem selecionados, adiciona proteína carnívora como principal.
      */
     fun normalized(): WeeklyGroceryPreferences {
+        GroceryPlanningPeriod.validated(planningDays)
         val hasCarnivorous = selectedProteins.any {
             it == GroceryProteinPreference.POULTRY || it == GroceryProteinPreference.FISH || it == GroceryProteinPreference.BEEF
         }
@@ -83,13 +108,12 @@ data class WeeklyGroceryPreferences(
             }
             else -> selectedProteins
         }
-        require(planningDays == 7 || planningDays == 14) { "O horizonte deve ser 7 ou 14 dias" }
         return copy(selectedProteins = proteins)
     }
 
     companion object {
         val RECOMMENDED = WeeklyGroceryPreferences(
-            budgetTier = GroceryBudgetTier.ULTRA_ECONOMIC,
+            budgetTier = GroceryBudgetTier.ECONOMIC,
             selectedProteins = setOf(
                 GroceryProteinPreference.EGGS,
                 GroceryProteinPreference.POULTRY

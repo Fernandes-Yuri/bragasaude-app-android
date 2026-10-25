@@ -10,7 +10,6 @@ import android.net.Uri
 import androidx.work.WorkManager
 import br.com.bragasaude.data.local.BragaDatabase
 import br.com.bragasaude.data.remote.repository.MedicationRepository
-import br.com.bragasaude.data.util.WhatsAppLinkTotp
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.google.firebase.auth.FirebaseAuth
@@ -32,11 +31,14 @@ class SettingsViewModel @Inject constructor(
     private val movementManager: br.com.bragasaude.data.util.MovementManager,
     private val medicationRepository: MedicationRepository,
     private val apiClient: br.com.bragasaude.data.remote.api.BragaApiClient,
+    private val smokingSession: br.com.bragasaude.data.local.smoking.SmokingSupportSession,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     private val _profile = MutableStateFlow<RemoteProfile?>(null)
     val profile = _profile.asStateFlow()
+    private val _photoUrl = MutableStateFlow<String?>(null)
+    val photoUrl = _photoUrl.asStateFlow()
 
     private val _isSaving = MutableStateFlow(false)
     val isSaving = _isSaving.asStateFlow()
@@ -52,16 +54,12 @@ class SettingsViewModel @Inject constructor(
     )
     val voiceConfirmationEnabled = _voiceConfirmationEnabled.asStateFlow()
 
-    private val _autoMorningCheckinEnabled = MutableStateFlow(
-        br.com.bragasaude.util.AppPreferences.isAutoMorningCheckinEnabled(appContext)
-    )
-    val autoMorningCheckinEnabled = _autoMorningCheckinEnabled.asStateFlow()
-
     init {
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         viewModelScope.launch {
             profileRepository.getProfile(userId).collectLatest { entity ->
                 _profile.value = entity?.toRemote()
+                _photoUrl.value = entity?.customPhotoUri
             }
         }
     }
@@ -69,11 +67,6 @@ class SettingsViewModel @Inject constructor(
     fun updateVoiceAssistant(enabled: Boolean) {
         _voiceAssistantEnabled.value = enabled
         br.com.bragasaude.util.AppPreferences.setVoiceAssistantEnabled(appContext, enabled)
-    }
-
-    fun updateAutoMorningCheckin(enabled: Boolean) {
-        _autoMorningCheckinEnabled.value = enabled
-        br.com.bragasaude.util.AppPreferences.setAutoMorningCheckinEnabled(appContext, enabled)
     }
 
     fun updateVoiceConfirmation(enabled: Boolean) {
@@ -106,52 +99,6 @@ class SettingsViewModel @Inject constructor(
         saveProfile(current.copy(stepGoal = sanitized))
     }
 
-    // --- Vínculo de WhatsApp (fluxo TOTP temporário) ---
-    // O fluxo antigo de OTP por texto foi removido (a Meta não aprova template).
-
-    private val _openWhatsAppLink = MutableStateFlow<String?>(null)
-    val openWhatsAppLinkEvent = _openWhatsAppLink.asStateFlow()
-
-    // Feedback para o usuário quando o link não pode ser aberto ainda.
-    private val _whatsappLinkError = MutableStateFlow<String?>(null)
-    val whatsappLinkError = _whatsappLinkError.asStateFlow()
-
-    /**
-     * Abre o WhatsApp com a mensagem de vínculo pronta (código TOTP atual).
-     *
-     * Sem segredo no perfil local (ainda não sincronizou com o backend), avisa o
-     * usuário em vez de ficar mudo e dispara a sincronização.
-     */
-    fun openWhatsAppLink(businessPhone: String = "5511967808252") {
-        val secret = _profile.value?.whatsappTotpSecret
-        if (secret.isNullOrBlank()) {
-            _whatsappLinkError.value =
-                "Seu vínculo ainda não está pronto. Aguarde um segundo e toque novamente."
-            val userId = auth.currentUser?.uid
-                ?: BragaConstants.GUEST_UID
-            viewModelScope.launch {
-                try {
-                    profileRepository.syncProfile(userId)
-                } catch (_: Exception) { }
-            }
-            return
-        }
-        _whatsappLinkError.value = null
-        val code = WhatsAppLinkTotp.currentCode(secret)
-        val text = Uri.encode("Olá Braga, eu desejo vincular meu número a minha conta. Esta é minha credencial: $code")
-        _openWhatsAppLink.value = "https://wa.me/$businessPhone?text=$text"
-    }
-
-    /** Consome o evento (a tela já abriu o link). */
-    fun consumeOpenWhatsAppLink() {
-        _openWhatsAppLink.value = null
-    }
-
-    /** Consome a mensagem de erro (a tela já mostrou). */
-    fun consumeWhatsappLinkError() {
-        _whatsappLinkError.value = null
-    }
-
     private fun saveProfile(updatedProfile: RemoteProfile) {
         viewModelScope.launch {
             _isSaving.value = true
@@ -165,7 +112,40 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    private val _accountBusy = MutableStateFlow(false)
+    val accountBusy = _accountBusy.asStateFlow()
+    private val _accountError = MutableStateFlow<String?>(null)
+    val accountError = _accountError.asStateFlow()
+
+    fun deactivateAccount(onComplete: () -> Unit) {
+        if (_accountBusy.value) return
+        val uid = auth.currentUser?.uid ?: return
+        _accountBusy.value = true
+        _accountError.value = null
+        viewModelScope.launch {
+            try {
+                movementManager.flush()
+                check(apiClient.deactivateAccount(uid)) { "Não foi possível pausar a conta. Tente novamente com conexão." }
+                check(auth.currentUser?.uid == uid) { "Sua sessão mudou. Entre novamente." }
+                smokingSession.closeForCleanup()
+                appContext.getSharedPreferences("account_pause", Context.MODE_PRIVATE).edit().putBoolean(uid, true).apply()
+                try { medicationRepository.cancelAllUserAlarms(uid) } catch (_: Exception) { }
+                withContext(Dispatchers.IO) {
+                    try { WorkManager.getInstance(appContext).cancelAllWork().result.get() } catch (_: Exception) { }
+                }
+                // Pausa preserva o Room cifrado, inclusive o diário que existe só neste aparelho.
+                auth.signOut()
+                _profile.value = null
+                _photoUrl.value = null
+                onComplete()
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { _accountError.value = e.message ?: "Não foi possível pausar a conta." }
+            finally { _accountBusy.value = false }
+        }
+    }
+
     fun logout(onComplete: () -> Unit) {
+        smokingSession.closeForCleanup()
         viewModelScope.launch {
             try {
                 val userId = auth.currentUser?.uid
@@ -185,6 +165,7 @@ class SettingsViewModel @Inject constructor(
                     }
                 }
 
+                withContext(Dispatchers.IO) { database.clearAllTables() }
                 auth.signOut()
                 _profile.value = null
                 onComplete()
@@ -214,9 +195,11 @@ class SettingsViewModel @Inject constructor(
 
                 val remoteDeleted = profileRepository.deleteProfileRemotely(userId)
                 if (!remoteDeleted) {
-                    android.util.Log.w("SettingsViewModel", "Delete remoto falhou para $userId.")
+                    _accountError.value = "A exclusão não foi confirmada no servidor. Seus dados foram preservados; tente novamente com conexão."
+                    return@launch
                 }
 
+                smokingSession.closeForCleanup()
                 withContext(Dispatchers.IO) {
                     try {
                         WorkManager.getInstance(appContext).cancelAllWork()

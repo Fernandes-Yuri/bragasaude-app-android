@@ -27,7 +27,9 @@ data class WeeklyGroceryPlanResult(
     val isManuallyModified: Boolean = false,
     val profileWeight: Double? = null,
     val structuredLimitations: List<GroceryLimitation> = emptyList(),
-    val purchaseStatus: PurchaseCalculationStatus = PurchaseCalculationStatus.CALCULABLE
+    val purchaseStatus: PurchaseCalculationStatus = PurchaseCalculationStatus.CALCULABLE,
+    val planningDays: Int = 7,
+    val periodStartDate: String = items.firstOrNull()?.weekStartDate ?: java.time.LocalDate.now().toString()
 )
 
 object WeeklyGroceryEngine {
@@ -92,13 +94,16 @@ object WeeklyGroceryEngine {
         dislikedFoodIds: Set<String> = emptySet()
     ): WeeklyGroceryPlanResult {
         val effectivePrefs = preferences.normalized()
-        val weekStartDate = GroceryWeek.start()
+        val weekStartDate = java.time.LocalDate.now().toString()
+        val planningDays = effectivePrefs.planningDays
+
 
         val limitations = mutableListOf<String>()
         val structuredLimitations = mutableListOf<GroceryLimitation>()
 
         val effectiveDailyCalories = targetCalories.takeIf { it.isFinite() && it > 0 }?.coerceAtLeast(500.0) ?: 1800.0
-        val targetWeeklyCalories = effectiveDailyCalories * 7.0
+        val baselineCalories = effectiveDailyCalories * 7.0
+        val targetWeeklyCalories = effectiveDailyCalories * planningDays
 
         // 1. Filtragem rigorosa por segurança clínica, alergias e preferências
         val safeCatalog = catalog.filter { food ->
@@ -130,7 +135,10 @@ object WeeklyGroceryEngine {
             )
             return WeeklyGroceryPlanResult(
                 items = emptyList(),
-                targetWeeklyCalories = effectiveDailyCalories * effectivePrefs.planningDays,
+                targetWeeklyCalories = targetWeeklyCalories,
+                planningDays = planningDays,
+                periodStartDate = weekStartDate,
+
                 plannedWeeklyCalories = 0.0,
                 coveragePercent = 0.0,
                 plannedProteinGrams = 0.0,
@@ -157,10 +165,10 @@ object WeeklyGroceryEngine {
         val hasHighBp = sys > 130 || profile?.hasHypertension == true
 
         // 3. Distribuição energética entre os pilares nutricionais (7 dias)
-        val grainTargetKcal = targetWeeklyCalories * 0.45
-        val proteinTargetKcal = targetWeeklyCalories * 0.25
-        val produceTargetKcal = targetWeeklyCalories * 0.15
-        val pantryTargetKcal = targetWeeklyCalories * 0.15
+        val grainTargetKcal = baselineCalories * 0.45
+        val proteinTargetKcal = baselineCalories * 0.25
+        val produceTargetKcal = baselineCalories * 0.15
+        val pantryTargetKcal = baselineCalories * 0.15
 
         val plannedConsumptions = mutableListOf<PlannedConsumption>()
         val selectedCanonicalGroups = mutableSetOf<String>()
@@ -214,7 +222,7 @@ object WeeklyGroceryEngine {
         }
 
         fun filterCost(list: List<FoodEntity>): List<FoodEntity> {
-            val shouldFilterCost = effectivePrefs.isEconomic || (effectivePrefs.maxWeeklyBudgetReais != null && effectivePrefs.maxWeeklyBudgetReais > 0)
+            val shouldFilterCost = effectivePrefs.isEconomic
             if (!shouldFilterCost) return list
             val filtered = list.filterNot { isHighCostFood(it, effectivePrefs.isUltraEconomic) }
             val baseList = filtered
@@ -276,6 +284,8 @@ object WeeklyGroceryEngine {
             )
         }
 
+        val effectiveBasketLimit = effectivePrefs.effectiveMaxBasketSize
+
         // 5. Dimensionamento do Pilar 1: Grãos, Cereais, Tubérculos e Raízes
         val existingGrainKcal = plannedConsumptions.filter { it.corridor == CORRIDOR_GRAOS }.sumOf { it.plannedCalories }
         val remainingGrainKcal = (grainTargetKcal - existingGrainKcal).coerceAtLeast(0.0)
@@ -289,7 +299,7 @@ object WeeklyGroceryEngine {
             destConsumptions = plannedConsumptions,
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit
         )
 
         // 6. Dimensionamento do Pilar 2: Proteínas (Animais/Vegetais, Leguminosas, Laticínios, Ovos)
@@ -306,7 +316,7 @@ object WeeklyGroceryEngine {
             preferFish = hasHighBp,
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit
         )
 
         // 7. Dimensionamento do Pilar 3: Hortifruti (Frutas, Folhosos, Legumes)
@@ -322,7 +332,7 @@ object WeeklyGroceryEngine {
             orderFn = ::orderPool,
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit
         )
 
         // 8. Dimensionamento do Pilar 4: Mercearia, Gorduras Boas, Sementes, Temperos e Chás
@@ -337,22 +347,23 @@ object WeeklyGroceryEngine {
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
             isPantry = true,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit
         )
 
         // 9. Calibração fina da meta calórica semanal
         val allEligibleCandidates = (grainsPool + proteinsPool + producePool + pantryPool).distinctBy { it.remoteId }
         calibrateTotalEnergy(
-            targetWeeklyKcal = targetWeeklyCalories,
+            targetWeeklyKcal = baselineCalories,
             plannedConsumptions = plannedConsumptions,
             candidatesPool = allEligibleCandidates,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
-            maxBasketSize = effectivePrefs.budgetTier.maxBasketSize
+            maxBasketSize = effectiveBasketLimit
         )
 
         // Garantia de respeito estrito ao maxBasketSize
-        while (plannedConsumptions.size > effectivePrefs.budgetTier.maxBasketSize && plannedConsumptions.size > 1) {
+        while (plannedConsumptions.size > effectiveBasketLimit && plannedConsumptions.size > 1) {
             val nonStapleMinKcal = plannedConsumptions.filterNot { it.food.remoteId in selectedRequiredFoodIds }
+
                 .minByOrNull { it.plannedCalories }
             if (nonStapleMinKcal != null) {
                 plannedConsumptions.remove(nonStapleMinKcal)
@@ -362,12 +373,12 @@ object WeeklyGroceryEngine {
         }
 
         // Scale consumption before packaging. Fast produce remains a single fresh week.
-        if (effectivePrefs.planningDays == 14) {
+        if (planningDays > 7) {
             val weeklyProduceKcal = plannedConsumptions.filter { it.corridor == CORRIDOR_HORTIFRUTI }.sumOf { it.plannedCalories }
             for (i in plannedConsumptions.indices) {
                 val pc = plannedConsumptions[i]
-                val grams = (pc.weeklyGrams.toLong() * effectiveDays(pc.food, 14) / 7)
-                    .coerceAtMost(maxWeeklyGramsForFood(pc.food, planningDays = 14).toLong()).toInt()
+                val grams = (pc.weeklyGrams.toLong() * effectiveDays(pc.food, planningDays) / 7)
+                    .coerceAtMost(maxWeeklyGramsForFood(pc.food, planningDays = planningDays).toLong()).toInt()
                 plannedConsumptions[i] = pc.copy(weeklyGrams = grams)
             }
             val durable = producePool.filter { it.semanticMetadata.shelfLife == ShelfLife.PERISHABLE_DURABLE }
@@ -375,21 +386,22 @@ object WeeklyGroceryEngine {
             val replacement = plannedConsumptions.filter { it.food.remoteId in durableIds }.toMutableList()
             val fixedProduceKcal = plannedConsumptions.filter { it.corridor == CORRIDOR_HORTIFRUTI && it.food.remoteId !in durableIds }.sumOf { it.plannedCalories }
             calibrateTotalEnergy(
-                targetWeeklyKcal = (weeklyProduceKcal * 2 - fixedProduceKcal).coerceAtLeast(0.0),
+                targetWeeklyKcal = (weeklyProduceKcal * planningDays / 7.0 - fixedProduceKcal).coerceAtLeast(0.0),
                 plannedConsumptions = replacement, candidatesPool = durable,
-                maxBasketSize = (effectivePrefs.budgetTier.maxBasketSize - plannedConsumptions.size + replacement.size).coerceAtLeast(0),
-                planningDays = 14
+                maxBasketSize = (effectiveBasketLimit - plannedConsumptions.size + replacement.size).coerceAtLeast(0),
+                planningDays = planningDays
             )
             plannedConsumptions.removeAll { it.food.remoteId in durableIds }
             plannedConsumptions.addAll(replacement)
             if (plannedConsumptions.any { it.food.semanticMetadata.pillar == NutritionalPillar.PROTEIN && it.food.semanticMetadata.shelfLife == ShelfLife.PERISHABLE_FAST }) {
                 limitations.add("Congele preventivamente as porções de proteínas frescas destinadas à segunda semana.")
             }
-            if (plannedConsumptions.filter { it.corridor == CORRIDOR_HORTIFRUTI }.sumOf { it.plannedCalories } < weeklyProduceKcal * 2 - 200) {
+            if (plannedConsumptions.filter { it.corridor == CORRIDOR_HORTIFRUTI }.sumOf { it.plannedCalories } < weeklyProduceKcal * planningDays / 7.0 - 200) {
                 limitations.add("Hortifruti durável insuficiente para cobrir a segunda semana dentro dos limites de porção.")
             }
         }
         val periodTargetCalories = effectiveDailyCalories * effectivePrefs.planningDays
+
 
         // 10. Conversão de consumo em demanda de ingredientes e consolidação canônica
         val demandsBySlug = mutableMapOf<String, MutableList<IngredientDemand>>()
@@ -437,6 +449,7 @@ object WeeklyGroceryEngine {
                 remoteId = UUID.randomUUID().toString(),
                 userId = userId,
                 weekStartDate = weekStartDate,
+                planningDays = planningDays,
                 foodId = ingredient.slug,
                 foodName = ingredient.name,
                 category = preferredCorridor,
@@ -515,6 +528,7 @@ object WeeklyGroceryEngine {
             varietyCount = distinctFoodsCount,
             limitations = limitations,
             planningDays = effectivePrefs.planningDays
+
         )
 
         return WeeklyGroceryPlanResult(
@@ -530,6 +544,8 @@ object WeeklyGroceryEngine {
             structuredLimitations = consolidatedLimitations,
             purchaseStatus = purchaseStatus,
             statusMessage = statusMessage,
+            planningDays = planningDays,
+            periodStartDate = weekStartDate,
             profileWeight = profile?.weight
         )
     }
@@ -850,6 +866,7 @@ object WeeklyGroceryEngine {
         varietyCount: Int,
         limitations: List<String>,
         planningDays: Int = 7
+
     ): String {
         return if (coveragePercent < MIN_ENERGY_COVERAGE_PERCENT) {
             val deficit = (targetWeeklyCalories - plannedWeeklyCalories).toInt()

@@ -420,21 +420,8 @@ private fun FamilyMessageItem(
             .padding(14.dp),
         verticalAlignment = Alignment.Top
     ) {
-        // Ícone vetorial do tipo de mensagem
-        Surface(
-            shape = RoundedCornerShape(10.dp),
-            color = iconColor.copy(alpha = 0.1f),
-            modifier = Modifier.size(42.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = iconConfig.icon,
-                    contentDescription = null,
-                    tint = iconColor,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
+        br.com.bragasaude.ui.components.ConnectedUserAvatar(
+            message.senderUserId, message.senderName, 42.dp)
 
         Spacer(Modifier.width(12.dp))
 

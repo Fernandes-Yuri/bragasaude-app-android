@@ -11,7 +11,6 @@ import br.com.bragasaude.data.remote.model.RemoteProfile
 import br.com.bragasaude.data.remote.repository.FeedbackRepository
 import br.com.bragasaude.data.remote.repository.ProfileRepository
 import br.com.bragasaude.data.remote.api.BragaApiClient
-import br.com.bragasaude.data.util.WhatsAppLinkTotp
 import br.com.bragasaude.data.util.toEntity
 import br.com.bragasaude.data.util.toRemote
 import com.google.firebase.auth.FirebaseAuth
@@ -32,7 +31,9 @@ class ProfileViewModel @Inject constructor(
     private val feedbackRepository: FeedbackRepository,
     private val auth: FirebaseAuth,
     private val database: BragaDatabase,
-    private val apiClient: BragaApiClient
+    private val apiClient: BragaApiClient,
+    private val smokingSupport: br.com.bragasaude.data.local.smoking.SmokingSupportRepository,
+    private val socialFeedRepository: br.com.bragasaude.data.remote.repository.SocialFeedRepository
 ) : ViewModel() {
 
     private val _profile = MutableStateFlow<RemoteProfile?>(null)
@@ -375,49 +376,17 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    // Redimensiona para máx. 512px em JPEG 85 — reduz o tamanho antes do envio.
-    private fun resizeAvatar(context: Context, uri: Uri): Pair<ByteArray?, String> {
-        val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
-        if (mime != "image/jpeg" && mime != "image/png" && mime != "image/webp") {
-            return null to mime
-        }
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-        val maxDim = maxOf(bounds.outWidth, bounds.outHeight).coerceAtLeast(1)
-        var sample = 1
-        while (maxDim / sample > 512) sample *= 2
-        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-        val bmp = context.contentResolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, opts)
-        } ?: return null to mime
-        val scale = minOf(1f, 512f / maxOf(bmp.width, bmp.height).coerceAtLeast(1))
-        val resized = if (scale < 1f) {
-            Bitmap.createScaledBitmap(
-                bmp,
-                (bmp.width * scale).toInt().coerceAtLeast(1),
-                (bmp.height * scale).toInt().coerceAtLeast(1),
-                true
-            )
-        } else bmp
-        val out = java.io.ByteArrayOutputStream()
-        resized.compress(Bitmap.CompressFormat.JPEG, 85, out)
-        if (resized !== bmp) bmp.recycle()
-        return out.toByteArray() to "image/jpeg"
-    }
-
     fun uploadAvatarPhoto(context: Context, uri: Uri) {
         val userId = auth.currentUser?.uid ?: return
+        if (_avatarUploading.value) return
+        _avatarUploading.value = true
         viewModelScope.launch {
-            _avatarUploading.value = true
             try {
-                val (bytes, mime) = withContext(Dispatchers.IO) { resizeAvatar(context, uri) }
-                if (bytes == null) {
-                    _avatarMessage.value = "Formato não suportado — use JPEG, PNG ou WebP."
-                    return@launch
+                val bytes = withContext(Dispatchers.IO) {
+                    br.com.bragasaude.data.avatar.LocalAvatarPhotoProcessor.readSource(context, uri)
                 }
-                val result = withContext(Dispatchers.IO) {
-                    repository.uploadAvatarPhoto(userId, "avatar.jpg", mime, bytes)
-                }
+                val result = repository.uploadAvatarPhoto(userId, bytes)
+                check(auth.currentUser?.uid == userId) { "Sua conta mudou. Abra o perfil novamente." }
                 val url = result.photoUrl
                 if (!url.isNullOrBlank()) {
                     repository.persistServerAvatar(userId, url)
@@ -427,18 +396,35 @@ class ProfileViewModel @Inject constructor(
                 } else {
                     _avatarMessage.value = when (result.code) {
                         422 -> result.detail ?: "Foto não aprovada. Escolha outra imagem."
-                        503 -> "Não foi possível verificar a foto agora. Tente novamente em instantes."
+                        503 -> result.detail ?: "A verificação de publicação está indisponível. Tente novamente em instantes."
                         413 -> "A foto excede o limite de 5 MB."
                         415 -> "Formato não suportado — use JPEG, PNG ou WebP."
                         0 -> "Sem conexão. Tente novamente."
                         else -> result.detail ?: "Não foi possível enviar a foto de perfil."
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _avatarMessage.value = "Não foi possível enviar a foto de perfil."
+                if (auth.currentUser?.uid == userId) _avatarMessage.value = e.message ?: "Não foi possível enviar a foto de perfil."
             } finally {
                 _avatarUploading.value = false
             }
+        }
+    }
+
+    fun shareGoogleAvatarPhoto() {
+        val userId = auth.currentUser?.uid ?: return
+        if (_avatarUploading.value) return
+        _avatarUploading.value = true
+        viewModelScope.launch {
+            try {
+                socialFeedRepository.shareGooglePhoto(userId)
+                if (auth.currentUser?.uid == userId) _avatarMessage.value = "Foto compartilhada no perfil, mural e conexões familiares."
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+              catch (e: Exception) {
+                if (auth.currentUser?.uid == userId) _avatarMessage.value = e.message ?: "Não foi possível compartilhar a foto."
+            } finally { _avatarUploading.value = false }
         }
     }
 
@@ -544,54 +530,4 @@ class ProfileViewModel @Inject constructor(
     // Alias retrocompatível
     fun resetProfile(onComplete: () -> Unit) = deleteProfile(onComplete)
 
-    // --- Vínculo de WhatsApp (fluxo TOTP temporário) ---
-    // O fluxo antigo de OTP por texto foi removido: a Meta não aprova template
-    // e o código nunca chegava. Agora é só abrir o WhatsApp com o código atual.
-
-    private val _openWhatsAppLink = MutableStateFlow<String?>(null)
-    val openWhatsAppLinkEvent = _openWhatsAppLink.asStateFlow()
-
-    // Mensagem de feedback para o usuário quando o botão não consegue abrir o
-    // link (antes o botão era mudo — "sem ação alguma").
-    private val _whatsappLinkError = MutableStateFlow<String?>(null)
-    val whatsappLinkError = _whatsappLinkError.asStateFlow()
-
-    /**
-     * Abre o WhatsApp com a mensagem de vínculo pronta (código TOTP atual).
-     *
-     * Se o segredo ainda não chegou (perfil do backend não sincronizou), não
-     * fica mudo: avisa o usuário e dispara a sincronização — o retry fica fácil
-     * (basta tocar de novo).
-     */
-    fun openWhatsAppLink(businessPhone: String = "5511967808252") {
-        val profile = _profile.value
-        val secret = profile?.whatsappTotpSecret
-        if (secret.isNullOrBlank()) {
-            _whatsappLinkError.value =
-                "Seu vínculo ainda não está pronto. Aguarde um segundo e toque novamente."
-            // Dispara a sincronização que traz o segredo do backend.
-            val userId = auth.currentUser?.uid
-                ?: BragaConstants.GUEST_UID
-            viewModelScope.launch {
-                try {
-                    repository.syncProfile(userId)
-                } catch (_: Exception) { }
-            }
-            return
-        }
-        _whatsappLinkError.value = null
-        val code = WhatsAppLinkTotp.currentCode(secret)
-        val text = Uri.encode("Olá Braga, eu desejo vincular meu número a minha conta. Esta é minha credencial: $code")
-        _openWhatsAppLink.value = "https://wa.me/$businessPhone?text=$text"
-    }
-
-    /** Consome o evento (a tela já abriu o link). */
-    fun consumeOpenWhatsAppLink() {
-        _openWhatsAppLink.value = null
-    }
-
-    /** Consome a mensagem de erro (a tela já mostrou). */
-    fun consumeWhatsappLinkError() {
-        _whatsappLinkError.value = null
-    }
 }

@@ -64,6 +64,26 @@ class RoomMigrationTest {
         assertEquals(listOf("DROP TABLE IF EXISTS exam_items_local", "DROP TABLE IF EXISTS exams_local", "DROP TABLE IF EXISTS clinical_references_local"), sql)
         assertTrue(Migrations.ALL.contains(Migrations.MIGRATION_51_52))
     }
+
+    @Test fun migration60To61AddsImageCreditColumns() {
+        val database = mockk<SupportSQLiteDatabase>()
+        val sql = mutableListOf<String>()
+        every { database.execSQL(capture(sql)) } just runs
+
+        assertEquals(60, Migrations.MIGRATION_60_61.startVersion)
+        assertEquals(61, Migrations.MIGRATION_60_61.endVersion)
+        assertTrue(Migrations.ALL.contains(Migrations.MIGRATION_60_61))
+
+        Migrations.MIGRATION_60_61.migrate(database)
+
+        assertEquals(
+            listOf(
+                "ALTER TABLE grocery_retail_cards_local ADD COLUMN imageCredit TEXT",
+                "ALTER TABLE grocery_retail_cards_local ADD COLUMN imageCreditUrl TEXT"
+            ),
+            sql
+        )
+    }
     private fun findSchema48(): File? {
         val relative = "schemas/br.com.bragasaude.data.local.BragaDatabase/48.json"
         return sequenceOf(File(relative), File("app/$relative")).firstOrNull(File::isFile)

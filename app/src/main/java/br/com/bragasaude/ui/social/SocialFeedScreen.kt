@@ -79,10 +79,14 @@ import java.util.*
 @Composable
 fun SocialFeedScreen(
     onBack: () -> Unit,
+    onManagePhoto: () -> Unit = {},
     viewModel: SocialFeedViewModel = hiltViewModel()
 ) {
     val posts by viewModel.posts.collectAsState()
     val author by viewModel.author.collectAsState()
+    val isSharingPhoto by viewModel.isSharingPhoto.collectAsState()
+    val photoNotice by viewModel.photoNotice.collectAsState()
+    var confirmGooglePhoto by remember { mutableStateOf(false) }
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner) {
@@ -97,6 +101,9 @@ fun SocialFeedScreen(
     val publishState by viewModel.publishState.collectAsState()
     val feedError by viewModel.feedError.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(photoNotice) {
+        photoNotice?.let { snackbarHostState.showSnackbar(it); viewModel.clearPhotoNotice() }
+    }
     var searchQuery by remember { mutableStateOf("") }
     var showCreateSheet by remember { mutableStateOf(false) }
     var editingPost by remember { mutableStateOf<SocialPostEntity?>(null) }
@@ -289,7 +296,7 @@ fun SocialFeedScreen(
                                 onDelete = { deletingPost = post },
                                 nowMillis = nowMillis,
                                 post = post,
-                                fallbackPhotoUrl = viewModel.currentUserPhotoUrl.takeIf { post.userId == viewModel.currentUserId },
+                                fallbackPhotoUrl = null,
                                 reactions = reactions,
                                 selectedReaction = selectedReaction,
                                 onReact = { reactionType ->
@@ -323,10 +330,26 @@ fun SocialFeedScreen(
         )
     }
 
+    if (confirmGooglePhoto) {
+        BragaAlertDialog(
+            onDismissRequest = { confirmGooglePhoto = false },
+            title = { Text("Compartilhar sua foto Google?") },
+            text = { Text("A foto será enviada à Braga Saúde para verificação e ficará visível no seu perfil e nas publicações. Você pode alterá-la ou removê-la no perfil.") },
+            confirmButton = { TextButton(onClick = {
+                confirmGooglePhoto = false
+                viewModel.shareGooglePhoto()
+            }) { Text("Usar minha foto") } },
+            dismissButton = { TextButton(onClick = { confirmGooglePhoto = false }) { Text("Agora não") } }
+        )
+    }
+
     if (showCreateSheet) {
         CreateAchievementBottomSheet(
             templates = viewModel.achievementTemplates,
             author = author,
+            onManagePhoto = { showCreateSheet = false; onManagePhoto() },
+            onShareGooglePhoto = if (viewModel.hasGooglePhoto) ({ confirmGooglePhoto = true }) else null,
+            isSharingPhoto = isSharingPhoto,
             publishState = publishState,
             onDismiss = {
                 if (publishState != SocialFeedViewModel.PublishState.Loading) {
@@ -490,6 +513,7 @@ private fun SocialPostCard(
                 ) {
                     SocialAuthorAvatar(
                         name = post.userName,
+                        userId = post.userId,
                         photo = post.userAvatarUrl,
                         avatarIdentifier = post.userAvatarIdentifier,
                         fallbackPhotoUrl = fallbackPhotoUrl,
@@ -663,6 +687,9 @@ private fun SocialPostCard(
 private fun CreateAchievementBottomSheet(
     templates: List<AchievementTemplate>,
     author: SocialPostAuthor,
+    onManagePhoto: () -> Unit,
+    onShareGooglePhoto: (() -> Unit)?,
+    isSharingPhoto: Boolean,
     publishState: SocialFeedViewModel.PublishState,
     onDismiss: () -> Unit,
     onPublish: (title: String, description: String, postType: String, isPublic: Boolean) -> Unit
@@ -688,6 +715,17 @@ private fun CreateAchievementBottomSheet(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (onShareGooglePhoto != null) {
+                    TextButton(onClick = onShareGooglePhoto,
+                        enabled = !isSharingPhoto && publishState != SocialFeedViewModel.PublishState.Loading) {
+                        Text(if (isSharingPhoto) "Compartilhando foto…" else "Usar minha foto Google no mural")
+                    }
+                }
+                TextButton(onClick = onManagePhoto, enabled = publishState != SocialFeedViewModel.PublishState.Loading) {
+                    Text("Alterar foto do mural")
+                }
+                Text("Para aparecer para outras pessoas, escolha uma foto no perfil. A foto Google não é compartilhada automaticamente.",
+                    style = MaterialTheme.typography.bodySmall)
                 Text(
                     text = "Compartilhar Conquista",
                     style = MaterialTheme.typography.headlineSmall,
@@ -941,7 +979,7 @@ private fun CreateAchievementBottomSheet(
                         isPublic
                     )
                 },
-                enabled = publishState != SocialFeedViewModel.PublishState.Loading,
+                enabled = !isSharingPhoto && publishState != SocialFeedViewModel.PublishState.Loading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 52.dp),
@@ -995,48 +1033,15 @@ private fun getPostTypeBadge(postType: String): PostBadgeInfo {
 @Composable
 private fun SocialAuthorAvatar(
     name: String?,
+    userId: String? = null,
     photo: String?,
     avatarIdentifier: String?,
     fallbackPhotoUrl: String?,
     size: androidx.compose.ui.unit.Dp
 ) {
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(BragaMint),
-        contentAlignment = Alignment.Center
-    ) {
-        val photoCandidates = remember(photo, fallbackPhotoUrl) {
-            listOfNotNull(photo, fallbackPhotoUrl).filter { it.isNotBlank() }.distinct()
-        }
-        var photoIndex by remember(photoCandidates) { mutableIntStateOf(0) }
-        val photoUrl = photoCandidates.getOrNull(photoIndex)
-        val avatarIcon = when (avatarIdentifier) {
-            "Person" -> Icons.Default.Person
-            "Favorite" -> Icons.Default.Favorite
-            "Accessibility" -> Icons.Default.AccessibilityNew
-            "Star" -> Icons.Default.Star
-            else -> null
-        }
-        when {
-            avatarIcon != null -> Icon(avatarIcon, contentDescription = null, tint = BragaEmeraldDark)
-            photoUrl != null -> AsyncImage(
-                model = photoUrl,
-                contentDescription = "Foto de perfil",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                onError = { photoIndex++ }
-            )
-            else -> Text(
-                text = name?.trim()?.takeIf { it.isNotEmpty() }?.take(1)?.uppercase(Locale.ROOT) ?: "C",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                fontSize = 17.sp,
-                color = BragaEmeraldDark
-            )
-        }
-    }
+    if (userId == null) br.com.bragasaude.ui.components.SharedProfileAvatar(name, photo, avatarIdentifier, size)
+    else br.com.bragasaude.ui.components.ConnectedUserAvatar(userId, name, size,
+        photoUrl = photo, avatarIdentifier = avatarIdentifier)
 }
 
 /**

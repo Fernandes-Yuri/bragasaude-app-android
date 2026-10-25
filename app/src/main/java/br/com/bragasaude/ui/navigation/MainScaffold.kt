@@ -3,6 +3,9 @@ package br.com.bragasaude.ui.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -36,6 +39,10 @@ fun MainScaffold(
     val currentRoute = navBackStackEntry?.destination?.route
     val appContext = LocalContext.current.applicationContext
     val isVoiceSessionActive by voiceViewModel.isSessionActive.collectAsState()
+
+    val showOrb = (shouldShowAssistantOrb(currentRoute) || isVoiceSessionActive) &&
+        AppPreferences.isVoiceAssistantEnabled(appContext)
+    val dockAssistant = showOrb && isCurrentRoute(currentRoute, Screen.Nutrition())
 
     // ==================== Itens de navegação por papel ====================
     val patientNavItems = listOf(
@@ -102,22 +109,26 @@ fun MainScaffold(
                 }
             }
         ) { innerPadding ->
-            AppNavHost(
-                navController = navController,
-                startDestination = startDestination,
-                userRole = userRole,
-                caregiverMode = caregiverMode,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            )
+            Box(Modifier.fillMaxSize().padding(innerPadding)) {
+                AppNavHost(
+                    navController = navController,
+                    startDestination = startDestination,
+                    userRole = userRole,
+                    caregiverMode = caregiverMode,
+                    modifier = Modifier.fillMaxSize().padding(bottom = if (dockAssistant) 96.dp else 0.dp)
+                )
+                if (dockAssistant) {
+                    DraggableAiAssistantFab(
+                        onNavigate = { screen -> navController.navigate(screen) },
+                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(96.dp).clipToBounds(),
+                        viewModel = voiceViewModel,
+                        docked = true
+                    )
+                }
+            }
         }
 
-        // Presente nas visões gerais ou acompanhando o usuário enquanto a sessão de voz estiver ativa.
-        val showOrb = (shouldShowAssistantOrb(currentRoute) || isVoiceSessionActive) &&
-            AppPreferences.isVoiceAssistantEnabled(appContext)
-
-        if (showOrb) {
+        if (showOrb && !dockAssistant) {
             DraggableAiAssistantFab(
                 onNavigate = { screen -> navController.navigate(screen) },
                 modifier = Modifier.fillMaxSize(),

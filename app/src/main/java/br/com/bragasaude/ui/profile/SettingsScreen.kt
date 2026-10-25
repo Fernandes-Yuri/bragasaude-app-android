@@ -18,12 +18,12 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.HeadsetMic
+import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Whatsapp
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material3.*
@@ -55,42 +55,28 @@ fun SettingsScreen(
     onNavigateToTerms: () -> Unit = {},
     onNavigateToPrivacy: () -> Unit = {},
     onNavigateToTutorial: () -> Unit = {},
+    onSmokingSupport: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val profile by viewModel.profile.collectAsState()
+    val photoUrl by viewModel.photoUrl.collectAsState()
     val isSaving by viewModel.isSaving.collectAsState()
+    val accountBusy by viewModel.accountBusy.collectAsState()
+    val accountError by viewModel.accountError.collectAsState()
+    var showPauseDialog by remember { mutableStateOf(false) }
     val voiceAssistantEnabled by viewModel.voiceAssistantEnabled.collectAsState()
     val voiceConfirmationEnabled by viewModel.voiceConfirmationEnabled.collectAsState()
-    val autoMorningCheckinEnabled by viewModel.autoMorningCheckinEnabled.collectAsState()
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
 
-    // Quando o ViewModel monta o link do WhatsApp (TOTP atual), abre e consome.
-    val waLink by viewModel.openWhatsAppLinkEvent.collectAsState()
-    LaunchedEffect(waLink) {
-        waLink?.let { url ->
-            runCatching {
-                context.startActivity(
-                    android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                        .apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
-                )
-            }
-            viewModel.consumeOpenWhatsAppLink()
-        }
-    }
-
-    // Avisa quando o vínculo ainda não está pronto (antes o botão era mudo).
-    val waError by viewModel.whatsappLinkError.collectAsState()
-    LaunchedEffect(waError) {
-        waError?.let { msg ->
-            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
-            viewModel.consumeWhatsappLinkError()
-        }
+    LaunchedEffect(accountError) {
+        accountError?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show() }
     }
 
     var showEmergencyDialog by remember { mutableStateOf(false) }
     var showStepGoalDialog by remember { mutableStateOf(false) }
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
     var deleteConfirmationText by remember { mutableStateOf("") }
 
     val userName = profile?.fullName?.takeIf { it.isNotBlank() } ?: "Meu perfil"
@@ -115,6 +101,10 @@ fun SettingsScreen(
                     title = "Configurações",
                     subtitle = "Preferências e Conta • $userName",
                     avatarInitials = initials,
+                    avatarContent = {
+                        br.com.bragasaude.ui.components.SharedProfileAvatar(userName, photoUrl,
+                            profile?.avatarIdentifier, 48.dp)
+                    },
                     onBack = onBack
                 )
             }
@@ -126,6 +116,8 @@ fun SettingsScreen(
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    br.com.bragasaude.ui.smoking.SmokingSupportEntry(onOpen = onSmokingSupport)
+
                     // Metas de Saúde
                     Text(
                         "Metas de Saúde Personalizadas",
@@ -149,9 +141,9 @@ fun SettingsScreen(
                         )
                     }
 
-                    // WhatsApp e Emergência
+                    // Contato de emergência
                     Text(
-                        "WhatsApp e Emergência",
+                        "Contato de emergência",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = BragaTextPrimary,
@@ -164,15 +156,6 @@ fun SettingsScreen(
                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                     ) {
                         Column {
-                            val linkedPhone = profile?.whatsappPhone
-                            val hasWhatsapp = !linkedPhone.isNullOrBlank()
-                            SettingsItem(
-                                title = if (hasWhatsapp) "Meu WhatsApp" else "Vincular meu WhatsApp",
-                                subtitle = if (hasWhatsapp) "$linkedPhone • Toque para vincular de novo" else "Abre o WhatsApp com o código pronto. É só enviar.",
-                                icon = Icons.Default.Whatsapp,
-                                onClick = { viewModel.openWhatsAppLink() }
-                            )
-                            HorizontalDivider(color = BragaMintBorder.copy(alpha = 0.3f), thickness = 0.8.dp)
                             SettingsItem(
                                 title = "Parente Próximo de Confiança",
                                 subtitle = profile?.emergencyContactName ?: "Não cadastrado",
@@ -211,14 +194,6 @@ fun SettingsScreen(
                                 icon = Icons.Default.LocationOn,
                                 checked = profile?.locationEnabled ?: true,
                                 onCheckedChange = { viewModel.updateLocation(it) }
-                            )
-                            HorizontalDivider(color = BragaMintBorder.copy(alpha = 0.3f), thickness = 0.8.dp)
-                            SettingsSwitchItem(
-                                title = "Check-in matinal automático",
-                                subtitle = "Abrir o diálogo de como você passou a noite ao iniciar o aplicativo pela manhã.",
-                                icon = Icons.Default.WbSunny,
-                                checked = autoMorningCheckinEnabled,
-                                onCheckedChange = { viewModel.updateAutoMorningCheckin(it) }
                             )
                         }
                     }
@@ -317,10 +292,17 @@ fun SettingsScreen(
                             )
                             HorizontalDivider(color = BragaMintBorder.copy(alpha = 0.3f), thickness = 0.8.dp)
                             SettingsItem(
+                                title = "Pausar conta temporariamente",
+                                subtitle = "Preservar seus registros e interromper os avisos.",
+                                icon = androidx.compose.material.icons.Icons.Default.PauseCircle,
+                                onClick = { if (!accountBusy) showPauseDialog = true }
+                            )
+                            HorizontalDivider(color = BragaMintBorder.copy(alpha = 0.3f), thickness = 0.8.dp)
+                            SettingsItem(
                                 title = "Sair da Conta",
                                 subtitle = "Encerrar sessão no dispositivo atual.",
                                 icon = Icons.AutoMirrored.Filled.ExitToApp,
-                                onClick = { viewModel.logout(onLogout) }
+                                onClick = { showLogoutDialog = true }
                             )
                             HorizontalDivider(color = BragaMintBorder.copy(alpha = 0.3f), thickness = 0.8.dp)
                             SettingsItem(
@@ -344,13 +326,37 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp), tint = BragaTextSecondary)
                         Spacer(Modifier.width(8.dp))
-                        Text("Braga Saúde • Versão 1.2.0 (Build 42)", style = MaterialTheme.typography.labelSmall, color = BragaTextSecondary)
+                        Text("Braga Saúde • Versão ${br.com.bragasaude.BuildConfig.VERSION_NAME} (Build ${br.com.bragasaude.BuildConfig.VERSION_CODE})", style = MaterialTheme.typography.labelSmall, color = BragaTextSecondary)
                     }
                     Spacer(Modifier.height(24.dp))
                 }
             }
         }
     }
+
+    if (showPauseDialog) BragaAlertDialog(
+        onDismissRequest = { if (!accountBusy) showPauseDialog = false },
+        title = { Text("Pausar sua conta?") },
+        text = { Text("Seus registros sincronizados ficam salvos e os avisos serão interrompidos. O diário local permanece neste aparelho. Para retornar, faça um novo login com o método que você já usa.") },
+        confirmButton = {
+            TextButton(enabled = !accountBusy, onClick = { viewModel.deactivateAccount {
+                showPauseDialog = false
+                android.widget.Toast.makeText(context, "Sua conta está pausada. Estaremos aqui quando você quiser voltar.", android.widget.Toast.LENGTH_LONG).show()
+                onLogout()
+            } }) {
+                Text(if (accountBusy) "Pausando..." else "Pausar conta")
+            }
+        },
+        dismissButton = { TextButton(enabled = !accountBusy, onClick = { showPauseDialog = false }) { Text("Continuar usando") } }
+    )
+
+    if (showLogoutDialog) BragaAlertDialog(
+        onDismissRequest = { showLogoutDialog = false },
+        title = { Text("Sair da conta?") },
+        text = { Text("Os registros locais deste aparelho serão removidos. O plano e o diário de apoio para parar de fumar não são sincronizados e não voltarão após entrar novamente.") },
+        confirmButton = { TextButton(onClick = { showLogoutDialog = false; viewModel.logout(onLogout) }) { Text("Sair da conta") } },
+        dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Continuar no aplicativo") } }
+    )
 
     if (showDeleteAccountDialog) {
         val isConfirmed = deleteConfirmationText.trim().equals("deletar meu perfil", ignoreCase = true)

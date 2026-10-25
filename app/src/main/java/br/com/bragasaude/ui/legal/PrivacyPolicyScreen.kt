@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.legal
+package br.com.bragasaude.ui.legal
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -43,8 +43,23 @@ fun PrivacyPolicyScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                Text("Relógios e Health Connect", style = MaterialTheme.typography.titleMedium)
-                Text("Com sua autorização, lemos passos, frequência cardíaca e saturação de oxigênio compartilhados com Health Connect. Batimentos e SpO₂ são armazenados neste celular, na sua conta, com horário e origem, e podem integrar o relatório que você escolher compartilhar. Passos integram suas métricas de atividade sincronizadas. Você pode revogar as permissões no Health Connect. A revogação não apaga o histórico já importado; a exclusão da conta remove os dados locais.")
+                Text("Meu caminho sem cigarro", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                Text(br.com.bragasaude.ui.smoking.SmokingSupportContent.privacy, style = MaterialTheme.typography.bodyMedium)
+                Text("Você pode desativar ou apagar apenas os dados desse apoio. Nenhum conteúdo do diário ou de vontade de fumar é enviado à análise de uso ou incluído em relatórios compartilhados.", style = MaterialTheme.typography.bodyMedium)
+            }
+            item {
+                Text(
+                    "Relógios e Health Connect",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Com sua autorização, lemos passos, frequência cardíaca e saturação de oxigênio compartilhados com Health Connect. Batimentos e SpO₂ são armazenados neste celular, na sua conta, com horário e origem, e podem integrar o relatório que você escolher compartilhar. Passos integram suas métricas de atividade sincronizadas. Você pode revogar as permissões no Health Connect. A revogação não apaga o histórico já importado; a exclusão da conta remove os dados locais.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             item {
                 Surface(

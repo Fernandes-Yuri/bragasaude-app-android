@@ -1,6 +1,7 @@
 package br.com.bragasaude.ui.nutrition
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -14,6 +15,7 @@ import br.com.bragasaude.domain.GroceryLimitationFormatter
 import br.com.bragasaude.domain.PurchaseCalculationStatus
 import br.com.bragasaude.domain.WeeklyGroceryEngine
 import br.com.bragasaude.domain.WeeklyGroceryPlanResult
+import br.com.bragasaude.ui.theme.BragaEmeraldDark
 import java.util.Locale
 
 @Composable
@@ -24,14 +26,16 @@ fun WeeklyGrocerySummaryCard(
 ) {
     var isDetailsExpanded by rememberSaveable { mutableStateOf(false) }
 
-    Card(modifier = modifier.fillMaxWidth()) {
+    Card(modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // 1. Título do card e valores calóricos
             Text(
-                text = if (plan.isManuallyModified) "Último planejamento • cobertura invalidada" else "Resumo estimado para 7 dias",
+                text = if (plan.isManuallyModified) "Último planejamento • cobertura invalidada" else "Resumo estimado para ${plan.planningDays} dias",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
@@ -39,6 +43,16 @@ fun WeeklyGrocerySummaryCard(
                 text = "${plan.plannedWeeklyCalories.toInt()} kcal planejadas / ${plan.targetWeeklyCalories.toInt()} kcal de meta",
                 style = MaterialTheme.typography.bodyMedium
             )
+            val totalEstimatedCost = plan.items.sumOf { it.estimatedPriceBrl }
+            if (totalEstimatedCost > 0.0) {
+                val dailyAvg = totalEstimatedCost / plan.planningDays.toDouble()
+                Text(
+                    text = String.format(Locale.getDefault(), "Total estimado: R$ %.2f (~R$ %.2f/dia)", totalEstimatedCost, dailyAvg),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = BragaEmeraldDark
+                )
+            }
 
             // 2. Cobertura energética estimada (consumo planejado, sem margem de compra)
             if (!plan.isManuallyModified) {
@@ -137,9 +151,8 @@ fun WeeklyGrocerySummaryCard(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
-                        TextButton(onClick = onResize) {
-                            Text("Redimensionar lista")
-                        }
+                        Text("Use as opções de planejamento no topo da lista para recalcular.",
+                            style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.modules
+package br.com.bragasaude.ui.modules
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
@@ -30,7 +30,8 @@ fun CareModulesScreen(
     viewModel: CareModulesViewModel = hiltViewModel(),
     onMedicationStock: () -> Unit = {},
     onCareWall: () -> Unit = {},
-    onDoctorMode: () -> Unit = {}
+    onDoctorMode: () -> Unit = {},
+    onSmokingSupport: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val detected by viewModel.detectedConditions.collectAsState()
@@ -64,6 +65,8 @@ fun CareModulesScreen(
                 color = Color.Gray
             )
         }
+
+        item { br.com.bragasaude.ui.smoking.SmokingSupportEntry(onOpen = onSmokingSupport) }
 
         item {
             Text("Care OS", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)

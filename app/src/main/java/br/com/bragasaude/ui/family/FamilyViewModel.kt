@@ -144,12 +144,11 @@ class FamilyViewModel @Inject constructor(
                 // Eu sou cuidador desta pessoa
                 val patientName = cachedProfiles[patientId]
                     ?: groupBindings.firstNotNullOfOrNull { it.patientName?.takeIf(String::isNotBlank) }
-                val rel = groupBindings.firstOrNull()?.caregiverRelation?.takeIf(String::isNotBlank) ?: "Familiar"
-                relationLabel = rel
+                relationLabel = "Paciente"
                 title = if (!patientName.isNullOrBlank()) {
-                    "$patientName ($rel)"
+                    patientName
                 } else {
-                    rel
+                    "Familiar em acompanhamento"
                 }
                 subtitle = "Você acompanha a saúde"
                 otherUserId = patientId
@@ -237,6 +236,8 @@ class FamilyViewModel @Inject constructor(
     val quickTemplates: StateFlow<Map<String, MessageTemplate>> = _quickTemplates.asStateFlow()
 
     private var dashboardJob: Job? = null
+    private var groceryJob: Job? = null
+    private var loadedUserId: String? = null
     private var authListener: FirebaseAuth.AuthStateListener? = null
     private var dataLoadJob: Job? = null
 
@@ -278,8 +279,7 @@ class FamilyViewModel @Inject constructor(
     ): Boolean {
         val snapshot = familyRepository.chatCycleSnapshot(userId, patientId)
         val hash = snapshot.messagesFingerprint ?: return false
-        if (hash == lastHash) return false
-        onHashChanged(hash)
+        if (hash != lastHash) onHashChanged(hash)
         return true
     }
 
@@ -290,8 +290,9 @@ class FamilyViewModel @Inject constructor(
     private fun setupAuthAndLoadData() {
         authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
             val uid = firebaseAuth.currentUser?.uid
-            if (uid != null && uid != br.com.bragasaude.util.BragaConstants.GUEST_UID) {
-                loadData(uid)
+            if (uid != loadedUserId) {
+                clearSessionState()
+                if (uid != null && uid != BragaConstants.GUEST_UID) loadData(uid)
             }
         }
         authListener?.let { auth.addAuthStateListener(it) }
@@ -302,9 +303,28 @@ class FamilyViewModel @Inject constructor(
         }
     }
 
+    private fun clearSessionState() {
+        dataLoadJob?.cancel()
+        dashboardJob?.cancel()
+        groceryJob?.cancel()
+        loadedUserId = null
+        selectedGroup.value = null
+        _activeCaregivers.value = emptyList()
+        _watchedPatients.value = emptyList()
+        _familyMessages.value = emptyList()
+        _cachedProfileNames.value = emptyMap()
+        _groceryItems.value = emptyList()
+        _dashboard.value = CaregiverDashboardState()
+        _connectionCode.value = null
+        _inviteHistory.value = emptyList()
+        _unreadMessageCount.value = 0
+        _chatSyncState.value = ChatSyncState()
+    }
+
     private fun loadData(userId: String = currentUserId) {
         if (userId.isBlank() || userId == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
 
+        loadedUserId = userId
         dataLoadJob?.cancel()
         dataLoadJob = viewModelScope.launch {
             // Sincronizar vínculos da nuvem em background
@@ -356,6 +376,8 @@ class FamilyViewModel @Inject constructor(
                                         lastPayloadHash = newHash
                                     }
                                     !changed
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    throw e
                                 } catch (e: Exception) {
                                     android.util.Log.w("FamilyVM", "Falha no ciclo de sync do chat: ${e.message}")
                                     true
@@ -413,7 +435,10 @@ class FamilyViewModel @Inject constructor(
                     _watchedPatients.value = bindings
                     if (bindings.size == 1 && _dashboard.value.patientUserId.isEmpty()) {
                         selectPatient(bindings.first(), selectChat = false)
-                    } else if (bindings.isEmpty()) {
+                    } else if (bindings.none { it.patientUserId == _dashboard.value.patientUserId }) {
+                        dashboardJob?.cancel()
+                        groceryJob?.cancel()
+                        _groceryItems.value = emptyList()
                         _dashboard.value = CaregiverDashboardState()
                     }
                     val missing = bindings.map { it.patientUserId }.filter { it.isNotBlank() && it !in _cachedProfileNames.value }
@@ -551,10 +576,11 @@ class FamilyViewModel @Inject constructor(
     // ==================== AÇÕES DO CUIDADOR ====================
 
     fun selectPatient(binding: FamilyBindingEntity, selectChat: Boolean = true) {
+        if (binding.status != "ACTIVE" || binding.caregiverUserId != currentUserId) return
         if (selectChat) selectedGroup.value = binding.patientUserId
         dashboardJob?.cancel()
         dashboardJob = viewModelScope.launch {
-            _dashboard.value = _dashboard.value.copy(
+            _dashboard.value = CaregiverDashboardState(
                 patientUserId = binding.patientUserId,
                 caregiverRelation = binding.caregiverRelation,
                 caregiverName = binding.caregiverName,
@@ -629,7 +655,9 @@ class FamilyViewModel @Inject constructor(
         }
 
         // Observar lista de compras do paciente
-        viewModelScope.launch {
+        groceryJob?.cancel()
+        _groceryItems.value = emptyList()
+        groceryJob = viewModelScope.launch {
             groceryRepository.getGroceryList(binding.patientUserId).collectLatest { items ->
                 _groceryItems.value = items
             }
@@ -668,13 +696,13 @@ class FamilyViewModel @Inject constructor(
                 val senderName = _dashboard.value.caregiverName.ifBlank {
                     auth.currentUser?.displayName ?: "Familiar"
                 }
-                familyRepository.sendCareMessage(
+                val message = familyRepository.sendCareMessage(
                     patientUserId = targetPatientId,
                     senderName = senderName,
                     messageText = text,
                     iconType = iconType
                 )
-                _uiEvents.emit(FamilyUiEvent.Notice("Recado enviado com carinho!"))
+                _uiEvents.emit(FamilyUiEvent.Notice(if (message.pendingSync) "Recado salvo no aparelho, aguardando sincronização." else "Recado enviado com carinho!"))
 
                 // O destinatário é notificado pelo push do servidor (doc 10 §1A) e,
                 // como fallback, pela notificação local no momento do pull.
@@ -790,7 +818,7 @@ class FamilyViewModel @Inject constructor(
                     auth.currentUser?.displayName ?: "Familiar"
                 }
 
-                familyRepository.sendMessageBidirectional(
+                val message = familyRepository.sendMessageBidirectional(
                     bindingId = bindingId,
                     recipientId = recipientId,
                     senderName = actualSenderName,
@@ -798,7 +826,7 @@ class FamilyViewModel @Inject constructor(
                     iconType = iconType
                 )
 
-                _uiEvents.emit(FamilyUiEvent.Notice("Mensagem enviada!"))
+                _uiEvents.emit(FamilyUiEvent.Notice(if (message.pendingSync) "Mensagem salva no aparelho, aguardando sincronização." else "Mensagem enviada ao grupo."))
             } catch (e: Exception) {
                 _uiEvents.emit(FamilyUiEvent.Error("Erro ao enviar: ${e.message}"))
             } finally {
@@ -845,6 +873,7 @@ class FamilyViewModel @Inject constructor(
         authListener?.let { auth.removeAuthStateListener(it) }
         dataLoadJob?.cancel()
         dashboardJob?.cancel()
+        groceryJob?.cancel()
     }
 }
 

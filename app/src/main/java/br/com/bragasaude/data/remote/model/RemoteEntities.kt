@@ -65,12 +65,6 @@ data class RemoteProfile(
     @SerialName("has_renal_issue") val hasRenalIssue: Boolean = false,
     @SerialName("has_bone_issue") val hasBoneIssue: Boolean = false,
     @SerialName("has_muscular_issue") val hasMuscularIssue: Boolean = false,
-    @SerialName("points_discipline") val pointsDiscipline: Int = 0,
-    @SerialName("current_xp") val currentXp: Int = 0,
-    @SerialName("total_xp") val totalXp: Int = 0,
-    @SerialName("current_level") val currentLevel: Int = 1,
-    @SerialName("current_streak") val currentStreak: Int = 0,
-    @SerialName("last_xp_at") val lastXpAt: String? = null,
     @SerialName("show_in_feed") val showInFeed: Boolean = true,
     val gender: String? = null,
     val weight: Double? = null,
@@ -95,9 +89,7 @@ data class RemoteProfile(
     @SerialName("self_care_setup_pending") val selfCareSetupPending: Boolean = false,
     @SerialName("caregiver_mode") val caregiverMode: String? = null,
     @SerialName("avatar_identifier") val avatarIdentifier: String? = null,
-    /** Segredo TOTP (base32) do vínculo de WhatsApp; app gera, gateway guarda. */
-    @SerialName("totp_secret") val whatsappTotpSecret: String? = null,
-    @SerialName("whatsapp_phone") val whatsappPhone: String? = null
+    @SerialName("photo_url") val photoUrl: String? = null,
 )
 
 @Serializable

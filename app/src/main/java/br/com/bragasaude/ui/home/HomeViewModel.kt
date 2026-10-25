@@ -84,6 +84,9 @@ class HomeViewModel @Inject constructor(
         .map { it?.stepGoal ?: 8000 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 8000)
 
+    val avatarProfile = profileRepository.getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     val profile: StateFlow<RemoteProfile?> = profileRepository
         .getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
         .map { it?.toRemote() }
@@ -140,13 +143,8 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Data Flow para UI e Score
-        // AUD-AN10: movementManager.currentSteps emite a CADA PASSO. Sem debounce,
-        // HealthScoreCalculator.calculate() rodava por passo (caro) e o
-        // collectLatest da análise de alertas era cancelado a cada passo — se os
-        // passos chegassem mais rápido que a análise, _clinicalAlerts NUNCA
-        // atualizava durante uma caminhada. Debounce de 2s: a score e os alertas
-        // acompanham o ritmo da caminhada sem serem interrompidos.
+        // Evita cancelar a análise de alertas a cada passo durante uma caminhada.
+        // O debounce mantém a atualização dos dados de movimento e dos alertas.
         val debouncedSteps = movementManager.currentSteps.debounce(2_000)
 
         val healthDataFlow = combine(

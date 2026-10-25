@@ -1,0 +1,266 @@
+package br.com.bragasaude.ui.smoking
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import br.com.bragasaude.data.local.smoking.*
+import br.com.bragasaude.domain.smoking.*
+import br.com.bragasaude.ui.components.BragaAlertDialog
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+
+@Composable
+fun SmokingSupportScreen(onBack: () -> Unit, viewModel: SmokingSupportViewModel = hiltViewModel()) {
+    val state by viewModel.snapshot.collectAsState()
+    val today by viewModel.today.collectAsState()
+    val busy by viewModel.busy.collectAsState()
+    val message by viewModel.message.collectAsState()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) { viewModel.refreshDate(); delay(30_000) }
+        }
+    }
+    // Drafts belong to this owner and disappear on account changes or screen exit.
+    key(state.ownerId) {
+        var page by remember { mutableStateOf("main") }
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+        LaunchedEffect(page) { listState.scrollToItem(0) }
+        var editingDay by remember { mutableStateOf<SmokingDailyEntry?>(null) }
+        var confirmation by remember { mutableStateOf<String?>(null) }
+        var dayToDelete by remember { mutableStateOf<SmokingDailyEntry?>(null) }
+        val leavePage = { page = "main"; viewModel.clearMessage() }
+        BackHandler(page != "main") { leavePage() }
+        SmokingSupportLayout(onBack = { if (page == "main") onBack() else leavePage() }, listState = listState) {
+            if (!state.loaded && state.ownerId != null) {
+                item { CircularProgressIndicator(Modifier.padding(24.dp)) }
+            } else when (page) {
+                "plan", "editPlan" -> item {
+                    SmokingPlanForm(state.plan, today, page == "editPlan", busy) { start, target, reason, triggers, stage ->
+                        viewModel.savePlan(start, target, reason, triggers, stage, page == "editPlan", leavePage)
+                    }
+                }
+                "day" -> item {
+                    SmokingDayForm(editingDay, today, busy) { date, smoked, quantity ->
+                        viewModel.saveDay(date, smoked, quantity) { page = "main" }
+                    }
+                }
+                "settings" -> item {
+                    SupportCard {
+                        SmokingInfoHeading("Gerenciar apoio", "Sobre desativar e apagar", "Desativar mantém seu diário e oculta o atalho da tela inicial. " + SmokingSupportContent.eraseNotice)
+                        if (state.enabled) OutlinedButton(onClick = { confirmation = "disable" }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Desativar apoio") }
+                        OutlinedButton(onClick = { confirmation = "erase" }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Apagar dados do apoio") }
+                    }
+                }
+                "pause" -> item {
+                    SmokingPause(state.plan?.personalReason, busy, onActivitySelected = { scope.launch { listState.animateScrollToItem(0) } }, onClose = leavePage, onRecord = { intensity ->
+                        viewModel.recordCraving(intensity, leavePage)
+                    })
+                }
+                else -> {
+                    if (state.enabled) {
+                        val plan = state.plan!!
+                        val start = LocalDate.parse(plan.startedOn)
+                        val zeroDays = state.days.count { !it.smoked && it.localDate >= start.toString() && it.localDate <= today.toString() }
+                        item {
+                            SupportCard {
+                                SmokingInfoHeading("Um dia de cada vez", "Como contamos seus dias", "Contamos somente os dias em que você confirmou que não fumou, a partir do início do plano. Dias sem registro são desconhecidos; o número não mede abstinência contínua.")
+                                Text("Dias registrados sem fumar: $zeroDays", style = MaterialTheme.typography.titleMedium)
+                                if (state.days.none { it.localDate == today.toString() }) Text("Você ainda não registrou como foi hoje.")
+                                Button(onClick = { editingDay = state.days.firstOrNull { it.localDate == today.toString() }; page = "day" }, modifier = Modifier.fillMaxWidth()) { Text("Registrar meu dia") }
+                                OutlinedButton(onClick = { page = "pause" }, modifier = Modifier.fillMaxWidth()) { Text("Estou com vontade agora") }
+                            }
+                        }
+                        item {
+                            SupportCard {
+                                Text("Meu plano", style = MaterialTheme.typography.titleMedium)
+                                Text(if (plan.stage == PreparationStage.PREPARING) "Quero me preparar" else "Já comecei")
+                                Text("Início do acompanhamento: ${start.format(smokingDateFormat)}")
+                                plan.quitTargetOn?.let { Text("Data-meta: ${LocalDate.parse(it).format(smokingDateFormat)}") }
+                                plan.personalReason?.let { Text("Meu motivo: $it") }
+                                val selected = SmokingTrigger.entries.filter { it.name in plan.triggers.split(',') }
+                                if (selected.isNotEmpty()) Text("Situações difíceis: ${selected.joinToString { triggerLabel(it) }}")
+                                TextButton(onClick = { page = "editPlan" }) { Text("Editar meu plano") }
+                            }
+                        }
+                        item { Text("Meu diário", style = MaterialTheme.typography.titleLarge) }
+                        if (state.days.isEmpty()) item { Text("Seu diário começa com o que você escolher registrar.") }
+                        items(state.days, key = { it.localDate }) { day ->
+                            SupportCard {
+                                Text(LocalDate.parse(day.localDate).format(smokingDateFormat), style = MaterialTheme.typography.titleMedium)
+                                Text(if (!day.smoked) "Não fumei" else day.cigaretteCount?.let { "Fumei — $it cigarro(s)" } ?: "Fumei — quantidade não informada")
+                                Text("Fuso do registro: ${day.zoneId}", style = MaterialTheme.typography.bodySmall)
+                                Row {
+                                    TextButton(onClick = { editingDay = day; page = "day" }) { Text("Editar dia") }
+                                    TextButton(onClick = { dayToDelete = day }) { Text("Remover dia") }
+                                }
+                            }
+                        }
+                    } else {
+                        item {
+                            SmokingIntroduction(
+                                authenticated = state.ownerId != null, hasPlan = state.plan != null, busy = busy,
+                                onPrepare = { page = "plan" },
+                                onResume = {
+                                    state.plan?.let { plan ->
+                                        viewModel.savePlan(LocalDate.parse(plan.startedOn).format(smokingDateFormat), "", "", emptySet(), PreparationStage.PREPARING, false, {})
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    item { SmokingHelp() }
+                    if (state.ownerId != null && (state.settings != null || state.plan != null)) item {
+                        TextButton(onClick = { page = "settings" }, modifier = Modifier.fillMaxWidth()) { Text("Gerenciar apoio") }
+                    }
+                }
+            }
+            message?.let { text -> item { Text(text, modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface) } }
+            item { Spacer(Modifier.height(24.dp)) }
+        }
+        if (confirmation != null) BragaAlertDialog(
+            onDismissRequest = { confirmation = null },
+            title = { Text(if (confirmation == "erase") "Apagar dados deste apoio?" else "Desativar apoio?") },
+            text = { Text(if (confirmation == "erase") SmokingSupportContent.eraseNotice else "Seu histórico será mantido, e o atalho sairá da tela inicial. Você pode reativar nas Configurações, no Perfil ou em Planos.") },
+            confirmButton = { TextButton(enabled = !busy, onClick = { if (confirmation == "erase") viewModel.erase() else viewModel.disable(); confirmation = null }) { Text(if (confirmation == "erase") "Apagar dados locais" else "Desativar") } },
+            dismissButton = { TextButton(onClick = { confirmation = null }) { Text("Cancelar") } }
+        )
+        dayToDelete?.let { day -> BragaAlertDialog(
+            onDismissRequest = { dayToDelete = null }, title = { Text("Remover este dia?") },
+            text = { Text("O dia ${LocalDate.parse(day.localDate).format(smokingDateFormat)} ficará sem informação no diário.") },
+            confirmButton = { TextButton(enabled = !busy, onClick = { viewModel.removeDay(LocalDate.parse(day.localDate)); dayToDelete = null }) { Text("Remover") } },
+            dismissButton = { TextButton(onClick = { dayToDelete = null }) { Text("Cancelar") } }
+        ) }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SmokingSupportLayout(onBack: () -> Unit, listState: LazyListState, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
+    Scaffold(containerColor = MaterialTheme.colorScheme.background, topBar = { TopAppBar(
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background, scrolledContainerColor = MaterialTheme.colorScheme.background),
+        title = { Text("Sem cigarro", style = MaterialTheme.typography.titleLarge) }, navigationIcon = {
+        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar") }
+    }) }) { padding ->
+        LazyColumn(Modifier.fillMaxSize().padding(padding).imePadding().padding(horizontal = 16.dp).testTag("smokingContent"), verticalArrangement = Arrangement.spacedBy(16.dp), state = listState, content = content)
+    }
+}
+
+@Composable
+internal fun SupportCard(content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content) }
+}
+
+@Composable
+internal fun SmokingHelp() {
+    val uri = LocalUriHandler.current
+    val mapsAction: @Composable () -> Unit = {
+        TextButton(onClick = { uri.openUri(SmokingSupportContent.mapsUrl) }) { Text("Procurar UBS próxima no Maps") }
+    }
+    SupportCard {
+        SmokingInfoHeading("Apoio e tratamento gratuito", "Como buscar atendimento no SUS", SmokingSupportContent.treatment + "\n\nFonte: INCA — Tratamento do tabagismo. Conteúdo local v3, conferido em 22/10/2026.", SmokingSupportContent.sourceUrl, sourceLabel = "Consultar fonte do INCA", action = mapsAction)
+        Text("Procure uma UBS e pergunte pelo tratamento para parar de fumar no SUS.")
+        mapsAction()
+    }
+}
+
+internal fun triggerLabel(trigger: SmokingTrigger): String = when (trigger) {
+    SmokingTrigger.STRESS -> "Estresse"
+    SmokingTrigger.COFFEE -> "Café"
+    SmokingTrigger.AFTER_MEALS -> "Após refeições"
+    SmokingTrigger.SOCIAL -> "Situações sociais"
+    SmokingTrigger.ALCOHOL -> "Bebida alcoólica"
+}
+
+@Composable
+internal fun SmokingPlanForm(plan: SmokingSupportPlan?, today: LocalDate, editing: Boolean, busy: Boolean,
+    onSave: (String, String, String, Set<SmokingTrigger>, PreparationStage) -> Unit) {
+    var start by remember { mutableStateOf(plan?.startedOn?.let { LocalDate.parse(it).format(smokingDateFormat) } ?: today.format(smokingDateFormat)) }
+    var target by remember { mutableStateOf(plan?.quitTargetOn?.let { LocalDate.parse(it).format(smokingDateFormat) }.orEmpty()) }
+    var reason by remember { mutableStateOf(plan?.personalReason.orEmpty()) }
+    var triggers by remember { mutableStateOf(SmokingTrigger.entries.filter { it.name in plan?.triggers.orEmpty().split(',') }.toSet()) }
+    var stage by remember { mutableStateOf(plan?.stage ?: PreparationStage.PREPARING) }
+    SupportCard {
+        Text(if (editing) "Editar meu plano" else "Meu plano pessoal", style = MaterialTheme.typography.titleLarge)
+        Text("Você escolhe como começar. Motivo, situações difíceis e data-meta são opcionais.")
+        ChoiceRow("Quero me preparar", stage == PreparationStage.PREPARING) { stage = PreparationStage.PREPARING }
+        ChoiceRow("Já comecei", stage == PreparationStage.STARTED) { stage = PreparationStage.STARTED }
+        OutlinedTextField(value = start, onValueChange = { start = it.take(10) }, enabled = !editing && !busy, label = { Text("Início do acompanhamento") }, placeholder = { Text("DD/MM/AAAA") }, supportingText = { Text("Hoje ou uma data passada. Não é uma medida de abstinência.") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = target, onValueChange = { target = it.take(10) }, enabled = !busy, label = { Text("Data-meta para parar (opcional)") }, placeholder = { Text("DD/MM/AAAA") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Text("A data-meta é um planejamento. Ela não acrescenta dias sem fumar.", style = MaterialTheme.typography.bodySmall)
+        OutlinedTextField(value = reason, onValueChange = { reason = it.take(300) }, enabled = !busy, label = { Text("Meu motivo (opcional)") }, supportingText = { Text("${reason.length}/300") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+        Text("Situações difíceis (opcional)", fontWeight = FontWeight.SemiBold)
+        SmokingTrigger.entries.forEach { trigger ->
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = trigger in triggers, role = Role.Checkbox, onValueChange = { checked -> triggers = if (checked) triggers + trigger else triggers - trigger }), verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = trigger in triggers, onCheckedChange = null)
+                Text(triggerLabel(trigger), Modifier.padding(start = 8.dp))
+            }
+        }
+        if (!editing) {
+            Text(SmokingSupportContent.localNotice)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Apoio opcional, sem garantia de resultado.", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                SmokingInfoButton("Privacidade e limites do apoio", SmokingSupportContent.privacy + "\n\n" + SmokingSupportContent.limits)
+            }
+        }
+        Button(onClick = { onSave(start, target, reason, triggers, stage) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (editing) "Salvar meu plano" else "Ativar meu apoio") }
+    }
+}
+
+@Composable
+internal fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(selected, role = Role.RadioButton, onClick = onClick), verticalAlignment = Alignment.CenterVertically) {
+        RadioButton(selected = selected, onClick = null)
+        Text(label, Modifier.padding(start = 8.dp))
+    }
+}
+
+@Composable
+internal fun SmokingDayForm(entry: SmokingDailyEntry?, today: LocalDate, busy: Boolean, onSave: (String, Boolean, String) -> Unit) {
+    var date by remember(entry) { mutableStateOf(entry?.localDate?.let { LocalDate.parse(it).format(smokingDateFormat) } ?: today.format(smokingDateFormat)) }
+    var smoked by remember(entry) { mutableStateOf(entry?.smoked) }
+    var quantity by remember(entry) { mutableStateOf(entry?.cigaretteCount?.takeIf { it > 0 }?.toString().orEmpty()) }
+    SupportCard {
+        Text("Como foi seu dia?", style = MaterialTheme.typography.titleLarge)
+        OutlinedTextField(value = date, onValueChange = { date = it.take(10) }, enabled = !busy && entry == null, label = { Text("Data (DD/MM/AAAA)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        ChoiceRow("Não fumei", smoked == false) { smoked = false }
+        ChoiceRow("Fumei", smoked == true) { smoked = true }
+        if (smoked == true) OutlinedTextField(value = quantity, onValueChange = { quantity = it.take(10) }, enabled = !busy, label = { Text("Quantidade de cigarros (opcional)") }, supportingText = { Text("Deixe em branco se não souber a quantidade.") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Registro de cigarros", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+            SmokingInfoButton("O que o diário acompanha", SmokingSupportContent.products)
+        }
+        Button(onClick = { smoked?.let { onSave(date, it, quantity) } }, enabled = smoked != null && !busy, modifier = Modifier.fillMaxWidth()) { Text("Salvar meu dia") }
+    }
+}

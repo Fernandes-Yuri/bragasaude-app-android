@@ -55,15 +55,52 @@ object GroceryPurchasePlanner {
         else -> "$amount un"
     }
 
+    fun normalizedUnitPrice(item: GroceryIngredient, rawPrice: Double): Double {
+        if (rawPrice <= 0.0 || !rawPrice.isFinite()) return 0.0
+        val key = groceryNameKey(item.name)
+        val slug = item.slug
+
+        // 1. Ovos (unidade) cotados em bandejas comerciais (10, 12, 20 ou 30 unidades)
+        if (item.unit == "un" && (key.contains("ovo") || slug.contains("ovo"))) {
+            if (rawPrice > 3.0) {
+                val packSize = when {
+                    rawPrice >= 25.0 -> 30.0
+                    rawPrice >= 18.0 -> 20.0
+                    rawPrice >= 12.0 -> 12.0
+                    else -> 10.0
+                }
+                return (rawPrice / packSize).coerceIn(0.40, 1.60)
+            }
+            return rawPrice.coerceIn(0.40, 1.60)
+        }
+
+        // 2. Arroz cotado em fardo de 5kg mas cadastrado com unidade kg
+        if (item.unit == "kg" && (key.contains("arroz") || slug.contains("arroz"))) {
+            if (rawPrice > 12.0) {
+                return (rawPrice / 5.0).coerceIn(3.0, 10.0)
+            }
+        }
+
+        // 3. Peito de frango / Carnes cotadas em porções prontas caras (ex: 400g a R$ 28,90)
+        if (item.unit == "kg" && (key.contains("frango") || slug.contains("frango"))) {
+            if (rawPrice > 40.0) {
+                return 22.0
+            }
+        }
+
+        return rawPrice
+    }
+
     fun cost(item: GroceryIngredient, amount: Int): Double {
-        val price = item.price?.takeIf { it.isFinite() && it > 0 } ?: return 0.0
+        val rawPrice = item.price?.takeIf { it.isFinite() && it > 0 } ?: return 0.0
+        val price = normalizedUnitPrice(item, rawPrice)
         val quantity = if (item.unit == "un") amount.toDouble() else amount / 1000.0
         return kotlin.math.round(price * quantity * 100) / 100.0
     }
 
     fun canonicalize(items: List<GroceryListItemEntity>, catalog: GroceryIngredientCatalog): List<GroceryListItemEntity> {
         val transformed = items.flatMap { old ->
-            val ingredients = catalog.forFood(old.foodId, old.foodName)
+            val ingredients = if (old.retailCardId != null) emptyList() else catalog.forFood(old.foodId, old.foodName)
             if (ingredients.isEmpty()) listOf(old) else ingredients.mapIndexed { index, ingredient ->
                 val alreadyCanonical = old.foodId == ingredient.slug && old.foodName == ingredient.name
                 val amount = if (alreadyCanonical) {

@@ -497,7 +497,7 @@ object Migrations {
         }
     }
 
-    val MIGRATION_54_55 = object : Migration(54, 55) {
+    val MIGRATION_61_62 = object : Migration(61, 62) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE food_catalog_local ADD COLUMN semanticMetadata TEXT NOT NULL DEFAULT '{}'")
             db.execSQL("ALTER TABLE food_catalog_local ADD COLUMN maxDailyGrams INTEGER")
@@ -511,6 +511,83 @@ object Migrations {
             db.execSQL("CREATE INDEX IF NOT EXISTS index_dose_intents_actorId_state ON dose_intents(actorId,state)")
             db.execSQL("CREATE TABLE IF NOT EXISTS dose_reservations (patientId TEXT NOT NULL,occurrenceId TEXT NOT NULL,intentId TEXT NOT NULL,PRIMARY KEY(patientId,occurrenceId))")
             db.execSQL("CREATE TABLE IF NOT EXISTS dose_schedules (actorId TEXT NOT NULL,medicationId TEXT NOT NULL,patientId TEXT NOT NULL,payload TEXT NOT NULL,draft TEXT,PRIMARY KEY(actorId,medicationId))")
+        }
+    }
+
+    val MIGRATION_54_55 = object : Migration(54, 55) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN retailCardId TEXT")
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1")
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN packageDisplay TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN kcalPerUnit REAL NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN packageNetValue REAL NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN packageUnit TEXT")
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN linkedIngredientSlug TEXT")
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN imageUrl TEXT")
+            db.execSQL("CREATE TABLE IF NOT EXISTS grocery_retail_cards_local (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, category TEXT NOT NULL, imageUrl TEXT NOT NULL, packageDisplay TEXT NOT NULL, packageNetValue REAL NOT NULL, packageUnit TEXT NOT NULL, kcalPerPackage REAL NOT NULL, carbsG REAL NOT NULL, proteinG REAL NOT NULL, fatG REAL NOT NULL, priceAvg REAL NOT NULL, linkedIngredientSlug TEXT, marketsJson TEXT NOT NULL, clinicalTagsJson TEXT NOT NULL)")
+        }
+    }
+
+    val MIGRATION_55_56 = object : Migration(55, 56) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS grocery_publication_cache (id INTEGER NOT NULL PRIMARY KEY, payload TEXT NOT NULL, fetchedAt INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS grocery_adopted_pack (userId TEXT NOT NULL PRIMARY KEY, payload TEXT NOT NULL, adoptedAt INTEGER NOT NULL)")
+        }
+    }
+
+    val MIGRATION_56_57 = object : Migration(56, 57) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE grocery_list_local ADD COLUMN planningDays INTEGER NOT NULL DEFAULT 7")
+            db.execSQL("ALTER TABLE weekly_grocery_summary_local ADD COLUMN planningDays INTEGER NOT NULL DEFAULT 7")
+        }
+    }
+
+    val MIGRATION_57_58 = object : Migration(57, 58) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE grocery_retail_cards_local ADD COLUMN fiberG REAL")
+            db.execSQL("ALTER TABLE grocery_retail_cards_local ADD COLUMN nutritionFactsJson TEXT NOT NULL DEFAULT '[]'")
+        }
+    }
+
+    /** 58 -> 59: remove os dados locais do antigo vínculo de atendimento. */
+    val MIGRATION_58_59 = object : Migration(58, 59) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""CREATE TABLE IF NOT EXISTS `profiles_without_channel` (`userId` TEXT NOT NULL, `fullName` TEXT, `birthDate` TEXT, `weightGoal` REAL, `dailyCalorieTarget` REAL, `hydrationTargetMl` INTEGER, `stepGoal` INTEGER, `hasDiabetes` INTEGER NOT NULL, `diabetesType` TEXT, `foodAllergies` TEXT NOT NULL, `customFoodRestrictions` TEXT, `hasHypertension` INTEGER NOT NULL, `hasThyroidIssue` INTEGER NOT NULL, `hasRenalIssue` INTEGER NOT NULL, `hasBoneIssue` INTEGER NOT NULL, `hasMuscularIssue` INTEGER NOT NULL, `pointsDiscipline` INTEGER NOT NULL, `currentXp` INTEGER NOT NULL, `totalXp` INTEGER NOT NULL, `currentLevel` INTEGER NOT NULL, `currentStreak` INTEGER NOT NULL, `lastXpAt` INTEGER, `showInFeed` INTEGER NOT NULL, `gender` TEXT, `weight` REAL, `height` REAL, `isSmoker` INTEGER NOT NULL, `activityLevel` TEXT, `emergencyContactName` TEXT, `emergencyContactRelation` TEXT, `emergencyContactPhone` TEXT, `phone` TEXT, `notificationsEnabled` INTEGER NOT NULL, `locationEnabled` INTEGER NOT NULL, `sleepStartTime` TEXT, `sleepEndTime` TEXT, `consentAcceptedAt` INTEGER, `updatedAt` INTEGER, `pendingSync` INTEGER NOT NULL, `userRole` TEXT, `basicProfileComplete` INTEGER NOT NULL, `selfCareComplete` INTEGER NOT NULL, `selfCareSetupPending` INTEGER NOT NULL, `caregiverMode` TEXT, `avatarIdentifier` TEXT, `customPhotoUri` TEXT, `communityNickname` TEXT, PRIMARY KEY(`userId`))""")
+            db.execSQL("""INSERT INTO profiles_without_channel (`userId`, `fullName`, `birthDate`, `weightGoal`, `dailyCalorieTarget`, `hydrationTargetMl`, `stepGoal`, `hasDiabetes`, `diabetesType`, `foodAllergies`, `customFoodRestrictions`, `hasHypertension`, `hasThyroidIssue`, `hasRenalIssue`, `hasBoneIssue`, `hasMuscularIssue`, `pointsDiscipline`, `currentXp`, `totalXp`, `currentLevel`, `currentStreak`, `lastXpAt`, `showInFeed`, `gender`, `weight`, `height`, `isSmoker`, `activityLevel`, `emergencyContactName`, `emergencyContactRelation`, `emergencyContactPhone`, `phone`, `notificationsEnabled`, `locationEnabled`, `sleepStartTime`, `sleepEndTime`, `consentAcceptedAt`, `updatedAt`, `pendingSync`, `userRole`, `basicProfileComplete`, `selfCareComplete`, `selfCareSetupPending`, `caregiverMode`, `avatarIdentifier`, `customPhotoUri`, `communityNickname`) SELECT `userId`, `fullName`, `birthDate`, `weightGoal`, `dailyCalorieTarget`, `hydrationTargetMl`, `stepGoal`, `hasDiabetes`, `diabetesType`, `foodAllergies`, `customFoodRestrictions`, `hasHypertension`, `hasThyroidIssue`, `hasRenalIssue`, `hasBoneIssue`, `hasMuscularIssue`, `pointsDiscipline`, `currentXp`, `totalXp`, `currentLevel`, `currentStreak`, `lastXpAt`, `showInFeed`, `gender`, `weight`, `height`, `isSmoker`, `activityLevel`, `emergencyContactName`, `emergencyContactRelation`, `emergencyContactPhone`, `phone`, `notificationsEnabled`, `locationEnabled`, `sleepStartTime`, `sleepEndTime`, `consentAcceptedAt`, `updatedAt`, `pendingSync`, `userRole`, `basicProfileComplete`, `selfCareComplete`, `selfCareSetupPending`, `caregiverMode`, `avatarIdentifier`, `customPhotoUri`, `communityNickname` FROM profiles_local""")
+            db.execSQL("DROP TABLE profiles_local")
+            db.execSQL("ALTER TABLE profiles_without_channel RENAME TO profiles_local")
+        }
+    }
+
+    /** Additive migration. Existing health and profile tables are untouched. */
+    val MIGRATION_59_60 = object : Migration(59, 60) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS smoking_settings_local (userId TEXT NOT NULL PRIMARY KEY, offerDecision TEXT NOT NULL, enabled INTEGER NOT NULL, acceptedVersion INTEGER, acceptedAt INTEGER, updatedAt INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS smoking_plan_local (userId TEXT NOT NULL PRIMARY KEY, startedOn TEXT NOT NULL, quitTargetOn TEXT, personalReason TEXT, triggers TEXT NOT NULL, stage TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, FOREIGN KEY(userId) REFERENCES smoking_settings_local(userId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS smoking_daily_local (userId TEXT NOT NULL, localDate TEXT NOT NULL, smoked INTEGER NOT NULL, cigaretteCount INTEGER, zoneId TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(userId, localDate), FOREIGN KEY(userId) REFERENCES smoking_settings_local(userId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS smoking_craving_local (id TEXT NOT NULL PRIMARY KEY, userId TEXT NOT NULL, occurredAt INTEGER NOT NULL, zoneId TEXT NOT NULL, intensity TEXT, FOREIGN KEY(userId) REFERENCES smoking_settings_local(userId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_smoking_craving_local_userId ON smoking_craving_local(userId)")
+        }
+    }
+
+    /** 60 -> 61: adiciona metadados aditivos de crédito e licença às imagens do catálogo. */
+    val MIGRATION_60_61 = object : Migration(60, 61) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            val columns = mutableSetOf<String>()
+            runCatching {
+                db.query("PRAGMA table_info(grocery_retail_cards_local)").use { cursor ->
+                    val nameIndex = cursor.getColumnIndex("name")
+                    while (cursor.moveToNext()) {
+                        if (nameIndex != -1) columns.add(cursor.getString(nameIndex).lowercase())
+                    }
+                }
+            }
+            if ("imagecredit" !in columns) {
+                db.execSQL("ALTER TABLE grocery_retail_cards_local ADD COLUMN imageCredit TEXT")
+            }
+            if ("imagecrediturl" !in columns) {
+                db.execSQL("ALTER TABLE grocery_retail_cards_local ADD COLUMN imageCreditUrl TEXT")
+            }
         }
     }
 
@@ -544,6 +621,14 @@ object Migrations {
         MIGRATION_51_52,
         MIGRATION_52_53,
         MIGRATION_53_54,
-        MIGRATION_54_55
+        MIGRATION_54_55,
+        MIGRATION_55_56,
+        MIGRATION_56_57,
+        MIGRATION_57_58,
+        MIGRATION_58_59,
+        MIGRATION_59_60,
+        MIGRATION_60_61,
+        MIGRATION_61_62
+
     )
 }

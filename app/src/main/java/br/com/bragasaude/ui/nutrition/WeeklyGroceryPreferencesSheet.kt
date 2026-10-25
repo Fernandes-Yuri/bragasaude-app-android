@@ -2,6 +2,7 @@ package br.com.bragasaude.ui.nutrition
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -13,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,11 +36,12 @@ fun WeeklyGroceryPreferencesSheet(
 ) {
     val effectiveInitial = remember(initialPreferences) {
         if (initialPreferences.selectedProteins.isEmpty() && initialPreferences.budgetTier == GroceryBudgetTier.MODERATE) {
-            WeeklyGroceryPreferences.RECOMMENDED
+            WeeklyGroceryPreferences.RECOMMENDED.copy(planningDays = initialPreferences.planningDays)
         } else {
             initialPreferences
         }
     }
+    var planningDays by remember { mutableStateOf(effectiveInitial.planningDays) }
     var budgetTier by remember { mutableStateOf(effectiveInitial.budgetTier) }
     var selectedProteins by remember { mutableStateOf(effectiveInitial.selectedProteins) }
     var hasPantryStaples by remember { mutableStateOf(effectiveInitial.hasPantryStaples) }
@@ -72,7 +75,7 @@ fun WeeklyGroceryPreferencesSheet(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Planejar Compras da Semana",
+                        text = "Planejar compras",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = BragaTextPrimary
@@ -104,7 +107,7 @@ fun WeeklyGroceryPreferencesSheet(
                 // 1. Ultraeconômica
                 BudgetOptionCard(
                     title = "Ultraeconômica (Cesta Essencial)",
-                    description = "Máximo rendimento por real gasto. Cesta supercompacta de 8 a 10 alimentos básicos (arroz, feijão, ovos, aveia, frango acessível/PTS e banana). Menor custo semanal.",
+                    description = "Máximo rendimento por real gasto. Cesta supercompacta de 8 a 10 alimentos básicos (arroz, feijão, ovos, aveia, frango acessível/PTS e banana). Menor custo do período.",
                     badge = "Menor Custo",
                     isSelected = budgetTier == GroceryBudgetTier.ULTRA_ECONOMIC,
                     onClick = { budgetTier = GroceryBudgetTier.ULTRA_ECONOMIC }
@@ -138,7 +141,15 @@ fun WeeklyGroceryPreferencesSheet(
                 )
             }
 
-            // Teto Orçamentário Semanal (Opcional)
+            Text("Período de planejamento", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                br.com.bragasaude.domain.GroceryPlanningPeriod.options.forEach { days ->
+                    FilterChip(selected = planningDays == days, onClick = { planningDays = days }, label = { Text("$days dias") })
+                }
+            }
+            Text("O orçamento abaixo vale para os $planningDays dias escolhidos. Em períodos maiores, organize reposições de perecíveis.", style = MaterialTheme.typography.bodySmall)
+
+            // Orçamento do período
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -158,7 +169,7 @@ fun WeeklyGroceryPreferencesSheet(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Teto Máximo Semanal (Opcional)",
+                                text = "Orçamento para $planningDays dias (opcional)",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = BragaTextPrimary
@@ -212,7 +223,7 @@ fun WeeklyGroceryPreferencesSheet(
                     // Chips de atalho rápido
                     val quickBudgets = listOf("80", "120", "160", "200")
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().testTag("quickBudgets").horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         quickBudgets.forEach { amount ->
@@ -220,8 +231,7 @@ fun WeeklyGroceryPreferencesSheet(
                             FilterChip(
                                 selected = isSelected,
                                 onClick = { maxBudgetInput = amount },
-                                label = { Text("R$ $amount", style = MaterialTheme.typography.labelSmall) },
-                                modifier = Modifier.weight(1f),
+                                label = { Text("R$ $amount", style = MaterialTheme.typography.labelSmall, maxLines = 1) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = BragaEmerald,
                                     selectedLabelColor = Color.White,
@@ -243,13 +253,13 @@ fun WeeklyGroceryPreferencesSheet(
             // Passo 2: Proteínas Prioritárias
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "2. Proteínas da Semana",
+                    text = "2. Proteínas do período",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = BragaTextPrimary
                 )
                 Text(
-                    text = "Escolha as opções que você pretende consumir nos próximos 7 dias:",
+                    text = "Escolha as opções que você pretende consumir nos próximos $planningDays dias:",
                     style = MaterialTheme.typography.bodySmall,
                     color = BragaTextSecondary
                 )
@@ -322,7 +332,7 @@ fun WeeklyGroceryPreferencesSheet(
                             color = BragaTextPrimary
                         )
                         Text(
-                            text = "Evita adicionar garrafas de azeite e potes de temperos inteiros na compra semanal.",
+                            text = "Evita adicionar garrafas de azeite e potes de temperos inteiros na compra planejada.",
                             style = MaterialTheme.typography.bodySmall,
                             color = BragaTextSecondary
                         )
@@ -346,7 +356,8 @@ fun WeeklyGroceryPreferencesSheet(
                         budgetTier = budgetTier,
                         selectedProteins = selectedProteins,
                         hasPantryStaples = hasPantryStaples,
-                        maxWeeklyBudgetReais = parsedBudget
+                        maxWeeklyBudgetReais = parsedBudget,
+                        planningDays = planningDays
                     ).normalized()
                     onConfirm(finalPrefs)
                 },

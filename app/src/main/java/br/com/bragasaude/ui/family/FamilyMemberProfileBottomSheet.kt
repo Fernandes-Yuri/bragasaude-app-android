@@ -98,20 +98,7 @@ fun FamilyMemberProfileBottomSheet(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Avatar
-            Surface(
-                shape = CircleShape,
-                color = BragaMint,
-                modifier = Modifier.size(72.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = conversation.avatarLetter,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = BragaEmerald
-                    )
-                }
-            }
+            FamilyConversationAvatar(conversation, 72.dp)
 
             Spacer(Modifier.height(12.dp))
 
@@ -141,6 +128,21 @@ fun FamilyMemberProfileBottomSheet(
             }
 
             Spacer(Modifier.height(20.dp))
+
+            Text("Participantes do grupo", style = MaterialTheme.typography.titleSmall)
+            val participants = (listOf(conversation.patientId to
+                (conversation.activeBindings.firstOrNull()?.patientName ?: "Pessoa acompanhada")) +
+                conversation.activeBindings.map { it.caregiverUserId to it.caregiverName })
+                .filter { it.first.isNotBlank() }.distinctBy { it.first }
+            participants.forEach { (id, name) ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    br.com.bragasaude.ui.components.ConnectedUserAvatar(id, name, 36.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(name.ifBlank { "Familiar" }, modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
 
             // Card de Papel de Cuidado
             Card(

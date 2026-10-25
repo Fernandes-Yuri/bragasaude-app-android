@@ -1,11 +1,13 @@
 package br.com.bragasaude.data.local
 
+import br.com.bragasaude.data.local.smoking.*
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 @Database(
     entities = [
+        SmokingSupportSettings::class, SmokingSupportPlan::class, SmokingDailyEntry::class, SmokingCravingEntry::class,
         DoseGroupEntity::class, DoseIntentEntity::class, DoseReservationEntity::class, DoseScheduleEntity::class,
         VitalSignEntity::class,
         ProfileEntity::class,
@@ -17,6 +19,7 @@ import androidx.room.TypeConverters
         MedicationLogEntity::class,
         DailyMetricsEntity::class,
         FeedbackEntity::class,
+        // Tabelas legadas mantidas para compatibilidade do schema 59, sem DAOs ativos.
         LeagueCycleEntity::class,
         LeagueMembershipEntity::class,
         SocialPostEntity::class,
@@ -25,6 +28,9 @@ import androidx.room.TypeConverters
         FamilyBindingEntity::class,
         FamilyMessageEntity::class,
         GroceryListItemEntity::class,
+        GroceryRetailCardEntity::class,
+        GroceryPublicationCache::class,
+        GroceryAdoptedPack::class,
         WeeklyGrocerySummaryEntity::class,
         GroceryPantryStockEntity::class,
         GroceryMealEntity::class,
@@ -39,11 +45,12 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 55, // Apelido local e alterações pendentes do mural
+    version = 62, // Metadados semânticos do catálogo de alimentos
     exportSchema = true
 )
-@TypeConverters(Converters::class)
+@TypeConverters(Converters::class, SmokingSupportConverters::class)
 abstract class BragaDatabase : RoomDatabase() {
+    abstract fun smokingSupportDao(): SmokingSupportDao
     abstract fun medicationDoseDao(): MedicationDoseDao
     abstract fun orbChatDao(): OrbChatDao
     abstract fun vitalSignDao(): VitalSignDao
@@ -56,9 +63,9 @@ abstract class BragaDatabase : RoomDatabase() {
     abstract fun milestoneDao(): MilestoneDao
     abstract fun dailyMetricsDao(): DailyMetricsDao
     abstract fun feedbackDao(): FeedbackDao
-    abstract fun leagueDao(): LeagueDao
     abstract fun socialFeedDao(): SocialFeedDao
-    abstract fun xpAwardDao(): XpAwardDao
+    abstract fun groceryPublicationDao(): GroceryPublicationDao
+    abstract fun groceryRetailCardDao(): GroceryRetailCardDao
     abstract fun groceryListDao(): GroceryListDao
     abstract fun weeklyGrocerySummaryDao(): WeeklyGrocerySummaryDao
     abstract fun groceryPantryDao(): GroceryPantryDao

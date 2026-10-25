@@ -94,8 +94,8 @@ jobs:
         with:
           packages: 'platform-tools'
 
-      - name: Plataforma de compilação (compileSdk 35)
-        run: yes | sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+      - name: Plataforma de compilação (compileSdk 36)
+        run: yes | sdkmanager --install "platforms;android-36" "build-tools;35.0.0"
 
       # Wrapper unix (./gradlew) NÃO está no repositório — só gradlew.bat.
       # A action oficial provê o Gradle 9.5.0 (mesma versão do wrapper).
@@ -133,18 +133,13 @@ jobs:
         id: apk
         env:
           INPUT_VARIANTE: ${{ inputs.variante }}
-          EVENTO: ${{ github.event_name }}
         run: |
           JDK_PATHS=$(ls -d "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}/Java_Temurin_jdk"/*/x64 2>/dev/null | paste -sd, -)
           echo "JDKs visíveis ao Gradle: $JDK_PATHS"
 
-          # Push na master = deploy: compila a variante de RELEASE, que é a
-          # única que o job de publicação sabe promover. Push em branch de
-          # trabalho e dispatch com "build-teste" continuam em debug.
+          # Merge/push serve para homologação e gera debug por padrão.
+          # Release exige workflow_dispatch explícito com lancar-release.
           VARIANTE="$INPUT_VARIANTE"
-          if [ "$EVENTO" = "push" ] && [ "$GITHUB_REF_NAME" = "master" ]; then
-            VARIANTE="release"
-          fi
 
           if [ -z "$VARIANTE" ] || [ "$VARIANTE" = "debug" ] || [ "$GITHUB_REF_NAME" = "codex/debug-sem-bloqueio-dev" ]; then
             gradle assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace \
@@ -154,7 +149,7 @@ jobs:
             echo "variant=debug (bloqueio de modo desenvolvedor desativado)" >> "$GITHUB_OUTPUT"
             echo "retention=7" >> "$GITHUB_OUTPUT"
           else
-            gradle assembleRelease --no-daemon --stacktrace \
+            gradle assembleRelease bundleRelease --no-daemon --stacktrace \
               -Dorg.gradle.java.installations.paths="$JDK_PATHS"
             # Se gerou unsigned, padroniza o nome para upload sem quebra.
             if [ ! -f app/build/outputs/apk/release/app-release.apk ]; then
@@ -193,6 +188,22 @@ jobs:
           name: ${{ steps.apk.outputs.artifact }}
           path: ${{ steps.apk.outputs.path }}
           retention-days: ${{ steps.apk.outputs.retention }}
+          if-no-files-found: error
+
+      - name: Verificar AAB e registrar origem
+        if: steps.apk.outputs.artifact == 'braga-release-apk'
+        run: |
+          python3 .github/scripts/bundle_manifest.py
+
+      - name: Salvar AAB candidato para teste interno
+        if: steps.apk.outputs.artifact == 'braga-release-apk'
+        uses: actions/upload-artifact@v4
+        with:
+          name: braga-release-aab
+          path: |
+            app/build/outputs/bundle/release/app-release.aab
+            bundle-manifest.json
+          retention-days: 30
           if-no-files-found: error
 
       - name: Salvar APK dos testes instrumentados
@@ -248,8 +259,8 @@ jobs:
         with:
           packages: 'platform-tools'
 
-      - name: Plataforma de compilação (compileSdk 35)
-        run: yes | sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+      - name: Plataforma de compilação (compileSdk 36)
+        run: yes | sdkmanager --install "platforms;android-36" "build-tools;35.0.0"
 
       - name: Gradle 9.5.0
         uses: gradle/actions/setup-gradle@v4
@@ -279,6 +290,42 @@ jobs:
           name: relatorio-testes-unitarios
           path: app/build/reports/tests/testDebugUnitTest/
           retention-days: 14
+
+      - name: Publicar capturas da alimentação
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: revisao-visual-alimentacao
+          path: app/build/outputs/nutrition-review/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Publicar capturas do apoio e perfil
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: revisao-visual-tabagismo
+          path: app/build/outputs/smoking-review/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Publicar revisão visual familiar
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: revisao-visual-familia
+          path: app/build/outputs/family-review/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Publicar revisão visual de relatórios
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: revisao-visual-relatorios
+          path: app/build/outputs/report-review/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Publicar schemas Room gerados
         if: always()
@@ -328,8 +375,7 @@ jobs:
     name: Publicar GitHub Release
     needs: [build, unit-tests, versao_nova, release-policy]
     if: |
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master' && inputs.destino == 'lancar-release') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/master' && needs.versao_nova.outputs.publicar == 'true')
+      github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master' && inputs.destino == 'lancar-release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
