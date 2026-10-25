@@ -21,16 +21,9 @@ object BatteryOptimizationHelper {
         return pm?.isIgnoringBatteryOptimizations(context.packageName) == true
     }
 
-    /**
-     * Solicita a confirmação específica deste app. Em sistemas que bloqueiam
-     * essa tela, mantém o usuário nas configurações do Braga Saúde.
-     */
+    /** Abre as configurações do app, sem solicitar isenção direta de bateria. */
     fun pedirIgnorarOtimizacao(context: Context): ResultadoLiberacao {
         if (estaLiberado(context)) return ResultadoLiberacao.JA_LIBERADO
-        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-            data = Uri.parse("package:${context.packageName}")
-        }
-        if (tentarAbrir(context, intent)) return ResultadoLiberacao.CONFIRMACAO_ABERTA
         return if (abrirConfigApp(context)) ResultadoLiberacao.CONFIG_APP_ABERTA
             else ResultadoLiberacao.INDISPONIVEL
     }

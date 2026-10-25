@@ -145,6 +145,14 @@ fun TermsOfUseScreen(
             }
 
             item {
+                LegalClause(
+                    number = "6",
+                    title = "Regras da Comunidade",
+                    content = "É proibido publicar assédio, ameaças, discurso de ódio, conteúdo sexual, exploração infantil, violência, spam ou dados pessoais de terceiros sem autorização. Denuncie publicações e autores pelo menu do mural. A equipe pode remover conteúdo e restringir contas que violem estas regras. Você pode bloquear autores no mural deste aparelho."
+                )
+            }
+
+            item {
                 Spacer(Modifier.height(32.dp))
             }
         }

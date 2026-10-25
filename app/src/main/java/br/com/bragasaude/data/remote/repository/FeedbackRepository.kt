@@ -93,6 +93,26 @@ class FeedbackRepository @Inject constructor(
         }
     }
 
+    /** Denúncia segue a fila autenticada do suporte, sem coletar diagnóstico do aparelho. */
+    suspend fun reportSocialPost(post: br.com.bragasaude.data.local.SocialPostEntity, reason: String): String = withContext(Dispatchers.IO) {
+        val user = auth.currentUser ?: error("Entre na sua conta para denunciar.")
+        require(reason.isNotBlank() && reason.length <= 500)
+        val entity = FeedbackEntity(
+            id = UUID.randomUUID().toString(), userId = user.uid,
+            category = "denuncia_social", title = "Denúncia de publicação e autor",
+            message = "Publicação: ${post.id}\nAutor: ${post.userId}\nMotivo: $reason",
+            appVersion = BuildConfig.VERSION_NAME
+        )
+        feedbackDao.insert(entity)
+        if (uploadToGateway(entity)) {
+            feedbackDao.markAsSynced(entity.id)
+            "Denúncia enviada à equipe para análise."
+        } else {
+            triggerSync()
+            "Denúncia guardada neste aparelho. Será enviada quando houver conexão."
+        }
+    }
+
     suspend fun syncPendingFeedbacks() = withContext(Dispatchers.IO) {
         val uid = auth.currentUser?.uid ?: return@withContext
         var deliveryFailed = false

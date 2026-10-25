@@ -82,34 +82,11 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
         private const val ID_FAMILY_MESSAGE = 2001
         private const val ID_CONSULTATION = 2010
 
-        const val DEFAULT_DOWNLOAD_URL = "https://api.bragasaude.online/api/app/download"
+        const val DEFAULT_DOWNLOAD_URL = "https://play.google.com/store/apps/details?id=br.com.bragasaude"
 
-        /**
-         * SEG-12 (T-17): Defesa em profundidade contra phishing via FCM.
-         * Valida se a URL de download pertence exclusivamente aos dominios oficiais
-         * do ecossistema Braga Saude com esquema seguro HTTPS.
-         */
-        fun sanitizeDownloadUrl(urlStr: String?): String {
-            if (urlStr.isNullOrBlank()) return DEFAULT_DOWNLOAD_URL
-            return try {
-                val uri = java.net.URI(urlStr.trim())
-                val scheme = uri.scheme?.lowercase()
-                val host = uri.host?.lowercase()
-                val isAllowedHost = host != null && (
-                    host == "api.bragasaude.online" ||
-                    host == "bragasaude.online" ||
-                    host == "github.com" ||
-                    host.endsWith(".bragasaude.online")
-                )
-                if (scheme == "https" && isAllowedHost) {
-                    urlStr.trim()
-                } else {
-                    DEFAULT_DOWNLOAD_URL
-                }
-            } catch (_: Exception) {
-                DEFAULT_DOWNLOAD_URL
-            }
-        }
+        /** Atualizações sempre abrem a ficha oficial. O payload não escolhe o destino. */
+        @Suppress("UNUSED_PARAMETER")
+        fun sanitizeDownloadUrl(urlStr: String?): String = DEFAULT_DOWNLOAD_URL
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
@@ -130,7 +107,7 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
                 "APP_UPDATE" -> {
                     val rawUrl = remoteMessage.data["download_url"]
                     val downloadUrl = sanitizeDownloadUrl(rawUrl)
-                    showUpdateNotification(title, message, downloadUrl)
+                    showUpdateNotification(downloadUrl)
                 }
                 else -> showClinicNotification(title, message, isCritical = false)
             }
@@ -315,7 +292,9 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
         manager.notify(ID_CONSULTATION, notification)
     }
 
-    private fun showUpdateNotification(title: String, message: String, downloadUrl: String) {
+    private fun showUpdateNotification(downloadUrl: String) {
+        val title = "Braga Saúde na Google Play"
+        val message = "Consulte a ficha na Google Play para verificar atualizações disponíveis."
         val channelId = "bragasaude_app_updates"
         val channelName = "Atualizações do Braga Saúde"
         val context = applicationContext

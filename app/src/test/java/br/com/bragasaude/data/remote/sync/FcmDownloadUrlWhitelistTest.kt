@@ -6,24 +6,24 @@ import org.junit.Test
 class FcmDownloadUrlWhitelistTest {
 
     @Test
-    fun `valid official domain returns url unchanged`() {
+    fun `official apk url redirects to Play`() {
         val url = "https://api.bragasaude.online/api/app/download"
         val result = BragaFirebaseMessagingService.sanitizeDownloadUrl(url)
-        assertEquals(url, result)
+        assertEquals(BragaFirebaseMessagingService.DEFAULT_DOWNLOAD_URL, result)
     }
 
     @Test
-    fun `valid subdomain of bragasaude online is accepted`() {
+    fun `release subdomain redirects to Play`() {
         val url = "https://releases.bragasaude.online/apk/braga-v1.2.9.apk"
         val result = BragaFirebaseMessagingService.sanitizeDownloadUrl(url)
-        assertEquals(url, result)
+        assertEquals(BragaFirebaseMessagingService.DEFAULT_DOWNLOAD_URL, result)
     }
 
     @Test
-    fun `valid github releases domain is accepted`() {
+    fun `github release redirects to Play`() {
         val url = "https://github.com/Fernandes-Yuri/bragasaude-app-android/releases/download/v1.2.8/app-release.apk"
         val result = BragaFirebaseMessagingService.sanitizeDownloadUrl(url)
-        assertEquals(url, result)
+        assertEquals(BragaFirebaseMessagingService.DEFAULT_DOWNLOAD_URL, result)
     }
 
     @Test

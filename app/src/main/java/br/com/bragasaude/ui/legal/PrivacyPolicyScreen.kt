@@ -106,7 +106,7 @@ fun PrivacyPolicyScreen(
                 LegalClause(
                     number = "2",
                     title = "Tratamento e Não Compartilhamento",
-                    content = "Seus dados de saúde são sensíveis e pertencem exclusivamente a você. NÃO vendemos, NÃO alugamos e NÃO compartilhamos seus dados individuais com terceiros, seguradoras ou anunciantes."
+                    content = "Seus dados de saúde são sensíveis e pertencem exclusivamente a você. Não usamos dados de saúde, inclusive os obtidos pelo Health Connect, para publicidade ou direcionamento de anúncios. NÃO vendemos, NÃO alugamos e NÃO compartilhamos seus dados individuais com terceiros, seguradoras ou anunciantes."
                 )
             }
 

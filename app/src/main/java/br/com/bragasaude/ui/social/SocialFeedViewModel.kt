@@ -56,7 +56,9 @@ internal fun resolveSocialPostAuthor(
 class SocialFeedViewModel @Inject constructor(
     private val socialFeedRepository: SocialFeedRepository,
     private val telemetryService: TelemetryService,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val blockStore: br.com.bragasaude.data.remote.repository.SocialBlockStore,
+    private val feedbackRepository: br.com.bragasaude.data.remote.repository.FeedbackRepository
 ) : ViewModel() {
 
     sealed interface PublishState {
@@ -65,6 +67,12 @@ class SocialFeedViewModel @Inject constructor(
         data object Success : PublishState
         data class Error(val message: String) : PublishState
     }
+
+    private val _moderationNotice = MutableStateFlow<String?>(null)
+    val moderationNotice = _moderationNotice.asStateFlow()
+    fun clearModerationNotice() { _moderationNotice.value = null }
+    private val _moderating = MutableStateFlow(false)
+    val moderating = _moderating.asStateFlow()
 
     private val guestId = BragaConstants.GUEST_UID
     val currentUserId: String
@@ -77,6 +85,7 @@ class SocialFeedViewModel @Inject constructor(
             accountId.value = uid
             _publishState.value = PublishState.Idle
             _feedError.value = null
+            _moderationNotice.value = null
             refresh()
         }
     }
@@ -84,7 +93,9 @@ class SocialFeedViewModel @Inject constructor(
     val posts: StateFlow<List<SocialPostEntity>> = accountId.flatMapLatest { uid ->
         flow {
             emit(emptyList<SocialPostEntity>())
-            if (uid != guestId) emitAll(socialFeedRepository.getGlobalFeed(uid))
+            if (uid != guestId) emitAll(combine(socialFeedRepository.getGlobalFeed(uid), blockStore.observe(uid)) { feed, blocked ->
+                feed.filter { it.userId !in blocked }
+            })
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(30_000), emptyList())
 
@@ -284,6 +295,32 @@ class SocialFeedViewModel @Inject constructor(
             try { socialFeedRepository.deletePost(post.id, currentUserId) }
             catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: Exception) { _feedError.value = e.message ?: "Não foi possível excluir." }
+        }
+    }
+
+    fun reportPost(post: SocialPostEntity, reason: String) = moderate {
+        feedbackRepository.reportSocialPost(post, reason)
+    }
+    fun blockAuthor(post: SocialPostEntity) = moderate {
+        blockStore.block(currentUserId, post.userId)
+        "Autor bloqueado no mural desta conta neste aparelho."
+    }
+    fun clearBlocks() = moderate {
+        blockStore.clear(currentUserId)
+        "Autores desbloqueados neste aparelho."
+    }
+    private fun moderate(action: suspend () -> String) {
+        if (_moderating.value || currentUserId == guestId) return
+        val uid = currentUserId
+        _moderating.value = true
+        viewModelScope.launch {
+            try {
+                val message = action()
+                if (uid == currentUserId) _moderationNotice.value = message
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
+                if (uid == currentUserId) _feedError.value = e.message ?: "Não foi possível concluir. Tente novamente."
+            } finally { _moderating.value = false }
         }
     }
 

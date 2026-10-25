@@ -108,6 +108,15 @@ fun SocialFeedScreen(
     var showCreateSheet by remember { mutableStateOf(false) }
     var editingPost by remember { mutableStateOf<SocialPostEntity?>(null) }
     var deletingPost by remember { mutableStateOf<SocialPostEntity?>(null) }
+    var reportingPost by remember { mutableStateOf<SocialPostEntity?>(null) }
+    var blockingPost by remember { mutableStateOf<SocialPostEntity?>(null) }
+    var confirmUnblock by remember { mutableStateOf(false) }
+    var reportReason by remember { mutableStateOf("") }
+    val moderating by viewModel.moderating.collectAsState()
+    val moderationNotice by viewModel.moderationNotice.collectAsState()
+    LaunchedEffect(moderationNotice) {
+        moderationNotice?.let { snackbarHostState.showSnackbar(it); viewModel.clearModerationNotice() }
+    }
 
     LaunchedEffect(publishState) {
         when (val state = publishState) {
@@ -168,6 +177,7 @@ fun SocialFeedScreen(
                     }
                 },
                 actions = {
+                    TextButton(onClick = { confirmUnblock = true }, enabled = !moderating) { Text("Bloqueios") }
                     IconButton(
                         onClick = { showCreateSheet = true },
                         modifier = Modifier.size(48.dp)
@@ -294,6 +304,9 @@ fun SocialFeedScreen(
                                 isOwner = post.userId == viewModel.currentUserId && !post.pendingSync,
                                 onEdit = { editingPost = post },
                                 onDelete = { deletingPost = post },
+                                canModerate = post.userId != viewModel.currentUserId && !moderating,
+                                onReport = { reportReason = ""; reportingPost = post },
+                                onBlock = { blockingPost = post },
                                 nowMillis = nowMillis,
                                 post = post,
                                 fallbackPhotoUrl = null,
@@ -308,6 +321,44 @@ fun SocialFeedScreen(
                 }
             }
         }
+    }
+
+    reportingPost?.let { post ->
+        BragaAlertDialog(
+            onDismissRequest = { reportingPost = null },
+            title = { Text("Denunciar publicação ou autor") },
+            text = {
+                Column {
+                    Text("Informe o motivo. A equipe receberá os identificadores da publicação e do autor para análise.")
+                    OutlinedTextField(value = reportReason, onValueChange = { reportReason = it.take(500) },
+                        label = { Text("Motivo da denúncia") }, modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = { TextButton(enabled = reportReason.isNotBlank() && !moderating, onClick = {
+                viewModel.reportPost(post, reportReason.trim()); reportingPost = null
+            }) { Text("Enviar denúncia") } },
+            dismissButton = { TextButton(onClick = { reportingPost = null }) { Text("Cancelar") } }
+        )
+    }
+    blockingPost?.let { post ->
+        BragaAlertDialog(
+            onDismissRequest = { blockingPost = null }, title = { Text("Bloquear autor?") },
+            text = { Text("As publicações deste autor serão ocultadas no mural desta conta neste aparelho. Você pode desfazer em Bloqueios. Para avisar a equipe sobre abuso, envie também uma denúncia.") },
+            confirmButton = { TextButton(enabled = !moderating, onClick = {
+                viewModel.blockAuthor(post); blockingPost = null
+            }) { Text("Bloquear autor") } },
+            dismissButton = { TextButton(onClick = { blockingPost = null }) { Text("Cancelar") } }
+        )
+    }
+    if (confirmUnblock) {
+        BragaAlertDialog(
+            onDismissRequest = { confirmUnblock = false }, title = { Text("Bloqueios do mural") },
+            text = { Text("Deseja desbloquear todos os autores bloqueados nesta conta neste aparelho?") },
+            confirmButton = { TextButton(enabled = !moderating, onClick = {
+                viewModel.clearBlocks(); confirmUnblock = false
+            }) { Text("Desbloquear todos") } },
+            dismissButton = { TextButton(onClick = { confirmUnblock = false }) { Text("Cancelar") } }
+        )
     }
 
     editingPost?.let { post ->
@@ -480,7 +531,10 @@ private fun SocialPostCard(
     onReact: (String) -> Unit,
     isOwner: Boolean,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    canModerate: Boolean,
+    onReport: () -> Unit,
+    onBlock: () -> Unit
 ) {
     val (typeIcon, typeColor, typeLabel) = getPostTypeBadge(post.postType)
     val haptics = LocalHapticFeedback.current
@@ -542,15 +596,20 @@ private fun SocialPostCard(
                     }
                 }
 
-                if (isOwner) {
+                if (isOwner || canModerate) {
                     var menuExpanded by remember { mutableStateOf(false) }
                     Box {
                         IconButton(onClick = { menuExpanded = true }) {
                             Icon(Icons.Default.MoreVert, contentDescription = "Opções da publicação")
                         }
                         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                            if (isOwner) {
                             DropdownMenuItem(text = { Text("Editar publicação") }, onClick = { menuExpanded = false; onEdit() })
                             DropdownMenuItem(text = { Text("Excluir publicação") }, onClick = { menuExpanded = false; onDelete() })
+                            } else {
+                                DropdownMenuItem(text = { Text("Denunciar publicação ou autor") }, onClick = { menuExpanded = false; onReport() })
+                                DropdownMenuItem(text = { Text("Bloquear autor") }, onClick = { menuExpanded = false; onBlock() })
+                            }
                         }
                     }
                 }
@@ -697,6 +756,7 @@ private fun CreateAchievementBottomSheet(
     var selectedTemplate by remember { mutableStateOf(templates.first()) }
     var descriptionText by remember { mutableStateOf(templates.first().defaultDescription) }
     var isPublic by remember { mutableStateOf(true) }
+    var acceptedCommunityRules by remember { mutableStateOf(false) }
 
     BragaBottomSheet(
         onDismissRequest = {
@@ -969,6 +1029,11 @@ private fun CreateAchievementBottomSheet(
                 }
             }
 
+            Text("Regras da comunidade: proibidos assédio, ameaças, ódio, conteúdo sexual, exploração infantil, violência, spam e dados de terceiros sem autorização. Violações podem levar à remoção de conteúdo e restrição da conta.")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = acceptedCommunityRules, onCheckedChange = { acceptedCommunityRules = it })
+                Text("Li e aceito as regras da comunidade.")
+            }
             // Botão [ Publicar Conquista ]
             Button(
                 onClick = {
@@ -979,7 +1044,7 @@ private fun CreateAchievementBottomSheet(
                         isPublic
                     )
                 },
-                enabled = !isSharingPhoto && publishState != SocialFeedViewModel.PublishState.Loading,
+                enabled = acceptedCommunityRules && !isSharingPhoto && publishState != SocialFeedViewModel.PublishState.Loading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 52.dp),

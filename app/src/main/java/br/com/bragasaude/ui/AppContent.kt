@@ -1,6 +1,5 @@
 package br.com.bragasaude.ui
 
-import br.com.bragasaude.ui.components.BragaAlertDialog
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -33,10 +32,6 @@ import br.com.bragasaude.ui.security.DeveloperModeBlockedScreen
 import br.com.bragasaude.ui.util.NotificationHelper
 import br.com.bragasaude.ui.util.Screen
 import br.com.bragasaude.util.DeveloperModeDetector
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.launch
 
 /**
@@ -65,10 +60,6 @@ fun AppContent(activity: MainActivity) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val appContext = context.applicationContext
-
-    val appUpdateClient = remember {
-        EntryPointAccessors.fromApplication(appContext, AppUpdateEntryPoint::class.java).bragaApiClient()
-    }
 
     var isDevModeBlocked by remember {
         mutableStateOf(DeveloperModeDetector.isDeveloperModeEnabled(context))
@@ -106,35 +97,6 @@ fun AppContent(activity: MainActivity) {
                     } else if (userRole != null) {
                         NotificationHelper.scheduleHydrationReminders(appContext)
                     }
-                }
-
-                // doc 10 §1B.6: checagem ativa de versão no startup. O push é a via
-                // principal, mas um aparelho sem push (ou com entrega falhada) ficaria
-                // sem saber da atualização. Compara só o versionCode (inteiro canônico).
-                var updateDownloadUrl by remember { mutableStateOf<String?>(null) }
-                LaunchedEffect(Unit) {
-                    val latestVersionCode = appUpdateClient.getLatestAppVersionCode()
-                    if (latestVersionCode != null && latestVersionCode > br.com.bragasaude.BuildConfig.VERSION_CODE) {
-                        updateDownloadUrl = "https://api.bragasaude.online/api/app/download"
-                    }
-                }
-                updateDownloadUrl?.let { url ->
-                    BragaAlertDialog(
-                        onDismissRequest = { updateDownloadUrl = null },
-                        title = { Text("Atualização disponível") },
-                        text = { Text("Há uma nova versão do Braga Saúde, com melhorias e mais estabilidade. Recomendamos atualizar agora.") },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                updateDownloadUrl = null
-                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                appContext.startActivity(intent)
-                            }) { Text("Baixar atualização") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { updateDownloadUrl = null }) { Text("Agora não") }
-                        }
-                    )
                 }
 
                 val prefs = context.getSharedPreferences("braga_prefs", android.content.Context.MODE_PRIVATE)
@@ -404,11 +366,4 @@ private fun ConsentFlow(
             onNavigateToPrivacy = { onSetLegalSubView("privacy") }
         )
     }
-}
-
-/** Acesso ao BragaApiClient a partir de composables sem ViewModel (doc 10 §1B.6). */
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-interface AppUpdateEntryPoint {
-    fun bragaApiClient(): br.com.bragasaude.data.remote.api.BragaApiClient
 }
