@@ -629,6 +629,5 @@ object Migrations {
         MIGRATION_59_60,
         MIGRATION_60_61,
         MIGRATION_61_62
-
     )
 }

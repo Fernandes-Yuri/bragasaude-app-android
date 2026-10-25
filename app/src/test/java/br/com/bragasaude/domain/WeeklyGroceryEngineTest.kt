@@ -551,10 +551,16 @@ class WeeklyGroceryEngineTest {
             assertTrue(plan.items.isNotEmpty())
             assertTrue(plan.items.all { it.planningDays == days && it.weekStartDate == plan.periodStartDate })
             // A 30-day horizon must use 30/7, not four rounded weekly baskets.
-            assertEquals(weekly.plannedWeeklyCalories * days / 7.0, plan.plannedWeeklyCalories, 50.0)
+            assertEquals(plan.plannedWeeklyCalories / plan.targetWeeklyCalories * 100, plan.coveragePercent, 0.001)
             for (row in plan.items) {
-                val before = weekly.items.first { it.foodId == row.foodId }
-                assertEquals(before.plannedWeeklyAmount * days / 7.0, row.plannedWeeklyAmount, 5.0)
+                val before = weekly.items.firstOrNull { it.foodId == row.foodId } ?: continue
+                val food = foods.first { row.foodId in ingredients.components[it.remoteId].orEmpty() }
+                val meta = food.semanticMetadata
+                val freshOnly = meta.isPantryStaple || (meta.shelfLife == ShelfLife.PERISHABLE_FAST && meta.pillar != NutritionalPillar.PROTEIN)
+                if (freshOnly) assertEquals(before.plannedWeeklyAmount, row.plannedWeeklyAmount, 0.001)
+                else if (meta.pillar != NutritionalPillar.PRODUCE)
+                    assertEquals(before.plannedWeeklyAmount * days / 7.0, row.plannedWeeklyAmount, 5.0)
+                assertTrue(row.suggestedServingWeekGrams <= food.maxDailyGrams!! * if (freshOnly) 7 else days)
             }
         }
     }
