@@ -1974,6 +1974,15 @@ class BragaApiClient @Inject constructor(
 
     data class CanonicalGroceryPrice(val unit: String, val average: Double, val source: String)
 
+    suspend fun compareGroceryBasket(items: List<br.com.bragasaude.data.remote.model.GroceryBasketItem>): br.com.bragasaude.data.remote.model.GroceryBasketComparison = withContext(Dispatchers.IO) {
+        val payload = br.com.bragasaude.data.remote.model.groceryBasketRequest(items)
+        val response = postJsonDetailed("$baseUrl/api/catalog/grocery/basket-comparison", payload)
+        if (response.code !in 200..299 || response.body == null) {
+            throw java.io.IOException(if (response.code == 422) "Atualize o catálogo e confira os produtos e quantidades da cesta." else "Não foi possível comparar os mercados. Tente novamente.")
+        }
+        br.com.bragasaude.data.remote.model.GroceryBasketComparisonDto.parse(response.body)
+    }
+
     suspend fun getGroceryRetailCards(): List<GroceryRetailCardEntity> = withContext(Dispatchers.IO) {
         val rows = getJsonArray("$baseUrl/api/catalog/grocery/cards", fresh = true)
             ?: throw java.io.IOException("Catálogo indisponível")

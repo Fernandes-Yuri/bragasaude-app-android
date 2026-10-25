@@ -20,6 +20,8 @@ class GroceryRetailRepository @Inject constructor(private val db: BragaDatabase,
         // Purchased stock remains available independently from the shopping list.
     }
 
+    suspend fun compareBasket(items: List<br.com.bragasaude.data.remote.model.GroceryBasketItem>) = api.compareGroceryBasket(items)
+
     fun observe() = db.groceryRetailCardDao().observe()
     suspend fun refresh() = db.groceryRetailCardDao().replace(api.getGroceryRetailCards())
 }

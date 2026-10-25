@@ -398,6 +398,26 @@ class NutritionViewModel @Inject constructor(
     val retailMessage = _retailMessage.asStateFlow()
     private val _retailLoading = MutableStateFlow(false)
     val retailLoading = _retailLoading.asStateFlow()
+    private val _basketComparison = MutableStateFlow(br.com.bragasaude.data.remote.model.GroceryBasketUiState())
+    val basketComparison = _basketComparison.asStateFlow()
+    fun compareGroceryBasket() {
+        if (_basketComparison.value.loading) return
+        _basketComparison.value = br.com.bragasaude.data.remote.model.GroceryBasketUiState(loading = true)
+        val rows = groceryList.value.toList()
+        viewModelScope.launch {
+            try {
+                val items = br.com.bragasaude.data.remote.model.groceryBasketItems(rows)
+                br.com.bragasaude.data.remote.model.groceryBasketRequest(items)
+                _basketComparison.value = br.com.bragasaude.data.remote.model.GroceryBasketUiState(comparison = retailRepository.compareBasket(items))
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: IllegalArgumentException) {
+                _basketComparison.value = br.com.bragasaude.data.remote.model.GroceryBasketUiState(error = e.message ?: "Confira os produtos e quantidades da cesta.")
+            } catch (_: Exception) {
+                _basketComparison.value = br.com.bragasaude.data.remote.model.GroceryBasketUiState(error = "Não foi possível comparar. Atualize o catálogo e tente novamente com conexão à internet.")
+            }
+        }
+    }
+
     fun refreshRetailCards() {
         if (_retailLoading.value) return
         _retailLoading.value = true

@@ -443,6 +443,7 @@ fun NutritionScreen(
         val weeklyGoal by viewModel.weeklyGroceryGoal.collectAsState()
         val retailLoading by viewModel.retailLoading.collectAsState()
         val retailMessage by viewModel.retailMessage.collectAsState()
+        val basketComparison by viewModel.basketComparison.collectAsState()
         GroceryListBottomSheet(
             groceryList = groceryList,
             retailCards = retailCards,
@@ -451,6 +452,8 @@ fun NutritionScreen(
             retailLoading = retailLoading,
             retailMessage = retailMessage,
             onRefreshRetail = { viewModel.refreshRetailCards() },
+            basketComparison = basketComparison,
+            onCompareMarkets = viewModel::compareGroceryBasket,
             onAddCard = viewModel::addOrIncrementCard,
             onDecrementCard = viewModel::decrementCard,
             manualIngredients = manualIngredients,

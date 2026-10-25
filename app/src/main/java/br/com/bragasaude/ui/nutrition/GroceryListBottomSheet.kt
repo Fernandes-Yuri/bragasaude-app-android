@@ -78,10 +78,13 @@ fun GroceryListBottomSheet(
     retailLoading: Boolean = false,
     retailMessage: String? = null,
     onRefreshRetail: () -> Unit = {},
+    basketComparison: br.com.bragasaude.data.remote.model.GroceryBasketUiState = br.com.bragasaude.data.remote.model.GroceryBasketUiState(),
+    onCompareMarkets: () -> Unit = {},
     onAddCard: (br.com.bragasaude.data.local.GroceryRetailCardEntity) -> Unit = {},
     onDecrementCard: (String) -> Unit = {},
     onGenerateListWithPreferences: ((preserveManual: Boolean, preferences: br.com.bragasaude.domain.WeeklyGroceryPreferences) -> Unit)? = null
 ) {
+    var showComparison by remember { mutableStateOf(false) }
     var showCatalog by rememberSaveable { mutableStateOf(false) }
     var showPlanningDetails by rememberSaveable { mutableStateOf(false) }
     var choosingPeriod by rememberSaveable { mutableStateOf(false) }
@@ -92,6 +95,10 @@ fun GroceryListBottomSheet(
     var showPlanOptionsDialog by remember { mutableStateOf(false) }
     var showPreferencesSheet by remember { mutableStateOf(false) }
     var pendingPreserveManual by remember { mutableStateOf(true) }
+
+    if (showComparison) {
+        GroceryBasketComparisonSheet(basketComparison, onDismiss = { showComparison = false }, onRetry = onCompareMarkets)
+    }
 
     if (isCreatingManual || manualEditingItem != null) {
         ManualGroceryItemSheet(
@@ -296,6 +303,13 @@ fun GroceryListBottomSheet(
                     }
                 }
             }
+            Button(
+                onClick = { showComparison = true; onCompareMarkets() },
+                enabled = groceryList.any { !it.isCheckedInPantry && !it.retailCardId.isNullOrBlank() && it.quantity > 0 },
+                modifier = Modifier.fillMaxWidth().testTag("compareGroceryMarkets")
+            ) { Text("Comparar Melhores Mercados") }
+            val excludedItems = groceryList.count { !it.isCheckedInPantry && it.retailCardId.isNullOrBlank() }
+            if (excludedItems > 0) Text("$excludedItems item(ns) sem embalagem do catálogo ficam fora da comparação.", style = MaterialTheme.typography.bodySmall)
             if (showCatalog) {
                 GroceryMarketShelfScreen(retailCards, groceryList, retailLoading, retailMessage,
                     onRefreshRetail, onAddCard, onDecrementCard,
