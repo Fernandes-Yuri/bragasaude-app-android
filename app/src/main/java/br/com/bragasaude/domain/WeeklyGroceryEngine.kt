@@ -1,8 +1,6 @@
 package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.local.*
-import br.com.bragasaude.data.local.GroceryListItemEntity
-import br.com.bragasaude.data.local.VitalSignEntity
 import br.com.bragasaude.data.remote.model.RemoteProfile
 import java.util.Locale
 import java.util.UUID
@@ -97,7 +95,6 @@ object WeeklyGroceryEngine {
         val weekStartDate = java.time.LocalDate.now().toString()
         val planningDays = effectivePrefs.planningDays
 
-
         val limitations = mutableListOf<String>()
         val structuredLimitations = mutableListOf<GroceryLimitation>()
 
@@ -138,7 +135,6 @@ object WeeklyGroceryEngine {
                 targetWeeklyCalories = targetWeeklyCalories,
                 planningDays = planningDays,
                 periodStartDate = weekStartDate,
-
                 plannedWeeklyCalories = 0.0,
                 coveragePercent = 0.0,
                 plannedProteinGrams = 0.0,
@@ -159,7 +155,6 @@ object WeeklyGroceryEngine {
         // 2. Análise de marcadores clínicos laboratoriais e vitais
         val glucose = vitals.firstOrNull { it.glucoseLevel != null }?.glucoseLevel?.toDouble()
         val hasHighGlucose = (glucose != null && glucose > 100.0) || profile?.hasDiabetes == true
-
 
         val sys = vitals.firstOrNull { it.systolicPressure != null }?.systolicPressure ?: 0
         val hasHighBp = sys > 130 || profile?.hasHypertension == true
@@ -363,7 +358,6 @@ object WeeklyGroceryEngine {
         // Garantia de respeito estrito ao maxBasketSize
         while (plannedConsumptions.size > effectiveBasketLimit && plannedConsumptions.size > 1) {
             val nonStapleMinKcal = plannedConsumptions.filterNot { it.food.remoteId in selectedRequiredFoodIds }
-
                 .minByOrNull { it.plannedCalories }
             if (nonStapleMinKcal != null) {
                 plannedConsumptions.remove(nonStapleMinKcal)
@@ -381,7 +375,7 @@ object WeeklyGroceryEngine {
                     .coerceAtMost(maxWeeklyGramsForFood(pc.food, planningDays = planningDays).toLong()).toInt()
                 plannedConsumptions[i] = pc.copy(weeklyGrams = grams)
             }
-            val durable = producePool.filter { it.semanticMetadata.shelfLife == ShelfLife.PERISHABLE_DURABLE }
+            val durable = available.filter { it.semanticMetadata.pillar == NutritionalPillar.PRODUCE && it.semanticMetadata.shelfLife == ShelfLife.PERISHABLE_DURABLE }
             val durableIds = durable.map { it.remoteId }.toSet()
             val replacement = plannedConsumptions.filter { it.food.remoteId in durableIds }.toMutableList()
             val fixedProduceKcal = plannedConsumptions.filter { it.corridor == CORRIDOR_HORTIFRUTI && it.food.remoteId !in durableIds }.sumOf { it.plannedCalories }
@@ -400,8 +394,7 @@ object WeeklyGroceryEngine {
                 limitations.add("Hortifruti durável insuficiente para cobrir a segunda semana dentro dos limites de porção.")
             }
         }
-        val periodTargetCalories = effectiveDailyCalories * effectivePrefs.planningDays
-
+        val periodTargetCalories = targetWeeklyCalories
 
         // 10. Conversão de consumo em demanda de ingredientes e consolidação canônica
         val demandsBySlug = mutableMapOf<String, MutableList<IngredientDemand>>()
