@@ -290,7 +290,7 @@ class WeeklyGroceryEnginePreferencesTest {
                 itemNames.any { it.contains("feijão") }
             )
             val hasCarnivorous = plan.items.any { item ->
-                val f = foods.firstOrNull { it.name == item.foodName }
+                val f = foods.firstOrNull { item.foodId in catalog.components[it.remoteId].orEmpty() }
                 f != null && WeeklyGroceryEngine.isCarnivorousProtein(f)
             }
             assertTrue(
@@ -301,7 +301,7 @@ class WeeklyGroceryEnginePreferencesTest {
     }
 
     @Test
-    fun planWeeklyGrocery_whenCatalogRequiredGroupsIsEmpty_stillGuaranteesRiceAndBeans() {
+    fun planWeeklyGrocery_whenPolicyIsEmpty_doesNotInventGroupsFromNames() {
         val (foods, originalCatalog) = createTestCatalog()
         val catalogWithEmptyRequired = originalCatalog.copy(requiredGroups = emptyList())
 
@@ -315,9 +315,15 @@ class WeeklyGroceryEnginePreferencesTest {
             preferences = WeeklyGroceryPreferences(budgetTier = GroceryBudgetTier.ECONOMIC)
         )
 
-        val itemNames = plan.items.map { it.foodName.lowercase() }
-        assertTrue("Deve conter arroz mesmo com requiredGroups vazio", itemNames.any { it.contains("arroz") })
-        assertTrue("Deve conter feijão mesmo com requiredGroups vazio", itemNames.any { it.contains("feijão") })
+        val renamed = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "test_user_empty_required", vitals = emptyList(), profile = null,
+            catalog = foods.mapIndexed { i, food -> food.copy(name = "alimento_xyz_$i", category = "abc") },
+            ingredientCatalog = catalogWithEmptyRequired, targetCalories = 2000.0,
+            preferences = WeeklyGroceryPreferences(budgetTier = GroceryBudgetTier.ECONOMIC)
+        )
+        assertTrue(plan.items.isNotEmpty())
+        assertEquals(plan.items.map { it.foodId to it.suggestedServingWeekGrams },
+            renamed.items.map { it.foodId to it.suggestedServingWeekGrams })
     }
 
     @Test
@@ -341,7 +347,7 @@ class WeeklyGroceryEnginePreferencesTest {
         val itemNames = plan.items.map { it.foodName.lowercase() }
         val hasEgg = itemNames.any { it.contains("ovo") }
         val hasCarnivorous = plan.items.any { item ->
-            val f = foods.firstOrNull { it.name == item.foodName }
+            val f = foods.firstOrNull { item.foodId in catalog.components[it.remoteId].orEmpty() }
             f != null && WeeklyGroceryEngine.isCarnivorousProtein(f)
         }
 
