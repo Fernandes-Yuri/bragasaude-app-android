@@ -108,9 +108,9 @@ fun SocialFeedScreen(
     var showCreateSheet by remember { mutableStateOf(false) }
     var editingPost by remember { mutableStateOf<SocialPostEntity?>(null) }
     var deletingPost by remember { mutableStateOf<SocialPostEntity?>(null) }
-    var reportingPost by remember { mutableStateOf<SocialPostEntity?>(null) }
-    var blockingPost by remember { mutableStateOf<SocialPostEntity?>(null) }
-    var confirmUnblock by remember { mutableStateOf(false) }
+    var reportingPost by remember(viewModel.currentUserId) { mutableStateOf<SocialPostEntity?>(null) }
+    var blockingPost by remember(viewModel.currentUserId) { mutableStateOf<SocialPostEntity?>(null) }
+    var confirmUnblock by remember(viewModel.currentUserId) { mutableStateOf(false) }
     var reportReason by remember { mutableStateOf("") }
     val moderating by viewModel.moderating.collectAsState()
     val moderationNotice by viewModel.moderationNotice.collectAsState()

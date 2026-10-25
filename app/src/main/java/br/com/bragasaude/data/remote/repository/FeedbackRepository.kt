@@ -94,8 +94,10 @@ class FeedbackRepository @Inject constructor(
     }
 
     /** Denúncia segue a fila autenticada do suporte, sem coletar diagnóstico do aparelho. */
-    suspend fun reportSocialPost(post: br.com.bragasaude.data.local.SocialPostEntity, reason: String): String = withContext(Dispatchers.IO) {
+    suspend fun reportSocialPost(expectedUserId: String, post: br.com.bragasaude.data.local.SocialPostEntity, reason: String): String = withContext(Dispatchers.IO) {
         val user = auth.currentUser ?: error("Entre na sua conta para denunciar.")
+        check(user.uid == expectedUserId) { "Sua conta mudou. Abra o mural novamente." }
+        require(post.userId != user.uid)
         require(reason.isNotBlank() && reason.length <= 500)
         val entity = FeedbackEntity(
             id = UUID.randomUUID().toString(), userId = user.uid,

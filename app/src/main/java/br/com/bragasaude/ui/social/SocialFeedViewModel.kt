@@ -298,24 +298,25 @@ class SocialFeedViewModel @Inject constructor(
         }
     }
 
-    fun reportPost(post: SocialPostEntity, reason: String) = moderate {
-        feedbackRepository.reportSocialPost(post, reason)
+    fun reportPost(post: SocialPostEntity, reason: String) = moderate { uid ->
+        feedbackRepository.reportSocialPost(uid, post, reason)
     }
-    fun blockAuthor(post: SocialPostEntity) = moderate {
-        blockStore.block(currentUserId, post.userId)
+    fun blockAuthor(post: SocialPostEntity) = moderate { uid ->
+        blockStore.block(uid, post.userId)
         "Autor bloqueado no mural desta conta neste aparelho."
     }
-    fun clearBlocks() = moderate {
-        blockStore.clear(currentUserId)
+    fun clearBlocks() = moderate { uid ->
+        blockStore.clear(uid)
         "Autores desbloqueados neste aparelho."
     }
-    private fun moderate(action: suspend () -> String) {
+    private fun moderate(action: suspend (String) -> String) {
         if (_moderating.value || currentUserId == guestId) return
         val uid = currentUserId
         _moderating.value = true
         viewModelScope.launch {
             try {
-                val message = action()
+                if (uid != currentUserId) return@launch
+                val message = action(uid)
                 if (uid == currentUserId) _moderationNotice.value = message
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: Exception) {
