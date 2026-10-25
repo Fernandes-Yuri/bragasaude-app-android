@@ -71,7 +71,7 @@ class MetadataGroceryEngineTest {
         }
     }
 
-    @Test fun clinicalAndAllergyTagsOverrideRequiredGroups() {
+    @Test fun yellowZoneFoodsAreIncludedWithModeratedPortionsWhileAllergensAreStrictlyExcluded() {
         val values = foods.take(3).mapIndexed { i, food -> when (i) {
             0 -> food.copy(isDiabetesSafe = false)
             1 -> food.copy(functionalTags = listOf("allergen:teste"))
@@ -80,6 +80,17 @@ class MetadataGroceryEngineTest {
         val result = WeeklyGroceryEngine.planWeeklyGrocery("u", emptyList(),
             RemoteProfile("u", hasDiabetes = true, hasHypertension = true, foodAllergies = listOf("teste")),
             values, ingredientCatalog = ingredients(values, true))
+        // Alergênico declarado ("teste") é estritamente excluído (Zona Vermelha)
+        assertFalse(result.items.any { it.foodId == "ingrediente_abc_1" })
+        // Itens da Zona Amarela são incluídos para diabéticos/hipertensos com moderação de porção e cota segura
+        assertTrue(result.items.any { it.foodId == "ingrediente_abc_0" || it.foodId == "ingrediente_abc_2" })
+    }
+
+    @Test fun strictAllergyExcludesAllMatchingFoods() {
+        val allergenFood = foods.first().copy(functionalTags = listOf("allergen:amendoim"))
+        val result = WeeklyGroceryEngine.planWeeklyGrocery("u", emptyList(),
+            RemoteProfile("u", foodAllergies = listOf("amendoim")),
+            listOf(allergenFood), ingredientCatalog = ingredients(listOf(allergenFood), true))
         assertTrue(result.items.isEmpty())
     }
 
