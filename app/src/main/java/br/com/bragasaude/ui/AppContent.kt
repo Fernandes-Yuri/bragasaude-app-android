@@ -138,13 +138,20 @@ fun AppContent(activity: MainActivity) {
                 }
 
                 val prefs = context.getSharedPreferences("braga_prefs", android.content.Context.MODE_PRIVATE)
-                var hasSeenTutorial by remember(userRole) {
+                val isFirebaseTestLab = remember {
+                    try {
+                        android.provider.Settings.System.getString(context.contentResolver, "firebase.test.lab") == "true"
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
+                var hasSeenTutorial by remember(userRole, isFirebaseTestLab) {
                     val seen = prefs.getBoolean("tutorial_seen", false)
                     val seenFor = prefs.getString("tutorial_seen_for_role", null)
-                    mutableStateOf(seen && (seenFor == null || seenFor == userRole))
+                    mutableStateOf(isFirebaseTestLab || (seen && (seenFor == null || seenFor == userRole)))
                 }
-                var hasAcceptedTermsBeforeAuth by remember {
-                    mutableStateOf(prefs.getBoolean("terms_accepted_before_auth", false))
+                var hasAcceptedTermsBeforeAuth by remember(isFirebaseTestLab) {
+                    mutableStateOf(isFirebaseTestLab || prefs.getBoolean("terms_accepted_before_auth", false))
                 }
 
                 when (val status = sessionStatus) {
