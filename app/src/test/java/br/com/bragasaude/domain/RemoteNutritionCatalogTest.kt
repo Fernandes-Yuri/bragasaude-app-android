@@ -55,7 +55,8 @@ class RemoteNutritionCatalogTest {
         assertEquals(listOf("ingredient_b"), list.map { it.foodId })
         val diabetes = WeeklyGroceryEngine.generateWeeklyList("u", emptyList(),
             RemoteProfile("u", hasDiabetes = true), listOf(food("base_a").copy(isDiabetesSafe = false), food("base_b")), ingredientCatalog = parsed)
-        assertEquals(listOf("ingredient_b"), diabetes.map { it.foodId })
+        assertTrue(diabetes.any { it.foodId == "ingredient_a" })
+        assertTrue(diabetes.any { it.foodId == "ingredient_b" })
         assertFalse(NutritionSuggestionEngine.isSafeFromAllergies(food("animal", emptyList()), emptyList(), "vegetariano"))
         assertFalse(NutritionSuggestionEngine.isSafeFromAllergies(food("ovo", listOf("diet:vegetarian")), emptyList(), "vegano"))
         assertTrue(NutritionSuggestionEngine.isSafeFromAllergies(food("planta"), emptyList(), "vegano"))

@@ -564,4 +564,92 @@ class WeeklyGroceryEngineTest {
             }
         }
     }
+
+    @Test
+    fun yellowZoneFoodsAreIncludedWithModerationForDiabeticAndHypertensiveProfiles() {
+        val (baseFoods, baseCatalog) = createTestCatalog()
+        val foodsWithYellow = baseFoods.map { food ->
+            when (food.remoteId) {
+                "food_cuscuz" -> food.copy(isDiabetesSafe = false)
+                "food_leite" -> food.copy(isHypertensionSafe = false)
+                else -> food
+            }
+        }
+
+        // Planejamento para diabético
+        val diabeticPlan = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "user_diabetic",
+            vitals = emptyList(),
+            profile = RemoteProfile("user_diabetic", hasDiabetes = true),
+            catalog = foodsWithYellow,
+            ingredientCatalog = baseCatalog,
+            targetCalories = 1800.0
+        )
+        // O cuscuz NÃO é excluído; entra como Zona Amarela em porção moderada
+        assertTrue(diabeticPlan.items.any { it.foodId == "farinha-milho" })
+        val cuscuzItem = diabeticPlan.items.first { it.foodId == "farinha-milho" }
+        // Cota de dias alternados (no máximo 4 dias de consumo)
+        assertTrue(cuscuzItem.suggestedServingWeekGrams <= 500 * 4)
+
+        // Planejamento para hipertenso
+        val hypertensiveCatalog = listOf(
+            foodsWithYellow.first { it.remoteId == "food_arroz" },
+            foodsWithYellow.first { it.remoteId == "food_feijao" },
+            foodsWithYellow.first { it.remoteId == "food_frango" },
+            foodsWithYellow.first { it.remoteId == "food_leite" },
+            foodsWithYellow.first { it.remoteId == "food_banana" },
+            foodsWithYellow.first { it.remoteId == "food_couve" }
+        )
+        val hypertensivePlan = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "user_hypertensive",
+            vitals = emptyList(),
+            profile = RemoteProfile("user_hypertensive", hasHypertension = true),
+            catalog = hypertensiveCatalog,
+            ingredientCatalog = baseCatalog,
+            targetCalories = 1800.0
+        )
+        // O leite com sódio moderado NÃO é excluído; entra na Zona Amarela
+        assertTrue(hypertensivePlan.items.any { it.foodId == "leite-desnatado" })
+        val leiteItem = hypertensivePlan.items.first { it.foodId == "leite-desnatado" }
+        assertTrue(leiteItem.suggestedServingWeekGrams <= 300 * 4)
+    }
+
+    @Test
+    fun vitalSignOscillationsDoNotDistortWeeklyBasket() {
+        val (foods, catalog) = createTestCatalog()
+        val profile = RemoteProfile("stable_user", hasDiabetes = false, hasHypertension = false)
+
+        val planWithoutVitals = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "stable_user",
+            vitals = emptyList(),
+            profile = profile,
+            catalog = foods,
+            ingredientCatalog = catalog,
+            targetCalories = 1800.0
+        )
+
+        val highVitals = listOf(
+            VitalSignEntity(
+                localId = 1,
+                userId = "stable_user",
+                glucoseLevel = 195,
+                systolicPressure = 160,
+                diastolicPressure = 100,
+                measuredAt = java.util.Date()
+            )
+        )
+
+        val planWithHighVitals = WeeklyGroceryEngine.planWeeklyGrocery(
+            userId = "stable_user",
+            vitals = highVitals,
+            profile = profile,
+            catalog = foods,
+            ingredientCatalog = catalog,
+            targetCalories = 1800.0
+        )
+
+        // O carrinho de compras semanal é consistente e não oscila por causa de um dextro isolado
+        assertEquals(planWithoutVitals.items.map { it.foodId }, planWithHighVitals.items.map { it.foodId })
+        assertEquals(planWithoutVitals.plannedWeeklyCalories, planWithHighVitals.plannedWeeklyCalories, 0.001)
+    }
 }
