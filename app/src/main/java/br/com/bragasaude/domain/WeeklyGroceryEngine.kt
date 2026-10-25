@@ -1,11 +1,9 @@
 package br.com.bragasaude.domain
 
-import br.com.bragasaude.data.local.FoodEntity
+import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.local.GroceryListItemEntity
 import br.com.bragasaude.data.local.VitalSignEntity
 import br.com.bragasaude.data.remote.model.RemoteProfile
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import java.util.UUID
 import kotlin.math.ceil
@@ -60,7 +58,8 @@ object WeeklyGroceryEngine {
         dislikedFoodNames: Set<String> = emptySet(),
         ingredientCatalog: GroceryIngredientCatalog,
         targetCalories: Double = 1800.0,
-        preferences: WeeklyGroceryPreferences = WeeklyGroceryPreferences()
+        preferences: WeeklyGroceryPreferences = WeeklyGroceryPreferences(),
+        dislikedFoodIds: Set<String> = emptySet()
     ): List<GroceryListItemEntity> {
         return planWeeklyGrocery(
             userId = userId,
@@ -70,7 +69,8 @@ object WeeklyGroceryEngine {
             dislikedFoodNames = dislikedFoodNames,
             ingredientCatalog = ingredientCatalog,
             targetCalories = targetCalories,
-            preferences = preferences
+            preferences = preferences,
+            dislikedFoodIds = dislikedFoodIds
         ).items
     }
 
@@ -88,10 +88,10 @@ object WeeklyGroceryEngine {
         targetCalories: Double = 1800.0,
         shuffleSeed: Long? = null,
         previousFoodIds: Set<String> = emptySet(),
-        preferences: WeeklyGroceryPreferences = WeeklyGroceryPreferences()
+        preferences: WeeklyGroceryPreferences = WeeklyGroceryPreferences(),
+        dislikedFoodIds: Set<String> = emptySet()
     ): WeeklyGroceryPlanResult {
         val effectivePrefs = preferences.normalized()
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val weekStartDate = GroceryWeek.start()
 
         val limitations = mutableListOf<String>()
@@ -102,11 +102,12 @@ object WeeklyGroceryEngine {
 
         // 1. Filtragem rigorosa por segurança clínica, alergias e preferências
         val safeCatalog = catalog.filter { food ->
-            if (ingredientCatalog.forFood(food.remoteId, food.name).isEmpty()) return@filter false
+            if (ingredientCatalog.forFood(food.remoteId, "").isEmpty()) return@filter false
             val allergySafe = NutritionSuggestionEngine.isSafeFromAllergies(
                 food,
                 profile?.foodAllergies ?: emptyList(),
-                profile?.customFoodRestrictions
+                profile?.customFoodRestrictions,
+                semanticOnly = true
             )
             allergySafe &&
                 (profile?.hasDiabetes != true || food.isDiabetesSafe) &&
@@ -115,10 +116,12 @@ object WeeklyGroceryEngine {
         }
 
         val available = safeCatalog.filter { food ->
-            dislikedFoodNames.none { groceryNameKey(it) == groceryNameKey(food.name) }
+            food.remoteId !in dislikedFoodIds && dislikedFoodNames.none { it == food.remoteId || it == food.name } &&
+                (!effectivePrefs.isEconomic || !isHighCostFood(food, effectivePrefs.isUltraEconomic)) &&
+                (!effectivePrefs.hasPantryStaples || !isPantryStaple(food))
         }
 
-        if (available.isEmpty() && safeCatalog.isEmpty()) {
+        if (available.isEmpty()) {
             val emptyLimitation = GroceryLimitation(
                 type = GroceryLimitationType.NO_ELIGIBLE_FOODS,
                 affectedItems = emptyList(),
@@ -127,7 +130,7 @@ object WeeklyGroceryEngine {
             )
             return WeeklyGroceryPlanResult(
                 items = emptyList(),
-                targetWeeklyCalories = targetWeeklyCalories,
+                targetWeeklyCalories = effectiveDailyCalories * effectivePrefs.planningDays,
                 plannedWeeklyCalories = 0.0,
                 coveragePercent = 0.0,
                 plannedProteinGrams = 0.0,
@@ -139,6 +142,10 @@ object WeeklyGroceryEngine {
                 purchaseStatus = PurchaseCalculationStatus.INCOMPLETE,
                 statusMessage = "Não foi possível gerar uma lista para o seu perfil. Você pode montar sua lista manualmente."
             )
+        }
+
+        if (available.any { it.semanticMetadata.pillar == NutritionalPillar.UNKNOWN }) {
+            limitations.add("Catálogo legado sem metadados semânticos completos; quantidades usam limites conservadores. Atualize o catálogo.")
         }
 
         // 2. Análise de marcadores clínicos laboratoriais e vitais
@@ -158,59 +165,35 @@ object WeeklyGroceryEngine {
         val plannedConsumptions = mutableListOf<PlannedConsumption>()
         val selectedCanonicalGroups = mutableSetOf<String>()
 
-        // 4. Preservação de grupos básicos obrigatórios da política do gateway (arroz e feijão sempre garantidos)
         val selectedRequiredFoodIds = mutableSetOf<String>()
         val requiredGroupsList = ingredientCatalog.requiredGroups.toMutableList()
 
-        val hasRiceGroup = requiredGroupsList.any { group ->
-            group.any { id -> (available + safeCatalog).any { it.remoteId == id && groceryNameKey(it.name).contains("arroz") } }
-        }
-        if (!hasRiceGroup) {
-            val eligibleRice = (available + safeCatalog).filter { groceryNameKey(it.name).contains("arroz") }.map { it.remoteId }
-            if (eligibleRice.isNotEmpty()) {
-                requiredGroupsList.add(eligibleRice)
-            }
-        }
-
-        val hasBeanGroup = requiredGroupsList.any { group ->
-            group.any { id -> (available + safeCatalog).any { it.remoteId == id && (groceryNameKey(it.name).contains("feijao") || groceryNameKey(it.name).contains("lentilha") || groceryNameKey(it.name).contains("grao-de-bico")) } }
-        }
-        if (!hasBeanGroup) {
-            val eligibleBeans = (available + safeCatalog).filter {
-                val key = groceryNameKey(it.name)
-                key.contains("feijao") || key.contains("lentilha") || key.contains("grao-de-bico")
-            }.map { it.remoteId }
-            if (eligibleBeans.isNotEmpty()) {
-                requiredGroupsList.add(eligibleBeans)
-            }
-        }
-
         requiredGroupsList.forEach { group ->
             val selected = group.firstNotNullOfOrNull { id -> available.firstOrNull { it.remoteId == id } }
-                ?: group.firstNotNullOfOrNull { id -> safeCatalog.firstOrNull { it.remoteId == id } }
-            if (selected != null) {
+
+            if (selected != null && selected.remoteId !in selectedRequiredFoodIds) {
                 selectedRequiredFoodIds.add(selected.remoteId)
                 val corridor = classifyPillar(selected)
-                val days = if (catalog.size <= 5) 5 else 7
+                val days = 7
                 val basePortion = selected.servingSizeGrams.takeIf { it > 0 } ?: 80
                 val scale = (effectiveDailyCalories / 1800.0).coerceIn(0.7, 2.5)
                 val portion = (basePortion * scale).toInt().coerceIn(
                     selected.minServingGrams.takeIf { it > 0 } ?: (basePortion / 2).coerceAtLeast(20),
                     selected.maxServingGrams.takeIf { it > 0 } ?: (basePortion * 3)
                 )
-                val weeklyGrams = portion * days
+                val weeklyGrams = (portion * days).coerceAtMost(maxWeeklyGramsForFood(selected))
                 plannedConsumptions.add(PlannedConsumption(selected, weeklyGrams, corridor))
                 canonicalGroupFor(selected, ingredientCatalog)?.let { selectedCanonicalGroups.add(it) }
             }
         }
 
-        // Separação em pools taxonômicos normalizados (sem fragilidade de acentos)
+        // Pools semânticos e rotação por identificadores estáveis.
         val random = shuffleSeed?.let { java.util.Random(it) }
 
         fun isPreviousFood(food: FoodEntity): Boolean {
             if (previousFoodIds.isEmpty()) return false
             if (food.remoteId in previousFoodIds) return true
-            val slugs = ingredientCatalog.forFood(food.remoteId, food.name).map { it.slug }
+            val slugs = ingredientCatalog.forFood(food.remoteId, "").map { it.slug }
             return slugs.any { it in previousFoodIds }
         }
 
@@ -227,31 +210,17 @@ object WeeklyGroceryEngine {
         }
 
         fun poolFor(corridor: String): List<FoodEntity> {
-            val list = available.filter { classifyPillar(it) == corridor && it.remoteId !in selectedRequiredFoodIds }
-            if (list.isNotEmpty()) return list
-
-            val fallback = safeCatalog.filter { classifyPillar(it) == corridor && it.remoteId !in selectedRequiredFoodIds }
-            if (fallback.isNotEmpty()) {
-                val dislikedUsed = fallback.filter { food ->
-                    dislikedFoodNames.any { groceryNameKey(it) == groceryNameKey(food.name) }
-                }
-                if (dislikedUsed.isNotEmpty()) {
-                    val names = dislikedUsed.joinToString(", ") { it.name }
-                    val msg = "Alimento(s) previamente desmarcado(s) ($names) incluído(s) como alternativa para o corredor $corridor por falta de outras opções no catálogo."
-                    limitations.add(msg)
-                }
-            }
-            return fallback
+            return available.filter { classifyPillar(it) == corridor && it.remoteId !in selectedRequiredFoodIds }
         }
 
         fun filterCost(list: List<FoodEntity>): List<FoodEntity> {
             val shouldFilterCost = effectivePrefs.isEconomic || (effectivePrefs.maxWeeklyBudgetReais != null && effectivePrefs.maxWeeklyBudgetReais > 0)
             if (!shouldFilterCost) return list
             val filtered = list.filterNot { isHighCostFood(it, effectivePrefs.isUltraEconomic) }
-            val baseList = if (filtered.isNotEmpty()) filtered else list
+            val baseList = filtered
 
             return baseList.sortedBy { food ->
-                val ing = ingredientCatalog.forFood(food.remoteId, food.name).firstOrNull()
+                val ing = ingredientCatalog.forFood(food.remoteId, "").firstOrNull()
                 val price = ing?.price ?: 0.0
                 if (price > 0.0 && (food.kcal ?: 0.0) > 0.0) {
                     (100.0 / (food.kcal ?: 100.0)) * price
@@ -383,7 +352,7 @@ object WeeklyGroceryEngine {
 
         // Garantia de respeito estrito ao maxBasketSize
         while (plannedConsumptions.size > effectivePrefs.budgetTier.maxBasketSize && plannedConsumptions.size > 1) {
-            val nonStapleMinKcal = plannedConsumptions.filterNot { isStapleEnergyFood(it.food) || isCarnivorousProtein(it.food) }
+            val nonStapleMinKcal = plannedConsumptions.filterNot { it.food.remoteId in selectedRequiredFoodIds }
                 .minByOrNull { it.plannedCalories }
             if (nonStapleMinKcal != null) {
                 plannedConsumptions.remove(nonStapleMinKcal)
@@ -392,13 +361,43 @@ object WeeklyGroceryEngine {
             }
         }
 
+        // Scale consumption before packaging. Fast produce remains a single fresh week.
+        if (effectivePrefs.planningDays == 14) {
+            val weeklyProduceKcal = plannedConsumptions.filter { it.corridor == CORRIDOR_HORTIFRUTI }.sumOf { it.plannedCalories }
+            for (i in plannedConsumptions.indices) {
+                val pc = plannedConsumptions[i]
+                val grams = (pc.weeklyGrams.toLong() * effectiveDays(pc.food, 14) / 7)
+                    .coerceAtMost(maxWeeklyGramsForFood(pc.food, planningDays = 14).toLong()).toInt()
+                plannedConsumptions[i] = pc.copy(weeklyGrams = grams)
+            }
+            val durable = producePool.filter { it.semanticMetadata.shelfLife == ShelfLife.PERISHABLE_DURABLE }
+            val durableIds = durable.map { it.remoteId }.toSet()
+            val replacement = plannedConsumptions.filter { it.food.remoteId in durableIds }.toMutableList()
+            val fixedProduceKcal = plannedConsumptions.filter { it.corridor == CORRIDOR_HORTIFRUTI && it.food.remoteId !in durableIds }.sumOf { it.plannedCalories }
+            calibrateTotalEnergy(
+                targetWeeklyKcal = (weeklyProduceKcal * 2 - fixedProduceKcal).coerceAtLeast(0.0),
+                plannedConsumptions = replacement, candidatesPool = durable,
+                maxBasketSize = (effectivePrefs.budgetTier.maxBasketSize - plannedConsumptions.size + replacement.size).coerceAtLeast(0),
+                planningDays = 14
+            )
+            plannedConsumptions.removeAll { it.food.remoteId in durableIds }
+            plannedConsumptions.addAll(replacement)
+            if (plannedConsumptions.any { it.food.semanticMetadata.pillar == NutritionalPillar.PROTEIN && it.food.semanticMetadata.shelfLife == ShelfLife.PERISHABLE_FAST }) {
+                limitations.add("Congele preventivamente as porções de proteínas frescas destinadas à segunda semana.")
+            }
+            if (plannedConsumptions.filter { it.corridor == CORRIDOR_HORTIFRUTI }.sumOf { it.plannedCalories } < weeklyProduceKcal * 2 - 200) {
+                limitations.add("Hortifruti durável insuficiente para cobrir a segunda semana dentro dos limites de porção.")
+            }
+        }
+        val periodTargetCalories = effectiveDailyCalories * effectivePrefs.planningDays
+
         // 10. Conversão de consumo em demanda de ingredientes e consolidação canônica
         val demandsBySlug = mutableMapOf<String, MutableList<IngredientDemand>>()
 
         plannedConsumptions.forEach { pc ->
             val food = pc.food
             val weeklyGrams = pc.weeklyGrams
-            val ingredients = ingredientCatalog.forFood(food.remoteId, food.name)
+            val ingredients = ingredientCatalog.forFood(food.remoteId, "")
             if (ingredients.isEmpty()) {
                 val msg = "Alimento '${food.name}' não possui ingrediente correspondente mapeado."
                 limitations.add(msg)
@@ -413,7 +412,7 @@ object WeeklyGroceryEngine {
                 return@forEach
             }
 
-            val conversion = GroceryConsumption.amounts(food.remoteId, food.name, weeklyGrams.toDouble(), ingredientCatalog)
+            val conversion = GroceryConsumption.amounts(food.remoteId, "", weeklyGrams.toDouble(), ingredientCatalog)
             limitations.addAll(conversion.limitations)
             structuredLimitations.addAll(conversion.structuredLimitations)
             conversion.amounts.forEach { (slug, amount) ->
@@ -481,7 +480,7 @@ object WeeklyGroceryEngine {
         val totalProteinG = plannedConsumptions.sumOf { it.plannedProtein }
         val totalCarbsG = plannedConsumptions.sumOf { it.plannedCarbs }
         val totalFatG = plannedConsumptions.sumOf { it.plannedFat }
-        val coveragePercent = if (targetWeeklyCalories > 0) (totalPlannedKcal / targetWeeklyCalories) * 100.0 else 100.0
+        val coveragePercent = totalPlannedKcal / periodTargetCalories * 100.0
 
         val distinctFoodsCount = plannedConsumptions.map { it.food.remoteId }.distinct().size
 
@@ -509,17 +508,18 @@ object WeeklyGroceryEngine {
         // 13. Mensagem informativa na interface
         val statusMessage = buildStatusMessage(
             targetDailyCalories = effectiveDailyCalories,
-            targetWeeklyCalories = targetWeeklyCalories,
+            targetWeeklyCalories = periodTargetCalories,
             plannedWeeklyCalories = totalPlannedKcal,
             coveragePercent = coveragePercent,
             itemCount = consolidatedItems.size,
             varietyCount = distinctFoodsCount,
-            limitations = limitations
+            limitations = limitations,
+            planningDays = effectivePrefs.planningDays
         )
 
         return WeeklyGroceryPlanResult(
             items = consolidatedItems,
-            targetWeeklyCalories = targetWeeklyCalories,
+            targetWeeklyCalories = periodTargetCalories,
             plannedWeeklyCalories = totalPlannedKcal,
             coveragePercent = coveragePercent,
             plannedProteinGrams = totalProteinG,
@@ -551,7 +551,7 @@ object WeeklyGroceryEngine {
         if (candidates.isEmpty() || targetKcal <= 0.0) return
 
         val sortedCandidates = if (preferFish) {
-            candidates.sortedByDescending { if (it.category?.contains("Peixes", ignoreCase = true) == true) 1 else 0 }
+            candidates.sortedByDescending { if (it.semanticMetadata.proteinSubtype == ProteinSubtype.FISH) 1 else 0 }
         } else {
             candidates
         }
@@ -620,7 +620,7 @@ object WeeklyGroceryEngine {
                 else -> 4
             }
 
-            val maxPantryCap = maxWeeklyGramsForFood(food, isUltraEconomic)
+            val maxPantryCap = maxWeeklyGramsForFood(food)
             val weeklyGrams = if (kcalPer100 > 0.0) {
                 val neededGrams = ((perFoodKcalTarget / kcalPer100) * 100.0).toInt()
                 val portion = (neededGrams / days).coerceIn(minPortion, maxPortion)
@@ -651,12 +651,9 @@ object WeeklyGroceryEngine {
     ) {
         if (candidates.isEmpty()) return
 
-        val frutasPool = orderFn(candidates.filter { groceryNameKey(it.category.orEmpty()).contains("fruta") })
-        val folhasPool = orderFn(candidates.filter {
-            val c = groceryNameKey(it.category.orEmpty())
-            c.contains("verdura") || c.contains("folhoso") || c.contains("hortalica") || c.contains("crucifera")
-        })
-        val legumesPool = orderFn(candidates.filter { groceryNameKey(it.category.orEmpty()).contains("legume") })
+        val frutasPool = orderFn(candidates.filter { it.semanticMetadata.mealRole in setOf(MealRole.FRUIT_DENSE, MealRole.FRUIT_HYDRATING) })
+        val folhasPool = orderFn(candidates.filter { it.semanticMetadata.mealRole == MealRole.VEGETABLE_LEAFY })
+        val legumesPool = orderFn(candidates.filter { it.semanticMetadata.mealRole == MealRole.VEGETABLE_SOLID })
 
         val remainingSlots = (maxBasketSize - destConsumptions.size).coerceAtLeast(0)
         val frutasCount = when {
@@ -714,7 +711,7 @@ object WeeklyGroceryEngine {
             val maxPortion = food.maxServingGrams.takeIf { it > 0 } ?: (baseServing * 3)
             val days = 6
 
-            val maxPantryCap = maxWeeklyGramsForFood(food, isUltraEconomic)
+            val maxPantryCap = maxWeeklyGramsForFood(food)
             val weeklyGrams = if (kcalPer100 > 0.0 && perFoodKcal > 0.0) {
                 val neededGrams = ((perFoodKcal / kcalPer100) * 100.0).toInt()
                 val portion = (neededGrams / days).coerceIn(minPortion, maxPortion)
@@ -729,55 +726,21 @@ object WeeklyGroceryEngine {
         }
     }
 
-    private fun isStapleEnergyFood(food: FoodEntity): Boolean {
-        val name = groceryNameKey(food.name.orEmpty())
-        val cat = groceryNameKey(food.category.orEmpty())
-        return name.contains("arroz") || name.contains("feijao") || name.contains("aveia") ||
-               name.contains("ovo") || name.contains("pao") || name.contains("tapioca") ||
-               name.contains("banana") || name.contains("cuscuz") || name.contains("mandioca") ||
-               name.contains("batata") || name.contains("frango") || cat.contains("carne") ||
-               cat.contains("ave")
+    private fun isStapleEnergyFood(food: FoodEntity): Boolean =
+        food.semanticMetadata.mealRole in setOf(MealRole.STAPLE_BASE, MealRole.BREAKFAST_BASE, MealRole.PRIMARY_PROTEIN)
+
+    private fun maxWeeklyGramsForFood(food: FoodEntity, planningDays: Int = 7): Int {
+        val days = effectiveDays(food, planningDays)
+        val dailyCap = food.maxDailyGrams?.takeIf { it > 0 }?.toLong()
+            ?: (food.servingSizeGrams.coerceAtLeast(1).toLong() * 2)
+        return (dailyCap * days).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
 
-    private fun maxWeeklyGramsForFood(food: FoodEntity, isUltraEconomic: Boolean = false): Int {
-        val name = groceryNameKey(food.name.orEmpty())
-        val cat = groceryNameKey(food.category.orEmpty())
-        return when {
-            // Brotos e folhosos leves: nunca excedem 350g por semana (evita sacas de 3kg de broto de feijão)
-            name.contains("broto") || name.contains("alface") || name.contains("rucula") ||
-            name.contains("espinafre") || name.contains("agriao") || name.contains("couve") -> 350
-
-            // Frutas frescas: porção semanal equilibrada (máx 1.5kg)
-            cat.contains("fruta") -> 1500
-
-            // Tubérculos nobres: teto estrito para evitar compras caras desnecessárias (máx 1kg de mandioquinha)
-            name.contains("mandioquinha") || name.contains("batata-baroa") -> 1000
-
-            // Tubérculos comuns (mandioca, aipim, batata): até 2kg em modo ultraeconômico
-            name.contains("mandioca") || name.contains("batata") || name.contains("aipim") -> if (isUltraEconomic) 2000 else 1500
-
-            // Legumes e hortaliças gerais: máx 1.2kg de consumo semanal
-            cat.contains("legume") || cat.contains("hortalica") || name.contains("abobora") || name.contains("abobrinha") -> 1200
-
-            // Massas (macarrão / espaguete): máx 700g por semana (evita 5kg de massa cara a R$ 100)
-            name.contains("massa") || name.contains("macarrao") -> 700
-
-            // Grãos básicos: pilares energéticos essenciais brasileiros
-            name.contains("arroz") -> if (isUltraEconomic) 3500 else 2500
-            name.contains("feijao") || name.contains("lentilha") || name.contains("grao-de-bico") -> if (isUltraEconomic) 2000 else 1500
-            name.contains("aveia") -> if (isUltraEconomic) 1200 else 800
-            name.contains("cuscuz") || name.contains("milho") -> if (isUltraEconomic) 1200 else 800
-
-            // Proteínas e ovos
-            name.contains("ovo") -> if (isUltraEconomic) 2100 else 1400 // ~30 a 42 unidades
-            cat.contains("carne") || cat.contains("ave") || cat.contains("peixe") || name.contains("frango") -> if (isUltraEconomic) 2200 else 1600
-
-            // Panificados e cafés
-            name.contains("pao") || name.contains("torrada") || name.contains("tapioca") -> 800
-
-            // Padrão de segurança
-            else -> 1000
-        }
+    private fun effectiveDays(food: FoodEntity, planningDays: Int): Int {
+        val meta = food.semanticMetadata
+        return if (meta.isPantryStaple ||
+            (meta.shelfLife == ShelfLife.PERISHABLE_FAST && meta.pillar != NutritionalPillar.PROTEIN))
+            minOf(planningDays, 7) else planningDays
     }
 
     private fun calibrateTotalEnergy(
@@ -785,7 +748,8 @@ object WeeklyGroceryEngine {
         plannedConsumptions: MutableList<PlannedConsumption>,
         candidatesPool: List<FoodEntity>,
         isUltraEconomic: Boolean = false,
-        maxBasketSize: Int = Int.MAX_VALUE
+        maxBasketSize: Int = Int.MAX_VALUE,
+        planningDays: Int = 7
     ) {
         var currentKcal = plannedConsumptions.sumOf { it.plannedCalories }
         var deficit = targetWeeklyKcal - currentKcal
@@ -808,7 +772,7 @@ object WeeklyGroceryEngine {
                     val foodKcal = pc.food.kcal ?: 0.0
                     val isEligible = if (isUltraEconomic) isStapleEnergyFood(pc.food) else true
                     if (foodKcal > 0.0 && isEligible) {
-                        val maxAllowedGrams = maxWeeklyGramsForFood(pc.food, isUltraEconomic)
+                        val maxAllowedGrams = maxWeeklyGramsForFood(pc.food, planningDays)
                         val headroom = (maxAllowedGrams - pc.weeklyGrams).coerceAtLeast(0)
                         if (headroom > 0) {
                             val additionalGrams = ((boostShare / foodKcal) * 100.0).toInt().coerceAtMost(headroom)
@@ -842,7 +806,7 @@ object WeeklyGroceryEngine {
                 val maxServing = food.maxServingGrams.takeIf { it > 0 } ?: (baseServing * 3)
                 val portion = ((baseServing * 1.5).toInt()).coerceIn(baseServing, maxServing)
                 val days = 5
-                val weeklyGrams = portion * days
+                val weeklyGrams = (portion * days).coerceAtMost(maxWeeklyGramsForFood(food, planningDays))
                 val foodTotalKcal = (weeklyGrams * foodKcal) / 100.0
                 plannedConsumptions.add(PlannedConsumption(food, weeklyGrams, corridor))
                 deficit -= foodTotalKcal
@@ -884,72 +848,27 @@ object WeeklyGroceryEngine {
         coveragePercent: Double,
         itemCount: Int,
         varietyCount: Int,
-        limitations: List<String>
+        limitations: List<String>,
+        planningDays: Int = 7
     ): String {
         return if (coveragePercent < MIN_ENERGY_COVERAGE_PERCENT) {
             val deficit = (targetWeeklyCalories - plannedWeeklyCalories).toInt()
-            "Lista planejada para 7 dias com ${plannedWeeklyCalories.toInt()} kcal (${String.format(Locale.ROOT, "%.1f%%", coveragePercent)} da meta de ${targetWeeklyCalories.toInt()} kcal). Déficit de $deficit kcal devido a limites de porção e restrições do catálogo."
+            "Lista planejada para $planningDays dias com ${plannedWeeklyCalories.toInt()} kcal (${String.format(Locale.ROOT, "%.1f%%", coveragePercent)} da meta de ${targetWeeklyCalories.toInt()} kcal). Déficit de $deficit kcal devido a limites de porção e restrições do catálogo."
         } else if (coveragePercent > MAX_ENERGY_COVERAGE_PERCENT) {
-            "Lista planejada para 7 dias com ${plannedWeeklyCalories.toInt()} kcal (${String.format(Locale.ROOT, "%.1f%%", coveragePercent)} da meta de ${targetWeeklyCalories.toInt()} kcal) com $itemCount itens variados."
+            "Lista planejada para $planningDays dias com ${plannedWeeklyCalories.toInt()} kcal (${String.format(Locale.ROOT, "%.1f%%", coveragePercent)} da meta de ${targetWeeklyCalories.toInt()} kcal) com $itemCount itens variados."
         } else {
-            "Quantidades calculadas para a sua meta diária de ${targetDailyCalories.toInt()} kcal (7 dias: ${plannedWeeklyCalories.toInt()} kcal planejadas, $itemCount itens)."
+            "Quantidades calculadas para a sua meta diária de ${targetDailyCalories.toInt()} kcal ($planningDays dias: ${plannedWeeklyCalories.toInt()} kcal planejadas, $itemCount itens)."
         }
     }
 
     /**
-     * Classificação taxonômica robusta baseada em metadados estruturados e nomes normalizados,
-     * imune a diferenças de acentuação gráfica ("Grãos" vs "Graos", "Laticínios" vs "Laticinios").
+     * Classificação baseada exclusivamente no pilar declarado pelo servidor.
      */
-    fun classifyPillar(food: FoodEntity): String {
-        val cat = groceryNameKey(food.category.orEmpty())
-        val name = groceryNameKey(food.name)
-        val tags = food.functionalTags
-
-        // 1. Proteínas, Leguminosas, Laticínios e Ovos
-        if (cat.contains("carne") || cat.contains("ave") || cat.contains("peixe") ||
-            cat.contains("pescado") || cat.contains("frutos do mar") || cat.contains("proteina") ||
-            cat.contains("ovo") || cat.contains("laticinio") || cat.contains("queijo") ||
-            cat.contains("leite") || cat.contains("iogurte") || cat.contains("leguminosa") ||
-            tags.contains("proteina_vegetal") || tags.contains("proteina_magra") ||
-            name.contains("feijao") || name.contains("lentilha") || name.contains("grao-de-bico") ||
-            name.contains("pts") || name.contains("tofu") || name.contains("soja") ||
-            name.contains("frango") || name.contains("bovino") || name.contains("tilapia") ||
-            name.contains("sardinha") || name.contains("ovo") || name.contains("queijo")
-        ) {
-            return CORRIDOR_PROTEINAS
-        }
-
-        // 2. Mercearia: Oleaginosas e Sementes Ricas em Lipídios
-        if (name.contains("chia") || name.contains("linhaca") || name.contains("gergelim") ||
-            name.contains("girassol") || name.contains("castanha") || name.contains("noz") ||
-            name.contains("amendoa") || name.contains("amendoim") || cat.contains("oleaginosa")
-        ) {
-            return CORRIDOR_MERCEARIA
-        }
-
-        // 3. Grãos, Cereais, Raízes e Tubérculos (inclui Mandioca, Batata, Inhame, Cuscuz, Massas e Panificados)
-        if (name.contains("batata") || name.contains("mandioca") || name.contains("aipim") ||
-            name.contains("inhame") || name.contains("cara") || name.contains("mandioquinha") ||
-            name.contains("baroa") || cat.contains("tuberculo") || cat.contains("raiz") ||
-            cat.contains("arroz") || cat.contains("cereal") || cat.contains("grao") ||
-            cat.contains("massa") || name.contains("arroz") || name.contains("cuscuz") ||
-            name.contains("macarrao") || name.contains("aveia") || name.contains("quinoa") ||
-            name.contains("pao") || name.contains("torrada") || name.contains("tapioca") ||
-            name.contains("milho") || name.contains("trigo")
-        ) {
-            return CORRIDOR_GRAOS
-        }
-
-        // 4. Hortifruti (Frutas, verduras, folhas, legumes não amiláceos)
-        if (cat.contains("fruta") || cat.contains("verdura") || cat.contains("hortalica") ||
-            cat.contains("folhoso") || cat.contains("crucifera") ||
-            (cat.contains("legume") && !cat.contains("leguminosa"))
-        ) {
-            return CORRIDOR_HORTIFRUTI
-        }
-
-        // 5. Mercearia, Gorduras Boas, Temperos e Chás
-        return CORRIDOR_MERCEARIA
+    fun classifyPillar(food: FoodEntity): String = when (food.semanticMetadata.pillar) {
+        NutritionalPillar.GRAINS_TUBERS -> CORRIDOR_GRAOS
+        NutritionalPillar.PROTEIN -> CORRIDOR_PROTEINAS
+        NutritionalPillar.PRODUCE -> CORRIDOR_HORTIFRUTI
+        else -> CORRIDOR_MERCEARIA
     }
 
     private data class PlannedConsumption(
@@ -979,20 +898,17 @@ object WeeklyGroceryEngine {
 
     /**
      * Determina o agrupador canônico de um alimento a partir dos metadados remotos
-     * dos ingredientes associados ou, como fallback, da raiz do nome do alimento.
+     * dos ingredientes associados ou, como fallback, do identificador estável.
      */
     fun canonicalGroupFor(food: FoodEntity, catalog: GroceryIngredientCatalog): String? {
-        val ingredient = catalog.forFood(food.remoteId, food.name).firstOrNull()
+        val ingredient = catalog.forFood(food.remoteId, "").firstOrNull()
         val fromIngredient = ingredient?.canonicalGroupSlug
         if (!fromIngredient.isNullOrBlank()) return fromIngredient
-        val norm = groceryNameKey(food.name)
-        val firstToken = norm.substringBefore(' ').substringBefore('-')
-        return firstToken.takeIf { it.length >= 3 }
+        return ingredient?.slug ?: food.remoteId
     }
 
     /**
      * Seleciona candidatos priorizando diversidade de grupos canônicos para evitar
-     * concentração de múltiplas variantes do mesmo produto (ex.: múltiplas aveias ou linhaças)
      * na mesma semana.
      */
     fun selectDiverseFoods(
@@ -1027,72 +943,19 @@ object WeeklyGroceryEngine {
         return chosen
     }
 
-    private fun isHighCostFood(food: FoodEntity, isUltraEconomic: Boolean = false): Boolean {
-        val key = groceryNameKey(food.name)
-        val isLuxury = key.contains("salmao") || key.contains("camarao") || key.contains("mignon") ||
-               key.contains("cardamomo") || key.contains("pistache") || key.contains("noz") ||
-               key.contains("amendoa") || key.contains("macadamia") || key.contains("bacalhau")
-        if (isLuxury) return true
-        if (isUltraEconomic) {
-            return key.contains("parmesao") || key.contains("gorgonzola") || key.contains("brie") ||
-                   key.contains("alcatra") || key.contains("picanha") || key.contains("contrafile") ||
-                   key.contains("whey") || key.contains("iogurte grego") || key.contains("castanha")
-        }
-        return false
-    }
+    private fun isHighCostFood(food: FoodEntity, isUltraEconomic: Boolean = false): Boolean =
+        if (isUltraEconomic) food.semanticMetadata.costTier != CostTier.ESSENTIAL
+        else food.semanticMetadata.costTier == CostTier.PREMIUM
 
-    private fun isPantryStaple(food: FoodEntity): Boolean {
-        val key = groceryNameKey(food.name)
-        return key.contains("azeite") || key.contains("oleo") || key.contains("sal") ||
-               key.contains("canela") || key.contains("cardamomo") || key.contains("oregano") ||
-               key.contains("curcuma") || key.contains("pimenta")
-    }
+    private fun isPantryStaple(food: FoodEntity): Boolean =
+        food.semanticMetadata.mealRole == MealRole.PANTRY_SEASONING
 
-    private fun matchesProteinPreference(food: FoodEntity, preferences: Set<GroceryProteinPreference>): Boolean {
-        if (preferences.isEmpty()) return true
-        val key = groceryNameKey(food.name)
-        val cat = groceryNameKey(food.category.orEmpty())
+    private fun matchesProteinPreference(food: FoodEntity, preferences: Set<GroceryProteinPreference>): Boolean =
+        preferences.isEmpty() || food.semanticMetadata.proteinSubtype == ProteinSubtype.DAIRY ||
+            preferences.any { it.name == food.semanticMetadata.proteinSubtype.name }
 
-        for (pref in preferences) {
-            when (pref) {
-                GroceryProteinPreference.EGGS -> {
-                    if (key.contains("ovo") || key.contains("ovos")) return true
-                }
-                GroceryProteinPreference.POULTRY -> {
-                    if (key.contains("frango") || key.contains("ave") || key.contains("peru") || key.contains("sobrecoxa")) return true
-                }
-                GroceryProteinPreference.BEEF -> {
-                    if (key.contains("carne") || key.contains("patinho") || key.contains("alcatra") ||
-                        key.contains("bovino") || key.contains("moida") || key.contains("acem") || key.contains("musculo")) return true
-                }
-                GroceryProteinPreference.FISH -> {
-                    if (cat.contains("peixe") || key.contains("peixe") || key.contains("tilapia") ||
-                        key.contains("sardinha") || key.contains("atum") || key.contains("pescada") || key.contains("salmao")) return true
-                }
-                GroceryProteinPreference.PLANT_BASED -> {
-                    if (key.contains("grao-de-bico") || key.contains("lentilha") || key.contains("soja") || key.contains("tofu")) return true
-                }
-            }
-        }
-        if (cat.contains("laticinio") && !cat.contains("queijo")) return true
-        return false
-    }
+    fun isCarnivorousProtein(food: FoodEntity): Boolean = food.semanticMetadata.proteinSubtype in
+        setOf(ProteinSubtype.POULTRY, ProteinSubtype.BEEF, ProteinSubtype.PORK, ProteinSubtype.FISH)
 
-    fun isCarnivorousProtein(food: FoodEntity): Boolean {
-        val key = groceryNameKey(food.name.orEmpty())
-        val cat = groceryNameKey(food.category.orEmpty())
-        return key.contains("frango") || key.contains("ave") || key.contains("peru") || key.contains("sobrecoxa") ||
-               cat.contains("ave") ||
-               key.contains("carne") || key.contains("patinho") || key.contains("alcatra") ||
-               key.contains("bovino") || key.contains("moida") || key.contains("acem") ||
-               key.contains("musculo") || cat.contains("carne") ||
-               cat.contains("peixe") || key.contains("peixe") || key.contains("tilapia") ||
-               key.contains("sardinha") || key.contains("atum") || key.contains("pescada") ||
-               key.contains("salmao")
-    }
-
-    fun isEggProtein(food: FoodEntity): Boolean {
-        val key = groceryNameKey(food.name.orEmpty())
-        return key.contains("ovo") || key.contains("ovos")
-    }
+    fun isEggProtein(food: FoodEntity): Boolean = food.semanticMetadata.proteinSubtype == ProteinSubtype.EGGS
 }

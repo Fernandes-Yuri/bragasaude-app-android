@@ -39,7 +39,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 54, // Apelido local e alterações pendentes do mural
+    version = 55, // Apelido local e alterações pendentes do mural
     exportSchema = true
 )
 @TypeConverters(Converters::class)

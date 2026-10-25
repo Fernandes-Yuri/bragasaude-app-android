@@ -497,6 +497,13 @@ object Migrations {
         }
     }
 
+    val MIGRATION_54_55 = object : Migration(54, 55) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE food_catalog_local ADD COLUMN semanticMetadata TEXT NOT NULL DEFAULT '{}'")
+            db.execSQL("ALTER TABLE food_catalog_local ADD COLUMN maxDailyGrams INTEGER")
+        }
+    }
+
     val MIGRATION_53_54 = object : Migration(53,54) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("CREATE TABLE IF NOT EXISTS dose_groups (actorId TEXT NOT NULL,groupId TEXT NOT NULL,patientId TEXT NOT NULL,localDate TEXT NOT NULL,scheduledAt INTEGER NOT NULL,payload TEXT NOT NULL,fetchedAt INTEGER NOT NULL,PRIMARY KEY(actorId,groupId))")
@@ -536,6 +543,7 @@ object Migrations {
         MIGRATION_50_51,
         MIGRATION_51_52,
         MIGRATION_52_53,
-        MIGRATION_53_54
+        MIGRATION_53_54,
+        MIGRATION_54_55
     )
 }

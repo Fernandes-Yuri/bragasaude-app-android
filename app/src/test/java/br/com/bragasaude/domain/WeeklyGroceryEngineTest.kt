@@ -1,6 +1,6 @@
 package br.com.bragasaude.domain
 
-import br.com.bragasaude.data.local.FoodEntity
+import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.local.GroceryListItemEntity
 import br.com.bragasaude.data.remote.model.RemoteProfile
 import org.junit.Assert.*
@@ -36,26 +36,26 @@ class WeeklyGroceryEngineTest {
         val lactoOvoTags = listOf("diet:vegetarian")
 
         val foods = listOf(
-            FoodEntity("food_arroz", "Arroz Branco Cozido", "Grãos & Cereais", kcal = 130.0, carbsG = 28.0, proteinG = 2.5, fatG = 0.3, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 300, functionalTags = vegTags),
-            FoodEntity("food_feijao", "Feijão Preto Cozido", "Leguminosas & Grãos", kcal = 76.0, carbsG = 14.0, proteinG = 4.5, fatG = 0.5, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = vegTags),
-            FoodEntity("food_frango", "Peito de Frango Grelhado", "Carnes & Aves", kcal = 165.0, carbsG = 0.0, proteinG = 31.0, fatG = 3.6, servingSizeGrams = 120, minServingGrams = 60, maxServingGrams = 300),
-            FoodEntity("food_peixe", "Filé de Tilápia Grelhado", "Peixes & Frutos do Mar", kcal = 128.0, carbsG = 0.0, proteinG = 26.0, fatG = 2.6, servingSizeGrams = 130, minServingGrams = 60, maxServingGrams = 300),
-            FoodEntity("food_ovo", "Ovo Cozido", "Proteínas & Ovos", kcal = 145.0, carbsG = 0.8, proteinG = 13.0, fatG = 9.5, servingSizeGrams = 50, minServingGrams = 50, maxServingGrams = 200, servingUnit = "1 unidade (50g)", functionalTags = lactoOvoTags),
-            FoodEntity("food_leite", "Leite Desnatado", "Laticínios", kcal = 35.0, carbsG = 5.0, proteinG = 3.4, fatG = 0.2, servingSizeGrams = 200, minServingGrams = 100, maxServingGrams = 400, servingUnit = "1 copo (200ml)", functionalTags = lactoOvoTags),
-            FoodEntity("food_iogurte", "Iogurte Natural Desnatado", "Laticínios Fermentados", kcal = 45.0, carbsG = 6.0, proteinG = 4.0, fatG = 0.5, servingSizeGrams = 170, minServingGrams = 100, maxServingGrams = 340, functionalTags = lactoOvoTags),
-            FoodEntity("food_aveia", "Aveia em Flocos", "Cereais & Fibras", kcal = 394.0, carbsG = 66.0, proteinG = 14.0, fatG = 8.5, servingSizeGrams = 40, minServingGrams = 20, maxServingGrams = 100, functionalTags = vegTags),
-            FoodEntity("food_cuscuz", "Cuscuz de Milho Cozido", "Cereais Tradicionais", kcal = 112.0, carbsG = 25.0, proteinG = 2.2, fatG = 0.7, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = vegTags),
-            FoodEntity("food_mandioca", "Mandioca Cozida", "Raízes & Tubérculos", kcal = 125.0, carbsG = 30.0, proteinG = 0.6, fatG = 0.3, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 300, functionalTags = vegTags),
-            FoodEntity("food_banana", "Banana Prata", "Frutas Frescas", kcal = 98.0, carbsG = 26.0, proteinG = 1.3, fatG = 0.1, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 200, functionalTags = vegTags),
-            FoodEntity("food_maca", "Maçã Fuji com Casca", "Frutas Frescas", kcal = 56.0, carbsG = 14.8, proteinG = 0.3, fatG = 0.2, servingSizeGrams = 120, minServingGrams = 60, maxServingGrams = 240, functionalTags = vegTags),
-            FoodEntity("food_couve", "Couve Manteiga Refogada", "Verduras", kcal = 27.0, carbsG = 4.4, proteinG = 2.9, fatG = 0.5, servingSizeGrams = 50, minServingGrams = 20, maxServingGrams = 150, functionalTags = vegTags),
-            FoodEntity("food_abobrinha", "Abobrinha Verde Refogada", "Legumes", kcal = 19.0, carbsG = 3.0, proteinG = 1.1, fatG = 0.2, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = vegTags),
-            FoodEntity("food_azeite", "Azeite de Oliva Extravirgem", "Gorduras & Azeites", kcal = 884.0, carbsG = 0.0, proteinG = 0.0, fatG = 100.0, servingSizeGrams = 15, minServingGrams = 5, maxServingGrams = 40, servingUnit = "1 colher de sopa (15ml)", functionalTags = vegTags),
-            FoodEntity("food_amendoim", "Amendoim Torrado sem Sal", "Oleaginosas", kcal = 567.0, carbsG = 16.0, proteinG = 26.0, fatG = 49.0, servingSizeGrams = 20, minServingGrams = 10, maxServingGrams = 60, functionalTags = vegTags),
-            FoodEntity("food_pts", "PTS Refogada", "Proteínas Vegetais", kcal = 120.0, carbsG = 9.0, proteinG = 20.0, fatG = 1.2, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = listOf("diet:vegan", "diet:vegetarian", "proteina_vegetal")),
-            FoodEntity("food_tofu", "Tofu Firme Grelhado", "Proteínas Vegetais", kcal = 85.0, carbsG = 2.0, proteinG = 10.0, fatG = 4.8, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = listOf("diet:vegan", "diet:vegetarian", "proteina_vegetal")),
-            FoodEntity("food_lentilha", "Lentilha Cozida", "Leguminosas & Grãos", kcal = 116.0, carbsG = 20.0, proteinG = 9.0, fatG = 0.4, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = listOf("diet:vegan", "diet:vegetarian", "proteina_vegetal")),
-            FoodEntity("food_camarao", "Camarão Cozido", "Peixes & Frutos do Mar", kcal = 99.0, carbsG = 0.2, proteinG = 24.0, fatG = 0.3, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250)
+            FoodEntity("food_arroz", "Arroz Branco Cozido", "Grãos & Cereais", kcal = 130.0, carbsG = 28.0, proteinG = 2.5, fatG = 0.3, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 300, functionalTags = vegTags, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.GRAINS_TUBERS, MealRole.STAPLE_BASE, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 500),
+            FoodEntity("food_feijao", "Feijão Preto Cozido", "Leguminosas & Grãos", kcal = 76.0, carbsG = 14.0, proteinG = 4.5, fatG = 0.5, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = vegTags, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PROTEIN, MealRole.STAPLE_BASE, ProteinSubtype.PLANT_BASED, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 300),
+            FoodEntity("food_frango", "Peito de Frango Grelhado", "Carnes & Aves", kcal = 165.0, carbsG = 0.0, proteinG = 31.0, fatG = 3.6, servingSizeGrams = 120, minServingGrams = 60, maxServingGrams = 300, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PROTEIN, MealRole.PRIMARY_PROTEIN, ProteinSubtype.POULTRY, ShelfLife.PERISHABLE_FAST, CostTier.ESSENTIAL, false), maxDailyGrams = 300),
+            FoodEntity("food_peixe", "Filé de Tilápia Grelhado", "Peixes & Frutos do Mar", kcal = 128.0, carbsG = 0.0, proteinG = 26.0, fatG = 2.6, servingSizeGrams = 130, minServingGrams = 60, maxServingGrams = 300, functionalTags = listOf("allergen:peixe","allergen:frutos do mar"), semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PROTEIN, MealRole.PRIMARY_PROTEIN, ProteinSubtype.FISH, ShelfLife.PERISHABLE_FAST, CostTier.ESSENTIAL, false), maxDailyGrams = 300),
+            FoodEntity("food_ovo", "Ovo Cozido", "Proteínas & Ovos", kcal = 145.0, carbsG = 0.8, proteinG = 13.0, fatG = 9.5, servingSizeGrams = 50, minServingGrams = 50, maxServingGrams = 200, servingUnit = "1 unidade (50g)", functionalTags = lactoOvoTags + listOf("allergen:ovo"), semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PROTEIN, MealRole.COMPLEMENTARY_PROTEIN, ProteinSubtype.EGGS, ShelfLife.PERISHABLE_DURABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 300),
+            FoodEntity("food_leite", "Leite Desnatado", "Laticínios", kcal = 35.0, carbsG = 5.0, proteinG = 3.4, fatG = 0.2, servingSizeGrams = 200, minServingGrams = 100, maxServingGrams = 400, servingUnit = "1 copo (200ml)", functionalTags = lactoOvoTags + listOf("allergen:leite", "allergen:lactose"), semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PROTEIN, MealRole.COMPLEMENTARY_PROTEIN, ProteinSubtype.DAIRY, ShelfLife.PERISHABLE_FAST, CostTier.ESSENTIAL, false), maxDailyGrams = 300),
+            FoodEntity("food_iogurte", "Iogurte Natural Desnatado", "Laticínios Fermentados", kcal = 45.0, carbsG = 6.0, proteinG = 4.0, fatG = 0.5, servingSizeGrams = 170, minServingGrams = 100, maxServingGrams = 340, functionalTags = lactoOvoTags + listOf("allergen:leite", "allergen:lactose"), semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PROTEIN, MealRole.COMPLEMENTARY_PROTEIN, ProteinSubtype.DAIRY, ShelfLife.PERISHABLE_FAST, CostTier.ESSENTIAL, false), maxDailyGrams = 300),
+            FoodEntity("food_aveia", "Aveia em Flocos", "Cereais & Fibras", kcal = 394.0, carbsG = 66.0, proteinG = 14.0, fatG = 8.5, servingSizeGrams = 40, minServingGrams = 20, maxServingGrams = 100, functionalTags = vegTags, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.GRAINS_TUBERS, MealRole.BREAKFAST_BASE, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 150),
+            FoodEntity("food_cuscuz", "Cuscuz de Milho Cozido", "Cereais Tradicionais", kcal = 112.0, carbsG = 25.0, proteinG = 2.2, fatG = 0.7, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = vegTags, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.GRAINS_TUBERS, MealRole.STAPLE_BASE, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 500),
+            FoodEntity("food_mandioca", "Mandioca Cozida", "Raízes & Tubérculos", kcal = 125.0, carbsG = 30.0, proteinG = 0.6, fatG = 0.3, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 300, functionalTags = vegTags, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.GRAINS_TUBERS, MealRole.STAPLE_BASE, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 500),
+            FoodEntity("food_banana", "Banana Prata", "Frutas Frescas", kcal = 98.0, carbsG = 26.0, proteinG = 1.3, fatG = 0.1, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 200, functionalTags = vegTags, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PRODUCE, MealRole.FRUIT_DENSE, ProteinSubtype.NONE, ShelfLife.PERISHABLE_DURABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 214),
+            FoodEntity("food_maca", "Maçã Fuji com Casca", "Frutas Frescas", kcal = 56.0, carbsG = 14.8, proteinG = 0.3, fatG = 0.2, servingSizeGrams = 120, minServingGrams = 60, maxServingGrams = 240, functionalTags = vegTags, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PRODUCE, MealRole.FRUIT_DENSE, ProteinSubtype.NONE, ShelfLife.PERISHABLE_DURABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 214),
+            FoodEntity("food_couve", "Couve Manteiga Refogada", "Verduras", kcal = 27.0, carbsG = 4.4, proteinG = 2.9, fatG = 0.5, servingSizeGrams = 50, minServingGrams = 20, maxServingGrams = 150, functionalTags = vegTags, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PRODUCE, MealRole.VEGETABLE_LEAFY, ProteinSubtype.NONE, ShelfLife.PERISHABLE_FAST, CostTier.ESSENTIAL, false), maxDailyGrams = 50),
+            FoodEntity("food_abobrinha", "Abobrinha Verde Refogada", "Legumes", kcal = 19.0, carbsG = 3.0, proteinG = 1.1, fatG = 0.2, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = vegTags, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PRODUCE, MealRole.VEGETABLE_SOLID, ProteinSubtype.NONE, ShelfLife.PERISHABLE_DURABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 170),
+            FoodEntity("food_azeite", "Azeite de Oliva Extravirgem", "Gorduras & Azeites", kcal = 884.0, carbsG = 0.0, proteinG = 0.0, fatG = 100.0, servingSizeGrams = 15, minServingGrams = 5, maxServingGrams = 40, servingUnit = "1 colher de sopa (15ml)", functionalTags = vegTags + "allergen:amendoim", semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PANTRY_FATS, MealRole.PANTRY_SEASONING, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, true), maxDailyGrams = 30),
+            FoodEntity("food_amendoim", "Amendoim Torrado sem Sal", "Oleaginosas", kcal = 567.0, carbsG = 16.0, proteinG = 26.0, fatG = 49.0, servingSizeGrams = 20, minServingGrams = 10, maxServingGrams = 60, functionalTags = vegTags + "allergen:amendoim", semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PANTRY_FATS, MealRole.COMPLEMENTARY_PROTEIN, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 60),
+            FoodEntity("food_pts", "PTS Refogada", "Proteínas Vegetais", kcal = 120.0, carbsG = 9.0, proteinG = 20.0, fatG = 1.2, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = listOf("diet:vegan", "diet:vegetarian", "proteina_vegetal"), semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PROTEIN, MealRole.PRIMARY_PROTEIN, ProteinSubtype.PLANT_BASED, ShelfLife.PERISHABLE_FAST, CostTier.ESSENTIAL, false), maxDailyGrams = 300),
+            FoodEntity("food_tofu", "Tofu Firme Grelhado", "Proteínas Vegetais", kcal = 85.0, carbsG = 2.0, proteinG = 10.0, fatG = 4.8, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = listOf("diet:vegan", "diet:vegetarian", "proteina_vegetal"), semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PROTEIN, MealRole.PRIMARY_PROTEIN, ProteinSubtype.PLANT_BASED, ShelfLife.PERISHABLE_FAST, CostTier.ESSENTIAL, false), maxDailyGrams = 300),
+            FoodEntity("food_lentilha", "Lentilha Cozida", "Leguminosas & Grãos", kcal = 116.0, carbsG = 20.0, proteinG = 9.0, fatG = 0.4, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = listOf("diet:vegan", "diet:vegetarian", "proteina_vegetal"), semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PROTEIN, MealRole.STAPLE_BASE, ProteinSubtype.PLANT_BASED, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 300),
+            FoodEntity("food_camarao", "Camarão Cozido", "Peixes & Frutos do Mar", kcal = 99.0, carbsG = 0.2, proteinG = 24.0, fatG = 0.3, servingSizeGrams = 100, minServingGrams = 50, maxServingGrams = 250, functionalTags = listOf("allergen:peixe","allergen:frutos do mar"), semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PROTEIN, MealRole.PRIMARY_PROTEIN, ProteinSubtype.FISH, ShelfLife.PERISHABLE_FAST, CostTier.PREMIUM, false), maxDailyGrams = 300)
         )
 
         val components = mapOf(
@@ -264,7 +264,7 @@ class WeeklyGroceryEngineTest {
     @Test
     fun reportsDeficitHonestlyWhenCatalogIsExtremelyLimited() {
         // Catálogo com apenas 1 alimento com limite de porção
-        val smallFood = FoodEntity("small_food", "Folha de Alface", "Verduras", kcal = 15.0, servingSizeGrams = 50, maxServingGrams = 100)
+        val smallFood = FoodEntity("small_food", "Folha de Alface", "Verduras", kcal = 15.0, servingSizeGrams = 50, maxServingGrams = 100, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PRODUCE, MealRole.VEGETABLE_LEAFY, ProteinSubtype.NONE, ShelfLife.PERISHABLE_FAST, CostTier.ESSENTIAL, false), maxDailyGrams = 50)
         val smallIng = GroceryIngredient("alface", "Alface", "kg", 50, 50, emptyList(), listOf("small_food"))
         val smallCatalog = GroceryIngredientCatalog(listOf(smallIng), mapOf("small_food" to listOf("alface")))
 
@@ -289,8 +289,8 @@ class WeeklyGroceryEngineTest {
     @Test
     fun sharedComponentsSummedBeforeApplyingSafetyMargin() {
         val ingA = GroceryIngredient("cebola", "Cebola", "kg", 100, 100, emptyList(), listOf("recipe1", "recipe2"))
-        val recipe1 = FoodEntity("recipe1", "Prato 1", "Proteínas", kcal = 200.0, servingSizeGrams = 100)
-        val recipe2 = FoodEntity("recipe2", "Prato 2", "Grãos", kcal = 200.0, servingSizeGrams = 100)
+        val recipe1 = FoodEntity("recipe1", "Prato 1", "Proteínas", kcal = 200.0, servingSizeGrams = 100, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PROTEIN, MealRole.PRIMARY_PROTEIN, ProteinSubtype.PLANT_BASED, ShelfLife.PERISHABLE_FAST, CostTier.ESSENTIAL, false), maxDailyGrams = 300)
+        val recipe2 = FoodEntity("recipe2", "Prato 2", "Grãos", kcal = 200.0, servingSizeGrams = 100, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.GRAINS_TUBERS, MealRole.STAPLE_BASE, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 500)
 
         val cat = GroceryIngredientCatalog(
             ingredients = listOf(ingA),
@@ -314,10 +314,10 @@ class WeeklyGroceryEngineTest {
         val ingQuinoa = GroceryIngredient("quinoa", "Quinoa em Grãos", "kg", 100, 200, emptyList(), listOf("food_qui"), canonicalGroupSlug = "quinoa")
         val ingMandioca = GroceryIngredient("mandioca", "Mandioca", "kg", 100, 200, emptyList(), listOf("food_man"), canonicalGroupSlug = "mandioca")
 
-        val foodAv1 = FoodEntity("food_av1", "Farelo de Aveia", "Cereais", kcal = 300.0, servingSizeGrams = 30)
-        val foodAv2 = FoodEntity("food_av2", "Aveia em Flocos Finos", "Cereais", kcal = 300.0, servingSizeGrams = 30)
-        val foodQui = FoodEntity("food_qui", "Quinoa em Grãos", "Cereais", kcal = 300.0, servingSizeGrams = 30)
-        val foodMan = FoodEntity("food_man", "Mandioca Cozida", "Raízes", kcal = 120.0, servingSizeGrams = 100)
+        val foodAv1 = FoodEntity("food_av1", "Farelo de Aveia", "Cereais", kcal = 300.0, servingSizeGrams = 30, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.GRAINS_TUBERS, MealRole.BREAKFAST_BASE, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 150)
+        val foodAv2 = FoodEntity("food_av2", "Aveia em Flocos Finos", "Cereais", kcal = 300.0, servingSizeGrams = 30, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.GRAINS_TUBERS, MealRole.BREAKFAST_BASE, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 150)
+        val foodQui = FoodEntity("food_qui", "Quinoa em Grãos", "Cereais", kcal = 300.0, servingSizeGrams = 30, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.GRAINS_TUBERS, MealRole.STAPLE_BASE, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 500)
+        val foodMan = FoodEntity("food_man", "Mandioca Cozida", "Raízes", kcal = 120.0, servingSizeGrams = 100, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.GRAINS_TUBERS, MealRole.STAPLE_BASE, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 500)
 
         val cat = GroceryIngredientCatalog(
             ingredients = listOf(ingAveia1, ingAveia2, ingQuinoa, ingMandioca),
@@ -346,7 +346,7 @@ class WeeklyGroceryEngineTest {
     @Test
     fun separatesEnergyCoverageFromPurchaseCalculationStatus() {
         val ingSemDensidade = GroceryIngredient("bebida", "Bebida", "L", 1000, 1000, emptyList(), listOf("food_bebida"), densityGPerMl = null)
-        val foodBebida = FoodEntity("food_bebida", "Bebida Láctea", "Laticínios", kcal = 100.0, servingSizeGrams = 200)
+        val foodBebida = FoodEntity("food_bebida", "Bebida Láctea", "Laticínios", kcal = 100.0, servingSizeGrams = 200, functionalTags = listOf("allergen:leite","allergen:lactose"), semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PROTEIN, MealRole.COMPLEMENTARY_PROTEIN, ProteinSubtype.DAIRY, ShelfLife.PERISHABLE_FAST, CostTier.ESSENTIAL, false), maxDailyGrams = 300)
         val cat = GroceryIngredientCatalog(
             ingredients = listOf(ingSemDensidade),
             components = mapOf("food_bebida" to listOf("bebida")),
@@ -461,12 +461,12 @@ class WeeklyGroceryEngineTest {
 
     @Test
     fun classifyPillarCorrectlyCategorizesTubersAndSeeds() {
-        val batata = FoodEntity("food_batata", "Batata Inglesa Cozida", "Legumes & Vegetais", kcal = 80.0)
-        val mandioca = FoodEntity("food_mandioca", "Mandioca Cozida", "Hortaliças", kcal = 120.0)
-        val linhaca = FoodEntity("food_linhaca", "Semente de Linhaça", "Grãos e Sementes", kcal = 530.0)
-        val chia = FoodEntity("food_chia", "Semente de Chia", "Cereais", kcal = 480.0)
-        val feijao = FoodEntity("food_feijao", "Feijão Carioca", "Grãos e Cereais", kcal = 80.0)
-        val couve = FoodEntity("food_couve", "Couve Refogada", "Verduras", kcal = 30.0)
+        val batata = FoodEntity("food_batata", "Batata Inglesa Cozida", "Legumes & Vegetais", kcal = 80.0, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.GRAINS_TUBERS, MealRole.STAPLE_BASE, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 500)
+        val mandioca = FoodEntity("food_mandioca", "Mandioca Cozida", "Hortaliças", kcal = 120.0, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.GRAINS_TUBERS, MealRole.STAPLE_BASE, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 500)
+        val linhaca = FoodEntity("food_linhaca", "Semente de Linhaça", "Grãos e Sementes", kcal = 530.0, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PANTRY_FATS, MealRole.COMPLEMENTARY_PROTEIN, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 60)
+        val chia = FoodEntity("food_chia", "Semente de Chia", "Cereais", kcal = 480.0, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PANTRY_FATS, MealRole.COMPLEMENTARY_PROTEIN, ProteinSubtype.NONE, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 60)
+        val feijao = FoodEntity("food_feijao", "Feijão Carioca", "Grãos e Cereais", kcal = 80.0, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PROTEIN, MealRole.STAPLE_BASE, ProteinSubtype.PLANT_BASED, ShelfLife.SHELF_STABLE, CostTier.ESSENTIAL, false), maxDailyGrams = 300)
+        val couve = FoodEntity("food_couve", "Couve Refogada", "Verduras", kcal = 30.0, semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PRODUCE, MealRole.VEGETABLE_LEAFY, ProteinSubtype.NONE, ShelfLife.PERISHABLE_FAST, CostTier.ESSENTIAL, false), maxDailyGrams = 50)
 
         assertEquals(WeeklyGroceryEngine.CORRIDOR_GRAOS, WeeklyGroceryEngine.classifyPillar(batata))
         assertEquals(WeeklyGroceryEngine.CORRIDOR_GRAOS, WeeklyGroceryEngine.classifyPillar(mandioca))

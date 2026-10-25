@@ -24,7 +24,7 @@ class CatalogRepository @Inject constructor(
 
     private val catalogMutex = kotlinx.coroutines.sync.Mutex()
     private val catalogCache by lazy { context.getSharedPreferences("remote_nutrition_catalog", Context.MODE_PRIVATE) }
-    private val catalogJson = Json { ignoreUnknownKeys = true }
+    private val catalogJson = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
     private suspend fun catalogSnapshot(refresh: Boolean): org.json.JSONObject? {
         catalogMutex.lock()
@@ -34,7 +34,7 @@ class CatalogRepository @Inject constructor(
                 if (remote != null) {
                     try {
                         val parsed = br.com.bragasaude.domain.RemoteNutritionCatalogParser.parse(remote)
-                        val foods = catalogJson.decodeFromString<List<FoodEntity>>(remote.getJSONArray("foods").toString())
+                        val foods = br.com.bragasaude.domain.RemoteNutritionCatalogParser.parseFoods(remote.getJSONArray("foods"))
                         require(foods.map { it.remoteId }.toSet() == parsed.components.keys)
                         foodDao.replaceServerCatalog(foods)
                         check(catalogCache.edit().putString("snapshot", remote.toString()).commit())
@@ -47,7 +47,7 @@ class CatalogRepository @Inject constructor(
                 try {
                     val cached = org.json.JSONObject(raw)
                     br.com.bragasaude.domain.RemoteNutritionCatalogParser.parse(cached)
-                    val foods = catalogJson.decodeFromString<List<FoodEntity>>(cached.getJSONArray("foods").toString())
+                    val foods = br.com.bragasaude.domain.RemoteNutritionCatalogParser.parseFoods(cached.getJSONArray("foods"))
                     foodDao.replaceServerCatalog(foods)
                     cached
                 } catch (e: kotlinx.coroutines.CancellationException) { throw e }

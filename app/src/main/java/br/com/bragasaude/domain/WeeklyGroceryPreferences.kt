@@ -60,7 +60,8 @@ data class WeeklyGroceryPreferences(
     val budgetTier: GroceryBudgetTier = GroceryBudgetTier.MODERATE,
     val selectedProteins: Set<GroceryProteinPreference> = emptySet(),
     val hasPantryStaples: Boolean = false,
-    val maxWeeklyBudgetReais: Double? = null
+    val maxWeeklyBudgetReais: Double? = null,
+    val planningDays: Int = 7
 ) {
     val isUltraEconomic: Boolean get() = budgetTier == GroceryBudgetTier.ULTRA_ECONOMIC
     val isEconomic: Boolean get() = budgetTier == GroceryBudgetTier.ECONOMIC || budgetTier == GroceryBudgetTier.ULTRA_ECONOMIC
@@ -82,6 +83,7 @@ data class WeeklyGroceryPreferences(
             }
             else -> selectedProteins
         }
+        require(planningDays == 7 || planningDays == 14) { "O horizonte deve ser 7 ou 14 dias" }
         return copy(selectedProteins = proteins)
     }
 
