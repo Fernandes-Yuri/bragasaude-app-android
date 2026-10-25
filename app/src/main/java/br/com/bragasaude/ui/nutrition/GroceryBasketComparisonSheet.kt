@@ -17,6 +17,7 @@ import br.com.bragasaude.ui.components.BragaBottomSheet
 import java.text.NumberFormat
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroceryBasketComparisonSheet(state: GroceryBasketUiState, onDismiss: () -> Unit, onRetry: () -> Unit) {
     val context = LocalContext.current
