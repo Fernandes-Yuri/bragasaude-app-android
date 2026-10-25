@@ -387,6 +387,11 @@ object WeeklyGroceryEngine {
             )
             plannedConsumptions.removeAll { it.food.remoteId in durableIds }
             plannedConsumptions.addAll(replacement)
+            if (planningDays == 14) {
+                limitations.add("Planejamento quinzenal (14 dias): congele porções de carnes da 2ª semana e priorize o consumo de folhosos e frutas frescas nos primeiros 5 a 7 dias para evitar desperdício.")
+            } else {
+                limitations.add("Planejamento de $planningDays dias: organize reposições de perecíveis conforme conservação e disponibilidade.")
+            }
             if (plannedConsumptions.any { it.food.semanticMetadata.pillar == NutritionalPillar.PROTEIN && it.food.semanticMetadata.shelfLife == ShelfLife.PERISHABLE_FAST }) {
                 limitations.add("Congele preventivamente as porções de proteínas frescas destinadas à segunda semana.")
             }

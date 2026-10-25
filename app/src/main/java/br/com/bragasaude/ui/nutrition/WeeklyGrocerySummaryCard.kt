@@ -34,8 +34,9 @@ fun WeeklyGrocerySummaryCard(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // 1. Título do card e valores calóricos
+            val periodTitle = if (plan.planningDays == 14) "14 dias (quinzenal)" else "${plan.planningDays} dias"
             Text(
-                text = if (plan.isManuallyModified) "Último planejamento • cobertura invalidada" else "Resumo estimado para ${plan.planningDays} dias",
+                text = if (plan.isManuallyModified) "Último planejamento • cobertura invalidada" else "Resumo estimado para $periodTitle",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )

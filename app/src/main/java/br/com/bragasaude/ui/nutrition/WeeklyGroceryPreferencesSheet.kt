@@ -141,13 +141,55 @@ fun WeeklyGroceryPreferencesSheet(
                 )
             }
 
-            Text("Período de planejamento", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                br.com.bragasaude.domain.GroceryPlanningPeriod.options.forEach { days ->
-                    FilterChip(selected = planningDays == days, onClick = { planningDays = days }, label = { Text("$days dias") })
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Horizonte de Compras",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = BragaTextPrimary
+                )
+                Text(
+                    text = "Defina a janela de consumo individual para evitar que hortifruti estrague ou lote a despensa:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BragaTextSecondary
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    br.com.bragasaude.domain.GroceryPlanningPeriod.options.forEach { days ->
+                        val isSelected = planningDays == days
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { planningDays = days },
+                            label = {
+                                Text(
+                                    text = br.com.bragasaude.domain.GroceryPlanningPeriod.labelFor(days),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = BragaEmerald,
+                                selectedLabelColor = Color.White,
+                                containerColor = Color.White,
+                                labelColor = BragaTextPrimary
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = isSelected,
+                                borderColor = BragaMintBorder,
+                                selectedBorderColor = BragaEmerald
+                            )
+                        )
+                    }
                 }
+                Text(
+                    text = br.com.bragasaude.domain.GroceryPlanningPeriod.descriptionFor(planningDays),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BragaTextSecondary
+                )
             }
-            Text("O orçamento abaixo vale para os $planningDays dias escolhidos. Em períodos maiores, organize reposições de perecíveis.", style = MaterialTheme.typography.bodySmall)
 
             // Orçamento do período
             Card(
@@ -220,8 +262,8 @@ fun WeeklyGroceryPreferencesSheet(
                         )
                     )
 
-                    // Chips de atalho rápido
-                    val quickBudgets = listOf("80", "120", "160", "200")
+                    // Chips de atalho rápido dinâmicos baseados no período escolhido
+                    val quickBudgets = br.com.bragasaude.domain.GroceryPlanningPeriod.quickBudgetsFor(planningDays)
                     Row(
                         modifier = Modifier.fillMaxWidth().testTag("quickBudgets").horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
