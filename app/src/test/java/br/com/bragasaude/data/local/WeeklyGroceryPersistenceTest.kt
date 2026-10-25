@@ -32,6 +32,16 @@ class WeeklyGroceryPersistenceTest {
     @Before fun before() { context.deleteDatabase("weekly-test.db"); open() }
     @After fun after() { db.close(); context.deleteDatabase("weekly-test.db") }
 
+    @Test fun foodSemanticsAndDailyCapSurviveDatabaseReopening() = runBlocking {
+        val food = FoodEntity("synthetic_food", "Nome arbitrário", maxDailyGrams = 50,
+            semanticMetadata = FoodSemanticMetadata(NutritionalPillar.PRODUCE,
+                MealRole.VEGETABLE_LEAFY, ProteinSubtype.NONE, ShelfLife.PERISHABLE_FAST,
+                CostTier.ESSENTIAL, false))
+        db.foodDao().insertAll(listOf(food))
+        db.close(); open()
+        assertEquals(food, db.foodDao().getCatalog().first().single())
+    }
+
     @Test fun summarySurvivesDatabaseReopeningAndIsScopedByUserAndWeek() = runBlocking {
         repository.save("u", plan().copy(profileWeight = 108.0), false)
         db.close(); open()
@@ -166,6 +176,7 @@ class WeeklyGroceryPersistenceTest {
                     }
                     val queries = schema.getJSONArray("setupQueries")
                     for (index in 0 until queries.length()) db.execSQL(queries.getString(index))
+                    db.execSQL("INSERT INTO food_catalog_local(remoteId,name,isDiabetesSafe,isHypertensionSafe,isThyroidSafe,functionalTags,servingSizeGrams,servingUnit,minServingGrams,maxServingGrams,suitableMeals) VALUES ('legacy_food','Alimento legado',1,1,1,'[]',100,'100g',1,500,'[]')")
                     db.execSQL("INSERT INTO grocery_list_local(remoteId,userId,weekStartDate,foodId,foodName,category,suggestedServingWeekGrams,purchaseWeightGrams,purchaseUnitText,estimatedPriceBrl,isCheckedInPantry,createdAt) VALUES ('legacy','u','2026-10-05','a','Produto','Minha lista',0,1000,'1000 g',0,1,1)")
                 }
                 override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
@@ -174,6 +185,10 @@ class WeeklyGroceryPersistenceTest {
         helper.writableDatabase
         helper.close()
         open()
+        val legacyFood = db.foodDao().getCatalog().first().single()
+        assertEquals("legacy_food", legacyFood.remoteId)
+        assertEquals(FoodSemanticMetadata(), legacyFood.semanticMetadata)
+        assertNull(legacyFood.maxDailyGrams)
         val migrated = db.groceryListDao().getGrocerySnapshot("u").single()
         assertTrue(migrated.isManual)
         assertTrue(migrated.isCheckedInPantry)

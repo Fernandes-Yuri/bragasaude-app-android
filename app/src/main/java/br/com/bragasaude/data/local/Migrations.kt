@@ -499,8 +499,21 @@ object Migrations {
 
     val MIGRATION_61_62 = object : Migration(61, 62) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            db.execSQL("ALTER TABLE food_catalog_local ADD COLUMN semanticMetadata TEXT NOT NULL DEFAULT '{}'")
-            db.execSQL("ALTER TABLE food_catalog_local ADD COLUMN maxDailyGrams INTEGER")
+            val columns = mutableSetOf<String>()
+            runCatching {
+                db.query("PRAGMA table_info(food_catalog_local)").use { cursor ->
+                    val nameIndex = cursor.getColumnIndex("name")
+                    while (cursor.moveToNext()) {
+                        if (nameIndex != -1) columns.add(cursor.getString(nameIndex).lowercase())
+                    }
+                }
+            }
+            if ("semanticmetadata" !in columns) {
+                db.execSQL("ALTER TABLE food_catalog_local ADD COLUMN semanticMetadata TEXT NOT NULL DEFAULT '{}'")
+            }
+            if ("maxdailygrams" !in columns) {
+                db.execSQL("ALTER TABLE food_catalog_local ADD COLUMN maxDailyGrams INTEGER")
+            }
         }
     }
 
