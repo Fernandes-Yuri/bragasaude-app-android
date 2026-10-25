@@ -192,6 +192,17 @@ class AuthViewModel @Inject constructor(
         profileOwner = userId
         _profileError.value = null
         profileJob = viewModelScope.launch {
+            val isFirebaseTestLab = try {
+                android.provider.Settings.System.getString(
+                    appContext.contentResolver,
+                    "firebase.test.lab"
+                ) == "true"
+            } catch (_: Exception) {
+                false
+            }
+            if (isFirebaseTestLab) {
+                repository.seedTestLabProfile(userId)
+            }
             var remote: ProfileLookup? = null
             val renderLock = Mutex()
             suspend fun render(update: ProfileLookup? = null) = renderLock.withLock {

@@ -225,6 +225,22 @@ class ProfileRepository @Inject constructor(
         }
     }
 
+    suspend fun seedTestLabProfile(userId: String) {
+        val existing = profileDao.getProfileOneShot(userId)
+        if (existing == null) {
+            profileDao.insert(
+                ProfileEntity(
+                    userId = userId,
+                    fullName = "Usuário Teste",
+                    userRole = "PATIENT",
+                    basicProfileComplete = true,
+                    selfCareComplete = true,
+                    consentAcceptedAt = java.util.Date()
+                )
+            )
+        }
+    }
+
     private fun triggerSync() {
         syncScheduler.scheduleSync()
     }
