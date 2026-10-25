@@ -5,6 +5,14 @@ import org.json.JSONObject
 
 /** Decodifica dados do gateway sem conhecer alimentos ou identificadores específicos. */
 object RemoteNutritionCatalogParser {
+    private val foodJson = kotlinx.serialization.json.Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+    }
+
+    fun parseFoods(foods: JSONArray): List<br.com.bragasaude.data.local.FoodEntity> =
+        foodJson.decodeFromString(foods.toString())
+
     private fun strings(values: JSONArray): List<String> = (0 until values.length()).map { values.getString(it) }
 
     private fun positive(item: JSONObject, key: String): Double? {

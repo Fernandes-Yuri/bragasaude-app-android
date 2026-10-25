@@ -117,7 +117,10 @@ data class FoodEntity(
     val servingUnit: String = "100g",
     val minServingGrams: Int = 1,
     val maxServingGrams: Int = 500,
-    val suitableMeals: List<String> = emptyList()
+    val suitableMeals: List<String> = emptyList(),
+    @androidx.room.ColumnInfo(defaultValue = "'{}'")
+    val semanticMetadata: FoodSemanticMetadata = FoodSemanticMetadata(),
+    val maxDailyGrams: Int? = null
 )
 
 @Entity(tableName = "meal_rules_local")

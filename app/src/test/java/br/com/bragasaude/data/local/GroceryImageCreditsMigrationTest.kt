@@ -47,7 +47,7 @@ class GroceryImageCreditsMigrationTest {
                 .allowMainThreadQueries().addMigrations(*Migrations.ALL).build()
             try {
                 val sql = upgraded.openHelper.writableDatabase
-                assertEquals(61, sql.version)
+                assertEquals(62, sql.version)
 
                 // Verify pre-existing seed card survived with null credits
                 sql.query("SELECT id, name, imageCredit, imageCreditUrl FROM grocery_retail_cards_local WHERE id = 'fixture'").use { c ->

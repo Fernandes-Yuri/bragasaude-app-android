@@ -84,6 +84,26 @@ class RoomMigrationTest {
             sql
         )
     }
+
+    @Test fun migration61To62AddsSemanticMetadataColumns() {
+        val database = mockk<SupportSQLiteDatabase>()
+        val sql = mutableListOf<String>()
+        every { database.execSQL(capture(sql)) } just runs
+
+        assertEquals(61, Migrations.MIGRATION_61_62.startVersion)
+        assertEquals(62, Migrations.MIGRATION_61_62.endVersion)
+        assertTrue(Migrations.ALL.contains(Migrations.MIGRATION_61_62))
+
+        Migrations.MIGRATION_61_62.migrate(database)
+
+        assertEquals(
+            listOf(
+                "ALTER TABLE food_catalog_local ADD COLUMN semanticMetadata TEXT NOT NULL DEFAULT '{}'",
+                "ALTER TABLE food_catalog_local ADD COLUMN maxDailyGrams INTEGER"
+            ),
+            sql
+        )
+    }
     private fun findSchema48(): File? {
         val relative = "schemas/br.com.bragasaude.data.local.BragaDatabase/48.json"
         return sequenceOf(File(relative), File("app/$relative")).firstOrNull(File::isFile)

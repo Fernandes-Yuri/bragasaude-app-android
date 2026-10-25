@@ -277,6 +277,9 @@ jobs:
       - name: Validar padrão compartilhado de janelas
         run: python3 .github/scripts/check_modal_consistency.py
 
+      - name: Validar motor sem nomes de alimentos
+        run: python3 .github/scripts/check_grocery_metadata.py
+
       - name: Rodar testes unitários
         run: |
           JDK_PATHS=$(ls -d "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}/Java_Temurin_jdk"/*/x64 2>/dev/null | paste -sd, -)

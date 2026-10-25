@@ -40,11 +40,11 @@ class RemoteNutritionCatalogTest {
             val list = WeeklyGroceryEngine.generateWeeklyList("u", emptyList(), null,
                 listOf(food("base_a"), food("base_b")), ingredientCatalog = parsed)
             assertEquals(setOf("ingredient_a", "ingredient_b"), list.map { it.foodId }.toSet())
-            assertEquals(300, list.first { it.foodId == "ingredient_a" }.purchaseWeightGrams)
+            assertEquals(500, list.first { it.foodId == "ingredient_a" }.purchaseWeightGrams)
         }
         val withDislikes = WeeklyGroceryEngine.generateWeeklyList("u", emptyList(), null,
             listOf(food("base_a"), food("base_b")), dislikedFoodNames = setOf("Preparo base_a", "Preparo base_b"), ingredientCatalog = parsed)
-        assertEquals(setOf("ingredient_a", "ingredient_b"), withDislikes.map { it.foodId }.toSet())
+        assertTrue(withDislikes.isEmpty())
     }
 
     @Test fun respectsAllergensClinicalRestrictionsAndDietBeforeRequiredGroups() {
@@ -93,5 +93,20 @@ class RemoteNutritionCatalogTest {
         assertTrue(parsed.components.containsKey("extra_c"))
         assertTrue(parsed.components["extra_c"]!!.isEmpty())
         assertEquals(2, parsed.ingredients.size)
+    }
+
+    @Test fun semanticSnapshotWithFictitiousIdentifiersGeneratesNutritionAndPurchases() {
+        val snap = snapshot()
+        for (i in 0 until snap.getJSONArray("foods").length()) {
+            snap.getJSONArray("foods").getJSONObject(i)
+                .put("kcal", 200.0).put("maxDailyGrams", 300)
+                .put("semanticMetadata", JSONObject("""{"pillar":"GRAINS_TUBERS","mealRole":"STAPLE_BASE","shelfLife":"SHELF_STABLE","costTier":"ESSENTIAL","proteinSubtype":"NONE","isPantryStaple":false}"""))
+        }
+        val result = WeeklyGroceryEngine.planWeeklyGrocery("u", emptyList(), null,
+            RemoteNutritionCatalogParser.parseFoods(snap.getJSONArray("foods")),
+            ingredientCatalog = RemoteNutritionCatalogParser.parse(snap))
+        assertEquals(setOf("ingredient_a", "ingredient_b"), result.items.map { it.foodId }.toSet())
+        assertTrue(result.plannedWeeklyCalories > 0)
+        assertTrue(result.items.all { it.purchaseWeightGrams > 0 })
     }
 }

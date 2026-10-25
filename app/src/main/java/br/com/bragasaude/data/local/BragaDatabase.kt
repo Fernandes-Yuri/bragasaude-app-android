@@ -45,7 +45,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 61, // Créditos e licenças de imagens do catálogo de compras
+    version = 62, // Metadados semânticos do catálogo de alimentos
     exportSchema = true
 )
 @TypeConverters(Converters::class, SmokingSupportConverters::class)

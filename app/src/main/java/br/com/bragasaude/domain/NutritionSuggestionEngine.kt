@@ -238,7 +238,7 @@ object NutritionSuggestionEngine {
         )
     }
 
-    fun isAllowedByDietAndDeclaredAllergens(food: FoodEntity, allergies: List<String>, restrictions: String?): Boolean {
+    fun isAllowedByDietAndDeclaredAllergens(food: FoodEntity, allergies: List<String>, restrictions: String?, semanticOnly: Boolean = false): Boolean {
         val terms = groceryNameKey(restrictions.orEmpty())
         val tags = food.functionalTags
         if (terms.contains("vegan") && "diet:vegan" !in tags) return false
@@ -246,6 +246,7 @@ object NutritionSuggestionEngine {
         val declared = tags.filter { it.startsWith("allergen:") }.map { groceryNameKey(it.substringAfter(':')) }
         val blocked = allergies.map { groceryNameKey(it) } + terms.split(',', ';').map { it.trim() }
         if (declared.any { allergen -> blocked.any { term -> term.contains(allergen) } }) return false
+        if (semanticOnly) return true
         val name = groceryNameKey(food.name)
         return allergies.none { allergy ->
             val normalized = groceryNameKey(allergy).removePrefix("alergia a ").removePrefix("alergia ao ")
@@ -256,9 +257,11 @@ object NutritionSuggestionEngine {
     fun isSafeFromAllergies(
         food: FoodEntity,
         allergies: List<String>,
-        customRestrictions: String?
+        customRestrictions: String?,
+        semanticOnly: Boolean = false
     ): Boolean {
-        if (!isAllowedByDietAndDeclaredAllergens(food, allergies, customRestrictions)) return false
+        if (!isAllowedByDietAndDeclaredAllergens(food, allergies, customRestrictions, semanticOnly)) return false
+        if (semanticOnly) return true
         val nameLower = food.name.lowercase()
         val catLower = (food.category ?: "").lowercase()
 
