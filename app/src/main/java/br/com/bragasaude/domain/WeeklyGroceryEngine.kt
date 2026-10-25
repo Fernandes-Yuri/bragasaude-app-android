@@ -180,7 +180,7 @@ object WeeklyGroceryEngine {
                     selected.minServingGrams.takeIf { it > 0 } ?: (basePortion / 2).coerceAtLeast(20),
                     selected.maxServingGrams.takeIf { it > 0 } ?: (basePortion * 3)
                 )
-                val weeklyGrams = (portion * days).coerceAtMost(maxWeeklyGramsForFood(selected, planningDays, profile))
+                val weeklyGrams = (portion * days).coerceAtMost(maxWeeklyGramsForFood(selected, 7, profile))
                 plannedConsumptions.add(PlannedConsumption(selected, weeklyGrams, corridor))
                 canonicalGroupFor(selected, ingredientCatalog)?.let { selectedCanonicalGroups.add(it) }
             }
@@ -291,7 +291,7 @@ object WeeklyGroceryEngine {
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
             maxBasketSize = effectiveBasketLimit,
-            planningDays = planningDays,
+            planningDays = 7,
             profile = profile
         )
 
@@ -310,7 +310,7 @@ object WeeklyGroceryEngine {
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
             maxBasketSize = effectiveBasketLimit,
-            planningDays = planningDays,
+            planningDays = 7,
             profile = profile
         )
 
@@ -328,7 +328,7 @@ object WeeklyGroceryEngine {
             isEconomic = effectivePrefs.isEconomic,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
             maxBasketSize = effectiveBasketLimit,
-            planningDays = planningDays,
+            planningDays = 7,
             profile = profile
         )
 
@@ -345,7 +345,7 @@ object WeeklyGroceryEngine {
             isUltraEconomic = effectivePrefs.isUltraEconomic,
             isPantry = true,
             maxBasketSize = effectiveBasketLimit,
-            planningDays = planningDays,
+            planningDays = 7,
             profile = profile
         )
 
@@ -357,7 +357,7 @@ object WeeklyGroceryEngine {
             candidatesPool = allEligibleCandidates,
             isUltraEconomic = effectivePrefs.isUltraEconomic,
             maxBasketSize = effectiveBasketLimit,
-            planningDays = planningDays,
+            planningDays = 7,
             profile = profile
         )
 
@@ -799,7 +799,7 @@ object WeeklyGroceryEngine {
 
     private fun effectiveDays(food: FoodEntity, planningDays: Int, profile: RemoteProfile? = null): Int {
         if (isYellowZoneFood(food, profile)) {
-            return minOf(4, (planningDays / 2) + 1)
+            return (planningDays / 2) + 1
         }
         val meta = food.semanticMetadata
         return if (meta.isPantryStaple ||

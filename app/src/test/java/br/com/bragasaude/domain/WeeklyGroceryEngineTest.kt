@@ -592,16 +592,26 @@ class WeeklyGroceryEngineTest {
         assertTrue(cuscuzItem.suggestedServingWeekGrams <= 500 * 4)
 
         // Planejamento para hipertenso
+        val hypertensiveCatalog = listOf(
+            foodsWithYellow.first { it.remoteId == "food_arroz" },
+            foodsWithYellow.first { it.remoteId == "food_feijao" },
+            foodsWithYellow.first { it.remoteId == "food_frango" },
+            foodsWithYellow.first { it.remoteId == "food_leite" },
+            foodsWithYellow.first { it.remoteId == "food_banana" },
+            foodsWithYellow.first { it.remoteId == "food_couve" }
+        )
         val hypertensivePlan = WeeklyGroceryEngine.planWeeklyGrocery(
             userId = "user_hypertensive",
             vitals = emptyList(),
             profile = RemoteProfile("user_hypertensive", hasHypertension = true),
-            catalog = foodsWithYellow,
+            catalog = hypertensiveCatalog,
             ingredientCatalog = baseCatalog,
             targetCalories = 1800.0
         )
-        // O leite com sódio moderado entra na lista
+        // O leite com sódio moderado NÃO é excluído; entra na Zona Amarela
         assertTrue(hypertensivePlan.items.any { it.foodId == "leite-desnatado" })
+        val leiteItem = hypertensivePlan.items.first { it.foodId == "leite-desnatado" }
+        assertTrue(leiteItem.suggestedServingWeekGrams <= 300 * 4)
     }
 
     @Test
