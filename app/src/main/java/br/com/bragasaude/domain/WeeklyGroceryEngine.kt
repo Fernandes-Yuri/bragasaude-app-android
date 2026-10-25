@@ -408,7 +408,11 @@ object WeeklyGroceryEngine {
                 plannedConsumptions[i] = consumption.copy(weeklyGrams =
                     kotlin.math.round(consumption.weeklyGrams * planningDays / 7.0).toInt())
             }
-            limitations.add("Planejamento de $planningDays dias: organize reposições de perecíveis conforme conservação e disponibilidade.")
+            if (planningDays == 14) {
+                limitations.add("Planejamento quinzenal (14 dias): congele porções de carnes da 2ª semana e priorize o consumo de folhosos e frutas frescas nos primeiros 5 a 7 dias para evitar desperdício.")
+            } else {
+                limitations.add("Planejamento de $planningDays dias: organize reposições de perecíveis conforme conservação e disponibilidade.")
+            }
         }
 
         // 10. Conversão de consumo em demanda de ingredientes e consolidação canônica
