@@ -30,6 +30,8 @@ class OrganizerViewModelTest {
             every { capability.probe() } returns OcrAvailability.Unavailable
             coEvery { store.restore() } returns session
             val viewModel = OrganizerViewModel(store, capability)
+            viewModel.probeDispatcher = StandardTestDispatcher(testScheduler)
+            viewModel.probeOcr()
             advanceUntilIdle()
             assertEquals(OcrAvailability.Unavailable, viewModel.state.value.ocrAvailability)
             assertEquals(session, viewModel.state.value.session)
@@ -47,6 +49,8 @@ class OrganizerViewModelTest {
             every { capability.probe() } returns OcrAvailability.NeedsUpdate(null)
             coEvery { store.restore() } returns null
             val viewModel = OrganizerViewModel(store, capability)
+            viewModel.probeDispatcher = StandardTestDispatcher(testScheduler)
+            viewModel.probeOcr()
             advanceUntilIdle()
             val availability = viewModel.state.value.ocrAvailability
             assertTrue(availability is OcrAvailability.NeedsUpdate)
