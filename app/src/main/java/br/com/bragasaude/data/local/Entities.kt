@@ -3,7 +3,6 @@ package br.com.bragasaude.data.local
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import kotlinx.serialization.Serializable
 import java.util.Date
 
 // AUD-AN28: índice composto — getRecent30Days e getLastN filtram por userId
@@ -91,7 +90,6 @@ data class ProfileEntity(
 
 
 
-@Serializable
 
 
 @Entity(tableName = "milestones_local")

@@ -343,7 +343,7 @@ class VoiceHealthParser @Inject constructor() {
         val action = Regex("\\b(adicion\\w*|registr\\w*|anot\\w*|abrir|abra|abr\\w*|coloc\\w*)\\b").containsMatchIn(text)
         val food = Regex("\\b(refeicao|refeicoes|alimento|alimentos|alimentacao|lista de compras|almoco|jantar|cafe da manha|lanche|arroz|feijao|frango|banana|maca|leite|aveia|chia)\\b").containsMatchIn(text)
         return if (action && food) VoiceHealthIntent.ConversationalReply(
-            "Para registrar refeições ou organizar sua lista de compras, use a tela de Alimentação. Ainda não faço esse registro por voz."
+            "O módulo de alimentação, compras, despensa e receitas foi descontinuado no Braga Saúde."
         ) else null
     }
 

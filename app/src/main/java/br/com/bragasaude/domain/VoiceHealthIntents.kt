@@ -11,9 +11,136 @@ import br.com.bragasaude.domain.util.BloodPressureParser
  */
 sealed interface VoiceHealthIntent {
 
+    /**
+     * Registro de hidratacao.
+     * @param amountMl Quantidade em mililitros (ex.: 250, 500).
+     * @param description Texto humanizado para confirmacao na UI ("1 copo de agua").
+     */
+    data class Hydration(
+        val amountMl: Int,
+        val description: String
+    ) : VoiceHealthIntent
 
+    /**
+     * Registro de pressao arterial (mmHg).
+     * @param systolic Sistolica (valor "maior").
+     * @param diastolic Diastolica (valor "menor").
+     * @param rawInput Texto original reconhecido ("12 por 8", "13 por 8 e meio").
+     */
+    data class BloodPressure(
+        val systolic: Int,
+        val diastolic: Int,
+        val rawInput: String
+    ) : VoiceHealthIntent
 
+    /**
+     * 🩸 Registro de glicemia (mg/dL).
+     * @param glucoseMgDl Valor em mg/dL.
+     */
+    data class Glucose(
+        val glucoseMgDl: Int
+    ) : VoiceHealthIntent
 
+    
+    /**
+      * Registro de adesao a medicacao.
+     * @param query Texto usado para buscar a medicação no catálogo do usuário.
+     * @param scheduleTimeHint Horário sugerido ("8 horas" → "08:00").
+     * @param query Texto usado para buscar a medicação no catálogo do usuário.
+     * @param scheduleTimeHint Horário sugerido ("8 horas" → "08:00").
+     */
+    data class Medication(
+        val query: String,
+        val scheduleTimeHint: String? = null
+    ) : VoiceHealthIntent
+
+    /**
+     * ⚖️ Registro de peso corporal (kg).
+     * @param weightKg Peso em quilogramas.
+     */
+    data class Weight(
+        val weightKg: Double
+    ) : VoiceHealthIntent
+
+    /**
+     * ❤️ Registro de frequência cardíaca (bpm).
+     * @param heartRateBpm Batimentos por minuto.
+     */
+    data class HeartRate(
+        val heartRateBpm: Int
+    ) : VoiceHealthIntent
+
+    /**
+     * 🫁 Registro de saturação de oxigênio (SpO2 %).
+     * @param oxygenPercent Percentual de oxigênio no sangue.
+     */
+    data class OxygenSaturation(
+        val oxygenPercent: Int
+    ) : VoiceHealthIntent
+
+    
+    /**
+     * 👨‍👩‍👧 Lembrete de medicação para familiar/cuidado.
+     * @param targetName Nome do paciente/familiar (ex.: "meu pai", "minha mãe").
+     * @param text Texto da mensagem ou nome do remédio.
+     * @param timeHint Horário sugerido para o lembrete.
+     */
+    data class FamilyMedicationReminder(
+        val targetName: String?,
+        val text: String,
+        val timeHint: String? = null
+    ) : VoiceHealthIntent
+    
+    /**
+     * 📅 Agendamento de consulta/compromisso para familiar.
+     * @param targetName Nome do paciente/familiar.
+     * @param title Título do compromisso (ex.: "consulta com cardiologista").
+     * @param dateTimeHint Descrição aproximada de data/hora (ex.: "terça às 14h").
+     */
+    data class FamilyAppointment(
+        val targetName: String?,
+        val title: String,
+        val dateTimeHint: String? = null
+    ) : VoiceHealthIntent
+    
+    /**
+     * ❓ Consulta sobre status/métricas do paciente.
+     * @param metric Tipo de métrica (ex.: "pressão", "glicose", "água", "passos").
+     * @param targetName Nome do paciente/familiar (opcional).
+     */
+    data class QueryPatientStatus(
+        val metric: String,
+        val targetName: String? = null
+    ) : VoiceHealthIntent
+
+    /**
+     * 💬 Esclarecimento Conversacional Proativo (Diálogo Multi-Turno).
+     * Disparado quando a fala do usuário é ambígua (ex.: "filé de frango")
+     * e o agente precisa saber se o usuário já comeu ou se quer colocar na lista de compras.
+     * @param originalText Texto original falado pelo usuário.
+     * @param questionPrompt Pergunta acolhedora formulada pelo agente para ser falada (TTS) e lida.
+     * @param options Opções estruturadas para exibição em chips visuais e reconhecimento por voz.
+     * @param detectedFoodItems Alimentos detectados para encaminhamento.
+     * @param candidateMeal Objeto Meal pré-montado se o usuário confirmar consumo.
+     */
+    data class ClarificationRequired(
+        val originalText: String,
+        val questionPrompt: String,
+        val options: List<ClarificationOption>,
+        val detectedFoodItems: List<String> = emptyList(),
+        val candidateMeal: Meal? = null
+    ) : VoiceHealthIntent
+
+    /**
+      * 💬 Resposta Conversacional Informal (saudações, identidade, agradecimentos).
+      * Não é um registro de saúde — apenas uma fala acolhedora da assistente.
+      * @param message Texto simpático a ser falado (TTS) e exibido.
+      */
+    data class ConversationalReply(
+        val message: String
+    ) : VoiceHealthIntent
+
+    
     /**
      * Fala não reconhecida como intenção de saúde.
      * @param rawText Texto transcrito original.
@@ -279,3 +406,4 @@ fun VoiceHealthIntent.toConfirmationDisplay(): ConfirmationDisplayData {
         )
     }
 }
+

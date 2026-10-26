@@ -116,7 +116,7 @@ fun RoleSelectionScreen(
             RoleOptionCard(
                 icon = Icons.Default.Person,
                 title = "Cuidar da minha saúde",
-                subtitle = "Quero monitorar meus hábitos diários, sinais vitais e alimentação.",
+                subtitle = "Quero monitorar meus hábitos diários e sinais vitais.",
                 selected = selectedRole == "PATIENT",
                 onClick = { selectedRole = "PATIENT" }
             )

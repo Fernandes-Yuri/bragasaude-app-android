@@ -640,8 +640,7 @@ interface FamilyDao {
     @Query("UPDATE family_bindings_local SET pendingSync = 0 WHERE id = :id")
     suspend fun abandonBindingSync(id: String)
 
-    /** --- CONSULTAS MÉDICAS --- */
-
+    
     /** Inserir nova consulta médica. */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertConsultation(consultation: ConsultationEntity)

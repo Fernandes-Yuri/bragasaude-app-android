@@ -173,7 +173,7 @@ class VoiceHealthParserTest {
         val result = parser.parse("abrir lista de compras")
         assertTrue(result is VoiceHealthIntent.ConversationalReply)
         val reply = result as VoiceHealthIntent.ConversationalReply
-        assertTrue(reply.message.contains("Alimentação"))
+        assertTrue(reply.message.contains("descontinuado"))
     }
 
     @Test
@@ -256,7 +256,7 @@ class VoiceHealthParserTest {
         val result = parser.parse("adicione farelo de aveia na minha meta diária de alimentação")
         assertTrue(result is VoiceHealthIntent.ConversationalReply)
         val reply = result as VoiceHealthIntent.ConversationalReply
-        assertTrue(reply.message.contains("Alimentação"))
+        assertTrue(reply.message.contains("descontinuado"))
     }
 
     @Test
@@ -264,7 +264,7 @@ class VoiceHealthParserTest {
         val result = parser.parse("adicione chia na lista de compras")
         assertTrue(result is VoiceHealthIntent.ConversationalReply)
         val reply = result as VoiceHealthIntent.ConversationalReply
-        assertTrue(reply.message.contains("Alimentação"))
+        assertTrue(reply.message.contains("descontinuado"))
     }
 
     @Test

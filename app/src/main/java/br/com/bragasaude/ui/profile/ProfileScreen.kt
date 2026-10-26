@@ -482,7 +482,7 @@ fun ProfileScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                "Alimentos marcados serão 100% excluídos das suas sugestões e lista de compras:",
+                                "Informe alergias e restrições alimentares relevantes para o seu acompanhamento:",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline
                             )
@@ -537,7 +537,7 @@ fun ProfileScreen(
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text("Perfil de Cuidador", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                Text("Registros de autocuidado, dados corporais e metas nutricionais são preenchidos e acompanhados diretamente na conta do seu familiar.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Registros de autocuidado e dados corporais são preenchidos e acompanhados diretamente na conta do seu familiar.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }

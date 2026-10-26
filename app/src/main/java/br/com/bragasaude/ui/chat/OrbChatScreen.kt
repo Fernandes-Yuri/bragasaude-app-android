@@ -752,17 +752,9 @@ private fun linkedText(text: String): AnnotatedString = buildAnnotatedString {
 
 private fun actionPreview(parameters: String): String = try {
     val p = org.json.JSONObject(parameters)
-    // Agente B1: prévia dos itens da lista.
-    if (p.has("items") && !p.isNull("items")) {
-        val arr = p.optJSONArray("items")
-        if (arr != null && arr.length() > 0) {
-            "Itens: " + List(arr.length()) { arr.optString(it) }.filter { it.isNotBlank() }.joinToString(", ")
-        } else "Abrir lista de compras"
-    } else {
         val labels = mapOf("sistolica" to "Sistólica", "diastolica" to "Diastólica", "glicemia" to "Glicemia",
-            "quantidade_ml" to "Água (ml)", "batimentos" to "Batimentos", "saturacao" to "Saturação", "alimento" to "Alimento", "tipo_metrica" to "Métrica")
+            "quantidade_ml" to "Água (ml)", "batimentos" to "Batimentos", "saturacao" to "Saturação", "tipo_metrica" to "Métrica")
         labels.mapNotNull { (key, label) -> if (p.has(key) && !p.isNull(key)) "$label: ${p.get(key)}" else null }.joinToString(" · ")
-    }
 } catch (_: Exception) { "" }
 
 @Composable

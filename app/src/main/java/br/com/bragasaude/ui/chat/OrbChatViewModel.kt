@@ -519,7 +519,7 @@ class OrbChatViewModel @Inject constructor(
         // Agente B1: ações com executor real no app. Registro clínico abre
         // tela pré-preenchida (o usuário confirma lá); lista/relatório navegam.
         return when (rawAction) {
-            "EMERGENCIA", "LEMBRETES", "EXAMES", "CONSULTAR_METRICAS", "ABRIR_FAMILIA", "ABRIR_LISTA_COMPRAS",
+            "EMERGENCIA", "LEMBRETES", "EXAMES", "CONSULTAR_METRICAS", "ABRIR_FAMILIA",
             "REGISTRAR_PRESSAO", "REGISTRAR_GLICEMIA", "REGISTRAR_AGUA",
             "REGISTRAR_BATIMENTOS", "REGISTRAR_OXIGENACAO",
             // D51: rascunho de agendamento por voz — card com botao Confirmar
@@ -537,8 +537,6 @@ fun actionLabel(action: String): String = when (action) {
     "REGISTRAR_BATIMENTOS" -> "batimentos cardíacos"
     "REGISTRAR_OXIGENACAO" -> "saturação de oxigênio"
     "REGISTRAR_AGUA" -> "hidratação"
-    "BUSCAR_ALIMENTO" -> "alimentação"
-    "ABRIR_LISTA_COMPRAS" -> "lista de compras"
     "CONSULTAR_METRICAS" -> "relatório de saúde"
     "ABRIR_FAMILIA" -> "Família"
     "LEMBRETES" -> "lembretes de remédios"
