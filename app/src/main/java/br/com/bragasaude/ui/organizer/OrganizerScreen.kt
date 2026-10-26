@@ -553,7 +553,19 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
                                             Icon(Icons.Default.Warning, contentDescription = null, tint = Warning, modifier = Modifier.size(16.dp))
-                                            Text("Possível documento repetido. Confira antes de manter.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF92400E))
+                                            Text(
+                                                "Possível documento repetido.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = Color(0xFF92400E),
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            TextButton(
+                                                onClick = { viewModel.delete(doc.id) },
+                                                enabled = !state.busy,
+                                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                            ) {
+                                                Text("Excluir repetido", style = MaterialTheme.typography.labelLarge)
+                                            }
                                         }
                                     }
                                 }
@@ -598,18 +610,24 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                                             Text("Fotografar página", style = MaterialTheme.typography.bodySmall)
                                         }
                                     }
-                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         IconButton(
                                             onClick = { originalToSave = doc.id; saveOriginal.launch("documento-de-exame.pdf") },
                                             enabled = !state.busy
                                         ) {
                                             Icon(Icons.Default.FileDownload, contentDescription = "Salvar cópia", tint = BragaTextSecondary)
                                         }
-                                        IconButton(
+                                        TextButton(
                                             onClick = { viewModel.delete(doc.id) },
-                                            enabled = !state.busy
+                                            enabled = !state.busy,
+                                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                         ) {
-                                            Icon(Icons.Default.DeleteOutline, contentDescription = "Remover", tint = MaterialTheme.colorScheme.error)
+                                            Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("Excluir", style = MaterialTheme.typography.bodySmall)
                                         }
                                     }
                                 }

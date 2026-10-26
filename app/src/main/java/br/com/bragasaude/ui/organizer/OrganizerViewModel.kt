@@ -61,7 +61,15 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
         mutable.value = mutable.value.copy(session = session, ready = false, saved = false, preview = null, notice = null)
     }
     fun import(uris: List<Uri>, appendTo: String? = null) = operation {
-        changed(store.import(requireNotNull(mutable.value.session).id, uris, appendTo))
+        val (session, failures) = store.import(requireNotNull(mutable.value.session).id, uris, appendTo)
+        changed(session)
+        if (failures.isNotEmpty()) {
+            val imported = uris.size - failures.size
+            mutable.value = mutable.value.copy(
+                notice = "Importei $imported de ${uris.size} arquivo(s). Não consegui importar:\n" +
+                    failures.joinToString("\n") { "• $it" }.take(900)
+            )
+        }
     }
     fun update(item: OrganizerDocument) = operation { changed(store.update(requireNotNull(mutable.value.session).id, item)) }
     fun delete(id: String) = operation { changed(store.delete(requireNotNull(mutable.value.session).id, id)) }
