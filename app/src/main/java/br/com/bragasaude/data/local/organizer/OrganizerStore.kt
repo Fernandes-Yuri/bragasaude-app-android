@@ -324,13 +324,14 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         try { render(file, page) } finally { file.delete() }
     } }
     suspend fun generate(id: String, newest: Boolean): Unit = withContext(Dispatchers.IO) { lock.withLock {
-        val s = active(id); val documents = OrganizerMetadata.ordered(s.documents, newest)
+        val s = active(id)
+        val documents = OrganizerMetadata.sections(s.documents, newest).flatMap { it.groups }.flatMap { it.documents }
         require(documents.isNotEmpty() && documents.all { it.confirmed }) { "Confira todos os documentos antes de gerar." }
         val work = temp(id)
         try {
             val files = documents.map { original(id, it) }
             val result = File(work, "result.pdf")
-            pdf.build(documents, files, result, work)
+            pdf.build(documents, files, result, work, newest)
             encryptFile(id, result, File(folder(id), "result.enc"))
         } finally { work.listFiles()?.forEach { it.deleteRecursively() } }
     } }
