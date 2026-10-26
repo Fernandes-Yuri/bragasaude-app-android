@@ -186,8 +186,10 @@ dependencies {
     implementation(libs.pdfbox.android)
 
     // OCR de imagem On-Device — Google ML Kit Text Recognition (D49 / Fase 1)
+    // play-services-base: sonda de disponibilidade/atualização para o gate da leitura assistida.
     implementation(libs.mlkit.text.recognition)
     implementation(libs.mlkit.face.detection)
+    implementation(libs.gms.play.services.base)
 
 
     // Movement & GPS
