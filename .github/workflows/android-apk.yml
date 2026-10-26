@@ -17,11 +17,7 @@
 #   KEYSTORE_STORE_PASSWORD     senha do keystore
 #   KEYSTORE_KEY_ALIAS          alias da chave  (padrão: bragasaude_key)
 #   KEYSTORE_KEY_PASSWORD       senha da chave
-# Entrega no gateway via AWS SSM (a porta 22 está fechada para a rede;
-# scp/ssh davam i/o timeout — run 36630084026):
-#   AWS_ACCESS_KEY_ID           IAM gha-bragasaude-android-ssm (mínimo SSM)
-#   AWS_SECRET_ACCESS_KEY       secret da mesma chave
-#   ADMIN_API_TOKEN             Bearer do broadcast OTA (/api/app/notify-update)
+# A distribuição pelo gateway foi encerrada; publicação ocorre no GitHub Releases.
 # =============================================================================
 
 name: Build APK
@@ -394,6 +390,7 @@ jobs:
           packages: 'build-tools;35.0.0'
 
       # run_id_testada vazio = promove a build desta própria run.
+      # Origem, testes, assinatura e tag imutável continuam obrigatórios.
       - name: Baixar APK (da run testada ou da atual)
         uses: actions/download-artifact@v4
         with:
@@ -425,16 +422,6 @@ jobs:
           git merge-base --is-ancestor "$SOURCE_SHA" origin/master
           python3 .github/scripts/check_release_tag.py release-manifest.json "$GITHUB_REPOSITORY"
 
-      - name: Credenciais AWS (entrega via SSM)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2
-
-      - name: Confirmar contrato privado do gateway antes de publicar
-        run: python3 .github/scripts/ssm_release.py
-
       - name: Criar GitHub Release com o APK
         uses: softprops/action-gh-release@v2
         with:
@@ -453,8 +440,6 @@ jobs:
             > ⚠️ Assinatura nova (D46): usuários da v1.1.2 precisam **desinstalar e reinstalar**.
             > Comunique o backup dos dados locais antes (LGPD).
 
-      - name: Publicar arquivo imutável e catálogo transacional no gateway
-        run: python3 .github/scripts/ssm_release.py --manifest verified-release.json
 
   release-policy:
     uses: ./.github/workflows/release-policy.yml
