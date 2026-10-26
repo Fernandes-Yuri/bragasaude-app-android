@@ -576,7 +576,7 @@ class VoiceHealthParser @Inject constructor() {
                         actionType = ClarificationActionType.CANCEL
                     )
                 ),
-                detectedFoodItems = listOf("$totalMl ml de água")
+                displayValues = listOf("$totalMl ml de água")
             )
         }
 

@@ -115,16 +115,16 @@ sealed interface VoiceHealthIntent {
 
     /**
      * 💬 Esclarecimento Conversacional Proativo (Diálogo Multi-Turno).
-     * Disparado quando a fala do usuário é ambígua (ex.: "filé de frango")
-     * e o agente precisa saber se o usuário já comeu ou se quer colocar na lista de compras.
+     * Pede esclarecimento de quantidades de água antes de preparar um registro.
      * @param originalText Texto original falado pelo usuário.
      * @param questionPrompt Pergunta acolhedora formulada pelo agente para ser falada (TTS) e lida.
      * @param options Opções estruturadas para exibição em chips visuais e reconhecimento por voz.
-             */
+     */
     data class ClarificationRequired(
         val originalText: String,
         val questionPrompt: String,
-        val options: List<ClarificationOption>
+        val options: List<ClarificationOption>,
+        val displayValues: List<String> = emptyList()
     ) : VoiceHealthIntent
 
     /**
@@ -357,7 +357,7 @@ fun VoiceHealthIntent.toConfirmationDisplay(): ConfirmationDisplayData {
 
         is VoiceHealthIntent.ClarificationRequired -> ConfirmationDisplayData(
             title = "Atenção",
-            value = originalText,
+            value = displayValues.joinToString(", ").ifBlank { originalText },
             unit = null,
             questionText = questionPrompt,
             spokenQuestion = questionPrompt
