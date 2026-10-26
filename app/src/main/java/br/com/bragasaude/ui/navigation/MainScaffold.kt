@@ -42,7 +42,6 @@ fun MainScaffold(
 
     val showOrb = (shouldShowAssistantOrb(currentRoute) || isVoiceSessionActive) &&
         AppPreferences.isVoiceAssistantEnabled(appContext)
-    val dockAssistant = false
 
     // ==================== Itens de navegação por papel ====================
     val patientNavItems = listOf(
@@ -112,20 +111,13 @@ fun MainScaffold(
                     startDestination = startDestination,
                     userRole = userRole,
                     caregiverMode = caregiverMode,
-                    modifier = Modifier.fillMaxSize().padding(bottom = if (dockAssistant) 96.dp else 0.dp)
+                    modifier = Modifier.fillMaxSize()
                 )
-                if (dockAssistant) {
-                    DraggableAiAssistantFab(
-                        onNavigate = { screen -> navController.navigate(screen) },
-                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(96.dp).clipToBounds(),
-                        viewModel = voiceViewModel,
-                        docked = true
-                    )
-                }
+
             }
         }
 
-        if (showOrb && !dockAssistant) {
+        if (showOrb) {
             DraggableAiAssistantFab(
                 onNavigate = { screen -> navController.navigate(screen) },
                 modifier = Modifier.fillMaxSize(),

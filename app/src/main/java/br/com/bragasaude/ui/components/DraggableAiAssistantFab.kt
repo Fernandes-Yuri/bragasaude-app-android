@@ -213,8 +213,7 @@ private fun AnimatedAudioWaveBar(delay: Int) {
 fun DraggableAiAssistantFab(
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: VoiceHealthViewModel = hiltViewModel(),
-    docked: Boolean = false
+    viewModel: VoiceHealthViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
@@ -287,7 +286,7 @@ fun DraggableAiAssistantFab(
         val density = LocalDensity.current
         val fabSizePx = with(density) { 72.dp.toPx() }
         val marginPx = with(density) { 16.dp.toPx() }
-        val navBarClearancePx = with(density) { (if (docked) 12.dp else 92.dp).toPx() }
+        val navBarClearancePx = with(density) { 92.dp.toPx() }
         val screenWidthPx = constraints.maxWidth.toFloat()
         val maxX = (screenWidthPx - fabSizePx).coerceAtLeast(0f)
         val maxY = (constraints.maxHeight.toFloat() - fabSizePx).coerceAtLeast(0f)
