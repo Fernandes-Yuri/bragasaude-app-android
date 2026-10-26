@@ -306,6 +306,59 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                     }
                 }
             } else {
+                // Disponibilidade da leitura assistida (OCR local via Google Play Services)
+                state.ocrAvailability?.let { ocr ->
+                    when (ocr) {
+                        is OcrAvailability.NeedsUpdate -> {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text("Leitura automática de exames precisa de atualização", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = BragaTextPrimary)
+                                    Text("O reconhecimento de texto usa o Google Play Services. Atualize-o para receber sugestões automáticas de título, data e tipo. A importação de PDFs e fotos continua normal.", style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary)
+                                    Button(
+                                        onClick = {
+                                            val intent = ocr.resolution
+                                                ?: Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.gms"))
+                                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            runCatching { context.startActivity(intent) }.onFailure {
+                                                runCatching {
+                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.gms")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                                }
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald)
+                                    ) {
+                                        Text("Atualizar Google Play Services", style = MaterialTheme.typography.labelLarge)
+                                    }
+                                }
+                            }
+                        }
+                        OcrAvailability.Unavailable -> {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = BragaCardSurface,
+                                border = BorderStroke(1.dp, BragaCardBorder),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text("Leitura automática indisponível neste aparelho", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = BragaTextPrimary)
+                                    Text("Não encontramos o Google Play Services aqui. Você pode importar PDFs e fotos normalmente e informar título, data e tipo manualmente; nada sai do aparelho.", style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary)
+                                }
+                            }
+                        }
+                        OcrAvailability.Ready -> Unit
+                    }
+                }
+
                 // Barra de Ações Rápidas
                 Card(
                     modifier = Modifier.fillMaxWidth(),

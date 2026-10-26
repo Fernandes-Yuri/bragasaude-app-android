@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.local.organizer.*
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -15,14 +16,15 @@ import javax.inject.Inject
 
 data class OrganizerUiState(val session: OrganizerSession? = null, val busy: Boolean = false,
     val error: String? = null, val notice: String? = null, val ready: Boolean = false, val saved: Boolean = false,
-    val preview: Bitmap? = null, val previewPage: Int = -1, val resultPages: Int = 0, val newest: Boolean = true)
+    val preview: Bitmap? = null, val previewPage: Int = -1, val resultPages: Int = 0, val newest: Boolean = true,
+    val ocrAvailability: OcrAvailability? = null)
 
 @HiltViewModel
-class OrganizerViewModel @Inject constructor(private val store: OrganizerStore) : ViewModel() {
+class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, private val ocrCapability: OcrCapability) : ViewModel() {
     private val mutable = MutableStateFlow(OrganizerUiState())
     val state = mutable.asStateFlow()
     private val operations = Mutex()
-    init { refresh() }
+    init { refresh(); probeOcr() }
     private fun operation(block: suspend () -> Unit) {
         mutable.value = mutable.value.copy(busy = true, error = null)
         viewModelScope.launch { operations.withLock {
@@ -38,6 +40,16 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore) 
         val session = store.restore()
         mutable.value = mutable.value.copy(session = session,
             ready = mutable.value.ready && session?.id == mutable.value.session?.id)
+        probeOcr()
+    }
+    /** Sonda a infraestrutura de leitura assistida sem nunca bloquear ou derrubar a área. */
+    fun probeOcr() {
+        viewModelScope.launch(Dispatchers.Default) {
+            val availability = ocrCapability.probe()
+            if (mutable.value.ocrAvailability != availability) {
+                mutable.value = mutable.value.copy(ocrAvailability = availability)
+            }
+        }
     }
     fun start() = operation { mutable.value = OrganizerUiState(session = store.start(), busy = true) }
     private fun changed(session: OrganizerSession) {
