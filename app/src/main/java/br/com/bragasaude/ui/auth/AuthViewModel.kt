@@ -735,7 +735,9 @@ class AuthViewModel @Inject constructor(
                 android.util.Log.w("AuthViewModel", "Erro ao cancelar workers: ${e.message}")
             }
             
-            // Limpar todas as tabelas locais (exceto catálogo de alimentos persistido)
+            // Limpar todas as tabelas locais — sem exceções: o schema 63 não tem
+            // mais tabelas do módulo de alimentação (retirado no ADR-010) e o
+            // catálogo/prefs legados são zerados pelo RetiredNutritionCleanup no boot.
             // AUD-AN17 corrigido: Room gerencia o ciclo de vida do SQLite sob Hilt @Singleton.
             // NUNCA chamar database.close() ou appContext.deleteDatabase():
             // 1) database.close() antes de clearAllTables() causa IllegalStateException
