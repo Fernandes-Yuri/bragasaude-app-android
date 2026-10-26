@@ -69,7 +69,7 @@ class ProfileViewModel @Inject constructor(
 
     init {
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
-        
+
         viewModelScope.launch {
             repository.getProfile(userId).collectLatest { entity ->
                 _profile.value = entity?.toRemote()
@@ -120,7 +120,6 @@ class ProfileViewModel @Inject constructor(
             hasBone = input.hasBone,
             hasMuscular = input.hasMuscular,
             hydrationTargetMl = input.hydrationTargetMl,
-            dailyCalorieTarget = input.dailyCalorieTarget,
             stepGoal = input.stepGoal,
             weightGoal = input.weightGoal,
             sleepStart = input.sleepStart,
@@ -153,7 +152,6 @@ class ProfileViewModel @Inject constructor(
         hasBone: Boolean? = null,
         hasMuscular: Boolean? = null,
         hydrationTargetMl: Int? = null,
-        dailyCalorieTarget: Double? = null,
         stepGoal: Int? = null,
         weightGoal: Double? = null,
         sleepStart: String? = "22:00",
@@ -171,7 +169,7 @@ class ProfileViewModel @Inject constructor(
         onComplete: () -> Unit
     ) {
         val userId = auth.currentUser?.uid ?: return
-        
+
         viewModelScope.launch {
             _isLoading.value = true
             _saveError.value = null
@@ -199,7 +197,6 @@ class ProfileViewModel @Inject constructor(
                     hasBoneIssue = hasBone ?: base.hasBoneIssue,
                     hasMuscularIssue = hasMuscular ?: base.hasMuscularIssue,
                     hydrationTargetMl = hydrationTargetMl ?: base.hydrationTargetMl,
-                    dailyCalorieTarget = dailyCalorieTarget ?: base.dailyCalorieTarget,
                     stepGoal = stepGoal ?: base.stepGoal ?: 8000,
                     weightGoal = weightGoal ?: base.weightGoal,
                     sleepStartTime = sleepStart ?: "22:00",
@@ -469,7 +466,7 @@ class ProfileViewModel @Inject constructor(
         val current = _profile.value ?: RemoteProfile(id = userId)
         val nowIso = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).format(java.util.Date())
         val updated = current.copy(consentAcceptedAt = nowIso)
-        
+
         viewModelScope.launch {
             _isLoading.value = true
             try {

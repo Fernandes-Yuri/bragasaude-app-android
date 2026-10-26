@@ -150,11 +150,7 @@ class VoiceHealthExecutor @Inject constructor(
                 }
             }
 
-            is VoiceHealthIntent.Meal,
-            is VoiceHealthIntent.Grocery,
-            is VoiceHealthIntent.SuggestFood -> {
-                "O assistente de voz não realiza anotação de refeições ou compras. Utilize a tela de Alimentação."
-            }
+
 
             is VoiceHealthIntent.ClarificationRequired -> {
                 intent.questionPrompt

@@ -1,7 +1,6 @@
 package br.com.bragasaude.ui.home
 
 import br.com.bragasaude.ui.components.BragaAlertDialog
-import br.com.bragasaude.ui.components.BragaCalorieProgressCard
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -87,8 +86,6 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val userName by viewModel.userName.collectAsState()
-    val consumedCal by viewModel.todayCaloriesConsumed.collectAsState()
-    val targetCal by viewModel.dailyCalorieTarget.collectAsState()
     val vitals by viewModel.dashboardVitals.collectAsState()
     val milestone by viewModel.latestMilestone.collectAsState()
     val clinicalAlerts by viewModel.clinicalAlerts.collectAsState()
@@ -99,7 +96,7 @@ fun HomeScreen(
     val medications by viewModel.medications.collectAsState()
     val heartReadings by viewModel.heartReadings.collectAsState()
     val oxygenReadings by viewModel.oxygenReadings.collectAsState()
-    
+
     val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     var showEmergencyDialog by remember { mutableStateOf(false) }
@@ -186,7 +183,7 @@ fun HomeScreen(
                             add(Triple("Mural", Icons.Default.Groups, br.com.bragasaude.ui.util.Screen.SocialFeed))
                             add(Triple("Exames", Icons.Default.Assignment, br.com.bragasaude.ui.util.Screen.Exams))
                         }
-                        
+
                         items(items.size) { index ->
                             val (label, icon, route) = items[index]
                             val interactionSource = remember { MutableInteractionSource() }
@@ -350,12 +347,7 @@ fun HomeScreen(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Vitals("PRESSURE")) }
                         )
-                        BragaCalorieProgressCard(
-                            consumedKcal = consumedCal,
-                            targetKcal = targetCal,
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Nutrition()) }
-                        )
+
                     }
 
                     if (profile?.hasDiabetes == true || gluc != null) {

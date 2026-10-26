@@ -47,11 +47,7 @@ val patientTourSlides = listOf(
     *examEducationSteps.map { step ->
         TourSlide(title = step.title, description = step.description, examScene = step.scene, notice = step.notice)
     }.toTypedArray(),
-    TourSlide(
-        title = "Autocuidado e Nutrição Consciente",
-        description = "Receba orientações inteligentes de refeições e combinações de alimentos ajustadas para suas preferências e perfil de saúde.",
-        scene = TourEducationScene.NUTRITION
-    ),
+
     TourSlide(
         title = "Movimento, Água e Conquistas",
         description = "Mantenha sua meta de hidratação diária, registre sua caminhada e acompanhe sua disciplina com respeito absoluto à sua privacidade.",
@@ -81,11 +77,7 @@ val caregiverTourSlides = listOf(
         description = "Envie lembretes de remédio, incentivos de hidratação e recados personalizados. Tudo chega no celular dele com o seu nome.",
         scene = TourEducationScene.MESSAGES
     ),
-    TourSlide(
-        title = "Lista de Compras Colaborativa",
-        description = "A lista semanal do seu familiar aparece aqui. Marque o que você já comprou e a despensa dele atualiza automaticamente em casa.",
-        scene = TourEducationScene.SHOPPING
-    ),
+
     TourSlide(
         title = "Alertas Silenciosos de Segurança",
         description = "Se algo fugir muito da faixa de referência (ex.: pressão fora do habitual), você recebe um aviso discreto para acolher e conversar. Nenhuma notificação alarmista é enviada.",

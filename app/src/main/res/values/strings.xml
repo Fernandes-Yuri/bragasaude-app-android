@@ -38,14 +38,6 @@
     <string name="heart_rate_high">Frequência cardíaca elevada em repouso (%1$d bpm).</string>
     <string name="heart_rate_high_action">Repouse por 10 a 15 minutos, respire calmamente e meça novamente.</string>
 
-    <string name="nutrition_glucose_msg">Glicemia em %1$d mg/dL (Faixa de Atenção SBD/ADA).</string>
-    <string name="nutrition_glucose_action">Sugestão Nutricional: Consuma fibras solúveis (aveia, semente de chia, psyllium), folhas verde-escuras e leguminosas, que retardam a absorção de carboidratos e auxiliam no controle glicêmico.</string>
-    <string name="nutrition_cholesterol_msg">Perfil Lipídico (%1$s: %2$d mg/dL) acima do ótimo da SBC.</string>
-    <string name="nutrition_cholesterol_action">Sugestão Nutricional: Inclua azeite de oliva extravirgem, abacate, peixes ricos em Ômega-3 (sardinha, salmão) e castanhas, que favorecem a modulação das frações lipídicas.</string>
-    <string name="nutrition_triglycerides_msg">Triglicerídeos em %1$d mg/dL (Acima da referência ideal SBC).</string>
-    <string name="nutrition_triglycerides_action">Sugestão Nutricional: Reduza açúcares e farinhas refinadas. Priorize carboidratos complexos, maçãs, grãos integrais e hidratação abundante.</string>
-    <string name="nutrition_uric_acid_msg">Ácido úrico em %1$s mg/dL (Limite superior).</string>
-    <string name="nutrition_uric_acid_action">Sugestão Nutricional: Aumente o consumo diário de água (meta 35 ml/kg) e dê preferência a alimentos com baixo teor de purinas como cerejas, morangos e vegetais frescos.</string>
 
     <string name="glucose_emergency">Glicose em nível significativamente fora da faixa (%1$d mg/dL).</string>
     <string name="glucose_emergency_action">Caso apresente sonolência, confusão ou mal-estar, busque atendimento de saúde presencial.</string>
@@ -76,7 +68,6 @@
     <string name="observation_bp_trend">Pressão arterial (sistólica) acima da faixa de referência em %1$d medições seguidas.</string>
     <string name="disclaimer_not_medical">Conteúdo informativo com base em faixas de referência e consensos internacionais. Não constitui diagnóstico nem prescrição médica. Em caso de dúvidas ou sintomas, consulte um profissional de saúde.</string>
     <string name="care_modules_subtitle">Sugestões de autocuidado com base nos parâmetros que você registra. Não substituem orientação médica.</string>
-    <string name="nutrition_disclaimer">Sugestões de autocuidado alimentar baseadas no seu perfil e parâmetros informados. Não constituem prescrição médica nem substituem nutricionista.</string>
 
 
     <!-- Atividade e Sedentarismo -->

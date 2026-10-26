@@ -3,7 +3,6 @@ package br.com.bragasaude.data.remote.repository
 import br.com.bragasaude.data.local.DailyMetricsDao
 import br.com.bragasaude.data.local.FamilyBindingEntity
 import br.com.bragasaude.data.local.FamilyDao
-import br.com.bragasaude.data.local.GroceryListDao
 import br.com.bragasaude.data.local.ProfileDao
 import br.com.bragasaude.data.local.SocialFeedDao
 import br.com.bragasaude.data.local.VitalSignDao
@@ -34,7 +33,6 @@ class FamilyBridgeRepositoryTest {
     private lateinit var vitalSignDao: VitalSignDao
     private lateinit var profileDao: ProfileDao
     private lateinit var dailyMetricsDao: DailyMetricsDao
-    private lateinit var groceryListDao: GroceryListDao
     private lateinit var socialFeedDao: SocialFeedDao
     private lateinit var apiClient: BragaApiClient
     private lateinit var auth: FirebaseAuth
@@ -51,7 +49,6 @@ class FamilyBridgeRepositoryTest {
         vitalSignDao = mockk(relaxed = true)
         profileDao = mockk(relaxed = true)
         dailyMetricsDao = mockk(relaxed = true)
-        groceryListDao = mockk(relaxed = true)
         socialFeedDao = mockk(relaxed = true)
         apiClient = mockk(relaxed = true)
         auth = mockk(relaxed = true)
@@ -64,7 +61,6 @@ class FamilyBridgeRepositoryTest {
             vitalSignDao = vitalSignDao,
             profileDao = profileDao,
             dailyMetricsDao = dailyMetricsDao,
-            groceryListDao = groceryListDao,
             socialFeedDao = socialFeedDao,
             apiClient = apiClient,
             auth = auth,
@@ -289,7 +285,6 @@ class FamilyBridgeRepositoryTest {
         coVerify(exactly = 1) { vitalSignDao.deleteByUserId("patient-secret-uid") }
         coVerify(exactly = 1) { dailyMetricsDao.deleteByUserId("patient-secret-uid") }
         coVerify(exactly = 1) { familyDao.deleteMessagesForPatient("patient-secret-uid") }
-        coVerify(exactly = 1) { groceryListDao.clearGroceryList("patient-secret-uid") }
     }
 
     @Test

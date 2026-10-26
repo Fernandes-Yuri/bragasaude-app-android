@@ -6,7 +6,6 @@ import br.com.bragasaude.data.local.DailyMetricsEntity
 import br.com.bragasaude.data.local.FamilyBindingEntity
 import br.com.bragasaude.data.local.FamilyDao
 import br.com.bragasaude.data.local.FamilyMessageEntity
-import br.com.bragasaude.data.local.GroceryListDao
 import br.com.bragasaude.data.local.ProfileDao
 import br.com.bragasaude.data.local.ProfileEntity
 import br.com.bragasaude.data.local.SocialPostEntity
@@ -46,7 +45,6 @@ class FamilyBridgeRepository @Inject constructor(
     private val vitalSignDao: VitalSignDao,
     private val profileDao: ProfileDao,
     private val dailyMetricsDao: DailyMetricsDao,
-    private val groceryListDao: GroceryListDao,
     private val socialFeedDao: SocialFeedDao,
     private val apiClient: BragaApiClient,
     private val auth: FirebaseAuth,
@@ -159,7 +157,6 @@ class FamilyBridgeRepository @Inject constructor(
             dailyMetricsDao.deleteByUserId(patientUserId)
             familyDao.deleteMessagesForPatient(patientUserId)
             profileDao.deleteProfile(patientUserId)
-            groceryListDao.clearGroceryList(patientUserId)
             android.util.Log.d("FamilyBridgeRepo", "Purga LGPD concluída com sucesso para dados do paciente")
         } catch (e: Exception) {
             android.util.Log.e("FamilyBridgeRepo", "Erro ao executar purga LGPD de dados médicos: ${e.message}")

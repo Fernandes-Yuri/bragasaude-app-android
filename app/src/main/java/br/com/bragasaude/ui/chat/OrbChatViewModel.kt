@@ -287,9 +287,8 @@ class OrbChatViewModel @Inject constructor(
                     if (version != revision) return@launch
                     healthQuerySession.forgetReferences(owner, conversationId, contextTurn)
                     gateway.open(viewModelScope)
-                    val dietContext = try { hybrid.dietContext(scope?.second ?: owner, value) } catch (_: Exception) { "" }
                     if (version != revision) return@launch
-                    val context = listOf("assistant" to GroqDynamicPrompt().build(history.dropLast(1), channel, local, dietContext)) + history.takeLast(10)
+                    val context = listOf("assistant" to GroqDynamicPrompt().build(history.dropLast(1), channel, local)) + history.takeLast(10)
                     gateway.sendRemote(context, actingAs = scope?.first, patientId = scope?.second) { partial ->
                         if (version == revision) {
                             if (partial.isNotBlank() && firstTextMs == null) firstTextMs = elapsedMs()
@@ -440,17 +439,7 @@ class OrbChatViewModel @Inject constructor(
                     "REGISTRAR_BATIMENTOS" -> Screen.HealthReadings("HEART_RATE", p.optString("batimentos").takeIf { it.isNotBlank() })
                     "REGISTRAR_OXIGENACAO" -> Screen.HealthReadings("OXYGEN_SATURATION", p.optString("saturacao").takeIf { it.isNotBlank() })
                     "REGISTRAR_AGUA" -> Screen.Hydration(p.optInt("quantidade_ml", 250).coerceIn(1, 5000), true)
-                    "BUSCAR_ALIMENTO" -> Screen.Nutrition(p.optString("alimento"))
-                    "ABRIR_LISTA_COMPRAS" -> {
-                        val items = mutableListOf<String>()
-                        val arr = p.optJSONArray("items")
-                        if (arr != null) {
-                            for (i in 0 until arr.length()) {
-                                arr.optString(i)?.takeIf { it.isNotBlank() }?.let { items.add(it) }
-                            }
-                        }
-                        Screen.Nutrition(openGroceryList = true, groceryItems = items)
-                    }
+
                     "CONSULTAR_METRICAS" -> Screen.Report
                     "ABRIR_FAMILIA" -> Screen.FamilyConnect
                     "LEMBRETES" -> Screen.Reminders
@@ -530,7 +519,7 @@ class OrbChatViewModel @Inject constructor(
         // Agente B1: ações com executor real no app. Registro clínico abre
         // tela pré-preenchida (o usuário confirma lá); lista/relatório navegam.
         return when (rawAction) {
-            "EMERGENCIA", "LEMBRETES", "EXAMES", "CONSULTAR_METRICAS", "ABRIR_FAMILIA", "ABRIR_LISTA_COMPRAS",
+            "EMERGENCIA", "LEMBRETES", "EXAMES", "CONSULTAR_METRICAS", "ABRIR_FAMILIA",
             "REGISTRAR_PRESSAO", "REGISTRAR_GLICEMIA", "REGISTRAR_AGUA",
             "REGISTRAR_BATIMENTOS", "REGISTRAR_OXIGENACAO",
             // D51: rascunho de agendamento por voz — card com botao Confirmar
@@ -548,8 +537,6 @@ fun actionLabel(action: String): String = when (action) {
     "REGISTRAR_BATIMENTOS" -> "batimentos cardíacos"
     "REGISTRAR_OXIGENACAO" -> "saturação de oxigênio"
     "REGISTRAR_AGUA" -> "hidratação"
-    "BUSCAR_ALIMENTO" -> "alimentação"
-    "ABRIR_LISTA_COMPRAS" -> "lista de compras"
     "CONSULTAR_METRICAS" -> "relatório de saúde"
     "ABRIR_FAMILIA" -> "Família"
     "LEMBRETES" -> "lembretes de remédios"

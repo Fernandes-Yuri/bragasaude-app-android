@@ -1,7 +1,7 @@
 name: Validar higiene do repositório
 on:
   push:
-    branches: [master, 'feat/**', 'fix/**']
+    branches: [master, 'feat/**', 'fix/**', 'ops/**']
   pull_request:
     branches: [master]
 permissions:

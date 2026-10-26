@@ -1,6 +1,5 @@
 package br.com.bragasaude.domain
 
-import br.com.bragasaude.data.local.FoodEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -9,102 +8,6 @@ import org.junit.Test
 class VoiceHealthParserTest {
 
     private lateinit var parser: VoiceHealthParser
-    private val testCatalog = listOf(
-        FoodEntity(
-            remoteId = "1",
-            name = "Filé de Frango Grelhado",
-            category = "Proteínas",
-            kcal = 165.0,
-            isDiabetesSafe = true,
-            isHypertensionSafe = true
-        ),
-        FoodEntity(
-            remoteId = "2",
-            name = "Arroz Integral Cozido",
-            category = "Cereais & Grãos",
-            kcal = 124.0,
-            isDiabetesSafe = true,
-            isHypertensionSafe = true
-        ),
-        FoodEntity(
-            remoteId = "3",
-            name = "Feijão Preto Cozido",
-            category = "Leguminosas",
-            kcal = 77.0,
-            isDiabetesSafe = true,
-            isHypertensionSafe = true
-        ),
-        FoodEntity(
-            remoteId = "4",
-            name = "Banana Prata",
-            category = "Frutas",
-            kcal = 98.0,
-            isDiabetesSafe = true,
-            isHypertensionSafe = true
-        ),
-        FoodEntity(
-            remoteId = "5",
-            name = "Leite Desnatado",
-            category = "Laticínios",
-            kcal = 35.0,
-            isDiabetesSafe = true,
-            isHypertensionSafe = true
-        ),
-        FoodEntity(
-            remoteId = "6",
-            name = "Farelo de Aveia",
-            category = "Cereais & Fibras",
-            kcal = 246.0,
-            isDiabetesSafe = true,
-            isHypertensionSafe = true,
-            functionalTags = listOf("fibra_soluvel", "baixo_ig", "beta_glucana"),
-            healthBenefits = "Rico em beta-glucana que modula a glicose.",
-            servingUnit = "1 colher de sopa cheia (20g)"
-        ),
-        FoodEntity(
-            remoteId = "7",
-            name = "Semente de Chia",
-            category = "Sementes & Grãos",
-            kcal = 486.0,
-            isDiabetesSafe = true,
-            isHypertensionSafe = true,
-            functionalTags = listOf("omega3", "fibra_soluvel"),
-            healthBenefits = "Rico em fibras solúveis e ômega-3.",
-            servingUnit = "1 colher de sopa (15g)"
-        ),
-        FoodEntity(
-            remoteId = "8",
-            name = "Maçã Gala",
-            category = "Frutas",
-            kcal = 52.0,
-            isDiabetesSafe = true,
-            isHypertensionSafe = true,
-            functionalTags = listOf("fibra_soluvel"),
-            healthBenefits = "Excelente fonte de pectina para saciedade.",
-            servingUnit = "1 unidade média"
-        ),
-        FoodEntity(
-            remoteId = "9",
-            name = "Suco de Laranja Natural",
-            category = "Bebidas Hidratantes",
-            kcal = 45.0,
-            isDiabetesSafe = false,
-            isHypertensionSafe = true,
-            servingUnit = "150 ml (1 copo pequeno)"
-        ),
-        FoodEntity(
-            remoteId = "10",
-            name = "Beterraba Cozida",
-            category = "Legumes & Raízes",
-            kcal = 44.0,
-            isDiabetesSafe = true,
-            isHypertensionSafe = true,
-            functionalTags = listOf("nitrato_natural", "potassio"),
-            healthBenefits = "Rica em nitratos naturais que apoiam a vasodilatação.",
-            servingUnit = "1 porção (100g)"
-        )
-    )
-
     @Before
     fun setup() {
         parser = VoiceHealthParser()
@@ -270,7 +173,7 @@ class VoiceHealthParserTest {
         val result = parser.parse("abrir lista de compras")
         assertTrue(result is VoiceHealthIntent.ConversationalReply)
         val reply = result as VoiceHealthIntent.ConversationalReply
-        assertTrue(reply.message.contains("Alimentação"))
+        assertTrue(reply.message.contains("descontinuado"))
     }
 
     @Test
@@ -353,7 +256,7 @@ class VoiceHealthParserTest {
         val result = parser.parse("adicione farelo de aveia na minha meta diária de alimentação")
         assertTrue(result is VoiceHealthIntent.ConversationalReply)
         val reply = result as VoiceHealthIntent.ConversationalReply
-        assertTrue(reply.message.contains("Alimentação"))
+        assertTrue(reply.message.contains("descontinuado"))
     }
 
     @Test
@@ -361,7 +264,7 @@ class VoiceHealthParserTest {
         val result = parser.parse("adicione chia na lista de compras")
         assertTrue(result is VoiceHealthIntent.ConversationalReply)
         val reply = result as VoiceHealthIntent.ConversationalReply
-        assertTrue(reply.message.contains("Alimentação"))
+        assertTrue(reply.message.contains("descontinuado"))
     }
 
     @Test
@@ -382,86 +285,11 @@ class VoiceHealthParserTest {
         assertTrue(result is VoiceHealthIntent.Unknown)
     }
 
-    @Test
-    fun `clinical suggestion for high glucose cites SBD and low GI food`() {
-        val vitalGlucose = br.com.bragasaude.data.local.VitalSignEntity(
-            userId = "u1",
-            remoteId = "v1",
-            measuredAt = java.util.Date(),
-            glucoseLevel = 145
-        )
-        val suggestion = NutritionSuggestionEngine.suggestFoodForUser(
-            profile = null,
-            vitals = listOf(vitalGlucose),
-            catalog = testCatalog,
-            userWeightKg = 70.0
-        )
-        assertEquals("GLUCOSE_HIGH", suggestion.targetCondition)
-        assertTrue(suggestion.clinicalSociety.contains("SBD", ignoreCase = true) || suggestion.clinicalSociety.contains("Diabetes", ignoreCase = true))
-        assertTrue(suggestion.food.isDiabetesSafe)
-        assertTrue(!suggestion.spokenPrompt.contains("acima do peso", ignoreCase = true))
-    }
 
-    @Test
-    fun `clinical suggestion for low glucose cites SBD 15g rule and fast carb`() {
-        val vitalGlucose = br.com.bragasaude.data.local.VitalSignEntity(
-            userId = "u1",
-            remoteId = "v2",
-            measuredAt = java.util.Date(),
-            glucoseLevel = 58
-        )
-        val suggestion = NutritionSuggestionEngine.suggestFoodForUser(
-            profile = null,
-            vitals = listOf(vitalGlucose),
-            catalog = testCatalog,
-            userWeightKg = 70.0
-        )
-        assertEquals("GLUCOSE_LOW", suggestion.targetCondition)
-        assertTrue(suggestion.clinicalSociety.contains("SBD", ignoreCase = true) || suggestion.clinicalSociety.contains("Diabetes", ignoreCase = true))
-        assertTrue(suggestion.spokenPrompt.contains("15", ignoreCase = true))
-    }
 
-    @Test
-    fun `clinical suggestion for hypertension cites SBC and DASH`() {
-        val vitalBp = br.com.bragasaude.data.local.VitalSignEntity(
-            userId = "u1",
-            remoteId = "v3",
-            measuredAt = java.util.Date(),
-            systolicPressure = 140,
-            diastolicPressure = 90
-        )
-        val suggestion = NutritionSuggestionEngine.suggestFoodForUser(
-            profile = null,
-            vitals = listOf(vitalBp),
-            catalog = testCatalog,
-            userWeightKg = 75.0
-        )
-        assertEquals("HYPERTENSION", suggestion.targetCondition)
-        assertTrue(suggestion.clinicalSociety.contains("SBC", ignoreCase = true) || suggestion.clinicalSociety.contains("Cardiologia", ignoreCase = true))
-        assertTrue(suggestion.food.isHypertensionSafe)
-    }
 
-    @Test
-    fun `clinical suggestion for elevated BMI recommends satiety food WITHOUT saying acima do peso`() {
-        val profile = br.com.bragasaude.data.local.ProfileEntity(
-            userId = "u1",
-            fullName = "Paciente Teste",
-            height = 1.65,
-            weight = 96.0 // IMC = 96 / (1.65^2) = 35.26 (Elevado)
-        )
-        val suggestion = NutritionSuggestionEngine.suggestFoodForUser(
-            profile = profile,
-            vitals = emptyList(),
-            catalog = testCatalog,
-            userWeightKg = 96.0
-        )
-        assertEquals("WEIGHT_MANAGEMENT", suggestion.targetCondition)
-        // Regra de Ouro: NUNCA verbalizar que o usuário está acima do peso
-        val fullText = "${suggestion.reason} ${suggestion.spokenPrompt}".lowercase()
-        assertTrue(!fullText.contains("acima do peso"))
-        assertTrue(!fullText.contains("sobrepeso"))
-        assertTrue(!fullText.contains("gordo"))
-        assertTrue(!fullText.contains("obes"))
-        assertTrue(fullText.contains("saciedade") || fullText.contains("leveza") || fullText.contains("fibras"))
-    }
+
+
+
+
 }

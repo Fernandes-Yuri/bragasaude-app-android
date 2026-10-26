@@ -47,7 +47,7 @@ class SplashLogoTest {
             }
         }
         assertTrue("The icon must contain the full mark", opaque > 10000)
-        val file = File("build/outputs/nutrition-review/splash-api-${RuntimeEnvironment.getApiLevel()}.png")
+        val file = File("build/outputs/ui-review/splash-api-${RuntimeEnvironment.getApiLevel()}.png")
         requireNotNull(file.parentFile).mkdirs()
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         bitmap.recycle()

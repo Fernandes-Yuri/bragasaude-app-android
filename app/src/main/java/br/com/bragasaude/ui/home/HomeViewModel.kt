@@ -49,30 +49,6 @@ class HomeViewModel @Inject constructor(
     private val _dashboardVitals = MutableStateFlow(RemoteVitalSign(userId = ""))
     val dashboardVitals = _dashboardVitals.asStateFlow()
 
-    val todayCaloriesConsumed: StateFlow<Double> = database.groceryPantryDao()
-        .meals(auth.currentUser?.uid ?: BragaConstants.GUEST_UID, todayDateStr)
-        .map { meals -> meals.sumOf { it.kcal } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
-
-    val dailyCalorieTarget: StateFlow<Double> = profileRepository
-        .getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
-        .map { profile ->
-            val custom = profile?.dailyCalorieTarget
-            if (custom != null && custom > 500.0 && custom != 1800.0) {
-                custom
-            } else {
-                HealthCalculators.calculateProfileCalorieTarget(
-                    weight = profile?.weight,
-                    height = profile?.height,
-                    birthDate = profile?.birthDate,
-                    gender = profile?.gender,
-                    activityLevel = profile?.activityLevel,
-                    weightGoal = profile?.weightGoal
-                ).toDouble()
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 2000.0)
-
     private val _latestMilestone = MutableStateFlow<RemoteMilestone?>(null)
     val latestMilestone = _latestMilestone.asStateFlow()
 
@@ -130,7 +106,7 @@ class HomeViewModel @Inject constructor(
     init {
         alertPrefs.registerOnSharedPreferenceChangeListener(alertPrefsListener)
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
-        
+
         viewModelScope.launch {
             try {
                 vitalsRepository.deduplicateVitals()
@@ -155,7 +131,7 @@ class HomeViewModel @Inject constructor(
         ) { vitalsEntities, profileEntity, dailyMetrics, liveSteps ->
             val vitals = vitalsEntities.map { it.toRemote() }
             val profile = profileEntity?.toRemote()
-            
+
             val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
             val dbSteps = dailyMetrics.firstOrNull { it.date == today }?.steps ?: 0
             val stepsNow = maxOf(dbSteps, liveSteps)
@@ -196,12 +172,12 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             healthDataFlow.map { it.second }.collectLatest { (uid, vitals, metrics) ->
                 val profile = profileRepository.getProfile(uid).firstOrNull()?.toRemote()
-                
+
                 val (vitalAnalysis, activityRecommendations) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                     healthEngine.analyzeVitals(uid, vitals.take(1), silent = true) to
                         healthEngine.analyzeActivityPatterns(uid, metrics)
                 }
-                
+
                 val alerts = mutableListOf<String>()
                 alerts.addAll(vitalAnalysis.alerts)
                 alerts.addAll(activityRecommendations.map { it.message })
@@ -216,7 +192,7 @@ class HomeViewModel @Inject constructor(
 
                     val hasLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
                                       ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                    
+
                     val hasActivity = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                         ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
                     } else true
@@ -225,7 +201,7 @@ class HomeViewModel @Inject constructor(
                         alerts.add(0, "PERMISSION_REQUIRED: Ative o monitoramento de passos para melhorar seu Score.")
                     }
                 }
-                
+
                 _clinicalAlerts.value = alerts.distinct().filter { !dismissedAlerts.contains(it) }
                 readStateStore.identify(_clinicalAlerts.value.toSet())
             }
@@ -236,7 +212,7 @@ class HomeViewModel @Inject constructor(
                 _latestMilestone.value = entities.firstOrNull()?.toRemote()
             }
         }
-        
+
         viewModelScope.launch {
             kotlinx.coroutines.delay(350)
             medicationRepository.syncMedicationsFromServer(userId)

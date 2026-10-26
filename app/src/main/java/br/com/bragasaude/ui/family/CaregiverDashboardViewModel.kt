@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.repository.FamilyBridgeRepository
-import br.com.bragasaude.data.remote.repository.GroceryRepository
 import br.com.bragasaude.data.remote.repository.MessageTemplate
 import br.com.bragasaude.ui.util.FamilyNotificationService
 import com.google.firebase.auth.FirebaseAuth
@@ -27,7 +26,6 @@ import br.com.bragasaude.util.BragaConstants
  * - Listagem dos pacientes acompanhados pelo cuidador
  * - Observação em tempo real (Firebase Data Connect -> Room -> UI) dos sinais vitais,
  *   hidratação e passos do paciente selecionado
- * - Gerenciamento de lista de compras / necessidades do paciente
  * - Envio de bilhetes de carinho e lembretes com modelos rápidos
  * - Compartilhamento de conquistas familiares no Feed Social Intergeracional
  * - Aceitação de novos vínculos através de código de conexão
@@ -39,7 +37,6 @@ class CaregiverDashboardViewModel @Inject constructor(
     private val profileDao: ProfileDao,
     private val vitalSignDao: VitalSignDao,
     private val dailyMetricsDao: DailyMetricsDao,
-    private val groceryRepository: GroceryRepository,
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
@@ -55,8 +52,6 @@ class CaregiverDashboardViewModel @Inject constructor(
     private val _dashboard = MutableStateFlow(CaregiverDashboardState())
     val dashboard: StateFlow<CaregiverDashboardState> = _dashboard.asStateFlow()
 
-    private val _groceryItems = MutableStateFlow<List<GroceryListItemEntity>>(emptyList())
-    val groceryItems: StateFlow<List<GroceryListItemEntity>> = _groceryItems.asStateFlow()
 
     private val _quickTemplates = MutableStateFlow(familyRepository.getQuickMessageTemplates())
     val quickTemplates: StateFlow<Map<String, MessageTemplate>> = _quickTemplates.asStateFlow()
@@ -221,23 +216,10 @@ class CaregiverDashboardViewModel @Inject constructor(
             }
         }
 
-        // Observar lista de compras do paciente
-        viewModelScope.launch {
-            groceryRepository.getGroceryList(binding.patientUserId).collectLatest { items ->
-                _groceryItems.value = items
-            }
-        }
+
     }
 
-    fun toggleGroceryItem(itemId: String, isChecked: Boolean) {
-        viewModelScope.launch {
-            try {
-                groceryRepository.updateCheckedStatus(itemId, isChecked)
-            } catch (e: Exception) {
-                _uiEvents.emit(FamilyUiEvent.Error("Erro ao atualizar lista: ${e.message}"))
-            }
-        }
-    }
+
 
     fun sendQuickMessage(templateKey: String) {
         val template = _quickTemplates.value[templateKey] ?: return

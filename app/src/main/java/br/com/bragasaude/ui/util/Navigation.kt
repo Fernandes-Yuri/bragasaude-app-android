@@ -14,10 +14,9 @@ import kotlinx.serialization.Serializable
     @Serializable data class HealthReadings(val metric: String, val initialValue: String? = null) : Screen
     @Serializable data object Reminders : Screen
     @Serializable data object AddData : Screen
-    @Serializable data class Nutrition(val searchFood: String? = null, val openGroceryList: Boolean = false, val groceryItems: List<String> = emptyList()) : Screen
     @Serializable data object Profile : Screen
     @Serializable data object ProfileEdit : Screen
-    
+
     @Serializable data class Vitals(val type: String? = null, val initialValue: String? = null) : Screen
     @Serializable data object Biometry : Screen
     @Serializable data object Exams : Screen
@@ -28,18 +27,17 @@ import kotlinx.serialization.Serializable
     @Deprecated("Liga Semanal desativada por D61; rota preservada apenas para compatibilidade")
     @Serializable data object League : Screen
     @Serializable data object SocialFeed : Screen
-    
+
     // Telas Legais e Onboarding Guiado (Agente D)
     @Serializable data object TermsOfUse : Screen
     @Serializable data object PrivacyPolicy : Screen
     @Serializable data object OnboardingTour : Screen
-    
-    // Novas Rotas (Ponte Familiar, Despensa e Papéis)
+
+    // Novas Rotas (Ponte Familiar e Papéis)
     @Serializable data object FamilyConnect : Screen
     @Serializable data object FamilyInbox : Screen
     @Serializable data class FamilyChat(val patientId: String? = null) : Screen
     @Serializable data object CaregiverDashboard : Screen
-    @Serializable data object PantryRecipes : Screen
     @Serializable data object RoleSelection : Screen
     @Serializable data object CaregiverRegistration : Screen
 

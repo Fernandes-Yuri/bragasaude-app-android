@@ -29,7 +29,7 @@ name: Build APK
 on:
   # Push no master ou em branches de trabalho: só build de teste (nunca release).
   push:
-    branches: [ master, 'fix/**', 'feat/**', 'fase-**' ]
+    branches: [ master, 'fix/**', 'ops/**', 'feat/**', 'fase-**' ]
     paths-ignore:
       - '*.md'
       - 'docs/**'
@@ -277,9 +277,6 @@ jobs:
       - name: Validar padrão compartilhado de janelas
         run: python3 .github/scripts/check_modal_consistency.py
 
-      - name: Validar motor sem nomes de alimentos
-        run: python3 .github/scripts/check_grocery_metadata.py
-
       - name: Rodar testes unitários
         run: |
           JDK_PATHS=$(ls -d "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}/Java_Temurin_jdk"/*/x64 2>/dev/null | paste -sd, -)
@@ -294,12 +291,12 @@ jobs:
           path: app/build/reports/tests/testDebugUnitTest/
           retention-days: 14
 
-      - name: Publicar capturas da alimentação
+      - name: Publicar capturas da interface
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: revisao-visual-alimentacao
-          path: app/build/outputs/nutrition-review/
+          name: revisao-visual-interface
+          path: app/build/outputs/ui-review/
           retention-days: 14
           if-no-files-found: warn
 

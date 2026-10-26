@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -19,6 +18,7 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], manifest = Config.NONE, application = Application::class)
 class Release18MigrationTest {
+    @Test fun version60PreservesHealthAndRemovesNutrition() = verifyUpgrade(60)
     @Test fun release173DataSurvivesUpgradeTo18() = verifyUpgrade(54)
     @Test fun currentTestBuildDataAndCachedPhotosSurviveUpgradeTo18() = verifyUpgrade(57)
 
@@ -76,18 +76,11 @@ class Release18MigrationTest {
         val room = Room.databaseBuilder(context, BragaDatabase::class.java, name)
             .allowMainThreadQueries().addMigrations(*Migrations.ALL).build()
         try {
-            val item = room.groceryListDao().getGrocerySnapshot("u").single()
-            assertEquals("Arroz", item.foodName)
-            assertEquals(8.9, item.estimatedPriceBrl, 0.001)
-            assertTrue(item.isCheckedInPantry)
-            assertEquals(7, item.planningDays)
-            assertEquals("Pessoa", room.profileDao().getProfileOneShot("u")!!.fullName)
-            assertEquals(1000.0, room.groceryPantryDao().stock("u", "rice")!!.availableAmount, 0.001)
-            if (version == 57) {
-                val card = room.groceryRetailCardDao().observe().first().single()
-                assertEquals("https://example.org/rice.jpg", card.imageUrl)
-                assertEquals("[]", card.nutritionFactsJson)
-                assertNull(card.fiberG)
+            assertEquals("Pessoa", room.profileDao().getProfileOneShot("u")?.fullName)
+            listOf("grocery_list_local", "grocery_retail_cards_local", "grocery_pantry_stock_local").forEach { table ->
+                room.openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'").use {
+                    assertFalse(it.moveToFirst())
+                }
             }
         } finally { room.close(); context.deleteDatabase(name) }
     }

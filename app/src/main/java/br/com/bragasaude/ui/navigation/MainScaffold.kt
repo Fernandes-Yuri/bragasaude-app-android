@@ -42,26 +42,22 @@ fun MainScaffold(
 
     val showOrb = (shouldShowAssistantOrb(currentRoute) || isVoiceSessionActive) &&
         AppPreferences.isVoiceAssistantEnabled(appContext)
-    val dockAssistant = showOrb && isCurrentRoute(currentRoute, Screen.Nutrition())
 
     // ==================== Itens de navegação por papel ====================
     val patientNavItems = listOf(
         BottomNavItem("Início", Icons.Default.Home, Screen.Home),
         BottomNavItem("Dados", Icons.Default.BarChart, Screen.Report),
-        BottomNavItem("Planos", Icons.Default.Restaurant, Screen.Nutrition()),
         BottomNavItem("Braga", Icons.Default.ChatBubbleOutline, Screen.OrbChat),
         BottomNavItem("Perfil", Icons.Default.Person, Screen.Profile)
     )
     val hybridCaregiverNavItems = listOf(
         BottomNavItem("Início", Icons.Default.Home, Screen.Home),
         BottomNavItem("Painel", Icons.Default.Diversity3, Screen.CaregiverDashboard),
-        BottomNavItem("Planos", Icons.Default.Restaurant, Screen.Nutrition()),
         BottomNavItem("Braga", Icons.Default.ChatBubbleOutline, Screen.OrbChat),
         BottomNavItem("Perfil", Icons.Default.Person, Screen.Profile)
     )
     val viewerCaregiverNavItems = listOf(
         BottomNavItem("Painel", Icons.Default.Diversity3, Screen.CaregiverDashboard),
-        BottomNavItem("Despensa", Icons.Default.ShoppingCart, Screen.PantryRecipes),
         BottomNavItem("Mural", Icons.Default.Groups, Screen.SocialFeed),
         BottomNavItem("Braga", Icons.Default.ChatBubbleOutline, Screen.OrbChat),
         BottomNavItem("Perfil", Icons.Default.Person, Screen.Profile)
@@ -115,20 +111,13 @@ fun MainScaffold(
                     startDestination = startDestination,
                     userRole = userRole,
                     caregiverMode = caregiverMode,
-                    modifier = Modifier.fillMaxSize().padding(bottom = if (dockAssistant) 96.dp else 0.dp)
+                    modifier = Modifier.fillMaxSize()
                 )
-                if (dockAssistant) {
-                    DraggableAiAssistantFab(
-                        onNavigate = { screen -> navController.navigate(screen) },
-                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(96.dp).clipToBounds(),
-                        viewModel = voiceViewModel,
-                        docked = true
-                    )
-                }
+
             }
         }
 
-        if (showOrb && !dockAssistant) {
+        if (showOrb) {
             DraggableAiAssistantFab(
                 onNavigate = { screen -> navController.navigate(screen) },
                 modifier = Modifier.fillMaxSize(),
@@ -152,7 +141,7 @@ data class BottomNavItem(
  *
  * O Navigation Compose 2.8 derive a rota do nome do serializador da classe:
  * para a sealed interface aninhada o formato é "Screen$Home" (e
- * "Screen$Nutrition?arg=..." para rotas com argumentos). Este helper casa o
+ * "Screen$Vitals?arg=..." para rotas com argumentos). Este helper casa o
  * nome exato ou o prefixo seguido de "?" — âncora que acaba com a colisão de
  * substring.
  */
@@ -173,7 +162,6 @@ internal fun shouldShowAssistantOrb(currentRoute: String?): Boolean =
     listOf(
         Screen.Home,
         Screen.Report,
-        Screen.Nutrition(),
         Screen.Hydration(),
         Screen.Steps,
         Screen.Reminders,

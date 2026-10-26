@@ -3,7 +3,6 @@
 import android.content.Context
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.repository.FamilyBridgeRepository
-import br.com.bragasaude.data.remote.repository.GroceryRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import io.mockk.*
@@ -26,7 +25,6 @@ class CaregiverDashboardViewModelTest {
     private val profileDao = mockk<ProfileDao>(relaxed = true)
     private val vitalSignDao = mockk<VitalSignDao>(relaxed = true)
     private val dailyMetricsDao = mockk<DailyMetricsDao>(relaxed = true)
-    private val groceryRepository = mockk<GroceryRepository>(relaxed = true)
     private val auth = mockk<FirebaseAuth>(relaxed = true)
     private val firebaseUser = mockk<FirebaseUser>(relaxed = true)
 
@@ -49,7 +47,6 @@ class CaregiverDashboardViewModelTest {
             profileDao = profileDao,
             vitalSignDao = vitalSignDao,
             dailyMetricsDao = dailyMetricsDao,
-            groceryRepository = groceryRepository,
             auth = auth
         )
     }
@@ -91,7 +88,6 @@ class CaregiverDashboardViewModelTest {
         every { profileDao.getProfile("patient-100") } returns flowOf(profile)
         every { vitalSignDao.getAll("patient-100") } returns flowOf(listOf(vitalSign))
         every { dailyMetricsDao.getRecent30Days("patient-100") } returns flowOf(emptyList())
-        every { groceryRepository.getGroceryList("patient-100") } returns flowOf(emptyList())
         every { familyRepository.subscribePatientVitalSignsRealtime("patient-100") } returns flowOf(listOf(vitalSign))
         every { familyRepository.subscribeFamilyMessagesRealtime("patient-100") } returns flowOf(emptyList())
 

@@ -143,39 +143,7 @@ interface ProfileDao {
     suspend fun deleteProfile(userId: String)
 }
 
-@Dao
-interface FoodDao {
-    @Query("DELETE FROM food_catalog_local WHERE status IS NULL OR LOWER(status) != 'custom'")
-    suspend fun clearServerCatalog()
 
-    @Transaction
-    suspend fun replaceServerCatalog(foods: List<FoodEntity>) {
-        require(foods.isNotEmpty())
-        clearServerCatalog()
-        insertAll(foods)
-    }
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(foods: List<FoodEntity>)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(food: FoodEntity)
-
-    @Query("SELECT * FROM food_catalog_local")
-    fun getCatalog(): Flow<List<FoodEntity>>
-
-    @Query("SELECT * FROM food_catalog_local WHERE name LIKE '%' || :query || '%'")
-    fun search(query: String): Flow<List<FoodEntity>>
-}
-
-@Dao
-interface MealRuleDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(rules: List<MealRuleEntity>)
-
-    @Query("SELECT * FROM meal_rules_local")
-    fun getRules(): Flow<List<MealRuleEntity>>
-}
 
 @Dao
 interface BiometryDao {
@@ -349,16 +317,16 @@ interface DailyMetricsDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(metrics: DailyMetricsEntity)
-    
+
     @Query("SELECT * FROM daily_metrics_local WHERE userId = :userId AND date = :date")
     suspend fun getByDate(userId: String, date: String): DailyMetricsEntity?
-    
+
     @Query("SELECT * FROM daily_metrics_local WHERE userId = :userId ORDER BY date DESC LIMIT 30")
     fun getRecent30Days(userId: String): Flow<List<DailyMetricsEntity>>
 
     @Query("SELECT * FROM daily_metrics_local WHERE userId = :userId AND date >= :startDate ORDER BY date ASC")
     fun getMetricsForDateRange(userId: String, startDate: String): Flow<List<DailyMetricsEntity>>
-    
+
     @Query("SELECT * FROM daily_metrics_local WHERE pendingSync = 1")
     suspend fun getPendingSync(): List<DailyMetricsEntity>
 
@@ -672,7 +640,6 @@ interface FamilyDao {
     @Query("UPDATE family_bindings_local SET pendingSync = 0 WHERE id = :id")
     suspend fun abandonBindingSync(id: String)
 
-    /** --- CONSULTAS MÉDICAS --- */
 
     /** Inserir nova consulta médica. */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -724,46 +691,8 @@ interface FamilyDao {
 }
 
 /**
- * Lista de compras compartilhada (Ponte Familiar).
  */
-@Dao
-interface GroceryListDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(items: List<GroceryListItemEntity>)
 
-    @Query("SELECT * FROM grocery_list_local WHERE userId = :userId ORDER BY category ASC, foodName ASC")
-    suspend fun getGrocerySnapshot(userId: String): List<GroceryListItemEntity>
-
-    @androidx.room.Transaction
-    suspend fun rewriteGroceryList(userId: String, transform: (List<GroceryListItemEntity>) -> List<GroceryListItemEntity>) {
-        val existing = getGrocerySnapshot(userId)
-        val updated = transform(existing)
-        if (updated != existing) {
-            clearGroceryList(userId)
-            insertAll(updated)
-        }
-    }
-
-    /** Lista completa do usuario, ordenada por categoria e nome. */
-    @Query("SELECT * FROM grocery_list_local WHERE userId = :userId ORDER BY category ASC, foodName ASC")
-    fun getGroceryList(userId: String): Flow<List<GroceryListItemEntity>>
-
-    /** Itens ja marcados como presentes na despensa. */
-    @Query("SELECT * FROM grocery_list_local WHERE userId = :userId AND isCheckedInPantry = 1")
-    fun getPantryItems(userId: String): Flow<List<GroceryListItemEntity>>
-
-    /** Atualizar o status de compra de um item. */
-    @Query("UPDATE grocery_list_local SET isCheckedInPantry = :isChecked WHERE remoteId = :id")
-    suspend fun updateCheckedStatus(id: String, isChecked: Boolean)
-
-    /** Limpar a lista do usuario. */
-    @Query("DELETE FROM grocery_list_local WHERE userId = :userId")
-    suspend fun clearGroceryList(userId: String)
-}
-
-/**
- * DAO para registro de alerts criticos de sinais vitais (anti-duplicacao).
- */
 @Dao
 interface VitalAlertLogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -780,22 +709,22 @@ interface VitalAlertLogDao {
 interface AuditLogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(log: AuditLogEntity)
-    
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(logs: List<AuditLogEntity>)
-    
+
     @Query("SELECT * FROM audit_logs_local WHERE userId = :userId ORDER BY timestamp DESC")
     fun getByUser(userId: String): Flow<List<AuditLogEntity>>
-    
+
     @Query("SELECT * FROM audit_logs_local WHERE userId = :userId AND eventType = :eventType ORDER BY timestamp DESC")
     fun getByType(userId: String, eventType: String): Flow<List<AuditLogEntity>>
-    
+
     @Query("SELECT * FROM audit_logs_local WHERE pendingSync = 1")
     suspend fun getPendingSync(): List<AuditLogEntity>
-    
+
     @Query("UPDATE audit_logs_local SET pendingSync = 0 WHERE id = :id")
     suspend fun markAsSynced(id: String)
-    
+
     @Query("DELETE FROM audit_logs_local WHERE timestamp < :cutoffTimestamp")
     suspend fun purgeOlderThan(cutoffTimestamp: Long)
 }

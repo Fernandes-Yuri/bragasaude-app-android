@@ -55,7 +55,6 @@ data class RemoteProfile(
     @SerialName("full_name") val fullName: String? = null,
     @SerialName("birth_date") val birthDate: String? = null,
     @SerialName("weight_goal") val weightGoal: Double? = null,
-    @SerialName("daily_calorie_target") val dailyCalorieTarget: Double? = null,
     @SerialName("has_diabetes") val hasDiabetes: Boolean = false,
     @SerialName("has_hypertension") val hasHypertension: Boolean = false,
     @SerialName("has_thyroid_issue") val hasThyroidIssue: Boolean = false,
@@ -92,52 +91,8 @@ data class RemoteProfile(
     @SerialName("photo_url") val photoUrl: String? = null,
 )
 
-@Serializable
-data class RemoteUserConsumption(
-    val id: String? = null,
-    @SerialName("user_id") val userId: String,
-    @SerialName("food_id") val foodId: String,
-    @SerialName("meal_type") val mealType: String,
-    @SerialName("was_consumed") val wasConsumed: Boolean = true,
-    @SerialName("consumed_at") val consumedAt: String? = null
-)
 
-@Serializable
-data class RemoteFood(
-    val id: String? = null,
-    val name: String,
-    val category: String? = null,
-    val kcal: Double? = null,
-    @SerialName("carbs_g") val carbsG: Double? = null,
-    @SerialName("protein_g") val proteinG: Double? = null,
-    @SerialName("fat_g") val fatG: Double? = null,
-    @SerialName("fiber_g") val fiberG: Double? = null,
-    @SerialName("sodium_mg") val sodiumMg: Double? = null,
-    val status: String? = null,
-    @SerialName("is_diabetes_safe") val isDiabetesSafe: Boolean = true,
-    @SerialName("is_hypertension_safe") val isHypertensionSafe: Boolean = true,
-    @SerialName("is_thyroid_safe") val isThyroidSafe: Boolean = true,
-    @SerialName("preparation_rule") val preparationRule: String? = null,
-    @SerialName("average_price") val averagePrice: Double? = null,
-    val tags: List<String>? = null,
-    @SerialName("calcium_mg") val calciumMg: Double? = null,
-    @SerialName("serving_size_grams") val servingSizeGrams: Int = 100,
-    @SerialName("serving_unit") val servingUnit: String = "100g",
-    @SerialName("min_serving_grams") val minServingGrams: Int = 1,
-    @SerialName("max_serving_grams") val maxServingGrams: Int = 500,
-    @SerialName("clinical_warning") val clinicalWarning: String? = null
-)
 
-@Serializable
-data class RemoteMealRule(
-    val id: Int? = null,
-    @SerialName("meal_name") val mealName: String,
-    @SerialName("suggested_time") val suggestedTime: String? = null,
-    @SerialName("calorie_percentage") val caloriePercentage: Double? = null,
-    @SerialName("veg_percentage") val vegPercentage: Double = 0.50,
-    @SerialName("protein_percentage") val proteinPercentage: Double = 0.25,
-    @SerialName("carb_percentage") val carbPercentage: Double = 0.25
-)
 
 @Serializable
 data class RemoteBiometry(

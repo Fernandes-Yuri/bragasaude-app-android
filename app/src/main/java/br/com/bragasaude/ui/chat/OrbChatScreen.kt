@@ -463,26 +463,26 @@ fun OrbChatContent(
                             Box(Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
                                 var visible by remember { mutableStateOf(false) }
                                 LaunchedEffect(Unit) { visible = true }
-                                
+
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
                                     val pulseAlpha by infiniteTransition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(1000), RepeatMode.Reverse), label = "pulse")
-                                    
+
                                     Box(Modifier.size(48.dp).clip(CircleShape).background(Color(0xFF00897B).copy(alpha = pulseAlpha)), contentAlignment = Alignment.Center) {
                                         Icon(Icons.Default.AutoAwesome, contentDescription = "Assistente de saúde", tint = Color.White)
                                     }
-                                    
+
                                     Spacer(Modifier.height(16.dp))
-                                    
+
                                     AnimatedVisibility(
                                         visible = visible,
                                         enter = fadeIn(tween(800)) + slideInVertically(initialOffsetY = { it / 4 })
                                     ) {
                                         Text("Olá! Como posso ajudar com sua saúde hoje?", color = Color(0xFF1E293B))
                                     }
-                                    
+
                                     Spacer(Modifier.height(24.dp))
-                                    
+
                                     var suggestionTime by remember { mutableStateOf(java.time.LocalTime.now()) }
                                     LaunchedEffect(Unit) {
                                         while (true) {
@@ -546,7 +546,7 @@ fun ChatBubble(message: ChatMessage, textScale: Float = 1f, speaking: Boolean = 
                onAudio: () -> Unit = {}, onConfirm: () -> Unit = {}, onIgnore: () -> Unit = {}) {
     val user = message.role == "user"
     var visible by remember { mutableStateOf(false) }
-    
+
     LaunchedEffect(Unit) {
         visible = true
     }
@@ -560,7 +560,7 @@ fun ChatBubble(message: ChatMessage, textScale: Float = 1f, speaking: Boolean = 
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) {
                 val shape = if (user) RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp) else RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp)
-                
+
                 Surface(
                     color = Color.Transparent,
                     contentColor = if (user) Color.White else Color(0xFF1E293B),
@@ -697,7 +697,7 @@ fun ChatInput(text: String, onTextChange: (String) -> Unit, onSend: (String) -> 
                     )
                 }
             }
-            
+
             OutlinedTextField(
                 value = text,
                 onValueChange = onTextChange,
@@ -725,7 +725,7 @@ fun ChatInput(text: String, onTextChange: (String) -> Unit, onSend: (String) -> 
                     unfocusedPlaceholderColor = Color(0xFF64748B)
                 )
             )
-            
+
             if (isStreaming) {
                 IconButton(onClick = onCancel) { Icon(Icons.Default.StopCircle, "Cancelar geração", tint = Color(0xFF64748B)) }
             } else {
@@ -752,17 +752,9 @@ private fun linkedText(text: String): AnnotatedString = buildAnnotatedString {
 
 private fun actionPreview(parameters: String): String = try {
     val p = org.json.JSONObject(parameters)
-    // Agente B1: prévia dos itens da lista.
-    if (p.has("items") && !p.isNull("items")) {
-        val arr = p.optJSONArray("items")
-        if (arr != null && arr.length() > 0) {
-            "Itens: " + List(arr.length()) { arr.optString(it) }.filter { it.isNotBlank() }.joinToString(", ")
-        } else "Abrir lista de compras"
-    } else {
         val labels = mapOf("sistolica" to "Sistólica", "diastolica" to "Diastólica", "glicemia" to "Glicemia",
-            "quantidade_ml" to "Água (ml)", "batimentos" to "Batimentos", "saturacao" to "Saturação", "alimento" to "Alimento", "tipo_metrica" to "Métrica")
+            "quantidade_ml" to "Água (ml)", "batimentos" to "Batimentos", "saturacao" to "Saturação", "tipo_metrica" to "Métrica")
         labels.mapNotNull { (key, label) -> if (p.has(key) && !p.isNull(key)) "$label: ${p.get(key)}" else null }.joinToString(" · ")
-    }
 } catch (_: Exception) { "" }
 
 @Composable

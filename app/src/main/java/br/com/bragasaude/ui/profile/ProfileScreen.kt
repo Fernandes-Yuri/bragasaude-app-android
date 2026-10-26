@@ -69,7 +69,7 @@ fun ProfileScreen(
     var height by rememberSaveable { mutableStateOf("") }
     var isSmoker by rememberSaveable { mutableStateOf(false) }
     var activityLevel by rememberSaveable { mutableStateOf("Sedentário") }
-    
+
     var hasDiabetes by rememberSaveable { mutableStateOf(false) }
     var diabetesType by rememberSaveable { mutableStateOf("Tipo 2") }
     var foodAllergies by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
@@ -316,7 +316,7 @@ fun ProfileScreen(
                 WhiteProfileDataCard {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text("Dados Pessoais", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        
+
                         OutlinedTextField(
                             value = fullName,
                             onValueChange = { fullName = it },
@@ -326,7 +326,7 @@ fun ProfileScreen(
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
                             keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Next)
                         )
-                        
+
                         OutlinedTextField(
                             value = birthDate,
                             onValueChange = {
@@ -338,15 +338,15 @@ fun ProfileScreen(
                             modifier = Modifier.fillMaxWidth(),
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
                             visualTransformation = DateMaskTransformation(),
-                            trailingIcon = { 
+                            trailingIcon = {
                                 IconButton(onClick = { showDatePicker = true }) {
-                                    Icon(Icons.Default.DateRange, contentDescription = "Selecionar Data") 
+                                    Icon(Icons.Default.DateRange, contentDescription = "Selecionar Data")
                                 }
                             },
                             placeholder = { Text("DD/MM/AAAA") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next)
                         )
-                        
+
                         Column {
                             Text("Gênero", style = MaterialTheme.typography.labelLarge)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -370,7 +370,7 @@ fun ProfileScreen(
                                 }
                             }
                         }
-                        
+
                         if (!isCaregiver) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 OutlinedTextField(
@@ -402,7 +402,7 @@ fun ProfileScreen(
                     WhiteProfileDataCard {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text("Estilo de Vida e Saúde", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        
+
                         Column {
                             Text("Nível de Atividade", style = MaterialTheme.typography.labelLarge)
                             Column {
@@ -417,9 +417,9 @@ fun ProfileScreen(
                                 }
                             }
                         }
-                        
+
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                        
+
                         Column {
                             Text("Saúde e Hábitos", style = MaterialTheme.typography.labelLarge)
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -482,7 +482,7 @@ fun ProfileScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                "Alimentos marcados serão 100% excluídos das suas sugestões e lista de compras:",
+                                "Informe alergias e restrições alimentares relevantes para o seu acompanhamento:",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline
                             )
@@ -537,7 +537,7 @@ fun ProfileScreen(
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text("Perfil de Cuidador", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                Text("Registros de autocuidado, dados corporais e metas nutricionais são preenchidos e acompanhados diretamente na conta do seu familiar.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Registros de autocuidado e dados corporais são preenchidos e acompanhados diretamente na conta do seu familiar.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -620,7 +620,7 @@ fun ProfileScreen(
                     }
                 }
             }
-            
+
             item { Spacer(Modifier.height(32.dp)) }
         }
     }

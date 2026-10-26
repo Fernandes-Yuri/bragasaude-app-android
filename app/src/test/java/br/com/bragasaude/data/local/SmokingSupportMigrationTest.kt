@@ -47,13 +47,14 @@ class SmokingSupportMigrationTest {
             try {
                 // Opening invokes Room's full generated schema validation.
                 val sql = upgraded.openHelper.writableDatabase
-                assertEquals(62, sql.version)
+                assertEquals(63, sql.version)
                 for (table in seeds) sql.query("SELECT COUNT(*) FROM `$table`").use { c ->
                     assertTrue(c.moveToFirst()); assertEquals(1, c.getInt(0))
                 }
                 for (i in 0 until entities.length()) {
                     val table = entities.getJSONObject(i).getString("tableName")
-                    sql.query("SELECT * FROM `$table` LIMIT 0").close()
+                    if (!table.startsWith("grocery_") && table != "food_catalog_local" && table != "meal_rules_local" && table != "weekly_grocery_summary_local")
+                        sql.query("SELECT * FROM `$table` LIMIT 0").close()
                 }
                 sql.query("SELECT COUNT(*) FROM smoking_settings_local").use { c ->
                     c.moveToFirst(); assertEquals(0, c.getInt(0))

@@ -18,8 +18,6 @@ import br.com.bragasaude.ui.vitals.VitalSignsScreen
 import br.com.bragasaude.ui.biometry.BiometryScreen
 import br.com.bragasaude.ui.hydration.HydrationScreen
 import br.com.bragasaude.ui.steps.StepsScreen
-import br.com.bragasaude.ui.nutrition.NutritionScreen
-import br.com.bragasaude.ui.nutrition.PantryRecipesScreen
 import br.com.bragasaude.ui.organizer.OrganizerScreen
 import br.com.bragasaude.ui.social.SocialFeedScreen
 import br.com.bragasaude.ui.profile.ProfileScreen
@@ -179,15 +177,7 @@ fun AppNavHost(
         composable<Screen.Feedback> {
             FeedbackScreen(onBack = navigateBack)
         }
-        composable<Screen.Nutrition> { entry ->
-            val nutrition: Screen.Nutrition = entry.toRoute()
-            NutritionScreen(
-                searchFood = nutrition.searchFood,
-                openGroceryList = nutrition.openGroceryList,
-                suggestedGroceryItems = nutrition.groceryItems,
-                onNavigateToPantryRecipes = { navController.navigate(Screen.PantryRecipes) }
-            )
-        }
+
         composable<Screen.Report> {
             MedicalReportScreen(onBack = navigateBack)
         }
@@ -249,9 +239,7 @@ fun AppNavHost(
                 onOpenChat = { navController.navigate(Screen.FamilyInbox) }
             )
         }
-        composable<Screen.PantryRecipes> {
-            PantryRecipesScreen(onBack = navigateBack)
-        }
+
         composable<Screen.RoleSelection> {
             RoleSelectionScreen(
                 onBack = navigateBack,

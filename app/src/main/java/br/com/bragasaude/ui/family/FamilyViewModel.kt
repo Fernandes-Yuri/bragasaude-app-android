@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.repository.FamilyBridgeRepository
-import br.com.bragasaude.data.remote.repository.GroceryRepository
 import br.com.bragasaude.data.remote.repository.MessageTemplate
 import br.com.bragasaude.ui.util.FamilyNotificationService
 import com.google.firebase.auth.FirebaseAuth
@@ -67,7 +66,6 @@ class FamilyViewModel @Inject constructor(
     private val profileDao: ProfileDao,
     private val vitalSignDao: VitalSignDao,
     private val dailyMetricsDao: DailyMetricsDao,
-    private val groceryRepository: GroceryRepository,
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
@@ -229,14 +227,11 @@ class FamilyViewModel @Inject constructor(
     private val _dashboard = MutableStateFlow(CaregiverDashboardState())
     val dashboard: StateFlow<CaregiverDashboardState> = _dashboard.asStateFlow()
 
-    private val _groceryItems = MutableStateFlow<List<GroceryListItemEntity>>(emptyList())
-    val groceryItems: StateFlow<List<GroceryListItemEntity>> = _groceryItems.asStateFlow()
 
     private val _quickTemplates = MutableStateFlow(familyRepository.getQuickMessageTemplates())
     val quickTemplates: StateFlow<Map<String, MessageTemplate>> = _quickTemplates.asStateFlow()
 
     private var dashboardJob: Job? = null
-    private var groceryJob: Job? = null
     private var loadedUserId: String? = null
     private var authListener: FirebaseAuth.AuthStateListener? = null
     private var dataLoadJob: Job? = null
@@ -306,14 +301,12 @@ class FamilyViewModel @Inject constructor(
     private fun clearSessionState() {
         dataLoadJob?.cancel()
         dashboardJob?.cancel()
-        groceryJob?.cancel()
         loadedUserId = null
         selectedGroup.value = null
         _activeCaregivers.value = emptyList()
         _watchedPatients.value = emptyList()
         _familyMessages.value = emptyList()
         _cachedProfileNames.value = emptyMap()
-        _groceryItems.value = emptyList()
         _dashboard.value = CaregiverDashboardState()
         _connectionCode.value = null
         _inviteHistory.value = emptyList()
@@ -437,8 +430,6 @@ class FamilyViewModel @Inject constructor(
                         selectPatient(bindings.first(), selectChat = false)
                     } else if (bindings.none { it.patientUserId == _dashboard.value.patientUserId }) {
                         dashboardJob?.cancel()
-                        groceryJob?.cancel()
-                        _groceryItems.value = emptyList()
                         _dashboard.value = CaregiverDashboardState()
                     }
                     val missing = bindings.map { it.patientUserId }.filter { it.isNotBlank() && it !in _cachedProfileNames.value }
@@ -654,28 +645,10 @@ class FamilyViewModel @Inject constructor(
             }
         }
 
-        // Observar lista de compras do paciente
-        groceryJob?.cancel()
-        _groceryItems.value = emptyList()
-        groceryJob = viewModelScope.launch {
-            groceryRepository.getGroceryList(binding.patientUserId).collectLatest { items ->
-                _groceryItems.value = items
-            }
-        }
-
-        // As mensagens têm um único observador, vinculado a chatPatientId.
 
     }
 
-    fun toggleGroceryItem(itemId: String, isChecked: Boolean) {
-        viewModelScope.launch {
-            try {
-                groceryRepository.updateCheckedStatus(itemId, isChecked)
-            } catch (e: Exception) {
-                _uiEvents.emit(FamilyUiEvent.Error("Erro ao atualizar lista: ${e.message}"))
-            }
-        }
-    }
+
 
     fun sendQuickMessage(templateKey: String) {
         val template = _quickTemplates.value[templateKey] ?: return
@@ -873,7 +846,5 @@ class FamilyViewModel @Inject constructor(
         authListener?.let { auth.removeAuthStateListener(it) }
         dataLoadJob?.cancel()
         dashboardJob?.cancel()
-        groceryJob?.cancel()
     }
 }
-

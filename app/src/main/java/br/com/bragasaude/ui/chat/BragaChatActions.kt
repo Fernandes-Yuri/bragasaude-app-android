@@ -18,7 +18,6 @@ internal object BragaChatActions {
             is VoiceHealthIntent.Hydration -> { params.put("quantidade_ml", intent.amountMl); "REGISTRAR_AGUA" }
             is VoiceHealthIntent.HeartRate -> { params.put("batimentos", intent.heartRateBpm); "REGISTRAR_BATIMENTOS" }
             is VoiceHealthIntent.OxygenSaturation -> { params.put("saturacao", intent.oxygenPercent); "REGISTRAR_OXIGENACAO" }
-            is VoiceHealthIntent.Grocery -> { params.put("items", JSONArray(intent.items)); "ABRIR_LISTA_COMPRAS" }
             is VoiceHealthIntent.QueryPatientStatus -> {
                 if (intent.targetName != null) return OrbReply(JSONObject()
                     .put("fala", "Selecione seu familiar na área Família para consultar os registros da pessoa certa.")
