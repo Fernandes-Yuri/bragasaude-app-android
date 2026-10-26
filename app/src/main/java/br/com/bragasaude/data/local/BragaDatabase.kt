@@ -11,8 +11,6 @@ import androidx.room.TypeConverters
         DoseGroupEntity::class, DoseIntentEntity::class, DoseReservationEntity::class, DoseScheduleEntity::class,
         VitalSignEntity::class,
         ProfileEntity::class,
-        FoodEntity::class,
-        MealRuleEntity::class,
         MilestoneEntity::class,
         BiometryEntity::class,
         MedicationEntity::class,
@@ -27,14 +25,6 @@ import androidx.room.TypeConverters
         XpAwardEntity::class,
         FamilyBindingEntity::class,
         FamilyMessageEntity::class,
-        GroceryListItemEntity::class,
-        GroceryRetailCardEntity::class,
-        GroceryPublicationCache::class,
-        GroceryAdoptedPack::class,
-        WeeklyGrocerySummaryEntity::class,
-        GroceryPantryStockEntity::class,
-        GroceryMealEntity::class,
-        GroceryConsumptionEntity::class,
         VitalAlertLogEntity::class,
         AuditLogEntity::class,
         WearableReading::class,
@@ -45,7 +35,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 62, // Metadados semânticos do catálogo de alimentos
+    version = 63, // Retirada completa do módulo de alimentação
     exportSchema = true
 )
 @TypeConverters(Converters::class, SmokingSupportConverters::class)
@@ -55,8 +45,6 @@ abstract class BragaDatabase : RoomDatabase() {
     abstract fun orbChatDao(): OrbChatDao
     abstract fun vitalSignDao(): VitalSignDao
     abstract fun profileDao(): ProfileDao
-    abstract fun foodDao(): FoodDao
-    abstract fun mealRuleDao(): MealRuleDao
     abstract fun biometryDao(): BiometryDao
     abstract fun medicationDao(): MedicationDao
     abstract fun medicationLogDao(): MedicationLogDao
@@ -64,11 +52,6 @@ abstract class BragaDatabase : RoomDatabase() {
     abstract fun dailyMetricsDao(): DailyMetricsDao
     abstract fun feedbackDao(): FeedbackDao
     abstract fun socialFeedDao(): SocialFeedDao
-    abstract fun groceryPublicationDao(): GroceryPublicationDao
-    abstract fun groceryRetailCardDao(): GroceryRetailCardDao
-    abstract fun groceryListDao(): GroceryListDao
-    abstract fun weeklyGrocerySummaryDao(): WeeklyGrocerySummaryDao
-    abstract fun groceryPantryDao(): GroceryPantryDao
     abstract fun familyDao(): FamilyDao
     abstract fun vitalAlertLogDao(): VitalAlertLogDao
     abstract fun auditLogDao(): AuditLogDao

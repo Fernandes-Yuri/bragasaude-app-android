@@ -42,7 +42,6 @@ data class ProfileEntity(
     val fullName: String? = null,
     val birthDate: String? = null,
     val weightGoal: Double? = null,
-    val dailyCalorieTarget: Double? = null,
     val hydrationTargetMl: Int? = null,
     val stepGoal: Int? = 8000,
     val hasDiabetes: Boolean = false,
@@ -93,46 +92,7 @@ data class ProfileEntity(
 
 
 @Serializable
-@Entity(tableName = "food_catalog_local")
-data class FoodEntity(
-    @PrimaryKey val remoteId: String,
-    val name: String,
-    val category: String? = null,
-    val kcal: Double? = null,
-    val carbsG: Double? = null,
-    val proteinG: Double? = null,
-    val fatG: Double? = null,
-    val fiberG: Double? = null,
-    val sodiumMg: Double? = null,
-    val calciumMg: Double? = null,
-    val status: String? = null,
-    val isDiabetesSafe: Boolean = true,
-    val isHypertensionSafe: Boolean = true,
-    val isThyroidSafe: Boolean = true,
-    val preparationRule: String? = null,
-    val functionalTags: List<String> = emptyList(),
-    val healthBenefits: String? = null,
-    val consumptionTip: String? = null,
-    val servingSizeGrams: Int = 100,
-    val servingUnit: String = "100g",
-    val minServingGrams: Int = 1,
-    val maxServingGrams: Int = 500,
-    val suitableMeals: List<String> = emptyList(),
-    @androidx.room.ColumnInfo(defaultValue = "'{}'")
-    val semanticMetadata: FoodSemanticMetadata = FoodSemanticMetadata(),
-    val maxDailyGrams: Int? = null
-)
 
-@Entity(tableName = "meal_rules_local")
-data class MealRuleEntity(
-    @PrimaryKey val id: Int,
-    val mealName: String,
-    val suggestedTime: String? = null,
-    val caloriePercentage: Double? = null,
-    val vegPercentage: Double = 0.50,
-    val proteinPercentage: Double = 0.25,
-    val carbPercentage: Double = 0.25
-)
 
 @Entity(tableName = "milestones_local")
 data class MilestoneEntity(
@@ -340,37 +300,7 @@ data class PostReactionEntity(
 /**
  * Ponte Familiar - item da lista de compras compartilhada entre o familiar e o cuidador.
  */
-@Entity(tableName = "grocery_list_local")
-data class GroceryListItemEntity(
-    @PrimaryKey val remoteId: String,
-    val userId: String,
-    val weekStartDate: String, // yyyy-MM-dd: início do período de compra
-    val foodId: String,
-    val foodName: String,
-    val category: String, // "Hortifruti & Feira", "Cereais & Graos", "Acougue & Ovos", "Mercearia & Chas"
-    val suggestedServingWeekGrams: Int,
-    val purchaseWeightGrams: Int, // com margem de compra
-    val purchaseUnitText: String, // ex: "1 palma (~850g)", "1 duzia (12 un)", "1 pacote (200g)"
-    val estimatedPriceBrl: Double,
-    val isCheckedInPantry: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis(),
-    @androidx.room.ColumnInfo(defaultValue = "0") val isManual: Boolean = false,
-    @androidx.room.ColumnInfo(defaultValue = "0") val plannedWeeklyAmount: Double = 0.0,
-    val retailCardId: String? = null,
-    @androidx.room.ColumnInfo(defaultValue = "1") val quantity: Int = 1,
-    @androidx.room.ColumnInfo(defaultValue = "''") val packageDisplay: String = "",
-    @androidx.room.ColumnInfo(defaultValue = "0") val kcalPerUnit: Double = 0.0,
-    @androidx.room.ColumnInfo(defaultValue = "0") val packageNetValue: Double = 0.0,
-    val packageUnit: String? = null,
-    val linkedIngredientSlug: String? = null,
-    val imageUrl: String? = null,
-    @androidx.room.ColumnInfo(defaultValue = "7") val planningDays: Int = 7
-)
 
-/**
- * Entidade de vínculo familiar - Ponte Familiar & Modo Cuidador.
- * Armazena conexões entre pacientes e cuidadores/familiares.
- */
 @Entity(tableName = "family_bindings_local")
 data class FamilyBindingEntity(
     @PrimaryKey val id: String, // UUID local

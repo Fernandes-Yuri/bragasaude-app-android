@@ -22,13 +22,11 @@ import br.com.bragasaude.R
 /** Cada cena ocupa uma célula independente da arte, disponível sem internet. */
 enum class TourEducationScene(val cell: Int, val description: String) {
     SELF_CARE(0, "Personagem registra a pressão em casa com um aparelho de braço."),
-    NUTRITION(1, "Personagem faz uma refeição com alimentos variados."),
     MOVEMENT(2, "Personagem caminha ao ar livre com sua garrafa de água."),
     FAMILY(3, "Titular e familiar conversam pelos seus celulares."),
     CAREGIVER(4, "Titular e cuidadora escolhem juntos o acompanhamento autorizado."),
     METRICS(5, "Cuidadora consulta os registros de saúde no celular."),
     MESSAGES(6, "Cuidadora escreve uma mensagem de incentivo."),
-    SHOPPING(7, "Cuidadora consulta a lista de compras com uma sacola de alimentos."),
     ALERTS(8, "Cuidadora vê um aviso discreto e conversa com a titular.")
 }
 

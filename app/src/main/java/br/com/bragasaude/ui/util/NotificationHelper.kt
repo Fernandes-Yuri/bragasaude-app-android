@@ -144,9 +144,6 @@ object NotificationHelper {
         manager.notify(HYDRATION_CONFIRMATION_TAG, HYDRATION_NOTIFICATION_ID, confirmation)
     }
 
-    private const val GROCERY_CHANNEL_ID = "bragasaude_grocery"
-    private const val GROCERY_CHANNEL_NAME = "Lista de Feira da Família"
-    private const val GROCERY_NOTIFICATION_ID = 2003
 
     private const val CONSULTATION_CHANNEL_ID = "bragasaude_consultation"
     private const val CONSULTATION_CHANNEL_NAME = "Lembretes de Consulta"
@@ -313,45 +310,7 @@ object NotificationHelper {
         notificationManager.notify(CONSULTATION_NOTIFICATION_ID + 2, builder.build())
     }
 
-    fun sendGroceryUpdatedNotification(context: Context, familyMemberName: String, itemsSummary: String) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                GROCERY_CHANNEL_ID,
-                GROCERY_CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "Avisos quando itens são adicionados à lista de feira da família"
-            }
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            putExtra("OPEN_GROCERY", true)
-        }
-
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            3,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val message = "$familyMemberName anotou na lista de feira: $itemsSummary"
-
-        val builder = NotificationCompat.Builder(context, GROCERY_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_agenda)
-            .setContentTitle("Lista de Feira Atualizada")
-            .setContentText(message)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
-
-        notificationManager.notify(GROCERY_NOTIFICATION_ID, builder.build())
-    }
 
     fun scheduleHydrationReminders(context: Context) {
         try {
@@ -601,4 +560,3 @@ object NotificationHelper {
         }
     }
 }
-

@@ -95,7 +95,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.local.FamilyBindingEntity
-import br.com.bragasaude.data.local.GroceryListItemEntity
 import java.util.*
 
 /** Painel de cuidado familiar, com foco em identificação do paciente e leitura rápida dos dados. */
@@ -109,7 +108,6 @@ fun CaregiverDashboardScreen(
 ) {
     val watchedPatients by viewModel.watchedPatients.collectAsState()
     val dashboard by viewModel.dashboard.collectAsState()
-    val groceryItems by viewModel.groceryItems.collectAsState()
     val quickTemplates by viewModel.quickTemplates.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -363,13 +361,7 @@ fun CaregiverDashboardScreen(
                     )
                 }
 
-                item {
-                    SharedGroceryListCard(
-                        items = groceryItems,
-                        patientName = dashboard.patientName,
-                        onToggle = { itemId, checked -> viewModel.toggleGroceryItem(itemId, checked) }
-                    )
-                }
+
 
                 item {
                     QuickMessagesCard(
@@ -833,168 +825,12 @@ private fun ActionChip(
 
 // ==================== LISTA DE COMPRAS COMPARTILHADA ====================
 
-@Composable
-private fun SharedGroceryListCard(
-    items: List<GroceryListItemEntity>,
-    patientName: String,
-    onToggle: (String, Boolean) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-    ) {
-        Column(Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.ShoppingCart,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "Lista de compras",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        "Marque enquanto compra para ${patientName.ifBlank { "seu familiar" }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
 
-            Spacer(Modifier.height(12.dp))
-
-            if (items.isEmpty()) {
-                Text(
-                    "A lista da semana ainda nao foi gerada.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp)
-                )
-            } else {
-                val checkedCount = items.count { it.isCheckedInPantry }
-
-                // Barra de progresso da lista
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    LinearProgressIndicator(
-                        progress = { if (items.size > 0) checkedCount.toFloat() / items.size else 0f },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(50)),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        strokeCap = StrokeCap.Round
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        "$checkedCount/${items.size}",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                Spacer(Modifier.height(14.dp))
-
-                // Checklist clean
-                items.forEach { item ->
-                    GroceryChecklistItem(
-                        item = item,
-                        onToggle = { onToggle(item.remoteId, !item.isCheckedInPantry) }
-                    )
-                }
-            }
-        }
-    }
-}
 
 /**
  * Item de checklist clean com checkbox circular e tachado suave.
  */
-@Composable
-private fun GroceryChecklistItem(
-    item: GroceryListItemEntity,
-    onToggle: () -> Unit
-) {
-    Surface(
-        onClick = onToggle,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        color = if (item.isCheckedInPantry)
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        else
-            Color.Transparent
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Checkbox(
-                checked = item.isCheckedInPantry,
-                onCheckedChange = { onToggle() },
-                colors = CheckboxDefaults.colors(
-                    checkedColor = MaterialTheme.colorScheme.primary,
-                    uncheckedColor = MaterialTheme.colorScheme.outline
-                ),
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    item.foodName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (!item.isCheckedInPantry) FontWeight.Medium else FontWeight.Normal,
-                    color = if (item.isCheckedInPantry)
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    else
-                        MaterialTheme.colorScheme.onSurface,
-                    textDecoration = if (item.isCheckedInPantry) TextDecoration.LineThrough else null,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    "${item.purchaseUnitText} \u2022 ${item.category}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Text(
-                "R$ %.2f".format(item.estimatedPriceBrl),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium,
-                color = if (item.isCheckedInPantry)
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                else
-                    MaterialTheme.colorScheme.onSurface
-            )
-        }
-    }
-}
+
 
 // ==================== MENSAGENS RAPIDAS ====================
 

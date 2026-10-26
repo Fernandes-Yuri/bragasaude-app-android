@@ -1,7 +1,6 @@
 package br.com.bragasaude.ui.home
 
 import br.com.bragasaude.ui.components.BragaAlertDialog
-import br.com.bragasaude.ui.components.BragaCalorieProgressCard
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -87,8 +86,6 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val userName by viewModel.userName.collectAsState()
-    val consumedCal by viewModel.todayCaloriesConsumed.collectAsState()
-    val targetCal by viewModel.dailyCalorieTarget.collectAsState()
     val vitals by viewModel.dashboardVitals.collectAsState()
     val milestone by viewModel.latestMilestone.collectAsState()
     val clinicalAlerts by viewModel.clinicalAlerts.collectAsState()
@@ -350,12 +347,7 @@ fun HomeScreen(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Vitals("PRESSURE")) }
                         )
-                        BragaCalorieProgressCard(
-                            consumedKcal = consumedCal,
-                            targetKcal = targetCal,
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Nutrition()) }
-                        )
+
                     }
 
                     if (profile?.hasDiabetes == true || gluc != null) {

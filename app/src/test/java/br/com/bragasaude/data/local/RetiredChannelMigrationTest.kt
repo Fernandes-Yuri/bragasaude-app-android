@@ -34,6 +34,7 @@ class RetiredChannelMigrationTest {
             db.execSQL("ALTER TABLE profiles_local ADD COLUMN whatsappTotpSecret TEXT")
             db.execSQL("ALTER TABLE profiles_local ADD COLUMN whatsappPhone TEXT")
             db.execSQL("UPDATE profiles_local SET whatsappTotpSecret='synthetic', whatsappPhone='synthetic'")
+            db.execSQL("ALTER TABLE profiles_local ADD COLUMN dailyCalorieTarget REAL")
             db.version = 58
         }
         val db = open()

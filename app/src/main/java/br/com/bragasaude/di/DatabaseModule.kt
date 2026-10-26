@@ -69,15 +69,9 @@ object DatabaseModule {
         return database.profileDao()
     }
 
-    @Provides
-    fun provideFoodDao(database: BragaDatabase): FoodDao {
-        return database.foodDao()
-    }
 
-    @Provides
-    fun provideMealRuleDao(database: BragaDatabase): MealRuleDao {
-        return database.mealRuleDao()
-    }
+
+
 
 
     @Provides
@@ -112,10 +106,7 @@ object DatabaseModule {
         return database.socialFeedDao()
     }
 
-    @Provides
-    fun provideGroceryListDao(database: BragaDatabase): GroceryListDao {
-        return database.groceryListDao()
-    }
+
 
     @Provides
     fun provideFamilyDao(database: BragaDatabase): FamilyDao {

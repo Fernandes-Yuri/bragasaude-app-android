@@ -17,11 +17,10 @@ sealed interface BragaHybridEvent {
 class BragaHybridOrchestrator internal constructor(
     private val cloud: GroqStreamSource,
     private val prompt: GroqDynamicPrompt,
-    private val memory: BragaHealthMemory? = null,
-    private val dietMemory: DietAndGroceryMemory? = null
+    private val memory: BragaHealthMemory? = null
 ) {
-    @Inject constructor(client: GroqStreamingClient, prompt: GroqDynamicPrompt, memory: BragaHealthMemory, dietMemory: DietAndGroceryMemory) : this(
-        client as GroqStreamSource, prompt, memory, dietMemory
+    @Inject constructor(client: GroqStreamingClient, prompt: GroqDynamicPrompt, memory: BragaHealthMemory) : this(
+        client as GroqStreamSource, prompt, memory
     )
 
     fun analyze(speech: String, channel: InputChannel = InputChannel.VOICE): NluOutput = BragaNluEngine.analisar(speech, channel)
@@ -41,11 +40,6 @@ class BragaHybridOrchestrator internal constructor(
         val query = session.resolve(speech, userId, conversationId) ?: local.healthQuery
         return if (query == null) local else local.copy(intent = query.intent, respostaLocal = null, healthQuery = query)
     }
-
-    suspend fun dietContext(userId: String, question: String): String = try {
-        dietMemory?.context(userId, question).orEmpty()
-    } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-    catch (_: Exception) { "Memória alimentar indisponível; não afirme conhecer a despensa ou as restrições." }
 
     suspend fun resolveLocal(output: NluOutput, userId: String, channel: InputChannel,
                              session: HealthQuerySession? = null, conversationId: String = "", expectedTurn: Long? = null): NluOutput {
@@ -79,7 +73,7 @@ class BragaHybridOrchestrator internal constructor(
             return@flow
         }
         val answer = StringBuilder()
-        cloud.stream(prompt.build(history, channel, local, dietContext(userId, speech)), speech).collect { delta ->
+        cloud.stream(prompt.build(history, channel, local), speech).collect { delta ->
             answer.append(delta)
             if (channel == InputChannel.VOICE) emit(BragaHybridEvent.Delta(delta))
         }

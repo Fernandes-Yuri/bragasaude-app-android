@@ -1,6 +1,5 @@
 ﻿package br.com.bragasaude.domain
 
-import br.com.bragasaude.data.local.FoodEntity
 import br.com.bragasaude.domain.model.BloodPressureCategory
 import br.com.bragasaude.domain.util.BloodPressureParser
 
@@ -12,174 +11,8 @@ import br.com.bragasaude.domain.util.BloodPressureParser
  */
 sealed interface VoiceHealthIntent {
 
-    /**
-     * Registro de hidratacao.
-     * @param amountMl Quantidade em mililitros (ex.: 250, 500).
-     * @param description Texto humanizado para confirmacao na UI ("1 copo de agua").
-     */
-    data class Hydration(
-        val amountMl: Int,
-        val description: String
-    ) : VoiceHealthIntent
 
-    /**
-     * Registro de pressao arterial (mmHg).
-     * @param systolic Sistolica (valor "maior").
-     * @param diastolic Diastolica (valor "menor").
-     * @param rawInput Texto original reconhecido ("12 por 8", "13 por 8 e meio").
-     */
-    data class BloodPressure(
-        val systolic: Int,
-        val diastolic: Int,
-        val rawInput: String
-    ) : VoiceHealthIntent
 
-    /**
-     * 🩸 Registro de glicemia (mg/dL).
-     * @param glucoseMgDl Valor em mg/dL.
-     */
-    data class Glucose(
-        val glucoseMgDl: Int
-    ) : VoiceHealthIntent
-
-    /**
-     * 🥗 Registro de refeição com identificação de alimentos do catálogo.
-     * @param mealType Tipo inferido ("Café da Manhã", "Almoço", "Lanche", "Jantar", "Café da Tarde").
-     * @param foodNames Nomes brutos mencionados na fala.
-     * @param matchedFoods Alimentos encontrados no catálogo (220 itens Braga Saúde).
-     * @param unmatchedFoods Itens não identificados no catálogo (para transparência ao idoso).
-     */
-    data class Meal(
-        val mealType: String,
-        val foodNames: List<String>,
-        val matchedFoods: List<FoodEntity>,
-        val unmatchedFoods: List<String>
-    ) : VoiceHealthIntent
-
-    /**
-      * Registro de adesao a medicacao.
-     * @param query Texto usado para buscar a medicação no catálogo do usuário.
-     * @param scheduleTimeHint Horário sugerido ("8 horas" → "08:00").
-     * @param query Texto usado para buscar a medicação no catálogo do usuário.
-     * @param scheduleTimeHint Horário sugerido ("8 horas" → "08:00").
-     */
-    data class Medication(
-        val query: String,
-        val scheduleTimeHint: String? = null
-    ) : VoiceHealthIntent
-
-    /**
-     * ⚖️ Registro de peso corporal (kg).
-     * @param weightKg Peso em quilogramas.
-     */
-    data class Weight(
-        val weightKg: Double
-    ) : VoiceHealthIntent
-
-    /**
-     * ❤️ Registro de frequência cardíaca (bpm).
-     * @param heartRateBpm Batimentos por minuto.
-     */
-    data class HeartRate(
-        val heartRateBpm: Int
-    ) : VoiceHealthIntent
-
-    /**
-     * 🫁 Registro de saturação de oxigênio (SpO2 %).
-     * @param oxygenPercent Percentual de oxigênio no sangue.
-     */
-    data class OxygenSaturation(
-        val oxygenPercent: Int
-    ) : VoiceHealthIntent
-
-    /**
-     * 🛒 Registro de itens na lista de compras do supermercado ou feira.
-     * @param items Lista de nomes dos alimentos ou itens a comprar.
-     * @param quantityHint Quantidade ou observação (ex.: "1 kg", "2 litros").
-     */
-    data class Grocery(
-        val items: List<String>,
-        val quantityHint: String? = null
-    ) : VoiceHealthIntent
-    
-    /**
-     * 👨‍👩‍👧 Lembrete de medicação para familiar/cuidado.
-     * @param targetName Nome do paciente/familiar (ex.: "meu pai", "minha mãe").
-     * @param text Texto da mensagem ou nome do remédio.
-     * @param timeHint Horário sugerido para o lembrete.
-     */
-    data class FamilyMedicationReminder(
-        val targetName: String?,
-        val text: String,
-        val timeHint: String? = null
-    ) : VoiceHealthIntent
-    
-    /**
-     * 📅 Agendamento de consulta/compromisso para familiar.
-     * @param targetName Nome do paciente/familiar.
-     * @param title Título do compromisso (ex.: "consulta com cardiologista").
-     * @param dateTimeHint Descrição aproximada de data/hora (ex.: "terça às 14h").
-     */
-    data class FamilyAppointment(
-        val targetName: String?,
-        val title: String,
-        val dateTimeHint: String? = null
-    ) : VoiceHealthIntent
-    
-    /**
-     * ❓ Consulta sobre status/métricas do paciente.
-     * @param metric Tipo de métrica (ex.: "pressão", "glicose", "água", "passos").
-     * @param targetName Nome do paciente/familiar (opcional).
-     */
-    data class QueryPatientStatus(
-        val metric: String,
-        val targetName: String? = null
-    ) : VoiceHealthIntent
-
-    /**
-     * 💬 Esclarecimento Conversacional Proativo (Diálogo Multi-Turno).
-     * Disparado quando a fala do usuário é ambígua (ex.: "filé de frango")
-     * e o agente precisa saber se o usuário já comeu ou se quer colocar na lista de compras.
-     * @param originalText Texto original falado pelo usuário.
-     * @param questionPrompt Pergunta acolhedora formulada pelo agente para ser falada (TTS) e lida.
-     * @param options Opções estruturadas para exibição em chips visuais e reconhecimento por voz.
-     * @param detectedFoodItems Alimentos detectados para encaminhamento.
-     * @param candidateMeal Objeto Meal pré-montado se o usuário confirmar consumo.
-     */
-    data class ClarificationRequired(
-        val originalText: String,
-        val questionPrompt: String,
-        val options: List<ClarificationOption>,
-        val detectedFoodItems: List<String> = emptyList(),
-        val candidateMeal: Meal? = null
-    ) : VoiceHealthIntent
-
-    /**
-      * 💬 Resposta Conversacional Informal (saudações, identidade, agradecimentos).
-      * Não é um registro de saúde — apenas uma fala acolhedora da assistente.
-      * @param message Texto simpático a ser falado (TTS) e exibido.
-      */
-    data class ConversationalReply(
-        val message: String
-    ) : VoiceHealthIntent
-
-    /**
-     * 🍎 Sugestão personalizada de alimento do catálogo (220 itens).
-     * @param suggestedFood Alimento recomendado do catálogo.
-     * @param reason Motivo clínico ou benefício funcional.
-     * @param portionGrams Porção sugerida em gramas (calculada proporcionalmente).
-     * @param portionDescription Descrição humanizada da porção (ex: "1 colher de sopa cheia (20g)").
-     * @param clinicalSociety Sociedade científica que respalda a recomendação (SBD, SBC, etc.).
-     * @param targetCondition Condição atendida ("GLUCOSE_HIGH", "GLUCOSE_LOW", "HYPERTENSION", "WEIGHT_MANAGEMENT", "WELLNESS").
-     */
-    data class SuggestFood(
-        val suggestedFood: FoodEntity,
-        val reason: String,
-        val portionGrams: Int,
-        val portionDescription: String,
-        val clinicalSociety: String,
-        val targetCondition: String
-    ) : VoiceHealthIntent
 
     /**
      * Fala não reconhecida como intenção de saúde.
@@ -193,8 +26,6 @@ sealed interface VoiceHealthIntent {
 }
 
 enum class ClarificationActionType {
-    LOG_MEAL,
-    ADD_TO_GROCERY,
     LOG_HYDRATION_CUPS,
     LOG_HYDRATION_FULL,
     CANCEL
@@ -399,24 +230,8 @@ fun VoiceHealthIntent.toConfirmationDisplay(): ConfirmationDisplayData {
             questionText = "Confirmar adesão ao medicamento \"$query\"?",
             spokenQuestion = "Você confirma que tomou o remédio $query?"
         )
-        is VoiceHealthIntent.Meal -> {
-            val names = (matchedFoods.map { it.name } + unmatchedFoods).distinct()
-            val text = if (names.isNotEmpty()) names.joinToString(", ") else foodNames.joinToString(", ")
-            ConfirmationDisplayData(
-                title = "Refeição ($mealType)",
-                value = text,
-                unit = null,
-                questionText = "Confirmar $text no seu $mealType?",
-                spokenQuestion = "Você confirma essa refeição no seu $mealType?"
-            )
-        }
-        is VoiceHealthIntent.Grocery -> ConfirmationDisplayData(
-            title = "Lista de Compras",
-            value = items.joinToString(", "),
-            unit = quantityHint,
-            questionText = "Adicionar ${items.joinToString(", ")} à lista de compras?",
-            spokenQuestion = "Deseja adicionar ${items.joinToString(", ")} à lista de compras?"
-        )
+
+
         is VoiceHealthIntent.ClarificationRequired -> ConfirmationDisplayData(
             title = "Atenção",
             value = detectedFoodItems.joinToString(", "),
@@ -454,16 +269,7 @@ fun VoiceHealthIntent.toConfirmationDisplay(): ConfirmationDisplayData {
             spokenQuestion = "Verificando dados de saúde...",
             isConversationalOnly = true
         )
-        is VoiceHealthIntent.SuggestFood -> ConfirmationDisplayData(
-            title = "Sugestão de Alimento",
-            value = suggestedFood.name,
-            unit = portionDescription,
-            questionText = "$reason Proporção sugerida: $portionDescription.",
-            spokenQuestion = "$reason Recomendo $portionDescription de ${suggestedFood.name}. Deseja adicionar à sua lista de compras?",
-            clinicalSocietyName = clinicalSociety,
-            clinicalStageBadge = "Sugestão Saudável",
-            isConversationalOnly = false
-        )
+
         is VoiceHealthIntent.Unknown -> ConfirmationDisplayData(
             title = "Não compreendido",
             value = rawText,
@@ -473,4 +279,3 @@ fun VoiceHealthIntent.toConfirmationDisplay(): ConfirmationDisplayData {
         )
     }
 }
-

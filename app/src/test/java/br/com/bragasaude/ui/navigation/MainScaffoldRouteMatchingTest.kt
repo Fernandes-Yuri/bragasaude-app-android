@@ -15,8 +15,8 @@ class MainScaffoldRouteMatchingTest {
     }
 
     @Test fun argScreen_matchesSerialNameFollowedByQueryString() {
-        // Rotas com argumentos chegam como "Screen$Nutrition?searchFood=...".
-        assertTrue(isCurrentRoute("Screen\$Nutrition?searchFood=arroz&openGroceryList=false&groceryItems=[]", Screen.Nutrition()))
+        // Rotas com argumentos chegam como "Screen$Vitals?type=...".
+        assertTrue(isCurrentRoute("Screen\$Vitals?type=PRESSURE", Screen.Vitals()))
     }
 
     @Test fun profileScreen_doesNotMatchProfileEditRoute() {
@@ -39,13 +39,13 @@ class MainScaffoldRouteMatchingTest {
         assertTrue(isCurrentRoute("br.com.bragasaude.ui.util.Screen.MedicationStock", Screen.MedicationStock))
         assertTrue(isCurrentRoute("br.com.bragasaude.ui.util.Screen\$MedicationStock", Screen.MedicationStock))
         assertTrue(isCurrentRoute("br.com.bragasaude.ui.util.Screen.BarcodeScanner", Screen.BarcodeScanner))
-        assertTrue(isCurrentRoute("br.com.bragasaude.ui.util.Screen.Nutrition?searchFood=feijao", Screen.Nutrition()))
+        assertTrue(isCurrentRoute("br.com.bragasaude.ui.util.Screen.Vitals?type=GLUCOSE", Screen.Vitals()))
         assertFalse(isCurrentRoute("br.com.bragasaude.ui.util.Screen.ProfileEdit", Screen.Profile))
     }
     @Test fun `orbe aparece nas visoes gerais com argumentos de navegacao`() {
         assertTrue(shouldShowAssistantOrb("Screen\$Home"))
         assertTrue(shouldShowAssistantOrb("Screen\$Report"))
-        assertTrue(shouldShowAssistantOrb("Screen\$Nutrition?searchFood=arroz"))
+        assertTrue(shouldShowAssistantOrb("Screen\$Vitals?type=PRESSURE"))
         assertTrue(shouldShowAssistantOrb("Screen\$Hydration?initialMl=200"))
         assertTrue(shouldShowAssistantOrb("Screen\$Steps"))
         assertTrue(shouldShowAssistantOrb("Screen\$Reminders"))

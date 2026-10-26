@@ -68,7 +68,6 @@ sealed interface VoiceUiState {
 sealed interface VoiceNavigationEvent {
     data class NavigateToVitals(val type: String, val value: String) : VoiceNavigationEvent
     data class NavigateToHydration(val addMl: Int? = null, val openCustomDialog: Boolean = true) : VoiceNavigationEvent
-    data class NavigateToNutrition(val searchFoodQuery: String? = null, val openGroceryList: Boolean = false) : VoiceNavigationEvent
     object OpenEmergencyDialog : VoiceNavigationEvent
 }
 
@@ -472,8 +471,6 @@ class VoiceHealthViewModel @Inject constructor(
                     onSpeechFinished()
                 }
             }
-            ClarificationActionType.LOG_MEAL,
-            ClarificationActionType.ADD_TO_GROCERY,
             ClarificationActionType.CANCEL -> {
                 cancel()
             }

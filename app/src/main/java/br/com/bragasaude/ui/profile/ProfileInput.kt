@@ -18,7 +18,6 @@ data class ProfileInput(
     val hasBone: Boolean? = null,
     val hasMuscular: Boolean? = null,
     val hydrationTargetMl: Int? = null,
-    val dailyCalorieTarget: Double? = null,
     val stepGoal: Int? = null,
     val weightGoal: Double? = null,
     val sleepStart: String? = "22:00",

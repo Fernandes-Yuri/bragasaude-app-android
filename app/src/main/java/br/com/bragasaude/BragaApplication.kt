@@ -11,7 +11,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
-import br.com.bragasaude.data.remote.repository.CatalogRepository
 import br.com.bragasaude.data.remote.sync.BragaFirebaseMessagingService
 import br.com.bragasaude.data.remote.sync.SyncManager
 import br.com.bragasaude.data.remote.sync.SyncScheduler
@@ -30,10 +29,10 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var syncManager: SyncManager
     @Inject lateinit var syncScheduler: SyncScheduler
-    @Inject lateinit var catalogRepository: CatalogRepository
 
     override fun onCreate() {
         super.onCreate()
+        br.com.bragasaude.data.local.RetiredNutritionCleanup.run(this)
         try {
             System.loadLibrary("sqlcipher")
         } catch (e: Throwable) {
@@ -73,7 +72,6 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
             listOf("exam_photos", "exam_originals", "dossiers").forEach { java.io.File(cacheDir, it).deleteRecursively() }
             java.io.File(cacheDir, "shared_pdfs").listFiles()?.filter { it.name.startsWith("exame_") }?.forEach { it.delete() }
             br.com.bragasaude.data.local.organizer.OrganizerStore(this@BragaApplication).cleanup()
-            catalogRepository.seedDatabaseIfNeeded()
         }
 
 

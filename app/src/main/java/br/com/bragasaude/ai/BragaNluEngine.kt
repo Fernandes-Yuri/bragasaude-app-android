@@ -498,7 +498,7 @@ object BragaNluEngine {
         if (REGEX_DUVIDA_AGUA.containsMatchIn(limpo)) {
             return NluOutput("duvida_hidratacao_agua", sortearResposta("duvida_hidratacao_agua"), tempoMs = deltaMs(inicio))
         }
-        if (REGEX_DUVIDA_ALIMENTACAO.containsMatchIn(limpo) || DietAndGroceryMemory.isFoodQuestion(texto)) {
+        if (REGEX_DUVIDA_ALIMENTACAO.containsMatchIn(limpo)) {
             return NluOutput("duvida_alimentacao_rotina", null, delegarParaNuvem = true, tempoMs = deltaMs(inicio))
         }
         if (REGEX_DUVIDA_SONO.containsMatchIn(limpo)) {
@@ -570,4 +570,3 @@ object BragaNluEngine {
         return (System.nanoTime() - inicioNano) / 1_000_000.0
     }
 }
-

@@ -247,9 +247,7 @@ fun DraggableAiAssistantFab(
                 is VoiceNavigationEvent.NavigateToHydration -> {
                     onNavigate(Screen.Hydration(initialMl = event.addMl, autoOpenDialog = event.openCustomDialog))
                 }
-                is VoiceNavigationEvent.NavigateToNutrition -> {
-                    onNavigate(Screen.Nutrition(searchFood = event.searchFoodQuery, openGroceryList = event.openGroceryList))
-                }
+
                 is VoiceNavigationEvent.OpenEmergencyDialog -> {
                     showEmergencyDialog = true
                 }

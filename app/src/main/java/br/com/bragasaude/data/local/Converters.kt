@@ -6,15 +6,6 @@ import kotlinx.serialization.json.Json
 import java.util.Date
 
 class Converters {
-    private val metadataJson = Json { ignoreUnknownKeys = true; coerceInputValues = true }
-
-    @TypeConverter
-    fun metadataFromString(value: String): FoodSemanticMetadata =
-        runCatching { metadataJson.decodeFromString<FoodSemanticMetadata>(value) }.getOrDefault(FoodSemanticMetadata())
-
-    @TypeConverter
-    fun metadataToString(value: FoodSemanticMetadata): String = metadataJson.encodeToString(value)
-
     @TypeConverter
     fun fromTimestamp(value: Long?): Date? {
         return value?.let { Date(it) }

@@ -49,30 +49,6 @@ class HomeViewModel @Inject constructor(
     private val _dashboardVitals = MutableStateFlow(RemoteVitalSign(userId = ""))
     val dashboardVitals = _dashboardVitals.asStateFlow()
 
-    val todayCaloriesConsumed: StateFlow<Double> = database.groceryPantryDao()
-        .meals(auth.currentUser?.uid ?: BragaConstants.GUEST_UID, todayDateStr)
-        .map { meals -> meals.sumOf { it.kcal } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
-
-    val dailyCalorieTarget: StateFlow<Double> = profileRepository
-        .getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
-        .map { profile ->
-            val custom = profile?.dailyCalorieTarget
-            if (custom != null && custom > 500.0 && custom != 1800.0) {
-                custom
-            } else {
-                HealthCalculators.calculateProfileCalorieTarget(
-                    weight = profile?.weight,
-                    height = profile?.height,
-                    birthDate = profile?.birthDate,
-                    gender = profile?.gender,
-                    activityLevel = profile?.activityLevel,
-                    weightGoal = profile?.weightGoal
-                ).toDouble()
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 2000.0)
-
     private val _latestMilestone = MutableStateFlow<RemoteMilestone?>(null)
     val latestMilestone = _latestMilestone.asStateFlow()
 
