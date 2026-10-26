@@ -2,10 +2,12 @@ package br.com.bragasaude.ui.organizer
 
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.local.organizer.*
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +26,9 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
     private val mutable = MutableStateFlow(OrganizerUiState())
     val state = mutable.asStateFlow()
     private val operations = Mutex()
+    /** Dispatcher da sonda de OCR fora da thread principal; testável para determinismo. */
+    @VisibleForTesting
+    internal var probeDispatcher: CoroutineDispatcher = Dispatchers.Default
     init { refresh(); probeOcr() }
     private fun operation(block: suspend () -> Unit) {
         mutable.value = mutable.value.copy(busy = true, error = null)
@@ -44,7 +49,7 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
     }
     /** Sonda a infraestrutura de leitura assistida sem nunca bloquear ou derrubar a área. */
     fun probeOcr() {
-        viewModelScope.launch(Dispatchers.Default) {
+        viewModelScope.launch(probeDispatcher) {
             val availability = ocrCapability.probe()
             if (mutable.value.ocrAvailability != availability) {
                 mutable.value = mutable.value.copy(ocrAvailability = availability)
