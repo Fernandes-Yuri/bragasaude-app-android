@@ -60,4 +60,35 @@ class OrganizerPdfBuilderTest {
         OrganizerPdfBuilder(context).build(listOf(OrganizerDocument("a", "Exame", pages = 1)),
             listOf(File(context.cacheDir, "input.pdf")), File(context.cacheDir, "output.pdf"), context.cacheDir, newest = true)
     }
+    @Test fun indexHeadersNeverOrphanAtPageBottom() {
+        val context = RuntimeEnvironment.getApplication()
+        val work = File(context.cacheDir, "pdf-orphan").apply { mkdirs() }
+        try {
+            val builder = OrganizerPdfBuilder(context)
+            val sectorList = listOf("Laboratorial", "Imagem", "Cardiológico")
+            val items = (1..18).map { n ->
+                OrganizerDocument("$n", "Exame " + "titulo bastante extenso ".repeat(6), "10/11/2026", sectorList[n % 3], pages = 1, confirmed = true)
+            }
+            val sources = items.map { item -> File(work, "${item.id}.pdf").apply {
+                PDDocument().use { document ->
+                    document.addPage(PDPage()); document.save(this)
+                }
+            } }
+            val result = File(work, "orphan.pdf")
+            builder.build(items, sources, result, work, newest = true)
+            PDDocument.load(result).use { document ->
+                assertTrue(document.numberOfPages > 2)
+                (1..5).forEach { page ->
+                    val text = PDFTextStripper().apply { startPage = page; endPage = page }.getText(document)
+                    if (!text.contains("Índice")) return@forEach
+                    val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+                    val footerStart = lines.indexOfFirst { it.startsWith("Guarde os originais") }
+                    val content = if (footerStart >= 0) lines.take(footerStart) else lines
+                    val last = content.lastOrNull().orEmpty()
+                    assertFalse("Página $page terminaria com cabeçalho órfão: $last",
+                        last.startsWith("SETOR:") || last.startsWith("Data:"))
+                }
+            }
+        } finally { work.deleteRecursively() }
+    }
 }

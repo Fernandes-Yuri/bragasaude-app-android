@@ -60,4 +60,22 @@ class OrganizerMetadataTest {
         assertEquals("", OrganizerMetadata.suggestDate("Data da realização: 12/05/2026"))
         assertEquals("", OrganizerMetadata.suggestDate("Paciente 01/01/1980 exame sem rotulo"))
     }
+    @Test fun doesNotConfuseBoneTermsWithUrineExam() {
+        // regressao real do teste fisico: "osseas" casava com "eas" por substring
+        val raiox = "RADIOGRAFIA DE TORAX. Raio-x em incidencias PA e perfil. " +
+            "Estruturas osseas e partes moles sem alteracoes. Seios costofrenicos livres."
+        val (title, type, topics) = OrganizerMetadata.suggestWithTopics(raiox, "raiox_torax.pdf")
+        assertEquals("Radiografia", title)
+        assertEquals("Imagem", type)
+        assertFalse(topics.contains("Urina (EAS)"))
+        assertTrue(topics.contains("Radiografia"))
+    }
+    @Test fun matchesShortTokensOnlyAsStandaloneWords() {
+        assertTrue(OrganizerMetadata.extractTopics("resultado do exame EAS dentro da normalidade").contains("Urina (EAS)"))
+        assertFalse(OrganizerMetadata.extractTopics("tem ideias brilhantes e varias formas").contains("Urina (EAS)"))
+        assertTrue(OrganizerMetadata.extractTopics("traco registado: ECG de 12 derivacoes").contains("Eletrocardiograma"))
+        assertEquals("Outros", OrganizerMetadata.suggestWithTopics("relatorio de mapeamento da area de risco", "x").second)
+        assertEquals("Cardiológico", OrganizerMetadata.suggestWithTopics("MAPA de 24 horas em repouso", "x").second)
+        assertFalse(OrganizerMetadata.extractTopics("amostras t34 e ut3g lacradas").contains("Tireoide"))
+    }
 }

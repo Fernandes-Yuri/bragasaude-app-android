@@ -67,8 +67,16 @@ class OrganizerPdfBuilder(context: Context) {
         }
         val indexGroups = mutableListOf<MutableList<IndexItem>>(mutableListOf())
         var available = 24
-        indexItems.forEach { item ->
-            if (item.weight > available) { indexGroups.add(mutableListOf()); available = 24 }
+        indexItems.forEachIndexed { index, item ->
+            // Cabecalhos nunca ficam orfaos no fim da pagina: so ocupam lugar se
+            // couber junto a proxima entrada de documento (keep-with-next).
+            val keepWithNext = (item is SectorHead || item is DateHead)
+            val lookahead = if (keepWithNext) {
+                indexItems.subList(index + 1, indexItems.size).firstOrNull { it is DocHead }?.weight ?: 0
+            } else 0
+            if (item.weight + lookahead > available && indexGroups.last().isNotEmpty()) {
+                indexGroups.add(mutableListOf()); available = 24
+            }
             indexGroups.last().add(item); available -= item.weight
         }
 

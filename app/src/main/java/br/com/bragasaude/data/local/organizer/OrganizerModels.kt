@@ -74,6 +74,8 @@ object OrganizerMetadata {
                     .map { DateGroup(it.key, it.value) }
                 Sector(docs.first().type, groups)
             }
+    private fun hasWord(plain: String, word: String): Boolean =
+        Regex("\\b${Regex.escape(word)}\\b").containsMatchIn(plain)
     fun extractTopics(text: String): List<String> {
         val plain = Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}"), "")
         val detected = mutableListOf<String>()
@@ -82,9 +84,11 @@ object OrganizerMetadata {
         if (listOf("colesterol", "hdl", "ldl", "triglicerid").any { it in plain }) detected.add("Perfil Lipídico")
         if (listOf("creatinina", "ureia", "acido urico").any { it in plain }) detected.add("Função Renal")
         if (listOf("tgo", "tgp", "transaminase", "gama gt", "bilirrubina").any { it in plain }) detected.add("Função Hepática")
-        if (listOf("tsh", "t4 livre", "t3", "tireoide").any { it in plain }) detected.add("Tireoide")
-        if (listOf("urina", "eas", "sedimentoscopia", "urocultura").any { it in plain }) detected.add("Urina (EAS)")
-        if (listOf("eletrocardiograma", "ecg").any { it in plain }) detected.add("Eletrocardiograma")
+        // palavras curtas exigem fronteira de palavra: "t3" jamais casa com "t34", "ut3g" etc.
+        if (listOf("tsh", "t4 livre", "tireoide").any { it in plain } || hasWord(plain, "t3")) detected.add("Tireoide")
+        // "eas" so vale isolada: "osseas", "ideias" e afins nao sao exame de urina
+        if (listOf("urina", "sedimentoscopia", "urocultura").any { it in plain } || hasWord(plain, "eas")) detected.add("Urina (EAS)")
+        if ("eletrocardiograma" in plain || hasWord(plain, "ecg")) detected.add("Eletrocardiograma")
         if (plain.contains("ecocardiograma") || Regex("\\b(?:ecocardiograf\\w*|ecocardio\\w*|eco)\\b").containsMatchIn(plain))
             detected.add("Ecocardiograma")
         if (listOf("ultrassonografia", "ultrassom").any { it in plain }) detected.add("Ultrassonografia")
@@ -109,7 +113,8 @@ object OrganizerMetadata {
             else -> fallback.substringBeforeLast('.').take(80).ifBlank { "Documento de exame" }
         }
         val type = when {
-            listOf("eletrocardiograma", "ecocardiogra", "holter", "mapa", "ergometrico").any { it in plain } -> "Cardiológico"
+            // "mapa" so vale isolada (exame MAPA); "mapeamento"/"mapamental" nao sao cardiologia
+            listOf("eletrocardiograma", "ecocardiogra", "holter", "ergometrico").any { it in plain } || hasWord(plain, "mapa") -> "Cardiológico"
             listOf("ultrass", "ressonancia", "tomografia", "mamografia", "radiografia", "raio-x").any { it in plain } -> "Imagem"
             listOf("hemograma", "glicose", "colesterol", "creatinina", "tsh", "urina", "leucocit").any { it in plain } -> "Laboratorial"
             else -> "Outros"

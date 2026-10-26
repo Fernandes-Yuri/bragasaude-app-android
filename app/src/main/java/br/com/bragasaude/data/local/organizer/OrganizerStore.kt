@@ -197,22 +197,27 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
             } }
         }
     }
-    suspend fun import(id: String, uris: List<Uri>, appendTo: String? = null): OrganizerSession = withContext(Dispatchers.IO) { lock.withLock {
+    /** Importação atômica POR ARQUIVO: uma falha nunca apaga o lote; cada falha vira relato visível. */
+    suspend fun import(id: String, uris: List<Uri>, appendTo: String? = null): Pair<OrganizerSession, List<String>> = withContext(Dispatchers.IO) { lock.withLock {
         var s = active(id)
         require(uris.isNotEmpty() && uris.size <= 20) { "Selecione até 20 arquivos por vez." }
-        // Atomic batch: do not commit a partial import if one source fails.
         val pending = mutableListOf<Pair<OrganizerDocument, File>>()
+        val failures = mutableListOf<String>()
         val work = File(temp(id), "import").apply { mkdirs() }
         try {
             uris.forEach { uri ->
+                val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                    if (it.moveToFirst()) it.getString(0) else null
+                } ?: "arquivo"
+                try {
                 require(s.documents.size + pending.size < 20 || appendTo != null) { "Limite de 20 documentos por sessão." }
                 val docId = UUID.randomUUID().toString()
                 val source = File(work, "$docId.source")
                 context.contentResolver.openInputStream(uri)?.use { input -> source.outputStream().use { out ->
                     val buffer = ByteArray(8192); var total = 0L
                     while (true) { val n = input.read(buffer); if (n < 0) break
-                        total += n; require(total <= 35L * 1024 * 1024) { "Cada arquivo pode ter até 35 MB." }; out.write(buffer, 0, n) }
-                } } ?: error("Não foi possível ler o arquivo.")
+                        total += n; require(total <= 35L * 1024 * 1024) { "tem mais de 35 MB" }; out.write(buffer, 0, n) }
+                } } ?: error("não foi possível ler")
                 val digest = java.security.MessageDigest.getInstance("SHA-256")
                 source.inputStream().use { input ->
                     val buffer = ByteArray(8192)
@@ -226,9 +231,9 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
                 if (isPdf) {
                     source.renameTo(normalized)
                     PDDocument.load(normalized, MemoryUsageSetting.setupTempFileOnly().setTempDir(work)).use { document ->
-                        require(!document.isEncrypted) { "Abra e salve uma cópia sem senha do PDF antes de importar." }
+                        require(!document.isEncrypted) { "está protegido por senha; abra e salve uma cópia sem senha" }
                         pages = document.numberOfPages
-                        require(pages in 1..100) { "O PDF precisa ter entre 1 e 100 páginas." }
+                        require(pages in 1..100) { "tem $pages páginas (limite 100)" }
                         text = PDFTextStripper().apply { endPage = minOf(pages, 3) }.getText(document).take(20000)
                     }
                     if (text.isBlank()) {
@@ -240,17 +245,20 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
                     try { pdf.imagePdf(bitmap, normalized); text = runCatching { recognize(bitmap) }.getOrDefault("") }
                     finally { bitmap.recycle() }
                 }
-                require(s.documents.sumOf { it.pages } + pending.sumOf { it.first.pages } + pages <= 100) { "Limite de 100 páginas por sessão." }
-                val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
-                    if (it.moveToFirst()) it.getString(0) else null
-                } ?: "Documento de exame"
+                require(s.documents.sumOf { it.pages } + pending.sumOf { it.first.pages } + pages <= 100) { "soma de páginas estouraria o limite de 100 por sessão" }
                 val (title, type, topics) = OrganizerMetadata.suggestWithTopics(text, name)
-                require(normalized.length() <= 35L * 1024 * 1024) { "Cada documento pode ter até 35 MB após a organização." }
+                require(normalized.length() <= 35L * 1024 * 1024) { "ficou com mais de 35 MB após a organização" }
                 require((folder(id).listFiles()?.filter { it.extension == "enc" }?.sumOf { it.length() } ?: 0L) +
-                    pending.sumOf { it.second.length() } + normalized.length() <= 150L * 1024 * 1024) { "A sessão pode ter até 150 MB. Organize em lotes menores." }
+                    pending.sumOf { it.second.length() } + normalized.length() <= 150L * 1024 * 1024) { "a sessão chegaria a 150 MB; organize em lotes menores" }
                 pending.add(OrganizerDocument(docId, title, OrganizerMetadata.suggestDate(text), type, pages, photoOnly = !isPdf, sourceDigest = sourceDigest, possibleDuplicate = duplicate, topics = topics) to normalized)
+                }
+                catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (problem: OrganizerProblem) { failures.add("$name — ${problem.message}") }
+                catch (invalid: IllegalArgumentException) { failures.add("$name — ${invalid.message}") }
+                catch (broken: IllegalStateException) { failures.add("$name — ${broken.message}") }
+                catch (io: java.io.IOException) { failures.add("$name — arquivo ilegível, corrompido ou não é PDF/imagem válida") }
             }
-            if (appendTo != null) {
+            if (appendTo != null && pending.isNotEmpty()) {
                 val item = s.documents.first { it.id == appendTo }
                 val old = original(id, item)
                 val merged = File(work, "merged.pdf")
@@ -270,7 +278,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
             save(s)
             val keep = s.documents.map { "${it.id}.enc" }.toSet() + setOf("session.enc", "result.enc")
             folder(id).listFiles()?.filter { it.extension == "enc" && it.name !in keep }?.forEach { it.delete() }
-            invalidate(id); s
+            invalidate(id); s to failures
         } finally { work.deleteRecursively() }
     } }
     suspend fun update(id: String, item: OrganizerDocument): OrganizerSession = withContext(Dispatchers.IO) { lock.withLock {
