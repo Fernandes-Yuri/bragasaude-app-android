@@ -242,7 +242,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                         )
 
                         Text(
-                            text = "Reúna PDFs e fotos de exames em um documento único, organizado com índice cronológico e divisórias para levar ao médico.",
+                            text = "Reúna PDFs e fotos de exames em um documento único, dividido por setores coloridos e, dentro de cada setor, por data (mais recentes primeiro), com divisórias para levar ao médico.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = BragaTextSecondary,
                             textAlign = TextAlign.Center,
@@ -383,7 +383,45 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                         color = BragaTextPrimary
                     )
 
-                    OrganizerMetadata.ordered(session.documents, state.newest).forEach { doc ->
+                    OrganizerMetadata.sections(session.documents, state.newest).forEach { sector ->
+                        val sectorColor = run {
+                            val (r, g, b) = OrganizerMetadata.pdfColor(sector.type)
+                            Color(r, g, b)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(sectorColor)
+                            )
+                            Text(
+                                text = "Setor: ${sector.type}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = BragaTextPrimary
+                            )
+                            Text(
+                                text = "${sector.groups.sumOf { it.documents.size }} exame(s)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = BragaTextSecondary
+                            )
+                        }
+                        sector.groups.forEach { group ->
+                            if (group.date.isNotBlank() || sector.groups.size > 1) {
+                                Text(
+                                    text = group.date.ifBlank { "Sem data" },
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = BragaTextSecondary,
+                                    modifier = Modifier.padding(start = 20.dp)
+                                )
+                            }
+                            group.documents.forEach { doc ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),
@@ -524,6 +562,8 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                                 }
                             }
                         }
+                            }
+                        }
                     }
 
                     // Ação de Gerar PDF
@@ -547,7 +587,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                                     enabled = !state.busy
                                 )
                                 Spacer(Modifier.width(6.dp))
-                                Text("Mais recentes primeiro no índice", style = MaterialTheme.typography.bodyMedium, color = BragaTextPrimary)
+                                Text("Mais recentes primeiro dentro de cada setor", style = MaterialTheme.typography.bodyMedium, color = BragaTextPrimary)
                             }
 
                             val allConfirmed = session.documents.all { it.confirmed }

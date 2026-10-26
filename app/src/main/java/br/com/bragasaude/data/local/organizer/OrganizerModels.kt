@@ -38,6 +38,42 @@ object OrganizerMetadata {
                 .takeIf { it != 0 } ?: compareValuesBy(a, b, { it.type }, { it.title.lowercase() }, { it.id })
         }
     }
+    // Cor de ticket por setor, fonte única para índice, capas, divisórias e tela.
+    fun pdfColor(type: String): Triple<Int, Int, Int> = when (type.lowercase()) {
+        "laboratorial" -> Triple(0, 137, 123)
+        "imagem" -> Triple(2, 132, 199)
+        "cardiológico", "cardiologico" -> Triple(124, 58, 237)
+        else -> Triple(100, 116, 139)
+    }
+    data class DateGroup(val date: String, val documents: List<OrganizerDocument>)
+    data class Sector(val type: String, val groups: List<DateGroup>)
+
+    /** Setores na ordem fixa; dentro de cada setor, grupos por data (mais recentes primeiro) e sem-data por último. */
+    fun sections(documents: List<OrganizerDocument>, newest: Boolean): List<Sector> =
+        types.map { sectorType -> documents.filter { it.type == sectorType } }
+            .filter { it.isNotEmpty() }
+            .map { docs ->
+                val sorted = docs.sortedWith { a, b ->
+                    val da = dateKey(a.date); val db = dateKey(b.date)
+                    val c = when {
+                        da == null && db != null -> 1
+                        da != null && db == null -> -1
+                        else -> if (newest) compareValues(db, da) else compareValues(da, db)
+                    }
+                    if (c != 0) c else compareValuesBy(a, b, { it.title.lowercase() }, { it.id })
+                }
+                val groups = sorted.groupBy { it.date }.entries
+                    .sortedWith { x, y ->
+                        val dx = dateKey(x.key); val dy = dateKey(y.key)
+                        when {
+                            dx == null && dy != null -> 1
+                            dx != null && dy == null -> -1
+                            else -> if (newest) compareValues(dy, dx) else compareValues(dx, dy)
+                        }
+                    }
+                    .map { DateGroup(it.key, it.value) }
+                Sector(docs.first().type, groups)
+            }
     fun extractTopics(text: String): List<String> {
         val plain = Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}"), "")
         val detected = mutableListOf<String>()
@@ -49,7 +85,8 @@ object OrganizerMetadata {
         if (listOf("tsh", "t4 livre", "t3", "tireoide").any { it in plain }) detected.add("Tireoide")
         if (listOf("urina", "eas", "sedimentoscopia", "urocultura").any { it in plain }) detected.add("Urina (EAS)")
         if (listOf("eletrocardiograma", "ecg").any { it in plain }) detected.add("Eletrocardiograma")
-        if (listOf("ecocardiograma", "eco").any { it in plain }) detected.add("Ecocardiograma")
+        if (plain.contains("ecocardiograma") || Regex("\\b(?:ecocardiograf\\w*|ecocardio\\w*|eco)\\b").containsMatchIn(plain))
+            detected.add("Ecocardiograma")
         if (listOf("ultrassonografia", "ultrassom").any { it in plain }) detected.add("Ultrassonografia")
         if (listOf("tomografia").any { it in plain }) detected.add("Tomografia")
         if (listOf("ressonancia").any { it in plain }) detected.add("Ressonância Magnética")
@@ -66,13 +103,13 @@ object OrganizerMetadata {
             "ressonancia" in plain -> "Ressonância magnética"
             "tomografia" in plain -> "Tomografia"
             "eletrocardiograma" in plain -> "Eletrocardiograma"
-            "ecocardiograma" in plain -> "Ecocardiograma"
+            "ecocardiogra" in plain -> "Ecocardiograma"
             "mamografia" in plain -> "Mamografia"
             topics.isNotEmpty() -> topics.first()
             else -> fallback.substringBeforeLast('.').take(80).ifBlank { "Documento de exame" }
         }
         val type = when {
-            listOf("eletrocardiograma", "ecocardiograma", "holter", "mapa", "ergometrico").any { it in plain } -> "Cardiológico"
+            listOf("eletrocardiograma", "ecocardiogra", "holter", "mapa", "ergometrico").any { it in plain } -> "Cardiológico"
             listOf("ultrass", "ressonancia", "tomografia", "mamografia", "radiografia", "raio-x").any { it in plain } -> "Imagem"
             listOf("hemograma", "glicose", "colesterol", "creatinina", "tsh", "urina", "leucocit").any { it in plain } -> "Laboratorial"
             else -> "Outros"

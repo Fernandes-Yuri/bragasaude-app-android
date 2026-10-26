@@ -37,17 +37,19 @@ class OrganizerPdfBuilderTest {
                 }
             } }
             val result = File(work, "result.pdf")
-            builder.build(items, sources, result, work)
+            builder.build(items, sources, result, work, newest = true)
             PDDocument.load(result).use { document ->
                 val text = PDFTextStripper().getText(document)
+                val ordered = OrganizerMetadata.sections(items, newest = true)
+                    .flatMap { it.groups }.flatMap { it.documents }
                 val indexPages = document.numberOfPages - 60
                 assertTrue("O índice precisa paginar títulos extensos", indexPages > 1)
-                items.forEachIndexed { n, item ->
+                ordered.forEachIndexed { n, item ->
                     assertTrue(text.contains("página ${indexPages + 1 + n * 3}"))
                     repeat(2) { originalPage ->
                         val page = indexPages + n * 3 + originalPage + 2
                         val content = PDFTextStripper().apply { startPage = page; endPage = page }.getText(document)
-                        assertTrue(content.contains("ORIGINAL ${item.id} PAGINA ${originalPage + 1}"))
+                        assertTrue("Documento ${item.id} fora da posição $n", content.contains("ORIGINAL ${item.id} PAGINA ${originalPage + 1}"))
                     }
                 }
             }
@@ -56,6 +58,6 @@ class OrganizerPdfBuilderTest {
     @Test(expected = IllegalArgumentException::class) fun refusesUnreviewedDocuments() {
         val context = RuntimeEnvironment.getApplication()
         OrganizerPdfBuilder(context).build(listOf(OrganizerDocument("a", "Exame", pages = 1)),
-            listOf(File(context.cacheDir, "input.pdf")), File(context.cacheDir, "output.pdf"), context.cacheDir)
+            listOf(File(context.cacheDir, "input.pdf")), File(context.cacheDir, "output.pdf"), context.cacheDir, newest = true)
     }
 }
