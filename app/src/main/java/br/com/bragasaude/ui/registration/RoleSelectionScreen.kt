@@ -73,7 +73,7 @@ fun RoleSelectionScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(24.dp))
-            
+
             // Icone/Logo
             Surface(
                 shape = RoundedCornerShape(20.dp),
@@ -89,9 +89,9 @@ fun RoleSelectionScreen(
                     )
                 }
             }
-            
+
             Spacer(Modifier.height(24.dp))
-            
+
             Text(
                 "Como você deseja usar o app?",
                 style = MaterialTheme.typography.headlineSmall,
@@ -99,9 +99,9 @@ fun RoleSelectionScreen(
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )
-            
+
             Spacer(Modifier.height(8.dp))
-            
+
             Text(
                 "Escolha a opção que melhor descreve seu objetivo.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -109,9 +109,9 @@ fun RoleSelectionScreen(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
-            
+
             Spacer(Modifier.height(32.dp))
-            
+
             // Opcao A: PATIENT
             RoleOptionCard(
                 icon = Icons.Default.Person,
@@ -120,9 +120,9 @@ fun RoleSelectionScreen(
                 selected = selectedRole == "PATIENT",
                 onClick = { selectedRole = "PATIENT" }
             )
-            
+
             Spacer(Modifier.height(16.dp))
-            
+
             // Opcao B: CAREGIVER
             RoleOptionCard(
                 icon = Icons.Default.Diversity3,
@@ -131,7 +131,7 @@ fun RoleSelectionScreen(
                 selected = selectedRole == "CAREGIVER",
                 onClick = { selectedRole = "CAREGIVER" }
             )
-            
+
             Spacer(Modifier.height(24.dp))
             Button(onClick = { selectedRole?.let(onRoleSelected) }, enabled = selectedRole != null,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(24.dp)) {
@@ -183,10 +183,10 @@ private fun RoleOptionCard(
                         )
                     }
                 }
-                
+
                 Spacer(Modifier.width(16.dp))
                 RadioButton(selected = selected, onClick = null)
-                
+
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         title,

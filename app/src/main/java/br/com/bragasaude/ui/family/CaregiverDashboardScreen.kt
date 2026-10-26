@@ -127,7 +127,7 @@ fun CaregiverDashboardScreen(
             viewModel.selectPatient(watchedPatients.first())
         }
     }
-    
+
     // Polling de fallback (2 min) para atualizar métricas diárias/perfil que não possuem stream realtime
     LaunchedEffect(dashboard.patientUserId) {
         if (dashboard.patientUserId.isNotBlank()) {
@@ -212,7 +212,7 @@ fun CaregiverDashboardScreen(
                 trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         }
-        
+
         if (watchedPatients.isEmpty()) {
             Column(Modifier.padding(innerPadding)) {
                 Button(onClick = onConnectFamily, modifier = Modifier.fillMaxWidth().padding(16.dp)) {
@@ -823,7 +823,6 @@ private fun ActionChip(
     }
 }
 
-// ==================== LISTA DE COMPRAS COMPARTILHADA ====================
 
 
 

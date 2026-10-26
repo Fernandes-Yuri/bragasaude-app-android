@@ -40,10 +40,10 @@ class BragaLocalAiClient @Inject constructor(
 
     companion object {
         private const val TAG = "BragaLocalAiClient"
-        
+
         // Domínio público com Cloudflare Tunnel para acesso global (4G/5G e Wi-Fi)
         val DEFAULT_SERVER_URL = br.com.bragasaude.BuildConfig.BASE_URL
-        
+
         // Timeout defensivo ajustado
         private const val CONNECT_TIMEOUT_MS = 5000
         private const val READ_TIMEOUT_MS = 35000

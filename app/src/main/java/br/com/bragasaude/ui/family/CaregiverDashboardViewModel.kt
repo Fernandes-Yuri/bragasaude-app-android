@@ -26,7 +26,6 @@ import br.com.bragasaude.util.BragaConstants
  * - Listagem dos pacientes acompanhados pelo cuidador
  * - Observação em tempo real (Firebase Data Connect -> Room -> UI) dos sinais vitais,
  *   hidratação e passos do paciente selecionado
- * - Gerenciamento de lista de compras / necessidades do paciente
  * - Envio de bilhetes de carinho e lembretes com modelos rápidos
  * - Compartilhamento de conquistas familiares no Feed Social Intergeracional
  * - Aceitação de novos vínculos através de código de conexão

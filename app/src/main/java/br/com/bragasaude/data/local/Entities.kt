@@ -296,7 +296,6 @@ data class PostReactionEntity(
 )
 
 /**
- * Ponte Familiar - item da lista de compras compartilhada entre o familiar e o cuidador.
  */
 
 @Entity(tableName = "family_bindings_local")

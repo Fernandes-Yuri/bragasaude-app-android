@@ -317,16 +317,16 @@ interface DailyMetricsDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(metrics: DailyMetricsEntity)
-    
+
     @Query("SELECT * FROM daily_metrics_local WHERE userId = :userId AND date = :date")
     suspend fun getByDate(userId: String, date: String): DailyMetricsEntity?
-    
+
     @Query("SELECT * FROM daily_metrics_local WHERE userId = :userId ORDER BY date DESC LIMIT 30")
     fun getRecent30Days(userId: String): Flow<List<DailyMetricsEntity>>
 
     @Query("SELECT * FROM daily_metrics_local WHERE userId = :userId AND date >= :startDate ORDER BY date ASC")
     fun getMetricsForDateRange(userId: String, startDate: String): Flow<List<DailyMetricsEntity>>
-    
+
     @Query("SELECT * FROM daily_metrics_local WHERE pendingSync = 1")
     suspend fun getPendingSync(): List<DailyMetricsEntity>
 
@@ -640,7 +640,7 @@ interface FamilyDao {
     @Query("UPDATE family_bindings_local SET pendingSync = 0 WHERE id = :id")
     suspend fun abandonBindingSync(id: String)
 
-    
+
     /** Inserir nova consulta médica. */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertConsultation(consultation: ConsultationEntity)
@@ -691,7 +691,6 @@ interface FamilyDao {
 }
 
 /**
- * Lista de compras compartilhada (Ponte Familiar).
  */
 
 @Dao
@@ -710,22 +709,22 @@ interface VitalAlertLogDao {
 interface AuditLogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(log: AuditLogEntity)
-    
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(logs: List<AuditLogEntity>)
-    
+
     @Query("SELECT * FROM audit_logs_local WHERE userId = :userId ORDER BY timestamp DESC")
     fun getByUser(userId: String): Flow<List<AuditLogEntity>>
-    
+
     @Query("SELECT * FROM audit_logs_local WHERE userId = :userId AND eventType = :eventType ORDER BY timestamp DESC")
     fun getByType(userId: String, eventType: String): Flow<List<AuditLogEntity>>
-    
+
     @Query("SELECT * FROM audit_logs_local WHERE pendingSync = 1")
     suspend fun getPendingSync(): List<AuditLogEntity>
-    
+
     @Query("UPDATE audit_logs_local SET pendingSync = 0 WHERE id = :id")
     suspend fun markAsSynced(id: String)
-    
+
     @Query("DELETE FROM audit_logs_local WHERE timestamp < :cutoffTimestamp")
     suspend fun purgeOlderThan(cutoffTimestamp: Long)
 }

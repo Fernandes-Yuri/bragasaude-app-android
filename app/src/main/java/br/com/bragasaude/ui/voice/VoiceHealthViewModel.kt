@@ -94,7 +94,7 @@ class VoiceHealthViewModel @Inject constructor(
 
     private var currentUserRole: String? = null
     private var currentCaregiverMode: String? = null
-    
+
     private fun getCurrentUserId(): String {
         return auth.currentUser?.uid ?: "anonymous"
     }
@@ -528,8 +528,8 @@ class VoiceHealthViewModel @Inject constructor(
             if (!current() || !voiceSession.consume(ticket)) return
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val bestMatch = matches?.firstOrNull()
-            
-            
+
+
             if (bestMatch.isNullOrBlank()) {
                 handleSilence()
                 return
@@ -846,10 +846,10 @@ class VoiceHealthViewModel @Inject constructor(
                     val sysFmt = if (systolic > 30) systolic / 10 else systolic
                     val diaFmt = if (diastolic > 20) diastolic / 10 else diastolic
                     telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", bestMatch, "BloodPressure")
-                    
+
                     navigateForVoice(VoiceNavigationEvent.NavigateToVitals("PRESSURE", "$systolic/$diastolic"))
                     _state.value = VoiceUiState.Saved(summary = "Pressão $systolic/$diastolic", isConversational = false)
-                    
+
                     // Alerta Clínico para Cuidadores se pressão fora de faixa
                     if (systolic >= 140 || diastolic >= 90) {
                         viewModelScope.launch {
@@ -872,7 +872,7 @@ class VoiceHealthViewModel @Inject constructor(
                 is VoiceHealthIntent.Glucose -> {
                     val glyc = intent.glucoseMgDl
                     telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", bestMatch, "Glucose")
-                    
+
                     navigateForVoice(VoiceNavigationEvent.NavigateToVitals("GLUCOSE", "$glyc"))
                     _state.value = VoiceUiState.Saved(summary = "Glicemia $glyc", isConversational = false)
 
@@ -897,7 +897,7 @@ class VoiceHealthViewModel @Inject constructor(
                 is VoiceHealthIntent.Hydration -> {
                     val ml = intent.amountMl
                     telemetryService.logVoiceEvent(getCurrentUserId(), "PARSED", bestMatch, "Hydration")
-                    
+
                     navigateForVoice(VoiceNavigationEvent.NavigateToHydration(addMl = ml, openCustomDialog = true))
                     _state.value = VoiceUiState.Saved(summary = "Água ${ml}ml", isConversational = false)
                     val spokenPrompt = "Preparei $ml ml de água na tela. Toque em Adicionar para confirmar."

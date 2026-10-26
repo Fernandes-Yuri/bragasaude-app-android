@@ -69,7 +69,7 @@ class ProfileViewModel @Inject constructor(
 
     init {
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
-        
+
         viewModelScope.launch {
             repository.getProfile(userId).collectLatest { entity ->
                 _profile.value = entity?.toRemote()
@@ -169,7 +169,7 @@ class ProfileViewModel @Inject constructor(
         onComplete: () -> Unit
     ) {
         val userId = auth.currentUser?.uid ?: return
-        
+
         viewModelScope.launch {
             _isLoading.value = true
             _saveError.value = null
@@ -466,7 +466,7 @@ class ProfileViewModel @Inject constructor(
         val current = _profile.value ?: RemoteProfile(id = userId)
         val nowIso = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).format(java.util.Date())
         val updated = current.copy(consentAcceptedAt = nowIso)
-        
+
         viewModelScope.launch {
             _isLoading.value = true
             try {

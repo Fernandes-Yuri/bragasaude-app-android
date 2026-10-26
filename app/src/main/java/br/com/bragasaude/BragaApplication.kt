@@ -24,7 +24,7 @@ import javax.inject.Inject
 
 @HiltAndroidApp
 class BragaApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory {
-    
+
     @Inject lateinit var authService: AuthService
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var syncManager: SyncManager
@@ -62,7 +62,7 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
         }
         syncManager.startRealtimeSync()
         syncScheduler.schedulePeriodicRecoverySync()
-        
+
         // AUD-AN07: CoroutineScope sem SupervisorJob — uma exceção no seeding
         // do catálogo propagava e derrubava o processo na inicialização. O
         // scope de aplicação deve sobreviver a falhas de um filho.

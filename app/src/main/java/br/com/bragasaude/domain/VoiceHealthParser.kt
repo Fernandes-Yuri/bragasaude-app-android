@@ -71,7 +71,7 @@ class VoiceHealthParser @Inject constructor() {
      * @param caregiverMode Modo do cuidador ("HYBRID", "VIEWER_ONLY", null).
      */
     fun parse(
-        rawTranscript: String, 
+        rawTranscript: String,
         userRole: String? = null,
         caregiverMode: String? = null
     ): VoiceHealthIntent {
@@ -82,11 +82,11 @@ class VoiceHealthParser @Inject constructor() {
         return runCatching {
             val normalized = normalize(rawTranscript)
             val withNumbers = replaceNumbersInWords(normalized)
-            
+
             // Verificar se usuário está em modo cuidador (HÍBRIDO ou VIEWER_ONLY)
             val isCaregiver = userRole == "CAREGIVER" || caregiverMode != null
             val isOnlyCaregiver = userRole == "CAREGIVER" && caregiverMode != "HYBRID"
-            
+
             if (isCaregiver) {
                 // Intenções específicas para cuidadores (lembretes e agendamentos do familiar)
                 detectFamilyMedicationReminder(withNumbers, rawTranscript)?.let { return@runCatching it }
@@ -378,9 +378,9 @@ class VoiceHealthParser @Inject constructor() {
             scheduleTimeHint = scheduleTimeHint
         )
     }
-    
+
     // ==================== INTENÇÕES FAMILIARES (CUIDADOR) ====================
-    
+
     // Detecta lembretes de medicação para familiar
     private val familyMedRegex = Regex(
         "(lembra[r]?|avisa[r]?|diga[r]?)\\s+" +
@@ -391,27 +391,27 @@ class VoiceHealthParser @Inject constructor() {
         "(rem[eé]dio|medicamento|comprimido)?",
         RegexOption.IGNORE_CASE
     )
-    
+
     private fun detectFamilyMedicationReminder(text: String, raw: String): VoiceHealthIntent.FamilyMedicationReminder? {
         val match = familyMedRegex.find(text) ?: return null
-        
+
         val targetName = match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() }
         val textMsg = match.groupValues.getOrNull(3)?.takeIf { it.isNotBlank() } ?: "remédio"
-        
+
         // Extrair horário se mencionado
         val timeMatch = timeHintRegex.find(text)
-        val timeHint = timeMatch?.let { 
+        val timeHint = timeMatch?.let {
             val hour = it.groupValues[1].toIntOrNull()
             hour?.let { h -> String.format("%02d:00", h) }
         }
-        
+
         return VoiceHealthIntent.FamilyMedicationReminder(
             targetName = targetName ?: "familiar",
             text = textMsg.replace(Regex("\\s+"), " ").trim(),
             timeHint = timeHint
         )
     }
-    
+
     // Detecta agendamentos para familiar
     private val familyApptRegex = Regex(
         "(agenda[r]?|marca[r]?)\\s+" +
@@ -422,24 +422,24 @@ class VoiceHealthParser @Inject constructor() {
         "(?:\\s+([a-z]+))?",
         RegexOption.IGNORE_CASE
     )
-    
+
     private fun detectFamilyAppointment(text: String, raw: String): VoiceHealthIntent.FamilyAppointment? {
         val match = familyApptRegex.find(text) ?: return null
-        
+
         val title = match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() } ?: "consulta"
         val targetName = match.groupValues.getOrNull(3)?.takeIf { it.isNotBlank() }
-        
+
         // Extrair data/hora aproximada
         val dateTimePattern = Regex("(segunda|terça|quarta|quinta|sexta|sábado|domingo|amanha|manhã|tarde|noite)|(\\d{1,2})\\s*(?:h|horas)?")
         val dateTimeHint = dateTimePattern.find(text)?.value?.takeIf { it.isNotBlank() }
-        
+
         return VoiceHealthIntent.FamilyAppointment(
             targetName = targetName ?: "familiar",
             title = title.replace(Regex("\\s+"), " ").trim(),
             dateTimeHint = dateTimeHint
         )
     }
-    
+
     // Detecta consultas sobre status do paciente ou usuário
     private val queryPatientRegex = Regex(
         "(como|qual|onde|quando)" +
@@ -448,12 +448,12 @@ class VoiceHealthParser @Inject constructor() {
         "(pressão|pressao|glicose|glicemia|agua|água|peso|passos|sinais|metrica|metricas|métrica|métricas|saude|saúde)?",
         RegexOption.IGNORE_CASE
     )
-    
 
-    
+
+
     private fun detectQueryPatientStatus(text: String, raw: String): VoiceHealthIntent.QueryPatientStatus? {
         val match = queryPatientRegex.find(text) ?: return null
-        
+
         val rawMetric = match.groupValues.getOrNull(3)?.takeIf { it.isNotBlank() }
         val metric = when (rawMetric?.lowercase()) {
             "pressao", "pressão" -> "pressão"
@@ -466,14 +466,14 @@ class VoiceHealthParser @Inject constructor() {
             "saude", "saúde" -> "saúde"
             else -> if (rawMetric.isNullOrBlank()) "status geral" else rawMetric
         }
-        
+
         // Tentar extrair nome do familiar, descartando nomes de métricas (ex: "minha pressão")
         val metricNames = setOf("pressao", "pressão", "glicose", "glicemia", "agua", "água", "peso", "passos", "sinais", "metrica", "metricas", "métrica", "métricas", "saude", "saúde")
         val namePattern = Regex("(meu|minha|seu|sua)\\s+([a-z]+)")
         val nameMatch = namePattern.find(text)
         val extractedName = nameMatch?.groupValues?.getOrNull(2)?.takeIf { it.isNotBlank() }
         val targetName = if (extractedName != null && extractedName.lowercase() !in metricNames) extractedName else null
-        
+
         return VoiceHealthIntent.QueryPatientStatus(
             metric = metric,
             targetName = targetName

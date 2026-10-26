@@ -41,7 +41,7 @@ sealed interface VoiceHealthIntent {
         val glucoseMgDl: Int
     ) : VoiceHealthIntent
 
-    
+
     /**
       * Registro de adesao a medicacao.
      * @param query Texto usado para buscar a medicação no catálogo do usuário.
@@ -78,7 +78,7 @@ sealed interface VoiceHealthIntent {
         val oxygenPercent: Int
     ) : VoiceHealthIntent
 
-    
+
     /**
      * 👨‍👩‍👧 Lembrete de medicação para familiar/cuidado.
      * @param targetName Nome do paciente/familiar (ex.: "meu pai", "minha mãe").
@@ -90,7 +90,7 @@ sealed interface VoiceHealthIntent {
         val text: String,
         val timeHint: String? = null
     ) : VoiceHealthIntent
-    
+
     /**
      * 📅 Agendamento de consulta/compromisso para familiar.
      * @param targetName Nome do paciente/familiar.
@@ -102,7 +102,7 @@ sealed interface VoiceHealthIntent {
         val title: String,
         val dateTimeHint: String? = null
     ) : VoiceHealthIntent
-    
+
     /**
      * ❓ Consulta sobre status/métricas do paciente.
      * @param metric Tipo de métrica (ex.: "pressão", "glicose", "água", "passos").
@@ -140,7 +140,7 @@ sealed interface VoiceHealthIntent {
         val message: String
     ) : VoiceHealthIntent
 
-    
+
     /**
      * Fala não reconhecida como intenção de saúde.
      * @param rawText Texto transcrito original.
@@ -406,4 +406,3 @@ fun VoiceHealthIntent.toConfirmationDisplay(): ConfirmationDisplayData {
         )
     }
 }
-

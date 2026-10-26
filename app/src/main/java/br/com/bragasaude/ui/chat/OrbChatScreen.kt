@@ -463,26 +463,26 @@ fun OrbChatContent(
                             Box(Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
                                 var visible by remember { mutableStateOf(false) }
                                 LaunchedEffect(Unit) { visible = true }
-                                
+
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
                                     val pulseAlpha by infiniteTransition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(1000), RepeatMode.Reverse), label = "pulse")
-                                    
+
                                     Box(Modifier.size(48.dp).clip(CircleShape).background(Color(0xFF00897B).copy(alpha = pulseAlpha)), contentAlignment = Alignment.Center) {
                                         Icon(Icons.Default.AutoAwesome, contentDescription = "Assistente de saúde", tint = Color.White)
                                     }
-                                    
+
                                     Spacer(Modifier.height(16.dp))
-                                    
+
                                     AnimatedVisibility(
                                         visible = visible,
                                         enter = fadeIn(tween(800)) + slideInVertically(initialOffsetY = { it / 4 })
                                     ) {
                                         Text("Olá! Como posso ajudar com sua saúde hoje?", color = Color(0xFF1E293B))
                                     }
-                                    
+
                                     Spacer(Modifier.height(24.dp))
-                                    
+
                                     var suggestionTime by remember { mutableStateOf(java.time.LocalTime.now()) }
                                     LaunchedEffect(Unit) {
                                         while (true) {
@@ -546,7 +546,7 @@ fun ChatBubble(message: ChatMessage, textScale: Float = 1f, speaking: Boolean = 
                onAudio: () -> Unit = {}, onConfirm: () -> Unit = {}, onIgnore: () -> Unit = {}) {
     val user = message.role == "user"
     var visible by remember { mutableStateOf(false) }
-    
+
     LaunchedEffect(Unit) {
         visible = true
     }
@@ -560,7 +560,7 @@ fun ChatBubble(message: ChatMessage, textScale: Float = 1f, speaking: Boolean = 
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) {
                 val shape = if (user) RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp) else RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp)
-                
+
                 Surface(
                     color = Color.Transparent,
                     contentColor = if (user) Color.White else Color(0xFF1E293B),
@@ -697,7 +697,7 @@ fun ChatInput(text: String, onTextChange: (String) -> Unit, onSend: (String) -> 
                     )
                 }
             }
-            
+
             OutlinedTextField(
                 value = text,
                 onValueChange = onTextChange,
@@ -725,7 +725,7 @@ fun ChatInput(text: String, onTextChange: (String) -> Unit, onSend: (String) -> 
                     unfocusedPlaceholderColor = Color(0xFF64748B)
                 )
             )
-            
+
             if (isStreaming) {
                 IconButton(onClick = onCancel) { Icon(Icons.Default.StopCircle, "Cancelar geração", tint = Color(0xFF64748B)) }
             } else {

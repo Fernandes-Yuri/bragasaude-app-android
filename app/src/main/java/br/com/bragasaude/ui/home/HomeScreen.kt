@@ -96,7 +96,7 @@ fun HomeScreen(
     val medications by viewModel.medications.collectAsState()
     val heartReadings by viewModel.heartReadings.collectAsState()
     val oxygenReadings by viewModel.oxygenReadings.collectAsState()
-    
+
     val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     var showEmergencyDialog by remember { mutableStateOf(false) }
@@ -183,7 +183,7 @@ fun HomeScreen(
                             add(Triple("Mural", Icons.Default.Groups, br.com.bragasaude.ui.util.Screen.SocialFeed))
                             add(Triple("Exames", Icons.Default.Assignment, br.com.bragasaude.ui.util.Screen.Exams))
                         }
-                        
+
                         items(items.size) { index ->
                             val (label, icon, route) = items[index]
                             val interactionSource = remember { MutableInteractionSource() }

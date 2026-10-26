@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.sp
  *
  * Aparece ANTES de CaregiverRegistrationScreen, logo após a seleção de papel:
  *   - HYBRID: "Quero também cuidar da minha saúde" → fluxo completo (biometria, metas, etc.)
- *   - VIEWER_ONLY: "Quero apenas acompanhar meu familiar" → só painel + mensagens + despensa
+ *   - VIEWER_ONLY: "Quero apenas acompanhar meu familiar" → só painel + mensagens
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
