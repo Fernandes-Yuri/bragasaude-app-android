@@ -120,15 +120,11 @@ sealed interface VoiceHealthIntent {
      * @param originalText Texto original falado pelo usuário.
      * @param questionPrompt Pergunta acolhedora formulada pelo agente para ser falada (TTS) e lida.
      * @param options Opções estruturadas para exibição em chips visuais e reconhecimento por voz.
-     * @param detectedFoodItems Alimentos detectados para encaminhamento.
-     * @param candidateMeal Objeto Meal pré-montado se o usuário confirmar consumo.
-     */
+             */
     data class ClarificationRequired(
         val originalText: String,
         val questionPrompt: String,
-        val options: List<ClarificationOption>,
-        val detectedFoodItems: List<String> = emptyList(),
-        val candidateMeal: Meal? = null
+        val options: List<ClarificationOption>
     ) : VoiceHealthIntent
 
     /**
@@ -361,7 +357,7 @@ fun VoiceHealthIntent.toConfirmationDisplay(): ConfirmationDisplayData {
 
         is VoiceHealthIntent.ClarificationRequired -> ConfirmationDisplayData(
             title = "Atenção",
-            value = detectedFoodItems.joinToString(", "),
+            value = originalText,
             unit = null,
             questionText = questionPrompt,
             spokenQuestion = questionPrompt
