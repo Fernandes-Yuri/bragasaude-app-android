@@ -291,6 +291,15 @@ jobs:
           path: app/build/reports/tests/testDebugUnitTest/
           retention-days: 14
 
+      - name: Publicar capturas da interface
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: revisao-visual-interface
+          path: app/build/outputs/ui-review/
+          retention-days: 14
+          if-no-files-found: warn
+
       - name: Publicar capturas do apoio e perfil
         if: always()
         uses: actions/upload-artifact@v4

@@ -35,7 +35,7 @@ class FamilySessionTest {
             every { repo.getGeneratedCodesForPatient(any()) } returns flowOf(emptyList())
             coEvery { repo.chatCycleSnapshot(any(), any()) } returns ChatCycleSnapshot("unchanged")
             val vm = FamilyViewModel(mockk(relaxed=true), repo, mockk(relaxed=true), mockk(relaxed=true),
-                mockk(relaxed=true), mockk(relaxed=true), auth)
+                mockk(relaxed=true), auth)
             store.put("family", vm)
             vm.setChatScreenVisible(true)
             runCurrent()
@@ -50,7 +50,6 @@ class FamilySessionTest {
             runCurrent()
             assertTrue(vm.activeCaregivers.value.isEmpty())
             assertTrue(vm.familyMessages.value.isEmpty())
-            assertTrue(vm.groceryItems.value.isEmpty())
             assertNull(vm.chatPatientId.value)
         } finally {
             store.clear()
