@@ -37,7 +37,7 @@ class OrganizerPdfBuilderTest {
                 }
             } }
             val result = File(work, "result.pdf")
-            builder.build(items, sources, result, work)
+            builder.build(items, sources, result, work, newest = true)
             PDDocument.load(result).use { document ->
                 val text = PDFTextStripper().getText(document)
                 val indexPages = document.numberOfPages - 60
@@ -56,6 +56,6 @@ class OrganizerPdfBuilderTest {
     @Test(expected = IllegalArgumentException::class) fun refusesUnreviewedDocuments() {
         val context = RuntimeEnvironment.getApplication()
         OrganizerPdfBuilder(context).build(listOf(OrganizerDocument("a", "Exame", pages = 1)),
-            listOf(File(context.cacheDir, "input.pdf")), File(context.cacheDir, "output.pdf"), context.cacheDir)
+            listOf(File(context.cacheDir, "input.pdf")), File(context.cacheDir, "output.pdf"), context.cacheDir, newest = true)
     }
 }
