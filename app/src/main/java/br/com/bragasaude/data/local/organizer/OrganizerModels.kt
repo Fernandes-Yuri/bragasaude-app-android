@@ -50,7 +50,7 @@ object OrganizerMetadata {
 
     /** Setores na ordem fixa; dentro de cada setor, grupos por data (mais recentes primeiro) e sem-data por último. */
     fun sections(documents: List<OrganizerDocument>, newest: Boolean): List<Sector> =
-        types.map { type -> documents.filter { it.type == type } }
+        types.map { sectorType -> documents.filter { it.type == sectorType } }
             .filter { it.isNotEmpty() }
             .map { docs ->
                 val sorted = docs.sortedWith { a, b ->
@@ -72,7 +72,7 @@ object OrganizerMetadata {
                         }
                     }
                     .map { DateGroup(it.key, it.value) }
-                Sector(type, groups)
+                Sector(docs.first().type, groups)
             }
     fun extractTopics(text: String): List<String> {
         val plain = Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}"), "")
