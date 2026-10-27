@@ -157,13 +157,17 @@ object OrganizerMetadata {
         return (tokens.size == 1 && junk == 1) || junk > tokens.size / 2
     }
 
-    private fun isOnlyLabel(line: String): Boolean =
-        line.endsWith(":") && line.substringBefore(':').split(' ').count { it.isNotBlank() } <= 2
+    // qualquer linha terminando em ":" e rotulo de algo ("Responsável:", "Endereço:") — nunca vira titulo
+    private fun isLabelOnly(line: String): Boolean = line.endsWith(":")
 
     private fun isInstitutionalHeader(line: String): Boolean {
         if (line.length !in 8..45 || line.contains(':') || line.any { it.isDigit() }) return false
         return line.count { it.isLetter() }.toFloat() / line.length >= 0.6f
     }
+
+    // faxina de tokens-lixo DENTRO da linha boa: "ATESTADO DE SAÚDE OcUPACIQNAL" vira "ATESTADO DE SAÚDE"
+    private fun withoutJunkTokens(line: String): String =
+        line.split(Regex("\\s+")).filter { it.isNotBlank() && !looksLikeJunkToken(it) }.joinToString(" ").trim()
 
     /**
      * Titulo sugerido a partir de termos realmente relevantes do documento:
@@ -176,9 +180,11 @@ object OrganizerMetadata {
         val cleaned = text.lineSequence()
             .map { it.trim().replace(Regex("\\s+"), " ") }
             .filter { it.length >= 6 && it.count { c -> c.isLetter() } >= 4 }
-            .filterNot(::isOnlyLabel)
+            .filterNot(::isLabelOnly)
             .filterNot(::isPersonalOrAdminData)
             .filterNot(::lineLooksJunk)
+            .map(::withoutJunkTokens)
+            .filter { it.length >= 6 && it.count { c -> c.isLetter() } >= 4 }
             .distinctBy { it.lowercase() }
             .toList()
         val healthLines = cleaned.filter { HEALTH_DOCUMENT_WORDS.containsMatchIn(plainOf(it)) }
