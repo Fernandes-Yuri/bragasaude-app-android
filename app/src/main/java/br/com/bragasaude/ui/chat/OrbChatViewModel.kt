@@ -90,6 +90,7 @@ class OrbChatViewModel @Inject constructor(
     private val authListener = FirebaseAuth.AuthStateListener {
         val next = it.currentUser?.uid
         if (uid != next) {
+            BragaRoutingLogger.clear()
             leaveScreen()
             uid = next
             mutable.value = OrbChatUiState()
@@ -138,6 +139,7 @@ class OrbChatViewModel @Inject constructor(
     }
 
     fun clearCurrentMessages() {
+        BragaRoutingLogger.clear()
         healthQuerySession.clear()
         cancelGeneration()
         stopAudio()
@@ -166,6 +168,7 @@ class OrbChatViewModel @Inject constructor(
     }
 
     fun deleteAllConversations() {
+        BragaRoutingLogger.clear()
         val owner = uid ?: return
         cancelGeneration()
         stopAudio()

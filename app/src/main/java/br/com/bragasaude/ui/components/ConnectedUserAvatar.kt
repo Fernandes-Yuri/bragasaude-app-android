@@ -1,5 +1,6 @@
 package br.com.bragasaude.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -56,6 +57,15 @@ fun ConnectedUserAvatar(
 @Composable
 internal fun SharedProfileAvatar(name: String?, photoUrl: String?, avatarIdentifier: String?, size: Dp, reloadKey: Any? = null) {
     var failed by remember(photoUrl, reloadKey) { mutableStateOf(false) }
+    var retries by remember(photoUrl, reloadKey) { mutableIntStateOf(0) }
+    // Uma falha temporária não deve deixar o autor sem foto até a próxima navegação.
+    LaunchedEffect(failed) {
+        if (failed && retries == 0) {
+            kotlinx.coroutines.delay(1500)
+            retries++
+            failed = false
+        }
+    }
     val icon = when (avatarIdentifier) {
         "Person" -> Icons.Default.Person
         "Favorite" -> Icons.Default.Favorite
@@ -63,15 +73,22 @@ internal fun SharedProfileAvatar(name: String?, photoUrl: String?, avatarIdentif
         "Star" -> Icons.Default.Star
         else -> null
     }
-    Box(Modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
+    Box(Modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer)
+            .then(if (failed) Modifier.clickable(onClickLabel = "Tentar carregar foto novamente") {
+                retries++
+                failed = false
+            } else Modifier),
         contentAlignment = Alignment.Center) {
         when {
             icon != null -> Icon(icon, contentDescription = "Avatar de ${name.orEmpty()}",
                 tint = MaterialTheme.colorScheme.onSecondaryContainer)
-            !photoUrl.isNullOrBlank() && !failed -> AsyncImage(
+            !photoUrl.isNullOrBlank() && !failed -> key(photoUrl, reloadKey, retries) { AsyncImage(
                 model = photoUrl, contentDescription = "Foto de ${name.orEmpty()}",
                 modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
-                onError = { failed = true })
+                onError = {
+                    failed = true
+                    android.util.Log.w("ProfileAvatar", "Falha de imagem: ${it.result.throwable::class.simpleName}")
+                }) }
             else -> Text(name?.trim()?.firstOrNull()?.uppercase() ?: "F",
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                 style = MaterialTheme.typography.titleMedium)

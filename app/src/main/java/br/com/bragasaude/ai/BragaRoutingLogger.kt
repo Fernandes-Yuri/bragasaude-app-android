@@ -54,6 +54,7 @@ object BragaRoutingLogger {
     private val _logs = MutableStateFlow<List<RoutingLogEntry>>(emptyList())
     val logs: StateFlow<List<RoutingLogEntry>> = _logs.asStateFlow()
 
+    @Suppress("UNUSED_PARAMETER")
     @Synchronized
     fun record(
         channel: InputChannel,
@@ -65,25 +66,26 @@ object BragaRoutingLogger {
         previewResponse: String,
         timing: RoutingTiming? = null
     ) {
+        if (!BuildConfig.DEBUG) return
         val entry = RoutingLogEntry(
             channel = channel,
-            input = input.trim(),
+            input = "",
             decision = decision,
             intent = intent,
-            reason = reason,
+            reason = decision.name,
             durationMs = durationMs,
-            previewResponse = previewResponse.trim(),
+            previewResponse = "",
             timing = timing
         )
 
         val updated = (listOf(entry) + _logs.value).take(MAX_LOGS)
         _logs.value = updated
 
-        // Logcat com tag dedicada: detalhes completos de mensagem apenas em builds DEBUG de desenvolvimento
+        // Diagnóstico apenas com classificação e tempos; nunca conteúdo das conversas.
         if (BuildConfig.DEBUG) {
             Log.i(
                 TAG,
-                "[$decision] [${channel.name}] (${durationMs}ms) intent=$intent | input=\"${entry.input}\" | reason=\"$reason\" | preview=\"${entry.previewResponse.take(90)}\" | timing=$timing"
+                "[$decision] [${channel.name}] (${durationMs}ms) intent=$intent | timing=$timing"
             )
         }
     }

@@ -35,7 +35,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 63, // Retirada completa do módulo de alimentação
+    version = 64, // Remoção durável de reações e seleção canônica do mural
     exportSchema = true
 )
 @TypeConverters(Converters::class, SmokingSupportConverters::class)

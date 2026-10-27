@@ -370,12 +370,24 @@ interface SocialFeedDao {
         posts: List<SocialPostEntity>,
         expected: Map<String, SocialPostEntity>,
         firstPageLimit: Int? = null,
-        confirmedEmpty: Boolean = false
+        confirmedEmpty: Boolean = false,
+        viewerId: String? = null
     ) {
         posts.forEach { remote ->
             val local = getPostById(remote.id)
             if (local == expected[remote.id] && local?.pendingSync != true &&
-                local?.pendingMutation.isNullOrEmpty() && local?.isVisible != false) insertPost(remote)
+                local?.pendingMutation.isNullOrEmpty() && local?.isVisible != false) {
+                val pendingReaction = hasPendingReactions(remote.id)
+                if (viewerId != null && !pendingReaction) {
+                    deleteReaction(remote.id, viewerId)
+                    if (remote.hasUserReacted) insertReaction(PostReactionEntity(
+                        id = "remote:${remote.id}:$viewerId", postId = remote.id, userId = viewerId,
+                        reactionType = remote.viewerReactionType ?: "apoio"))
+                }
+                insertPost(if (local != null && pendingReaction) remote.copy(
+                    reactionCount = local.reactionCount, hasUserReacted = local.hasUserReacted,
+                    viewerReactionType = local.viewerReactionType) else remote)
+            }
         }
         if (firstPageLimit == null || (posts.isEmpty() && !confirmedEmpty)) return
         require(firstPageLimit in 1..100 && posts.size <= firstPageLimit)
@@ -455,7 +467,7 @@ interface SocialFeedDao {
     @Query("DELETE FROM post_reactions_local WHERE postId = :postId AND userId = :userId")
     suspend fun deleteReaction(postId: String, userId: String)
 
-    @Query("SELECT * FROM post_reactions_local WHERE postId = :postId ORDER BY createdAt DESC")
+    @Query("SELECT * FROM post_reactions_local WHERE postId = :postId AND pendingDelete = 0 ORDER BY createdAt DESC")
     fun getReactionsForPost(postId: String): Flow<List<PostReactionEntity>>
 
     @Query("SELECT * FROM post_reactions_local WHERE pendingSync = 1")
@@ -464,8 +476,34 @@ interface SocialFeedDao {
     @Query("UPDATE post_reactions_local SET pendingSync = 0 WHERE id = :id")
     suspend fun markReactionSynced(id: String)
 
-    @Query("UPDATE social_posts_local SET reactionCount = :count, hasUserReacted = :hasReacted WHERE id = :postId")
-    suspend fun updatePostReactionState(postId: String, count: Int, hasReacted: Boolean)
+    @Query("SELECT * FROM post_reactions_local WHERE id = :id")
+    suspend fun getReactionById(id: String): PostReactionEntity?
+
+    @Query("DELETE FROM post_reactions_local WHERE id = :id")
+    suspend fun deleteReactionById(id: String)
+
+    @Transaction
+    suspend fun queueReaction(reaction: PostReactionEntity, ownsSession: () -> Boolean = { true }) {
+        check(ownsSession()) { "A sessão mudou." }
+        val post = getPostById(reaction.postId) ?: error("Publicação indisponível.")
+        deleteReaction(reaction.postId, reaction.userId)
+        insertReaction(reaction)
+        val reacted = !reaction.pendingDelete
+        val delta = (if (reacted) 1 else 0) - (if (post.hasUserReacted) 1 else 0)
+        updatePostReactionState(post.id, maxOf(0, post.reactionCount + delta), reacted,
+            reaction.reactionType.takeIf { reacted })
+        check(ownsSession()) { "A sessão mudou." }
+    }
+
+    @Transaction
+    suspend fun completeReaction(expected: PostReactionEntity) {
+        if (getReactionById(expected.id) != expected) return
+        if (expected.pendingDelete) deleteReactionById(expected.id)
+        else markReactionSynced(expected.id)
+    }
+
+    @Query("UPDATE social_posts_local SET reactionCount = :count, hasUserReacted = :hasReacted, viewerReactionType = :reactionType WHERE id = :postId")
+    suspend fun updatePostReactionState(postId: String, count: Int, hasReacted: Boolean, reactionType: String? = null)
 
     @Query("DELETE FROM social_posts_local WHERE userId = :userId")
     suspend fun deletePostsByUser(userId: String)

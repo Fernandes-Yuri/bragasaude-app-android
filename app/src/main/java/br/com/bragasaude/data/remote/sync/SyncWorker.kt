@@ -14,6 +14,7 @@ import br.com.bragasaude.util.BragaTime
 import br.com.bragasaude.ui.util.NotificationHelper
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -35,6 +36,7 @@ class SyncWorker @AssistedInject constructor(
     private val auditLogDao: AuditLogDao,
     private val symptomsDiaryDao: SymptomsDiaryDao,
     private val bleTelemetryReceiptDao: BleTelemetryReceiptDao,
+    private val auth: com.google.firebase.auth.FirebaseAuth,
     private val doseRepository: br.com.bragasaude.data.medicationdoses.MedicationDoseRepository
 ) : CoroutineWorker(appContext, workerParams) {
 
@@ -234,13 +236,18 @@ class SyncWorker @AssistedInject constructor(
         }
     }
 
-    private suspend fun syncPostReactions() {
-        val pending = socialFeedDao.getPendingReactions()
-        for (r in pending) {
-            val ok = apiClient.reactToPost(r.postId, r.userId, r.reactionType)
-            if (ok) {
-                socialFeedDao.markReactionSynced(r.id)
-            }
+    private suspend fun syncPostReactions() = socialMutationLock.withLock {
+        val owner = auth.currentUser?.uid ?: return@withLock
+        for (reaction in socialFeedDao.getPendingReactions()) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (auth.currentUser?.uid != owner) return@withLock
+            if (reaction.userId != owner || socialFeedDao.getReactionById(reaction.id) != reaction) continue
+            val ok = if (reaction.pendingDelete) apiClient.removePostReaction(reaction.postId)
+                else apiClient.reactToPost(reaction.postId, reaction.userId, reaction.reactionType)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (auth.currentUser?.uid != owner) return@withLock
+            if (!ok) throw java.io.IOException("Reação aguardando sincronização")
+            socialFeedDao.completeReaction(reaction)
         }
     }
 

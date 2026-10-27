@@ -10,15 +10,17 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.ui.components.BragaAlertDialog
 
-/** Permanent discovery always belongs to the signed-in owner, including hybrid caregivers. */
+/** Convite contextual; mantém acesso ao histórico de quem já iniciou um plano. */
 @Composable
 fun SmokingSupportEntry(onOpen: () -> Unit, viewModel: SmokingSupportViewModel = hiltViewModel()) {
     val state by viewModel.snapshot.collectAsState()
+    val visible by viewModel.entryVisible.collectAsState()
     val eligible by viewModel.offerEligible.collectAsState()
     val busy by viewModel.busy.collectAsState()
     val message by viewModel.message.collectAsState()
+    if (!visible) return
     SupportCard {
-        Text(if (eligible) "Quer um apoio para parar de fumar, no seu ritmo?" else "Meu caminho sem cigarro", style = MaterialTheme.typography.titleMedium)
+        Text(if (eligible) "Quer um apoio para parar de fumar, no seu ritmo?" else if (state.plan != null) "Meu caminho sem cigarro" else "Apoio para parar de fumar", style = MaterialTheme.typography.titleMedium)
         Text(if (state.enabled) "Seu plano, diário e pausa de apoio." else "Apoio opcional para parar de fumar. Conheça os recursos e escolha se quer ativar.")
         Button(onClick = { if (eligible) viewModel.answerOffer(onOpen) else onOpen() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text(if (state.enabled) "Abrir meu apoio" else if (eligible) "Conhecer e ativar" else "Conhecer apoio para parar de fumar")

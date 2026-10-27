@@ -400,7 +400,7 @@ class BragaApiClient @Inject constructor(
                         userName = br.com.bragasaude.domain.communityDisplayName(
                             obj.optString("user_name", ""), obj.optString("user_nickname", "")
                         ),
-                        userAvatarUrl = obj.optString("photo_url", "").takeIf { it.isNotBlank() && it != "null" },
+                        userAvatarUrl = br.com.bragasaude.data.util.sharedSocialPhotoUrl(obj.safeNullableString("photo_url")),
                         userAvatarIdentifier = obj.optString("avatar_identifier", "").takeIf { it.isNotBlank() && it != "null" },
                         postType = obj.getString("post_type"),
                         title = obj.getString("title"),
@@ -411,7 +411,8 @@ class BragaApiClient @Inject constructor(
                         isVisible = true,
                         visibility = obj.optString("visibility", "PUBLIC"),
                         reactionCount = obj.optInt("reaction_count", 0),
-                        hasUserReacted = false,
+                        hasUserReacted = obj.optBoolean("has_user_reacted", false),
+                        viewerReactionType = obj.safeNullableString("user_reaction_type"),
                         pendingSync = false
                     )
                 )
@@ -432,11 +433,16 @@ class BragaApiClient @Inject constructor(
                 put("createdAt", isoFormat.format(Date()))
             }
             val res = postJson("$baseUrl/api/sync/post-reaction", json)
-            return@withContext res != null
+            return@withContext res?.optString("status") == "success"
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao registrar reação no post: ${e.message}")
             return@withContext false
         }
+    }
+
+    suspend fun removePostReaction(postId: String): Boolean = withContext(Dispatchers.IO) {
+        deleteJson("$baseUrl/api/social/posts/$postId/reaction")?.optString("status") == "success"
     }
 
     // ==================== PONTE FAMILIAR ====================

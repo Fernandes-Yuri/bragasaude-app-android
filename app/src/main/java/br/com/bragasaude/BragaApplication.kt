@@ -56,6 +56,7 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
         organizerAuth.addAuthStateListener { changedAuth ->
             val newUid = changedAuth.currentUser?.uid
             if (newUid != organizerUid) {
+                br.com.bragasaude.ai.BragaRoutingLogger.clear()
                 organizerUid = newUid
                 organizerScope.launch { br.com.bragasaude.data.local.organizer.OrganizerStore(this@BragaApplication).clearAll() }
             }

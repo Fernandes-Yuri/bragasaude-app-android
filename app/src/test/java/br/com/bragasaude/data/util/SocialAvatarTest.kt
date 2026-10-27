@@ -9,6 +9,12 @@ class SocialAvatarTest {
     private val photo = "https://api.bragasaude.online/api/files/avatars/autor/foto.jpg"
     private val post = SocialPostEntity(id = "post", userId = "autor", postType = "milestone", title = "Meta", userAvatarUrl = "foto-antiga")
 
+    @Test fun resolveCaminhoRelativoSomenteNaOrigemProtegida() {
+        assertEquals(photo, sharedSocialPhotoUrl("/api/files/avatars/autor/foto.jpg"))
+        assertNull(sharedSocialPhotoUrl("//evil.test/api/files/avatars/autor/foto.jpg"))
+        assertNull(sharedSocialPhotoUrl("/api/files/avatars/../../profile/autor"))
+    }
+
     @Test fun acompanhaFotoCompartilhadaSemAtualizarFeed() {
         assertEquals(photo, post.withProfileAvatar(ProfileEntity(userId = "autor", customPhotoUri = photo)).userAvatarUrl)
     }

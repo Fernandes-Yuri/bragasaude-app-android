@@ -220,8 +220,7 @@ class SocialFeedViewModel @Inject constructor(
                     socialFeedRepository.removeReaction(post.id, userId)
                     telemetryService.logSocialFeed(userId, "UNREACT", post.id, reactionType)
                 } else {
-                    val synced = socialFeedRepository.reactToPost(post.id, userId, reactionType)
-                    android.util.Log.i("SocialFeedVM", "reaction postId=${post.id} userId=$userId synced=$synced")
+                    socialFeedRepository.reactToPost(post.id, userId, reactionType)
                     telemetryService.logSocialFeed(userId, "REACT", post.id, reactionType)
                 }
             } catch (e: Exception) {

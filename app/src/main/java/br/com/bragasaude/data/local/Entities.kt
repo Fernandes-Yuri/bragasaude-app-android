@@ -262,6 +262,7 @@ data class SocialPostEntity(
     val isVisible: Boolean = true,
     val reactionCount: Int = 0,
     val hasUserReacted: Boolean = false,
+    val viewerReactionType: String? = null,
     val pendingSync: Boolean = false,
     // Rede Social Intergeracional - Publicacoes de Orgulho Familiar
     val isFamilyPost: Boolean = false,
@@ -292,7 +293,8 @@ data class PostReactionEntity(
     val userName: String? = null,
     val reactionType: String = "apoio",
     val createdAt: Date = Date(),
-    val pendingSync: Boolean = false
+    val pendingSync: Boolean = false,
+    @androidx.room.ColumnInfo(defaultValue = "0") val pendingDelete: Boolean = false
 )
 
 /**

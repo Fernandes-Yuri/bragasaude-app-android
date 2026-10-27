@@ -288,7 +288,7 @@ fun SocialFeedScreen(
 
                         items(filteredPosts, key = { it.id }) { post ->
                             val reactions by remember(post.id) { viewModel.reactionsForPost(post.id) }.collectAsState(initial = emptyList())
-                            val selectedReaction = reactions.firstOrNull { it.userId == viewModel.currentUserId }?.reactionType
+                            val selectedReaction = post.viewerReactionType
                                 ?: if (post.hasUserReacted) "apoio" else null
                             SocialPostCard(
                                 isOwner = post.userId == viewModel.currentUserId && !post.pendingSync,
