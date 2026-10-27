@@ -624,6 +624,13 @@ object Migrations {
         }
     }
 
+    val MIGRATION_63_64 = object : Migration(63, 64) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE post_reactions_local ADD COLUMN pendingDelete INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE social_posts_local ADD COLUMN viewerReactionType TEXT")
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -662,6 +669,7 @@ object Migrations {
         MIGRATION_59_60,
         MIGRATION_60_61,
         MIGRATION_61_62,
-        MIGRATION_62_63
+        MIGRATION_62_63,
+        MIGRATION_63_64
     )
 }

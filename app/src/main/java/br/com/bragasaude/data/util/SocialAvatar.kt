@@ -7,9 +7,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /** Apenas fotos já publicadas pelo endpoint de avatar podem representar a autoria no mural. */
 fun sharedSocialPhotoUrl(value: String?): String? {
-    val url = value?.toHttpUrlOrNull() ?: return null
     val gateway = BuildConfig.BASE_URL.toHttpUrlOrNull() ?: return null
-    return value.takeIf { url.scheme == "https" && url.host == gateway.host &&
+    val url = if (value?.startsWith("/api/files/avatars/") == true) gateway.resolve(value)
+        else value?.toHttpUrlOrNull()
+    url ?: return null
+    return url.toString().takeIf { url.scheme == "https" && url.host == gateway.host &&
         url.port == gateway.port && url.encodedPath.startsWith("/api/files/avatars/") &&
         url.username.isEmpty() && url.password.isEmpty() }
 }

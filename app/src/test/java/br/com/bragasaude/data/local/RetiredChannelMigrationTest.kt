@@ -53,6 +53,17 @@ class RetiredChannelMigrationTest {
             db.execSQL("ALTER TABLE profiles_local ADD COLUMN whatsappPhone TEXT")
             db.execSQL("UPDATE profiles_local SET whatsappTotpSecret='synthetic', whatsappPhone='synthetic'")
             db.execSQL("ALTER TABLE profiles_local ADD COLUMN dailyCalorieTarget REAL")
+            val snapshotPath = "schemas/br.com.bragasaude.data.local.BragaDatabase/63.json"
+            val snapshotFile = sequenceOf(java.io.File(snapshotPath), java.io.File("app/$snapshotPath")).first { it.isFile }
+            val snapshotEntities = org.json.JSONObject(snapshotFile.readText()).getJSONObject("database").getJSONArray("entities")
+            repeat(snapshotEntities.length()) { index ->
+                val table = snapshotEntities.getJSONObject(index)
+                val tableName = table.getString("tableName")
+                if (tableName in setOf("post_reactions_local", "social_posts_local")) {
+                    db.execSQL("DROP TABLE `$tableName`")
+                    db.execSQL(table.getString("createSql").replace("\${TABLE_NAME}", tableName))
+                }
+            }
             db.version = 58
         }
         val db = open()

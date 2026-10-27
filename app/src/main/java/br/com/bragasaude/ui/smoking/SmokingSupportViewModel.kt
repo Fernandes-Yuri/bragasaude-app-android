@@ -37,6 +37,11 @@ class SmokingSupportViewModel @Inject constructor(
     private val ownerProfile = session.owners.flatMapLatest { owner ->
         if (owner == null) flowOf(null) else database.profileDao().getProfile(owner)
     }
+    val entryVisible = combine(snapshot, ownerProfile) { state, profile ->
+        state.loaded && state.ownerId != null && profile?.userId == state.ownerId &&
+            (state.plan != null || (profile.isSmoker &&
+                (profile.userRole != "CAREGIVER" || profile.caregiverMode == "HYBRID")))
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val offerEligible = combine(snapshot, ownerProfile) { state, profile ->
         state.loaded && state.ownerId != null && profile != null && profile.userId == state.ownerId && profile.isSmoker &&
             (profile.userRole != "CAREGIVER" || profile.caregiverMode == "HYBRID") &&

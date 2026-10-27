@@ -43,6 +43,17 @@ class RetiredNutritionMigrationTest {
                 old.execSQL("CREATE TABLE `$table` (id TEXT)")
                 old.execSQL("INSERT INTO `$table` VALUES ('retired')")
             }
+            val snapshotPath = "schemas/br.com.bragasaude.data.local.BragaDatabase/63.json"
+            val snapshotFile = sequenceOf(java.io.File(snapshotPath), java.io.File("app/$snapshotPath")).first { it.isFile }
+            val snapshotEntities = org.json.JSONObject(snapshotFile.readText()).getJSONObject("database").getJSONArray("entities")
+            repeat(snapshotEntities.length()) { index ->
+                val table = snapshotEntities.getJSONObject(index)
+                val tableName = table.getString("tableName")
+                if (tableName in setOf("post_reactions_local", "social_posts_local")) {
+                    old.execSQL("DROP TABLE `$tableName`")
+                    old.execSQL(table.getString("createSql").replace("\${TABLE_NAME}", tableName))
+                }
+            }
             old.version = 62
         }
         val db = open()
@@ -63,7 +74,7 @@ class RetiredNutritionMigrationTest {
         context.deleteDatabase(name)
         val db = open()
         try {
-            assertEquals(63, db.openHelper.readableDatabase.version)
+            assertEquals(64, db.openHelper.readableDatabase.version)
             retired.forEach { table ->
                 db.openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'").use { assertFalse(it.moveToFirst()) }
             }

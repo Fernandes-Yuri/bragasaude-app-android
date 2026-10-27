@@ -55,7 +55,7 @@ class SocialFeedRepository @Inject constructor(
         val posts = apiClient.getSocialFeed(currentUserId, limit)
         requireSession(currentUserId)
         // O gateway retorna 503 quando indisponível; 200 [] confirma mural vazio.
-        socialFeedDao.cacheRemotePosts(posts, expected, firstPageLimit = limit, confirmedEmpty = true)
+        socialFeedDao.cacheRemotePosts(posts, expected, firstPageLimit = limit, confirmedEmpty = true, viewerId = currentUserId)
         return posts.size
     }
 
@@ -132,60 +132,25 @@ class SocialFeedRepository @Inject constructor(
 
     fun reactionsForPost(postId: String) = socialFeedDao.getReactionsForPost(postId)
 
-    suspend fun reactToPost(postId: String, userId: String, reactionType: String = "apoio"): Boolean {
-        requireSession(userId)
-        val reactionId = UUID.nameUUIDFromBytes((postId + ":" + userId).toByteArray()).toString()
-        val userProfile = profileDao.getProfileOneShot(userId)
-
-        val reactionEntity = PostReactionEntity(
-            id = reactionId,
-            postId = postId,
-            userId = userId,
-            userName = userProfile?.fullName?.takeIf { it.isNotBlank() } ?: "Você",
-            reactionType = reactionType,
-            createdAt = Date(),
-            pendingSync = false
-        )
-        socialFeedDao.insertReaction(reactionEntity)
-
-        // Optimistic update
-        val existingPost = socialFeedDao.getPostById(postId)
-        if (existingPost != null && !existingPost.hasUserReacted) {
-            socialFeedDao.updatePostReactionState(
-                postId = postId,
-                count = existingPost.reactionCount + 1,
-                hasReacted = true
-            )
-        }
-
-        if (userId == guestId) return false
-
-        try {
-            val ok = apiClient.reactToPost(postId, userId, reactionType)
-            if (!ok) {
-                socialFeedDao.insertReaction(reactionEntity.copy(pendingSync = true))
-                triggerSync()
-            }
-            return ok
-        } catch (e: Exception) {
-            socialFeedDao.insertReaction(reactionEntity.copy(pendingSync = true))
-            triggerSync()
-            return false
-        }
+    suspend fun reactToPost(postId: String, userId: String, reactionType: String = "apoio") {
+        require(reactionType in setOf("apoio", "palmas", "forca")) { "Reação inválida." }
+        queueReaction(postId, userId, reactionType, delete = false)
     }
 
     suspend fun removeReaction(postId: String, userId: String) {
-        socialFeedDao.deleteReaction(postId, userId)
+        queueReaction(postId, userId, "apoio", delete = true)
+    }
 
-        // Optimistic update
-        val existingPost = socialFeedDao.getPostById(postId)
-        if (existingPost != null && existingPost.hasUserReacted) {
-            socialFeedDao.updatePostReactionState(
-                postId = postId,
-                count = maxOf(0, existingPost.reactionCount - 1),
-                hasReacted = false
-            )
-        }
+    private suspend fun queueReaction(postId: String, userId: String, type: String, delete: Boolean) {
+        requireSession(userId)
+        val profile = profileDao.getProfileOneShot(userId)
+        requireSession(userId)
+        socialFeedDao.queueReaction(PostReactionEntity(
+            id = UUID.randomUUID().toString(), postId = postId, userId = userId,
+            userName = profile?.fullName, reactionType = type,
+            pendingSync = true, pendingDelete = delete)) { auth.currentUser?.uid == userId }
+        requireSession(userId)
+        syncScheduler.scheduleSync(androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE)
     }
 
     suspend fun createPost(

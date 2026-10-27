@@ -714,6 +714,7 @@ class AuthViewModel @Inject constructor(
     }
 
     suspend fun signOut() {
+        br.com.bragasaude.ai.BragaRoutingLogger.clear()
         smokingSession.closeForCleanup()
         movementManager.flush()
         
@@ -801,6 +802,7 @@ class AuthViewModel @Inject constructor(
             _authState.value = AuthState.Error("A exclusão não foi confirmada no servidor. Tente novamente com conexão.")
             return
         }
+        br.com.bragasaude.ai.BragaRoutingLogger.clear()
         smokingSession.closeForCleanup()
 
         // 2. ROOM LOCAL + WORKERS + PREFERENCES

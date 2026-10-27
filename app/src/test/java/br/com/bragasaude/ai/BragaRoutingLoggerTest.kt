@@ -37,17 +37,20 @@ class BragaRoutingLoggerTest {
 
         val logs = BragaRoutingLogger.logs.value
         assertEquals(2, logs.size)
-        assertEquals("o que é hipertensão arterial", logs[0].input)
+        assertEquals("", logs[0].input)
+        assertEquals("", logs[0].previewResponse)
         assertEquals(RoutingLogEntry.RoutingDecision.CLOUD_LLM, logs[0].decision)
-        assertEquals("qual foi minha pressão", logs[1].input)
+        assertEquals("", logs[1].input)
+        assertEquals("", logs[1].previewResponse)
         assertEquals(RoutingLogEntry.RoutingDecision.LOCAL_NLU, logs[1].decision)
 
         val report = BragaRoutingLogger.exportReport()
         assertTrue(report.contains("Total de Interações: 2"))
         assertTrue(report.contains("Locais (NLU On-Device): 1 (50.0%)"))
         assertTrue(report.contains("Nuvem (Groq LLM): 1"))
-        assertTrue(report.contains("qual foi minha pressão"))
-        assertTrue(report.contains("o que é hipertensão arterial"))
+        assertFalse(report.contains("qual foi minha pressão"))
+        assertFalse(report.contains("o que é hipertensão arterial"))
+        assertFalse(report.contains("Sua última pressão"))
     }
 
     @Test

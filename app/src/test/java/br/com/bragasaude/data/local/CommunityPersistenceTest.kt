@@ -24,6 +24,61 @@ class CommunityPersistenceTest {
     @Before fun setup() { context.deleteDatabase("community-test.db"); open() }
     @After fun cleanup() { db.close(); context.deleteDatabase("community-test.db") }
 
+    @Test fun removalSurvivesRestartAndLateAcknowledgmentCannotEraseNewReaction() = runBlocking {
+        val dao = db.socialFeedDao()
+        dao.insertPost(post.copy(hasUserReacted = true, viewerReactionType = "apoio", reactionCount = 2))
+        val removal = PostReactionEntity("remove", post.id, "u", pendingSync = true, pendingDelete = true)
+        dao.queueReaction(removal)
+        assertTrue(dao.getReactionsForPost(post.id).first().isEmpty())
+        assertEquals(1, dao.getPostById(post.id)!!.reactionCount)
+        val expected = dao.getCachedPosts().associateBy { it.id }
+        dao.cacheRemotePosts(listOf(post.copy(hasUserReacted = true, reactionCount = 2)), expected, viewerId = "u")
+        assertFalse(dao.getPostById(post.id)!!.hasUserReacted)
+        db.close(); open()
+        val reopened = db.socialFeedDao()
+        assertEquals(removal, reopened.getPendingReactions().single())
+        val newer = PostReactionEntity("newer", post.id, "u", reactionType = "palmas", pendingSync = true)
+        reopened.queueReaction(newer)
+        reopened.completeReaction(removal)
+        assertEquals(newer, reopened.getPendingReactions().single())
+        assertEquals("palmas", reopened.getPostById(post.id)!!.viewerReactionType)
+        reopened.completeReaction(newer)
+        assertTrue(reopened.getPendingReactions().isEmpty())
+    }
+
+    @Test fun refreshRestoresCanonicalReactionAndRemovalAcrossDevices() = runBlocking {
+        val dao = db.socialFeedDao()
+        dao.insertPost(post)
+        val remote = post.copy(hasUserReacted = true, viewerReactionType = "forca", reactionCount = 1)
+        dao.cacheRemotePosts(listOf(remote), mapOf(post.id to post), viewerId = "u")
+        assertEquals("forca", dao.getReactionsForPost(post.id).first().single().reactionType)
+        dao.cacheRemotePosts(listOf(post), mapOf(post.id to remote), viewerId = "u")
+        assertTrue(dao.getReactionsForPost(post.id).first().isEmpty())
+    }
+
+    @Test fun acknowledgedRemovalDeletesTombstoneWithoutRestoringCount() = runBlocking {
+        val dao = db.socialFeedDao()
+        dao.insertPost(post.copy(hasUserReacted = true, reactionCount = 1))
+        val removal = PostReactionEntity("remove", post.id, "u", pendingSync = true, pendingDelete = true)
+        dao.queueReaction(removal)
+        dao.completeReaction(removal)
+        assertTrue(dao.getPendingReactions().isEmpty())
+        assertEquals(0, dao.getPostById(post.id)!!.reactionCount)
+        assertFalse(dao.getPostById(post.id)!!.hasUserReacted)
+    }
+
+    @Test fun sessionChangeRollsBackQueuedReaction() = runBlocking {
+        val dao = db.socialFeedDao()
+        dao.insertPost(post)
+        var checks = 0
+        try {
+            dao.queueReaction(PostReactionEntity("operation", post.id, "u", pendingSync = true)) { ++checks == 1 }
+            fail("A sessão alterada deve abortar a transação")
+        } catch (_: IllegalStateException) { }
+        assertTrue(dao.getPendingReactions().isEmpty())
+        assertEquals(0, dao.getPostById(post.id)!!.reactionCount)
+    }
+
     @Test fun nicknameAndEditSurviveReopening() = runBlocking {
         db.profileDao().insert(ProfileEntity(userId = "u"))
         db.profileDao().updateCommunityNickname("u", "Colega")
