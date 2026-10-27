@@ -109,18 +109,22 @@ class OrganizerPdfBuilder(context: Context) {
             }
         }
 
-        // ---- empacotamento do índice (cabeçalhos nunca órfãos: keep-with-next) ----
-        fun pack(scale: Float): List<List<IndexItem>> {
-            val heights = indexItems.map { it.height(scale, widthOf) }
+        // ---- empacotamento do índice: ganancioso (1 página) ou balanceado (2+ páginas) ----
+        fun heightsAt(scale: Float): List<Float> = indexItems.map { it.height(scale, widthOf) }
+        // Cabecalhos nunca ficam orfaos: precisam couber junto aa proxima entrada (keep-with-next).
+        fun keepWithNextNeed(index: Int, heights: List<Float>): Float {
+            val item = indexItems[index]
+            if (item !is SectorHead && item !is DateHead) return heights[index]
+            val nextDocHeight = (index + 1 until indexItems.size)
+                .firstOrNull { indexItems[it] is DocHead }?.let { heights[it] } ?: 0f
+            return heights[index] + nextDocHeight
+        }
+        fun packGreedy(scale: Float): List<List<IndexItem>> {
+            val heights = heightsAt(scale)
             val pages = mutableListOf<MutableList<IndexItem>>(mutableListOf())
             var available = CONTENT_HEIGHT
             indexItems.forEachIndexed { index, item ->
-                var need = heights[index]
-                if (item is SectorHead || item is DateHead) {
-                    val nextDocHeight = (index + 1 until indexItems.size)
-                        .firstOrNull { indexItems[it] is DocHead }?.let { heights[it] } ?: 0f
-                    need += nextDocHeight
-                }
+                val need = keepWithNextNeed(index, heights)
                 if (need > available && pages.last().isNotEmpty()) {
                     pages.add(mutableListOf()); available = CONTENT_HEIGHT
                 }
@@ -128,19 +132,38 @@ class OrganizerPdfBuilder(context: Context) {
             }
             return pages
         }
+        // Fix do teste físico: se vai quebrar em 2+ páginas mesmo, distribua a altura
+        // por elas em vez de encher a primeira até a borda e deixar a última quase vazia.
+        fun packBalanced(scale: Float, pageCount: Int): List<List<IndexItem>> {
+            val heights = heightsAt(scale)
+            val target = heights.sum() / pageCount
+            val pages = mutableListOf<MutableList<IndexItem>>(mutableListOf())
+            var used = 0f
+            indexItems.forEachIndexed { index, item ->
+                val need = keepWithNextNeed(index, heights)
+                val mustBreakPhysically = used + need > CONTENT_HEIGHT
+                val shouldBalanceBreak = used + need > target && pages.size < pageCount
+                if (pages.last().isNotEmpty() && (mustBreakPhysically || shouldBalanceBreak)) {
+                    pages.add(mutableListOf()); used = 0f
+                }
+                pages.last().add(item); used += heights[index]
+            }
+            return pages
+        }
 
         // ---- escala adaptativa: 1 página sempre que viável, letra legível ----
         var scale = 1.0f
-        if (pack(1.0f).size > 1) {
+        if (packGreedy(1.0f).size > 1) {
             val estimated = indexItems.sumOf { it.height(1.0f, widthOf).toDouble() }.toFloat()
             scale = (CONTENT_HEIGHT / estimated).coerceIn(MIN_SCALE, 1.0f)
             var guard = 0
-            while (pack(scale).size > 1 && scale > MIN_SCALE + 0.005f && guard++ < 8) {
+            while (packGreedy(scale).size > 1 && scale > MIN_SCALE + 0.005f && guard++ < 8) {
                 scale = (scale - 0.03f).coerceAtLeast(MIN_SCALE)
             }
         }
         val topicsInline = scale < 0.995f
-        val indexGroups = pack(scale)
+        val greedy = packGreedy(scale)
+        val indexGroups = if (greedy.size > 1) packBalanced(scale, greedy.size) else greedy
 
         // ---- numeracao fisica: capa + indice + separadoras + originais + encerramento ----
         val sectorHasSeparator = sectors.associate { sector ->
@@ -394,9 +417,10 @@ class OrganizerPdfBuilder(context: Context) {
                 }
             }
 
-            // ==================== SEPARADORAS POR SETOR (só em setor > 1 página) ====================
+            // ======= SEPARADORA E ORIGINAIS INTERCALADOS POR SETOR (montagem física = numeração) =======
             sectors.forEach { sector ->
-                val separatorPage = separatorPageByType[sector.type] ?: return@forEach
+                val separatorPage = separatorPageByType[sector.type]
+                if (separatorPage != null) {
                 val page = PDPage(PDRectangle.A4)
                 combined.addPage(page)
                 PDPageContentStream(combined, page).use { stream ->
@@ -440,13 +464,16 @@ class OrganizerPdfBuilder(context: Context) {
                     stream.showText(safe("Os exames deste setor seguem em sequência nas próximas páginas. Números exatos no sumário."))
                     stream.endText()
                 }
-            }
+                }
 
-            // ==================== ORIGINAIS EM SEQUÊNCIA (sem divisória por documento) ====================
-            flatDocuments.forEach { item ->
-                PDDocument.load(originalsById.getValue(item.id), MemoryUsageSetting.setupTempFileOnly().setTempDir(work)).use { source ->
-                    check(source.numberOfPages == item.pages) { "Quantidade de páginas alterada. Confira o documento novamente." }
-                    com.tom_roush.pdfbox.multipdf.PDFMergerUtility().appendDocument(combined, source)
+                // Originais deste setor logo apos a separadora dele (nao ha divisória por documento)
+                sector.groups.forEach { group ->
+                    group.documents.forEach { item ->
+                        PDDocument.load(originalsById.getValue(item.id), MemoryUsageSetting.setupTempFileOnly().setTempDir(work)).use { source ->
+                            check(source.numberOfPages == item.pages) { "Quantidade de páginas alterada. Confira o documento novamente." }
+                            com.tom_roush.pdfbox.multipdf.PDFMergerUtility().appendDocument(combined, source)
+                        }
+                    }
                 }
             }
 
