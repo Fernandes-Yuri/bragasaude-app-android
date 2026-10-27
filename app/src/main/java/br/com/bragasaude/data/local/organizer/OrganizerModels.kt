@@ -153,7 +153,9 @@ object OrganizerMetadata {
             val date = found.groupValues[1]
             if (!validDate(date)) return@forEach
             val window = plain.substring(maxOf(0, found.range.first - 40), found.range.first)
-            if (window.contains("nasc")) return@forEach
+            // anti-nascimento SOH sobre os ultimos caracteres colados na data: rejeitar a linha
+            // inteira (janela de 40) mataria a propria "Emissão" quando ela convive com o nascimento
+            if (window.takeLast(18).contains("nasc")) return@forEach
             if (context.containsMatchIn(window)) return date
         }
         return ""
