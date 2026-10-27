@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -665,7 +666,10 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                             HorizontalDivider(color = BragaCardBorder.copy(alpha = 0.5f), thickness = 1.dp)
 
                             // Personalizar capa: nome/cor/fonte — somente preferencias locais, nada de exame
-                            Text("🎨 Personalizar capa", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = BragaTextPrimary)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Default.Palette, contentDescription = null, tint = BragaEmerald, modifier = Modifier.size(18.dp))
+                                Text("Personalizar capa", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = BragaTextPrimary)
+                            }
                             OutlinedTextField(
                                 value = state.personalization.coverName,
                                 onValueChange = {
