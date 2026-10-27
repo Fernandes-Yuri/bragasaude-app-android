@@ -1,6 +1,7 @@
 package br.com.bragasaude.data.local.organizer
 
 import android.app.Application
+import android.graphics.Bitmap
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
@@ -301,5 +302,29 @@ class OrganizerPdfBuilderTest {
         assertEquals(2, loaded.fontIndex)
         prefs.save(OrganizerPersonalization())
         assertTrue(prefs.load().isBragaDefault)
+    }
+    @Test fun photoPagesAreEmbeddedWithPhotographicCompression() {
+        val context = RuntimeEnvironment.getApplication()
+        val work = File(context.cacheDir, "pdf-photo").apply { mkdirs() }
+        try {
+            val builder = OrganizerPdfBuilder(context)
+            // fotografia barulhenta de ~4MP, o pior caso de compressao (camera entrega ate 2400 de borda)
+            val bitmap = Bitmap.createBitmap(2400, 1800, Bitmap.Config.ARGB_8888)
+            val rnd = java.util.Random(42)
+            val pixels = IntArray(2400 * 1800)
+            for (i in pixels.indices) pixels[i] = rnd.nextInt() or (0xFF shl 24)
+            bitmap.setPixels(pixels, 0, 2400, 0, 0, 2400, 1800)
+            val output = File(work, "foto.pdf")
+            builder.imagePdf(bitmap, output)
+            bitmap.recycle()
+            val mb = output.length() / (1024.0 * 1024.0)
+            // antes eram ~8 MB/pagina por RGB bruto; fotografico fica abaixo de 1,5 MB mesmo com ruido puro
+            assertTrue("foto ficou com %.2f MB".format(mb), output.length() < 1_500_000L)
+            PDDocument.load(output).use { document ->
+                assertEquals(1, document.numberOfPages)
+                assertEquals(2200f, document.getPage(0).mediaBox.width, 40f) // borda maior limitada p/ embutir
+                assertEquals(2200f * 1800f / 2400f, document.getPage(0).mediaBox.height, 40f) // aspecto preservado
+            }
+        } finally { work.deleteRecursively() }
     }
 }

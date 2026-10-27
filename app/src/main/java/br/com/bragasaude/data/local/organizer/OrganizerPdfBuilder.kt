@@ -9,7 +9,7 @@ import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
 import com.tom_roush.pdfbox.pdmodel.common.PDRectangle
 import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
-import com.tom_roush.pdfbox.pdmodel.graphics.image.LosslessFactory
+import com.tom_roush.pdfbox.pdmodel.graphics.image.JPEGFactory
 import com.tom_roush.pdfbox.io.MemoryUsageSetting
 import java.io.File
 
@@ -62,11 +62,31 @@ private data class DocHead(val doc: OrganizerDocument) : IndexItem {
 class OrganizerPdfBuilder(context: Context) {
     init { PDFBoxResourceLoader.init(context) }
 
+    /**
+     * Embute A FOTO do documento com compressao fotografica (JPEG DCT). Sem isso, cada foto
+     * entra como RGB bruto deflacionado e chega perto de 8 MB/pagina (batendo 150 MB com 20).
+     * Alvo: ate ~0,4 MB/pagina nitida para leitura; o OCR continua rodando no bitmap original.
+     */
     fun imagePdf(bitmap: Bitmap, output: File) {
+        val scaled = downscale(bitmap, MAX_IMAGE_EDGE)
+        try {
+            saveJpegPdf(scaled, 0.82f, output)
+            if (output.length() > 1_500_000L) saveJpegPdf(scaled, 0.65f, output) // segunda passada de seguranca
+        } finally { if (scaled !== bitmap) scaled.recycle() }
+    }
+
+    private fun downscale(bitmap: Bitmap, maxEdge: Int): Bitmap {
+        val scale = minOf(1f, maxEdge.toFloat() / maxOf(bitmap.width, bitmap.height))
+        if (scale >= 1f) return bitmap
+        return Bitmap.createScaledBitmap(bitmap,
+            (bitmap.width * scale).toInt().coerceAtLeast(1), (bitmap.height * scale).toInt().coerceAtLeast(1), true)
+    }
+
+    private fun saveJpegPdf(bitmap: Bitmap, quality: Float, output: File) {
         PDDocument().use { doc ->
             val page = PDPage(PDRectangle(bitmap.width.toFloat(), bitmap.height.toFloat()))
             doc.addPage(page)
-            PDPageContentStream(doc, page).use { it.drawImage(LosslessFactory.createFromImage(doc, bitmap), 0f, 0f) }
+            PDPageContentStream(doc, page).use { it.drawImage(JPEGFactory.createFromImage(doc, bitmap, quality), 0f, 0f) }
             doc.save(output)
         }
     }
@@ -76,6 +96,7 @@ class OrganizerPdfBuilder(context: Context) {
         const val PAGE_BOTTOM_SAFE = 70f
         val CONTENT_HEIGHT = PAGE_TOP_CONTENT - PAGE_BOTTOM_SAFE
         const val MIN_SCALE = 0.78f
+        const val MAX_IMAGE_EDGE = 2200
     }
 
     fun build(documents: List<OrganizerDocument>, originals: List<File>, output: File, work: File, newest: Boolean,
