@@ -19,17 +19,18 @@ import javax.inject.Inject
 data class OrganizerUiState(val session: OrganizerSession? = null, val busy: Boolean = false,
     val error: String? = null, val notice: String? = null, val ready: Boolean = false, val saved: Boolean = false,
     val preview: Bitmap? = null, val previewPage: Int = -1, val resultPages: Int = 0, val newest: Boolean = true,
-    val ocrAvailability: OcrAvailability? = null)
+    val ocrAvailability: OcrAvailability? = null, val personalization: OrganizerPersonalization = OrganizerPersonalization())
 
 @HiltViewModel
-class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, private val ocrCapability: OcrCapability) : ViewModel() {
+class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, private val ocrCapability: OcrCapability,
+                                             private val prefs: OrganizerPreferences? = null) : ViewModel() {
     private val mutable = MutableStateFlow(OrganizerUiState())
     val state = mutable.asStateFlow()
     private val operations = Mutex()
     /** Dispatcher da sonda de OCR fora da thread principal; testável para determinismo. */
     @VisibleForTesting
     internal var probeDispatcher: CoroutineDispatcher = Dispatchers.Default
-    init { refresh(); probeOcr() }
+    init { mutable.value = mutable.value.copy(personalization = prefs?.load() ?: OrganizerPersonalization()); refresh(); probeOcr() }
     private fun operation(block: suspend () -> Unit) {
         mutable.value = mutable.value.copy(busy = true, error = null)
         viewModelScope.launch { operations.withLock {
@@ -56,7 +57,9 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
             }
         }
     }
-    fun start() = operation { mutable.value = OrganizerUiState(session = store.start(), busy = true) }
+    fun start() = operation {
+        mutable.value = OrganizerUiState(session = store.start(), busy = true, personalization = mutable.value.personalization)
+    }
     private fun changed(session: OrganizerSession) {
         mutable.value = mutable.value.copy(session = session, ready = false, saved = false, preview = null, notice = null)
     }
@@ -92,8 +95,14 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
     }
     fun clearPreview() { mutable.value = mutable.value.copy(preview = null) }
     fun order(newest: Boolean) { if (!mutable.value.busy) mutable.value = mutable.value.copy(newest = newest, ready = false, saved = false) }
+    /** Personalizacao de capa: persistida localmente (sem dado de exame) e passada ao builder na geracao. */
+    fun updatePersonalization(next: OrganizerPersonalization) {
+        prefs?.save(next)
+        mutable.value = mutable.value.copy(personalization = next, ready = false, saved = false)
+    }
+    fun resetPersonalization() = updatePersonalization(OrganizerPersonalization())
     fun generate() = operation {
-        store.generate(requireNotNull(mutable.value.session).id, mutable.value.newest)
+        store.generate(requireNotNull(mutable.value.session).id, mutable.value.newest, mutable.value.personalization)
         mutable.value = mutable.value.copy(ready = true, saved = false)
     }
     fun save(uri: Uri) = operation {
@@ -101,5 +110,8 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
         mutable.value = mutable.value.copy(saved = true)
     }
     fun share(onReady: (Uri) -> Unit) = operation { onReady(store.shareResult(requireNotNull(mutable.value.session).id)) }
-    fun end() = operation { mutable.value.session?.let { store.end(it.id) }; mutable.value = OrganizerUiState(busy = true) }
+    fun end() = operation {
+        mutable.value.session?.let { store.end(it.id) }
+        mutable.value = OrganizerUiState(busy = true, personalization = mutable.value.personalization)
+    }
 }

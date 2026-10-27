@@ -331,7 +331,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         val file = original(id, doc)
         try { render(file, page) } finally { file.delete() }
     } }
-    suspend fun generate(id: String, newest: Boolean): Unit = withContext(Dispatchers.IO) { lock.withLock {
+    suspend fun generate(id: String, newest: Boolean, personalization: OrganizerPersonalization = OrganizerPersonalization()): Unit = withContext(Dispatchers.IO) { lock.withLock {
         val s = active(id)
         val documents = OrganizerMetadata.sections(s.documents, newest).flatMap { it.groups }.flatMap { it.documents }
         require(documents.isNotEmpty() && documents.all { it.confirmed }) { "Confira todos os documentos antes de gerar." }
@@ -339,7 +339,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         try {
             val files = documents.map { original(id, it) }
             val result = File(work, "result.pdf")
-            pdf.build(documents, files, result, work, newest)
+            pdf.build(documents, files, result, work, newest, personalization)
             encryptFile(id, result, File(folder(id), "result.enc"))
         } finally { work.listFiles()?.forEach { it.deleteRecursively() } }
     } }

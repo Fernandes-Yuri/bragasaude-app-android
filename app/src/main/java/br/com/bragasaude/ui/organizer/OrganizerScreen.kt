@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
@@ -659,6 +660,62 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Text("Mais recentes primeiro dentro de cada setor", style = MaterialTheme.typography.bodyMedium, color = BragaTextPrimary)
+                            }
+
+                            HorizontalDivider(color = BragaCardBorder.copy(alpha = 0.5f), thickness = 1.dp)
+
+                            // Personalizar capa: nome/cor/fonte — somente preferencias locais, nada de exame
+                            Text("🎨 Personalizar capa", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = BragaTextPrimary)
+                            OutlinedTextField(
+                                value = state.personalization.coverName,
+                                onValueChange = {
+                                    viewModel.updatePersonalization(state.personalization.copy(coverName = it.take(OrganizerPersonalization.MAX_COVER_NAME)))
+                                },
+                                label = { Text("Seu nome na capa (opcional)") },
+                                supportingText = { Text("Dica: evite dados sensíveis — o PDF é compartilhável.") },
+                                singleLine = true,
+                                enabled = !state.busy,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                OrganizerPersonalization.ACCENTS.forEachIndexed { index, tone ->
+                                    val selected = state.personalization.accentIndex == index
+                                    Box(
+                                        modifier = Modifier
+                                            .size(30.dp)
+                                            .then(if (selected) Modifier.border(2.5.dp, BragaTextPrimary, CircleShape) else Modifier.border(1.dp, BragaCardBorder, CircleShape))
+                                            .padding(if (selected) 4.dp else 5.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(tone.main.first, tone.main.second, tone.main.third))
+                                            .clickable(enabled = !state.busy) { viewModel.updatePersonalization(state.personalization.copy(accentIndex = index)) }
+                                    )
+                                }
+                            }
+                            Text(
+                                "Cor do PDF (capa, cabeçalhos e encerramento) — as cores dos setores seguem o padrão dos tickets.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BragaTextSecondary
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OrganizerPersonalization.FONT_LABELS.forEachIndexed { index, label ->
+                                    FilterChip(
+                                        selected = state.personalization.fontIndex == index,
+                                        onClick = { viewModel.updatePersonalization(state.personalization.copy(fontIndex = index)) },
+                                        label = { Text(label) },
+                                        enabled = !state.busy
+                                    )
+                                }
+                            }
+                            if (!state.personalization.isBragaDefault) {
+                                TextButton(
+                                    onClick = { viewModel.resetPersonalization() },
+                                    enabled = !state.busy
+                                ) {
+                                    Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Voltar ao padrão Braga")
+                                }
                             }
 
                             val allConfirmed = session.documents.all { it.confirmed }
