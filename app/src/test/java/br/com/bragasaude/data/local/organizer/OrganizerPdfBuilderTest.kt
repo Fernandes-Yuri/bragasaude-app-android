@@ -62,7 +62,8 @@ class OrganizerPdfBuilderTest {
                 // estrutura: capa(1) + indice(I) + separadora(1, setor > 1 pagina) + 40 originais + encerramento(1)
                 assertEquals(1 + indexPages + 1 + 40 + 1, document.numberOfPages)
                 ordered.forEachIndexed { n, item ->
-                    val destination = 2 + indexPages + 1 + n * 2 + 1
+                    // capa(1) + indice(I) + separadora(1) => primeiro original comeca na pagina I+3
+                    val destination = 3 + indexPages + n * 2
                     assertTrue("Destino do documento ${item.id} deve constar no indice",
                         text.contains(Regex("página $destination(?!\\d)")))
                     repeat(2) { originalPage ->
