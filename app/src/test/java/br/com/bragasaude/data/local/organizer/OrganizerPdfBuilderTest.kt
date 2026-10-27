@@ -247,4 +247,59 @@ class OrganizerPdfBuilderTest {
             }
         } finally { work.deleteRecursively() }
     }
+    @Test fun personalizedCoverShowsUserNameClosingCarriesBragaSignature() {
+        val context = RuntimeEnvironment.getApplication()
+        val work = File(context.cacheDir, "pdf-personal").apply { mkdirs() }
+        try {
+            val builder = OrganizerPdfBuilder(context)
+            val items = (1..3).map { n ->
+                OrganizerDocument("$n", "Exame $n", "01/10/2026", pages = 1, confirmed = true)
+            }
+            val sources = items.map { item -> blankOnePagePdf(File(work, "${item.id}.pdf")) }
+            val result = File(work, "personal.pdf")
+            val personalization = OrganizerPersonalization(coverName = "Maria Silva", accentIndex = 3, fontIndex = 1)
+            builder.build(items, sources, result, work, newest = true, personalization = personalization)
+            PDDocument.load(result).use { document ->
+                val cover = pageText(document, 1)
+                assertTrue("capa personalizada deve exibir o nome do usuario", cover.contains("MARIA SILVA"))
+                assertTrue("capa personalizada nao deve mais trazer o nome BRAGA como titulo", !cover.startsWith("BRAGA"))
+                assertTrue(cover.contains("assinatura deste documento"))
+                assertTrue(cover.contains("empresa de software"))
+                // assinatura Braga so no encerramento
+                val closing = pageText(document, document.numberOfPages)
+                assertTrue(closing.contains("Organizado com BRAGA SAUDE"))
+                assertTrue(closing.contains("Documento encerrado."))
+            }
+        } finally { work.deleteRecursively() }
+    }
+    @Test fun allSupportedFontsAndAccentsRenderWithoutError() {
+        val context = RuntimeEnvironment.getApplication()
+        val work = File(context.cacheDir, "pdf-fonts").apply { mkdirs() }
+        try {
+            val builder = OrganizerPdfBuilder(context)
+            val items = (1..2).map { n -> OrganizerDocument("$n", "Exame $n com titulo", "01/10/2026", pages = 1, confirmed = true) }
+            val sources = items.map { item -> blankOnePagePdf(File(work, "${item.id}.pdf")) }
+            listOf(0, 1, 2).forEach { font ->
+                listOf(0, 3, 5).forEach { accent ->
+                    val out = File(work, "font-$font-accent-$accent.pdf")
+                    builder.build(items, sources, out, work, newest = true,
+                        personalization = OrganizerPersonalization(coverName = "Paciente Exemplo", accentIndex = accent, fontIndex = font))
+                    PDDocument.load(out).use { document ->
+                        assertTrue(pageText(document, 1).contains("PACIENTE EXEMPLO"))
+                    }
+                }
+            }
+        } finally { work.deleteRecursively() }
+    }
+    @Test fun organizerPreferencesRoundTripKeepsUserChoices() {
+        val context = RuntimeEnvironment.getApplication()
+        val prefs = OrganizerPreferences(context)
+        prefs.save(OrganizerPersonalization(coverName = "Carlos", accentIndex = 4, fontIndex = 2))
+        val loaded = prefs.load()
+        assertEquals("Carlos", loaded.coverName)
+        assertEquals(4, loaded.accentIndex)
+        assertEquals(2, loaded.fontIndex)
+        prefs.save(OrganizerPersonalization())
+        assertTrue(prefs.load().isBragaDefault)
+    }
 }

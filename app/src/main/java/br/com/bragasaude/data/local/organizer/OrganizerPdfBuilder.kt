@@ -78,10 +78,15 @@ class OrganizerPdfBuilder(context: Context) {
         const val MIN_SCALE = 0.78f
     }
 
-    fun build(documents: List<OrganizerDocument>, originals: List<File>, output: File, work: File, newest: Boolean) {
+    fun build(documents: List<OrganizerDocument>, originals: List<File>, output: File, work: File, newest: Boolean,
+              personalization: OrganizerPersonalization = OrganizerPersonalization()) {
         require(documents.isNotEmpty() && documents.size == originals.size && documents.all { it.confirmed })
-        val font = PDType1Font.HELVETICA
-        val boldFont = PDType1Font.HELVETICA_BOLD
+        val font = personalization.regularFont()
+        val boldFont = personalization.boldFont()
+        val accent = personalization.accent()
+        val (accentR, accentG, accentB) = accent.main
+        val (lightR, lightG, lightB) = accent.light
+        val (subR, subG, subB) = accent.subtitle
 
         fun safe(text: String, f: PDType1Font = font): String = buildString {
             text.forEach { c -> append(if (runCatching { f.encode(c.toString()) }.isSuccess) c else '?') }
@@ -185,21 +190,21 @@ class OrganizerPdfBuilder(context: Context) {
         PDDocument(MemoryUsageSetting.setupTempFileOnly().setTempDir(work)).use { combined ->
 
             fun drawBragaHeader(stream: PDPageContentStream, subtitle: String) {
-                stream.setNonStrokingColor(0, 137, 123)
+                stream.setNonStrokingColor(accentR, accentG, accentB)
                 stream.addRect(0f, 770f, 595f, 72f)
                 stream.fill()
-                stream.setNonStrokingColor(0, 168, 132)
+                stream.setNonStrokingColor(lightR, lightG, lightB)
                 stream.addRect(0f, 766f, 595f, 4f)
                 stream.fill()
                 stream.beginText()
                 stream.setFont(boldFont, 16f)
                 stream.setNonStrokingColor(255, 255, 255)
                 stream.newLineAtOffset(48f, 804f)
-                stream.showText("BRAGA SAUDE")
+                stream.showText(safe(personalization.displayTitle(), boldFont))
                 stream.endText()
                 stream.beginText()
                 stream.setFont(font, 9.5f)
-                stream.setNonStrokingColor(230, 244, 241)
+                stream.setNonStrokingColor(subR, subG, subB)
                 stream.newLineAtOffset(48f, 786f)
                 stream.showText(safe(subtitle.uppercase()))
                 stream.endText()
@@ -230,36 +235,48 @@ class OrganizerPdfBuilder(context: Context) {
                 val page = PDPage(PDRectangle.A4)
                 combined.addPage(page)
                 PDPageContentStream(combined, page).use { stream ->
-                    stream.setNonStrokingColor(0, 137, 123)
+                    stream.setNonStrokingColor(accentR, accentG, accentB)
                     stream.addRect(0f, 562f, 595f, 280f)
                     stream.fill()
-                    stream.setNonStrokingColor(0, 168, 132)
+                    stream.setNonStrokingColor(lightR, lightG, lightB)
                     stream.addRect(0f, 556f, 595f, 6f)
                     stream.fill()
+                    // Titulo da capa: nome do usuario substitui a marca (ela fica so na assinatura)
+                    val coverTitle = safe(personalization.displayTitle(), boldFont)
+                    var titleSize = 30f
+                    while (titleSize > 18f && widthOf(coverTitle, titleSize, 1) > 499f) titleSize -= 1f
                     stream.beginText()
-                    stream.setFont(boldFont, 30f)
+                    stream.setFont(boldFont, titleSize)
                     stream.setNonStrokingColor(255, 255, 255)
                     stream.newLineAtOffset(48f, 780f)
-                    stream.showText("BRAGA SAUDE")
+                    stream.showText(coverTitle)
                     stream.endText()
                     stream.beginText()
                     stream.setFont(font, 13f)
-                    stream.setNonStrokingColor(230, 244, 241)
+                    stream.setNonStrokingColor(subR, subG, subB)
                     stream.newLineAtOffset(48f, 756f)
-                    stream.showText("Plataforma de Autocuidado • Organização Pessoal de Exames")
+                    stream.showText(if (personalization.coverName.isNotBlank()) "Documento consolidado de exames" else "Plataforma de Autocuidado • Organização Pessoal de Exames")
                     stream.endText()
-                    stream.beginText()
-                    stream.setFont(boldFont, 15f)
-                    stream.setNonStrokingColor(255, 255, 255)
-                    stream.newLineAtOffset(48f, 700f)
-                    stream.showText("Documento consolidado de exames para consulta")
-                    stream.endText()
+                    if (personalization.coverName.isBlank()) {
+                        stream.beginText()
+                        stream.setFont(boldFont, 15f)
+                        stream.setNonStrokingColor(255, 255, 255)
+                        stream.newLineAtOffset(48f, 700f)
+                        stream.showText("Documento consolidado de exames para consulta")
+                        stream.endText()
+                    }
 
                     // Declaração institucional: somos software, nao laboratório
                     val boxTop = 500f
                     val statement = listOf(
-                        "A Braga Saúde é uma empresa de software. Não somos laboratório,",
-                        "clínica, hospital ou profissional de saúde.",
+                        if (personalization.coverName.isNotBlank())
+                            "A assinatura deste documento — BRAGA SAÚDE, empresa de software —"
+                        else
+                            "A Braga Saúde é uma empresa de software. Não somos laboratório,",
+                        if (personalization.coverName.isNotBlank())
+                            "não é laboratório, clínica, hospital ou profissional de saúde."
+                        else
+                            "clínica, hospital ou profissional de saúde.",
                         "",
                         "Nosso método apenas organiza em um único documento os exames",
                         "que já existiam, fornecidos e conferidos pelo próprio usuário,",
@@ -279,7 +296,7 @@ class OrganizerPdfBuilder(context: Context) {
                     stream.setLineWidth(0.8f)
                     stream.addRect(48f, boxTop - boxHeight, 499f, boxHeight)
                     stream.stroke()
-                    stream.setNonStrokingColor(0, 137, 123)
+                    stream.setNonStrokingColor(accentR, accentG, accentB)
                     stream.addRect(48f, boxTop - boxHeight, 6f, boxHeight)
                     stream.fill()
                     var y = boxTop - 30f
@@ -492,7 +509,7 @@ class OrganizerPdfBuilder(context: Context) {
                     stream.setLineWidth(0.8f)
                     stream.addRect(48f, 360f, 499f, 190f)
                     stream.stroke()
-                    stream.setNonStrokingColor(0, 137, 123)
+                    stream.setNonStrokingColor(accentR, accentG, accentB)
                     stream.addRect(48f, 360f, 6f, 190f)
                     stream.fill()
 
@@ -525,6 +542,20 @@ class OrganizerPdfBuilder(context: Context) {
                         }
                         y -= 15f
                     }
+
+                    // Assinatura da plataforma: marca discreta sob a caixa de encerramento,
+                    // na cor de acento escolhida pelo usuario (padrao Braga = esmeralda).
+                    stream.setStrokingColor(accentR, accentG, accentB)
+                    stream.setLineWidth(1.2f)
+                    stream.moveTo(48f, 352f)
+                    stream.lineTo(212f, 352f)
+                    stream.stroke()
+                    stream.beginText()
+                    stream.setFont(boldFont, 9f)
+                    stream.setNonStrokingColor(accentR, accentG, accentB)
+                    stream.newLineAtOffset(48f, 338f)
+                    stream.showText(safe("Organizado com BRAGA SAUDE — plataforma de autocuidado", boldFont))
+                    stream.endText()
                 }
             }
 
