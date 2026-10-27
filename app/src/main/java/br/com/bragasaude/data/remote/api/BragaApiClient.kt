@@ -441,8 +441,9 @@ class BragaApiClient @Inject constructor(
         }
     }
 
-    suspend fun removePostReaction(postId: String): Boolean = withContext(Dispatchers.IO) {
-        deleteJson("$baseUrl/api/social/posts/$postId/reaction")?.optString("status") == "success"
+    suspend fun removePostReaction(postId: String, userId: String): Boolean = withContext(Dispatchers.IO) {
+        val owner = java.net.URLEncoder.encode(userId, "UTF-8")
+        deleteJson("$baseUrl/api/social/posts/$postId/reaction?expected_user_id=$owner")?.optString("status") == "success"
     }
 
     // ==================== PONTE FAMILIAR ====================

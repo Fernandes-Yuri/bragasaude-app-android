@@ -53,7 +53,7 @@ class ConversationalAudioOrchestrator @Inject constructor(
                 val aiSpeech = aiSpeechDeferred.await()
 
                 if (!aiSpeech.isNullOrBlank()) {
-                    Log.d(TAG, "Recebida resposta da IA: ${aiSpeech.take(50)}...")
+                    Log.d(TAG, "Recebida resposta da IA para reprodução.")
                     val aiCompleted = CompletableDeferred<Unit>()
 
                     val speechPlayed = audioPlayer.playSpeech(

@@ -24,13 +24,13 @@ class BragaApiClientSocialTest {
             assertFalse(api.reactToPost("post", "owner"))
             server.takeRequest()
             server.enqueue(MockResponse().setResponseCode(503))
-            assertFalse(api.removePostReaction("post"))
+            assertFalse(api.removePostReaction("post", "owner"))
             server.takeRequest()
             server.enqueue(MockResponse().setBody("""{"status":"success"}"""))
-            assertTrue(api.removePostReaction("post"))
+            assertTrue(api.removePostReaction("post", "owner"))
             val request = server.takeRequest()
             assertEquals("DELETE", request.method)
-            assertEquals("/api/social/posts/post/reaction", request.path)
+            assertEquals("/api/social/posts/post/reaction?expected_user_id=owner", request.path)
             assertEquals("Bearer test-session", request.getHeader("Authorization"))
         }
     }

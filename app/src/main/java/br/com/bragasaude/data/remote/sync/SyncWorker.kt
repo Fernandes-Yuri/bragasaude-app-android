@@ -242,7 +242,7 @@ class SyncWorker @AssistedInject constructor(
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             if (auth.currentUser?.uid != owner) return@withLock
             if (reaction.userId != owner || socialFeedDao.getReactionById(reaction.id) != reaction) continue
-            val ok = if (reaction.pendingDelete) apiClient.removePostReaction(reaction.postId)
+            val ok = if (reaction.pendingDelete) apiClient.removePostReaction(reaction.postId, reaction.userId)
                 else apiClient.reactToPost(reaction.postId, reaction.userId, reaction.reactionType)
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             if (auth.currentUser?.uid != owner) return@withLock
