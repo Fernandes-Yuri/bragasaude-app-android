@@ -101,6 +101,19 @@ class OrganizerMetadataTest {
         assertEquals("Foto de exame",
             OrganizerMetadata.suggestWithTopics("MNTRIS\nEmpresa:", "IMG_0003.jpg").first)
     }
+    @Test fun labelLinesAndJunkTokensInsideGoodLinesNeverReachTheTitle() {
+        // 6o teste fisico — "Responsável famillar pela Internação:" e "OcUPACIQNAL" sujavam o titulo
+        assertEquals("TERMO DE ALTA",
+            OrganizerMetadata.suggestWithTopics(
+                "TERMO DE ALTA\nResponsável famillar pela Internação:\nQuadro estável no momento",
+                "IMG_termo.jpg"
+            ).first)
+        assertEquals("ATESTADO DE SAÚDE — Médico Coordenador do",
+            OrganizerMetadata.suggestWithTopics(
+                "ATESTADO DE SAÚDE OcUPACIQNAL\nMédico Coordenador do PCMSO",
+                "IMG_atestado.jpg"
+            ).first)
+    }
     @Test fun healthGateOpensWithOneVocabularyWord() {
         assertFalse(OrganizerMetadata.looksLikeHealthDocument("udDdLd Un novD raminbo"))
         assertTrue(OrganizerMetadata.looksLikeHealthDocument("Hospital Geral de Caxias"))
