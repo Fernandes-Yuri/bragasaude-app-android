@@ -23,6 +23,16 @@ class OrganizerPdfBuilderTest {
         }
         return file
     }
+    private fun onePageMarkedPdf(file: File, marker: String): File {
+        PDDocument().use { document ->
+            val page = PDPage(); document.addPage(page)
+            PDPageContentStream(document, page).use {
+                it.beginText(); it.setFont(PDType1Font.HELVETICA, 12f); it.newLineAtOffset(50f, 700f)
+                it.showText(marker); it.endText()
+            }; document.save(file)
+        }
+        return file
+    }
     private fun twoPagePdf(file: File, marker: String): File {
         PDDocument().use { document ->
             repeat(2) { n ->
@@ -183,6 +193,57 @@ class OrganizerPdfBuilderTest {
                 val closing = pageText(document, document.numberOfPages)
                 assertTrue(closing.contains("Documento encerrado."))
                 assertTrue(closing.contains("assinaturas digitais"))
+            }
+        } finally { work.deleteRecursively() }
+    }
+    @Test fun separatorsArePlacedPhysicallyBeforeTheirOwnSectorOriginals() {
+        val context = RuntimeEnvironment.getApplication()
+        val work = File(context.cacheDir, "pdf-interleave").apply { mkdirs() }
+        try {
+            val builder = OrganizerPdfBuilder(context)
+            val items = listOf(
+                OrganizerDocument("l1", "Glicemia", "10/10/2026", "Laboratorial", pages = 1, confirmed = true),
+                OrganizerDocument("l2", "Hemograma", "10/10/2026", "Laboratorial", pages = 1, confirmed = true),
+                OrganizerDocument("i1", "Raio-x", "10/10/2026", "Imagem", pages = 1, confirmed = true),
+                OrganizerDocument("i2", "Tomografia", "10/10/2026", "Imagem", pages = 1, confirmed = true)
+            )
+            val sources = items.map { item -> onePageMarkedPdf(File(work, "${item.id}.pdf"), "ORIGINAL ${item.id}") }
+            val result = File(work, "interleave.pdf")
+            builder.build(items, sources, result, work, newest = true)
+            PDDocument.load(result).use { document ->
+                val indexPages = indexPageCount(document)
+                val total = 1 + indexPages + 2 + 4 + 1 // capa + indice + 2 separadoras + 4 originais + encerramento
+                assertEquals(total, document.numberOfPages)
+                val sepLab = 2 + indexPages
+                assertTrue(pageText(document, sepLab).contains("Laboratorial"))
+                assertTrue("original l1 deve seguir a separadora Lab", pageText(document, sepLab + 1).contains("ORIGINAL l1"))
+                assertTrue(pageText(document, sepLab + 2).contains("ORIGINAL l2"))
+                val sepImg = sepLab + 3
+                assertTrue(pageText(document, sepImg).contains("Imagem"))
+                assertTrue("original i1 deve seguir a separadora Imagem", pageText(document, sepImg + 1).contains("ORIGINAL i1"))
+                assertTrue(pageText(document, sepImg + 2).contains("ORIGINAL i2"))
+            }
+        } finally { work.deleteRecursively() }
+    }
+    @Test fun balancesContentAcrossPagesWhenIndexCannotFitOne() {
+        val context = RuntimeEnvironment.getApplication()
+        val work = File(context.cacheDir, "pdf-balanced").apply { mkdirs() }
+        try {
+            val builder = OrganizerPdfBuilder(context)
+            val items = (1..35).map { n ->
+                OrganizerDocument("$n", "Exame da rotina " + "titulo extenso ".repeat(3), "01/10/2026", pages = 1, confirmed = true)
+            }
+            val sources = items.map { item -> blankOnePagePdf(File(work, "${item.id}.pdf")) }
+            val result = File(work, "balanced.pdf")
+            builder.build(items, sources, result, work, newest = true)
+            PDDocument.load(result).use { document ->
+                val indexPages = indexPageCount(document)
+                assertTrue("35 exames nao cabem numa pagina so", indexPages >= 2)
+                // balanceado: as duas primeiras paginas carregam uma fatia significativa de entradas
+                val first = Regex("página ").findAll(pageText(document, 2)).count()
+                val second = Regex("página ").findAll(pageText(document, 3)).count()
+                assertTrue("pagina 1 de indice quase vazia ($first entradas)", first >= 10)
+                assertTrue("pagina 2 de indice cauda ($second entradas, devia ser balanceado)", second >= 10)
             }
         } finally { work.deleteRecursively() }
     }
