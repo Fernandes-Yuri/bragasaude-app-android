@@ -5,8 +5,10 @@ class OrganizerMetadataTest {
     @Test fun rejectsImpossibleDatesAndDoesNotUseBirthDate() {
         assertFalse(OrganizerMetadata.validDate("31/02/2026"))
         assertTrue(OrganizerMetadata.validDate("29/02/2024"))
-        assertEquals("", OrganizerMetadata.suggestDate("Nascimento: 01/01/1980 Emissão: 01/10/2026"))
+        // cascata relx: nascimento jamais ganha, mas uma "Emissão" contextual preenche (usuário confere)
+        assertEquals("01/10/2026", OrganizerMetadata.suggestDate("Nascimento: 01/01/1980 Emissão: 01/10/2026"))
         assertEquals("02/10/2026", OrganizerMetadata.suggestDate("Nascimento: 01/01/1980 Coleta: 02/10/2026"))
+        assertEquals("", OrganizerMetadata.suggestDate("Nascimento: 23/07/1985 | laudo do ano sem outra data"))
     }
     @Test fun keepsUndatedDocumentsLastInBothDirectionsAndAllPages() {
         val a = OrganizerDocument("a", "A", "01/10/2026", pages = 3)
@@ -53,12 +55,35 @@ class OrganizerMetadataTest {
         assertEquals("Ecocardiograma", title)
         assertEquals("Cardiológico", type)
     }
-    @Test fun keepsStrictExamDateLabelsOnly() {
+    @Test fun examDateCascadeFromStrictLabelsToRelaxedContext() {
+        // rotulos estritos seguem prioritarios (padrao dos arquivos digitais)
         assertEquals("12/05/2026", OrganizerMetadata.suggestDate("Data do exame: 12/05/2026"))
         assertEquals("03/02/2025", OrganizerMetadata.suggestDate("data de coleta - 03/02/2025"))
-        assertEquals("", OrganizerMetadata.suggestDate("Data: 12/05/2026"))
-        assertEquals("", OrganizerMetadata.suggestDate("Data da realização: 12/05/2026"))
+        // formas reais de hospitais que antes voltavam em branco (feedback do teste fisico)
+        assertEquals("12/05/2026", OrganizerMetadata.suggestDate("Data: 12/05/2026"))
+        assertEquals("12/05/2026", OrganizerMetadata.suggestDate("Data da realização: 12/05/2026"))
+        assertEquals("20/10/2026", OrganizerMetadata.suggestDate("TERMO DE ALTA HOSPITALAR\nData da internação: 20/10/2026\nData da alta: 24/10/2026"))
+        assertEquals("05/03/2025", OrganizerMetadata.suggestDate("RECEITUARIO\nAtendimento em 05/03/2025 com retorno"))
+        assertEquals("15/08/2025", OrganizerMetadata.suggestDate("Emissão: 15/08/2025"))
+        // sem rótulo e sem contexto: continua em branco (usuario confere manualmente)
         assertEquals("", OrganizerMetadata.suggestDate("Paciente 01/01/1980 exame sem rotulo"))
+        assertEquals("", OrganizerMetadata.suggestDate("Conclusao radiologica estavel."))
+    }
+    @Test fun birthDatesAreNeverSuggestedAsExamDate() {
+        assertEquals("", OrganizerMetadata.suggestDate("Paciente: Fulano | Nascimento: 23/07/1985 | laudo"))
+        assertEquals("15/08/2025", OrganizerMetadata.suggestDate("Nascimento: 23/07/1985\nEmissão: 15/08/2025"))
+    }
+    @Test fun ocrTitleUsesFirstUsefulLinesWhenNoTopicMatches() {
+        // termo de alta fotografado: OCR leu, mas nenhum exame conhecido bateu (reproduz o teste fisico)
+        val ocr = "Hospital Geral de Caxias\nTERMO DE ALTA HOSPITALAR\nPaciente internado 5 dias, quadro estavel."
+        val (title, type, topics) = OrganizerMetadata.suggestWithTopics(ocr, "IMG_20261027_1154.jpg")
+        assertEquals("Hospital Geral de Caxias — TERMO DE ALTA HOSPITALAR", title)
+        assertEquals("Outros", type)
+        assertTrue(topics.isEmpty())
+    }
+    @Test fun ocrTitleSkipsJunkLinesAndFallsBackToFilename() {
+        val (title, _, _) = OrganizerMetadata.suggestWithTopics("### 12498-3\n.", "foto de exame.jpg")
+        assertEquals("foto de exame", title)
     }
     @Test fun doesNotConfuseBoneTermsWithUrineExam() {
         // regressao real do teste fisico: "osseas" casava com "eas" por substring

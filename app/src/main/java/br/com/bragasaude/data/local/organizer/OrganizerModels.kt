@@ -110,7 +110,12 @@ object OrganizerMetadata {
             "ecocardiogra" in plain -> "Ecocardiograma"
             "mamografia" in plain -> "Mamografia"
             topics.isNotEmpty() -> topics.first()
-            else -> fallback.substringBeforeLast('.').take(80).ifBlank { "Documento de exame" }
+            else -> {
+                // OCR/textraiu texto mas nao conhecemos o exame (ex.: termo de alta):
+                // em vez do nome de arquivo, sugira as 2 primeiras linhas uteis do documento.
+                val fromText = usefulOcrLines(text).joinToString(" — ").take(80).trim()
+                if (fromText.isNotBlank()) fromText else fallback.substringBeforeLast('.').take(80).ifBlank { "Documento de exame" }
+            }
         }
         val type = when {
             // "mapa" so vale isolada (exame MAPA); "mapeamento"/"mapamental" nao sao cardiologia
@@ -121,13 +126,40 @@ object OrganizerMetadata {
         }
         return Triple(title, type, topics)
     }
+    /** Linhas que parecem conteudo real para servir de titulo sugerido (descarta numeracao, carimbos e simbolos). */
+    private fun usefulOcrLines(text: String): List<String> =
+        text.lineSequence()
+            .map { it.trim().replace(Regex("\\s+"), " ") }
+            .filter { line -> line.length >= 6 && line.count { it.isLetter() } >= 4 }
+            .take(2).toList()
+
     fun suggest(text: String, fallback: String): Pair<String, String> {
         val (title, type, _) = suggestWithTopics(text, fallback)
         return title to type
     }
-    // Only collection/exam date labels; never use the first date, which may be a birth date.
-    fun suggestDate(text: String): String = Regex("(?i)(?:data\\s+(?:do\\s+exame|de\\s+coleta)|coleta)\\s*[:\\-]?\\s*(\\d{2}/\\d{2}/\\d{4})")
-        .find(text)?.groupValues?.get(1)?.takeIf(::validDate).orEmpty()
+    // Data do exame em cascata: (1) rotulos estritos "Data do exame"/"Data de coleta" — o padrao
+    // original dos arquivos digitais; (2) contexto relaxado para documentos escaneados/fotos
+    // reais (termos de alta, pedidos, receituarios): qualquer dd/mm/aaaa cuja janela anterior de
+    // ~40 caracteres traga "data", "emissao", "realizacao", "coleta", "atendimento", "alta" ou
+    // "internacao". Janelas com "nasc" (nascimento) sao rejeitadas: aniversario nao e data de exame.
+    fun suggestDate(text: String): String {
+        val strict = Regex("(?i)(?:data\\s+(?:do\\s+exame|de\\s+coleta)|coleta)\\s*[:\\-]?\\s*(\\d{2}/\\d{2}/\\d{4})")
+        strict.find(text)?.groupValues?.get(1)?.takeIf(::validDate)?.let { return it }
+        val plain = Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}"), "")
+        val anyDate = Regex("\\b(\\d{2}/\\d{2}/\\d{4})\\b")
+        // "alta" so vale como palavra (evita "alteracoes"); os demais sao raizes longas seguras
+        val context = Regex("data|emiss|realiz|colet|atendiment|intern|\\balta\\b")
+        anyDate.findAll(plain).forEach { found ->
+            val date = found.groupValues[1]
+            if (!validDate(date)) return@forEach
+            val window = plain.substring(maxOf(0, found.range.first - 40), found.range.first)
+            // anti-nascimento SOH sobre os ultimos caracteres colados na data: rejeitar a linha
+            // inteira (janela de 40) mataria a propria "Emissão" quando ela convive com o nascimento
+            if (window.takeLast(18).contains("nasc")) return@forEach
+            if (context.containsMatchIn(window)) return date
+        }
+        return ""
+    }
 }
 
 class OrganizerProblem(message: String) : IllegalStateException(message)
