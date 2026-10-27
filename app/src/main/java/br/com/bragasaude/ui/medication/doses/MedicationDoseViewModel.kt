@@ -14,7 +14,8 @@ import javax.inject.Inject
 
 data class DoseScreenState(val groups:List<DoseGroup> = emptyList(),val intents:List<DoseIntentEntity> = emptyList(),
     val reserved:Set<String> = emptySet(),val busy:Boolean=false,val message:String?=null,
-    val selectedDate:String?=null,val schedule:JSONObject?=null,val scheduleMedication:String?=null,val patient:String="")
+    val selectedDate:String?=null,val schedule:JSONObject?=null,val scheduleMedication:String?=null,val patient:String="",
+    val accessVerified:Boolean=false,val accessMessage:String?=null)
 @HiltViewModel
 class MedicationDoseViewModel @Inject constructor(private val repository:MedicationDoseRepository):ViewModel() {
     private val _state=MutableStateFlow(DoseScreenState())
@@ -38,7 +39,19 @@ class MedicationDoseViewModel @Inject constructor(private val repository:Medicat
     }
     fun refresh()=run {
         val current=_state.value
-        repository.refresh(current.patient,if(current.selectedDate==null) 7 else 1,current.selectedDate)
+        _state.update { it.copy(accessVerified=false,accessMessage=null) }
+        try {
+            repository.refresh(current.patient,if(current.selectedDate==null) 7 else 1,current.selectedDate)
+            _state.update { if(it.patient==current.patient) it.copy(accessVerified=true,accessMessage=null) else it }
+        } catch(e: DoseApiException) {
+            _state.update { if(it.patient!=current.patient) it else it.copy(accessVerified=false,
+                accessMessage=if(e.http==403 || e.http==401) "Não foi possível acessar os dados desta pessoa. Confira seu vínculo e sua conta." else "Não foi possível verificar o acesso. Confira a conexão e tente novamente.") }
+            return@run "Não foi possível atualizar os horários."
+        } catch(e: kotlinx.coroutines.CancellationException) { throw e
+        } catch(e: Exception) {
+            _state.update { if(it.patient!=current.patient) it else it.copy(accessVerified=false,accessMessage="Não foi possível verificar o acesso. Confira a conexão e tente novamente.") }
+            return@run "Não foi possível atualizar os horários."
+        }
         repository.enqueue()
         "Programação atualizada."
     }
@@ -75,7 +88,7 @@ class MedicationDoseViewModel @Inject constructor(private val repository:Medicat
             _state.update { it.copy(busy=true,message=null) }
             try { val message=action();_state.update { it.copy(message=message) } }
             catch(e:kotlinx.coroutines.CancellationException) { throw e }
-            catch(e:Exception) { _state.update { it.copy(message=e.message ?: "Não foi possível concluir.") } }
+            catch(e:Exception) { _state.update { it.copy(message="Não foi possível concluir. Confira a conexão e tente novamente.") } }
             finally { _state.update { it.copy(busy=false) } }
         }
     }
