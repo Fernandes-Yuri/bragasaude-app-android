@@ -5,8 +5,8 @@ class OrganizerMetadataTest {
     @Test fun rejectsImpossibleDatesAndDoesNotUseBirthDate() {
         assertFalse(OrganizerMetadata.validDate("31/02/2026"))
         assertTrue(OrganizerMetadata.validDate("29/02/2024"))
-        // cascata relx: nascimento jamais ganha, mas uma "Emissão" contextual preenche (usuário confere)
-        assertEquals("01/10/2026", OrganizerMetadata.suggestDate("Nascimento: 01/01/1980 Emissão: 01/10/2026"))
+        // anti-nascimento: nunca sugere o nascimento; emissao contextual (com vocabulario de saude) preenche
+        assertEquals("01/10/2026", OrganizerMetadata.suggestDate("Nascimento: 01/01/1980 | Laboratório X\nEmissão: 01/10/2026"))
         assertEquals("02/10/2026", OrganizerMetadata.suggestDate("Nascimento: 01/01/1980 Coleta: 02/10/2026"))
         assertEquals("", OrganizerMetadata.suggestDate("Nascimento: 23/07/1985 | laudo do ano sem outra data"))
     }
@@ -59,19 +59,29 @@ class OrganizerMetadataTest {
         // rotulos estritos seguem prioritarios (padrao dos arquivos digitais)
         assertEquals("12/05/2026", OrganizerMetadata.suggestDate("Data do exame: 12/05/2026"))
         assertEquals("03/02/2025", OrganizerMetadata.suggestDate("data de coleta - 03/02/2025"))
-        // formas reais de hospitais que antes voltavam em branco (feedback do teste fisico)
-        assertEquals("12/05/2026", OrganizerMetadata.suggestDate("Data: 12/05/2026"))
-        assertEquals("12/05/2026", OrganizerMetadata.suggestDate("Data da realização: 12/05/2026"))
+        // formas reais de hospitais (com vocabulario de saude no texto, como o portao exige)
+        assertEquals("12/05/2026", OrganizerMetadata.suggestDate("CLÍNICA MODELO\nData: 12/05/2026"))
+        assertEquals("12/05/2026", OrganizerMetadata.suggestDate("Hospital Y — Data da realização: 12/05/2026"))
         assertEquals("20/10/2026", OrganizerMetadata.suggestDate("TERMO DE ALTA HOSPITALAR\nData da internação: 20/10/2026\nData da alta: 24/10/2026"))
         assertEquals("05/03/2025", OrganizerMetadata.suggestDate("RECEITUARIO\nAtendimento em 05/03/2025 com retorno"))
-        assertEquals("15/08/2025", OrganizerMetadata.suggestDate("Emissão: 15/08/2025"))
+        assertEquals("15/08/2025", OrganizerMetadata.suggestDate("Laboratório Modelo de Análises\nEmissão: 15/08/2025"))
         // sem rótulo e sem contexto: continua em branco (usuario confere manualmente)
         assertEquals("", OrganizerMetadata.suggestDate("Paciente 01/01/1980 exame sem rotulo"))
         assertEquals("", OrganizerMetadata.suggestDate("Conclusao radiologica estavel."))
     }
+    @Test fun relaxedDateNeedsHealthVocabularyOrKnownExamKeyword() {
+        // o portao: sem vocabulario de saude nem exame conhecido, data relaxada fica em branco —
+        // feedback do teste fisico: "Data:" solto numa foto de objeto nao pode preencher o campo
+        assertEquals("", OrganizerMetadata.suggestDate("udDdLd\nUn novD raminbo, Ue rava vica.\nData: 29/06/2026"))
+        assertEquals("", OrganizerMetadata.suggestDate("Empresa:\nEndereço:\nData: 19/03/2026"))
+        assertEquals("", OrganizerMetadata.suggestDate("Data: 12/05/2026"))
+        // com 1 palavra de vocabulario a mesma forma preenche (regra aprovada: basta uma)
+        assertEquals("12/05/2026", OrganizerMetadata.suggestDate("Exame de rotina.\nData: 12/05/2026"))
+        assertEquals("12/05/2026", OrganizerMetadata.suggestDate("Resultado normal.\nData: 12/05/2026"))
+    }
     @Test fun birthDatesAreNeverSuggestedAsExamDate() {
         assertEquals("", OrganizerMetadata.suggestDate("Paciente: Fulano | Nascimento: 23/07/1985 | laudo"))
-        assertEquals("15/08/2025", OrganizerMetadata.suggestDate("Nascimento: 23/07/1985\nEmissão: 15/08/2025"))
+        assertEquals("15/08/2025", OrganizerMetadata.suggestDate("Laudo\nNascimento: 23/07/1985\nEmissão: 15/08/2025"))
     }
     @Test fun ocrTitleUsesFirstUsefulLinesWhenNoTopicMatches() {
         // termo de alta fotografado: OCR leu, mas nenhum exame conhecido bateu (reproduz o teste fisico)
@@ -81,9 +91,20 @@ class OrganizerMetadataTest {
         assertEquals("Outros", type)
         assertTrue(topics.isEmpty())
     }
-    @Test fun ocrTitleSkipsJunkLinesAndFallsBackToFilename() {
-        val (title, _, _) = OrganizerMetadata.suggestWithTopics("### 12498-3\n.", "foto de exame.jpg")
-        assertEquals("foto de exame", title)
+    @Test fun ocrNoiseFallsBackToNeutralPhotoTitle() {
+        // feedback real do 4o teste fisico: fotos de objetos geravam titulos como
+        // "udDdLd — Un novD raminbo" — agora viram convite neutro para o usuario digitar
+        assertEquals("Foto de exame",
+            OrganizerMetadata.suggestWithTopics("udDdLd\nUn novD raminbo, Ue rava vica.", "IMG_0001.jpg").first)
+        assertEquals("Foto de exame",
+            OrganizerMetadata.suggestWithTopics("Endereço:\nEndereço:", "IMG_0002.jpg").first)
+        assertEquals("Foto de exame",
+            OrganizerMetadata.suggestWithTopics("MNTRIS\nEmpresa:", "IMG_0003.jpg").first)
+    }
+    @Test fun healthGateOpensWithOneVocabularyWord() {
+        assertFalse(OrganizerMetadata.looksLikeHealthDocument("udDdLd Un novD raminbo"))
+        assertTrue(OrganizerMetadata.looksLikeHealthDocument("Hospital Geral de Caxias"))
+        assertTrue(OrganizerMetadata.looksLikeHealthDocument("nota de resultado qualquer")) // 1 palavra basta (regra aprovada)
     }
     @Test fun doesNotConfuseBoneTermsWithUrineExam() {
         // regressao real do teste fisico: "osseas" casava com "eas" por substring

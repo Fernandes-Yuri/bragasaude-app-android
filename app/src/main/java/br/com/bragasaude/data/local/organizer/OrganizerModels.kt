@@ -112,9 +112,13 @@ object OrganizerMetadata {
             topics.isNotEmpty() -> topics.first()
             else -> {
                 // OCR/textraiu texto mas nao conhecemos o exame (ex.: termo de alta):
-                // em vez do nome de arquivo, sugira as 2 primeiras linhas uteis do documento.
-                val fromText = usefulOcrLines(text).joinToString(" — ").take(80).trim()
-                if (fromText.isNotBlank()) fromText else fallback.substringBeforeLast('.').take(80).ifBlank { "Documento de exame" }
+                // sugira as 2 primeiras linhas uteis — so quando o texto parece de fato um
+                // documento de saude. Lixo OCR de fotos aleatorias vira titulo neutro.
+                if (!looksLikeHealthDocument(text)) "Foto de exame"
+                else {
+                    val fromText = usefulOcrLines(text).joinToString(" — ").take(80).trim()
+                    if (fromText.isNotBlank()) fromText else fallback.substringBeforeLast('.').take(80).ifBlank { "Documento de exame" }
+                }
             }
         }
         val type = when {
@@ -127,11 +131,32 @@ object OrganizerMetadata {
         return Triple(title, type, topics)
     }
     /** Linhas que parecem conteudo real para servir de titulo sugerido (descarta numeracao, carimbos e simbolos). */
-    private fun usefulOcrLines(text: String): List<String> =
-        text.lineSequence()
+    private fun usefulOcrLines(text: String): List<String> {
+        val seen = hashSetOf<String>()
+        return text.lineSequence()
             .map { it.trim().replace(Regex("\\s+"), " ") }
             .filter { line -> line.length >= 6 && line.count { it.isLetter() } >= 4 }
+            // rotulo vazio ("Endereço:", "Empresa:") nao e conteudo — corta fora
+            .filter { line -> !(line.endsWith(":") && line.substringBefore(':').split(' ').count { it.isNotBlank() } <= 2) }
+            .filter { line -> seen.add(line.lowercase()) } // OCR repete bastante ("Endereço: — Endereço:")
             .take(2).toList()
+    }
+
+    /**
+     * Portao de confianca para sugestoes a partir de OCR: 1 palavra de vocabulario de
+     * documento de saude basta. Fotos de objetos/cartazes produzem so lixo OCR — nesses
+     * casos o app NAO finge leitura: titulo neutro e data em branco, o usuario digita.
+     */
+    private val HEALTH_DOCUMENT_WORDS = Regex(
+        "hospital|clinic|laborator|laudo|paciente|exame|resultado|amostra|colet|receit|atestado|" +
+        "prontuari|termo|medic|enferm|intern|consulta|sorolog|sangue|saude|tomograf|ultrassom|" +
+        "ressonanc|mamograf|radiograf|\\balta\\b"
+    )
+
+    fun looksLikeHealthDocument(text: String): Boolean {
+        val plain = Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}"), "")
+        return HEALTH_DOCUMENT_WORDS.containsMatchIn(plain)
+    }
 
     fun suggest(text: String, fallback: String): Pair<String, String> {
         val (title, type, _) = suggestWithTopics(text, fallback)
@@ -142,9 +167,13 @@ object OrganizerMetadata {
     // reais (termos de alta, pedidos, receituarios): qualquer dd/mm/aaaa cuja janela anterior de
     // ~40 caracteres traga "data", "emissao", "realizacao", "coleta", "atendimento", "alta" ou
     // "internacao". Janelas com "nasc" (nascimento) sao rejeitadas: aniversario nao e data de exame.
+    // O (2) so roda quando o texto passa no portão de confiança (vocabulário de saúde ou keyword
+    // de exame conhecida) — fora disso o OCR estava lendo cenário (calendário, cartaz...) e o
+    // app deixa em branco para o usuário conferir manualmente.
     fun suggestDate(text: String): String {
         val strict = Regex("(?i)(?:data\\s+(?:do\\s+exame|de\\s+coleta)|coleta)\\s*[:\\-]?\\s*(\\d{2}/\\d{2}/\\d{4})")
         strict.find(text)?.groupValues?.get(1)?.takeIf(::validDate)?.let { return it }
+        if (extractTopics(text).isEmpty() && !looksLikeHealthDocument(text)) return ""
         val plain = Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}"), "")
         val anyDate = Regex("\\b(\\d{2}/\\d{2}/\\d{4})\\b")
         // "alta" so vale como palavra (evita "alteracoes"); os demais sao raizes longas seguras
