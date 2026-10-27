@@ -67,6 +67,18 @@ class CommunityPersistenceTest {
         assertFalse(dao.getPostById(post.id)!!.hasUserReacted)
     }
 
+    @Test fun sessionChangeRollsBackQueuedReaction() = runBlocking {
+        val dao = db.socialFeedDao()
+        dao.insertPost(post)
+        var checks = 0
+        try {
+            dao.queueReaction(PostReactionEntity("operation", post.id, "u", pendingSync = true)) { ++checks == 1 }
+            fail("A sessão alterada deve abortar a transação")
+        } catch (_: IllegalStateException) { }
+        assertTrue(dao.getPendingReactions().isEmpty())
+        assertEquals(0, dao.getPostById(post.id)!!.reactionCount)
+    }
+
     @Test fun nicknameAndEditSurviveReopening() = runBlocking {
         db.profileDao().insert(ProfileEntity(userId = "u"))
         db.profileDao().updateCommunityNickname("u", "Colega")
