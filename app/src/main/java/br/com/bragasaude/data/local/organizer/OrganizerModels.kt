@@ -110,16 +110,7 @@ object OrganizerMetadata {
             "ecocardiogra" in plain -> "Ecocardiograma"
             "mamografia" in plain -> "Mamografia"
             topics.isNotEmpty() -> topics.first()
-            else -> {
-                // OCR/textraiu texto mas nao conhecemos o exame (ex.: termo de alta):
-                // sugira as 2 primeiras linhas uteis — so quando o texto parece de fato um
-                // documento de saude. Lixo OCR de fotos aleatorias vira titulo neutro.
-                if (!looksLikeHealthDocument(text)) "Foto de exame"
-                else {
-                    val fromText = usefulOcrLines(text).joinToString(" — ").take(80).trim()
-                    if (fromText.isNotBlank()) fromText else fallback.substringBeforeLast('.').take(80).ifBlank { "Documento de exame" }
-                }
-            }
+            else -> suggestOcrTitle(text, fallback)
         }
         val type = when {
             // "mapa" so vale isolada (exame MAPA); "mapeamento"/"mapamental" nao sao cardiologia
@@ -130,16 +121,78 @@ object OrganizerMetadata {
         }
         return Triple(title, type, topics)
     }
-    /** Linhas que parecem conteudo real para servir de titulo sugerido (descarta numeracao, carimbos e simbolos). */
-    private fun usefulOcrLines(text: String): List<String> {
-        val seen = hashSetOf<String>()
-        return text.lineSequence()
+
+    // ---- captura de titulo por TERMOS RELEVANTES (feedback: "UdDlLd"/CPF no titulo = ruim) ----
+    private fun plainOf(text: String): String =
+        Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}"), "")
+
+    // linhas de identificacao/administrativas nunca viram titulo (e CPF/documentos nao vazam no indice)
+    private val PERSONAL_OR_ADMIN_LINE = Regex(
+        "paciente|nasciment|cpf|cnpj|razao social|endereco|identidade|\\brg\\b|convenio\\b|\\bnome\\s*:"
+    )
+    private val ID_NUMBER_PATTERN = Regex("\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}|\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}-\\d{2}|\\b\\d{7,}\\b")
+
+    private fun isPersonalOrAdminData(line: String): Boolean {
+        val plain = plainOf(line)
+        return PERSONAL_OR_ADMIN_LINE.containsMatchIn(plain) || ID_NUMBER_PATTERN.containsMatchIn(plain)
+    }
+
+    // ruido OCR: alternancia maisc/minusc dentro da palavra, aglomerado de consoantes, quase sem vogal
+    private fun looksLikeJunkToken(token: String): Boolean {
+        val letters = token.filter { it.isLetter() }
+        if (letters.length < 5) return false
+        var flips = 0
+        for (i in 1 until letters.length) if (letters[i].isUpperCase() != letters[i - 1].isUpperCase()) flips++
+        if (flips >= 2) return true
+        val lower = letters.lowercase()
+        if (Regex("[^aeiou]{4,}").containsMatchIn(lower)) return true
+        val vowels = lower.count { it == 'a' || it == 'e' || it == 'i' || it == 'o' || it == 'u' }
+        return letters.length >= 6 && vowels.toFloat() / letters.length < 0.15f
+    }
+
+    private fun lineLooksJunk(line: String): Boolean {
+        val tokens = line.split(Regex("\\s+")).filter { it.isNotBlank() }
+        if (tokens.isEmpty()) return true
+        val junk = tokens.count(::looksLikeJunkToken)
+        return (tokens.size == 1 && junk == 1) || junk > tokens.size / 2
+    }
+
+    private fun isOnlyLabel(line: String): Boolean =
+        line.endsWith(":") && line.substringBefore(':').split(' ').count { it.isNotBlank() } <= 2
+
+    private fun isInstitutionalHeader(line: String): Boolean {
+        if (line.length !in 8..45 || line.contains(':') || line.any { it.isDigit() }) return false
+        return line.count { it.isLetter() }.toFloat() / line.length >= 0.6f
+    }
+
+    /**
+     * Titulo sugerido a partir de termos realmente relevantes do documento:
+     * (1) linha(s) com vocabulario de saude do proprio documento (tipo/finalidade), juntando
+     *     a instituição quando ela aparece logo atras; (2) cabecalho institucional plausivel;
+     *     (3) titulo neutro — OCR nao inventa. Identificacao do paciente/admin nunca entra.
+     */
+    private fun suggestOcrTitle(text: String, fallback: String): String {
+        if (!looksLikeHealthDocument(text)) return "Foto de exame"
+        val cleaned = text.lineSequence()
             .map { it.trim().replace(Regex("\\s+"), " ") }
-            .filter { line -> line.length >= 6 && line.count { it.isLetter() } >= 4 }
-            // rotulo vazio ("Endereço:", "Empresa:") nao e conteudo — corta fora
-            .filter { line -> !(line.endsWith(":") && line.substringBefore(':').split(' ').count { it.isNotBlank() } <= 2) }
-            .filter { line -> seen.add(line.lowercase()) } // OCR repete bastante ("Endereço: — Endereço:")
-            .take(2).toList()
+            .filter { it.length >= 6 && it.count { c -> c.isLetter() } >= 4 }
+            .filterNot(::isOnlyLabel)
+            .filterNot(::isPersonalOrAdminData)
+            .filterNot(::lineLooksJunk)
+            .distinctBy { it.lowercase() }
+            .toList()
+        val healthLines = cleaned.filter { HEALTH_DOCUMENT_WORDS.containsMatchIn(plainOf(it)) }
+        val joined = when {
+            healthLines.size >= 2 -> healthLines.take(2).joinToString(" — ")
+            healthLines.size == 1 -> {
+                val head = cleaned.take(cleaned.indexOf(healthLines.first())).lastOrNull(::isInstitutionalHeader)
+                listOfNotNull(head, healthLines[0]).joinToString(" — ")
+            }
+            else -> ""
+        }.take(80).trim()
+        if (joined.isNotBlank()) return joined
+        return cleaned.firstOrNull(::isInstitutionalHeader)?.take(80)?.trim()
+            ?: fallback.substringBeforeLast('.').take(80).ifBlank { "Documento de exame" }
     }
 
     /**
