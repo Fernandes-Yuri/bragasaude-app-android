@@ -61,7 +61,8 @@ class CareOsViewModel @Inject constructor(
     private val familyDao: FamilyDao,
     private val database: BragaDatabase,
     private val pdfGenerator: PdfReportGenerator,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val apiClient: BragaApiClient
 ) : ViewModel() {
 
     private val authenticatedUserId: String?
@@ -131,6 +132,8 @@ class CareOsViewModel @Inject constructor(
                             isAuthenticated = true,
                             patients = options,
                             selectedPatientId = selected,
+                            medications = if (it.selectedPatientId == selected) it.medications else emptyList(),
+                            lastTakenMillisByMed = if (it.selectedPatientId == selected) it.lastTakenMillisByMed else emptyMap(),
                             userRole = role,
                             isCaregiver = isCaregiver
                         )
@@ -140,7 +143,7 @@ class CareOsViewModel @Inject constructor(
 
             viewModelScope.launch {
                 ui.map { it.selectedPatientId }.distinctUntilChanged().flatMapLatest { selected ->
-                    if (selected == null) flowOf(Triple(emptyList<MedicationEntity>(), emptyList<CareAuditEntity>(), emptyMap<String, Long>()))
+                    if (selected == null) flowOf(null to Triple(emptyList<MedicationEntity>(), emptyList<CareAuditEntity>(), emptyMap<String, Long>()))
                     else combine(
                         medicationRepository.getMedications(selected),
                         careOsRepository.getCareWall(selected),
@@ -153,10 +156,11 @@ class CareOsViewModel @Inject constructor(
                                 entry.value.maxOfOrNull { it.takenAt.time } ?: 0L
                             }
                         Triple(meds, wall, lastTakenMap)
-                    }
-                }.collect { (meds, wall, lastTakenMap) ->
+                    }.map { selected to it }
+                }.collect { (selected, data) ->
+                    val (meds, wall, lastTakenMap) = data
                     _ui.update {
-                        it.copy(
+                        if (it.selectedPatientId != selected) it else it.copy(
                             medications = meds,
                             wall = wall,
                             lastTakenMillisByMed = lastTakenMap
@@ -173,9 +177,14 @@ class CareOsViewModel @Inject constructor(
         }
     }
 
+    suspend fun medicationAccess(patientId: String): Int {
+        if (patientId == authenticatedUserId) return 200
+        return apiClient.doseRequest("GET", "/api/family/patients/$patientId/medication-dose-groups").code
+    }
+
     fun selectPatient(id: String) {
-        if (_ui.value.patients.any { it.id == id }) {
-            _ui.update { it.copy(selectedPatientId = id, medicalAccess = null, reportFile = null) }
+        if (_ui.value.selectedPatientId != id && _ui.value.patients.any { it.id == id }) {
+            _ui.update { it.copy(selectedPatientId = id, medications = emptyList(), lastTakenMillisByMed = emptyMap(), medicalAccess = null, reportFile = null) }
         }
     }
 

@@ -35,6 +35,13 @@ fun MedicationDosePanel(patientId:String,canTake:Boolean,canEdit:Boolean,medicat
         onDispose { lifecycle.lifecycle.removeObserver(observer) }
     }
     val context=LocalContext.current
+    if (!state.accessVerified || state.patient != patientId) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(state.accessMessage ?: "Verificando acesso aos horários...")
+            TextButton(onClick={viewModel.refresh()},enabled=!state.busy) { Text("Tentar novamente") }
+        }
+        return
+    }
     Column(Modifier.fillMaxWidth().padding(12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         Text("Medicamentos por horário",style=MaterialTheme.typography.titleLarge)
         TextButton(onClick={viewModel.refresh()},enabled=!state.busy) { Text("Atualizar horários") }
@@ -69,7 +76,7 @@ fun MedicationDosePanel(patientId:String,canTake:Boolean,canEdit:Boolean,medicat
                                 onCheckedChange={ checked -> selected=if(checked) selected+item.occurrenceId else selected-item.occurrenceId })
                             Column(Modifier.weight(1f)) {
                                 Text("${item.name} - ${item.units?.let { "$it unidade(s)" } ?: "quantidade a conferir"}",fontSize=18.sp)
-                                item.instruction?.let { Text(it) }
+                                item.instruction?.let { Text(br.com.bragasaude.ui.medication.medicationInstructionLabel(it)) }
                                 val detail=when {
                                     item.occurrenceId in state.reserved && item.state!="recorded" -> "Confirmação salva neste aparelho"
                                     item.state=="recorded" -> "Já registrado"
@@ -108,19 +115,16 @@ fun MedicationDosePanel(patientId:String,canTake:Boolean,canEdit:Boolean,medicat
         state.intents.take(12).forEach { intent ->
             Text(when(intent.state) {
                 "RESOLVED" -> intent.message ?: "Resultado recebido."
-                "REVIEW" -> "Precisa de revisão: ${intent.message}"
-                "ACCESS_LOST" -> "Acesso perdido: ${intent.message}"
+                "REVIEW" -> "Esta confirmação precisa de revisão."
+                "ACCESS_LOST" -> "O acesso aos dados desta pessoa foi perdido."
                 "CANCELLED" -> "Proposta cancelada."
                 "CONFIRMING" -> "Pedido enviado; aguardando o resultado do servidor."
-                else -> "Confirmação salva; aguardando sincronização.${intent.message?.let { " $it" } ?: ""}"
+                else -> "Confirmação salva; aguardando sincronização."
             })
             if(intent.state=="REVIEW") TextButton(onClick={viewModel.review(intent)},enabled=!state.busy) { Text("Revisar esta confirmação") }
             if(intent.state in setOf("PENDING","WAITING")) TextButton(onClick={viewModel.cancel(intent.id)}) { Text("Cancelar proposta") }
         }
-        if(canEdit && medications.isNotEmpty()) {
-            Text("Revisar programação",style=MaterialTheme.typography.titleMedium)
-            medications.forEach { (id,name) -> TextButton(onClick={viewModel.edit(id)},enabled=!state.busy) { Text(name) } }
-        }
+
     }
     val schedule=state.schedule
     if(schedule!=null) {

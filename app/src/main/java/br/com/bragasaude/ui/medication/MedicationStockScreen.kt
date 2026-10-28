@@ -47,6 +47,19 @@ import br.com.bragasaude.ui.care.CarePatientSelector
 import br.com.bragasaude.ui.theme.*
 import kotlinx.coroutines.flow.collectLatest
 
+internal fun medicationInstructionLabel(value: String): String = when (value.trim().uppercase()) {
+    "JEJUM", "FASTING" -> "Em jejum"
+    "APOS_CAFE" -> "Após o café da manhã"
+    "ANTES_ALMOCO" -> "Antes do almoço"
+    "APOS_ALMOCO" -> "Após o almoço"
+    "ANTES_JANTAR" -> "Antes do jantar"
+    "APOS_JANTAR" -> "Após o jantar"
+    "AO_DEITAR", "AT_BEDTIME" -> "Ao deitar"
+    "AFTER_MEAL" -> "Após a refeição"
+    "BEFORE_MEAL" -> "Antes da refeição"
+    else -> "Confira a orientação de uso"
+}
+
 /**
  * Gestão Visual de Estoque (Care OS — D62).
  *
@@ -69,6 +82,22 @@ fun MedicationStockScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showAddChoice by remember { mutableStateOf(false) }
     var showManualAddDialog by remember { mutableStateOf(false) }
+    var accessCode by remember(ui.selectedPatientId) { mutableStateOf<Int?>(null) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var resumeCount by remember { mutableIntStateOf(0) }
+    DisposableEffect(lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) resumeCount++
+        }
+        lifecycle.lifecycle.addObserver(observer)
+        onDispose { lifecycle.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(ui.selectedPatientId, resumeCount) {
+        accessCode = null
+        val id = ui.selectedPatientId
+        if (id != null) accessCode = viewModel.medicationAccess(id)
+    }
+    val accessAllowed = accessCode == 200 && ui.selectedPatientId != null
 
     LaunchedEffect(Unit) {
         viewModel.ui.collectLatest { state ->
@@ -267,14 +296,14 @@ fun MedicationStockScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Meus Remédios", fontWeight = FontWeight.SemiBold) },
+                title = { Text(if (ui.selectedPatient.role == "PATIENT") "Meus Remédios" else "Remédios de ${ui.selectedPatient.name}", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
                 },
                 actions = {
-                    IconButton(
+                    if (accessAllowed && ui.selectedPatient.canWriteMedication) IconButton(
                         onClick = { showAddChoice = true },
                         modifier = Modifier.size(48.dp)
                     ) {
@@ -294,7 +323,7 @@ fun MedicationStockScreen(
             )
         },
         floatingActionButton = {
-            if (ui.isAuthenticated) {
+            if (ui.isAuthenticated && accessAllowed && ui.selectedPatient.canWriteMedication) {
                 FloatingActionButton(
                     onClick = { showAddChoice = true },
                     containerColor = BragaEmerald,
@@ -326,6 +355,16 @@ fun MedicationStockScreen(
                 CarePatientSelector(ui, viewModel::selectPatient)
             }
 
+            if (!accessAllowed) {
+                Text(when (accessCode) {
+                    null -> "Verificando acesso aos medicamentos..."
+                    401, 403 -> "Não foi possível acessar os dados desta pessoa. Confira seu vínculo e sua conta."
+                    else -> "Não foi possível verificar o acesso. Confira a conexão e tente novamente."
+                })
+                if (accessCode != null) TextButton(onClick = { resumeCount++ }) { Text("Tentar novamente") }
+                return@Column
+            }
+            Text("Medicamentos de ${ui.selectedPatient.name}", fontWeight = FontWeight.SemiBold)
             if (ui.medications.isEmpty()) {
                 EmptyStockCard(ui.selectedPatient.canWriteMedication) { showAddChoice = true }
             } else {
@@ -388,11 +427,12 @@ fun MedicationStockScreen(
                         }
                     }
                     item {
-                        br.com.bragasaude.ui.medication.doses.MedicationDosePanel(
-                            patientId=ui.selectedPatient.id,
-                            canTake=ui.selectedPatient.canTakeMedication,
-                            canEdit=ui.selectedPatient.canWriteMedication,
-                            medications=ui.medications.map { it.id to it.name })
+                        OutlinedButton(onClick = {
+                            doseContext.startActivity(Intent(doseContext, br.com.bragasaude.ui.medication.doses.MedicationDoseActivity::class.java)
+                                .putExtra("patient", ui.selectedPatient.id)
+                                .putExtra("canTake", ui.selectedPatient.canTakeMedication)
+                                .putExtra("canEdit", ui.selectedPatient.canWriteMedication))
+                        }, modifier = Modifier.fillMaxWidth()) { Text("Ver doses por horário") }
                     }
                     items(ui.medications, key = { it.id }) { med ->
                         MedicationStockCard(
@@ -811,13 +851,7 @@ private fun MedicationStockCard(
                         }
                     }
                     medication.notes?.takeIf { it.isNotBlank() }?.let { notes ->
-                        val label = when (notes) {
-                            "FASTING" -> "Em Jejum"
-                            "AFTER_MEAL" -> "Após Refeição"
-                            "BEFORE_MEAL" -> "Antes da Refeição"
-                            "AT_BEDTIME" -> "Ao Deitar"
-                            else -> notes
-                        }
+                        val label = medicationInstructionLabel(notes)
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = BragaCardSurface,
