@@ -532,5 +532,20 @@ class BragaApiClientCareOsTest {
         assertTrue(runCatching { api.getProfileAvatar("expected") }.isFailure)
     }
 
+    @Test
+    fun `getLatestAppVersionCode succeeds without auth token`() = runBlocking {
+        val publicAuthService = mockk<AuthService>()
+        every { publicAuthService.getTokenBlocking(any(), any()) } returns null
+        val publicApi = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), publicAuthService)
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"version_code": 42}"""))
+
+        val version = publicApi.getLatestAppVersionCode()
+
+        assertEquals(42, version)
+        val request = server.takeRequest()
+        assertEquals("/api/app/latest", request.path)
+        assertNull(request.getHeader("Authorization"))
+    }
+
 }
 

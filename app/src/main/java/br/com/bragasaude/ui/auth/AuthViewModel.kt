@@ -117,6 +117,10 @@ class AuthViewModel @Inject constructor(
             _sessionStatus.value = AppSessionStatus.NotAuthenticated
             _isProfileComplete.value = null
             _hasAcceptedConsent.value = null
+            lastRegisteredToken = null
+            lastRegisteredRole = null
+            lastRegisteredUserId = null
+            lastRegisteredName = null
         }
     }
 
@@ -157,22 +161,41 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    private var lastRegisteredToken: String? = null
+    private var lastRegisteredRole: String? = null
+    private var lastRegisteredUserId: String? = null
+    private var lastRegisteredName: String? = null
+
     /**
      * G2 (doc 10 §3.2): registra o token FCM no gateway sempre que há um usuário
-     * autenticado. Antes o registro só ocorria em onNewToken (rotação de token),
-     * deixando o aparelho sem receber push até a próxima rotação.
+     * autenticado. Deduplica o envio para evitar disparos redundantes a cada
+     * atualização de perfil pelo Room Flow.
      */
     private fun registerFcmToken() {
         val user = auth.currentUser ?: return
+        val currentRole = _userRole.value ?: "USER"
+        val currentName = user.displayName ?: "Usuário Braga"
         viewModelScope.launch {
             try {
                 val token = FirebaseMessaging.getInstance().token.await()
-                notificationClient.registerDevice(
+                if (token == lastRegisteredToken &&
+                    currentRole == lastRegisteredRole &&
+                    user.uid == lastRegisteredUserId &&
+                    currentName == lastRegisteredName) {
+                    return@launch
+                }
+                val success = notificationClient.registerDevice(
                     userId = user.uid,
                     token = token,
-                    role = _userRole.value ?: "USER",
-                    name = user.displayName ?: "Usuário Braga"
+                    role = currentRole,
+                    name = currentName
                 )
+                if (success) {
+                    lastRegisteredToken = token
+                    lastRegisteredRole = currentRole
+                    lastRegisteredUserId = user.uid
+                    lastRegisteredName = currentName
+                }
             } catch (e: Exception) {
                 android.util.Log.w("AuthViewModel", "Falha ao registrar token FCM: ${e.message}")
             }

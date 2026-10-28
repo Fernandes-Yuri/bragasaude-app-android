@@ -59,4 +59,28 @@ class OrganizerViewModelTest {
             Dispatchers.resetMain()
         }
     }
+
+    @Test fun `chamadas consecutivas de refresh sao throttled para evitar restauracao redundante`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val session = OrganizerSession("s", System.currentTimeMillis())
+            val store = mockk<OrganizerStore>(relaxed = true)
+            val capability = mockk<OcrCapability>()
+            every { capability.probe() } returns OcrAvailability.Ready
+            coEvery { store.restore() } returns session
+            val viewModel = OrganizerViewModel(store, capability)
+            advanceUntilIdle()
+            coVerify(exactly = 1) { store.restore() }
+
+            viewModel.refresh()
+            advanceUntilIdle()
+            coVerify(exactly = 1) { store.restore() }
+
+            viewModel.refresh(force = true)
+            advanceUntilIdle()
+            coVerify(exactly = 2) { store.restore() }
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
 }

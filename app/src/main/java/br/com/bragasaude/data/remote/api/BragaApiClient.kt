@@ -961,6 +961,10 @@ class BragaApiClient @Inject constructor(
     private fun HttpURLConnection.attachIdentity(urlString: String) {
         val path = URL(urlString).path
         if (path.startsWith("/api/auth/")) return
+        if (path == "/api/app/latest") {
+            authService.getTokenBlocking()?.let { setRequestProperty("Authorization", "Bearer $it") }
+            return
+        }
         val token = authService.getTokenBlocking()
             ?: throw java.io.IOException("Sessão expirada. Entre novamente.")
         setRequestProperty("Authorization", "Bearer $token")

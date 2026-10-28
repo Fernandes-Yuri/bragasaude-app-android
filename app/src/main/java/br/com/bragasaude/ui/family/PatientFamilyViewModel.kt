@@ -125,6 +125,8 @@ class PatientFamilyViewModel @Inject constructor(
             launch {
                 try {
                     familyRepository.purgeExpiredFamilyMessages()
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     android.util.Log.w("PatientFamilyVM", "Falha na purga de mensagens expiradas: ${e.message}")
                 }

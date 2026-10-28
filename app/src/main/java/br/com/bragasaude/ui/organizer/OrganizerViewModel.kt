@@ -27,6 +27,7 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
     private val mutable = MutableStateFlow(OrganizerUiState())
     val state = mutable.asStateFlow()
     private val operations = Mutex()
+    private var lastRestoredAt: Long = 0L
     /** Dispatcher da sonda de OCR fora da thread principal; testável para determinismo. */
     @VisibleForTesting
     internal var probeDispatcher: CoroutineDispatcher = Dispatchers.Default
@@ -42,8 +43,13 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
             finally { mutable.value = mutable.value.copy(busy = false) }
         } }
     }
-    fun refresh() = operation {
+    fun refresh(force: Boolean = false) = operation {
+        val now = System.currentTimeMillis()
+        if (!force && mutable.value.session != null && (now - lastRestoredAt) < 2500L) {
+            return@operation
+        }
         val session = store.restore()
+        lastRestoredAt = System.currentTimeMillis()
         mutable.value = mutable.value.copy(session = session,
             ready = mutable.value.ready && session?.id == mutable.value.session?.id)
         probeOcr()

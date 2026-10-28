@@ -191,6 +191,8 @@ class FamilyBridgeRepository @Inject constructor(
                     purgePatientDataFromCache(item.patientUserId)
                 }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("FamilyBridgeRepo", "Falha ao baixar vínculos do paciente: ${e.message}")
         }
@@ -207,6 +209,8 @@ class FamilyBridgeRepository @Inject constructor(
                     purgePatientDataFromCache(item.patientUserId)
                 }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("FamilyBridgeRepo", "Falha ao baixar vínculos do cuidador: ${e.message}")
         }
@@ -370,6 +374,8 @@ class FamilyBridgeRepository @Inject constructor(
                 )
                 profileDao.insert(updated)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.w("FamilyBridgeRepo", "Aviso ao sincronizar perfil do paciente: ${e.message}")
         }
@@ -397,6 +403,8 @@ class FamilyBridgeRepository @Inject constructor(
                 )
             }
             vitalSignDao.deduplicateVitals()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.w("FamilyBridgeRepo", "Aviso ao sincronizar vitais do paciente: ${e.message}")
         }
