@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain.model
+package br.com.bragasaude.domain.model
 
 /**
  * Classificação de Pressão Arterial baseada nas Diretrizes Brasileiras de Hipertensão Arterial da
@@ -27,9 +27,9 @@ enum class BloodPressureCategory(
         colorHex = 0xFFD97706 // Amber
     ),
     OPTIMAL(
-        displayName = "Pressão Ótima",
+        displayName = "Faixa de referência normal",
         description = "Sistólica < 120 mmHg e Diastólica < 80 mmHg",
-        recommendation = "Excelente! Seus valores estão na faixa ótima de referência da Sociedade Brasileira de Cardiologia (SBC).",
+        recommendation = "Acompanhe seus registros com um profissional de saúde.",
         colorHex = 0xFF0D9488 // Teal Primary
     ),
     NORMAL(
@@ -39,13 +39,13 @@ enum class BloodPressureCategory(
         colorHex = 0xFF16A34A // Green
     ),
     PREHYPERTENSION(
-        displayName = "Pré-Hipertensão",
-        description = "Sistólica 130-139 mmHg e/ou Diastólica 85-89 mmHg",
+        displayName = "Faixa de pré-hipertensão",
+        description = "Sistólica 120-139 mmHg e/ou Diastólica 80-89 mmHg",
         recommendation = "Faixa de atenção preventiva da SBC. Hábitos saudáveis, redução de sódio e monitoramento ajudam a manter o equilíbrio.",
         colorHex = 0xFFD97706 // Amber
     ),
     STAGE_1_HYPERTENSION(
-        displayName = "Hipertensão Estágio 1",
+        displayName = "Faixa de pressão elevada: estágio 1",
         description = "Sistólica 140-159 mmHg e/ou Diastólica 90-99 mmHg",
         recommendation = "Valores acima da faixa recomendada pela SBC. Monitore regularmente e converse com seu médico para acompanhamento.",
         colorHex = 0xFFEA580C // Orange
@@ -57,7 +57,7 @@ enum class BloodPressureCategory(
         colorHex = 0xFFE11D48 // Rose
     ),
     STAGE_2_HYPERTENSION(
-        displayName = "Hipertensão Estágio 2",
+        displayName = "Faixa de pressão elevada: estágio 2",
         description = "Sistólica 160-179 mmHg e/ou Diastólica 100-109 mmHg",
         recommendation = "Valores significativamente elevados segundo a SBC. Recomenda-se orientação e acompanhamento médico.",
         colorHex = 0xFFE11D48 // Rose
@@ -69,7 +69,7 @@ enum class BloodPressureCategory(
         colorHex = 0xFFDC2626 // Red
     ),
     STAGE_3_HYPERTENSION(
-        displayName = "Hipertensão Estágio 3 (Atenção Imediata)",
+        displayName = "Faixa de pressão elevada: estágio 3",
         description = "Sistólica ≥ 180 mmHg e/ou Diastólica ≥ 110 mmHg",
         recommendation = "Valores muito elevados segundo a SBC/OMS. Se houver sintomas como dor de cabeça intensa ou visão turva, procure atendimento médico imediatamente.",
         colorHex = 0xFFDC2626 // Red

@@ -574,27 +574,17 @@ fun VitalInputRow(
 
 @Composable
 fun VitalHistoryCard(vital: RemoteVitalSign, metricType: String = "PRESSURE") {
-    var statusText = "Normal"
-    var statusColor = Success
-
-    if (metricType == "PRESSURE") {
-        val sys = vital.systolicPressure
-        val dia = vital.diastolicPressure
-        if (sys != null && dia != null) {
-            if (sys !in 90..140 || dia !in 60..90) {
-                statusText = "Atenção"
-                statusColor = Warning
-            }
-        }
+    val pressureResult = if (metricType == "PRESSURE" && vital.systolicPressure != null && vital.diastolicPressure != null) {
+        BloodPressureParser.classify(vital.systolicPressure, vital.diastolicPressure)
+    } else null
+    val statusText = if (metricType == "PRESSURE") {
+        pressureResult?.let { if (it.isNormal) "Referência normal" else "Confira com profissional" }
     } else {
-        val glu = vital.glucoseLevel
-        if (glu != null) {
-            if (glu !in 70..140) {
-                statusText = "Atenção"
-                statusColor = Warning
-            }
-        }
+        vital.glucoseLevel?.let { if (it in 70..140) "Normal" else "Atenção" }
     }
+    val statusColor = if (metricType == "PRESSURE") {
+        if (pressureResult?.isNormal == true) Success else Warning
+    } else if (statusText == "Normal") Success else Warning
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -622,7 +612,7 @@ fun VitalHistoryCard(vital: RemoteVitalSign, metricType: String = "PRESSURE") {
                     )
                 }
                 
-                Surface(
+                if (statusText != null) Surface(
                     shape = RoundedCornerShape(percent = 50),
                     color = statusColor.copy(alpha = 0.1f),
                     contentColor = statusColor

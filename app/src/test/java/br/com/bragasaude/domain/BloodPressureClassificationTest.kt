@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.domain.model.BloodPressureCategory
 import br.com.bragasaude.domain.util.BloodPressureParser
@@ -9,10 +9,24 @@ import org.junit.Test
 class BloodPressureClassificationTest {
 
     @Test
-    fun `test 120 over 80 mmHg is classified as NORMAL by SBC`() {
+    fun `test 120 over 80 mmHg is classified as PREHYPERTENSION by SBC 2025`() {
         val result = BloodPressureParser.classify(120, 80)
-        assertEquals(BloodPressureCategory.NORMAL, result.category)
-        assertTrue("Deve ser considerado normal/dentro da meta clínica", result.isNormal)
+        assertEquals(BloodPressureCategory.PREHYPERTENSION, result.category)
+        org.junit.Assert.assertFalse(result.isNormal)
+    }
+
+    @Test
+    fun `limites e valores assimetricos seguem o componente mais alto`() {
+        val cases = listOf(
+            Triple(119, 79, BloodPressureCategory.OPTIMAL),
+            Triple(120, 79, BloodPressureCategory.PREHYPERTENSION),
+            Triple(119, 80, BloodPressureCategory.PREHYPERTENSION),
+            Triple(120, 90, BloodPressureCategory.STAGE_1_HYPERTENSION),
+            Triple(140, 80, BloodPressureCategory.STAGE_1_HYPERTENSION),
+            Triple(140, 100, BloodPressureCategory.STAGE_2_HYPERTENSION),
+            Triple(160, 110, BloodPressureCategory.STAGE_3_HYPERTENSION)
+        )
+        cases.forEach { (sys, dia, expected) -> assertEquals(expected, BloodPressureParser.classify(sys, dia).category) }
     }
 
     @Test
