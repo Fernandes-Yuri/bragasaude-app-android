@@ -556,7 +556,7 @@ fun HydrationScreen(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "Cálculo Automático: 35 ml/kg",
+                                "Estimativa automática: 35 ml/kg",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -570,9 +570,9 @@ fun HydrationScreen(
                         val weight = userWeight
                         Text(
                             if (weight != null && weight > 0) {
-                                "Com base no seu peso cadastrado (${weight} kg), sua meta calculada é de ${autoRecommendedTarget} ml por dia."
+                                "Com base no seu peso cadastrado (${weight} kg), sua meta estimada é de ${autoRecommendedTarget} ml por dia. A necessidade individual varia; siga as orientações de seu profissional de saúde, especialmente se precisar limitar líquidos."
                             } else {
-                                "Calculamos 35 ml por cada quilo corporal. Como seu peso ainda não foi cadastrado no perfil, a meta padrão sugerida é de ${autoRecommendedTarget} ml."
+                                "Calculamos 35 ml por cada quilo corporal. Como seu peso ainda não foi cadastrado no perfil, a meta padrão sugerida é de ${autoRecommendedTarget} ml. A necessidade individual varia; siga as orientações de seu profissional de saúde, especialmente se precisar limitar líquidos."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
