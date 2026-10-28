@@ -62,6 +62,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
     var reviewing by remember { mutableStateOf<OrganizerDocument?>(null) }
+    var deleting by remember { mutableStateOf<OrganizerDocument?>(null) }
     var appendTo by rememberSaveable { mutableStateOf<String?>(null) }
     var ending by remember { mutableStateOf(false) }
     var originalToSave by rememberSaveable { mutableStateOf<String?>(null) }
@@ -571,7 +572,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                                                 modifier = Modifier.weight(1f)
                                             )
                                             TextButton(
-                                                onClick = { viewModel.delete(doc.id) },
+                                                onClick = { deleting = doc },
                                                 enabled = !state.busy,
                                                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                             ) {
@@ -603,43 +604,41 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        TextButton(
-                                            onClick = { appendTo = doc.id; picker.launch(arrayOf("application/pdf", "image/*")) },
-                                            enabled = !state.busy
-                                        ) {
-                                            Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("Mais páginas", style = MaterialTheme.typography.bodySmall)
-                                        }
-                                        TextButton(
-                                            onClick = { requestCamera(doc.id) },
-                                            enabled = !state.busy
-                                        ) {
-                                            Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("Fotografar página", style = MaterialTheme.typography.bodySmall)
-                                        }
-                                    }
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                    TextButton(
+                                        onClick = { appendTo = doc.id; picker.launch(arrayOf("application/pdf", "image/*")) },
+                                        enabled = !state.busy
                                     ) {
-                                        IconButton(
-                                            onClick = { originalToSave = doc.id; saveOriginal.launch("documento-de-exame.pdf") },
-                                            enabled = !state.busy
-                                        ) {
-                                            Icon(Icons.Default.FileDownload, contentDescription = "Salvar cópia", tint = BragaTextSecondary)
-                                        }
-                                        TextButton(
-                                            onClick = { viewModel.delete(doc.id) },
-                                            enabled = !state.busy,
-                                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                                        ) {
-                                            Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("Excluir", style = MaterialTheme.typography.bodySmall)
-                                        }
+                                        Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Mais páginas", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    TextButton(onClick = { requestCamera(doc.id) }, enabled = !state.busy) {
+                                        Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Fotografar página", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    TextButton(
+                                        onClick = { originalToSave = doc.id; saveOriginal.launch("documento-de-exame.pdf") },
+                                        enabled = !state.busy
+                                    ) {
+                                        Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Salvar cópia", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    TextButton(
+                                        onClick = { deleting = doc },
+                                        enabled = !state.busy,
+                                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                    ) {
+                                        Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Excluir exame", style = MaterialTheme.typography.bodySmall)
                                     }
                                 }
                             }
@@ -983,6 +982,16 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                 }
             }
         }
+    }
+
+    deleting?.let { doc ->
+        BragaAlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("Excluir este exame?") },
+            text = { Text("A cópia de \"${doc.title}\" será removida desta organização. Os demais exames e os arquivos de origem selecionados no aparelho permanecem. Fotos tiradas aqui também serão apagadas.") },
+            confirmButton = { TextButton(onClick = { deleting = null; viewModel.delete(doc.id) }) { Text("Excluir exame") } },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancelar") } }
+        )
     }
 
     if (ending) BragaAlertDialog(

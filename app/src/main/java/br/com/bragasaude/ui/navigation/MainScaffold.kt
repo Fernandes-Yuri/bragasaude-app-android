@@ -47,12 +47,14 @@ fun MainScaffold(
     val patientNavItems = listOf(
         BottomNavItem("Início", Icons.Default.Home, Screen.Home),
         BottomNavItem("Dados", Icons.Default.BarChart, Screen.Report),
+        BottomNavItem("Exames", Icons.Default.Assignment, Screen.Exams),
         BottomNavItem("Braga", Icons.Default.ChatBubbleOutline, Screen.OrbChat),
         BottomNavItem("Perfil", Icons.Default.Person, Screen.Profile)
     )
     val hybridCaregiverNavItems = listOf(
         BottomNavItem("Início", Icons.Default.Home, Screen.Home),
         BottomNavItem("Painel", Icons.Default.Diversity3, Screen.CaregiverDashboard),
+        BottomNavItem("Exames", Icons.Default.Assignment, Screen.Exams),
         BottomNavItem("Braga", Icons.Default.ChatBubbleOutline, Screen.OrbChat),
         BottomNavItem("Perfil", Icons.Default.Person, Screen.Profile)
     )
