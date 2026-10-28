@@ -302,7 +302,7 @@ fun SimpleTrendChart(
 
                 if (dual) {
                     Text(
-                        "Faixa normal SBC/OMS: Sistólica 90 a 120 e Diastólica 60 a 80 mmHg",
+                        "Referência de consultório para adultos: abaixo de 120/80 mmHg. Uma medida isolada não é diagnóstico.",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

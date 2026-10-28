@@ -45,19 +45,17 @@ object MetricInfoCatalog {
     
     val bloodPressure = MetricInfo(
         name = "Pressão Arterial (Sistólica e Diastólica)",
-        howCalculated = "Medida em mmHg através de monitor oscilométrico validado. Avalia tanto a pressão máxima durante a contração (Sistólica) quanto a pressão mínima no relaxamento (Diastólica). Quando Sistólica e Diastólica estão em faixas diferentes, a mais alta define a classificação, indicando eventuais transições/oscilações.",
-        referenceInstitution = "SBC - Sociedade Brasileira de Cardiologia / Diretrizes Brasileiras de Hipertensão Arterial & OMS",
-        whyThisReference = "Diretriz médica oficial e padrão de referência nacional e internacional para saúde cardiovascular e acompanhamento preventivo no Brasil.",
+        howCalculated = "A referência abaixo se aplica a medidas de consultório em adultos. Quando os valores estão em faixas diferentes, considera-se a faixa mais alta. Uma medição isolada não estabelece diagnóstico; converse com um profissional de saúde.",
+        referenceInstitution = "Diretriz Brasileira de Hipertensão Arterial 2025 (SBC, SBH e SBN)",
+        whyThisReference = "Diretriz brasileira para avaliação da pressão arterial em adultos.",
         unit = "mmHg",
-        officialUrl = "https://www.portal.cardiol.br",
+        officialUrl = "https://journals.cardiol.br/article/diretriz-brasileira-de-hipertensao-arterial-2025/",
         tableRows = listOf(
-            "Pressão Ótima" to "< 120 mmHg e < 80 mmHg",
-            "Pressão Normal" to "120–129 mmHg e/ou 80–84 mmHg",
-            "Pré-Hipertensão" to "130–139 mmHg e/ou 85–89 mmHg",
-            "Hipertensão Estágio 1" to "140–159 mmHg e/ou 90–99 mmHg",
-            "Hipertensão Estágio 2" to "160–179 mmHg e/ou 100–109 mmHg",
-            "Hipertensão Estágio 3" to "≥ 180 mmHg e/ou ≥ 110 mmHg",
-            "Hipotensão (Baixa)" to "< 90 mmHg ou < 60 mmHg"
+            "Referência normal" to "< 120 e < 80 mmHg",
+            "Pré-hipertensão" to "120–139 e/ou 80–89 mmHg",
+            "Faixa de estágio 1" to "140–159 e/ou 90–99 mmHg",
+            "Faixa de estágio 2" to "160–179 e/ou 100–109 mmHg",
+            "Faixa de estágio 3" to "≥ 180 e/ou ≥ 110 mmHg"
         )
     )
 
