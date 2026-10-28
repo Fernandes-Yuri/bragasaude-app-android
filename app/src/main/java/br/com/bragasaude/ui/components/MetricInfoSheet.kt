@@ -151,11 +151,11 @@ object MetricInfoCatalog {
 
     val hydration = MetricInfo(
         name = "Meta Diária de Hidratação (35 ml/kg)",
-        howCalculated = "A meta de hidratação é calculada pela fórmula científica recomendada: 35 ml para cada 1 kg de peso corporal ao dia (ex: 70 kg × 35 ml = 2.450 ml/dia). A ingestão de água auxilia na circulação, controle térmico, filtração renal e equilíbrio pressórico.",
-        referenceInstitution = "EFSA (European Food Safety Authority) / OMS & Ministério da Saúde do Brasil",
-        whyThisReference = "Recomendação oficial que equilibra a homeostase hídrica e a taxa de filtração glomerular fisiológica.",
+        howCalculated = "A meta automática é uma estimativa geral para adultos: 35 ml por kg de peso ao dia (ex.: 70 kg × 35 ml = 2.450 ml/dia). A necessidade varia de pessoa para pessoa. Se você recebeu orientação para limitar líquidos ou tem uma condição de saúde, siga a orientação do seu profissional de saúde.",
+        referenceInstitution = "Secretaria de Estado da Saúde do Paraná",
+        whyThisReference = "Orientação geral de hidratação para adultos; a meta pode ser personalizada.",
         unit = "ml/dia",
-        officialUrl = "https://www.who.int/news-room/fact-sheets/detail/water-sanitation-and-health",
+        officialUrl = "https://www.saude.pr.gov.br/Noticia/Saude-orienta-beber-pouca-agua-no-frio-pode-causar-problemas-renais-e-agravar-doencas",
         tableRows = listOf(
             "Fórmula de Cálculo" to "35 ml × Peso corporal (kg)",
             "Pessoa de 50 kg" to "1.750 ml / dia",
@@ -163,8 +163,7 @@ object MetricInfoCatalog {
             "Pessoa de 70 kg" to "2.450 ml / dia",
             "Pessoa de 80 kg" to "2.800 ml / dia",
             "Pessoa de 90 kg" to "3.150 ml / dia",
-            "Pessoa de 100 kg" to "3.500 ml / dia",
-            "Dias de Calor / Exercício" to "+ 500 a 1.000 ml adicionais"
+            "Pessoa de 100 kg" to "3.500 ml / dia"
         )
     )
 }
