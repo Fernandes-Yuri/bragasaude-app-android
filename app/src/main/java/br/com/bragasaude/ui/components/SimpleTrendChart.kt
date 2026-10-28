@@ -45,14 +45,6 @@ enum class ChartPeriod(val label: String, val days: Int) {
     SEVEN_DAYS("7D", 7), FIFTEEN_DAYS("15D", 15), THIRTY_DAYS("30D", 30)
 }
 
-/**
- * Faixa de normalidade clínica (SBC/OMS) usada quando o gráfico plota duas séries
- * (Sistólica + Diastólica). A banda sombreada cobre 60 a 120 mmHg, englobando a
- * zona ideal de ambas as curvas: Sistólica 90–120 e Diastólica 60–80.
- */
-private const val DUAL_NORMAL_BAND_TOP = 120.0
-private const val DUAL_NORMAL_BAND_BOTTOM = 60.0
-
 @Composable
 fun SimpleTrendChart(
     data: List<Double>,
@@ -116,8 +108,7 @@ fun SimpleTrendChart(
     val insetPx = with(density) { 12.dp.toPx() }
     val canvasHeightPx = with(density) { chartHeight.toPx() }
     val bottomPx = canvasHeightPx - insetPx
-    val guides = listOfNotNull(targetValue, referenceRange?.start, referenceRange?.endInclusive) +
-        if (dual) listOf(DUAL_NORMAL_BAND_TOP, DUAL_NORMAL_BAND_BOTTOM) else emptyList()
+    val guides = listOfNotNull(targetValue, referenceRange?.start, referenceRange?.endInclusive)
     val allValues = samples.map { it.second } +
         samples.mapNotNull { secondaryData.getOrNull(it.first) } +
         guides
@@ -197,16 +188,8 @@ fun SimpleTrendChart(
                         val inset = 12.dp.toPx()
                         val bottom = size.height - inset
 
-                        // 1. Faixa de normalidade clínica (SBC/OMS) ao fundo.
-                        if (dual) {
-                            val bandTop = yFor(DUAL_NORMAL_BAND_TOP)
-                            val bandBottom = yFor(DUAL_NORMAL_BAND_BOTTOM)
-                            drawRect(
-                                BragaMint.copy(alpha = 0.6f),
-                                Offset(inset, bandTop),
-                                Size(size.width - 2 * inset, (bandBottom - bandTop).coerceAtLeast(0f))
-                            )
-                        } else referenceRange?.let {
+                        // Uma faixa única não representa os limites diferentes das duas séries.
+                        if (!dual) referenceRange?.let {
                             drawRect(
                                 color.copy(alpha = 0.09f),
                                 Offset(inset, yFor(it.endInclusive)),

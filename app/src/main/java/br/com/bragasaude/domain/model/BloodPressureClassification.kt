@@ -1,42 +1,24 @@
 package br.com.bragasaude.domain.model
 
-/**
- * Classificação de Pressão Arterial baseada nas Diretrizes Brasileiras de Hipertensão Arterial da
- * SBC (Sociedade Brasileira de Cardiologia) e OMS (Organização Mundial da Saúde).
- * 
- * NOTA DE COMPLIANCE: Os textos descrevem faixas de referência e orientações de autocuidado e monitoramento,
- * sempre indicando consulta a um profissional de saúde e citando a instituição de referência.
- */
+/** Faixas de referência para registros de pressão; não constituem diagnóstico. */
 enum class BloodPressureCategory(
     val displayName: String,
     val description: String,
     val recommendation: String,
-    val institution: String = "SBC (Sociedade Brasileira de Cardiologia) / OMS",
+    val institution: String = "Diretriz Brasileira de Hipertensão Arterial 2025",
     val colorHex: Long = 0xFF16A34A // Default Green
 ) {
     HYPOTENSION(
         displayName = "Pressão Abaixo da Faixa (Hipotensão)",
         description = "Sistólica < 90 mmHg ou Diastólica < 60 mmHg",
-        recommendation = "Valores abaixo do habitual segundo a SBC/OMS. Mantenha boa hidratação e descanse se sentir tontura.",
+        recommendation = "Valor abaixo da faixa habitual. Converse com um profissional de saúde, especialmente se sentir sintomas.",
         colorHex = 0xFF2563EB // Blue
-    ),
-    ASYMMETRIC_OBSERVATION(
-        displayName = "Pressão em Observação (Diastólica Limítrofe / Diferencial)",
-        description = "Sistólica dentro do padrão (≥ 120 mmHg) com Diastólica no limiar inferior (≤ 60 mmHg)",
-        recommendation = "Atenção: amplitude aumentada entre os valores segundo a SBC/OMS. Mantenha boa hidratação e relate ao seu médico se sentir tontura ao se levantar.",
-        colorHex = 0xFFD97706 // Amber
     ),
     OPTIMAL(
         displayName = "Faixa de referência normal",
         description = "Sistólica < 120 mmHg e Diastólica < 80 mmHg",
         recommendation = "Acompanhe seus registros com um profissional de saúde.",
         colorHex = 0xFF0D9488 // Teal Primary
-    ),
-    NORMAL(
-        displayName = "Pressão Normal",
-        description = "Sistólica 120-129 mmHg e/ou Diastólica 80-84 mmHg",
-        recommendation = "Valores dentro da faixa normal de referência da SBC. Continue com hábitos saudáveis de vida.",
-        colorHex = 0xFF16A34A // Green
     ),
     PREHYPERTENSION(
         displayName = "Faixa de pré-hipertensão",
@@ -50,28 +32,16 @@ enum class BloodPressureCategory(
         recommendation = "Valores acima da faixa recomendada pela SBC. Monitore regularmente e converse com seu médico para acompanhamento.",
         colorHex = 0xFFEA580C // Orange
     ),
-    STAGE_1_TO_2_TRANSITION(
-        displayName = "Faixa entre Estágio 1 e Estágio 2",
-        description = "Valores em transição/oscilação entre Estágio 1 e Estágio 2",
-        recommendation = "Atenção: seus parâmetros estão na fronteira entre os Estágios 1 e 2 da SBC. Recomenda-se acompanhamento com um profissional de saúde.",
-        colorHex = 0xFFE11D48 // Rose
-    ),
     STAGE_2_HYPERTENSION(
         displayName = "Faixa de pressão elevada: estágio 2",
         description = "Sistólica 160-179 mmHg e/ou Diastólica 100-109 mmHg",
         recommendation = "Valores significativamente elevados segundo a SBC. Recomenda-se orientação e acompanhamento médico.",
         colorHex = 0xFFE11D48 // Rose
     ),
-    STAGE_2_TO_3_TRANSITION(
-        displayName = "Faixa entre Estágio 2 e Estágio 3",
-        description = "Valores em transição/oscilação entre Estágio 2 e Estágio 3",
-        recommendation = "Alerta: valores no limite superior do Estágio 2 para o Estágio 3 da SBC. Procure avaliação de um profissional de saúde.",
-        colorHex = 0xFFDC2626 // Red
-    ),
     STAGE_3_HYPERTENSION(
         displayName = "Faixa de pressão elevada: estágio 3",
         description = "Sistólica ≥ 180 mmHg e/ou Diastólica ≥ 110 mmHg",
-        recommendation = "Valores muito elevados segundo a SBC/OMS. Se houver sintomas como dor de cabeça intensa ou visão turva, procure atendimento médico imediatamente.",
+        recommendation = "Valores muito elevados. Se houver sintomas como dor de cabeça intensa ou visão turva, procure atendimento médico imediatamente.",
         colorHex = 0xFFDC2626 // Red
     )
 }
@@ -86,5 +56,5 @@ data class BloodPressureResult(
     val isNormal: Boolean,
     val requiresMedicalAttention: Boolean,
     val explanatoryDetail: String,
-    val institution: String = "Sociedade Brasileira de Cardiologia (SBC) / OMS"
+    val institution: String = "Diretriz Brasileira de Hipertensão Arterial 2025"
 )

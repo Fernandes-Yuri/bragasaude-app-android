@@ -212,33 +212,28 @@ fun VoiceHealthIntent.toConfirmationDisplay(): ConfirmationDisplayData {
         is VoiceHealthIntent.BloodPressure -> {
             val result = BloodPressureParser.classify(systolic, diastolic)
             val (spoken, stageBadge, stageIdx) = when (result.category) {
-                BloodPressureCategory.OPTIMAL, BloodPressureCategory.NORMAL -> Triple(
+                BloodPressureCategory.OPTIMAL -> Triple(
                     "De acordo com a Sociedade Brasileira de Cardiologia, a sua pressão se encontra dentro do ideal. Deseja confirmar e salvar?",
                     "Dentro do Ideal",
                     0
                 )
                 BloodPressureCategory.PREHYPERTENSION -> Triple(
-                    "De acordo com a Sociedade Brasileira de Cardiologia, a sua pressão se encontra em pré-hipertensão. Confira os valores de referência. Deseja salvar?",
+                    "De acordo com a Sociedade Brasileira de Cardiologia, o valor informado está na faixa de pré-hipertensão. Uma medição isolada não é diagnóstico. Deseja salvar?",
                     "Pré-Hipertensão",
                     1
                 )
                 BloodPressureCategory.STAGE_1_HYPERTENSION -> Triple(
-                    "De acordo com a Sociedade Brasileira de Cardiologia, a sua pressão se encontra em estágio um. Confira os valores de referência. Deseja salvar?",
+                    "De acordo com a Sociedade Brasileira de Cardiologia, o valor informado está na faixa de estágio um. Uma medição isolada não é diagnóstico. Deseja salvar?",
                     "Estágio 1",
                     2
                 )
-                BloodPressureCategory.STAGE_1_TO_2_TRANSITION -> Triple(
-                    "De acordo com a Sociedade Brasileira de Cardiologia, você está entre o estágio um e o estágio dois. Confira os valores de referência. Deseja salvar?",
-                    "Estágio 1 a 2",
-                    2
-                )
                 BloodPressureCategory.STAGE_2_HYPERTENSION -> Triple(
-                    "De acordo com a Sociedade Brasileira de Cardiologia, a sua pressão se encontra em estágio dois. Confira os valores de referência. Deseja salvar?",
+                    "De acordo com a Sociedade Brasileira de Cardiologia, o valor informado está na faixa de estágio dois. Uma medição isolada não é diagnóstico. Deseja salvar?",
                     "Estágio 2",
                     3
                 )
-                BloodPressureCategory.STAGE_2_TO_3_TRANSITION, BloodPressureCategory.STAGE_3_HYPERTENSION -> Triple(
-                    "De acordo com a Sociedade Brasileira de Cardiologia, a sua pressão se encontra em estágio três de atenção imediata. Confira os valores de referência. Deseja salvar?",
+                BloodPressureCategory.STAGE_3_HYPERTENSION -> Triple(
+                    "De acordo com a Sociedade Brasileira de Cardiologia, o valor informado está na faixa de estágio três. Uma medição isolada não é diagnóstico. Deseja salvar?",
                     "Estágio 3 (Atenção)",
                     4
                 )
