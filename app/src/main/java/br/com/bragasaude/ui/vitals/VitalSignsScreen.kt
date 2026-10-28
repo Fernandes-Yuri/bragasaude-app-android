@@ -211,7 +211,7 @@ fun VitalSignsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "Diretriz SBC / OMS (mmHg)",
+                            "Diretriz brasileira 2025 (mmHg)",
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -4,20 +4,9 @@ import br.com.bragasaude.domain.model.BloodPressureCategory
 import br.com.bragasaude.domain.model.BloodPressureResult
 
 /**
- * Parser e Classificador de Pressão Arterial
- * 
- * Baseado estritamente nas Diretrizes Brasileiras de Hipertensão Arterial da
- * SBC (Sociedade Brasileira de Cardiologia) e OMS (Organização Mundial da Saúde).
- * 
- * REGRAS DE CLASSIFICAÇÃO DA SBC:
- * - Hipotensão: Sistólica < 90 mmHg ou Diastólica < 60 mmHg
- * - Observação / Diferencial Amplo: Sistólica normal (≥ 120 mmHg) com Diastólica no limiar inferior (≤ 60 mmHg, ex: 12/6 → 120/60 mmHg)
- * - Ótima: Sistólica < 120 mmHg e Diastólica < 80 mmHg (ex: 11/7 → 110/70 mmHg, 119/79 mmHg)
- * - Normal: Sistólica 120-129 mmHg e/ou Diastólica 80-84 mmHg (ex: 12/8 → 120/80 mmHg)
- * - Pré-Hipertensão: Sistólica 130-139 mmHg e/ou Diastólica 85-89 mmHg
- * - Hipertensão Estágio 1: Sistólica 140-159 mmHg e/ou Diastólica 90-99 mmHg
- * - Hipertensão Estágio 2: Sistólica 160-179 mmHg e/ou Diastólica 100-109 mmHg
- * - Hipertensão Estágio 3 (Atenção Imediata): Sistólica ≥ 180 mmHg e/ou Diastólica ≥ 110 mmHg
+ * Normaliza valores informados e compara registros com as faixas de consultório
+ * para adultos da Diretriz Brasileira de Hipertensão Arterial de 2025.
+ * Uma medição isolada não estabelece diagnóstico.
  */
 object BloodPressureParser {
     
@@ -78,7 +67,7 @@ object BloodPressureParser {
     }
     
     /**
-     * Classifica a pressão arterial segundo a SBC / OMS com análise de cruzamento, assimetria e transição.
+     * Compara os valores com as faixas de consultório para adultos da diretriz de 2025.
      */
     fun classify(systolic: Int, diastolic: Int): BloodPressureResult {
         // Referência para medidas de consultório em adultos; uma medida isolada não é diagnóstico.
