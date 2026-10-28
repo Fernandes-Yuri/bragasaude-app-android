@@ -174,9 +174,9 @@ class AuthViewModel @Inject constructor(
     private fun registerFcmToken() {
         val user = auth.currentUser ?: return
         val currentRole = _userRole.value ?: "USER"
-        val currentName = user.displayName ?: "Usuário Braga"
         viewModelScope.launch {
             try {
+                val currentName = runCatching { user.displayName }.getOrNull() ?: "Usuário Braga"
                 val token = FirebaseMessaging.getInstance().token.await()
                 if (token == lastRegisteredToken &&
                     currentRole == lastRegisteredRole &&

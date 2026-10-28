@@ -367,11 +367,17 @@ class FamilyBridgeRepositoryTest {
         coVerify(exactly=0) { familyDao.insertMessage(any()) }
     }
 
-    @Test fun syncBindingsRethrowsCancellationException() = runBlocking {
-        every { auth.currentUser?.uid } returns "patient-1"
-        coEvery { apiClient.getFamilyBindings("patient-1") } throws kotlinx.coroutines.CancellationException("Job cancelled")
-        assertThrows(kotlinx.coroutines.CancellationException::class.java) {
-            runBlocking { repository.syncBindingsForPatient("patient-1") }
+    @Test fun syncBindingsRethrowsCancellationException() {
+        runBlocking {
+            every { auth.currentUser?.uid } returns "patient-1"
+            coEvery { apiClient.getFamilyBindings("patient-1") } throws kotlinx.coroutines.CancellationException("Job cancelled")
+            var threw = false
+            try {
+                repository.syncBindingsForPatient("patient-1")
+            } catch (_: kotlinx.coroutines.CancellationException) {
+                threw = true
+            }
+            assertTrue("Deveria ter relançado CancellationException", threw)
         }
     }
 
