@@ -107,8 +107,17 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
         if (uri != null) viewModel.save(uri)
     }
+    var isFirstResume by remember { mutableStateOf(true) }
     DisposableEffect(lifecycle) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) viewModel.refresh() }
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (isFirstResume) {
+                    isFirstResume = false
+                } else {
+                    viewModel.refresh()
+                }
+            }
+        }
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer) }
     }

@@ -44,7 +44,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
     companion object { private val lock = Mutex() }
     private val root get() = File(context.noBackupFilesDir, "organizer").apply { mkdirs() }
     private val cache get() = File(context.cacheDir, "organizer-work").apply { mkdirs() }
-    private val pdf = OrganizerPdfBuilder(context)
+    private val pdf by lazy { OrganizerPdfBuilder(context) }
     private val keys get() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     private fun alias(id: String) = "organizer-$id"
     private fun folder(id: String) = File(root, id)

@@ -125,6 +125,8 @@ class CaregiverDashboardViewModel @Inject constructor(
                     familyRepository.subscribePatientVitalSignsRealtime(binding.patientUserId).collect {
                         // Inserções no Room são feitas internamente pelo flow do repositório
                     }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     android.util.Log.w("CaregiverDashboardVM", "Subscrição realtime vitals falhou, mantendo offline: ${e.message}")
                 }
@@ -134,6 +136,8 @@ class CaregiverDashboardViewModel @Inject constructor(
                     familyRepository.subscribeFamilyMessagesRealtime(binding.patientUserId).collect {
                         // Inserções no Room são feitas internamente pelo flow do repositório
                     }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     android.util.Log.w("CaregiverDashboardVM", "Subscrição realtime mensagens falhou, mantendo offline: ${e.message}")
                 }
