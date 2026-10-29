@@ -51,8 +51,9 @@ object MetricInfoCatalog {
         unit = "mmHg",
         officialUrl = "https://journals.cardiol.br/article/diretriz-brasileira-de-hipertensao-arterial-2025/",
         tableRows = listOf(
-            "Referência normal" to "< 120 e < 80 mmHg",
-            "Pré-hipertensão" to "120–139 e/ou 80–89 mmHg",
+            "Pressão Ótima" to "< 120 e < 80 mmHg",
+            "Pressão Normal" to "120–129 e/ou 80–84 mmHg",
+            "Pré-hipertensão" to "130–139 e/ou 85–89 mmHg",
             "Faixa de estágio 1" to "140–159 e/ou 90–99 mmHg",
             "Faixa de estágio 2" to "160–179 e/ou 100–109 mmHg",
             "Faixa de estágio 3" to "≥ 180 e/ou ≥ 110 mmHg"
