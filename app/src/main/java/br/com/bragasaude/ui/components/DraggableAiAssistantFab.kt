@@ -247,6 +247,7 @@ fun DraggableAiAssistantFab(
                     onNavigate(Screen.Hydration(initialMl = event.addMl, autoOpenDialog = event.openCustomDialog))
                 }
 
+                is VoiceNavigationEvent.NavigateToDoses -> onNavigate(Screen.Reminders)
                 is VoiceNavigationEvent.OpenEmergencyDialog -> {
                     showEmergencyDialog = true
                 }

@@ -2,7 +2,6 @@ package br.com.bragasaude.domain
 
 import br.com.bragasaude.data.local.ProfileDao
 import br.com.bragasaude.data.remote.model.RemoteBiometry
-import br.com.bragasaude.data.remote.model.RemoteMedication
 import br.com.bragasaude.data.remote.model.RemoteVitalSign
 import br.com.bragasaude.data.remote.repository.BiometryRepository
 import br.com.bragasaude.data.remote.repository.MedicationRepository
@@ -127,30 +126,8 @@ class VoiceHealthExecutor @Inject constructor(
                 "Saturação: ${intent.oxygenPercent}% registrado!"
             }
 
-            is VoiceHealthIntent.Medication -> {
-                val meds = medicationRepository.getMedications(userId).first()
-                val match = meds.firstOrNull { med ->
-                    med.name.contains(intent.query, ignoreCase = true) ||
-                        intent.query.contains(med.name, ignoreCase = true)
-                }
-                if (match != null) {
-                    medicationRepository.takeMedication(userId, match.id)
-                    "Medicacao: ${match.name} marcado como tomado!"
-                } else {
-                    val newMed = RemoteMedication(
-                        id = UUID.randomUUID().toString(),
-                        userId = userId,
-                        name = intent.query.replaceFirstChar {
-                            if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString()
-                        },
-                        scheduleTime = intent.scheduleTimeHint
-                    )
-                    medicationRepository.saveMedication(newMed)
-                    "Medicacao: \"${newMed.name}\" registrado!"
-                }
-            }
-
-
+            is VoiceHealthIntent.Medication ->
+                "Confira o medicamento e as doses em Lembretes, no painel Medicamentos por horário, e confirme na tela. Nenhum medicamento foi criado ou marcado como tomado por esta conversa."
 
             is VoiceHealthIntent.ClarificationRequired -> {
                 intent.questionPrompt

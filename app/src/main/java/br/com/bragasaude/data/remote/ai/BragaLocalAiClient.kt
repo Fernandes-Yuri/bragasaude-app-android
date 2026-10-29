@@ -50,6 +50,7 @@ class BragaLocalAiClient @Inject constructor(
 
         // Prompt simplificado, direto e com foco no preenchimento de água, pressão e glicemia
         private const val SYSTEM_PROMPT = "REGRAS DO CANAL DE VOZ: " +
+            br.com.bragasaude.ai.BragaProductScope.PROMPT + " " +
             "TRAVAS CLÍNICAS OBRIGATÓRIAS: " +
             "1. NUNCA faça diagnóstico médico, nunca afirme que o usuário tem uma doença e nunca prescreva medicamentos, dosagens ou tratamentos. " +
             "2. Use linguagem acolhedora, humana e empática. Varie suas palavras e evite respostas mecânicas, clichês ou vícios repetitivos. " +

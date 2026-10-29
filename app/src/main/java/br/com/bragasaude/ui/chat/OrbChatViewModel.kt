@@ -246,7 +246,10 @@ class OrbChatViewModel @Inject constructor(
                     "/emergência", "/emergencia" -> "EMERGENCIA"
                     else -> null
                 }
-                val actionReply = if (concrete != null) BragaChatActions.reply(concrete) else null
+                val actionReply = if (local.intent == br.com.bragasaude.ai.BragaProductScope.DOSES)
+                    OrbReply(JSONObject().put("fala", local.respostaLocal).put("acao", "LEMBRETES")
+                        .put("parametros", JSONObject()).toString())
+                else if (concrete != null) BragaChatActions.reply(concrete) else null
                 if (concrete is br.com.bragasaude.domain.VoiceHealthIntent.ConversationalReply &&
                     local.route == br.com.bragasaude.ai.BragaRoute.CLARIFICATION) {
                     local = br.com.bragasaude.ai.NluOutput("conversa_parser_local", concrete.message)
