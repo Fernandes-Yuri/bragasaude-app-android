@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import android.content.Context
 import br.com.bragasaude.data.local.organizer.OrganizerStore
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
@@ -21,6 +22,7 @@ import java.util.UUID
 class OrganizerSessionInstrumentedTest {
     @Test fun organizaDoisDocumentosRemoveUmEInvalidaResultado() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
+        PDFBoxResourceLoader.init(context)
         val store = OrganizerStore(context)
         check(store.restore() == null) { "Use uma instalação de teste sem sessão existente." }
         val sources = (1..2).map { number ->
