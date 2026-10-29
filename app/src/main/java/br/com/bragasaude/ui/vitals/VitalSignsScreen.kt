@@ -607,12 +607,20 @@ fun VitalHistoryCard(vital: RemoteVitalSign, metricType: String = "PRESSURE") {
         BloodPressureParser.classify(vital.systolicPressure, vital.diastolicPressure)
     } else null
     val statusText = if (metricType == "PRESSURE") {
-        pressureResult?.let { if (it.isNormal) "Referência normal" else "Confira com profissional" }
+        pressureResult?.let { when {
+            it.category == br.com.bragasaude.domain.model.BloodPressureCategory.PREHYPERTENSION -> "Oscilação leve"
+            it.isNormal -> "Referência normal"
+            else -> "Confira com profissional"
+        } }
     } else {
         vital.glucoseLevel?.let { if (it in 70..140) "Normal" else "Atenção" }
     }
     val statusColor = if (metricType == "PRESSURE") {
-        if (pressureResult?.isNormal == true) Success else Warning
+        when {
+            pressureResult?.category == br.com.bragasaude.domain.model.BloodPressureCategory.PREHYPERTENSION -> Color(0xFF0284C7)
+            pressureResult?.isNormal == true -> Success
+            else -> Warning
+        }
     } else if (statusText == "Normal") Success else Warning
 
     Card(

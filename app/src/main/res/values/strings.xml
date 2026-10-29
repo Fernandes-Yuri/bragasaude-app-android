@@ -48,8 +48,8 @@
     <string name="pressure_stabilized">Sua pressão arterial retornou à faixa de referência (%1$d mmHg).</string>
     <string name="pressure_stabilized_action">Continue mantendo seus hábitos saudáveis e o acompanhamento regular.</string>
 
-    <string name="hydration_milestone_title">Hidratação Completa</string>
-    <string name="hydration_milestone_desc">Você atingiu sua meta diária de %1$dml de água hoje.</string>
+    <string name="hydration_milestone_title">Meta de hidratação alcançada!</string>
+    <string name="hydration_milestone_desc">Parabéns! Você atingiu sua meta diária de %1$d ml de água hoje.</string>
 
 
     <!-- Transparência Metodológica & Compliance -->

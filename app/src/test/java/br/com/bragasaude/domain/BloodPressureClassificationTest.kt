@@ -9,6 +9,21 @@ import org.junit.Test
 class BloodPressureClassificationTest {
 
     @Test
+    fun `prehypertension explains transient factors without weakening hypertension alerts`() {
+        for ((sys, dia) in listOf(120 to 86, 130 to 85)) {
+            val result = BloodPressureParser.classify(sys, dia)
+            assertEquals(BloodPressureCategory.PREHYPERTENSION, result.category)
+            assertEquals(0xFF0284C7L, result.category.colorHex)
+            assertTrue(result.explanatoryDetail.contains("estresse"))
+            assertTrue(result.explanatoryDetail.contains("apenas um médico"))
+            org.junit.Assert.assertFalse(result.requiresMedicalAttention)
+        }
+        for ((sys, dia) in listOf(140 to 90, 160 to 100, 180 to 110)) {
+            assertTrue(BloodPressureParser.classify(sys, dia).requiresMedicalAttention)
+        }
+    }
+
+    @Test
     fun `test 120 over 80 mmHg is classified as NORMAL by SBC`() {
         val result = BloodPressureParser.classify(120, 80)
         assertEquals(BloodPressureCategory.NORMAL, result.category)

@@ -29,8 +29,8 @@ enum class BloodPressureCategory(
     PREHYPERTENSION(
         displayName = "Faixa de pré-hipertensão",
         description = "Sistólica 130-139 mmHg e/ou Diastólica 85-89 mmHg",
-        recommendation = "Faixa de atenção preventiva da SBC. Hábitos saudáveis, redução de sódio e monitoramento ajudam a manter o equilíbrio.",
-        colorHex = 0xFFD97706 // Amber
+        recommendation = "Valores ligeiramente elevados podem variar com estresse, cansaço, café ou esforço físico recente. Uma medição isolada não estabelece diagnóstico; mantenha o acompanhamento médico.",
+        colorHex = 0xFF0284C7 // Azul suave
     ),
     STAGE_1_HYPERTENSION(
         displayName = "Faixa de pressão elevada: estágio 1",

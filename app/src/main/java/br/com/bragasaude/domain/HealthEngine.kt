@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.firstOrNull
 import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import br.com.bragasaude.data.notification.HydrationNotifications
 import kotlin.math.abs
 
 @Singleton
@@ -28,6 +31,8 @@ class HealthEngine @Inject constructor(
     private val riskManager: RiskManager,
     private val auth: com.google.firebase.auth.FirebaseAuth
 ) {
+
+    private val hydrationLock = Mutex()
 
     private val CHANNEL_ID = "health_alerts_channel"
     private val NOTIFICATION_ID_EMERGENCY = 2001
@@ -251,19 +256,24 @@ class HealthEngine @Inject constructor(
         }
 
         // --- ANÁLISE DE SITUAÇÃO: META DE HIDRATAÇÃO ---
-        checkHydrationMilestone(userId, newVitals)?.let { milestone ->
-            milestones.add(milestone)
-            if (!silent) {
-                milestonesRepository.saveMilestone(milestone)
-                showNotification(context.getString(R.string.health_milestone_title), milestone.title, NOTIFICATION_ID_MILESTONE)
+        hydrationLock.withLock {
+            checkHydrationMilestone(userId, newVitals)?.let { milestone ->
+                milestones.add(milestone)
+                if (!silent) {
+                    milestonesRepository.saveMilestone(milestone)
+                    val profile = profileRepository.getProfile(userId).firstOrNull()
+                    if ((auth.currentUser?.uid ?: br.com.bragasaude.util.BragaConstants.GUEST_UID) == userId &&
+                        profile?.notificationsEnabled != false) {
+                        HydrationNotifications.notifyOnce(
+                            context, userId, java.time.LocalDate.now().toString(), milestone.title, milestone.description.orEmpty()
+                        )
+                    }
+                }
             }
         }
 
         if (!silent) {
             conditions.forEach { conditionRepository.saveDetectedCondition(it) }
-            milestones.forEach { 
-                milestonesRepository.saveMilestone(it)
-            }
         }
 
         return AnalysisResult(alerts, recommendations.sortedByDescending { it.isEmergency }, milestones, conditions)
@@ -302,7 +312,7 @@ class HealthEngine @Inject constructor(
             dateStr == today 
         }.sumOf { it.hydrationMl ?: 0 }
 
-        if (todayTotal >= target) {
+        if (target > 0 && todayTotal >= target) {
             // Verifica se já ganhou hoje para não duplicar
             val existingMilestones = milestonesRepository.getMilestones(userId).first()
             val alreadyAchievedToday = existingMilestones.any { 
@@ -312,6 +322,7 @@ class HealthEngine @Inject constructor(
 
             if (!alreadyAchievedToday) {
                 return RemoteMilestone(
+                    id = java.util.UUID.nameUUIDFromBytes("hydration_daily:$userId:$today".toByteArray(Charsets.UTF_8)).toString(),
                     userId = userId,
                     title = context.getString(R.string.hydration_milestone_title),
                     description = context.getString(R.string.hydration_milestone_desc, target),

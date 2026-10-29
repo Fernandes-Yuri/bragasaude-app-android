@@ -12,6 +12,8 @@ import com.google.firebase.auth.FirebaseAuth
 import io.mockk.*
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -47,6 +49,44 @@ class HealthEngineTest {
         // Mock strings default
         every { context.getString(any()) } returns "Mock String"
         every { context.getString(any(), *anyVararg()) } answers { "Mock String with Args ${args.drop(1).joinToString()}" }
+    }
+
+    @Test
+    fun `hydration saves once and silent analysis never consumes achievement`() = runBlocking {
+        val user = "user1"
+        val saved = mutableListOf<MilestoneEntity>()
+        val firebaseUser = mockk<com.google.firebase.auth.FirebaseUser>()
+        every { auth.currentUser } returns firebaseUser
+        every { firebaseUser.uid } returns user
+        coEvery { vitalsRepository.getVitalSignsSync(user) } returns emptyList()
+        coEvery { profileRepository.getProfile(user) } returns flowOf(ProfileEntity(userId = user, hydrationTargetMl = 2625))
+        var total = 2500
+        coEvery { vitalsRepository.getVitalSigns(user) } answers { flowOf(listOf(
+            br.com.bragasaude.data.local.VitalSignEntity(userId = user, hydrationMl = total, measuredAt = Date())
+        )) }
+        coEvery { milestonesRepository.getMilestones(user) } answers { flowOf(saved.toList()) }
+        coEvery { milestonesRepository.saveMilestone(any()) } coAnswers {
+            val milestone = firstArg<br.com.bragasaude.data.remote.model.RemoteMilestone>()
+            kotlinx.coroutines.yield()
+            saved.add(MilestoneEntity(remoteId = requireNotNull(milestone.id), userId = user,
+                title = milestone.title, description = milestone.description, badgeType = milestone.badgeType))
+        }
+        mockkObject(br.com.bragasaude.data.notification.HydrationNotifications)
+        try {
+            every { br.com.bragasaude.data.notification.HydrationNotifications.notifyOnce(any(), any(), any(), any(), any()) } returns true
+            val water = listOf(RemoteVitalSign(userId = user, hydrationMl = 250))
+            healthEngine.analyzeVitals(user, water)
+            assertTrue(saved.isEmpty())
+            verify(exactly = 0) { br.com.bragasaude.data.notification.HydrationNotifications.notifyOnce(any(), any(), any(), any(), any()) }
+            total = 2625
+            healthEngine.analyzeVitals(user, water, silent = true)
+            assertTrue(saved.isEmpty())
+            listOf(async { healthEngine.analyzeVitals(user, water) }, async { healthEngine.analyzeVitals(user, water) }).awaitAll()
+            assertEquals(1, saved.size)
+            verify(exactly = 1) { br.com.bragasaude.data.notification.HydrationNotifications.notifyOnce(any(), user, any(), any(), any()) }
+        } finally {
+            unmockkObject(br.com.bragasaude.data.notification.HydrationNotifications)
+        }
     }
 
     @Test

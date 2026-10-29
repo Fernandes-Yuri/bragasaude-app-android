@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui.util
+package br.com.bragasaude.ui.util
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -21,6 +21,9 @@ class HydrationQuickActionReceiver : BroadcastReceiver() {
 
     @Inject
     lateinit var auth: FirebaseAuth
+
+    @Inject
+    lateinit var healthEngine: br.com.bragasaude.domain.HealthEngine
 
     override fun onReceive(context: Context, intent: Intent) {
         val amountMl = intent.getIntExtra("amount_ml", 250)
@@ -48,6 +51,9 @@ class HydrationQuickActionReceiver : BroadcastReceiver() {
                     .setConstraints(constraints)
                     .build()
                 androidx.work.WorkManager.getInstance(context).enqueue(request)
+                healthEngine.analyzeVitals(userId, listOf(
+                    br.com.bragasaude.data.remote.model.RemoteVitalSign(userId = userId, hydrationMl = amountMl)
+                ))
 
             } catch (e: Exception) {
                 e.printStackTrace()

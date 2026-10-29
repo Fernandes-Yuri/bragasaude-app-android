@@ -108,6 +108,9 @@ class CaregiverDashboardViewModel @Inject constructor(
         }
     }
 
+    fun recentMessages(patientId: String): Flow<List<FamilyMessageEntity>> =
+        if (patientId.isBlank()) flowOf(emptyList()) else familyRepository.getRecentMessagesForPatient(patientId)
+
     fun selectPatient(binding: FamilyBindingEntity) {
         dashboardJob?.cancel()
         realtimeSubscriptionJob?.cancel()

@@ -91,7 +91,9 @@ object BloodPressureParser {
                 BloodPressureCategory.STAGE_2_HYPERTENSION,
                 BloodPressureCategory.STAGE_3_HYPERTENSION
             ),
-            explanatoryDetail = "Registro de $systolic/$diastolic mmHg. Classificado como ${category.displayName} conforme as Diretrizes Brasileiras de Hipertensão Arterial (SBC). Uma medição isolada não estabelece diagnóstico. Converse com um profissional de saúde sobre seus registros.",
+            explanatoryDetail = if (category == BloodPressureCategory.PREHYPERTENSION) {
+                "Pressão de $systolic/$diastolic mmHg. Conforme as Diretrizes da Sociedade Brasileira de Cardiologia (SBC), valores ligeiramente elevados podem decorrer de estresse momentâneo, cansaço, café ou esforço físico recente. Uma medição isolada não estabelece diagnóstico: apenas um médico em consulta pode avaliar seu histórico e diagnosticar hipertensão."
+            } else "Registro de $systolic/$diastolic mmHg. Classificado como ${category.displayName} conforme as Diretrizes Brasileiras de Hipertensão Arterial (SBC). Uma medição isolada não estabelece diagnóstico. Converse com um profissional de saúde sobre seus registros.",
             institution = "Diretriz Brasileira de Hipertensão Arterial (SBC)"
         )
     }
