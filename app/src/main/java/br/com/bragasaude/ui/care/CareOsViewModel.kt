@@ -287,11 +287,16 @@ class CareOsViewModel @Inject constructor(
                 return@launch
             }
             _ui.update { it.copy(loading = true, message = null) }
+            val stateAtDelete = _ui.value
             val ok = medicationRepository.deleteMedication(patientId, medId)
             _ui.update {
                 it.copy(
                     loading = false,
-                    message = if (ok) "Medicamento excluído com sucesso." else "Medicamento removido localmente."
+                    message = medicationDeletionFeedback(
+                        patientName = stateAtDelete.selectedPatient.name,
+                        isOtherPatient = stateAtDelete.selectedPatient.role != "PATIENT",
+                        synced = ok
+                    )
                 )
             }
             onComplete?.invoke(true)
@@ -606,6 +611,27 @@ class CareOsViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         celebrationTts.shutdown()
+    }
+}
+
+/**
+ * Feedback audível/visível da exclusão de medicamento (SPEC-06).
+ * Contextualiza o nome do assistido quando o usuário gerencia o plano de outra pessoa.
+ */
+internal fun medicationDeletionFeedback(
+    patientName: String,
+    isOtherPatient: Boolean,
+    synced: Boolean
+): String {
+    val successMessage = if (isOtherPatient) {
+        "Medicamento excluído do plano de $patientName."
+    } else {
+        "Medicamento excluído com sucesso."
+    }
+    return if (synced) {
+        successMessage
+    } else {
+        "$successMessage A remoção local foi concluída; a sincronização com a nuvem ficará pendente."
     }
 }
 
