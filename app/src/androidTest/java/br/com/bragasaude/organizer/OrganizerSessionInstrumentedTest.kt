@@ -24,11 +24,14 @@ class OrganizerSessionInstrumentedTest {
         val sources = (1..2).map { number ->
             File(context.cacheDir, "shared_pdfs/teste-${UUID.randomUUID()}.pdf").apply {
                 parentFile?.mkdirs()
-                PdfDocument().use { document ->
+                val document = PdfDocument()
+                try {
                     val page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
                     page.canvas.drawText("DOCUMENTO FICTICIO DE EXAME $number", 40f, 100f, Paint().apply { textSize = 16f })
                     document.finishPage(page)
                     outputStream().use { document.writeTo(it) }
+                } finally {
+                    document.close()
                 }
             }
         }
