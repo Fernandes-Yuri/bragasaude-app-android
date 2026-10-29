@@ -139,24 +139,6 @@ data class RemoteUserStats(
 )
 
 @Serializable
-data class RemoteFeedback(
-    val id: String? = null,
-    @SerialName("user_id") val userId: String? = null,
-    @SerialName("user_email") val userEmail: String? = null,
-    @SerialName("user_name") val userName: String? = null,
-    val category: String, // 'sugestao', 'reclamacao', 'bug', 'outro'
-    val title: String? = null,
-    val message: String,
-    @SerialName("input_method") val inputMethod: String? = "text", // 'voice', 'text', 'voice_edited'
-    @SerialName("app_version") val appVersion: String? = "1.2.0",
-    @SerialName("device_info") val deviceInfo: String? = null,
-    @SerialName("screenshot_base64") val screenshotBase64: String? = null,
-    @SerialName("screenshot_url") val screenshotUrl: String? = null,
-    val status: String = "pending",
-    @SerialName("created_at") val createdAt: String? = null
-)
-
-@Serializable
 data class RemoteSocialPost(
     @SerialName("photo_url") val userAvatarUrl: String? = null,
     @SerialName("avatar_identifier") val userAvatarIdentifier: String? = null,

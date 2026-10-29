@@ -44,13 +44,3 @@ data class MedicationBatchItemCreateDto(
     val treatmentDurationDays: Int? = null,
     val anvisaRegistrationNumber: String? = null
 )
-
-data class MedicationBatchCreateRequest(
-    val medications: List<MedicationBatchItemCreateDto>
-)
-
-data class MedicationBatchResponseDto(
-    val status: String,
-    val patientId: String,
-    val createdCount: Int
-)

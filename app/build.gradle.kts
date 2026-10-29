@@ -92,8 +92,6 @@ android {
         compose = true
         buildConfig = true
     }
-    // A mesma personalidade é carregada pelo gateway Python.
-    sourceSets.getByName("main").assets.srcDir(rootProject.file("scripts/server/persona"))
     packaging {
         resources {
             excludes += listOf(
@@ -119,15 +117,11 @@ android {
 
 dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    // Retrofit & Serialization Converter
-    implementation("com.squareup.retrofit2:retrofit:2.11.0")
-    implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
-    implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
@@ -180,7 +174,7 @@ dependencies {
 
     // Splash Screen
     implementation(libs.androidx.core.splashscreen)
-    implementation("com.google.android.material:material:1.12.0")
+    implementation(libs.google.material)
 
     // Extração de texto de PDF — pdfbox-android (Apache 2.0).
     implementation(libs.pdfbox.android)

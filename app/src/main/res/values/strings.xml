@@ -2,17 +2,9 @@
     <!-- Placeholder de Novo Nome da Marca & Rebranding -->
     <string name="app_name">Braga Saúde</string>
     <string name="app_name_new">Braga Saúde</string>
-    <string name="welcome_message">Bem-vindo ao seu espaço de saúde</string>
     <string name="slogan">Seu guardião de bem-estar.\nAcompanhamento leve, claro e seguro.</string>
-    <string name="login_with_google">Continuar com Google</string>
-    <string name="home_tab">Início</string>
-    <string name="data_tab">Exames</string>
-    <string name="plans_tab">Planos</string>
-    <string name="profile_tab">Perfil</string>
     <string name="register_data">Registrar dados</string>
     <string name="recent_history">Histórico recente</string>
-    <string name="health_evolution_charts">Evolução de Parâmetros</string>
-    <string name="generate_report">Gerar Relatório PDF</string>
 
     <!-- Health Engine Alerts (Focados em fatos, acolhimento e faixas, sem diagnósticos médicos) -->
     <string name="health_emergency_title">Atenção Redobrada</string>
@@ -50,8 +42,6 @@
 
     <string name="imc_alert">Seu IMC atual é %1$s, fora da faixa de referência populacional.</string>
     <string name="imc_alert_action">Considere conversar com um profissional de saúde (médico ou nutricionista) sobre esses valores.</string>
-    <string name="weight_trend_alert">Notamos uma variação rápida de peso (%1$s de %2$skg).</string>
-    <string name="weight_trend_action">Se essa mudança não foi planejada, considere conversar com um profissional de saúde.</string>
     <string name="weight_goal_milestone_title">Meta de Peso Alcançada</string>
     <string name="weight_goal_milestone_desc">Você atingiu sua meta de %1$skg. Parabéns pela consistência!</string>
 
@@ -65,7 +55,6 @@
     <!-- Transparência Metodológica & Compliance -->
     <string name="observations_section_title">Observações de Parâmetros</string>
     <string name="observations_referral">Considere conversar com seu profissional de saúde sobre esses valores.</string>
-    <string name="observation_bp_trend">Pressão arterial (sistólica) acima da faixa de referência em %1$d medições seguidas.</string>
     <string name="disclaimer_not_medical">Conteúdo informativo com base em faixas de referência e consensos internacionais. Não constitui diagnóstico nem prescrição médica. Em caso de dúvidas ou sintomas, consulte um profissional de saúde.</string>
     <string name="care_modules_subtitle">Sugestões de autocuidado com base nos parâmetros que você registra. Não substituem orientação médica.</string>
 
@@ -75,14 +64,6 @@
     <string name="sedentary_msg">Você está em repouso há algum tempo. Que tal uma breve caminhada ou alongamento?</string>
     <string name="activity_goal_title">Meta de Passos Alcançada!</string>
     <string name="activity_goal_msg">Parabéns! Você atingiu sua meta de %d passos hoje.</string>
-
-    <!-- Onboarding e Telas Legais -->
-    <string name="terms_of_use_title">Termos de Uso</string>
-    <string name="privacy_policy_title">Política de Privacidade (LGPD)</string>
-    <string name="tutorial_skip">Pular Tutorial</string>
-    <string name="tutorial_finish">Começar a Usar</string>
-    <string name="tutorial_next">Próximo</string>
-    <string name="tutorial_see_again">Ver Tutorial do Aplicativo</string>
 
     <!-- Trava de Segurança - Modo Desenvolvedor & Depuração USB -->
     <string name="security_dev_mode_title">Acesso Bloqueado por Segurança</string>
