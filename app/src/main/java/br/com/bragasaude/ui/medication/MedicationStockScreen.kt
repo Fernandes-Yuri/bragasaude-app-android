@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -461,7 +462,9 @@ fun MedicationStockScreen(
                             canRestock = ui.selectedPatient.canWriteMedication,
                             canEdit = ui.selectedPatient.canWriteMedication,
                             canDelete = ui.selectedPatient.canWriteMedication,
-                            loading = ui.loading
+                            loading = ui.loading,
+                            isCaregiver = ui.isCaregiver || ui.selectedPatient.role != "PATIENT",
+                            patientName = ui.selectedPatient.name
                         )
                     }
                 }
@@ -665,12 +668,19 @@ private fun MedicationStockCard(
     canRestock: Boolean,
     canEdit: Boolean,
     canDelete: Boolean,
-    loading: Boolean
+    loading: Boolean,
+    isCaregiver: Boolean = false,
+    patientName: String = ""
 ) {
     val context = LocalContext.current
     var showRestock by remember { mutableStateOf(false) }
     var restockQty by remember { mutableStateOf(medication.totalUnits.toString()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    // Guardrail anti-toque: a exclusão só é liberada após marcação consciente.
+    var confirmDeletion by remember { mutableStateOf(false) }
+    LaunchedEffect(showDeleteConfirm) {
+        if (showDeleteConfirm) confirmDeletion = false
+    }
     var showEditSchedule by remember { mutableStateOf(false) }
     var showCalendarPrompt by remember { mutableStateOf(false) }
     val currentTimes = remember(medication.scheduleTimes, medication.scheduleTime) {
@@ -690,16 +700,50 @@ private fun MedicationStockCard(
             },
             title = {
                 Text(
-                    "Excluir Medicamento",
+                    if (isCaregiver) "Excluir Medicamento do Cuidado" else "Excluir Medicamento",
                     fontWeight = FontWeight.Bold,
                     fontSize = 20.sp,
                     color = BragaTextPrimary
                 )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (isCaregiver) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = BragaEmergencyOrange.copy(alpha = 0.12f),
+                            border = BorderStroke(
+                                1.dp,
+                                BragaEmergencyOrange.copy(alpha = 0.45f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Icon(
+                                    Icons.Filled.WarningAmber,
+                                    contentDescription = null,
+                                    tint = BragaEmergencyOrange,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "Atenção Cuidador: Você está gerenciando o plano de saúde de $patientName.",
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = BragaEmergencyOrange
+                                )
+                            }
+                        }
+                    }
                     Text(
-                        "Deseja excluir este medicamento do seu tratamento? Esta ação removerá o remédio e seus registros de rotina.",
+                        if (isCaregiver) {
+                            "Deseja realmente remover ${medication.name} do tratamento de $patientName? Esta ação cancelará os alarmes e removerá os registros de rotina desse medicamento."
+                        } else {
+                            "Deseja excluir ${medication.name} do seu tratamento? Esta ação removerá o remédio e seus registros de rotina."
+                        },
                         fontSize = 15.sp,
                         color = BragaTextPrimary
                     )
@@ -709,6 +753,33 @@ private fun MedicationStockCard(
                         color = BragaTextSecondary,
                         lineHeight = 18.sp
                     )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { confirmDeletion = !confirmDeletion }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = confirmDeletion,
+                            onCheckedChange = { confirmDeletion = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = BragaEmergencyOrange
+                            )
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (isCaregiver) {
+                                "Confirmo a exclusão deste medicamento do plano de $patientName."
+                            } else {
+                                "Estou ciente de que esta ação removerá os alarmes e dados definitivamente."
+                            },
+                            fontSize = 13.sp,
+                            lineHeight = 20.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = BragaTextPrimary
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -717,7 +788,12 @@ private fun MedicationStockCard(
                         showDeleteConfirm = false
                         onDelete()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = BragaEmergencyOrange),
+                    enabled = confirmDeletion,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BragaEmergencyOrange,
+                        disabledContainerColor = BragaEmergencyOrange.copy(alpha = 0.3f),
+                        disabledContentColor = Color.White.copy(alpha = 0.7f)
+                    ),
                     modifier = Modifier.heightIn(min = 48.dp)
                 ) {
                     Text("Excluir Definitivamente", color = Color.White, fontWeight = FontWeight.Bold)
