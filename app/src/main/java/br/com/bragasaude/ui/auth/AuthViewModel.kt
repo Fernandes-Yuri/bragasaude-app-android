@@ -97,6 +97,13 @@ class AuthViewModel @Inject constructor(
         object PhoneLinkedSuccess : AuthState()
     }
 
+    private var fcmRegistrationJob: kotlinx.coroutines.Job? = null
+    private var fcmRegistrationKey: Triple<String, String, String>? = null
+    private var lastRegisteredToken: String? = null
+    private var lastRegisteredRole: String? = null
+    private var lastRegisteredUserId: String? = null
+    private var lastRegisteredName: String? = null
+
     private val authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val user = firebaseAuth.currentUser
         if (user != null) {
@@ -163,12 +170,6 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    private var fcmRegistrationJob: kotlinx.coroutines.Job? = null
-    private var fcmRegistrationKey: Triple<String, String, String>? = null
-    private var lastRegisteredToken: String? = null
-    private var lastRegisteredRole: String? = null
-    private var lastRegisteredUserId: String? = null
-    private var lastRegisteredName: String? = null
 
     /**
      * G2 (doc 10 §3.2): registra o token FCM no gateway sempre que há um usuário
