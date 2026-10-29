@@ -151,11 +151,16 @@ class SyncManager @Inject constructor(
                 android.util.Log.e(BragaConstants.SYNC_LOG_TAG, "Erro ao sincronizar métricas diárias: ${e.message}")
             }
 
-            // 4. Vínculos Familiares
+            // 4. Vínculos Familiares: seguir com as demais etapas, mas não registrar
+            // sucesso global se alguma atualização de vínculos não terminou.
+            var familySyncSucceeded = false
             try {
-                familyBridgeRepository.syncBindingsForPatient(userId)
-                familyBridgeRepository.syncBindingsForCaregiver(userId)
+                val patientSynced = familyBridgeRepository.syncBindingsForPatient(userId)
+                val caregiverSynced = familyBridgeRepository.syncBindingsForCaregiver(userId)
+                familySyncSucceeded = patientSynced && caregiverSynced
                 familyBridgeRepository.cleanExpiredCodes()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 android.util.Log.e(BragaConstants.SYNC_LOG_TAG, "Erro ao sincronizar vínculos familiares: ${e.message}")
             }
@@ -191,9 +196,17 @@ class SyncManager @Inject constructor(
                 android.util.Log.w(BragaConstants.SYNC_LOG_TAG, "Aviso: Falha na retenção de dados locais: ${e.message}")
             }
 
+            if (!familySyncSucceeded) {
+                val problem = IllegalStateException("Não foi possível atualizar os vínculos familiares.")
+                _syncState.value = SyncState.Error(problem.message.orEmpty(), problem)
+                return Result.failure(problem)
+            }
             syncPreferences.recordSyncSuccess(userId)
             _syncState.value = SyncState.Success(nowUtc)
             Result.success(Unit)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            _syncState.value = SyncState.Idle
+            throw cancelled
         } catch (e: Exception) {
             val errorMsg = e.message ?: "Erro ao baixar dados do usuário"
             android.util.Log.e(BragaConstants.SYNC_LOG_TAG, "Falha no sync delta: $errorMsg", e)
