@@ -37,7 +37,7 @@ fun medicationStockDose(
     val next = occurrences.firstOrNull { (group, item) -> group.instant.isAfter(now) && item.eligible && item.occurrenceId !in reserved }
     val upToDate = today.isNotEmpty() && today.all { (_, item) -> item.state == "recorded" }
     return MedicationStockDose(
-        label = next?.let { "Próxima dose: ${it.first.time}" } ?: "Ver horários",
+        label = next?.let { "Próxima dose: ${it.first.time}" } ?: if (upToDate) "Ver Histórico" else "Ver horários",
         detail = if (upToDate) "Dose de hoje em dia" else "Nenhuma dose pendente para hoje. Confira a programação."
     )
 }

@@ -47,6 +47,7 @@ class MedicationStockDoseTest {
         val recorded = original.copy(items = original.items.map { if (it.medicationId == "med2") it.copy(state = "recorded") else it })
         val result = medicationStockDose("med2", listOf(recorded, group(date = "2026-10-30")), emptySet(), now)
         assertFalse(result.canConfirm)
+        assertEquals("Ver Histórico", medicationStockDose("med2", listOf(recorded), emptySet(), now).label)
         assertEquals("Dose de hoje em dia", result.detail)
         assertEquals("Próxima dose: 08:00", result.label)
     }

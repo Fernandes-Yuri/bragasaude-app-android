@@ -322,7 +322,7 @@ class HealthEngine @Inject constructor(
 
             if (!alreadyAchievedToday) {
                 return RemoteMilestone(
-                    id = "hydration_daily:$userId:$today",
+                    id = java.util.UUID.nameUUIDFromBytes("hydration_daily:$userId:$today".toByteArray(Charsets.UTF_8)).toString(),
                     userId = userId,
                     title = context.getString(R.string.hydration_milestone_title),
                     description = context.getString(R.string.hydration_milestone_desc, target),
