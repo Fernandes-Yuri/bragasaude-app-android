@@ -47,11 +47,19 @@ fun NotificationsScreen(onBack: () -> Unit, viewModel: HomeViewModel = hiltViewM
     val lifecycleOwner = LocalLifecycleOwner.current
     var batteryAllowed by remember(context) { mutableStateOf(BatteryOptimizationHelper.estaLiberado(context)) }
     var batteryGuidance by rememberSaveable { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(mainViewModel) {
+        mainViewModel.permissionUpdatedSignal.collect {
+            viewModel.syncGrantedPermissions(context)
+        }
+    }
+
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 batteryAllowed = BatteryOptimizationHelper.estaLiberado(context)
                 if (batteryAllowed) batteryGuidance = null
+                viewModel.syncGrantedPermissions(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

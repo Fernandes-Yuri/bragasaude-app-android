@@ -247,6 +247,36 @@ class HomeViewModel @Inject constructor(
         _clinicalAlerts.value = _clinicalAlerts.value.filterNot { it == alert }
     }
 
+    /**
+     * Sincroniza ativamente as permissões concedidas pelo sistema e expurga os cartões
+     * de solicitação de permissão sem exigir descarte manual (SPEC-02).
+     */
+    fun syncGrantedPermissions(customContext: Context? = null) {
+        val ctx = customContext ?: context
+        val hasNotifications = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        } else true
+
+        val hasLocation = ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                          ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+        val hasActivity = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
+        } else true
+
+        val currentAlerts = _clinicalAlerts.value
+        val updatedAlerts = currentAlerts.filterNot { alert ->
+            when {
+                alert.startsWith("PERMISSION_NOTIFICATIONS:") -> hasNotifications
+                alert.startsWith("PERMISSION_REQUIRED:") -> (hasLocation && hasActivity)
+                else -> false
+            }
+        }
+        if (updatedAlerts != currentAlerts) {
+            _clinicalAlerts.value = updatedAlerts
+        }
+    }
+
     fun markAlertAsRead(alert: String) {
         readStateStore.markRead(setOf(alert))
     }

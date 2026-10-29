@@ -101,6 +101,17 @@ fun HomeScreen(
 
     var showEmergencyDialog by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.syncGrantedPermissions(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val avatarProfile by viewModel.avatarProfile.collectAsState()
     val useGooglePhoto = br.com.bragasaude.util.AppPreferences.isUseGooglePhotoEnabled(context)
     val avatarPhotoUrl = resolveHomeAvatarPhoto(avatarProfile?.customPhotoUri,

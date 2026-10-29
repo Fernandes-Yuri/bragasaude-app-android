@@ -10,15 +10,19 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import br.com.bragasaude.ui.AppContent
+import br.com.bragasaude.ui.MainViewModel
 import br.com.bragasaude.ui.theme.BragasaudeTheme
 import br.com.bragasaude.ui.util.StepTrackingService
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    private val mainViewModel: MainViewModel by viewModels()
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -28,6 +32,7 @@ class MainActivity : ComponentActivity() {
             results[Manifest.permission.ACTIVITY_RECOGNITION] ?: false
         } else true
         if (locationGranted && activityGranted) startTrackingService()
+        mainViewModel.notifyPermissionResult()
     }
 
     internal fun startTrackingService() {

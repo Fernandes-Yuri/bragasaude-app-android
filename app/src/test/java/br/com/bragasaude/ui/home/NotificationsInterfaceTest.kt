@@ -53,4 +53,47 @@ class NotificationsInterfaceTest {
         compose.onNodeWithText("Avisos em segundo plano").assertDoesNotExist()
         compose.onNodeWithText("Beba água").assertIsDisplayed()
     }
+
+    @Test fun empty_alerts_displays_reassuring_empty_state() {
+        compose.setContent {
+            BragasaudeTheme(forceThemeMode = "LIGHT") {
+                NotificationsContent(
+                    alerts = emptyList(),
+                    readAlerts = emptySet(),
+                    identifiedAt = emptyMap(),
+                    batteryAllowed = true,
+                    batteryGuidance = null,
+                    onBack = {},
+                    onBatterySettings = {},
+                    onMarkAllRead = {},
+                    onOpen = {},
+                    onDismiss = {}
+                )
+            }
+        }
+        compose.onNodeWithText("Tudo tranquilo por aqui").assertIsDisplayed()
+        compose.onNodeWithText("Nenhum aviso no momento.").assertIsDisplayed()
+    }
+
+    @Test fun permission_alerts_render_under_settings_category_without_raw_prefix() {
+        val permissionAlert = "PERMISSION_NOTIFICATIONS: Ative as notificações para receber alertas de saúde importantes."
+        compose.setContent {
+            BragasaudeTheme(forceThemeMode = "LIGHT") {
+                NotificationsContent(
+                    alerts = listOf(permissionAlert),
+                    readAlerts = emptySet(),
+                    identifiedAt = emptyMap(),
+                    batteryAllowed = true,
+                    batteryGuidance = null,
+                    onBack = {},
+                    onBatterySettings = {},
+                    onMarkAllRead = {},
+                    onOpen = {},
+                    onDismiss = {}
+                )
+            }
+        }
+        compose.onNodeWithText("Configurações").assertIsDisplayed()
+        compose.onNodeWithText("Ative as notificações para receber alertas de saúde importantes.").assertIsDisplayed()
+    }
 }
