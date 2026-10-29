@@ -177,24 +177,31 @@ fun HomeScreen(
 
                 // 1. Atalhos Rápidos de Navegação — topo visível
                 item {
+                    val isHybridCaregiver = profile?.userRole == "CAREGIVER" && profile?.caregiverMode == "HYBRID"
+                    val items = buildList {
+                        add(Triple("Hidratação", Icons.Default.WaterDrop, br.com.bragasaude.ui.util.Screen.Hydration()))
+                        add(Triple("Pressão", Icons.Default.Favorite, br.com.bragasaude.ui.util.Screen.Vitals("PRESSURE")))
+                        add(Triple("Remédios", Icons.Default.Medication, br.com.bragasaude.ui.util.Screen.MedicationStock))
+                        if (profile?.hasDiabetes == true || vitals.glucoseLevel != null) {
+                            add(Triple("Glicose", Icons.Default.Bloodtype, br.com.bragasaude.ui.util.Screen.Vitals("GLUCOSE")))
+                        }
+                        if (isHybridCaregiver) {
+                            add(Triple("Dados", Icons.Default.BarChart, br.com.bragasaude.ui.util.Screen.Report))
+                        }
+                        add(Triple("Mural", Icons.Default.Groups, br.com.bragasaude.ui.util.Screen.SocialFeed))
+                    }
+                    // Com até 4 atalhos, distribui igualmente na largura disponível;
+                    // acima disso, mantém o espaçamento fixo com rolagem horizontal.
+                    val shortcutsArrangement = if (items.size <= 4) {
+                        Arrangement.SpaceEvenly
+                    } else {
+                        Arrangement.spacedBy(16.dp)
+                    }
+
                     LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = shortcutsArrangement,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        val isHybridCaregiver = profile?.userRole == "CAREGIVER" && profile?.caregiverMode == "HYBRID"
-                        val items = buildList {
-                            add(Triple("Hidratação", Icons.Default.WaterDrop, br.com.bragasaude.ui.util.Screen.Hydration()))
-                            add(Triple("Pressão", Icons.Default.Favorite, br.com.bragasaude.ui.util.Screen.Vitals("PRESSURE")))
-                            add(Triple("Remédios", Icons.Default.Medication, br.com.bragasaude.ui.util.Screen.MedicationStock))
-                            if (profile?.hasDiabetes == true || vitals.glucoseLevel != null) {
-                                add(Triple("Glicose", Icons.Default.Bloodtype, br.com.bragasaude.ui.util.Screen.Vitals("GLUCOSE")))
-                            }
-                            if (isHybridCaregiver) {
-                                add(Triple("Dados", Icons.Default.BarChart, br.com.bragasaude.ui.util.Screen.Report))
-                            }
-                            add(Triple("Mural", Icons.Default.Groups, br.com.bragasaude.ui.util.Screen.SocialFeed))
-                        }
-
                         items(items.size) { index ->
                             val (label, icon, route) = items[index]
                             val interactionSource = remember { MutableInteractionSource() }

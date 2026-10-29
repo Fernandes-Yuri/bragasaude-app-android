@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -927,7 +928,7 @@ private fun MedicationStockCard(
                             border = BorderStroke(1.dp, BragaMintBorder),
                             modifier = Modifier
                                 .weight(1f)
-                                .heightIn(min = 52.dp)
+                                .height(44.dp)
                         ) {
                             Icon(
                                 Icons.Filled.CheckCircle,
@@ -950,11 +951,18 @@ private fun MedicationStockCard(
                             colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
                             modifier = Modifier
                                 .weight(1f)
-                                .heightIn(min = 52.dp)
+                                .height(44.dp)
                         ) {
                             Icon(Icons.Filled.CheckCircle, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Ver doses por horário", color = Color.White, fontSize = 16.sp)
+                            Text(
+                                "Doses",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 } else {
@@ -964,7 +972,7 @@ private fun MedicationStockCard(
                         colors = ButtonDefaults.buttonColors(containerColor = BragaEmeraldDark),
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 52.dp)
+                            .height(44.dp)
                     ) {
                         Icon(Icons.Filled.NotificationsActive, contentDescription = null, tint = Color.White)
                         Spacer(Modifier.width(8.dp))
@@ -976,8 +984,16 @@ private fun MedicationStockCard(
                     enabled = canRestock,
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 52.dp)
-                ) { Text("Reabastecer", fontSize = 16.sp) }
+                        .height(44.dp)
+                ) {
+                    Text(
+                        "Reabastecer",
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
 
             if (isDoseBlocked && hoursUntilNextDose > 0) {

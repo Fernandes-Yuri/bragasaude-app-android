@@ -638,27 +638,33 @@ private fun SocialPostCard(
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             onReact(type)
                         },
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics {
-                            selected = isSelected
-                            stateDescription = if (count == 1) "1 reação" else "$count reações"
-                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .semantics {
+                                selected = isSelected
+                                stateDescription = if (count == 1) "1 reação" else "$count reações"
+                            },
+                        shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
                         colors = ButtonDefaults.textButtonColors(
+                            containerColor = if (isSelected) {
+                                BragaEmerald.copy(alpha = 0.15f)
+                            } else {
+                                Color.Transparent
+                            },
                             contentColor = if (isSelected) BragaEmeraldDark else BragaTextSecondary
                         )
                     ) {
                         Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = label + when {
-                                count > 99 -> " 99+"
-                                count > 0 -> " $count"
-                                else -> ""
-                            },
+                            text = label,
                             fontSize = 13.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                         )
                     }
                 }
