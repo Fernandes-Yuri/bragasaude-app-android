@@ -6,7 +6,7 @@ internal object BragaProductScope {
     const val DOSES = "ajuda_conferir_doses"
     const val GUIDANCE = "O Braga Saúde foca no cuidado diário: medicamentos, sinais vitais, hidratação, organização local de exames e família. Não oferecemos planos alimentares, contagem de calorias, cardápios, compras ou atendimento via WhatsApp. Para suporte, abra um ticket no app ou escreva para contato@bragasaude.online. Posso ajudar com seus sinais vitais ou remédios?"
     const val PROMPT = "O escopo ativo inclui sinais vitais, medicamentos, hidratação, organização local de exames, família e cuidadores. Planos alimentares, dietas, calorias, cardápios, compras e atendimento via WhatsApp foram descontinuados. Não ofereça esses recursos nem links para eles. Suporte: tickets no app ou contato@bragasaude.online. Confirmações de medicamentos exigem revisão no painel de doses por horário; nunca crie medicamentos a partir de relatos de consumo."
-    private val retired = Regex("""\b(dietas?|calorias?|cardapios?|whats\s*app|zap|zapzap|planos? alimentares?|plano alimentar|lista de compras|despensa)\b""")
+    private val retired = Regex("""\b(dietas?|calorias?|cardapios?|whats\s*app|zap|zapzap|planos? alimentares?|plano alimentar|planos? (?:de )?alimentacao|receitas? (?:da|de) (?:minha )?lista|lista de compras|despensa)\b""")
     private val foodAction = Regex("""\b(registr\w*|anot\w*|adicion\w*|mont\w*|abr\w*)\b.{0,60}\b(refeic\w*|aliment\w*|receitas? culinarias|compras)\b""")
     private val taken = Regex("""\b(tomei|tomamos)\b.{0,35}\b(remedios?|medicamentos?|comprimidos?|medicacao)\b""")
 

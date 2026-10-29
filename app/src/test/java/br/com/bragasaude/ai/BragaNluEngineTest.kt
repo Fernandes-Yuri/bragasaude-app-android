@@ -17,7 +17,7 @@ class BragaNluEngineTest {
         for (channel in InputChannel.entries) {
             for (text in listOf("Quero uma dieta", "Conte minhas calorias", "Abra meu cardápio",
                 "Qual é o WhatsApp do suporte?", "Registrar pressão 12 por 8 pelo WhatsApp",
-                "Monte meu plano alimentar", "Abra a lista de compras", "Anote minha refeição",
+                "Monte meu plano alimentar", "Quero um plano de alimentação", "Abra a lista de compras", "Anote minha refeição",
                 "Obrigado, onde fica o cardapio?", "Me chama no zap", "Suporte via whats app")) {
                 val output = hybrid.analyze(text, channel)
                 assertEquals(text, BragaProductScope.RETIRED, output.intent)

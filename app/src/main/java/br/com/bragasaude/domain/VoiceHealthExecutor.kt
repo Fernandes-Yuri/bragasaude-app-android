@@ -40,7 +40,7 @@ class VoiceHealthExecutor @Inject constructor(
      * Persiste a intenção e retorna uma descrição curta do que foi registrado.
      *
      * Regra de ouro (D4 / DECISOES.md): NUNCA prescreve, sugere ou altera
-     * medicação — apenas marca adesão informada pelo idoso.
+     * medicação. A confirmação de adesão pertence ao painel de doses por horário.
      */
     suspend fun execute(intent: VoiceHealthIntent): String {
         val userId = currentUserId
