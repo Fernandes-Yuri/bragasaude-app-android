@@ -229,6 +229,8 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
                 val isPdf = source.inputStream().use { String(ByteArray(5).also { header -> it.read(header) }, Charsets.US_ASCII) == "%PDF-" }
                 var text = ""; var pages = 1
                 if (isPdf) {
+                    // A leitura pode ocorrer antes da criação preguiçosa do gerador de PDF.
+                    com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(context)
                     source.renameTo(normalized)
                     PDDocument.load(normalized, MemoryUsageSetting.setupTempFileOnly().setTempDir(work)).use { document ->
                         require(!document.isEncrypted) { "está protegido por senha; abra e salve uma cópia sem senha" }
