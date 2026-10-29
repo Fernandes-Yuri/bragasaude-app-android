@@ -70,6 +70,8 @@ object OnDeviceSpeechRecognition {
                     })
                 }
             }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (_: Throwable) {
             // Consulta defensiva: se falhar ou der timeout, a execução prossegue com o reconhecedor ativo.
         }
