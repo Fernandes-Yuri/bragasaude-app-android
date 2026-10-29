@@ -325,6 +325,8 @@ class FamilyViewModel @Inject constructor(
                 try {
                     familyRepository.syncBindingsForPatient(userId)
                     familyRepository.syncBindingsForCaregiver(userId)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
                 } catch (e: Exception) {
                     android.util.Log.w("FamilyVM", "Falha ao sincronizar vínculos remotos: ${e.message}")
                 }

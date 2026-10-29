@@ -88,7 +88,11 @@ class CaregiverDashboardViewModel @Inject constructor(
             // 1. Baixar vínculos atualizados da nuvem (evita tela vazia se o cache local foi limpo)
             launch {
                 try {
-                    familyRepository.syncBindingsForCaregiver(caregiverUid)
+                    if (!familyRepository.syncBindingsForCaregiver(caregiverUid) && currentUserId == caregiverUid) {
+                        _uiEvents.emit(FamilyUiEvent.Error("Não foi possível atualizar os vínculos. Os dados salvos continuam disponíveis."))
+                    }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
                 } catch (e: Exception) {
                     android.util.Log.w("CaregiverDashboardVM", "Falha ao sincronizar vínculos do cuidador: ${e.message}")
                 }
@@ -301,7 +305,11 @@ class CaregiverDashboardViewModel @Inject constructor(
         if (uid.isNotBlank() && uid != br.com.bragasaude.util.BragaConstants.GUEST_UID) {
             viewModelScope.launch {
                 try {
-                    familyRepository.syncBindingsForCaregiver(uid)
+                    if (!familyRepository.syncBindingsForCaregiver(uid) && currentUserId == uid) {
+                        _uiEvents.emit(FamilyUiEvent.Error("Não foi possível atualizar os vínculos. Tente novamente."))
+                    }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
                 } catch (e: Exception) {
                     android.util.Log.e("CaregiverDashboardVM", "Erro ao sincronizar vínculos no refresh: ${e.message}")
                 }

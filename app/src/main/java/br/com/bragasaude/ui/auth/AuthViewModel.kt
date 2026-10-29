@@ -117,6 +117,8 @@ class AuthViewModel @Inject constructor(
             _sessionStatus.value = AppSessionStatus.NotAuthenticated
             _isProfileComplete.value = null
             _hasAcceptedConsent.value = null
+            fcmRegistrationJob?.cancel()
+            fcmRegistrationKey = null
             lastRegisteredToken = null
             lastRegisteredRole = null
             lastRegisteredUserId = null
@@ -161,6 +163,8 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    private var fcmRegistrationJob: kotlinx.coroutines.Job? = null
+    private var fcmRegistrationKey: Triple<String, String, String>? = null
     private var lastRegisteredToken: String? = null
     private var lastRegisteredRole: String? = null
     private var lastRegisteredUserId: String? = null
@@ -174,10 +178,15 @@ class AuthViewModel @Inject constructor(
     private fun registerFcmToken() {
         val user = auth.currentUser ?: return
         val currentRole = _userRole.value ?: "USER"
-        viewModelScope.launch {
+        val currentName = runCatching { user.displayName }.getOrNull() ?: "Usuário Braga"
+        val key = Triple(user.uid, currentRole, currentName)
+        if (fcmRegistrationJob?.isActive == true && fcmRegistrationKey == key) return
+        fcmRegistrationJob?.cancel()
+        fcmRegistrationKey = key
+        fcmRegistrationJob = viewModelScope.launch {
             try {
-                val currentName = runCatching { user.displayName }.getOrNull() ?: "Usuário Braga"
                 val token = FirebaseMessaging.getInstance().token.await()
+                if (auth.currentUser?.uid != user.uid) return@launch
                 if (token == lastRegisteredToken &&
                     currentRole == lastRegisteredRole &&
                     user.uid == lastRegisteredUserId &&
@@ -190,12 +199,14 @@ class AuthViewModel @Inject constructor(
                     role = currentRole,
                     name = currentName
                 )
-                if (success) {
+                if (success && auth.currentUser?.uid == user.uid) {
                     lastRegisteredToken = token
                     lastRegisteredRole = currentRole
                     lastRegisteredUserId = user.uid
                     lastRegisteredName = currentName
                 }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 android.util.Log.w("AuthViewModel", "Falha ao registrar token FCM: ${e.message}")
             }

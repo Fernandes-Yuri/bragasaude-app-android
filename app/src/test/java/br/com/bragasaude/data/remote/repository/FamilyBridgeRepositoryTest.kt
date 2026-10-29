@@ -367,6 +367,26 @@ class FamilyBridgeRepositoryTest {
         coVerify(exactly=0) { familyDao.insertMessage(any()) }
     }
 
+    @Test fun `binding sync returns failure on timeout without deleting local data`() = runBlocking {
+        mockkStatic(android.util.Log::class)
+        try {
+            every { android.util.Log.e(any(), any<String>()) } returns 0
+            coEvery { apiClient.getFamilyBindings("patient-1") } throws java.net.SocketTimeoutException("timeout")
+            assertFalse(repository.syncBindingsForPatient("patient-1"))
+            coVerify(exactly = 0) { familyDao.insertBinding(any()) }
+            coVerify(exactly = 0) { familyDao.deletePendingBindingsByCode(any()) }
+            coEvery { apiClient.getFamilyBindings("patient-1") } returns emptyList()
+            assertTrue(repository.syncBindingsForPatient("patient-1"))
+        } finally { unmockkStatic(android.util.Log::class) }
+    }
+
+    @Test fun `caregiver binding sync propagates cancellation`() = runBlocking {
+        coEvery { apiClient.getFamilyBindings("caregiver-1") } throws kotlinx.coroutines.CancellationException("cancelled")
+        val error = runCatching { repository.syncBindingsForCaregiver("caregiver-1") }.exceptionOrNull()
+        assertTrue(error is kotlinx.coroutines.CancellationException)
+        coVerify(exactly = 0) { familyDao.insertBinding(any()) }
+    }
+
     @Test fun syncBindingsRethrowsCancellationException() {
         runBlocking {
             every { auth.currentUser?.uid } returns "patient-1"

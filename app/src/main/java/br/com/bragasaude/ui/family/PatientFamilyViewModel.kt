@@ -82,7 +82,11 @@ class PatientFamilyViewModel @Inject constructor(
             // Sincronizar vínculos do paciente da nuvem para o Room
             launch {
                 try {
-                    familyRepository.syncBindingsForPatient(patientUid)
+                    if (!familyRepository.syncBindingsForPatient(patientUid) && currentUserId == patientUid) {
+                        _uiEvents.emit(FamilyUiEvent.Error("Não foi possível atualizar os vínculos. Os dados salvos continuam disponíveis."))
+                    }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
                 } catch (e: Exception) {
                     android.util.Log.w("PatientFamilyVM", "Falha ao sincronizar vínculos remotos do paciente: ${e.message}")
                 }

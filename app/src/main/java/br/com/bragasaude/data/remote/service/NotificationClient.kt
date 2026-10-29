@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.service
+package br.com.bragasaude.data.remote.service
 
 import android.util.Log
 import br.com.bragasaude.data.remote.auth.AuthService
@@ -53,6 +53,8 @@ class NotificationClient @Inject constructor(
                 put("platform", "android")
             }
             return@withContext sendJsonPost(endpoint, payload)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao registrar dispositivo no Hub: ${e.message}")
             return@withContext false

@@ -177,8 +177,8 @@ class FamilyBridgeRepository @Inject constructor(
 
     // ==================== SINCRONIZAÇÃO REMOTA ====================
 
-    suspend fun syncBindingsForPatient(patientUserId: String) {
-        if (patientUserId.isBlank() || patientUserId == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
+    suspend fun syncBindingsForPatient(patientUserId: String): Boolean {
+        if (patientUserId.isBlank() || patientUserId == br.com.bragasaude.util.BragaConstants.GUEST_UID) return false
         try {
             val list = apiClient.getFamilyBindings(patientUserId)
             list.forEach { item ->
@@ -191,15 +191,17 @@ class FamilyBridgeRepository @Inject constructor(
                     purgePatientDataFromCache(item.patientUserId)
                 }
             }
+            return true
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
             android.util.Log.e("FamilyBridgeRepo", "Falha ao baixar vínculos do paciente: ${e.message}")
+            return false
         }
     }
 
-    suspend fun syncBindingsForCaregiver(caregiverUserId: String) {
-        if (caregiverUserId.isBlank() || caregiverUserId == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
+    suspend fun syncBindingsForCaregiver(caregiverUserId: String): Boolean {
+        if (caregiverUserId.isBlank() || caregiverUserId == br.com.bragasaude.util.BragaConstants.GUEST_UID) return false
         try {
             val list = apiClient.getFamilyBindings(caregiverUserId)
             list.forEach { item ->
@@ -209,10 +211,12 @@ class FamilyBridgeRepository @Inject constructor(
                     purgePatientDataFromCache(item.patientUserId)
                 }
             }
+            return true
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
             android.util.Log.e("FamilyBridgeRepo", "Falha ao baixar vínculos do cuidador: ${e.message}")
+            return false
         }
     }
 
