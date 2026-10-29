@@ -88,7 +88,8 @@ internal fun MedicalReportContent(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         LazyColumn(Modifier.fillMaxSize().padding(innerPadding).testTag("reportContent"),
-            contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp,
+                bottom = br.com.bragasaude.ui.components.AssistantOrbScrollClearance), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(Icons.Default.PictureAsPdf, contentDescription = null,
