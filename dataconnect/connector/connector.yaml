@@ -1,8 +1,0 @@
-connectorId: "default"
-generate:
-  javascriptSdk:
-    outputDir: "../../webservice/src/lib/dataconnect-sdk"
-    package: "@bragasaude/dataconnect"
-  kotlinSdk:
-    outputDir: "../../app/src/main/java"
-    package: "com.example.bragasaude.data.dataconnect"
