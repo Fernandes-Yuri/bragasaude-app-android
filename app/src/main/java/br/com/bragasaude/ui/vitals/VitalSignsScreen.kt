@@ -11,6 +11,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Mic
+import br.com.bragasaude.ui.util.rememberVoiceInputLauncher
+import br.com.bragasaude.ui.util.createVoiceInputIntent
+import br.com.bragasaude.domain.VoiceHealthIntent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -82,6 +86,21 @@ fun VitalSignsScreen(
                 else -> 0
             }
         ) 
+    }
+
+    var voiceHint by remember { mutableStateOf<String?>(null) }
+    val voiceLauncher = rememberVoiceInputLauncher { transcription ->
+        val draft = VitalVoiceInput.parse(transcription, glucose = selectedTab == 1)
+        when (draft) {
+            is VoiceHealthIntent.BloodPressure -> {
+                systolicInput = draft.systolic.toString()
+                diastolicInput = draft.diastolic.toString()
+            }
+            is VoiceHealthIntent.Glucose -> glucose = draft.glucoseMgDl.toString()
+            else -> Unit
+        }
+        voiceHint = if (draft == null) "Não reconheci o valor desta medição. Confira os campos ou tente novamente."
+            else "Valor preenchido. Confira os campos antes de salvar."
     }
 
     val allVitals by viewModel.allVitals.collectAsStateWithLifecycle()
@@ -199,6 +218,16 @@ fun VitalSignsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
+                OutlinedButton(onClick = {
+                    voiceHint = if (selectedTab == 0) "Diga a pressão, por exemplo: 12 por 8."
+                        else "Diga a glicemia, por exemplo: glicemia 105."
+                    voiceLauncher.launch(createVoiceInputIntent(if (selectedTab == 0) "PRESSURE" else "GLUCOSE"))
+                }) {
+                    Icon(Icons.Default.Mic, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (selectedTab == 0) "Ditar pressão" else "Ditar glicemia")
+                }
+                voiceHint?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
             }
 
             if (selectedTab == 0) {
