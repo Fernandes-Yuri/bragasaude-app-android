@@ -30,7 +30,8 @@ class VoiceHealthExecutor @Inject constructor(
     private val profileDao: ProfileDao,
     private val familyRepository: FamilyBridgeRepository,
     private val vitalSignDao: VitalSignDao,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val healthEngine: HealthEngine
 ) {
 
     private val currentUserId: String
@@ -53,10 +54,11 @@ class VoiceHealthExecutor @Inject constructor(
                     id = UUID.randomUUID().toString(),
                     userId = userId,
                     hydrationMl = intent.amountMl,
-                    measuredAt = nowIso,
+                    measuredAt = java.time.Instant.now().toString(),
                     status = "recorded"
                 )
                 vitalsRepository.saveVitalSigns(listOf(vital))
+                healthEngine.analyzeVitals(userId, listOf(vital))
                 "Registro de hidratacao: ${intent.description} registrado!"
             }
 
