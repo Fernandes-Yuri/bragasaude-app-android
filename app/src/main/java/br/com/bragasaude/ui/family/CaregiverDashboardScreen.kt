@@ -108,6 +108,7 @@ fun CaregiverDashboardScreen(
 ) {
     val watchedPatients by viewModel.watchedPatients.collectAsState()
     val dashboard by viewModel.dashboard.collectAsState()
+    val bindingSyncFailed by viewModel.bindingSyncFailed.collectAsState()
     val quickTemplates by viewModel.quickTemplates.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -215,6 +216,7 @@ fun CaregiverDashboardScreen(
 
         if (watchedPatients.isEmpty()) {
             Column(Modifier.padding(innerPadding)) {
+                if (bindingSyncFailed) FamilySyncWarning(onRetry = viewModel::refreshPatientData)
                 Button(onClick = onConnectFamily, modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                     Text("Conectar familiar por código")
                 }
@@ -229,6 +231,7 @@ fun CaregiverDashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
             ) {
+                if (bindingSyncFailed) item { FamilySyncWarning(onRetry = viewModel::refreshPatientData) }
                 // Seletor quando acompanha mais de um familiar
                 if (watchedPatients.size > 1) {
                     item {

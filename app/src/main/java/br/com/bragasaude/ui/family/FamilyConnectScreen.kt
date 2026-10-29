@@ -64,6 +64,7 @@ fun FamilyConnectScreen(
 ) {
     val connectionCode by viewModel.connectionCode.collectAsState()
     val activeCaregivers by viewModel.activeCaregivers.collectAsState()
+    val bindingSyncFailed by viewModel.bindingSyncFailed.collectAsState()
     val unreadCount by viewModel.unreadMessageCount.collectAsState()
     val inviteHistory by viewModel.inviteHistory.collectAsState()
 
@@ -128,6 +129,7 @@ fun FamilyConnectScreen(
                 .padding(horizontal = 20.dp)
         ) {
             Spacer(Modifier.height(16.dp))
+            if (bindingSyncFailed) FamilySyncWarning(onRetry = viewModel::retryBindingSync)
 
             // ============================================
             // SEÇÃO 1: GERAR E COMPARTILHAR O CÓDIGO

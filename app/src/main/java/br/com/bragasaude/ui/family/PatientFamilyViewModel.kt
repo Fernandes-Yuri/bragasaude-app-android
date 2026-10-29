@@ -33,6 +33,8 @@ class PatientFamilyViewModel @Inject constructor(
 
     private val _uiEvents = MutableSharedFlow<FamilyUiEvent>()
     val uiEvents: SharedFlow<FamilyUiEvent> = _uiEvents.asSharedFlow()
+    private val _bindingSyncFailed = MutableStateFlow(false)
+    val bindingSyncFailed: StateFlow<Boolean> = _bindingSyncFailed.asStateFlow()
 
     val currentUserId: String
         get() = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
@@ -77,14 +79,14 @@ class PatientFamilyViewModel @Inject constructor(
     private fun loadData(patientUid: String = currentUserId) {
         if (patientUid.isBlank() || patientUid == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
 
+        _bindingSyncFailed.value = false
         dataLoadJob?.cancel()
         dataLoadJob = viewModelScope.launch {
             // Sincronizar vínculos do paciente da nuvem para o Room
             launch {
                 try {
-                    if (!familyRepository.syncBindingsForPatient(patientUid) && currentUserId == patientUid) {
-                        _uiEvents.emit(FamilyUiEvent.Error("Não foi possível atualizar os vínculos. Os dados salvos continuam disponíveis."))
-                    }
+                    val updated = familyRepository.syncBindingsForPatient(patientUid)
+                    if (currentUserId == patientUid) _bindingSyncFailed.value = !updated
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
                     throw cancelled
                 } catch (e: Exception) {
@@ -137,6 +139,8 @@ class PatientFamilyViewModel @Inject constructor(
             }
         }
     }
+
+    fun retryBindingSync() { loadData() }
 
     fun loadExistingCode() {
         val uid = currentUserId

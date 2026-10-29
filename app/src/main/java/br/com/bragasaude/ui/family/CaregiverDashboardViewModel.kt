@@ -42,6 +42,8 @@ class CaregiverDashboardViewModel @Inject constructor(
 
     private val _uiEvents = MutableSharedFlow<FamilyUiEvent>()
     val uiEvents: SharedFlow<FamilyUiEvent> = _uiEvents.asSharedFlow()
+    private val _bindingSyncFailed = MutableStateFlow(false)
+    val bindingSyncFailed: StateFlow<Boolean> = _bindingSyncFailed.asStateFlow()
 
     val currentUserId: String
         get() = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
@@ -83,14 +85,14 @@ class CaregiverDashboardViewModel @Inject constructor(
     private fun loadData(caregiverUid: String = currentUserId) {
         if (caregiverUid.isBlank() || caregiverUid == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
 
+        _bindingSyncFailed.value = false
         bindingsJob?.cancel()
         bindingsJob = viewModelScope.launch {
             // 1. Baixar vínculos atualizados da nuvem (evita tela vazia se o cache local foi limpo)
             launch {
                 try {
-                    if (!familyRepository.syncBindingsForCaregiver(caregiverUid) && currentUserId == caregiverUid) {
-                        _uiEvents.emit(FamilyUiEvent.Error("Não foi possível atualizar os vínculos. Os dados salvos continuam disponíveis."))
-                    }
+                    val updated = familyRepository.syncBindingsForCaregiver(caregiverUid)
+                    if (currentUserId == caregiverUid) _bindingSyncFailed.value = !updated
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
                     throw cancelled
                 } catch (e: Exception) {
@@ -305,9 +307,8 @@ class CaregiverDashboardViewModel @Inject constructor(
         if (uid.isNotBlank() && uid != br.com.bragasaude.util.BragaConstants.GUEST_UID) {
             viewModelScope.launch {
                 try {
-                    if (!familyRepository.syncBindingsForCaregiver(uid) && currentUserId == uid) {
-                        _uiEvents.emit(FamilyUiEvent.Error("Não foi possível atualizar os vínculos. Tente novamente."))
-                    }
+                    val updated = familyRepository.syncBindingsForCaregiver(uid)
+                    if (currentUserId == uid) _bindingSyncFailed.value = !updated
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
                     throw cancelled
                 } catch (e: Exception) {
