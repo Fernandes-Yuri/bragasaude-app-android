@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.domain
+package br.com.bragasaude.domain
 
 import br.com.bragasaude.domain.model.BloodPressureCategory
 import br.com.bragasaude.domain.util.BloodPressureParser
@@ -214,7 +214,12 @@ fun VoiceHealthIntent.toConfirmationDisplay(): ConfirmationDisplayData {
             val (spoken, stageBadge, stageIdx) = when (result.category) {
                 BloodPressureCategory.OPTIMAL -> Triple(
                     "De acordo com a Sociedade Brasileira de Cardiologia, a sua pressão se encontra dentro do ideal. Deseja confirmar e salvar?",
-                    "Dentro do Ideal",
+                    "Pressão Ótima",
+                    0
+                )
+                BloodPressureCategory.NORMAL -> Triple(
+                    "De acordo com a Sociedade Brasileira de Cardiologia, a sua pressão se encontra na faixa normal. Deseja confirmar e salvar?",
+                    "Pressão Normal",
                     0
                 )
                 BloodPressureCategory.PREHYPERTENSION -> Triple(

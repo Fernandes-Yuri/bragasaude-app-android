@@ -70,27 +70,29 @@ object BloodPressureParser {
      * Compara os valores com as faixas de consultório para adultos da diretriz de 2025.
      */
     fun classify(systolic: Int, diastolic: Int): BloodPressureResult {
-        // Referência para medidas de consultório em adultos; uma medida isolada não é diagnóstico.
+        // Classificação canônica conforme Diretrizes Brasileiras de Hipertensão Arterial (SBC)
         val category = when {
+            systolic < 90 || diastolic < 60 -> BloodPressureCategory.HYPOTENSION
             systolic >= 180 || diastolic >= 110 -> BloodPressureCategory.STAGE_3_HYPERTENSION
             systolic >= 160 || diastolic >= 100 -> BloodPressureCategory.STAGE_2_HYPERTENSION
             systolic >= 140 || diastolic >= 90 -> BloodPressureCategory.STAGE_1_HYPERTENSION
-            systolic >= 120 || diastolic >= 80 -> BloodPressureCategory.PREHYPERTENSION
-            systolic < 90 || diastolic < 60 -> BloodPressureCategory.HYPOTENSION
+            systolic >= 130 || diastolic >= 85 -> BloodPressureCategory.PREHYPERTENSION
+            systolic >= 120 || diastolic >= 80 -> BloodPressureCategory.NORMAL
             else -> BloodPressureCategory.OPTIMAL
         }
+        val isNormal = category == BloodPressureCategory.OPTIMAL || category == BloodPressureCategory.NORMAL
         return BloodPressureResult(
             systolic = systolic,
             diastolic = diastolic,
             category = category,
-            isNormal = category == BloodPressureCategory.OPTIMAL,
+            isNormal = isNormal,
             requiresMedicalAttention = category in listOf(
                 BloodPressureCategory.STAGE_1_HYPERTENSION,
                 BloodPressureCategory.STAGE_2_HYPERTENSION,
                 BloodPressureCategory.STAGE_3_HYPERTENSION
             ),
-            explanatoryDetail = "Registro de $systolic/$diastolic mmHg. Referência para adultos em consultório; uma medição isolada não estabelece diagnóstico. Converse com um profissional de saúde sobre seus registros.",
-            institution = "Diretriz Brasileira de Hipertensão Arterial 2025"
+            explanatoryDetail = "Registro de $systolic/$diastolic mmHg. Classificado como ${category.displayName} conforme as Diretrizes Brasileiras de Hipertensão Arterial (SBC). Uma medição isolada não estabelece diagnóstico. Converse com um profissional de saúde sobre seus registros.",
+            institution = "Diretriz Brasileira de Hipertensão Arterial (SBC)"
         )
     }
 
