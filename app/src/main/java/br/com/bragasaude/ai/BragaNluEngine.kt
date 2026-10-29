@@ -102,10 +102,6 @@ object BragaNluEngine {
         "(beber água|sede|beber agua|pouca água|quantos copos|chá conta como água|substituir água)",
         RegexOption.IGNORE_CASE
     )
-    private val REGEX_DUVIDA_ALIMENTACAO = Regex(
-        "(alimentação|digestão|colesterol|banana com aveia|sopa de legumes|café puro de estômago)",
-        RegexOption.IGNORE_CASE
-    )
     private val REGEX_DUVIDA_SONO = Regex(
         "(insônia|insonia|pregar o olho|não consigo dormir|perco o sono|dormir à noite|acordo de madrugada)",
         RegexOption.IGNORE_CASE
@@ -247,12 +243,6 @@ object BragaNluEngine {
             "Deixar água por perto ajuda a lembrar. A quantidade adequada deve considerar seu acompanhamento de saúde.",
             "Você pode organizar pausas para beber água durante a rotina, respeitando eventuais restrições médicas.",
             "Vale acompanhar o que você bebe ao longo do dia. Converse com seu profissional sobre a meta adequada para você."
-        ),
-        "duvida_alimentacao_rotina" to listOf(
-            "A alimentação pode ser organizada de acordo com sua rotina e necessidades. Um nutricionista pode ajudar a ajustar isso.",
-            "Posso conversar sobre hábitos alimentares. Para mudanças específicas de dieta, procure orientação profissional.",
-            "Vale observar como a alimentação se encaixa no seu dia. Evite restrições por conta própria e converse com um nutricionista.",
-            "Suas preferências e seu acompanhamento de saúde fazem diferença na alimentação. Um profissional pode orientar escolhas individuais."
         ),
         "duvida_sono_insonia" to listOf(
             "Como anda sua rotina antes de dormir? Se a dificuldade persistir, vale conversar com um profissional de saúde.",
@@ -426,6 +416,7 @@ object BragaNluEngine {
         emergency.intent?.let { intent ->
             return NluOutput(intent, sortearResposta(intent), isEmergencia = true, tempoMs = deltaMs(inicio))
         }
+        BragaProductScope.answer(texto)?.let { return it.copy(tempoMs = deltaMs(inicio)) }
         if (Regex("""^(?:eu )?(?:to|tou|estou) (?:passando mal|me sentindo mal)(?: agora)?[.!? ]*$""").matches(protegido)) return NluOutput(
             "sintoma_mal_estar_atual",
             // Ministério da Saúde: gov.br/saude/pt-br/assuntos/saude-de-a-a-z/i/infarto
@@ -497,9 +488,6 @@ object BragaNluEngine {
         }
         if (REGEX_DUVIDA_AGUA.containsMatchIn(limpo)) {
             return NluOutput("duvida_hidratacao_agua", sortearResposta("duvida_hidratacao_agua"), tempoMs = deltaMs(inicio))
-        }
-        if (REGEX_DUVIDA_ALIMENTACAO.containsMatchIn(limpo)) {
-            return NluOutput("duvida_alimentacao_rotina", null, delegarParaNuvem = true, tempoMs = deltaMs(inicio))
         }
         if (REGEX_DUVIDA_SONO.containsMatchIn(limpo)) {
             return NluOutput("duvida_sono_insonia", sortearResposta("duvida_sono_insonia"), tempoMs = deltaMs(inicio))

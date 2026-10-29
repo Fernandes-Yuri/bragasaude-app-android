@@ -42,13 +42,15 @@ class MainScaffoldRouteMatchingTest {
         assertTrue(isCurrentRoute("br.com.bragasaude.ui.util.Screen.Vitals?type=GLUCOSE", Screen.Vitals()))
         assertFalse(isCurrentRoute("br.com.bragasaude.ui.util.Screen.ProfileEdit", Screen.Profile))
     }
-    @Test fun `orbe aparece nas visoes gerais com argumentos de navegacao`() {
+    @Test fun `orbe aparece somente na Home e nos Relatorios`() {
         assertTrue(shouldShowAssistantOrb("Screen\$Home"))
         assertTrue(shouldShowAssistantOrb("Screen\$Report"))
-        assertTrue(shouldShowAssistantOrb("Screen\$Vitals?type=PRESSURE"))
-        assertTrue(shouldShowAssistantOrb("Screen\$Hydration?initialMl=200"))
-        assertTrue(shouldShowAssistantOrb("Screen\$Steps"))
-        assertTrue(shouldShowAssistantOrb("Screen\$Reminders"))
+        assertTrue(shouldShowAssistantOrb("br.com.bragasaude.ui.util.Screen.Home"))
+        assertFalse(shouldShowAssistantOrb("br.com.bragasaude.ui.util.Screen.Vitals?type=PRESSURE"))
+        assertFalse(shouldShowAssistantOrb("Screen\$Vitals?type=PRESSURE"))
+        assertFalse(shouldShowAssistantOrb("Screen\$Hydration?initialMl=200"))
+        assertFalse(shouldShowAssistantOrb("Screen\$Steps"))
+        assertFalse(shouldShowAssistantOrb("Screen\$Reminders"))
     }
 
     @Test fun `orbe nao cobre informacoes no painel de acompanhamento`() {
@@ -64,12 +66,12 @@ class MainScaffoldRouteMatchingTest {
         }
     }
 
-    @Test fun `orbe permanece nos formularios de medidas abertos pelo assistente`() {
-        assertTrue(shouldShowAssistantOrb("Screen\$Vitals?type=PRESSURE&initialValue=120/80"))
-        assertTrue(shouldShowAssistantOrb("Screen\$HealthReadings?metric=HEART_RATE"))
-        assertTrue(shouldShowAssistantOrb("Screen\$HealthReadings/{metric}?initialValue={initialValue}"))
-        assertTrue(shouldShowAssistantOrb("Screen\$HealthReadings/OXYGEN_SATURATION?initialValue=98"))
-        assertTrue(shouldShowAssistantOrb("Screen\$Biometry"))
+    @Test fun `orbe fica oculta inclusive nos formularios abertos pelo assistente`() {
+        assertFalse(shouldShowAssistantOrb("Screen\$Vitals?type=PRESSURE&initialValue=120/80"))
+        assertFalse(shouldShowAssistantOrb("Screen\$HealthReadings?metric=HEART_RATE"))
+        assertFalse(shouldShowAssistantOrb("Screen\$HealthReadings/{metric}?initialValue={initialValue}"))
+        assertFalse(shouldShowAssistantOrb("Screen\$HealthReadings/OXYGEN_SATURATION?initialValue=98"))
+        assertFalse(shouldShowAssistantOrb("Screen\$Biometry"))
     }
 
     @Test fun `rota desconhecida nao cria sobreposicao por padrao`() {

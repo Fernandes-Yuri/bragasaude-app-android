@@ -158,6 +158,7 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(bottom = br.com.bragasaude.ui.components.AssistantOrbScrollClearance),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item { Spacer(Modifier.height(4.dp)) }
@@ -423,7 +424,6 @@ fun HomeScreen(
                     )
                 }
 
-                item { Spacer(Modifier.height(40.dp)) }
             }
         }
     }

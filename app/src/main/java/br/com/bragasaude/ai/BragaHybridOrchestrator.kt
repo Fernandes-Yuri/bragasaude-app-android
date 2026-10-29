@@ -28,6 +28,7 @@ class BragaHybridOrchestrator internal constructor(
     fun analyze(speech: String, channel: InputChannel, session: HealthQuerySession,
                 userId: String, conversationId: String): NluOutput {
         val local = analyze(speech, channel)
+        if (local.intent in setOf(BragaProductScope.RETIRED, BragaProductScope.DOSES)) return local
         if (!local.isBloqueioSeguranca && !local.isEmergencia && local.intent != "entrada_linguagem_ambigua") {
             session.contextualAnswer(speech, userId, conversationId)?.let { return it }
         }

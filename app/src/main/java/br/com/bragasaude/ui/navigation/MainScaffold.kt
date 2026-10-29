@@ -1,5 +1,8 @@
 package br.com.bragasaude.ui.navigation
 
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -38,9 +41,7 @@ fun MainScaffold(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val appContext = LocalContext.current.applicationContext
-    val isVoiceSessionActive by voiceViewModel.isSessionActive.collectAsState()
-
-    val showOrb = (shouldShowAssistantOrb(currentRoute) || isVoiceSessionActive) &&
+    val showOrb = shouldShowAssistantOrb(currentRoute) &&
         AppPreferences.isVoiceAssistantEnabled(appContext)
 
     // ==================== Itens de navegação por papel ====================
@@ -74,6 +75,7 @@ fun MainScaffold(
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets.safeDrawing,
             bottomBar = {
                 NavigationBar(
                     modifier = Modifier.height(64.dp),
@@ -107,7 +109,7 @@ fun MainScaffold(
                 }
             }
         ) { innerPadding ->
-            Box(Modifier.fillMaxSize().padding(innerPadding)) {
+            Box(Modifier.fillMaxSize().padding(innerPadding).consumeWindowInsets(innerPadding)) {
                 AppNavHost(
                     navController = navController,
                     startDestination = startDestination,
@@ -116,15 +118,15 @@ fun MainScaffold(
                     modifier = Modifier.fillMaxSize()
                 )
 
+                // O arraste fica limitado à área útil, acima da barra de navegação.
+                if (showOrb) {
+                    DraggableAiAssistantFab(
+                        onNavigate = { screen -> navController.navigate(screen) },
+                        modifier = Modifier.fillMaxSize(),
+                        viewModel = voiceViewModel
+                    )
+                }
             }
-        }
-
-        if (showOrb) {
-            DraggableAiAssistantFab(
-                onNavigate = { screen -> navController.navigate(screen) },
-                modifier = Modifier.fillMaxSize(),
-                viewModel = voiceViewModel
-            )
         }
     }
 }
@@ -163,11 +165,5 @@ internal fun isCurrentRoute(currentRoute: String?, screen: Screen): Boolean {
 internal fun shouldShowAssistantOrb(currentRoute: String?): Boolean =
     listOf(
         Screen.Home,
-        Screen.Report,
-        Screen.Hydration(),
-        Screen.Steps,
-        Screen.Reminders,
-        Screen.Vitals(),
-        Screen.HealthReadings("HEART_RATE"),
-        Screen.Biometry
+        Screen.Report
     ).any { isCurrentRoute(currentRoute, it) }

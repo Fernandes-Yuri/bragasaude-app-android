@@ -229,6 +229,8 @@ fun DraggableAiAssistantFab(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            // Ao abrir um formulário, não deixar escuta ou retomada sem controle visível.
+            viewModel.onHostStopped()
         }
     }
 
@@ -247,6 +249,7 @@ fun DraggableAiAssistantFab(
                     onNavigate(Screen.Hydration(initialMl = event.addMl, autoOpenDialog = event.openCustomDialog))
                 }
 
+                is VoiceNavigationEvent.NavigateToDoses -> onNavigate(Screen.Reminders)
                 is VoiceNavigationEvent.OpenEmergencyDialog -> {
                     showEmergencyDialog = true
                 }
@@ -286,14 +289,15 @@ fun DraggableAiAssistantFab(
         val density = LocalDensity.current
         val fabSizePx = with(density) { 72.dp.toPx() }
         val marginPx = with(density) { 16.dp.toPx() }
-        val navBarClearancePx = with(density) { 92.dp.toPx() }
+        // O container já exclui as barras do sistema e a navegação do app.
+        val bottomMarginPx = marginPx
         val screenWidthPx = constraints.maxWidth.toFloat()
         val maxX = (screenWidthPx - fabSizePx).coerceAtLeast(0f)
         val maxY = (constraints.maxHeight.toFloat() - fabSizePx).coerceAtLeast(0f)
 
         // Posição inicial padrão: canto inferior direito, acima da NavigationBar
         val offsetX = remember { Animatable((maxX - marginPx).coerceAtLeast(0f)) }
-        val offsetY = remember { Animatable((maxY - navBarClearancePx).coerceIn(0f, maxY)) }
+        val offsetY = remember { Animatable((maxY - bottomMarginPx).coerceIn(0f, maxY)) }
         val scope = rememberCoroutineScope()
 
         LaunchedEffect(maxX, maxY) {

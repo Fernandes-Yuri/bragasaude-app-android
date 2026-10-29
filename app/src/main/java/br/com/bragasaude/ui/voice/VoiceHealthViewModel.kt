@@ -68,6 +68,7 @@ sealed interface VoiceUiState {
 sealed interface VoiceNavigationEvent {
     data class NavigateToVitals(val type: String, val value: String) : VoiceNavigationEvent
     data class NavigateToHydration(val addMl: Int? = null, val openCustomDialog: Boolean = true) : VoiceNavigationEvent
+    object NavigateToDoses : VoiceNavigationEvent
     object OpenEmergencyDialog : VoiceNavigationEvent
 }
 
@@ -602,6 +603,14 @@ class VoiceHealthViewModel @Inject constructor(
             // Antes de preferências, parser, telemetria de conversa ou qualquer rede.
             if (local.isBloqueioSeguranca) {
                 hydrationConversation.reset()
+                showLocalResponse(local)
+                return
+            }
+            if (local.intent == br.com.bragasaude.ai.BragaProductScope.DOSES) {
+                hydrationConversation.reset()
+                if (currentUserRole != "CAREGIVER" || currentCaregiverMode == "HYBRID") {
+                    navigateForVoice(VoiceNavigationEvent.NavigateToDoses)
+                }
                 showLocalResponse(local)
                 return
             }
