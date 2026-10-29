@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.ui
+package br.com.bragasaude.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,6 +31,9 @@ class MainViewModel @Inject constructor(
     private val _notificationPromptSignal = MutableSharedFlow<Unit>()
     val notificationPromptSignal = _notificationPromptSignal.asSharedFlow()
 
+    private val _permissionUpdatedSignal = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val permissionUpdatedSignal = _permissionUpdatedSignal.asSharedFlow()
+
     private val shownRisks = mutableSetOf<String>()
 
     init {
@@ -55,6 +58,12 @@ class MainViewModel @Inject constructor(
     fun triggerNotificationPrompt() {
         viewModelScope.launch {
             _notificationPromptSignal.emit(Unit)
+        }
+    }
+
+    fun notifyPermissionResult() {
+        viewModelScope.launch {
+            _permissionUpdatedSignal.emit(Unit)
         }
     }
 
