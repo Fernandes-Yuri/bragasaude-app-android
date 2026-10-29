@@ -5,11 +5,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import android.content.Context
 import br.com.bragasaude.data.local.organizer.OrganizerStore
-import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
-import com.tom_roush.pdfbox.pdmodel.PDDocument
-import com.tom_roush.pdfbox.pdmodel.PDPage
-import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
-import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -22,23 +19,16 @@ import java.util.UUID
 class OrganizerSessionInstrumentedTest {
     @Test fun organizaDoisDocumentosRemoveUmEInvalidaResultado() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        PDFBoxResourceLoader.init(context)
         val store = OrganizerStore(context)
         check(store.restore() == null) { "Use uma instalação de teste sem sessão existente." }
         val sources = (1..2).map { number ->
             File(context.cacheDir, "shared_pdfs/teste-${UUID.randomUUID()}.pdf").apply {
                 parentFile?.mkdirs()
-                PDDocument().use { document ->
-                    val page = PDPage()
-                    document.addPage(page)
-                    PDPageContentStream(document, page).use { stream ->
-                        stream.beginText()
-                        stream.setFont(PDType1Font.HELVETICA, 12f)
-                        stream.newLineAtOffset(40f, 700f)
-                        stream.showText("DOCUMENTO FICTICIO DE EXAME $number")
-                        stream.endText()
-                    }
-                    document.save(this)
+                PdfDocument().use { document ->
+                    val page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
+                    page.canvas.drawText("DOCUMENTO FICTICIO DE EXAME $number", 40f, 100f, Paint().apply { textSize = 16f })
+                    document.finishPage(page)
+                    outputStream().use { document.writeTo(it) }
                 }
             }
         }
