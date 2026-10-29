@@ -64,6 +64,7 @@ android {
 
     buildTypes {
         release {
+            buildConfigField("boolean", "EXAM_SCREENSHOTS_ENABLED", "false")
             applicationIdSuffix = ""
             isMinifyEnabled = true
             isShrinkResources = true
@@ -76,6 +77,8 @@ android {
             )
         }
         debug {
+            buildConfigField("boolean", "EXAM_SCREENSHOTS_ENABLED",
+                (providers.gradleProperty("testLabExamScreenshots").orNull == "true").toString())
             isDebuggable = true
             // APK interno: mantém o applicationId/Firebase da produção e pode
             // atualizar a instalação release, mas continua com BuildConfig.DEBUG=true.
