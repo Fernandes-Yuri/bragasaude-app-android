@@ -160,7 +160,7 @@ fun MedicationDosePanel(
                                 border = BorderStroke(1.dp, BragaMintBorder)
                             ) {
                                 Text(
-                                    "✓ Administrado",
+                                    "Administrado",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = BragaEmeraldDark,
@@ -221,7 +221,7 @@ fun MedicationDosePanel(
                                 }
                                 val detail = when {
                                     item.occurrenceId in state.reserved && item.state != "recorded" -> "Confirmação salva neste aparelho"
-                                    item.state == "recorded" -> "✓ Registrado como tomado"
+                                    item.state == "recorded" -> "Registrado como tomado"
                                     item.reason != null -> when (item.reason) {
                                         "quantity_required" -> "Defina a quantidade de comprimidos por dose"
                                         "insufficient_stock" -> "Estoque insuficiente para registrar"
