@@ -136,7 +136,7 @@ fun MedicationDosePanel(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(Modifier.weight(1f).padding(end = 10.dp)) {
                             Text(
                                 text = group.time,
                                 fontSize = 22.sp,
@@ -152,7 +152,7 @@ fun MedicationDosePanel(
                             }
                         }
 
-                        val allRecorded = group.items.all { it.state == "recorded" || it.occurrenceId in state.reserved }
+                        val allRecorded = group.items.isNotEmpty() && group.items.all { it.state == "recorded" }
                         if (allRecorded) {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
@@ -164,7 +164,9 @@ fun MedicationDosePanel(
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = BragaEmeraldDark,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.wrapContentWidth().padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
                             }
                         } else if (available.isNotEmpty()) {
@@ -177,7 +179,9 @@ fun MedicationDosePanel(
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFFB45309),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.wrapContentWidth().padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
                             }
                         } else if (group.items.any { it.reason == "quantity_required" }) {
@@ -186,10 +190,12 @@ fun MedicationDosePanel(
                                 color = Color(0xFFF1F5F9)
                             ) {
                                 Text(
-                                    "Requer confirmação de dose",
+                                    "Definir dose",
                                     fontSize = 12.sp,
                                     color = BragaTextSecondary,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.wrapContentWidth().padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
                             }
                         }
@@ -302,6 +308,10 @@ fun MedicationDosePanel(
                         }
                     }
 
+                    if (group.items.isNotEmpty() && group.items.all { it.state == "recorded" }) {
+                        Text("Todas as doses deste horário estão confirmadas.", color = BragaEmeraldDark)
+                    }
+
                     if (group.instant.isAfter(Instant.ofEpochMilli(nowMillis))) {
                         Text(
                             "A confirmação será liberada no horário desta dose (${group.time}).",
@@ -315,7 +325,9 @@ fun MedicationDosePanel(
         state.intents.take(12).forEach { intent ->
             Text(
                 when (intent.state) {
-                    "RESOLVED" -> intent.message ?: "Resultado recebido."
+                    "RESOLVED" -> intent.result?.let {
+                        runCatching { br.com.bragasaude.data.medicationdoses.DoseProtocol.friendlySummary(JSONObject(it)) }.getOrNull()
+                    } ?: "Confirmação processada. Confira as doses acima."
                     "REVIEW" -> "Esta confirmação precisa de revisão."
                     "ACCESS_LOST" -> "O acesso aos dados desta pessoa foi perdido."
                     "CANCELLED" -> "Proposta cancelada."

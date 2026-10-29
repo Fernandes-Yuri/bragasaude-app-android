@@ -42,6 +42,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.local.MedicationEntity
+import br.com.bragasaude.data.medicationdoses.medicationStockDose
+import br.com.bragasaude.data.medicationdoses.MedicationStockDose
+import br.com.bragasaude.ui.medication.doses.MedicationDoseViewModel
+import java.time.Instant
 import br.com.bragasaude.domain.MedicationSchedule
 import br.com.bragasaude.ui.care.CareOsViewModel
 import br.com.bragasaude.ui.care.CareAuthenticationRequired
@@ -80,6 +84,16 @@ fun MedicationStockScreen(
     viewModel: CareOsViewModel = hiltViewModel()
 ) {
     val ui by viewModel.ui.collectAsState()
+    val doseViewModel: MedicationDoseViewModel = hiltViewModel(key = "stock-doses-${ui.selectedPatientId}")
+    val doses by doseViewModel.state.collectAsState()
+    var selectedOccurrence by remember(ui.selectedPatientId) { mutableStateOf<String?>(null) }
+    var now by remember { mutableStateOf(Instant.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = Instant.now()
+            kotlinx.coroutines.delay(30_000)
+        }
+    }
     val doseContext = androidx.compose.ui.platform.LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     var showAddChoice by remember { mutableStateOf(false) }
@@ -100,6 +114,53 @@ fun MedicationStockScreen(
         if (id != null) accessCode = viewModel.medicationAccess(id)
     }
     val accessAllowed = accessCode == 200 && ui.selectedPatientId != null
+
+    LaunchedEffect(accessAllowed, ui.selectedPatientId, resumeCount) {
+        if (accessAllowed) {
+            val patient = ui.selectedPatient.id
+            if (doses.patient != patient) doseViewModel.open(patient) else doseViewModel.refresh()
+        }
+    }
+    LaunchedEffect(doses.message) {
+        doses.message?.let { snackbarHostState.showSnackbar(it) }
+    }
+    val dosesReady = accessAllowed && doses.accessVerified && doses.patient == ui.selectedPatientId
+    LaunchedEffect(dosesReady) { if (!dosesReady) selectedOccurrence = null }
+    val openAllDoses = {
+        doseContext.startActivity(Intent(doseContext, br.com.bragasaude.ui.medication.doses.MedicationDoseActivity::class.java)
+            .putExtra("patient", ui.selectedPatient.id)
+            .putExtra("patientName", ui.selectedPatient.name)
+            .putExtra("canTake", ui.selectedPatient.canTakeMedication)
+            .putExtra("canEdit", ui.selectedPatient.canWriteMedication))
+    }
+    if (selectedOccurrence != null && dosesReady) {
+        val group = doses.groups.firstOrNull { row -> row.items.any { it.occurrenceId == selectedOccurrence } }
+        val item = group?.items?.firstOrNull { it.occurrenceId == selectedOccurrence }
+        BragaBottomSheet(onDismissRequest = { selectedOccurrence = null }) {
+            Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Confirmar tomada", style = MaterialTheme.typography.titleLarge)
+                Text(ui.selectedPatient.name, style = MaterialTheme.typography.titleMedium)
+                if (group != null && item != null) {
+                    Text(item.name, fontWeight = FontWeight.Bold)
+                    Text("${group.date} às ${group.time} • ${item.units} unidade(s)")
+                    item.instruction?.let { Text(medicationInstructionLabel(it)) }
+                    Text("Confirme somente se esta dose já foi tomada.")
+                    Button(
+                        onClick = {
+                            doseViewModel.submit(group, setOf(item.occurrenceId))
+                            selectedOccurrence = null
+                        },
+                        enabled = ui.selectedPatient.canTakeMedication && !doses.busy && item.eligible &&
+                            item.occurrenceId !in doses.reserved && !group.instant.isAfter(Instant.now()),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    ) { Text("Confirmar dose tomada") }
+                } else {
+                    Text("A programação mudou. Feche e confira os horários atualizados.")
+                }
+                TextButton(onClick = { selectedOccurrence = null }, modifier = Modifier.fillMaxWidth()) { Text("Cancelar") }
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.ui.collectLatest { state ->
@@ -416,27 +477,24 @@ fun MedicationStockScreen(
                         }
                     }
                     item {
-                        OutlinedButton(onClick = {
-                            doseContext.startActivity(Intent(doseContext, br.com.bragasaude.ui.medication.doses.MedicationDoseActivity::class.java)
-                                .putExtra("patient", ui.selectedPatient.id)
-                                .putExtra("patientName", ui.selectedPatient.name)
-                                .putExtra("canTake", ui.selectedPatient.canTakeMedication)
-                                .putExtra("canEdit", ui.selectedPatient.canWriteMedication))
-                        }, modifier = Modifier.fillMaxWidth()) { Text("Ver doses por horário") }
+                        TextButton(onClick = openAllDoses, modifier = Modifier.fillMaxWidth()) { Text("Ver todas as doses por horário") }
+                        if (!dosesReady) {
+                            Text(doses.accessMessage ?: "Atualizando doses...", color = BragaTextSecondary)
+                            if (!doses.busy) TextButton(onClick = { doseViewModel.refresh() }) { Text("Atualizar doses") }
+                        }
                     }
                     items(ui.medications, key = { it.id }) { med ->
+                        val dose = if (dosesReady) medicationStockDose(med.id, doses.groups, doses.reserved, now)
+                            else MedicationStockDose(label = "Atualizando doses...", detail = "Aguarde a verificação dos horários.")
                         MedicationStockCard(
                             medication = med,
                             daysRemaining = viewModel.daysRemaining(med),
                             isCritical = viewModel.isStockCritical(med),
-                            isDoseBlocked = viewModel.isDoseBlocked(med.id),
-                            hoursUntilNextDose = viewModel.hoursUntilNextDose(med.id),
+                            dose = dose,
+                            doseActionEnabled = dosesReady && !doses.busy,
                             onTake = {
-                                doseContext.startActivity(android.content.Intent(doseContext,br.com.bragasaude.ui.medication.doses.MedicationDoseActivity::class.java)
-                                    .putExtra("patient",ui.selectedPatient.id)
-                                    .putExtra("patientName",ui.selectedPatient.name)
-                                    .putExtra("canTake",ui.selectedPatient.canTakeMedication)
-                                    .putExtra("canEdit",ui.selectedPatient.canWriteMedication))
+                                if (dose.canConfirm) selectedOccurrence = dose.item?.occurrenceId
+                                else openAllDoses()
                             },
                             onSendReminder = {
                                 val times = MedicationSchedule.times(med.scheduleTimes, med.scheduleTime)
@@ -646,8 +704,8 @@ private fun MedicationStockCard(
     medication: MedicationEntity,
     daysRemaining: Double,
     isCritical: Boolean,
-    isDoseBlocked: Boolean = false,
-    hoursUntilNextDose: Int = 0,
+    dose: MedicationStockDose,
+    doseActionEnabled: Boolean,
     onTake: () -> Unit,
     onSendReminder: () -> Unit = {},
     onRestock: (Int) -> Unit,
@@ -977,58 +1035,19 @@ private fun MedicationStockCard(
                 }
             }
 
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 if (canTake) {
-                    if (isDoseBlocked) {
-                        Button(
-                            onClick = {},
-                            enabled = false,
-                            colors = ButtonDefaults.buttonColors(
-                                disabledContainerColor = BragaMintSurface,
-                                disabledContentColor = BragaEmeraldDark
-                            ),
-                            border = BorderStroke(1.dp, BragaMintBorder),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp)
-                        ) {
-                            Icon(
-                                Icons.Filled.CheckCircle,
-                                contentDescription = null,
-                                tint = BragaEmeraldDark,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "Dose tomada",
-                                color = BragaEmeraldDark,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    } else {
-                        Button(
-                            onClick = onTake,
-                            enabled = !loading,
-                            colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp)
-                        ) {
-                            Icon(Icons.Filled.CheckCircle, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "Ver Doses",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                    Button(
+                        onClick = onTake,
+                        enabled = !loading && doseActionEnabled,
+                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    ) {
+                        Text(dose.label, fontSize = 13.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                     }
                 } else {
                     Button(
@@ -1036,8 +1055,8 @@ private fun MedicationStockCard(
                         enabled = !loading,
                         colors = ButtonDefaults.buttonColors(containerColor = BragaEmeraldDark),
                         modifier = Modifier
-                            .weight(1f)
-                            .height(44.dp)
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
                     ) {
                         Icon(Icons.Filled.NotificationsActive, contentDescription = null, tint = Color.White)
                         Spacer(Modifier.width(8.dp))
@@ -1048,8 +1067,8 @@ private fun MedicationStockCard(
                     onClick = { showRestock = !showRestock },
                     enabled = canRestock,
                     modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
                 ) {
                     Text(
                         "Reabastecer",
@@ -1061,14 +1080,7 @@ private fun MedicationStockCard(
                 }
             }
 
-            if (isDoseBlocked && hoursUntilNextDose > 0) {
-                Text(
-                    text = "Dose registrada. Próxima dose liberada em ${hoursUntilNextDose}h.",
-                    fontSize = 12.sp,
-                    color = BragaTextSecondary,
-                    modifier = Modifier.padding(start = 4.dp, top = 2.dp)
-                )
-            }
+            Text(dose.detail, fontSize = 13.sp, color = BragaTextSecondary)
 
             if (showRestock) {
                 OutlinedTextField(

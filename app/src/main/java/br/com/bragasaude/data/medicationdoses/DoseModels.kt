@@ -64,6 +64,17 @@ object DoseProtocol {
         }
     }
     fun selection(json: String) = JSONArray(json).let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
+    fun friendlySummary(result: JSONObject): String {
+        val counts = result.optJSONObject("counts")
+        return when {
+            (counts?.optInt("blocked") ?: 0) > 0 -> "Algumas doses precisam de revisão. Confira os horários."
+            (counts?.optInt("excluded") ?: 0) > 0 -> "Confira os horários: algumas doses não foram registradas."
+            result.optString("state") in setOf("failed", "cancelled", "expired") -> "A confirmação não foi concluída. Confira os horários."
+            (counts?.optInt("recorded") ?: 0) + (counts?.optInt("already_recorded") ?: 0) > 0 -> "Doses confirmadas com sucesso."
+            else -> "Confirmação processada. Confira os horários."
+        }
+    }
+
     fun summary(result: JSONObject): String {
         val c=result.optJSONObject("counts") ?: return "Operação ${result.getString("state")}."
         return "${c.optInt("recorded")} registros novos; ${c.optInt("already_recorded")} já registrados; " +

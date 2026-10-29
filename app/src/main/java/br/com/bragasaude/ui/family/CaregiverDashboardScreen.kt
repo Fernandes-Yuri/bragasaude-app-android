@@ -108,7 +108,9 @@ fun CaregiverDashboardScreen(
 ) {
     val watchedPatients by viewModel.watchedPatients.collectAsState()
     val dashboard by viewModel.dashboard.collectAsState()
-    val quickTemplates by viewModel.quickTemplates.collectAsState()
+    val messages by remember(dashboard.patientUserId) {
+        viewModel.recentMessages(dashboard.patientUserId)
+    }.collectAsState(initial = emptyList())
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -364,9 +366,9 @@ fun CaregiverDashboardScreen(
 
 
                 item {
-                    QuickMessagesCard(
-                        templates = quickTemplates,
-                        onSend = { key -> viewModel.sendQuickMessage(key) }
+                    FamilyChatAccessCard(
+                        latestMessage = messages.maxByOrNull { it.sentAt },
+                        onOpenChat = onOpenChat
                     )
                 }
 
@@ -831,118 +833,41 @@ private fun ActionChip(
  */
 
 
-// ==================== MENSAGENS RAPIDAS ====================
-
 @Composable
-private fun QuickMessagesCard(
-    templates: Map<String, br.com.bragasaude.data.remote.repository.MessageTemplate>,
-    onSend: (String) -> Unit
+private fun FamilyChatAccessCard(
+    latestMessage: br.com.bragasaude.data.local.FamilyMessageEntity?,
+    onOpenChat: () -> Unit
 ) {
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Column(Modifier.padding(20.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Message,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                Icon(Icons.Default.Forum, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Conversa Familiar", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        latestMessage?.let {
+                            "Último recado: " + android.text.format.DateUtils.getRelativeTimeSpanString(
+                                it.sentAt, System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS
+                            )
+                        } ?: "Toque para falar com seu familiar",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    "Mensagens rapidas",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
             }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Um toque e o recado chega na tela do seu familiar.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(14.dp))
-
-            val labels = mapOf(
-                "water" to "Meta de agua",
-                "medication" to "Medicacao em dia",
-                "walk" to "Caminhada",
-                "love" to "Carinho",
-                "general" to "Saudade"
-            )
-            val iconMap = mapOf(
-                "water" to Icons.Default.WaterDrop,
-                "medication" to Icons.Default.Medication,
-                "walk" to Icons.AutoMirrored.Filled.DirectionsWalk,
-                "love" to Icons.Default.Favorite,
-                "general" to Icons.AutoMirrored.Filled.Message
-            )
-
-            val perRow = 3
-            val keys = templates.keys.toList()
-            keys.chunked(perRow).forEach { rowKeys ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    rowKeys.forEach { key ->
-                        Surface(
-                            onClick = { onSend(key) },
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(
-                                1.dp,
-                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 72.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(10.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    iconMap[key] ?: Icons.Default.Favorite,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    labels[key] ?: key,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    textAlign = TextAlign.Center,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 2
-                                )
-                            }
-                        }
-                    }
-                    repeat(perRow - rowKeys.size) {
-                        Spacer(Modifier.weight(1f))
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
+            latestMessage?.takeIf { !it.isRead }?.let {
+                Text(it.messageText, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            Button(onClick = onOpenChat, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                shape = RoundedCornerShape(14.dp)) {
+                Text("Abrir Chat Familiar", fontWeight = FontWeight.SemiBold)
             }
         }
     }

@@ -61,7 +61,10 @@ class MedicationDoseViewModel @Inject constructor(private val repository:Medicat
         refresh()
     }
     fun today() { _state.update { it.copy(selectedDate=null) };refresh() }
-    fun submit(group:DoseGroup,selected:Set<String>)=run { repository.submit(group,selected) }
+    fun submit(group:DoseGroup,selected:Set<String>)=run {
+        check(_state.value.accessVerified && _state.value.patient == group.patientId)
+        repository.submit(group,selected)
+    }
     fun reconcileAlarms()=run { repository.reschedule();"Preferência de avisos salva." }
     fun cancel(id:String)=run { repository.cancel(id) }
     fun edit(medication:String)=run {

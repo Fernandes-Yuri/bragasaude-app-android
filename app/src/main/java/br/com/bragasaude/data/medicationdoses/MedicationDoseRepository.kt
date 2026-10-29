@@ -173,7 +173,8 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
                     takenAt=Date.from(runCatching { Instant.parse(remote?.takenAt) }.getOrDefault(Instant.parse(intent.declaredAt))),scheduledFor="${local.toLocalDate()}T${local.toLocalTime()}",
                     actorId=remote?.actorId ?: if(item.getString("status")=="recorded") intent.actorId else null,unitsTaken=remote?.unitsTaken ?: units,careOsScheduledFor=instant.toString(),pendingSync=false))
             }
-            dao.putIntent(intent.copy(state="RESOLVED",result=result.toString(),message=DoseProtocol.summary(result)))
+            android.util.Log.d("MedicationDose", DoseProtocol.summary(result))
+            dao.putIntent(intent.copy(state="RESOLVED",result=result.toString(),message=DoseProtocol.friendlySummary(result)))
         }
         try {
             api.getMedicationStock(intent.patientId).forEach { item -> item.id?.let { database.medicationDao().applyAuthoritativeStock(it,item.currentUnits) } }

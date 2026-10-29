@@ -50,6 +50,39 @@ class HealthEngineTest {
     }
 
     @Test
+    fun `hydration saves once and silent analysis never consumes achievement`() = runBlocking {
+        val user = "user1"
+        val saved = mutableListOf<MilestoneEntity>()
+        val firebaseUser = mockk<com.google.firebase.auth.FirebaseUser>()
+        every { auth.currentUser } returns firebaseUser
+        every { firebaseUser.uid } returns user
+        coEvery { vitalsRepository.getVitalSignsSync(user) } returns emptyList()
+        coEvery { profileRepository.getProfile(user) } returns flowOf(ProfileEntity(userId = user, hydrationTargetMl = 2625))
+        coEvery { vitalsRepository.getVitalSigns(user) } returns flowOf(listOf(
+            br.com.bragasaude.data.local.VitalSignEntity(userId = user, hydrationMl = 2625, measuredAt = Date())
+        ))
+        coEvery { milestonesRepository.getMilestones(user) } answers { flowOf(saved.toList()) }
+        coEvery { milestonesRepository.saveMilestone(any()) } coAnswers {
+            val milestone = firstArg<br.com.bragasaude.data.remote.model.RemoteMilestone>()
+            saved.add(MilestoneEntity(remoteId = requireNotNull(milestone.id), userId = user,
+                title = milestone.title, description = milestone.description, badgeType = milestone.badgeType))
+        }
+        mockkObject(br.com.bragasaude.data.notification.HydrationNotifications)
+        try {
+            every { br.com.bragasaude.data.notification.HydrationNotifications.notifyOnce(any(), any(), any(), any(), any()) } returns true
+            val water = listOf(RemoteVitalSign(userId = user, hydrationMl = 250))
+            healthEngine.analyzeVitals(user, water, silent = true)
+            assertTrue(saved.isEmpty())
+            healthEngine.analyzeVitals(user, water)
+            healthEngine.analyzeVitals(user, water)
+            assertEquals(1, saved.size)
+            verify(exactly = 1) { br.com.bragasaude.data.notification.HydrationNotifications.notifyOnce(any(), user, any(), any(), any()) }
+        } finally {
+            unmockkObject(br.com.bragasaude.data.notification.HydrationNotifications)
+        }
+    }
+
+    @Test
     fun `moderate systolic must not suppress critical diastolic heart rate or glucose`() = runBlocking {
         coEvery { vitalsRepository.getVitalSignsSync("user1") } returns emptyList()
         val cases = listOf(
