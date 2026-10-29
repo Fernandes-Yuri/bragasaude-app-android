@@ -304,18 +304,6 @@ fun MedicationStockScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
                 },
-                actions = {
-                    if (accessAllowed && ui.selectedPatient.canWriteMedication) IconButton(
-                        onClick = { showAddChoice = true },
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Add,
-                            contentDescription = "Adicionar Medicamento",
-                            tint = Color.White
-                        )
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BragaEmerald,
                     titleContentColor = Color.White,
@@ -366,7 +354,6 @@ fun MedicationStockScreen(
                 if (accessCode != null) TextButton(onClick = { resumeCount++ }) { Text("Tentar novamente") }
                 return@Column
             }
-            Text("Medicamentos de ${ui.selectedPatient.name}", fontWeight = FontWeight.SemiBold)
             if (ui.medications.isEmpty()) {
                 EmptyStockCard(ui.selectedPatient.canWriteMedication) { showAddChoice = true }
             } else {
@@ -432,6 +419,7 @@ fun MedicationStockScreen(
                         OutlinedButton(onClick = {
                             doseContext.startActivity(Intent(doseContext, br.com.bragasaude.ui.medication.doses.MedicationDoseActivity::class.java)
                                 .putExtra("patient", ui.selectedPatient.id)
+                                .putExtra("patientName", ui.selectedPatient.name)
                                 .putExtra("canTake", ui.selectedPatient.canTakeMedication)
                                 .putExtra("canEdit", ui.selectedPatient.canWriteMedication))
                         }, modifier = Modifier.fillMaxWidth()) { Text("Ver doses por horário") }
@@ -446,6 +434,7 @@ fun MedicationStockScreen(
                             onTake = {
                                 doseContext.startActivity(android.content.Intent(doseContext,br.com.bragasaude.ui.medication.doses.MedicationDoseActivity::class.java)
                                     .putExtra("patient",ui.selectedPatient.id)
+                                    .putExtra("patientName",ui.selectedPatient.name)
                                     .putExtra("canTake",ui.selectedPatient.canTakeMedication)
                                     .putExtra("canEdit",ui.selectedPatient.canWriteMedication))
                             },
@@ -1032,7 +1021,7 @@ private fun MedicationStockCard(
                             Icon(Icons.Filled.CheckCircle, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "Doses",
+                                "Ver Doses",
                                 color = Color.White,
                                 fontSize = 14.sp,
                                 maxLines = 1,
