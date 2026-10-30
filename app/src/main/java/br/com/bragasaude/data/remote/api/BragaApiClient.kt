@@ -385,6 +385,32 @@ class BragaApiClient @Inject constructor(
         deleteRequest("$baseUrl/api/sync/social-post/$postId")
     }
 
+    suspend fun reportSocialPost(postId: String, userId: String, reason: String, details: String): Unit = withContext(Dispatchers.IO) {
+        val owner = java.net.URLEncoder.encode(userId, "UTF-8")
+        val result = postJsonDetailed("$baseUrl/api/social/posts/$postId/report?expected_user_id=$owner", JSONObject().apply {
+            put("reason", reason)
+            if (details.isNotBlank()) put("details", details.trim())
+        })
+        if (result.code !in 200..299 || result.body?.optString("status") != "reported") {
+            throw java.io.IOException(result.errorDetail?.takeIf { it.isNotBlank() && it != "null" }
+                ?: "Não foi possível enviar a denúncia. Verifique sua conexão e tente novamente.")
+        }
+    }
+
+    suspend fun blockSocialUser(targetUserId: String, userId: String): Boolean = withContext(Dispatchers.IO) {
+        val target = java.net.URLEncoder.encode(targetUserId, "UTF-8")
+        val owner = java.net.URLEncoder.encode(userId, "UTF-8")
+        postJson("$baseUrl/api/social/users/$target/block?expected_user_id=$owner", JSONObject())?.optString("status") == "blocked"
+    }
+
+    suspend fun getSocialHiddenUsers(userId: String): Set<String> = withContext(Dispatchers.IO) {
+        val owner = java.net.URLEncoder.encode(userId, "UTF-8")
+        val result = getJson("$baseUrl/api/social/blocks?expected_user_id=$owner", strict = true)
+            ?: throw java.io.IOException("Não foi possível atualizar os bloqueios do mural.")
+        val ids = result.getJSONArray("hidden_user_ids")
+        (0 until ids.length()).map { ids.getString(it) }.toSet()
+    }
+
     suspend fun getSocialFeed(currentUserId: String, limit: Int = 30): List<SocialPostEntity> = withContext(Dispatchers.IO) {
         try {
             val arr = getJsonArray("$baseUrl/api/social/feed?limit=$limit")

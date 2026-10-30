@@ -363,6 +363,45 @@ interface FeedbackDao {
 
 @Dao
 interface SocialFeedDao {
+    @Query("""SELECT sp.* FROM social_posts_local sp WHERE sp.isVisible = 1 AND NOT EXISTS (
+        SELECT 1 FROM social_user_blocks_local b WHERE b.userId = :viewerId AND b.blockedUserId = sp.userId
+    ) ORDER BY sp.createdAt DESC""")
+    fun getUnblockedFeed(viewerId: String): Flow<List<SocialPostEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertBlock(block: BlockedUserEntity)
+
+    @Query("SELECT * FROM social_user_blocks_local WHERE userId = :userId")
+    suspend fun getBlocks(userId: String): List<BlockedUserEntity>
+
+    @Query("UPDATE social_user_blocks_local SET pendingSync = 0 WHERE userId = :userId AND blockedUserId = :blockedUserId")
+    suspend fun acknowledgeBlock(userId: String, blockedUserId: String)
+
+    @Query("DELETE FROM social_user_blocks_local WHERE userId = :userId AND pendingSync = 0")
+    suspend fun deleteSyncedBlocks(userId: String)
+
+    @Query("DELETE FROM social_user_blocks_local WHERE userId = :userId")
+    suspend fun deleteBlocksByUser(userId: String)
+
+    @Query("""DELETE FROM post_reactions_local WHERE userId = :userId AND postId IN (
+        SELECT id FROM social_posts_local WHERE userId = :blockedUserId)""")
+    suspend fun deleteReactionsToBlockedUser(userId: String, blockedUserId: String)
+
+    @Transaction
+    suspend fun queueBlock(userId: String, blockedUserId: String) {
+        require(userId != blockedUserId) { "Você não pode bloquear sua própria conta." }
+        insertBlock(BlockedUserEntity(userId, blockedUserId, pendingSync = true))
+        deleteReactionsToBlockedUser(userId, blockedUserId)
+    }
+
+    @Transaction
+    suspend fun reconcileBlocks(userId: String, hiddenUserIds: Set<String>) {
+        deleteSyncedBlocks(userId)
+        hiddenUserIds.filter { it != userId }.forEach { insertBlock(BlockedUserEntity(userId, it)) }
+        // Uma resposta anterior à confirmação local nunca apaga bloqueios pendentes.
+        getBlocks(userId).forEach { deleteReactionsToBlockedUser(userId, it.blockedUserId) }
+    }
+
     /**
      * Aplica uma página e reconcilia só a janela confirmada pelo servidor.
      * expected é o snapshot anterior à requisição: mudanças posteriores são preservadas.

@@ -275,6 +275,13 @@ data class SocialPostEntity(
 
 )
 
+@Entity(tableName = "social_user_blocks_local", primaryKeys = ["userId", "blockedUserId"])
+data class BlockedUserEntity(
+    val userId: String,
+    val blockedUserId: String,
+    @androidx.room.ColumnInfo(defaultValue = "0") val pendingSync: Boolean = false
+)
+
 // Tabela legada inerte, sem concessão de XP ou DAO ativo.
 @Entity(tableName = "xp_awards_local", primaryKeys = ["userId", "date", "actionType"])
 data class XpAwardEntity(

@@ -21,6 +21,7 @@ import androidx.room.TypeConverters
         LeagueCycleEntity::class,
         LeagueMembershipEntity::class,
         SocialPostEntity::class,
+        BlockedUserEntity::class,
         PostReactionEntity::class,
         XpAwardEntity::class,
         FamilyBindingEntity::class,
@@ -35,7 +36,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 64, // Remoção durável de reações e seleção canônica do mural
+    version = 65, // Bloqueios do mural por conta, com sincronização durável
     exportSchema = true
 )
 @TypeConverters(Converters::class, SmokingSupportConverters::class)

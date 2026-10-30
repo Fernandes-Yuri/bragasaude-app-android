@@ -631,6 +631,14 @@ object Migrations {
         }
     }
 
+    val MIGRATION_64_65 = object : Migration(64, 65) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""CREATE TABLE IF NOT EXISTS `social_user_blocks_local` (
+                `userId` TEXT NOT NULL, `blockedUserId` TEXT NOT NULL,
+                `pendingSync` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`userId`, `blockedUserId`))""")
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -670,6 +678,7 @@ object Migrations {
         MIGRATION_60_61,
         MIGRATION_61_62,
         MIGRATION_62_63,
-        MIGRATION_63_64
+        MIGRATION_63_64,
+        MIGRATION_64_65
     )
 }
