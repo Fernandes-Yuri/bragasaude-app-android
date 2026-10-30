@@ -190,39 +190,45 @@ fun HomeScreen(
                         }
                         add(Triple("Mural", Icons.Default.Groups, br.com.bragasaude.ui.util.Screen.SocialFeed))
                     }
-                    // Com até 4 atalhos, distribui igualmente na largura disponível;
-                    // acima disso, mantém o espaçamento fixo com rolagem horizontal.
-                    val shortcutsArrangement = if (items.size <= 4) {
-                        Arrangement.SpaceEvenly
-                    } else {
-                        Arrangement.spacedBy(16.dp)
-                    }
+                    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                        val shortcutMinWidth = 64.dp
+                        val shortcutSpacing = 16.dp
+                        val totalNeeded = shortcutMinWidth * items.size + shortcutSpacing * (items.size - 1)
+                        // Centraliza o conjunto quando cabe; preserva o espaçamento e a
+                        // rolagem quando falta espaço, inclusive com rótulos ampliados.
+                        val shortcutsArrangement = Arrangement.spacedBy(
+                            shortcutSpacing,
+                            if (maxWidth > totalNeeded) Alignment.CenterHorizontally else Alignment.Start
+                        )
 
-                    LazyRow(
-                        horizontalArrangement = shortcutsArrangement,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(items.size) { index ->
-                            val (label, icon, route) = items[index]
-                            val interactionSource = remember { MutableInteractionSource() }
-                            BragaSubtleRipple(color = BragaEmerald) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.clickable(interactionSource = interactionSource, indication = null) { onNavigateToScreen(route) }
-                                ) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = BragaCardSurface,
-                                        border = BorderStroke(1.dp, BragaCardBorder),
-                                        shadowElevation = 1.dp,
-                                        modifier = Modifier.size(52.dp).clip(CircleShape).indication(interactionSource, ripple())
+                        LazyRow(
+                            horizontalArrangement = shortcutsArrangement,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(items.size) { index ->
+                                val (label, icon, route) = items[index]
+                                val interactionSource = remember { MutableInteractionSource() }
+                                BragaSubtleRipple(color = BragaEmerald) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .widthIn(min = shortcutMinWidth)
+                                            .clickable(interactionSource = interactionSource, indication = null) { onNavigateToScreen(route) }
                                     ) {
-                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                            Icon(icon, contentDescription = label, tint = BragaEmerald)
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = BragaCardSurface,
+                                            border = BorderStroke(1.dp, BragaCardBorder),
+                                            shadowElevation = 1.dp,
+                                            modifier = Modifier.size(52.dp).clip(CircleShape).indication(interactionSource, ripple())
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                                Icon(icon, contentDescription = label, tint = BragaEmerald)
+                                            }
                                         }
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(label, style = MaterialTheme.typography.labelSmall, color = BragaTextPrimary)
                                     }
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(label, style = MaterialTheme.typography.labelSmall, color = BragaTextPrimary)
                                 }
                             }
                         }
