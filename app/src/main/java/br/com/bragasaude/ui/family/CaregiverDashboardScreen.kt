@@ -98,6 +98,7 @@ import br.com.bragasaude.data.local.ConsultationEntity
 import br.com.bragasaude.data.local.FamilyBindingEntity
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DeleteOutline
+import java.text.SimpleDateFormat
 import java.util.*
 
 /** Painel de cuidado familiar, com foco em identificação do paciente e leitura rápida dos dados. */
