@@ -17,6 +17,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Diversity3
@@ -83,6 +85,9 @@ fun SocialFeedScreen(
     viewModel: SocialFeedViewModel = hiltViewModel()
 ) {
     val posts by viewModel.posts.collectAsState()
+    val viewerId by viewModel.currentAccountId.collectAsState()
+    val reportState by viewModel.reportState.collectAsState()
+    val moderationNotice by viewModel.moderationNotice.collectAsState()
     val author by viewModel.author.collectAsState()
     val isSharingPhoto by viewModel.isSharingPhoto.collectAsState()
     val photoNotice by viewModel.photoNotice.collectAsState()
@@ -108,6 +113,22 @@ fun SocialFeedScreen(
     var showCreateSheet by remember { mutableStateOf(false) }
     var editingPost by remember { mutableStateOf<SocialPostEntity?>(null) }
     var deletingPost by remember { mutableStateOf<SocialPostEntity?>(null) }
+    var reportingPost by remember(viewerId) { mutableStateOf<SocialPostEntity?>(null) }
+    var blockingPost by remember(viewerId) { mutableStateOf<SocialPostEntity?>(null) }
+
+    LaunchedEffect(reportState.sent) {
+        if (reportState.sent) {
+            reportingPost = null
+            viewModel.clearReportState()
+            snackbarHostState.showSnackbar("Denúncia enviada. Nossa equipe revisará em até 24h.")
+        }
+    }
+    LaunchedEffect(moderationNotice) {
+        moderationNotice?.let {
+            viewModel.clearModerationNotice()
+            snackbarHostState.showSnackbar(it)
+        }
+    }
 
     LaunchedEffect(publishState) {
         when (val state = publishState) {
@@ -291,9 +312,11 @@ fun SocialFeedScreen(
                             val selectedReaction = post.viewerReactionType
                                 ?: if (post.hasUserReacted) "apoio" else null
                             SocialPostCard(
-                                isOwner = post.userId == viewModel.currentUserId && !post.pendingSync,
+                                isOwner = post.userId == viewerId,
                                 onEdit = { editingPost = post },
                                 onDelete = { deletingPost = post },
+                                onReport = { viewModel.clearReportState(); reportingPost = post },
+                                onBlock = { blockingPost = post },
                                 nowMillis = nowMillis,
                                 post = post,
                                 fallbackPhotoUrl = null,
@@ -308,6 +331,23 @@ fun SocialFeedScreen(
                 }
             }
         }
+    }
+
+    reportingPost?.let { post ->
+        key(post.id, viewerId) {
+            ReportPostDialog(reportState,
+                onDismiss = { reportingPost = null; viewModel.clearReportState() },
+                onSend = { reason, details -> viewModel.reportPost(post, reason, details) })
+        }
+    }
+    blockingPost?.let { post ->
+        BragaAlertDialog(
+            onDismissRequest = { blockingPost = null },
+            title = { Text("Bloquear usuário?") },
+            text = { Text("Deseja ocultar as publicações deste usuário? Você não verá mais conteúdos compartilhados por ele.") },
+            confirmButton = { TextButton(onClick = { viewModel.blockUser(post); blockingPost = null }) { Text("Bloquear usuário") } },
+            dismissButton = { TextButton(onClick = { blockingPost = null }) { Text("Cancelar") } }
+        )
     }
 
     editingPost?.let { post ->
@@ -466,6 +506,35 @@ private fun CommunityWelcomeBanner(
     }
 }
 
+@Composable
+internal fun SocialPostMenu(
+    isOwner: Boolean,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onReport: () -> Unit,
+    onBlock: () -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { menuExpanded = true }) {
+            Icon(Icons.Default.MoreVert, contentDescription = "Opções da publicação")
+        }
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            if (isOwner) {
+                DropdownMenuItem(text = { Text("Editar publicação") }, onClick = { menuExpanded = false; onEdit() })
+                DropdownMenuItem(text = { Text("Excluir publicação") }, onClick = { menuExpanded = false; onDelete() })
+            } else {
+                DropdownMenuItem(text = { Text("Denunciar publicação") },
+                    leadingIcon = { Icon(Icons.Default.Flag, contentDescription = null) },
+                    onClick = { menuExpanded = false; onReport() })
+                DropdownMenuItem(text = { Text("Bloquear usuário") },
+                    leadingIcon = { Icon(Icons.Default.Block, contentDescription = null) },
+                    onClick = { menuExpanded = false; onBlock() })
+            }
+        }
+    }
+}
+
 /**
  * Card contemporâneo do feed com cantos de 24.dp, borda sutil BragaMintBorder
  * e barra de 3 reações expressivas com contadores e feedback tátil.
@@ -480,7 +549,9 @@ private fun SocialPostCard(
     onReact: (String) -> Unit,
     isOwner: Boolean,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onReport: () -> Unit,
+    onBlock: () -> Unit
 ) {
     val (typeIcon, typeColor, typeLabel) = getPostTypeBadge(post.postType)
     val haptics = LocalHapticFeedback.current
@@ -542,17 +613,8 @@ private fun SocialPostCard(
                     }
                 }
 
-                if (isOwner) {
-                    var menuExpanded by remember { mutableStateOf(false) }
-                    Box {
-                        IconButton(onClick = { menuExpanded = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "Opções da publicação")
-                        }
-                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                            DropdownMenuItem(text = { Text("Editar publicação") }, onClick = { menuExpanded = false; onEdit() })
-                            DropdownMenuItem(text = { Text("Excluir publicação") }, onClick = { menuExpanded = false; onDelete() })
-                        }
-                    }
+                if (!post.pendingSync) {
+                    SocialPostMenu(isOwner, onEdit, onDelete, onReport, onBlock)
                 }
 
                 // Selo ilustrado da conquista

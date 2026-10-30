@@ -37,7 +37,8 @@ class SyncWorker @AssistedInject constructor(
     private val symptomsDiaryDao: SymptomsDiaryDao,
     private val bleTelemetryReceiptDao: BleTelemetryReceiptDao,
     private val auth: com.google.firebase.auth.FirebaseAuth,
-    private val doseRepository: br.com.bragasaude.data.medicationdoses.MedicationDoseRepository
+    private val doseRepository: br.com.bragasaude.data.medicationdoses.MedicationDoseRepository,
+    private val blockSynchronizer: SocialBlockSynchronizer
 ) : CoroutineWorker(appContext, workerParams) {
 
     companion object {
@@ -60,6 +61,11 @@ class SyncWorker @AssistedInject constructor(
         if (!safeSync { syncDailyMetrics() }) hasErrors = true
         if (!safeSync { syncFeedbacks() }) hasErrors = true
         if (!safeSync { syncSocialPosts() }) hasErrors = true
+        if (!safeSync {
+            auth.currentUser?.uid?.let { owner ->
+                if (!blockSynchronizer.syncPending(owner)) throw java.io.IOException("Bloqueio aguardando sincronização")
+            }
+        }) hasErrors = true
         if (!safeSync { syncPostReactions() }) hasErrors = true
         if (!safeSync { syncFamilyBindings() }) hasErrors = true
         if (!safeSync { syncFamilyMessages() }) hasErrors = true

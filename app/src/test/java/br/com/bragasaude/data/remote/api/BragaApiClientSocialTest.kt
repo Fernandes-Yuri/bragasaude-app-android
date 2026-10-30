@@ -44,4 +44,43 @@ class BragaApiClientSocialTest {
             assertEquals("palmas", post.viewerReactionType)
         }
     }
+
+    @Test fun reportAndBlockUseAuthenticatedAccountBoundContracts() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = client(server)
+            server.enqueue(MockResponse().setResponseCode(201).setBody("""{"status":"reported"}"""))
+            api.reportSocialPost("post", "reader", "misinformation", "  Detalhes  ")
+            val report = server.takeRequest()
+            assertEquals("POST", report.method)
+            assertEquals("/api/social/posts/post/report?expected_user_id=reader", report.path)
+            assertEquals("Bearer test-session", report.getHeader("Authorization"))
+            val body = org.json.JSONObject(report.body.readUtf8())
+            assertEquals("misinformation", body.getString("reason"))
+            assertEquals("Detalhes", body.getString("details"))
+            assertFalse(body.has("author_id"))
+            server.enqueue(MockResponse().setBody("""{"status":"offline_mode"}"""))
+            assertFalse(api.blockSocialUser("author", "reader"))
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody("""{"status":"blocked"}"""))
+            assertTrue(api.blockSocialUser("author", "reader"))
+            assertEquals("/api/social/users/author/block?expected_user_id=reader", server.takeRequest().path)
+            server.enqueue(MockResponse().setBody("""{"hidden_user_ids":["author"]}"""))
+            assertEquals(setOf("author"), api.getSocialHiddenUsers("reader"))
+            assertEquals("/api/social/blocks?expected_user_id=reader", server.takeRequest().path)
+        }
+    }
+
+    @Test fun rejectedReportAndUnavailableBlocksNeverBecomeSuccess() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = client(server)
+            server.enqueue(MockResponse().setResponseCode(403).setBody("""{"detail":"Publicação própria."}"""))
+            try { api.reportSocialPost("post", "reader", "spam", ""); fail("Denúncia recusada deve falhar") }
+            catch (e: java.io.IOException) { assertEquals("Publicação própria.", e.message) }
+            server.enqueue(MockResponse().setResponseCode(503))
+            try { api.getSocialHiddenUsers("reader"); fail("Falha não pode apagar bloqueios locais") }
+            catch (_: java.io.IOException) { }
+        }
+    }
 }

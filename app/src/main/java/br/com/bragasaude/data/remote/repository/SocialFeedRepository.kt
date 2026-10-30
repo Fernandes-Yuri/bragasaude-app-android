@@ -26,7 +26,8 @@ class SocialFeedRepository @Inject constructor(
     private val syncScheduler: SyncScheduler,
     private val auth: com.google.firebase.auth.FirebaseAuth,
     private val familyDao: br.com.bragasaude.data.local.FamilyDao,
-    private val avatarUploader: br.com.bragasaude.data.avatar.AvatarPhotoUploader
+    private val avatarUploader: br.com.bragasaude.data.avatar.AvatarPhotoUploader,
+    private val blockSynchronizer: br.com.bragasaude.data.remote.sync.SocialBlockSynchronizer
 ) {
     private val guestId = BragaConstants.GUEST_UID
 
@@ -35,8 +36,8 @@ class SocialFeedRepository @Inject constructor(
     }
 
     fun getGlobalFeed(currentUserId: String? = null): Flow<List<SocialPostEntity>> {
-        val posts = socialFeedDao.getGlobalFeed()
         if (currentUserId == null || currentUserId == guestId) return kotlinx.coroutines.flow.flowOf(emptyList())
+        val posts = socialFeedDao.getUnblockedFeed(currentUserId)
         return combine(posts, profileDao.getProfile(currentUserId),
             familyDao.getActiveBindingsForPatient(currentUserId),
             familyDao.getActiveBindingsForCaregiver(currentUserId)) { feed, profile, caregivers, patients ->
@@ -50,6 +51,8 @@ class SocialFeedRepository @Inject constructor(
 
     suspend fun fetchGlobalFeed(limit: Int = 20, offset: Int = 0, currentUserId: String): Int {
         require(limit in 1..100 && offset == 0) { "Atualização do mural exige a primeira página, com até 100 publicações." }
+        requireSession(currentUserId)
+        blockSynchronizer.refresh(currentUserId)
         requireSession(currentUserId)
         val expected = socialFeedDao.getCachedPosts().associateBy { it.id }
         val posts = apiClient.getSocialFeed(currentUserId, limit)
@@ -128,6 +131,23 @@ class SocialFeedRepository @Inject constructor(
         requireSession(userId)
         socialFeedDao.queueMutation(postId, userId, null, null, delete = true)
         syncScheduler.scheduleSync(androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE)
+    }
+
+    suspend fun reportPost(post: SocialPostEntity, userId: String, reason: String, details: String) {
+        requireSession(userId)
+        require(post.userId != userId) { "Você não pode denunciar sua própria publicação." }
+        require(reason in setOf("offensive", "misinformation", "spam", "other") && details.length <= 2000) { "Revise o motivo da denúncia." }
+        apiClient.reportSocialPost(post.id, userId, reason, details)
+        requireSession(userId)
+    }
+
+    suspend fun blockUser(targetUserId: String, userId: String): Boolean {
+        requireSession(userId)
+        require(targetUserId != userId) { "Você não pode bloquear sua própria conta." }
+        // Room invalida a consulta do feed antes de qualquer chamada de rede.
+        socialFeedDao.queueBlock(userId, targetUserId)
+        syncScheduler.scheduleSync(androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE)
+        return blockSynchronizer.syncPending(userId)
     }
 
     fun reactionsForPost(postId: String) = socialFeedDao.getReactionsForPost(postId)

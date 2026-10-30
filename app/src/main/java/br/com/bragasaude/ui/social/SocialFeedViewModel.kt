@@ -71,12 +71,15 @@ class SocialFeedViewModel @Inject constructor(
         get() = auth.currentUser?.uid ?: guestId
 
     private val accountId = MutableStateFlow(currentUserId)
+    val currentAccountId = accountId.asStateFlow()
     private val authListener = FirebaseAuth.AuthStateListener {
         val uid = currentUserId
         if (accountId.value != uid) {
             accountId.value = uid
             _publishState.value = PublishState.Idle
             _feedError.value = null
+            _reportState.value = ReportState()
+            _moderationNotice.value = null
             refresh()
         }
     }
@@ -127,6 +130,47 @@ class SocialFeedViewModel @Inject constructor(
     val publishState: StateFlow<PublishState> = _publishState.asStateFlow()
     private val _feedError = MutableStateFlow<String?>(null)
     val feedError: StateFlow<String?> = _feedError.asStateFlow()
+
+    data class ReportState(val sending: Boolean = false, val sent: Boolean = false, val error: String? = null)
+    private val _reportState = MutableStateFlow(ReportState())
+    val reportState = _reportState.asStateFlow()
+    private val _moderationNotice = MutableStateFlow<String?>(null)
+    val moderationNotice = _moderationNotice.asStateFlow()
+    private val blocking = mutableSetOf<String>()
+
+    fun clearReportState() { _reportState.value = ReportState() }
+    fun clearModerationNotice() { _moderationNotice.value = null }
+
+    fun reportPost(post: SocialPostEntity, reason: String, details: String) {
+        if (_reportState.value.sending) return
+        val userId = currentUserId
+        _reportState.value = ReportState(sending = true)
+        viewModelScope.launch {
+            try {
+                socialFeedRepository.reportPost(post, userId, reason, details)
+                if (currentUserId == userId) _reportState.value = ReportState(sent = true)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+            } catch (e: Exception) {
+                if (currentUserId == userId) _reportState.value = ReportState(error = e.message ?: "Não foi possível enviar a denúncia.")
+            }
+        }
+    }
+
+    fun blockUser(post: SocialPostEntity) {
+        val userId = currentUserId
+        val key = "$userId:${post.userId}"
+        if (!blocking.add(key)) return
+        viewModelScope.launch {
+            try {
+                val synced = socialFeedRepository.blockUser(post.userId, userId)
+                if (currentUserId == userId) _moderationNotice.value = if (synced) "Usuário bloqueado. As publicações foram ocultadas."
+                    else "Publicações ocultadas neste aparelho. O bloqueio será enviado quando houver conexão."
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+            } catch (e: Exception) {
+                if (currentUserId == userId) _feedError.value = e.message ?: "Não foi possível bloquear este usuário."
+            } finally { blocking.remove(key) }
+        }
+    }
 
     /**
      * Templates canônicos e harmonizados de conquistas para publicação.
