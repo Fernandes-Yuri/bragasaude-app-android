@@ -506,12 +506,41 @@ private fun CommunityWelcomeBanner(
     }
 }
 
+@Composable
+internal fun SocialPostMenu(
+    isOwner: Boolean,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onReport: () -> Unit,
+    onBlock: () -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { menuExpanded = true }) {
+            Icon(Icons.Default.MoreVert, contentDescription = "Opções da publicação")
+        }
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            if (isOwner) {
+                DropdownMenuItem(text = { Text("Editar publicação") }, onClick = { menuExpanded = false; onEdit() })
+                DropdownMenuItem(text = { Text("Excluir publicação") }, onClick = { menuExpanded = false; onDelete() })
+            } else {
+                DropdownMenuItem(text = { Text("Denunciar publicação") },
+                    leadingIcon = { Icon(Icons.Default.Flag, contentDescription = null) },
+                    onClick = { menuExpanded = false; onReport() })
+                DropdownMenuItem(text = { Text("Bloquear usuário") },
+                    leadingIcon = { Icon(Icons.Default.Block, contentDescription = null) },
+                    onClick = { menuExpanded = false; onBlock() })
+            }
+        }
+    }
+}
+
 /**
  * Card contemporâneo do feed com cantos de 24.dp, borda sutil BragaMintBorder
  * e barra de 3 reações expressivas com contadores e feedback tátil.
  */
 @Composable
-internal fun SocialPostCard(
+private fun SocialPostCard(
     post: SocialPostEntity,
     nowMillis: Long,
     fallbackPhotoUrl: String?,
@@ -585,25 +614,7 @@ internal fun SocialPostCard(
                 }
 
                 if (!post.pendingSync) {
-                    var menuExpanded by remember { mutableStateOf(false) }
-                    Box {
-                        IconButton(onClick = { menuExpanded = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "Opções da publicação")
-                        }
-                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                            if (isOwner) {
-                                DropdownMenuItem(text = { Text("Editar publicação") }, onClick = { menuExpanded = false; onEdit() })
-                                DropdownMenuItem(text = { Text("Excluir publicação") }, onClick = { menuExpanded = false; onDelete() })
-                            } else {
-                                DropdownMenuItem(text = { Text("Denunciar publicação") },
-                                    leadingIcon = { Icon(Icons.Default.Flag, contentDescription = null) },
-                                    onClick = { menuExpanded = false; onReport() })
-                                DropdownMenuItem(text = { Text("Bloquear usuário") },
-                                    leadingIcon = { Icon(Icons.Default.Block, contentDescription = null) },
-                                    onClick = { menuExpanded = false; onBlock() })
-                            }
-                        }
-                    }
+                    SocialPostMenu(isOwner, onEdit, onDelete, onReport, onBlock)
                 }
 
                 // Selo ilustrado da conquista

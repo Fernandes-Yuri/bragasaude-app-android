@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import br.com.bragasaude.data.local.SocialPostEntity
 import br.com.bragasaude.ui.theme.BragasaudeTheme
 import org.junit.Assert.*
 import org.junit.Rule
@@ -52,10 +51,8 @@ class SocialModerationInterfaceTest {
         var blocks = 0
         compose.setContent {
             BragasaudeTheme(forceThemeMode = "LIGHT") {
-                SocialPostCard(
-                    post = SocialPostEntity(id = "post", userId = "author", userName = "Colega", postType = "milestone", title = "Meta"),
-                    nowMillis = 0, fallbackPhotoUrl = null, reactions = emptyList(), selectedReaction = null,
-                    onReact = {}, isOwner = owner.value, onEdit = {}, onDelete = {},
+                SocialPostMenu(
+                    isOwner = owner.value, onEdit = {}, onDelete = {},
                     onReport = { reports++ }, onBlock = { blocks++ }
                 )
             }
