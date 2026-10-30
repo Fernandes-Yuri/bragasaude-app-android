@@ -48,7 +48,7 @@ class MedicationStockDoseTest {
         val result = medicationStockDose("med2", listOf(recorded, group(date = "2026-10-30")), emptySet(), now)
         assertFalse(result.canConfirm)
         assertEquals("Ver Histórico", medicationStockDose("med2", listOf(recorded), emptySet(), now).label)
-        assertEquals("Dose de hoje em dia", result.detail)
+        assertEquals("Todas as doses de hoje já tomadas", result.detail)
         assertEquals("Próxima dose: 08:00", result.label)
     }
 
@@ -56,7 +56,7 @@ class MedicationStockDoseTest {
         val original = group()
         val invalid = original.copy(items = original.items.map { it.copy(units = null, reason = "quantity_required") })
         assertEquals("Revisar doses", medicationStockDose("med1", listOf(invalid), emptySet(), now).label)
-        assertFalse(medicationStockDose("missing", listOf(original), emptySet(), now).detail.contains("em dia"))
+        assertFalse(medicationStockDose("missing", listOf(original), emptySet(), now).detail.contains("já tomadas"))
     }
 
     @Test fun partialConfirmationGivesFriendlyReviewFeedback() {

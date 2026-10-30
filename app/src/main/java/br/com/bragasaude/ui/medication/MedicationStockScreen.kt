@@ -359,7 +359,7 @@ fun MedicationStockScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (ui.selectedPatient.role == "PATIENT") "Meus Remédios" else "Remédios de ${ui.selectedPatient.name}", fontWeight = FontWeight.SemiBold) },
+                title = { Text("Estoque de Remédios", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
@@ -1040,14 +1040,29 @@ private fun MedicationStockCard(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 if (canTake) {
-                    Button(
-                        onClick = onTake,
-                        enabled = !loading && doseActionEnabled,
-                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
-                        contentPadding = PaddingValues(horizontal = 8.dp),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    ) {
-                        Text(dose.label, fontSize = 13.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                    if (dose.canConfirm) {
+                        Button(
+                            onClick = onTake,
+                            enabled = !loading && doseActionEnabled,
+                            colors = ButtonDefaults.buttonColors(containerColor = BragaEmerald),
+                            contentPadding = PaddingValues(horizontal = 8.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Confirmar Dose", fontSize = 13.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = onTake,
+                            enabled = !loading && doseActionEnabled,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            contentPadding = PaddingValues(horizontal = 8.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        ) {
+                            Text(dose.label, fontSize = 13.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 } else {
                     Button(
