@@ -99,6 +99,12 @@ class FamilyViewModel @Inject constructor(
         resolveFamilyChatGroup(bindings, currentUserId, selected)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val activeConsultations: StateFlow<List<ConsultationEntity>> = chatPatientId.flatMapLatest { patientId ->
+        if (patientId.isNullOrBlank()) flowOf(emptyList())
+        else familyRepository.getActiveConsultationsForUser(patientId)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun selectChatGroup(patientId: String) {
         if (familyChatGroups(activeBindingsForCurrentUser.value, currentUserId).contains(patientId)) {
             selectedGroup.value = patientId
@@ -693,6 +699,50 @@ class FamilyViewModel @Inject constructor(
     fun sendAppointmentReminder(text: String) {
         val msg = if (text.isNotBlank()) "Consulta agendada: $text" else "Não esqueça da sua consulta agendada!"
         sendCareMessage(msg, "CALENDAR")
+    }
+
+    /**
+     * Agenda consulta médica durável no banco Room e programa lembretes locais no WorkManager (24h e 1h antes).
+     */
+    fun scheduleConsultation(specialty: String, scheduledDateMillis: Long) {
+        val targetPatientId = chatPatientId.value ?: _dashboard.value.patientUserId
+        if (targetPatientId.isBlank()) return
+
+        viewModelScope.launch {
+            try {
+                val caregiverName = _dashboard.value.caregiverName.ifBlank {
+                    auth.currentUser?.displayName ?: "Familiar"
+                }
+                familyRepository.createConsultation(
+                    userId = targetPatientId,
+                    title = specialty.trim(),
+                    scheduledDate = scheduledDateMillis,
+                    caregiverUserId = currentUserId,
+                    caregiverName = caregiverName,
+                    caregiverRelation = _dashboard.value.caregiverRelation
+                )
+                val sdf = SimpleDateFormat("dd/MM/yyyy 'às' HH:mm", Locale.getDefault())
+                val formattedDate = sdf.format(Date(scheduledDateMillis))
+                sendCareMessage("Consulta agendada: ${specialty.trim()} - $formattedDate (Lembretes ativos 24h e 1h antes)", "CALENDAR")
+                _uiEvents.emit(FamilyUiEvent.Notice("Consulta agendada com lembretes programados!"))
+            } catch (e: Exception) {
+                _uiEvents.emit(FamilyUiEvent.Error("Erro ao agendar consulta: ${e.message}"))
+            }
+        }
+    }
+
+    /**
+     * Cancela uma consulta agendada e desativa seus lembretes programados no WorkManager.
+     */
+    fun cancelConsultation(consultationId: String) {
+        viewModelScope.launch {
+            try {
+                familyRepository.cancelConsultation(consultationId, currentUserId)
+                _uiEvents.emit(FamilyUiEvent.Notice("Consulta cancelada e lembretes desativados."))
+            } catch (e: Exception) {
+                _uiEvents.emit(FamilyUiEvent.Error("Erro ao cancelar consulta: ${e.message}"))
+            }
+        }
     }
 
     fun publishFamilyPride(title: String, description: String) {

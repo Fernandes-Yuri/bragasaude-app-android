@@ -726,8 +726,12 @@ interface FamilyDao {
     @Query("SELECT status, COUNT(*) as count FROM consultations_local WHERE userId = :userId GROUP BY status")
     suspend fun countConsultationsByStatus(userId: String): List<ConsultationStatusCount>
 
+    /** Buscar consultas ativas (não canceladas e não recusadas) ordenadas por data crescente. */
+    @Query("SELECT * FROM consultations_local WHERE userId = :userId AND status NOT IN ('CANCELLED', 'REJECTED') ORDER BY scheduledDate ASC")
+    fun getActiveConsultationsForUser(userId: String): Flow<List<ConsultationEntity>>
+
     /** Buscar consulta marcada para hoje ou próxima. */
-    @Query("SELECT * FROM consultations_local WHERE userId = :userId AND scheduledDate >= :nowMillis ORDER BY scheduledDate ASC LIMIT 1")
+    @Query("SELECT * FROM consultations_local WHERE userId = :userId AND scheduledDate >= :nowMillis AND status NOT IN ('CANCELLED', 'REJECTED') ORDER BY scheduledDate ASC LIMIT 1")
     suspend fun getNextConsultation(userId: String, nowMillis: Long): ConsultationEntity?
 }
 

@@ -190,7 +190,13 @@ object NotificationHelper {
         notificationManager.notify(CONSULTATION_NOTIFICATION_ID, builder.build())
     }
 
-    fun sendConsultationReminderNotification(context: Context, title: String, dateText: String, timeText: String) {
+    fun sendConsultationReminderNotification(
+        context: Context,
+        title: String,
+        dateText: String,
+        timeText: String,
+        reminderTag: String = "24h"
+    ) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -216,7 +222,11 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val text = "Lembrete: Sua consulta de $title é amanhã, $dateText às $timeText"
+        val text = if (reminderTag == "1h") {
+            "Lembrete: Sua consulta de $title começa em 1 hora ($timeText)!"
+        } else {
+            "Lembrete: Sua consulta de $title é amanhã, $dateText às $timeText"
+        }
 
         val builder = NotificationCompat.Builder(context, CONSULTATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
@@ -347,14 +357,15 @@ object NotificationHelper {
     fun scheduleConsultationReminders(context: Context, consultationId: String, title: String, scheduledDateMillis: Long) {
         try {
             val now = System.currentTimeMillis()
-            val data = androidx.work.Data.Builder()
-                .putString("title", title)
-                .putLong("scheduledAt", scheduledDateMillis)
-                .build()
 
             for ((tag, hoursBefore) in listOf("24h" to 24L, "1h" to 1L)) {
                 val delay = scheduledDateMillis - hoursBefore * 3_600_000 - now
                 if (delay <= 0) continue
+                val data = androidx.work.Data.Builder()
+                    .putString("title", title)
+                    .putLong("scheduledAt", scheduledDateMillis)
+                    .putString("reminderTag", tag)
+                    .build()
                 val work = androidx.work.OneTimeWorkRequestBuilder<br.com.bragasaude.data.remote.sync.ConsultationReminderWorker>()
                     .setInitialDelay(delay, java.util.concurrent.TimeUnit.MILLISECONDS)
                     .setInputData(data)

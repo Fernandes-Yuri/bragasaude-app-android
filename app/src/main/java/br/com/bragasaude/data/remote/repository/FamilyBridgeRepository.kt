@@ -598,6 +598,16 @@ class FamilyBridgeRepository @Inject constructor(
         return familyDao.getConsultationsForUser(userId)
     }
 
+    fun getActiveConsultationsForUser(userId: String): Flow<List<ConsultationEntity>> {
+        return familyDao.getActiveConsultationsForUser(userId)
+    }
+
+    suspend fun deleteConsultation(consultationId: String): Boolean {
+        familyDao.deleteConsultation(consultationId)
+        NotificationHelper.cancelConsultationReminders(appContext, consultationId)
+        return true
+    }
+
     fun getSuggestedConsultationsForUser(userId: String): Flow<List<ConsultationEntity>> {
         return familyDao.getSuggestedConsultationsForUser(userId)
     }

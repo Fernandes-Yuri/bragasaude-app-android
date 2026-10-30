@@ -94,7 +94,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import br.com.bragasaude.data.local.ConsultationEntity
 import br.com.bragasaude.data.local.FamilyBindingEntity
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DeleteOutline
 import java.util.*
 
 /** Painel de cuidado familiar, com foco em identificação do paciente e leitura rápida dos dados. */
@@ -108,6 +111,7 @@ fun CaregiverDashboardScreen(
 ) {
     val watchedPatients by viewModel.watchedPatients.collectAsState()
     val dashboard by viewModel.dashboard.collectAsState()
+    val upcomingConsultations by viewModel.upcomingConsultations.collectAsState()
     val messages by remember(dashboard.patientUserId) {
         viewModel.recentMessages(dashboard.patientUserId)
     }.collectAsState(initial = emptyList())
@@ -363,6 +367,16 @@ fun CaregiverDashboardScreen(
                     )
                 }
 
+                item {
+                    UpcomingConsultationsCard(
+                        consultations = upcomingConsultations,
+                        onAddConsultation = { showAppointmentDialog = true },
+                        onCancelConsultation = { consultationId ->
+                            viewModel.cancelConsultation(consultationId)
+                        }
+                    )
+                }
+
 
 
                 item {
@@ -395,10 +409,8 @@ fun CaregiverDashboardScreen(
 
     if (showAppointmentDialog) {
         AppointmentDialog(
-            onConfirm = { specialty, dateMillis, hour, minute ->
-                val sdf = java.text.SimpleDateFormat("dd/MM/yyyy 'as' HH:mm", java.util.Locale.getDefault())
-                val dateStr = sdf.format(java.util.Date(dateMillis + (hour * 60L + minute) * 60L * 1000L))
-                viewModel.sendAppointmentReminder("$specialty - $dateStr")
+            onConfirm = { specialty, scheduledDateMillis ->
+                viewModel.scheduleConsultation(specialty, scheduledDateMillis)
                 showAppointmentDialog = false
             },
             onDismiss = { showAppointmentDialog = false }
@@ -915,12 +927,157 @@ private fun EmptyCaregiverState(modifier: Modifier = Modifier) {
     }
 }
 
+// ==================== AGENDA DO CUIDADO (CONSULTAS DURÁVEIS) ====================
+
+@Composable
+private fun UpcomingConsultationsCard(
+    consultations: List<ConsultationEntity>,
+    onAddConsultation: () -> Unit,
+    onCancelConsultation: (String) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF6A1B9A).copy(alpha = 0.1f),
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.CalendarMonth,
+                                contentDescription = null,
+                                tint = Color(0xFF6A1B9A),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            "Agenda do Cuidado",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            "Consultas agendadas e lembretes duráveis",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                IconButton(onClick = onAddConsultation) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Agendar Consulta",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            if (consultations.isEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "Nenhuma consulta agendada para os próximos dias.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                val sdfDate = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                val sdfTime = SimpleDateFormat("HH:mm", Locale.getDefault())
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    consultations.forEach { consultation ->
+                        val dateFormatted = sdfDate.format(consultation.scheduledDate)
+                        val timeFormatted = sdfTime.format(consultation.scheduledDate)
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        consultation.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        "$dateFormatted às $timeFormatted",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color(0xFF6A1B9A).copy(alpha = 0.1f)
+                                    ) {
+                                        Text(
+                                            "Lembretes ativos (24h e 1h antes)",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color(0xFF6A1B9A),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                IconButton(
+                                    onClick = { onCancelConsultation(consultation.id) }
+                                ) {
+                                    Icon(
+                                        Icons.Default.DeleteOutline,
+                                        contentDescription = "Cancelar Consulta",
+                                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ==================== DIALOGOS ====================
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppointmentDialog(
-    onConfirm: (specialty: String, dateMillis: Long, hour: Int, minute: Int) -> Unit,
+    onConfirm: (specialty: String, scheduledDateMillis: Long) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -928,8 +1085,6 @@ private fun AppointmentDialog(
     var dateText by remember { mutableStateOf("") }
     var timeText by remember { mutableStateOf("") }
     var parsedDateMillis by remember { mutableLongStateOf(0L) }
-    var parsedHour by remember { mutableIntStateOf(8) }
-    var parsedMinute by remember { mutableIntStateOf(0) }
 
     BragaFormSheet(
         scrollContent = false,
@@ -943,10 +1098,10 @@ private fun AppointmentDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState())
             ) {
                 Text(
-                    "Preencha os dados da consulta. Voce tambem pode salvar direto no Google Agenda.",
+                    "Preencha os dados da consulta. Os lembretes no celular (24h e 1h antes) serão configurados automaticamente pelo WorkManager.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
 
@@ -962,7 +1117,7 @@ private fun AppointmentDialog(
                 OutlinedTextField(
                     value = dateText,
                     onValueChange = { dateText = it },
-                    label = { Text("Data (ex: 15/10/2026)") },
+                    label = { Text("Data (ex: 31/10/2026)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
@@ -987,9 +1142,6 @@ private fun AppointmentDialog(
                             val dateTime = sdf.parse("$dateText $timeText")
                             if (dateTime != null && specialty.isNotBlank()) {
                                 parsedDateMillis = dateTime.time
-                                val cal = java.util.Calendar.getInstance().apply { time = dateTime }
-                                parsedHour = cal.get(java.util.Calendar.HOUR_OF_DAY)
-                                parsedMinute = cal.get(java.util.Calendar.MINUTE)
 
                                 val intent = android.content.Intent(android.content.Intent.ACTION_INSERT).apply {
                                     data = android.provider.CalendarContract.Events.CONTENT_URI
@@ -1018,16 +1170,14 @@ private fun AppointmentDialog(
                         try {
                             val dateTime = sdf.parse("$dateText $timeText")
                             if (dateTime != null && specialty.isNotBlank()) {
-                                onConfirm(specialty, dateTime.time,
-                                    java.util.Calendar.getInstance().apply { time = dateTime }.get(java.util.Calendar.HOUR_OF_DAY),
-                                    java.util.Calendar.getInstance().apply { time = dateTime }.get(java.util.Calendar.MINUTE))
+                                onConfirm(specialty, dateTime.time)
                             }
                         } catch (_: Exception) {}
                     },
                     enabled = specialty.isNotBlank() && dateText.isNotBlank() && timeText.isNotBlank(),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Enviar")
+                    Text("Agendar")
                 }
             }
         },
