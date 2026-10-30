@@ -169,7 +169,7 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(bottom = br.com.bragasaude.ui.components.AssistantOrbScrollClearance),
+                contentPadding = PaddingValues(bottom = br.com.bragasaude.ui.components.AssistantOrbScrollClearance + 32.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item { Spacer(Modifier.height(4.dp)) }
@@ -446,6 +446,11 @@ fun HomeScreen(
                     BragaEmergencyBannerCard(
                         onClick = { showEmergencyDialog = true }
                     )
+                }
+
+                // Folga de segurança final para garantir clearance total do card de emergência acima do Orb flutuante
+                item {
+                    Spacer(Modifier.height(16.dp))
                 }
 
             }

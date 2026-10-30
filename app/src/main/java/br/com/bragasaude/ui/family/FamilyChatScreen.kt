@@ -542,6 +542,7 @@ private fun HorizontalQuickReplyChips(
     )
     
     LazyRow(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
     ) {
@@ -549,7 +550,12 @@ private fun HorizontalQuickReplyChips(
             AssistChip(
                 onClick = { onSendQuickReply(reply) },
                 label = {
-                    Text(reply, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = reply,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 },
                 leadingIcon = {
                     Icon(
