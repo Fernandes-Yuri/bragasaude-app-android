@@ -1048,7 +1048,7 @@ private fun MedicationStockCard(
                             contentPadding = PaddingValues(horizontal = 8.dp),
                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                         ) {
-                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
                             Text("Confirmar Dose", fontSize = 13.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                         }
