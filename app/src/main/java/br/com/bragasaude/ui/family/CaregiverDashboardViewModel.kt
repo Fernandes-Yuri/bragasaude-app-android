@@ -52,12 +52,15 @@ class CaregiverDashboardViewModel @Inject constructor(
     private val _dashboard = MutableStateFlow(CaregiverDashboardState())
     val dashboard: StateFlow<CaregiverDashboardState> = _dashboard.asStateFlow()
 
+    private val _upcomingConsultations = MutableStateFlow<List<ConsultationEntity>>(emptyList())
+    val upcomingConsultations: StateFlow<List<ConsultationEntity>> = _upcomingConsultations.asStateFlow()
 
     private val _quickTemplates = MutableStateFlow(familyRepository.getQuickMessageTemplates())
     val quickTemplates: StateFlow<Map<String, MessageTemplate>> = _quickTemplates.asStateFlow()
 
     private var dashboardJob: Job? = null
     private var realtimeSubscriptionJob: Job? = null
+    private var consultationsJob: Job? = null
     private var bindingsJob: Job? = null
     private var authListener: FirebaseAuth.AuthStateListener? = null
 
@@ -102,6 +105,8 @@ class CaregiverDashboardViewModel @Inject constructor(
                 } else if (bindings.isEmpty()) {
                     dashboardJob?.cancel()
                     realtimeSubscriptionJob?.cancel()
+                    consultationsJob?.cancel()
+                    _upcomingConsultations.value = emptyList()
                     _dashboard.value = CaregiverDashboardState()
                 }
             }
@@ -114,11 +119,19 @@ class CaregiverDashboardViewModel @Inject constructor(
     fun selectPatient(binding: FamilyBindingEntity) {
         dashboardJob?.cancel()
         realtimeSubscriptionJob?.cancel()
+        consultationsJob?.cancel()
 
         viewModelScope.launch {
             try {
                 vitalSignDao.deduplicateVitals()
             } catch (_: Exception) {}
+        }
+
+        // Observar consultas ativas do paciente selecionado
+        consultationsJob = viewModelScope.launch {
+            familyRepository.getActiveConsultationsForUser(binding.patientUserId).collectLatest { list ->
+                _upcomingConsultations.value = list
+            }
         }
 
         // 1. Iniciar subscrição Realtime no Firebase Data Connect para atualizar Room em background
@@ -273,6 +286,60 @@ class CaregiverDashboardViewModel @Inject constructor(
         sendCareMessage(msg, "CALENDAR")
     }
 
+    /**
+     * Agenda consulta médica durável no banco Room e programa lembretes locais no WorkManager (24h e 1h antes).
+     */
+    fun scheduleConsultation(specialty: String, scheduledDateMillis: Long) {
+        val targetPatientId = _dashboard.value.patientUserId
+        if (targetPatientId.isBlank()) {
+            viewModelScope.launch {
+                _uiEvents.emit(FamilyUiEvent.Error("Selecione um familiar para agendar a consulta."))
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                val caregiverName = _dashboard.value.caregiverName.ifBlank {
+                    auth.currentUser?.displayName ?: "Familiar"
+                }
+                val caregiverRelation = _dashboard.value.caregiverRelation
+
+                familyRepository.createConsultation(
+                    userId = targetPatientId,
+                    title = specialty.trim(),
+                    scheduledDate = scheduledDateMillis,
+                    caregiverUserId = currentUserId,
+                    caregiverName = caregiverName,
+                    caregiverRelation = caregiverRelation
+                )
+
+                val sdf = SimpleDateFormat("dd/MM/yyyy 'às' HH:mm", Locale.getDefault())
+                val formattedDate = sdf.format(Date(scheduledDateMillis))
+                val msg = "Consulta agendada: ${specialty.trim()} - $formattedDate (Lembretes ativos 24h e 1h antes)"
+                sendCareMessage(msg, "CALENDAR")
+
+                _uiEvents.emit(FamilyUiEvent.Notice("Consulta agendada com lembretes programados!"))
+            } catch (e: Exception) {
+                _uiEvents.emit(FamilyUiEvent.Error("Erro ao agendar consulta: ${e.message}"))
+            }
+        }
+    }
+
+    /**
+     * Cancela uma consulta agendada e desativa seus lembretes programados no WorkManager.
+     */
+    fun cancelConsultation(consultationId: String) {
+        viewModelScope.launch {
+            try {
+                familyRepository.cancelConsultation(consultationId, currentUserId)
+                _uiEvents.emit(FamilyUiEvent.Notice("Consulta cancelada e lembretes desativados."))
+            } catch (e: Exception) {
+                _uiEvents.emit(FamilyUiEvent.Error("Erro ao cancelar consulta: ${e.message}"))
+            }
+        }
+    }
+
     fun publishFamilyPride(title: String, description: String) {
         val targetPatientId = _dashboard.value.patientUserId
         if (targetPatientId.isBlank()) return
@@ -359,6 +426,7 @@ class CaregiverDashboardViewModel @Inject constructor(
         authListener?.let { auth.removeAuthStateListener(it) }
         bindingsJob?.cancel()
         dashboardJob?.cancel()
+        consultationsJob?.cancel()
         realtimeSubscriptionJob?.cancel()
     }
 }

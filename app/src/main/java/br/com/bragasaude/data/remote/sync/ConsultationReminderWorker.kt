@@ -35,13 +35,14 @@ class ConsultationReminderWorker @AssistedInject constructor(
                 return Result.success()
             }
 
+            val reminderTag = inputData.getString("reminderTag") ?: "24h"
             val title = inputData.getString("title") ?: "Consulta"
             val scheduledAt = inputData.getLong("scheduledAt", 0L)
 
             val dateText = SimpleDateFormat("dd/MM", Locale.getDefault()).format(Date(scheduledAt))
             val timeText = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(scheduledAt))
 
-            NotificationHelper.sendConsultationReminderNotification(appContext, title, dateText, timeText)
+            NotificationHelper.sendConsultationReminderNotification(appContext, title, dateText, timeText, reminderTag)
             Result.success()
         } catch (e: Exception) {
             android.util.Log.e("ConsultationWorker", "Erro no lembrete de consulta: ${e.message}", e)
