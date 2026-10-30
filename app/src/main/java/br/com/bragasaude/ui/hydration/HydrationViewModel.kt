@@ -16,6 +16,8 @@ import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import java.text.SimpleDateFormat
 import java.util.*
@@ -34,6 +36,8 @@ class HydrationViewModel @Inject constructor(
     private val auth: FirebaseAuth,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    private val waterMutationLock = Mutex()
 
     private val _currentHydration = MutableStateFlow(0.0)
     val currentHydration = _currentHydration.asStateFlow()
@@ -213,30 +217,35 @@ class HydrationViewModel @Inject constructor(
     fun addWater(ml: Int) {
         if (ml <= 0) return
         viewModelScope.launch {
-            try {
-                val newVital = RemoteVitalSign(
-                    userId = userId,
-                    hydrationMl = ml,
-                    measuredAt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.getDefault()).format(Date())
-                )
-                repository.saveVitalSigns(listOf(newVital))
-                
-                val analysis = healthEngine.analyzeVitals(userId, listOf(newVital))
-                analysis.newMilestones.firstOrNull()?.let { 
-                    _milestoneAlert.emit(it.title)
+            waterMutationLock.withLock {
+                try {
+                    val currentUserId = userId
+                    val newVital = RemoteVitalSign(
+                        userId = currentUserId,
+                        hydrationMl = ml,
+                        measuredAt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.getDefault()).format(Date())
+                    )
+                    repository.saveVitalSigns(listOf(newVital))
+
+                    val analysis = healthEngine.analyzeVitals(currentUserId, listOf(newVital))
+                    analysis.newMilestones.firstOrNull()?.let {
+                        _milestoneAlert.emit(it.title)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
         }
     }
 
     fun removeLastWater() {
         viewModelScope.launch {
-            try {
-                repository.deleteLastHydration(userId)
-            } catch (e: Exception) {
-                e.printStackTrace()
+            waterMutationLock.withLock {
+                try {
+                    healthEngine.removeLastHydration(userId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         }
     }

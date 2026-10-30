@@ -94,8 +94,8 @@ interface VitalSignDao {
     @Query("DELETE FROM vital_signs_local WHERE localId = :localId")
     suspend fun deleteById(localId: Long)
 
-    @Query("DELETE FROM vital_signs_local WHERE localId = (SELECT localId FROM vital_signs_local WHERE userId = :userId AND hydrationMl > 0 ORDER BY measuredAt DESC LIMIT 1)")
-    suspend fun deleteLastHydration(userId: String)
+    @Query("DELETE FROM vital_signs_local WHERE localId = (SELECT localId FROM vital_signs_local WHERE userId = :userId AND hydrationMl > 0 AND measuredAt >= :startMillis AND measuredAt < :endMillis ORDER BY measuredAt DESC, localId DESC LIMIT 1)")
+    suspend fun deleteLastHydration(userId: String, startMillis: Long, endMillis: Long)
 
     @Query("DELETE FROM vital_signs_local WHERE measuredAt < :cutoffMillis")
     suspend fun purgeOlderThan(cutoffMillis: Long)
@@ -294,6 +294,9 @@ interface MilestoneDao {
 
     @Query("SELECT * FROM milestones_local WHERE userId = :userId ORDER BY achievedAt DESC")
     fun getAll(userId: String): Flow<List<MilestoneEntity>>
+
+    @Query("DELETE FROM milestones_local WHERE userId = :userId AND badgeType = :badgeType AND achievedAt >= :startMillis AND achievedAt < :endMillis")
+    suspend fun deleteForDay(userId: String, badgeType: String, startMillis: Long, endMillis: Long)
 
     @Query("SELECT * FROM milestones_local WHERE pendingSync = 1")
     suspend fun getPendingSync(): List<MilestoneEntity>

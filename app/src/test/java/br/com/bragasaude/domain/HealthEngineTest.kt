@@ -60,7 +60,7 @@ class HealthEngineTest {
         every { firebaseUser.uid } returns user
         coEvery { vitalsRepository.getVitalSignsSync(user) } returns emptyList()
         coEvery { profileRepository.getProfile(user) } returns flowOf(ProfileEntity(userId = user, hydrationTargetMl = 2625))
-        var total = 2500
+        var total = 1000
         coEvery { vitalsRepository.getVitalSigns(user) } answers { flowOf(listOf(
             br.com.bragasaude.data.local.VitalSignEntity(userId = user, hydrationMl = total, measuredAt = Date())
         )) }

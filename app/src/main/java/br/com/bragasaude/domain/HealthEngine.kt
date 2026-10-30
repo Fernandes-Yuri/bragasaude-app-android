@@ -13,6 +13,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import java.util.Calendar
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.sync.Mutex
@@ -257,16 +260,24 @@ class HealthEngine @Inject constructor(
 
         // --- ANÁLISE DE SITUAÇÃO: META DE HIDRATAÇÃO ---
         hydrationLock.withLock {
-            checkHydrationMilestone(userId, newVitals)?.let { milestone ->
+            val now = ZonedDateTime.now()
+            checkHydrationMilestone(userId, newVitals, now)?.let { milestone ->
                 milestones.add(milestone)
                 if (!silent) {
                     milestonesRepository.saveMilestone(milestone)
                     val profile = profileRepository.getProfile(userId).firstOrNull()
                     if ((auth.currentUser?.uid ?: br.com.bragasaude.util.BragaConstants.GUEST_UID) == userId &&
                         profile?.notificationsEnabled != false) {
-                        HydrationNotifications.notifyOnce(
-                            context, userId, java.time.LocalDate.now().toString(), milestone.title, milestone.description.orEmpty()
-                        )
+                        val day = now.toLocalDate().toString()
+                        if (milestone.badgeType == "hydration_half") {
+                            HydrationNotifications.notifyHalfOnce(
+                                context, userId, day, milestone.title, milestone.description.orEmpty()
+                            )
+                        } else {
+                            HydrationNotifications.notifyOnce(
+                                context, userId, day, milestone.title, milestone.description.orEmpty()
+                            )
+                        }
                     }
                 }
             }
@@ -297,40 +308,62 @@ class HealthEngine @Inject constructor(
         return null
     }
 
-    private suspend fun checkHydrationMilestone(userId: String, newVitals: List<RemoteVitalSign>): RemoteMilestone? {
+    /** A exclusão e o estorno usam o mesmo lock da concessão, inclusive nas análises da Home. */
+    suspend fun removeLastHydration(userId: String) {
+        hydrationLock.withLock {
+            val today = LocalDate.now()
+            vitalsRepository.deleteLastHydration(userId, today)
+            val remainingTotal = hydrationTotal(userId, today)
+            val target = profileRepository.getProfile(userId).firstOrNull()?.hydrationTargetMl ?: 2000
+
+            if (target <= 0 || remainingTotal < target) {
+                milestonesRepository.deleteMilestonesForDay(userId, "hydration_daily", today)
+                HydrationNotifications.clearFullNotification(context, userId, today.toString())
+            }
+            if (target <= 0 || remainingTotal < target / 2) {
+                milestonesRepository.deleteMilestonesForDay(userId, "hydration_half", today)
+                HydrationNotifications.clearHalfNotification(context, userId, today.toString())
+            }
+        }
+    }
+
+    private suspend fun hydrationTotal(userId: String, day: LocalDate): Int {
+        val zone = ZoneId.systemDefault()
+        return vitalsRepository.getVitalSigns(userId).first()
+            .filter { it.measuredAt.toInstant().atZone(zone).toLocalDate() == day }
+            .sumOf { it.hydrationMl ?: 0 }
+    }
+
+    private suspend fun checkHydrationMilestone(
+        userId: String, newVitals: List<RemoteVitalSign>, now: ZonedDateTime
+    ): RemoteMilestone? {
         val hasNewHydration = newVitals.any { it.hydrationMl != null }
         if (!hasNewHydration) return null
 
         val profile = profileRepository.getProfile(userId).firstOrNull() ?: return null
         val target = profile.hydrationTargetMl ?: 2000
-
-        val vitals = vitalsRepository.getVitalSigns(userId).first()
-        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
-        
-        val todayTotal = vitals.filter { 
-            val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(it.measuredAt)
-            dateStr == today 
-        }.sumOf { it.hydrationMl ?: 0 }
-
-        if (target > 0 && todayTotal >= target) {
-            // Verifica se já ganhou hoje para não duplicar
-            val existingMilestones = milestonesRepository.getMilestones(userId).first()
-            val alreadyAchievedToday = existingMilestones.any { 
-                it.badgeType == "hydration_daily" && 
-                java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(it.achievedAt) == today 
-            }
-
-            if (!alreadyAchievedToday) {
-                return RemoteMilestone(
-                    id = java.util.UUID.nameUUIDFromBytes("hydration_daily:$userId:$today".toByteArray(Charsets.UTF_8)).toString(),
-                    userId = userId,
-                    title = context.getString(R.string.hydration_milestone_title),
-                    description = context.getString(R.string.hydration_milestone_desc, target),
-                    badgeType = "hydration_daily"
-                )
-            }
+        if (target <= 0) return null
+        val today = now.toLocalDate()
+        val todayTotal = hydrationTotal(userId, today)
+        val badgeType = when {
+            todayTotal >= target -> "hydration_daily"
+            todayTotal > 0 && todayTotal >= target / 2 -> "hydration_half"
+            else -> return null
         }
-        return null
+        val alreadyAchievedToday = milestonesRepository.getMilestones(userId).first().any {
+            it.badgeType == badgeType && it.achievedAt.toInstant().atZone(now.zone).toLocalDate() == today
+        }
+        if (alreadyAchievedToday) return null
+        val isHalf = badgeType == "hydration_half"
+        return RemoteMilestone(
+            id = java.util.UUID.nameUUIDFromBytes("$badgeType:$userId:$today".toByteArray(Charsets.UTF_8)).toString(),
+            userId = userId,
+            title = context.getString(if (isHalf) R.string.hydration_half_milestone_title else R.string.hydration_milestone_title),
+            description = if (isHalf) context.getString(R.string.hydration_half_milestone_desc, todayTotal, target)
+                else context.getString(R.string.hydration_milestone_desc, target),
+            badgeType = badgeType,
+            achievedAt = now.toOffsetDateTime().toString()
+        )
     }
 
 
