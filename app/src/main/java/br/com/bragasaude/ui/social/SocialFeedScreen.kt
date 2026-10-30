@@ -511,7 +511,7 @@ private fun CommunityWelcomeBanner(
  * e barra de 3 reações expressivas com contadores e feedback tátil.
  */
 @Composable
-private fun SocialPostCard(
+internal fun SocialPostCard(
     post: SocialPostEntity,
     nowMillis: Long,
     fallbackPhotoUrl: String?,
