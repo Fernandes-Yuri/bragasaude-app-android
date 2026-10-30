@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.util.Date
 import java.util.UUID
+import java.time.LocalDate
+import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -144,8 +146,13 @@ class VitalsRepository @Inject constructor(
         }
     }
 
-    suspend fun deleteLastHydration(userId: String) {
-        vitalSignDao.deleteLastHydration(userId)
+    suspend fun deleteLastHydration(userId: String, day: LocalDate = LocalDate.now()) {
+        val zone = ZoneId.systemDefault()
+        vitalSignDao.deleteLastHydration(
+            userId,
+            day.atStartOfDay(zone).toInstant().toEpochMilli(),
+            day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        )
     }
 
     suspend fun deduplicateVitals() {

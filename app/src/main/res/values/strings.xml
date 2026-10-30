@@ -49,6 +49,8 @@
     <string name="pressure_stabilized_action">Continue mantendo seus hábitos saudáveis e o acompanhamento regular.</string>
 
     <string name="hydration_milestone_title">Meta de hidratação alcançada!</string>
+    <string name="hydration_half_milestone_title">Metade da meta alcançada!</string>
+    <string name="hydration_half_milestone_desc">Você atingiu 50%% da sua meta diária de hidratação (%1$d ml de %2$d ml). Continue assim!</string>
     <string name="hydration_milestone_desc">Parabéns! Você atingiu sua meta diária de %1$d ml de água hoje.</string>
 
 
