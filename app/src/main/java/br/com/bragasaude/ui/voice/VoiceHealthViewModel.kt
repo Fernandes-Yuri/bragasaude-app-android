@@ -69,7 +69,7 @@ sealed interface VoiceNavigationEvent {
     data class NavigateToVitals(val type: String, val value: String) : VoiceNavigationEvent
     data class NavigateToHydration(val addMl: Int? = null, val openCustomDialog: Boolean = true) : VoiceNavigationEvent
     object NavigateToDoses : VoiceNavigationEvent
-    object OpenEmergencyDialog : VoiceNavigationEvent
+    data class OpenEmergencyDialog(val type: String, val message: String) : VoiceNavigationEvent
 }
 
 /**
@@ -581,8 +581,13 @@ class VoiceHealthViewModel @Inject constructor(
             healthQuerySession.rememberReply(output, owner, conversationId, contextTurn)
             _state.value = VoiceUiState.Saved(reply, isConversational = true)
             if (output.isEmergencia) {
-                _navigationEvent.tryEmit(VoiceNavigationEvent.OpenEmergencyDialog)
-                // Emergência abre na hora; a voz alcança logo depois sem espera.
+                // O SOS e a fala começam neste turno, sem a espera de navegação ou rede.
+                // Encerrar a escuta evita que o TTS de acolhimento vire um novo comando.
+                _isLiveMode.value = false
+                voiceSession.invalidate()
+                destroyRecognizer()
+                speak(reply) { onSpeechFinished() }
+                _navigationEvent.tryEmit(VoiceNavigationEvent.OpenEmergencyDialog(output.intent, reply))
             }
             val reason = output.routingReason
             br.com.bragasaude.ai.BragaRoutingLogger.record(
@@ -594,7 +599,7 @@ class VoiceHealthViewModel @Inject constructor(
                 durationMs = output.tempoMs.toLong(),
                 previewResponse = reply
             )
-            speak(reply) { onSpeechFinished() }
+            if (!output.isEmergencia) speak(reply) { onSpeechFinished() }
         }
 
         private suspend fun processUserSpeech(bestMatch: String, local: br.com.bragasaude.ai.NluOutput) {

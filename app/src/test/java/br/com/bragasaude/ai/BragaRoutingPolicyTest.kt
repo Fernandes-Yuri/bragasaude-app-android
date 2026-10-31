@@ -7,6 +7,51 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BragaRoutingPolicyTest {
+    @Test fun `crise emocional recebe acolhimento local nos dois canais`() {
+        for (channel in InputChannel.entries) listOf(
+            "estou me sentindo muito mal quero morrer", "não aguento mais viver",
+            "não quero mais viver", "vontade de sumir", "pensando em morrer",
+            "quero tirar minha vida", "quero acabar com a minha vida", "preferia estar morta",
+            "desespero total", "socorro não aguento mais", "quero me machucar",
+            "automutilação", "quero cortar meus pulsos", "estou pensando em suicídio",
+            "Não tenho dor no peito, mas quero morrer", "não consigo dormir, quero morrer",
+            "não aguento mais, quero morrer"
+        ).forEach { text ->
+            val output = BragaNluEngine.analisar(text, channel)
+            assertEquals(text, BragaRoutingPolicy.MENTAL_HEALTH_EMERGENCY, output.intent)
+            assertEquals(text, BragaRoute.EMERGENCY, output.route)
+            assertFalse(output.delegarParaNuvem)
+            assertTrue(output.respostaLocal!!.contains("CVV 188"))
+            assertTrue(output.respostaLocal.contains("SAMU 192"))
+        }
+    }
+
+    @Test fun `quedas no infinitivo e trauma atual acionam socorro local`() {
+        listOf("acabei de cair passando mal", "meu pai acabou de cair", "estou caindo",
+            "me machuquei agora", "levei um tombo", "escorreguei no banheiro").forEach { text ->
+            val output = BragaNluEngine.analisar(text)
+            assertEquals(text, "emergencia_queda_trauma", output.intent)
+            assertTrue(output.isEmergencia)
+            assertFalse(output.delegarParaNuvem)
+        }
+    }
+
+    @Test fun `negacao historico e prevencao nao viram crise atual`() {
+        listOf("não quero morrer", "não tenho vontade de sumir", "não quero me machucar",
+            "ontem tive vontade de sumir", "não acabei de cair", "ontem levei um tombo",
+            "o que é automutilação?", "como prevenir suicídio?", "li a frase quero morrer no livro",
+            "tenho medo de cair", "como evitar cair?", "tenho receio de me machucar"
+        ).forEach { assertFalse(it, BragaNluEngine.analisar(it).isEmergencia) }
+        assertTrue(BragaNluEngine.analisar("ontem tive vontade de sumir, mas agora voltou").isEmergencia)
+    }
+
+    @Test fun `crise emocional e queda nao consultam rede para texto ou voz`() = runTest {
+        val hybrid = BragaHybridOrchestrator(GroqStreamSource { _, _ -> error("Emergência deve ser local") }, GroqDynamicPrompt())
+        for (channel in InputChannel.entries) listOf("quero morrer", "acabei de cair passando mal").forEach {
+            assertTrue(hybrid.respond(it, emptyList(), channel).toList().single() is BragaHybridEvent.Local)
+        }
+    }
+
     @Test fun `negacao e relato historico nao acionam alerta por coincidencia`() {
         listOf("Não estou com dor no peito", "Não tenho falta de ar", "Ontem tive dor no peito",
             "Li a frase dor no peito num livro", "O que significa dor no peito?").forEach {

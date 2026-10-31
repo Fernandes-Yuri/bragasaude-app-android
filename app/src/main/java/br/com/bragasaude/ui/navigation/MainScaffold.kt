@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.hilt.navigation.compose.hiltViewModel
+import br.com.bragasaude.ui.components.LocalBragaModalState
 import br.com.bragasaude.ui.components.DraggableAiAssistantFab
 import br.com.bragasaude.ui.util.Screen
 import br.com.bragasaude.ui.voice.VoiceHealthViewModel
@@ -41,8 +42,9 @@ fun MainScaffold(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val appContext = LocalContext.current.applicationContext
-    val showOrb = shouldShowAssistantOrb(currentRoute) &&
+    val orbEnabled = shouldShowAssistantOrb(currentRoute) &&
         AppPreferences.isVoiceAssistantEnabled(appContext)
+    val showOrb = shouldShowAssistantOrb(currentRoute, LocalBragaModalState.current.isOpen)
 
     // ==================== Itens de navegação por papel ====================
     val patientNavItems = listOf(
@@ -119,11 +121,13 @@ fun MainScaffold(
                 )
 
                 // O arraste fica limitado à área útil, acima da barra de navegação.
-                if (showOrb) {
+                // Manter o host preserva o SOS e o TTS enquanto apenas o visual fica oculto.
+                if (orbEnabled) {
                     DraggableAiAssistantFab(
                         onNavigate = { screen -> navController.navigate(screen) },
                         modifier = Modifier.fillMaxSize(),
-                        viewModel = voiceViewModel
+                        viewModel = voiceViewModel,
+                        visible = showOrb
                     )
                 }
             }
@@ -162,8 +166,8 @@ internal fun isCurrentRoute(currentRoute: String?, screen: Screen): Boolean {
 
 
 /** Telas novas começam sem sobreposição, até uma decisão explícita de produto. */
-internal fun shouldShowAssistantOrb(currentRoute: String?): Boolean =
-    listOf(
+internal fun shouldShowAssistantOrb(currentRoute: String?, hasOpenModal: Boolean = false): Boolean =
+    !hasOpenModal && listOf(
         Screen.Home,
         Screen.Report
     ).any { isCurrentRoute(currentRoute, it) }

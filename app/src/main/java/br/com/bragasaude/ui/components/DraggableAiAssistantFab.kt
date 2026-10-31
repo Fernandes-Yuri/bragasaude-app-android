@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
@@ -213,14 +214,15 @@ private fun AnimatedAudioWaveBar(delay: Int) {
 fun DraggableAiAssistantFab(
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: VoiceHealthViewModel = hiltViewModel()
+    viewModel: VoiceHealthViewModel = hiltViewModel(),
+    visible: Boolean = true
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     val audioRmsDb by viewModel.audioRmsDb.collectAsState()
     val isSpeaking by viewModel.isSpeaking.collectAsState()
     val isLiveMode by viewModel.isLiveMode.collectAsState()
-    var showEmergencyDialog by remember { mutableStateOf(false) }
+    var emergencyDialog by remember { mutableStateOf<VoiceNavigationEvent.OpenEmergencyDialog?>(null) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
@@ -251,7 +253,7 @@ fun DraggableAiAssistantFab(
 
                 is VoiceNavigationEvent.NavigateToDoses -> onNavigate(Screen.Reminders)
                 is VoiceNavigationEvent.OpenEmergencyDialog -> {
-                    showEmergencyDialog = true
+                    emergencyDialog = event
                 }
             }
         }
@@ -435,12 +437,16 @@ fun DraggableAiAssistantFab(
 
         val isModalOpen = LocalBragaModalState.current.isOpen
         val isKeyboardOpen = WindowInsets.isImeVisible
-        val shouldHideOrbVisuals = (isModalOpen || isKeyboardOpen) && !showEmergencyDialog
+        val shouldHideOrbVisuals = !visible || isModalOpen || isKeyboardOpen || emergencyDialog != null
         LaunchedEffect(shouldHideOrbVisuals) {
-            if (shouldHideOrbVisuals && !isLiveMode) viewModel.onHostStopped()
+            if (shouldHideOrbVisuals && emergencyDialog == null && !isLiveMode) viewModel.onHostStopped()
         }
 
-        if (!shouldHideOrbVisuals) {
+        AnimatedVisibility(
+            visible = !shouldHideOrbVisuals,
+            enter = fadeIn(tween(150)),
+            exit = fadeOut(tween(100))
+        ) {
             // 2. Continuous Glow Pulse + Concentric Rings + Shockwave
             Canvas(
                 modifier = Modifier
@@ -669,13 +675,11 @@ fun DraggableAiAssistantFab(
         }
     }
 
-    if (showEmergencyDialog) {
-        // Assume this component exists in the current scope or is imported
-        // Since we are preserving it, it should just compile if it compiled before.
+    emergencyDialog?.let { alert ->
         RiskNotificationDialog(
-            type = "EMERGENCIA",
-            message = "Atenção: Sintomas agudos exigem avaliação médica urgente. Escolha uma das opções abaixo para obter socorro imediato:",
-            onDismiss = { showEmergencyDialog = false }
+            type = alert.type,
+            message = alert.message,
+            onDismiss = { emergencyDialog = null }
         )
     }
 }

@@ -23,6 +23,31 @@ import org.junit.Assert.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class VoiceRecognitionSessionTest {
+    @Test fun `crise emocional fala e abre SOS sem esperar TTS ou navegacao`() = runTest(dispatcher) {
+        val output = BragaNluEngine.analisar("quero morrer")
+        every { hybrid.analyze(any(), InputChannel.VOICE, any(), any(), any()) } returns output
+        coEvery { player.playSpeech(any(), any(), any(), any()) } coAnswers { awaitCancellation() }
+        val events = mutableListOf<VoiceNavigationEvent>()
+        val collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.navigationEvent.collect { events.add(it) }
+        }
+        vm.startListening(context)
+        runCurrent()
+        val start = testScheduler.currentTime
+        listeners.single().onResults(result("quero morrer"))
+        runCurrent()
+        assertEquals(start, testScheduler.currentTime)
+        assertEquals(VoiceNavigationEvent.OpenEmergencyDialog(output.intent, output.respostaLocal!!), events.single())
+        coVerify(exactly = 1) { player.playSpeech(
+            br.com.bragasaude.util.PortuguesePhoneticHelper.cleanTextForTts(output.respostaLocal!!),
+            any(), any(), any()) }
+        verify(exactly = 0) { parser.parse(any(), any(), any()) }
+        verify(exactly = 0) { hybrid.respond(any(), any(), any(), any(), any()) }
+        verify(atLeast = 1) { recognizer.destroy() }
+        assertFalse(vm.isLiveMode.value)
+        collector.cancel()
+    }
+
     @Test fun `unknown speech reaches cloud only after local parser fails`() = runTest(dispatcher) {
         every { hybrid.analyze(any(), InputChannel.VOICE, any(), any(), any()) } returns
             NluOutput("entrada_sem_clareza", "Repita")

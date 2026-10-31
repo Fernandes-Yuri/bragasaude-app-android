@@ -33,7 +33,8 @@ data class ChatMessage(
     val parameters: String = "{}",
     val actionStatus: String = "pending",
     val rawContent: String? = null,
-    val metrics: String? = null
+    val metrics: String? = null,
+    val emergencyType: String? = null
 )
 
 data class OrbChatUiState(
@@ -50,7 +51,7 @@ data class OrbChatUiState(
 
 sealed interface OrbChatEvent {
     data class Navigate(val screen: Screen) : OrbChatEvent
-    data object Emergency : OrbChatEvent
+    data class Emergency(val type: String = "EMERGENCIA", val message: String = "Se precisar de socorro imediato, ligue para o SAMU 192. Para apoio emocional, ligue para o CVV 188.") : OrbChatEvent
 }
 
 @HiltViewModel
@@ -283,7 +284,7 @@ class OrbChatViewModel @Inject constructor(
                         delay(cadenceMs)
                     }
                     if (auth.currentUser?.uid != owner || uid != owner || version != revision) return@launch
-                    if (local.isEmergencia) navigation.send(OrbChatEvent.Emergency)
+                    if (local.isEmergencia) navigation.send(OrbChatEvent.Emergency(local.intent, resolved.respostaLocal.orEmpty()))
                     OrbReply(JSONObject().put("fala", resolved.respostaLocal.orEmpty())
                         .put("acao", "CONVERSA").put("parametros", JSONObject()).toString(), "Resposta local; 0 tokens de nuvem")
                 } else {
@@ -329,7 +330,7 @@ class OrbChatViewModel @Inject constructor(
                 } else if (useLocal) {
                     val reason = when {
                         local.isBloqueioSeguranca -> "Muralha de segurança local (0 tokens)"
-                        local.isEmergencia -> "Emergência detectada localmente (SAMU 192)"
+                        local.isEmergencia -> "Emergência detectada localmente; socorro e apoio disponíveis"
                         BragaHealthMemory.supports(local.intent) -> "Consulta local Room (histórico de saúde)"
                         else -> local.routingReason
                     }
@@ -340,6 +341,7 @@ class OrbChatViewModel @Inject constructor(
 
                 val answer = ChatMessage(role = "assistant", text = answerText, status = "received",
                     action = action, parameters = finalParams.toString(),
+                    emergencyType = if (local.isEmergencia) local.intent else if (action == "EMERGENCIA") "EMERGENCIA" else null,
                     rawContent = if (channel == InputChannel.TEXT) JSONObject(safeContent)
                         .put("fala", answerText).toString() else safeContent,
                     metrics = listOfNotNull(reply.metrics, diagnostic).joinToString("\n"))
@@ -472,7 +474,7 @@ class OrbChatViewModel @Inject constructor(
                         Screen.Reminders
                     }
                     "EMERGENCIA" -> {
-                        navigation.send(OrbChatEvent.Emergency)
+                        navigation.send(OrbChatEvent.Emergency())
                         if (!notifications.triggerEmergency(owner, profile?.fullName ?: "Usuário Braga", "Alerta confirmado pelo usuário no chat Braga."))
                             showError("Não foi possível avisar seus contatos. Use as opções de socorro na tela.")
                         null
@@ -547,6 +549,6 @@ fun actionLabel(action: String): String = when (action) {
     "ABRIR_FAMILIA" -> "Família"
     "LEMBRETES" -> "lembretes de remédios"
     "EXAMES" -> "exames"
-    "EMERGENCIA" -> "opções de socorro e avisar contatos"
+    "EMERGENCIA" -> "opções de socorro e apoio"
     else -> action
 }

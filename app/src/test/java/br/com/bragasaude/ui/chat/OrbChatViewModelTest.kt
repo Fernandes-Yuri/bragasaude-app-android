@@ -54,6 +54,35 @@ class OrbChatViewModelTest {
     }
     @After fun tearDown() { vm.leaveScreen(); Dispatchers.resetMain() }
 
+    @Test fun emergenciesKeepDirectActionsWithoutCadenceOrCloud() = runTest(dispatcher) {
+        vm.nluResponseDelayMs = 5000L
+        val events = mutableListOf<OrbChatEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.events.collect { events.add(it) } }
+        listOf("quero morrer" to BragaRoutingPolicy.MENTAL_HEALTH_EMERGENCY,
+            "acabei de cair passando mal" to "emergencia_queda_trauma").forEach { (text, type) ->
+            val start = testScheduler.currentTime
+            vm.sendMessage(text)
+            runCurrent()
+            val answer = vm.state.value.messages.last()
+            assertFalse(vm.state.value.isStreaming)
+            assertEquals(start, testScheduler.currentTime)
+            assertEquals(type, answer.emergencyType)
+            assertEquals(OrbChatEvent.Emergency(type, answer.text), events.last())
+            val json = kotlinx.serialization.json.Json
+            val saved = json.encodeToString(ChatMessage.serializer(), answer)
+            assertEquals(type, json.decodeFromString(ChatMessage.serializer(), saved).emergencyType)
+        }
+        verify(exactly = 0) { gateway.open(any()) }
+        coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
+    }
+
+    @Test fun oldChatHistoryLoadsWithoutEmergencyActions() {
+        val restored = kotlinx.serialization.json.Json.decodeFromString(ChatMessage.serializer(),
+            """{"role":"assistant","text":"Olá"}""")
+        assertNull(restored.emergencyType)
+    }
+
+
     @Test fun test_sendMessage_updatesState() = runTest(dispatcher) {
         coEvery { gateway.sendRemote(any(), any(), any(), any()) } coAnswers { awaitCancellation() }
         vm.updateInput("Minha pressão")

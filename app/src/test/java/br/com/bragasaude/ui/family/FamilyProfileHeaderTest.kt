@@ -30,6 +30,44 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class FamilyProfileHeaderTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun extraParticipantsStayInsideCircularBadgeWithLargeFont() {
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 1.5f)) {
+                BragasaudeTheme {
+                    Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        listOf(1, 10, 100).forEach { FamilyParticipantBadge(it, 18.dp) }
+                    }
+                }
+            }
+        }
+        listOf(1, 10, 100).forEach { count ->
+            val layouts = mutableListOf<TextLayoutResult>()
+            val label = compose.onNodeWithText("+$count", useUnmergedTree = true).assertIsDisplayed()
+            label
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            assertEquals(1, layouts.single().lineCount)
+            assertEquals("+$count".length, layouts.single().getLineEnd(0, visibleEnd = true))
+            assertFalse(layouts.single().isLineEllipsized(0))
+            val bounds = compose.onNodeWithContentDescription("Mais $count participantes")
+                .fetchSemanticsNode().boundsInRoot
+            assertEquals(bounds.width, bounds.height, 0.1f)
+            // Em Compose 1.7, GetTextLayoutResult de String reconstrói o parágrafo com
+            // maxWidth do pai. Conferir os limites renderizados evita esse falso overflow.
+            val textBounds = label.fetchSemanticsNode().boundsInRoot
+            assertTrue("Texto deve caber no círculo", textBounds.left >= bounds.left &&
+                textBounds.right <= bounds.right && textBounds.top >= bounds.top && textBounds.bottom <= bounds.bottom)
+        }
+        compose.runOnIdle {
+            val view = WindowInspector.getGlobalWindowViews().first()
+            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            view.draw(Canvas(bitmap))
+            val file = File("build/outputs/family-review/badge-participantes-fonte-ampliada.png")
+            file.parentFile.mkdirs()
+            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
+    }
     @Test fun completeNameWrapsAtLargeFontWithoutEllipsis() {
         val name = "Yuri Fernandes dos Santos de Oliveira"
         compose.setContent {

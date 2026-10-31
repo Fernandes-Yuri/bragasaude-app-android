@@ -202,6 +202,12 @@ object BragaNluEngine {
             "Não tenho esse talento no meu repertório. Posso apoiar seu autocuidado hoje?",
             "Esse pedido foge do que consigo fazer. Vamos conversar sobre sua saúde ou sua rotina?"
         ),
+        BragaRoutingPolicy.MENTAL_HEALTH_EMERGENCY to listOf(
+            "Sinto muito que esteja sofrendo assim. Sua vida importa. Ligue para o CVV 188 para conversar e procure alguém de confiança para ficar com você. Se houver perigo imediato, ligue para o SAMU 192.",
+            "Você merece cuidado e apoio neste momento. Ligue para o CVV 188 e peça a alguém de confiança que fique com você. Em perigo imediato, ligue para o SAMU 192.",
+            "Obrigado por contar como está se sentindo. Você não precisa enfrentar isso sem apoio. Ligue para o CVV 188 e chame alguém de confiança. Se houver risco imediato à sua vida, ligue para o SAMU 192.",
+            "Sinto muito por essa dor. Sua vida tem valor e há pessoas prontas para ouvir você no CVV 188. Procure alguém de confiança para ficar ao seu lado. Em perigo imediato, ligue para o SAMU 192."
+        ),
         "emergencia_dor_peito_avc" to listOf(
             "Esses sintomas precisam de avaliação urgente. Ligue para o SAMU 192 e peça ajuda a alguém próximo.",
             "Procure socorro agora: ligue para o SAMU 192. Avise alguém próximo e não espere a conversa continuar.",
