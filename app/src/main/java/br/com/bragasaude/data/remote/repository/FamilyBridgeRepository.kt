@@ -12,6 +12,7 @@ import br.com.bragasaude.data.local.SocialPostEntity
 import br.com.bragasaude.data.local.SocialFeedDao
 import br.com.bragasaude.data.local.VitalSignDao
 import br.com.bragasaude.data.local.VitalSignEntity
+import br.com.bragasaude.data.local.security.FamilyE2eeManager
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.sync.SyncScheduler
 import br.com.bragasaude.data.util.parseDate
@@ -49,8 +50,31 @@ class FamilyBridgeRepository @Inject constructor(
     private val apiClient: BragaApiClient,
     private val auth: FirebaseAuth,
     private val syncScheduler: SyncScheduler,
-    @ApplicationContext private val appContext: Context
+    @ApplicationContext private val appContext: Context,
+    private val e2eeManager: FamilyE2eeManager
 ) {
+    constructor(
+        familyDao: FamilyDao,
+        vitalSignDao: VitalSignDao,
+        profileDao: ProfileDao,
+        dailyMetricsDao: DailyMetricsDao,
+        socialFeedDao: SocialFeedDao,
+        apiClient: BragaApiClient,
+        auth: FirebaseAuth,
+        syncScheduler: SyncScheduler,
+        appContext: Context
+    ) : this(
+        familyDao = familyDao,
+        vitalSignDao = vitalSignDao,
+        profileDao = profileDao,
+        dailyMetricsDao = dailyMetricsDao,
+        socialFeedDao = socialFeedDao,
+        apiClient = apiClient,
+        auth = auth,
+        syncScheduler = syncScheduler,
+        appContext = appContext,
+        e2eeManager = FamilyE2eeManager()
+    )
 
     // AUD-AN22: escopo único para o ticker de purga compartilhado.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -135,6 +159,16 @@ class FamilyBridgeRepository @Inject constructor(
     ): FamilyBindingEntity {
         require(auth.currentUser?.uid == caregiverUserId) { "Entre na sua conta para conectar o familiar." }
         val accepted = apiClient.acceptFamilyInvitation(code, caregiverName, caregiverRelation)
+        runCatching {
+            val caregiverPubKey = e2eeManager.getOrCreatePublicKeyBase64(caregiverUserId)
+            if (caregiverPubKey.isNotBlank()) {
+                apiClient.publishFamilyE2eePublicKey(
+                    bindingId = accepted.remoteId ?: accepted.id,
+                    patientId = accepted.patientUserId,
+                    publicKey = caregiverPubKey
+                )
+            }
+        }
         familyDao.deletePendingBindingsByCode(accepted.connectionCode)
         familyDao.insertBinding(accepted)
         return accepted
@@ -153,6 +187,7 @@ class FamilyBridgeRepository @Inject constructor(
 
     suspend fun purgePatientDataFromCache(patientUserId: String) {
         try {
+            e2eeManager.clearKeysForPatient(patientUserId)
             vitalSignDao.deleteByUserId(patientUserId)
             dailyMetricsDao.deleteByUserId(patientUserId)
             familyDao.deleteMessagesForPatient(patientUserId)
@@ -254,7 +289,13 @@ class FamilyBridgeRepository @Inject constructor(
         familyDao.insertMessage(message)
 
         try {
-            val remoteId = apiClient.syncFamilyMessage(message)
+            val encryptedPayload = e2eeManager.encryptForConversation(
+                senderUserId = userId,
+                patientId = patientUserId,
+                plaintext = cleanText
+            )
+            val wireMessage = message.copy(messageText = encryptedPayload)
+            val remoteId = apiClient.syncFamilyMessage(wireMessage)
             check(auth.currentUser?.uid == userId) { "Sua conta mudou. Abra a conversa novamente." }
             if (remoteId != null) {
                 familyDao.markMessageSynced(localId, remoteId)
@@ -269,6 +310,26 @@ class FamilyBridgeRepository @Inject constructor(
         }
         syncScheduler.scheduleSync()
         return message
+    }
+
+    private fun decodeMessageForLocalStorage(
+        currentUserId: String,
+        patientUserId: String,
+        msg: FamilyMessageEntity
+    ): FamilyMessageEntity {
+        if (!FamilyE2eeManager.isEncryptedEnvelope(msg.messageText)) return msg
+        val clearText = runCatching {
+            e2eeManager.decryptForConversation(
+                currentUserId = currentUserId,
+                patientId = patientUserId,
+                rawPayload = msg.messageText,
+                senderUserId = msg.senderUserId
+            ).text
+        }.getOrElse {
+            android.util.Log.w("FamilyBridgeRepo", "Mensagem E2EE indecifrável no momento: ${it.message}")
+            msg.messageText
+        }
+        return msg.copy(messageText = clearText)
     }
 
     suspend fun sendCareMessage(
@@ -311,17 +372,18 @@ class FamilyBridgeRepository @Inject constructor(
                 // D47: expirada no servidor — nunca reintroduzir; purgar cópia local se houver
                 msg.expiresAt in 1..now -> familyDao.deleteMessage(msg.id)
                 else -> {
-                    val local = familyDao.getMessageById(msg.id)
-                    if (local?.pendingSync != true && local?.deletedAt == null) familyDao.insertMessage(msg)
+                    val decodedMsg = decodeMessageForLocalStorage(userId, patientUserId, msg)
+                    val local = familyDao.getMessageById(decodedMsg.id)
+                    if (local?.pendingSync != true && local?.deletedAt == null) familyDao.insertMessage(decodedMsg)
                     // Fallback (doc 10 §1A.2): mensagem NOVA vinda do servidor e que
                     // não foi enviada por este aparelho → notificação local. É a rota
                     // que cobre quem não recebeu (ou não pode receber) o push FCM.
-                    if (local == null && msg.senderUserId != auth.currentUser?.uid && msg.messageText.isNotBlank()) {
+                    if (local == null && decodedMsg.senderUserId != auth.currentUser?.uid && decodedMsg.messageText.isNotBlank()) {
                         try {
                             FamilyNotificationService.notifyPatientMessage(
                                 appContext,
-                                msg.senderName.ifBlank { "Familiar" },
-                                msg.messageText
+                                decodedMsg.senderName.ifBlank { "Familiar" },
+                                decodedMsg.messageText
                             )
                         } catch (e: Exception) {
                             android.util.Log.w("FamilyBridgeRepo", "Aviso ao notificar mensagem recebida: ${e.message}")
@@ -481,7 +543,16 @@ class FamilyBridgeRepository @Inject constructor(
 
     private fun liveMessages(source: Flow<List<FamilyMessageEntity>>): Flow<List<FamilyMessageEntity>> =
         source.combine(purgeTicker) { messages, now ->
-            messages.filter { it.deletedAt == null && it.expiresAt > now }
+            val currentUid = auth.currentUser?.uid
+            messages
+                .filter { it.deletedAt == null && it.expiresAt > now }
+                .map { msg ->
+                    decodeMessageForLocalStorage(
+                        currentUserId = currentUid ?: msg.patientUserId,
+                        patientUserId = msg.patientUserId,
+                        msg = msg
+                    )
+                }
         }
 
     /** D47 — Purga local: remove definitivamente mensagens que completaram 24h. */

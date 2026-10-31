@@ -381,4 +381,55 @@ class FamilyBridgeRepositoryTest {
         }
     }
 
+    @Test fun e2eeEncryptsMessageBeforeWireAndDecryptsOnDownload() = runBlocking {
+        val e2ee = br.com.bragasaude.data.local.security.FamilyE2eeManager()
+        val patientPub = e2ee.getOrCreatePublicKeyBase64("patient-1")
+        val caregiverPub = e2ee.getOrCreatePublicKeyBase64("caregiver-1")
+        e2ee.registerBindingKeys("patient-1", "caregiver-1", patientPub, caregiverPub)
+
+        val e2eeRepo = FamilyBridgeRepository(
+            familyDao = familyDao,
+            vitalSignDao = vitalSignDao,
+            profileDao = profileDao,
+            dailyMetricsDao = dailyMetricsDao,
+            socialFeedDao = socialFeedDao,
+            apiClient = apiClient,
+            auth = auth,
+            syncScheduler = syncScheduler,
+            appContext = appContext,
+            e2eeManager = e2ee
+        )
+        coEvery { familyDao.existsActiveLink("patient-1", "caregiver-1") } returns pendingBinding().copy(
+            patientUserId = "patient-1",
+            caregiverUserId = "caregiver-1",
+            status = "ACTIVE"
+        )
+        val wireSlot = slot<br.com.bragasaude.data.local.FamilyMessageEntity>()
+        coEvery { apiClient.syncFamilyMessage(capture(wireSlot)) } returns "remote-e2ee-id"
+
+        val plaintext = "Tomei o medicamento da pressão às 09h"
+        val created = e2eeRepo.createFamilyMessage("patient-1", "Maria", plaintext, "MED")
+
+        assertEquals(plaintext, created.messageText)
+        assertTrue(
+            "Payload enviado para a nuvem deve ser um envelope E2EE v1",
+            br.com.bragasaude.data.local.security.FamilyE2eeManager.isEncryptedEnvelope(wireSlot.captured.messageText)
+        )
+        assertFalse(
+            "Payload de rede nunca deve conter texto plano",
+            wireSlot.captured.messageText.contains("medicamento")
+        )
+
+        coEvery { familyDao.getMessageById(any()) } returns null
+        coEvery { apiClient.getFamilyMessages("patient-1") } returns listOf(
+            wireSlot.captured.copy(id = "remote-e2ee-id", remoteId = "remote-e2ee-id", pendingSync = false)
+        )
+        val insertedSlot = slot<br.com.bragasaude.data.local.FamilyMessageEntity>()
+        coEvery { familyDao.insertMessage(capture(insertedSlot)) } just Runs
+
+        val syncRes = e2eeRepo.syncFamilyMessages("patient-1")
+        assertTrue(syncRes.isSuccess)
+        assertEquals(plaintext, insertedSlot.captured.messageText)
+    }
+
 }
