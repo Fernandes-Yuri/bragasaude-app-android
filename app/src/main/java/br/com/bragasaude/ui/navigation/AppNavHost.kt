@@ -144,7 +144,10 @@ fun AppNavHost(
             OrganizerScreen(onBack = navigateBack)
         }
         composable<Screen.Notifications> {
-            NotificationsScreen(onBack = navigateBack)
+            NotificationsScreen(
+                onBack = navigateBack,
+                onNavigateToScreen = { navController.navigate(it) }
+            )
         }
         composable<Screen.SmokingSupport> {
             br.com.bragasaude.ui.smoking.SmokingSupportScreen(onBack = navigateBack)

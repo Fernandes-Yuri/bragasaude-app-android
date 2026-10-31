@@ -180,7 +180,7 @@ class HomeViewModel @Inject constructor(
 
                 val alerts = mutableListOf<String>()
                 alerts.addAll(vitalAnalysis.alerts)
-                alerts.addAll(activityRecommendations.map { it.message })
+                alerts.addAll(activityRecommendations.map { it.alertText })
 
                 if (profile?.fullName != null) {
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {

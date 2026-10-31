@@ -18,6 +18,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -29,6 +30,7 @@ import br.com.bragasaude.ui.components.BragaFormSheet
 import br.com.bragasaude.ui.components.EmeraldHeaderBanner
 import br.com.bragasaude.ui.theme.BragaBackground
 import br.com.bragasaude.ui.util.BatteryOptimizationHelper
+import br.com.bragasaude.ui.util.Screen
 
 fun Context.findActivity(): ComponentActivity? = when (this) {
     is ComponentActivity -> this
@@ -37,13 +39,16 @@ fun Context.findActivity(): ComponentActivity? = when (this) {
 }
 
 @Composable
-fun NotificationsScreen(onBack: () -> Unit, viewModel: HomeViewModel = hiltViewModel()) {
+fun NotificationsScreen(
+    onBack: () -> Unit,
+    onNavigateToScreen: (Screen) -> Unit,
+    viewModel: HomeViewModel = hiltViewModel()
+) {
     val context = LocalContext.current
     val mainViewModel: MainViewModel = hiltViewModel(context.findActivity()!!)
     val alerts by viewModel.clinicalAlerts.collectAsState()
     val readAlerts by viewModel.readAlerts.collectAsState()
     val identifiedAt by viewModel.alertIdentifiedAt.collectAsState()
-    var selectedAlert by rememberSaveable { mutableStateOf<String?>(null) }
     val lifecycleOwner = LocalLifecycleOwner.current
     var batteryAllowed by remember(context) { mutableStateOf(BatteryOptimizationHelper.estaLiberado(context)) }
     var batteryGuidance by rememberSaveable { mutableStateOf<String?>(null) }
@@ -83,33 +88,12 @@ fun NotificationsScreen(onBack: () -> Unit, viewModel: HomeViewModel = hiltViewM
         batteryAllowed = batteryAllowed, batteryGuidance = batteryGuidance,
         onBack = onBack, onBatterySettings = openBatterySettings,
         onMarkAllRead = viewModel::markAlertsAsRead,
-        onOpen = { alert -> viewModel.markAlertAsRead(alert); selectedAlert = alert },
-        onDismiss = viewModel::dismissAlert
+        onOpen = viewModel::markAlertAsRead,
+        onDismiss = viewModel::dismissAlert,
+        onNotificationPermission = mainViewModel::triggerNotificationPrompt,
+        onMonitoringPermission = mainViewModel::requestPermissions,
+        onNavigateToScreen = onNavigateToScreen
     )
-    selectedAlert?.let { alert ->
-        val isNotificationPermission = alert.startsWith("PERMISSION_NOTIFICATIONS:")
-        val isMonitoringPermission = alert.startsWith("PERMISSION_REQUIRED:")
-        BragaFormSheet(
-            onDismissRequest = { selectedAlert = null },
-            title = { Text(alertCategory(alert)) },
-            text = { Text(alert.removePrefix("PERMISSION_NOTIFICATIONS:").removePrefix("PERMISSION_REQUIRED:").trim()) },
-            confirmButton = {
-                Button(onClick = {
-                    if (isNotificationPermission) mainViewModel.triggerNotificationPrompt()
-                    if (isMonitoringPermission) mainViewModel.requestPermissions()
-                    selectedAlert = null
-                }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
-                    Text(if (isNotificationPermission || isMonitoringPermission) "Configurar permissões" else "Voltar aos avisos",
-                        style = MaterialTheme.typography.bodyMedium)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissAlert(alert); selectedAlert = null }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                    Text("Dispensar aviso", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        )
-    }
 }
 
 @Composable
@@ -117,8 +101,16 @@ internal fun NotificationsContent(
     alerts: List<String>, readAlerts: Set<String>, identifiedAt: Map<String, Long>,
     batteryAllowed: Boolean, batteryGuidance: String?, onBack: () -> Unit,
     onBatterySettings: () -> Unit, onMarkAllRead: () -> Unit,
-    onOpen: (String) -> Unit, onDismiss: (String) -> Unit
+    onOpen: (String) -> Unit, onDismiss: (String) -> Unit,
+    onNotificationPermission: () -> Unit = {},
+    onMonitoringPermission: () -> Unit = {},
+    onNavigateToScreen: (Screen) -> Unit = {}
 ) {
+    var selectedAlert by rememberSaveable { mutableStateOf<String?>(null) }
+    val openAlert: (String) -> Unit = { alert ->
+        onOpen(alert)
+        selectedAlert = alert
+    }
     var batteryExpanded by rememberSaveable { mutableStateOf(false) }
     var batteryDismissed by rememberSaveable { mutableStateOf(false) }
     val unread = alerts.filter { it !in readAlerts }
@@ -169,8 +161,8 @@ internal fun NotificationsContent(
                     }
                 }
                 items(unread, key = { it }) { alert ->
-                    NotificationCard(alert.removePrefix("PERMISSION_NOTIFICATIONS:").removePrefix("PERMISSION_REQUIRED:").trim(),
-                        alertCategory(alert), true, identifiedAt[alert], { onOpen(alert) }, { onDismiss(alert) })
+                    NotificationCard(alertDisplayText(alert).substringBefore("\n\n"),
+                        alertCategory(alert), true, identifiedAt[alert], { openAlert(alert) }, { onDismiss(alert) })
                 }
             }
             if (previous.isNotEmpty()) {
@@ -179,20 +171,120 @@ internal fun NotificationsContent(
                         style = MaterialTheme.typography.titleMedium)
                 }
                 items(previous, key = { it }) { alert ->
-                    NotificationCard(alert.removePrefix("PERMISSION_NOTIFICATIONS:").removePrefix("PERMISSION_REQUIRED:").trim(),
-                        alertCategory(alert), false, identifiedAt[alert], { onOpen(alert) }, { onDismiss(alert) })
+                    NotificationCard(alertDisplayText(alert).substringBefore("\n\n"),
+                        alertCategory(alert), false, identifiedAt[alert], { openAlert(alert) }, { onDismiss(alert) })
                 }
             }
         }
     }
+    selectedAlert?.let { alert ->
+        NotificationDetailsSheet(
+            alert = alert,
+            onClose = { selectedAlert = null },
+            onDismiss = { onDismiss(alert); selectedAlert = null },
+            onNotificationPermission = onNotificationPermission,
+            onMonitoringPermission = onMonitoringPermission,
+            onNavigateToScreen = onNavigateToScreen
+        )
+    }
 }
 
-private fun alertCategory(alert: String): String = when {
-    alert.startsWith("PERMISSION_") -> "Configurações"
-    alert.contains("água", ignoreCase = true) || alert.contains("hidrat", ignoreCase = true) -> "Hidratação"
-    alert.contains("passos", ignoreCase = true) || alert.contains("atividade", ignoreCase = true) -> "Atividade"
-    alert.contains("remédio", ignoreCase = true) || alert.contains("medica", ignoreCase = true) -> "Medicamentos"
-    else -> "Saúde e cuidado"
+@Composable
+private fun NotificationDetailsSheet(
+    alert: String,
+    onClose: () -> Unit,
+    onDismiss: () -> Unit,
+    onNotificationPermission: () -> Unit,
+    onMonitoringPermission: () -> Unit,
+    onNavigateToScreen: (Screen) -> Unit
+) {
+    val isNotificationPermission = alert.startsWith("PERMISSION_NOTIFICATIONS:")
+    val isMonitoringPermission = alert.startsWith("PERMISSION_REQUIRED:")
+    val category = alertCategory(alert)
+    // O primeiro parágrafo é o título; os demais preservam a orientação completa.
+    val paragraphs = alertDisplayText(alert).split("\n\n", limit = 2)
+    val title = when {
+        isNotificationPermission || isMonitoringPermission -> paragraphs.first()
+        paragraphs.size == 2 -> paragraphs.first()
+        else -> null
+    }
+    val body = when {
+        isNotificationPermission ->
+            "Permita as notificações para receber lembretes e avisos de saúde mesmo com o aplicativo fechado. Toque em Configurar permissões para autorizar no Android."
+        isMonitoringPermission ->
+            "Permita o acesso à atividade física e à localização para acompanhar seus passos e caminhadas e atualizar seu Score. Toque em Configurar permissões para revisar os acessos no Android."
+        else -> paragraphs.getOrElse(1) { paragraphs.first() }
+    }
+    val destination = when (category) {
+        "Hidratação" -> Screen.Hydration(autoOpenDialog = true)
+        "Atividade" -> Screen.Steps
+        "Medicamentos" -> Screen.Reminders
+        else -> null
+    }
+    val hasAction = isNotificationPermission || isMonitoringPermission || destination != null
+    val actionLabel = when {
+        isNotificationPermission || isMonitoringPermission -> "Configurar permissões"
+        category == "Hidratação" -> "Registrar água"
+        category == "Atividade" -> "Ver passos"
+        category == "Medicamentos" -> "Ver medicamentos"
+        else -> "Voltar aos avisos"
+    }
+    BragaFormSheet(
+        onDismissRequest = onClose,
+        title = { Text(category) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                title?.let {
+                    Text(it, modifier = Modifier.testTag("notificationAlertTitle"),
+                        style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                }
+                Text(body, modifier = Modifier.testTag("notificationAlertBody"),
+                    style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+            }
+        },
+        confirmButton = {
+            Column {
+                Button(
+                    onClick = {
+                        when {
+                            isNotificationPermission -> onNotificationPermission()
+                            isMonitoringPermission -> onMonitoringPermission()
+                            destination != null -> onNavigateToScreen(destination)
+                        }
+                        onClose()
+                    },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                ) {
+                    Text(actionLabel, style = MaterialTheme.typography.bodyMedium)
+                }
+                if (hasAction) {
+                    TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text("Voltar aos avisos", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text("Dispensar aviso", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    )
+}
+
+private fun alertDisplayText(alert: String): String =
+    alert.removePrefix("PERMISSION_NOTIFICATIONS:").removePrefix("PERMISSION_REQUIRED:").trim()
+
+private fun alertCategory(alert: String): String {
+    // A orientação pode mencionar outros hábitos; a categoria acompanha o título do aviso.
+    val title = alert.substringBefore("\n\n")
+    return when {
+        alert.startsWith("PERMISSION_") -> "Configurações"
+        listOf("água", "hidrat").any { title.contains(it, ignoreCase = true) } -> "Hidratação"
+        listOf("passos", "atividade", "movimento", "caminhada", "sedentar").any { title.contains(it, ignoreCase = true) } -> "Atividade"
+        listOf("remédio", "medica").any { title.contains(it, ignoreCase = true) } -> "Medicamentos"
+        else -> "Saúde e cuidado"
+    }
 }
 
 @Composable

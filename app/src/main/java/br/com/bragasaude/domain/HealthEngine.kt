@@ -12,7 +12,6 @@ import br.com.bragasaude.data.remote.repository.*
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
-import java.util.Calendar
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -82,13 +81,17 @@ class HealthEngine @Inject constructor(
         val action: String,
         val recheckMinutes: Int? = null,
         val isEmergency: Boolean = false
-    )
+    ) {
+        val alertText: String get() = listOf(message, action).filter { it.isNotBlank() }.joinToString("\n\n")
+    }
 
     data class ActivityRecommendation(
         val message: String,
         val action: String,
         val isAchievement: Boolean = false
-    )
+    ) {
+        val alertText: String get() = listOf(message, action).filter { it.isNotBlank() }.joinToString("\n\n")
+    }
 
     data class AnalysisResult(
         val alerts: List<String>,
@@ -232,7 +235,7 @@ class HealthEngine @Inject constructor(
 
             checkImmediateSOS(vital)?.let { rec ->
                 recommendations.add(rec)
-                alerts.add(rec.message)
+                alerts.add(rec.alertText)
                 
                 if (rec.isEmergency && shouldNotify) {
                     riskManager.emitRisk("SOS", rec.message)
@@ -251,7 +254,7 @@ class HealthEngine @Inject constructor(
             // --- ANÁLISE DE SITUAÇÃO: ESTABILIZAÇÃO DE PRESSÃO ---
             checkPressureStabilization(vital, history)?.let { rec ->
                 recommendations.add(rec)
-                alerts.add(rec.message)
+                alerts.add(rec.alertText)
                 if (shouldNotify) {
                     showNotification(context.getString(R.string.health_evolution_title), rec.message, NOTIFICATION_ID_EVOLUTION)
                 }
@@ -369,14 +372,18 @@ class HealthEngine @Inject constructor(
 
 
 
-    suspend fun analyzeActivityPatterns(userId: String, dailyMetrics: List<DailyMetricsEntity>): List<ActivityRecommendation> {
+    suspend fun analyzeActivityPatterns(
+        userId: String,
+        dailyMetrics: List<DailyMetricsEntity>,
+        now: ZonedDateTime = ZonedDateTime.now()
+    ): List<ActivityRecommendation> {
         val recommendations = mutableListOf<ActivityRecommendation>()
         
         // 1. Alerta de Sedentarismo (Baseado nos dados do dia atual)
-        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+        val today = now.toLocalDate().toString()
         val todayMetrics = dailyMetrics.find { it.date == today }
         
-        if (todayMetrics != null && todayMetrics.steps < 500 && Calendar.getInstance().get(Calendar.HOUR_OF_DAY) > 10) {
+        if (todayMetrics != null && todayMetrics.steps < 500 && now.hour > 10) {
             recommendations.add(ActivityRecommendation(
                 message = context.getString(R.string.sedentary_alert),
                 action = context.getString(R.string.sedentary_msg)
@@ -439,7 +446,7 @@ class HealthEngine @Inject constructor(
                 action = context.getString(R.string.imc_alert_action)
             )
             recommendations.add(rec)
-            alerts.add(rec.message)
+            alerts.add(rec.alertText)
         }
 
         // --- ANÁLISE DE SITUAÇÃO: TENDÊNCIA DE PESO ---
@@ -453,7 +460,7 @@ class HealthEngine @Inject constructor(
                     isEmergency = true
                 )
                 recommendations.add(0, rec)
-                alerts.add(0, rec.message)
+                alerts.add(0, rec.alertText)
                 if (!silent && measuredAt >= System.currentTimeMillis() - 5 * 60 * 1000) {
                     riskManager.emitRisk("SOS", "${rec.message} ${rec.action}")
                     showNotification(context.getString(R.string.health_emergency_title), "${rec.message} ${rec.action}", NOTIFICATION_ID_EMERGENCY)
