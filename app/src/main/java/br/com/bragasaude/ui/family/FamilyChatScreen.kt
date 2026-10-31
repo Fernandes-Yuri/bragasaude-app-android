@@ -3,6 +3,7 @@ package br.com.bragasaude.ui.family
 import br.com.bragasaude.ui.components.BragaAlertDialog
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -23,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -33,6 +35,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.local.FamilyMessageEntity
 import br.com.bragasaude.domain.FamilyConversationPdfExporter
 import br.com.bragasaude.ui.theme.BragaEmerald
+import br.com.bragasaude.ui.theme.BragaEmeraldDark
 import br.com.bragasaude.ui.theme.BragaMint
 import br.com.bragasaude.ui.theme.BragaTextPrimary
 import br.com.bragasaude.ui.theme.BragaTextSecondary
@@ -58,7 +61,6 @@ fun FamilyChatScreen(
     val allMessages by viewModel.familyMessages.collectAsState()
     val patientId by viewModel.chatPatientId.collectAsState()
     val messages = allMessages.filter { it.patientUserId == patientId }
-    val binding by viewModel.activeBindingsForCurrentUser.collectAsState()
     val conversations by viewModel.conversations.collectAsState()
     val currentConversation = conversations.firstOrNull { it.patientId == patientId }
     val chatSyncState by viewModel.chatSyncState.collectAsState()
@@ -72,7 +74,7 @@ fun FamilyChatScreen(
     }
 
     // Gate do polling: só sincroniza com a tela em primeiro plano. Em
-    // background o loop pausa e o gateway deixa de receber os hits de 15s.
+    // background o loop pausa e o gateway deixa de receber os hits de 3s.
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
@@ -128,7 +130,7 @@ fun FamilyChatScreen(
                 },
                 title = {
                     val titleText = currentConversation?.title ?: "Grupo da família"
-                    val subtitleText = "Toque para ver o perfil • mensagens por 24h"
+                    val subtitleText = "Ver perfil"
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
@@ -165,9 +167,6 @@ fun FamilyChatScreen(
                         enabled = messages.isNotEmpty()
                     ) {
                         Icon(Icons.Default.Share, contentDescription = "Exportar conversa em PDF")
-                    }
-                    IconButton(onClick = { showProfileBottomSheet = true }) {
-                        Icon(Icons.Default.Info, contentDescription = "Ver perfil do familiar")
                     }
                     Box {
                         IconButton(onClick = { showMenu = true }) {
@@ -221,16 +220,10 @@ fun FamilyChatScreen(
                 .background(MaterialTheme.colorScheme.background)
         ) {
 
-            Text(
-                text = "Grupo da família: as mensagens são compartilhadas com os participantes vinculados a esta pessoa.",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            // D47: aviso permanente de retenção — as mensagens vivem por 24 horas
+            // Retenção sempre visível; detalhes do grupo e da expiração sob demanda.
             FamilyRetentionNotice(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                compact = true
             )
 
             // Estado da sincronização periódica: discreto, não bloqueia a leitura
@@ -267,12 +260,17 @@ fun FamilyChatScreen(
                     key = { it.id }
                 ) { message ->
                     val isFromMe = message.senderUserId == currentUserId
-                    ChatBubble(
-                        message = message,
-                        isFromMe = isFromMe,
-                        onLongClick = if (isFromMe) ({ messagePendingDelete = message }) else null,
-                        modifier = Modifier.fillMaxWidth(0.85f)
-                    )
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = if (isFromMe) Alignment.CenterEnd else Alignment.CenterStart
+                    ) {
+                        ChatBubble(
+                            message = message,
+                            isFromMe = isFromMe,
+                            onLongClick = if (isFromMe) ({ messagePendingDelete = message }) else null,
+                            modifier = Modifier.fillMaxWidth(0.85f)
+                        )
+                    }
                 }
                 
                 if (messages.isEmpty()) {
@@ -308,8 +306,22 @@ fun FamilyChatScreen(
             
             // Chips de resposta rápida
             HorizontalQuickReplyChips(
+                enabled = patientId != null && !isSending,
                 onSendQuickReply = { text ->
                     messageText = text
+                }
+            )
+
+            FamilyQuickEmojiBar(
+                enabled = patientId != null && !isSending,
+                onSendEmoji = { emoji ->
+                    if (patientId != null && !isSending) {
+                        isSending = true
+                        // O emoji é enviado sozinho; o rascunho de texto é preservado.
+                        viewModel.sendMessageToGroup(emoji) {
+                            isSending = false
+                        }
+                    }
                 }
             )
             
@@ -439,6 +451,16 @@ private fun ChatBubble(
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val bubbleColor = when {
+        isFromMe && isDark -> Color(0xFF064E3B)
+        isFromMe -> Color(0xFFDCFCE7)
+        isDark -> Color(0xFF1E293B)
+        else -> Color.White
+    }
+    val textColor = if (isDark) Color(0xFFF1F5F9) else BragaTextPrimary
+    val secondaryColor = if (isDark) Color(0xFFCBD5E1) else BragaTextSecondary
+    val authorColor = if (isDark) BragaMint else BragaEmeraldDark
     Row(
         modifier = modifier,
         horizontalArrangement = if (isFromMe) Arrangement.End else Arrangement.Start,
@@ -474,9 +496,23 @@ private fun ChatBubble(
                     Modifier
                 },
                 shape = bubbleShape,
-                color = if (isFromMe) BragaEmerald.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant
+                color = bubbleColor,
+                contentColor = textColor,
+                shadowElevation = if (isFromMe) 0.dp else 1.dp,
+                border = if (isFromMe) null else BorderStroke(
+                    1.dp, MaterialTheme.colorScheme.outlineVariant
+                )
             ) {
                 Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    if (!isFromMe) {
+                        Text(
+                            text = message.senderName.ifBlank { "Familiar" },
+                            fontWeight = FontWeight.Bold,
+                            color = authorColor,
+                            fontSize = 13.sp
+                        )
+                        Spacer(Modifier.height(4.dp))
+                    }
                     // Ícone tipo de mensagem
                     if (message.iconType != "CUSTOM" && message.iconType.isNotBlank()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -498,7 +534,7 @@ private fun ChatBubble(
                             message.messageText,
                             style = MaterialTheme.typography.bodyMedium,
                             fontSize = 15.sp,
-                            color = if (isFromMe) Color.Black else BragaTextPrimary
+                            color = textColor
                         )
                     }
                     
@@ -509,7 +545,7 @@ private fun ChatBubble(
                         formatMessageDate(message.sentAt),
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 12.sp,
-                        color = if (isFromMe) BragaTextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = secondaryColor
                     )
                 }
             }
@@ -530,6 +566,7 @@ private fun ChatBubble(
 
 @Composable
 private fun HorizontalQuickReplyChips(
+    enabled: Boolean,
     onSendQuickReply: (String) -> Unit
 ) {
     val quickReplies = listOf(
@@ -549,6 +586,7 @@ private fun HorizontalQuickReplyChips(
         items(quickReplies) { reply ->
             AssistChip(
                 onClick = { onSendQuickReply(reply) },
+                enabled = enabled,
                 label = {
                     Text(
                         text = reply,
@@ -572,7 +610,7 @@ private fun HorizontalQuickReplyChips(
                         modifier = Modifier.size(16.dp)
                     )
                 },
-                modifier = Modifier.heightIn(min = 48.dp)
+                modifier = Modifier.wrapContentWidth().heightIn(min = 48.dp)
             )
         }
     }
