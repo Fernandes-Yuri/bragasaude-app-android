@@ -1,27 +1,19 @@
 package br.com.bragasaude.ui.components
 
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
+import br.com.bragasaude.ai.BragaRoutingPolicy
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import br.com.bragasaude.ui.profile.ProfileViewModel
-import br.com.bragasaude.ui.theme.Success
 
 @Composable
 fun RiskNotificationDialog(
@@ -29,13 +21,6 @@ fun RiskNotificationDialog(
     message: String,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
-    val profileViewModel: ProfileViewModel = hiltViewModel()
-    val profileState by profileViewModel.profile.collectAsState(initial = null)
-    
-    val contactPhone = profileState?.emergencyContactPhone
-    val contactName = profileState?.emergencyContactName ?: "Contato de Emergência"
-
     BragaAlertDialog(
         onDismissRequest = onDismiss,
 
@@ -78,71 +63,10 @@ fun RiskNotificationDialog(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // BOTÃO 1: Ligar para Emergência (192)
-                Button(
-                    onClick = { 
-                        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:192"))
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
-                ) {
-                    Icon(Icons.Default.Call, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Emergência — 192")
-                }
-
-                // BOTÃO 2: Apoio Emocional — CVV 188
-                Button(
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:188"))
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
-                ) {
-                    Icon(Icons.Default.Phone, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Apoio emocional — CVV 188")
-                }
-
-                // BOTÃO 3: Encontrar UPA mais próxima
-                Button(
-                    onClick = {
-                        val gmmIntentUri = Uri.parse("geo:0,0?q=UNIDADE+DE+PRONTO+ATENDIMENTO")
-                        val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
-                        mapIntent.setPackage("com.google.android.apps.maps")
-                        try {
-                            context.startActivity(mapIntent)
-                        } catch (_: android.content.ActivityNotFoundException) {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/search/?api=1&query=UNIDADE+DE+PRONTO+ATENDIMENTO")))
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(Icons.Default.LocationOn, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("UPA mais próxima")
-                }
-
-                // BOTÃO 3: Contato de Emergência Cadastrado
-                OutlinedButton(
-                    onClick = {
-                        val number = if (!contactPhone.isNullOrBlank()) contactPhone else "192"
-                        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(Icons.Default.Person, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(contactName, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+                EmergencySupportActions(
+                    mentalHealthFirst = type == BragaRoutingPolicy.MENTAL_HEALTH_EMERGENCY,
+                    requestInitialFocus = true
+                )
             }
         }
     )

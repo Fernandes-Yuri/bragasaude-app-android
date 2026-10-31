@@ -6,6 +6,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MainScaffoldRouteMatchingTest {
+    @Test fun `orbe some durante modais inclusive aninhados e volta ao fechar`() {
+        val modals = br.com.bragasaude.ui.components.BragaModalState()
+        assertTrue(shouldShowAssistantOrb("Screen\$Home", modals.isOpen))
+        modals.opened()
+        modals.opened()
+        assertFalse(shouldShowAssistantOrb("Screen\$Home", modals.isOpen))
+        assertFalse(shouldShowAssistantOrb("Screen\$Report", modals.isOpen))
+        modals.closed()
+        assertFalse(shouldShowAssistantOrb("Screen\$Home", modals.isOpen))
+        modals.closed()
+        assertTrue(shouldShowAssistantOrb("Screen\$Home", modals.isOpen))
+    }
 
     @Test fun objectScreen_matchesExactSerialName() {
         // O Navigation Compose 2.8 deriva a rota do serialName do serializador.

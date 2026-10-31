@@ -59,6 +59,8 @@ import androidx.compose.ui.text.style.TextAlign
 import br.com.bragasaude.ai.BragaRoutingLogger
 import br.com.bragasaude.ai.RoutingLogEntry
 import br.com.bragasaude.data.remote.ai.OrbConnectionState
+import br.com.bragasaude.ai.BragaRoutingPolicy
+import br.com.bragasaude.ui.components.EmergencySupportActions
 import br.com.bragasaude.ui.components.RiskNotificationDialog
 import br.com.bragasaude.ui.util.Screen
 import br.com.bragasaude.ui.util.OnDeviceSpeechRecognition
@@ -80,7 +82,7 @@ fun OrbChatScreen(onBack: () -> Unit, onNavigate: (Screen) -> Unit, viewModel: O
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val clipboard = LocalClipboardManager.current
-    var emergency by remember { mutableStateOf(false) }
+    var emergency by remember { mutableStateOf<OrbChatEvent.Emergency?>(null) }
     var listening by remember { mutableStateOf(false) }
     var recognitionStarting by remember { mutableStateOf(false) }
     var recognitionActive by remember { mutableStateOf(false) }
@@ -175,7 +177,7 @@ fun OrbChatScreen(onBack: () -> Unit, onNavigate: (Screen) -> Unit, viewModel: O
         viewModel.events.collect { event ->
             when (event) {
                 is OrbChatEvent.Navigate -> onNavigate(event.screen)
-                OrbChatEvent.Emergency -> emergency = true
+                is OrbChatEvent.Emergency -> emergency = event
             }
         }
     }
@@ -193,8 +195,9 @@ fun OrbChatScreen(onBack: () -> Unit, onNavigate: (Screen) -> Unit, viewModel: O
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startVoice()
             else permission.launch(Manifest.permission.RECORD_AUDIO)
         })
-    if (emergency) RiskNotificationDialog(type = "EMERGENCIA",
-        message = "Se precisar de socorro imediato, ligue 192. Escolha uma opção abaixo.", onDismiss = { emergency = false })
+    emergency?.let { alert ->
+        RiskNotificationDialog(type = alert.type, message = alert.message, onDismiss = { emergency = null })
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -396,7 +399,7 @@ fun OrbChatContent(
         },
         bottomBar = {
             if (!state.showHistory) {
-                Surface(color = Color.Transparent, tonalElevation = 0.dp) {
+                Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
                     Column {
                         if (scrollNavigation.showReturnToLatest) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
@@ -449,7 +452,8 @@ fun OrbChatContent(
                 }
             } else {
                 LazyColumn(Modifier.fillMaxSize().testTag("chatMessages"), state = scroll,
-                    contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(state.messages, key = { it.id }) { message ->
                         ChatBubble(message, state.textScale, state.speakingId == message.id,
                             onAudio = { onAudio(message) }, onConfirm = { onConfirm(message.id) }, onIgnore = { onIgnore(message.id) })
@@ -544,7 +548,8 @@ private fun ChatReturnToLatest(unreadMessages: Int, onClick: () -> Unit) {
 
 @Composable
 fun ChatBubble(message: ChatMessage, textScale: Float = 1f, speaking: Boolean = false,
-               onAudio: () -> Unit = {}, onConfirm: () -> Unit = {}, onIgnore: () -> Unit = {}) {
+               onAudio: () -> Unit = {}, onConfirm: () -> Unit = {}, onIgnore: () -> Unit = {},
+               emergencyActions: @Composable (Boolean) -> Unit = { EmergencySupportActions(it) }) {
     val user = message.role == "user"
     var visible by remember { mutableStateOf(false) }
 
@@ -597,7 +602,11 @@ fun ChatBubble(message: ChatMessage, textScale: Float = 1f, speaking: Boolean = 
                                     if (speaking) AudioWaves() else Icon(Icons.Default.VolumeUp, "Ouvir resposta", tint = Color(0xFF64748B))
                                 }
                             }
-                            if (message.action != null) {
+                            if (!user && (message.emergencyType != null || message.action == "EMERGENCIA")) {
+                                HorizontalDivider(color = Color(0xFFB2DFDB))
+                                Text("Socorro e apoio", style = MaterialTheme.typography.titleSmall)
+                                emergencyActions(message.emergencyType == BragaRoutingPolicy.MENTAL_HEALTH_EMERGENCY)
+                            } else if (message.action != null) {
                                 HorizontalDivider(color = if (user) Color.White.copy(alpha = .3f) else Color(0xFFB2DFDB))
                                 Text("Sugestão: ${actionLabel(message.action)}", color = if (user) Color.White else Color(0xFF1E293B))
                                 val preview = remember(message.parameters) { actionPreview(message.parameters) }

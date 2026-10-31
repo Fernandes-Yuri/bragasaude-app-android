@@ -30,6 +30,37 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class FamilyProfileHeaderTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun extraParticipantsStayInsideCircularBadgeWithLargeFont() {
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 1.5f)) {
+                BragasaudeTheme {
+                    Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        listOf(1, 10, 100).forEach { FamilyParticipantBadge(it, 18.dp) }
+                    }
+                }
+            }
+        }
+        listOf(1, 10, 100).forEach { count ->
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText("+$count", useUnmergedTree = true).assertIsDisplayed()
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            assertEquals(1, layouts.single().lineCount)
+            assertFalse(layouts.single().hasVisualOverflow)
+            val bounds = compose.onNodeWithContentDescription("Mais $count participantes")
+                .fetchSemanticsNode().boundsInRoot
+            assertEquals(bounds.width, bounds.height, 0.1f)
+        }
+        compose.runOnIdle {
+            val view = WindowInspector.getGlobalWindowViews().first()
+            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            view.draw(Canvas(bitmap))
+            val file = File("build/outputs/family-review/badge-participantes-fonte-ampliada.png")
+            file.parentFile.mkdirs()
+            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
+    }
     @Test fun completeNameWrapsAtLargeFontWithoutEllipsis() {
         val name = "Yuri Fernandes dos Santos de Oliveira"
         compose.setContent {
