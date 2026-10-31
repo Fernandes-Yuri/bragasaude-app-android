@@ -64,6 +64,10 @@ class BragaApiClient @Inject constructor(
 
     val baseUrl: String get() = _baseUrl
 
+    internal var familyE2eeManager: br.com.bragasaude.data.local.security.FamilyE2eeManager =
+        runCatching { br.com.bragasaude.data.local.security.FamilyE2eeManager(context) }
+            .getOrElse { br.com.bragasaude.data.local.security.FamilyE2eeManager() }
+
     private val isoFormat get() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
     private val dateFormat get() = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
@@ -488,6 +492,12 @@ class BragaApiClient @Inject constructor(
                 put("expiresAt", isoFormat.format(Date(b.expiresAt)))
                 put("caregiverRole", b.caregiverRole)
                 put("permissions", JSONArray(b.permissionsJson))
+                if (b.status == "PENDING" && b.patientUserId.isNotBlank()) {
+                    runCatching { familyE2eeManager.getOrCreatePublicKeyBase64(b.patientUserId) }
+                        .getOrNull()
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { put("patientPublicKey", it) }
+                }
             }
             val res = postJson("$baseUrl/api/sync/family-binding", json)
             return@withContext res?.optString("id", null)
@@ -505,12 +515,23 @@ class BragaApiClient @Inject constructor(
 
     suspend fun syncFamilyMessage(m: FamilyMessageEntity): String? = withContext(Dispatchers.IO) {
         try {
+            val encryptedBlob = if (br.com.bragasaude.data.local.security.FamilyE2eeManager.isEncryptedEnvelope(m.messageText)) {
+                m.messageText
+            } else {
+                familyE2eeManager.encryptForConversation(
+                    senderUserId = m.senderUserId ?: m.patientUserId,
+                    patientId = m.patientUserId,
+                    plaintext = m.messageText
+                )
+            }
             val json = JSONObject().apply {
                 put("id", m.remoteId ?: m.id)
                 put("patientId", m.patientUserId)
                 put("senderId", m.senderUserId)
                 put("senderName", m.senderName)
-                put("messageText", m.messageText)
+                put("messageText", encryptedBlob)
+                put("bodyEncrypted", encryptedBlob)
+                put("encryptionVersion", br.com.bragasaude.data.local.security.FamilyE2eeManager.CURRENT_ENCRYPTION_VERSION)
                 put("iconType", m.iconType)
                 put("isRead", m.isRead)
                 put("sentAt", isoFormat.format(Date(m.sentAt)))
@@ -540,6 +561,8 @@ class BragaApiClient @Inject constructor(
                 // D47: TTL e tombstone vindos do servidor (retrocompatível com gateway antigo)
                 val expAt = parseIsoMillis(obj.optString("expires_at", null)) ?: (sAt + FAMILY_MESSAGE_TTL_MS)
                 val delAt = parseIsoMillis(obj.optString("deleted_at", null))
+                val bodyEnc = if (obj.isNull("body_encrypted")) "" else obj.optString("body_encrypted", "")
+                val msgText = bodyEnc.ifBlank { obj.optString("message_text", "") }
                 list.add(
                     FamilyMessageEntity(
                         id = obj.getString("id"),
@@ -547,7 +570,7 @@ class BragaApiClient @Inject constructor(
                         patientUserId = obj.getString("patient_id"),
                         senderUserId = obj.getString("sender_id"),
                         senderName = obj.getString("sender_name"),
-                        messageText = obj.getString("message_text"),
+                        messageText = msgText,
                         iconType = obj.optString("icon_type", "LOVE"),
                         isRead = obj.optBoolean("is_read", false),
                         sentAt = sAt,
@@ -998,20 +1021,36 @@ class BragaApiClient @Inject constructor(
 
     private fun JSONObject.nullableString(key: String): String? = safeNullableString(key)
 
-    private fun parseBinding(obj: JSONObject): FamilyBindingEntity = FamilyBindingEntity(
-        id = obj.getString("id"), remoteId = obj.getString("id"),
-        patientUserId = obj.getString("patient_id"),
-        caregiverUserId = if (obj.isNull("caregiver_id")) "" else obj.getString("caregiver_id"),
-        caregiverName = obj.optString("caregiver_name", ""),
-        caregiverRelation = obj.optString("caregiver_relation", ""),
-        patientName = obj.optString("patient_name", null),
-        connectionCode = obj.getString("connection_code"), status = obj.getString("status"),
-        createdAt = java.time.OffsetDateTime.parse(obj.getString("created_at")).toInstant().toEpochMilli(),
-        expiresAt = if (obj.isNull("expires_at")) 0L else java.time.OffsetDateTime.parse(obj.getString("expires_at")).toInstant().toEpochMilli(),
-        caregiverRole = obj.optString("caregiver_role", "CAREGIVER_VIEWER"),
-        permissionsJson = (obj.optJSONArray("permissions") ?: JSONArray()).toString(),
-        pendingSync = false
-    )
+    private fun parseBinding(obj: JSONObject): FamilyBindingEntity {
+        val patientId = obj.getString("patient_id")
+        val caregiverId = if (obj.isNull("caregiver_id")) "" else obj.getString("caregiver_id")
+        val patientPubKey = if (obj.isNull("patient_public_key")) null else obj.optString("patient_public_key", "").takeIf { it.isNotBlank() }
+        val caregiverPubKey = if (obj.isNull("caregiver_public_key")) null else obj.optString("caregiver_public_key", "").takeIf { it.isNotBlank() }
+        if (patientPubKey != null || caregiverPubKey != null) {
+            runCatching {
+                familyE2eeManager.registerBindingKeys(
+                    patientId = patientId,
+                    caregiverId = caregiverId,
+                    patientPublicKey = patientPubKey,
+                    caregiverPublicKey = caregiverPubKey
+                )
+            }
+        }
+        return FamilyBindingEntity(
+            id = obj.getString("id"), remoteId = obj.getString("id"),
+            patientUserId = patientId,
+            caregiverUserId = caregiverId,
+            caregiverName = obj.optString("caregiver_name", ""),
+            caregiverRelation = obj.optString("caregiver_relation", ""),
+            patientName = obj.optString("patient_name", null),
+            connectionCode = obj.getString("connection_code"), status = obj.getString("status"),
+            createdAt = java.time.OffsetDateTime.parse(obj.getString("created_at")).toInstant().toEpochMilli(),
+            expiresAt = if (obj.isNull("expires_at")) 0L else java.time.OffsetDateTime.parse(obj.getString("expires_at")).toInstant().toEpochMilli(),
+            caregiverRole = obj.optString("caregiver_role", "CAREGIVER_VIEWER"),
+            permissionsJson = (obj.optJSONArray("permissions") ?: JSONArray()).toString(),
+            pendingSync = false
+        )
+    }
 
     suspend fun acceptFamilyInvitation(code: String, name: String, relation: String): FamilyBindingEntity = withContext(Dispatchers.IO) {
         val response = postJsonDetailed("$baseUrl/api/family/accept", JSONObject().apply {
@@ -1021,6 +1060,25 @@ class BragaApiClient @Inject constructor(
             throw java.io.IOException(response.errorDetail ?: "Não foi possível confirmar o convite. Verifique a conexão e tente novamente.")
         }
         parseBinding(response.body)
+    }
+
+    suspend fun publishFamilyE2eePublicKey(
+        bindingId: String? = null,
+        patientId: String? = null,
+        publicKey: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                bindingId?.takeIf { it.isNotBlank() }?.let { put("bindingId", it) }
+                patientId?.takeIf { it.isNotBlank() }?.let { put("patientId", it) }
+                put("publicKey", publicKey)
+            }
+            val res = postJson("$baseUrl/api/family/e2ee/public-key", json)
+            return@withContext res != null
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao publicar chave pública E2EE: ${e.message}")
+            return@withContext false
+        }
     }
 
     data class ApiResponse(val body: JSONObject?, val code: Int, val errorDetail: String?)
