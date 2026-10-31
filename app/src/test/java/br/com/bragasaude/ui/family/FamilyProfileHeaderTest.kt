@@ -43,13 +43,20 @@ class FamilyProfileHeaderTest {
         }
         listOf(1, 10, 100).forEach { count ->
             val layouts = mutableListOf<TextLayoutResult>()
-            compose.onNodeWithText("+$count", useUnmergedTree = true).assertIsDisplayed()
+            val label = compose.onNodeWithText("+$count", useUnmergedTree = true).assertIsDisplayed()
+            label
                 .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
             assertEquals(1, layouts.single().lineCount)
-            assertFalse("+$count: ${layouts.single().size}, ${layouts.single().layoutInput}", layouts.single().hasVisualOverflow)
+            assertEquals("+$count".length, layouts.single().getLineEnd(0, visibleEnd = true))
+            assertFalse(layouts.single().isLineEllipsized(0))
             val bounds = compose.onNodeWithContentDescription("Mais $count participantes")
                 .fetchSemanticsNode().boundsInRoot
             assertEquals(bounds.width, bounds.height, 0.1f)
+            // Em Compose 1.7, GetTextLayoutResult de String reconstrói o parágrafo com
+            // maxWidth do pai. Conferir os limites renderizados evita esse falso overflow.
+            val textBounds = label.fetchSemanticsNode().boundsInRoot
+            assertTrue("Texto deve caber no círculo", textBounds.left >= bounds.left &&
+                textBounds.right <= bounds.right && textBounds.top >= bounds.top && textBounds.bottom <= bounds.bottom)
         }
         compose.runOnIdle {
             val view = WindowInspector.getGlobalWindowViews().first()
