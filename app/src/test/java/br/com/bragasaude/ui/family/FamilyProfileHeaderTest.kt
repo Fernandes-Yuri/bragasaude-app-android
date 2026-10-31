@@ -46,7 +46,7 @@ class FamilyProfileHeaderTest {
             compose.onNodeWithText("+$count", useUnmergedTree = true).assertIsDisplayed()
                 .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
             assertEquals(1, layouts.single().lineCount)
-            assertFalse(layouts.single().hasVisualOverflow)
+            assertFalse("+$count: ${layouts.single().size}, ${layouts.single().layoutInput}", layouts.single().hasVisualOverflow)
             val bounds = compose.onNodeWithContentDescription("Mais $count participantes")
                 .fetchSemanticsNode().boundsInRoot
             assertEquals(bounds.width, bounds.height, 0.1f)

@@ -38,7 +38,9 @@ class VoiceRecognitionSessionTest {
         runCurrent()
         assertEquals(start, testScheduler.currentTime)
         assertEquals(VoiceNavigationEvent.OpenEmergencyDialog(output.intent, output.respostaLocal!!), events.single())
-        coVerify(exactly = 1) { player.playSpeech(match { it.contains("CVV 188") }, any(), any(), any()) }
+        coVerify(exactly = 1) { player.playSpeech(
+            br.com.bragasaude.util.PortuguesePhoneticHelper.cleanTextForTts(output.respostaLocal!!),
+            any(), any(), any()) }
         verify(exactly = 0) { parser.parse(any(), any(), any()) }
         verify(exactly = 0) { hybrid.respond(any(), any(), any(), any(), any()) }
         verify(atLeast = 1) { recognizer.destroy() }

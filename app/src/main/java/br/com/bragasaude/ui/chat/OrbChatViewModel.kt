@@ -549,6 +549,6 @@ fun actionLabel(action: String): String = when (action) {
     "ABRIR_FAMILIA" -> "Família"
     "LEMBRETES" -> "lembretes de remédios"
     "EXAMES" -> "exames"
-    "EMERGENCIA" -> "opções de socorro e avisar contatos"
+    "EMERGENCIA" -> "opções de socorro e apoio"
     else -> action
 }

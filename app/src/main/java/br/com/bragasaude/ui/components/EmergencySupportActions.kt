@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -45,7 +46,10 @@ internal fun EmergencyActionButtons(
     val context = LocalContext.current
     val firstAction = remember { FocusRequester() }
     LaunchedEffect(requestInitialFocus, mentalHealthFirst) {
-        if (requestInitialFocus) firstAction.requestFocus()
+        if (requestInitialFocus) {
+            withFrameNanos { }
+            firstAction.requestFocus()
+        }
     }
     fun dial(number: String) {
         context.startActivity(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", number, null)))
@@ -58,7 +62,8 @@ internal fun EmergencyActionButtons(
                 onClick = { dial(number) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
                     .testTag("emergencyDial$number")
-                    .then(if (index == 0) Modifier.focusRequester(firstAction) else Modifier),
+                    .then(if (index == 0) Modifier.focusRequester(firstAction)
+                        .focusProperties { canFocus = true } else Modifier),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (emotionalSupport) Color(0xFFF59E0B) else Color(0xFFDC2626),

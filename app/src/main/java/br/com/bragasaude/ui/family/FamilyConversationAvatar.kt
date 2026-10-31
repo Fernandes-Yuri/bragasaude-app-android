@@ -2,21 +2,20 @@ package br.com.bragasaude.ui.family
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import br.com.bragasaude.ui.components.ConnectedUserAvatar
@@ -51,21 +50,19 @@ fun FamilyConversationAvatar(conversation: FamilyConversationUi?, size: Dp) {
 internal fun FamilyParticipantBadge(count: Int, size: Dp, modifier: Modifier = Modifier) {
     val label = "+$count"
     val style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
-    val measured = rememberTextMeasurer().measure(label, style, softWrap = false, maxLines = 1)
-    val diameter = with(LocalDensity.current) {
-        size.coerceAtLeast(18.dp).coerceAtLeast(measured.size.width.toDp() + 8.dp)
-            .coerceAtLeast(measured.size.height.toDp() + 4.dp)
-    }
-    Surface(
-        modifier = modifier.size(diameter).testTag("familyParticipantBadge")
+    Layout(
+        modifier = modifier.background(BragaEmerald, CircleShape)
+            .border(1.5.dp, Color.White, CircleShape).testTag("familyParticipantBadge")
             .semantics { contentDescription = "Mais $count participantes" },
-        shape = CircleShape,
-        color = BragaEmerald,
-        contentColor = Color.White,
-        border = BorderStroke(1.5.dp, Color.White)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(label, style = style, maxLines = 1, softWrap = false)
+        content = { Text(label, color = Color.White, style = style, maxLines = 1, softWrap = false) }
+    ) { measurables, constraints ->
+        // Medir o próprio texto inclui a fonte e a escala reais usadas na renderização.
+        val text = measurables.single().measure(constraints.copy(minWidth = 0, minHeight = 0))
+        val diameter = maxOf(size.roundToPx(), 18.dp.roundToPx(),
+            text.width + 8.dp.roundToPx(), text.height + 4.dp.roundToPx())
+            .coerceAtMost(minOf(constraints.maxWidth, constraints.maxHeight))
+        layout(diameter, diameter) {
+            text.placeRelative((diameter - text.width) / 2, (diameter - text.height) / 2)
         }
     }
 }
