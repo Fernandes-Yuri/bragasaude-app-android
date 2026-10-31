@@ -3,6 +3,7 @@ package br.com.bragasaude.domain
 import android.content.Context
 import br.com.bragasaude.R
 import br.com.bragasaude.data.local.BiometryEntity
+import br.com.bragasaude.data.local.DailyMetricsEntity
 import br.com.bragasaude.data.local.MilestoneEntity
 import br.com.bragasaude.data.local.ProfileEntity
 import br.com.bragasaude.data.remote.model.RemoteBiometry
@@ -18,6 +19,7 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import java.util.*
+import java.time.ZonedDateTime
 
 class HealthEngineTest {
 
@@ -49,6 +51,62 @@ class HealthEngineTest {
         // Mock strings default
         every { context.getString(any()) } returns "Mock String"
         every { context.getString(any(), *anyVararg()) } answers { "Mock String with Args ${args.drop(1).joinToString()}" }
+    }
+
+    @Test
+    fun `sedentary alert preserves the complete movement guidance`() = runBlocking {
+        val now = ZonedDateTime.parse("2026-10-31T14:00:00-03:00")
+        val action = "Você está em repouso há algum tempo. Que tal uma breve caminhada ou alongamento?"
+        every { context.getString(R.string.sedentary_alert) } returns "Momento de Movimento"
+        every { context.getString(R.string.sedentary_msg) } returns action
+        every { profileRepository.getProfile("user1") } returns flowOf(null)
+
+        val recommendation = healthEngine.analyzeActivityPatterns(
+            "user1", listOf(DailyMetricsEntity("user1", "2026-10-31", steps = 499)), now
+        ).single()
+
+        assertEquals("Momento de Movimento\n\n$action", recommendation.alertText)
+        assertFalse(recommendation.isAchievement)
+    }
+
+    @Test
+    fun `activity achievement preserves guidance and the personal step goal`() = runBlocking {
+        val now = ZonedDateTime.parse("2026-10-31T14:00:00-03:00")
+        every { context.getString(R.string.activity_goal_title) } returns "Meta de Passos Alcançada!"
+        every { context.getString(R.string.activity_goal_msg, 6000) } returns "Parabéns! Você atingiu sua meta de 6000 passos hoje."
+        every { profileRepository.getProfile("user1") } returns flowOf(ProfileEntity(userId = "user1", stepGoal = 6000))
+
+        val recommendation = healthEngine.analyzeActivityPatterns(
+            "user1", listOf(DailyMetricsEntity("user1", "2026-10-31", steps = 6000)), now
+        ).single()
+
+        assertEquals("Meta de Passos Alcançada!\n\nParabéns! Você atingiu sua meta de 6000 passos hoje.", recommendation.alertText)
+        assertTrue(recommendation.isAchievement)
+    }
+
+    @Test
+    fun `sedentary alerts still require current low steps after ten`() = runBlocking {
+        val now = ZonedDateTime.parse("2026-10-31T14:00:00-03:00")
+        every { profileRepository.getProfile("user1") } returns flowOf(null)
+        val today = DailyMetricsEntity("user1", "2026-10-31", steps = 499)
+
+        assertTrue(healthEngine.analyzeActivityPatterns("user1", listOf(today), now.withHour(10)).isEmpty())
+        assertTrue(healthEngine.analyzeActivityPatterns("user1", listOf(today.copy(steps = 500)), now).isEmpty())
+        assertTrue(healthEngine.analyzeActivityPatterns("user1", listOf(today.copy(date = "2026-10-30")), now).isEmpty())
+        assertTrue(healthEngine.analyzeActivityPatterns("user1", emptyList(), now).isEmpty())
+    }
+
+    @Test
+    fun `vital alert retains the explanation instead of only the measured value`() = runBlocking {
+        coEvery { vitalsRepository.getVitalSignsSync("user1") } returns emptyList()
+        every { context.getString(R.string.bp_high, 145) } returns "Pressão sistólica: 145 mmHg"
+        every { context.getString(R.string.bp_high_action) } returns "Repouse e registre uma nova medida."
+
+        val result = healthEngine.analyzeVitals(
+            "user1", listOf(RemoteVitalSign(userId = "user1", systolicPressure = 145)), silent = true
+        )
+
+        assertEquals(listOf("Pressão sistólica: 145 mmHg\n\nRepouse e registre uma nova medida."), result.alerts)
     }
 
     @Test

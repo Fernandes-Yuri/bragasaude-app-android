@@ -30,6 +30,7 @@ class NotificationsInterfaceTest {
         compose.runOnIdle { assertEquals(0, reads); assertEquals(null, opened) }
         compose.onNodeWithText("Beba água").performClick()
         compose.runOnIdle { assertEquals("Beba água", opened) }
+        compose.onNodeWithText("Voltar aos avisos").performClick()
         compose.onNodeWithText("Marcar todas como lidas").performClick()
         compose.runOnIdle { assertEquals(1, reads) }
     }
