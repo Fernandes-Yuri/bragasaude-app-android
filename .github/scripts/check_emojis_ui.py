@@ -10,7 +10,9 @@
 #   py .github/scripts/check_emojis_ui.py
 #
 # Regra: nenhum emoji (símbolo pictográfico Unicode) pode aparecer dentro de
-# uma string literal em arquivos de UI (app/src/main). Emojis em COMENTÁRIO
+# uma string literal em arquivos de UI (app/src/main), exceto os conteúdos
+# de mensagem explicitamente listados para a barra rápida da SPEC-16.
+# Emojis em COMENTÁRIO
 # são permitidos (não chegam ao usuário), mas também são reportados como
 # warning para evitar que virem string no futuro.
 # =============================================================================
@@ -35,6 +37,7 @@ EMOJI_RANGES = re.compile(
     "]"
 )
 
+
 # Extensões de UI (Kotlin/Compose) e de valores (strings.xml).
 EXTS = {".kt", ".xml"}
 
@@ -45,6 +48,14 @@ EXCLUDE_SUBSTRINGS = (
     "/values/ic_",      # resources de ícone
     "ic_launcher",
 )
+
+# SPEC-16: apenas estes conteúdos de mensagem na barra rápida do chat familiar.
+# Rótulos, avisos e demais telas continuam sujeitos à AUD-AN02.
+ALLOWED_EMOJI_LITERALS = {
+    "app/src/main/java/br/com/bragasaude/ui/family/FamilyQuickEmojiBar.kt": frozenset(
+        {"❤️", "🙏", "💊", "💧", "👍", "😊", "🚶", "👵", "👴"}
+    ),
+}
 
 
 def is_emoji(ch: str) -> bool:
@@ -59,10 +70,10 @@ def is_emoji(ch: str) -> bool:
     return cat.startswith("S") and ("HEART" in name or "KEYCAP" in name)
 
 
-def line_has_string_literal_emoji(line: str) -> bool:
-    """True se a linha tem um emoji DENTRO de aspas duplas."""
+def line_has_string_literal_emoji(line: str, allowed_literals=frozenset()) -> bool:
+    """True se a linha tem um emoji não autorizado DENTRO de aspas duplas."""
     for m in re.finditer(r'"([^"]*)"', line):
-        if any(is_emoji(c) for c in m.group(1)):
+        if m.group(1) not in allowed_literals and any(is_emoji(c) for c in m.group(1)):
             return True
     return False
 
@@ -88,7 +99,7 @@ def main() -> int:
             # Pula declarações de PathData/vetores no XML.
             if "android:pathData" in line or "viewportWidth" in line:
                 continue
-            if line_has_string_literal_emoji(line):
+            if line_has_string_literal_emoji(line, ALLOWED_EMOJI_LITERALS.get(rel, frozenset())):
                 in_string.append((rel, lineno, stripped[:100]))
             elif "//" in stripped or "<!--" in stripped or stripped.startswith("*"):
                 if any(is_emoji(c) for c in stripped):
@@ -114,7 +125,7 @@ def main() -> int:
         print("texto). Strings de UI com emoji violam a AUD-AN02 (2 regressões).")
         return 1
 
-    print(f"\n✅ Nenhum emoji em string de UI em {SCAN_ROOT.relative_to(REPO)}.")
+    print(f"\n✅ Nenhum emoji não autorizado em string de UI em {SCAN_ROOT.relative_to(REPO)}.")
     return 0
 
 

@@ -258,7 +258,49 @@ class FamilyBridgeRepositoryTest {
     }
 
     // ==================================================================
-    // [5] REVOKE E PURGA LGPD
+    // [5] POLLING DO CHAT (SPEC-16)
+    // ==================================================================
+    @Test
+    fun emptyChatResponseIsSuccessfulWithoutDownloadingBindings() = runBlocking {
+        every { auth.currentUser?.uid } returns "patient"
+        coEvery { apiClient.getFamilyMessages("patient") } returns emptyList()
+
+        val first = repository.chatCycleSnapshot("patient", "patient")
+        val repeated = repository.chatCycleSnapshot("patient", "patient")
+
+        assertEquals(first, repeated)
+        coVerify(exactly=2) { apiClient.getFamilyMessages("patient") }
+        coVerify(exactly=0) { apiClient.getFamilyBindings(any()) }
+    }
+
+    @Test
+    fun chatCyclePropagatesRealNetworkFailure() = runBlocking {
+        every { auth.currentUser?.uid } returns "patient"
+        val failure = java.io.IOException("offline")
+        coEvery { apiClient.getFamilyMessages("patient") } throws failure
+
+        assertSame(failure, runCatching { repository.chatCycleSnapshot("patient", "patient") }.exceptionOrNull())
+        coVerify(exactly=0) { familyDao.purgeExpiredMessages(any()) }
+    }
+
+    @Test
+    fun messageDownloadDoesNotSwallowCancellation() = runBlocking {
+        every { auth.currentUser?.uid } returns "patient"
+        val cancellation = kotlinx.coroutines.CancellationException("chat hidden")
+        coEvery { apiClient.getFamilyMessages("patient") } throws cancellation
+
+        assertSame(cancellation, runCatching { repository.syncFamilyMessages("patient") }.exceptionOrNull())
+        coVerify(exactly=0) { familyDao.purgeExpiredMessages(any()) }
+    }
+
+    @Test
+    fun chatCycleRejectsPreviousSessionBeforeDownloading() = runBlocking {
+        assertTrue(runCatching { repository.chatCycleSnapshot("previous-user", "patient") }.isFailure)
+        coVerify(exactly=0) { apiClient.getFamilyMessages(any()) }
+    }
+
+    // ==================================================================
+    // [6] REVOKE E PURGA LGPD
     // ==================================================================
     @Test
     fun `revokeBinding persists a revocation and sends it to server`() = runBlocking {

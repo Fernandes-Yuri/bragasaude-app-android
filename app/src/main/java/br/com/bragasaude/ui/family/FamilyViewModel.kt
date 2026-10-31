@@ -11,11 +11,12 @@ import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
@@ -246,16 +247,15 @@ class FamilyViewModel @Inject constructor(
 
     /** Apenas a FamilyChatScreen ativa; evita polling em background. */
     private val isChatScreenVisible = MutableStateFlow(false)
+    private val chatSyncRequests = Channel<Unit>(Channel.CONFLATED)
 
     private companion object {
         /** Intervalo base do polling com a tela ativa e saudável. */
-        const val POLL_INTERVAL_MS = 15_000L
+        const val ACTIVE_CHAT_POLL_INTERVAL_MS = 3_000L
         /** Teto do backoff exponencial em falhas consecutivas. */
         const val POLL_INTERVAL_MAX_MS = 60_000L
         /** Limite do shift (2^N) para evitar estouro do Long. */
-        const val BACKOFF_SHIFT_CAP = 4
-        /** Intervalo de checagem do gate de visibilidade (pausa barata). */
-        const val VISIBILITY_GATE_INTERVAL_MS = 5_000L
+        const val BACKOFF_SHIFT_CAP = 5
     }
 
     /**
@@ -266,22 +266,11 @@ class FamilyViewModel @Inject constructor(
         isChatScreenVisible.value = visible
     }
 
-    /**
-     * Executa um ciclo de sincronização do chat e devolve true quando a
-     * resposta do servidor mudou desde o último ciclo (e portanto vale a pena
-     * reagir). Skip por fingerprint elimina o tráfego repetido quando a
-     * conversa parou — a causa do ruído no log do gateway.
-     */
-    private suspend fun syncChatCycle(
-        userId: String,
-        patientId: String,
-        lastHash: String?,
-        onHashChanged: (String) -> Unit
-    ): Boolean {
-        val snapshot = familyRepository.chatCycleSnapshot(userId, patientId)
-        val hash = snapshot.messagesFingerprint ?: return false
-        if (hash != lastHash) onHashChanged(hash)
-        return true
+    /** Acorda o mesmo loop após o envio, sem criar downloads concorrentes. */
+    private fun requestChatSync(patientId: String) {
+        if (isChatScreenVisible.value && chatPatientId.value == patientId) {
+            chatSyncRequests.trySend(Unit)
+        }
     }
 
     init {
@@ -318,6 +307,7 @@ class FamilyViewModel @Inject constructor(
         _inviteHistory.value = emptyList()
         _unreadMessageCount.value = 0
         _chatSyncState.value = ChatSyncState()
+        chatSyncRequests.tryReceive()
     }
 
     private fun loadData(userId: String = currentUserId) {
@@ -326,13 +316,21 @@ class FamilyViewModel @Inject constructor(
         loadedUserId = userId
         dataLoadJob?.cancel()
         dataLoadJob = viewModelScope.launch {
-            // Sincronizar vínculos da nuvem em background
+            // Vínculos na carga inicial e ao abrir/retomar o chat, fora do polling.
             launch {
-                try {
-                    familyRepository.syncBindingsForPatient(userId)
-                    familyRepository.syncBindingsForCaregiver(userId)
-                } catch (e: Exception) {
-                    android.util.Log.w("FamilyVM", "Falha ao sincronizar vínculos remotos: ${e.message}")
+                var firstLoad = true
+                isChatScreenVisible.collectLatest { visible ->
+                    if (visible || firstLoad) {
+                        firstLoad = false
+                        try {
+                            familyRepository.syncBindingsForPatient(userId)
+                            familyRepository.syncBindingsForCaregiver(userId)
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            android.util.Log.w("FamilyVM", "Falha ao sincronizar vínculos remotos: ${e.message}")
+                        }
+                    }
                 }
             }
 
@@ -355,46 +353,49 @@ class FamilyViewModel @Inject constructor(
                             }
                         }
                         launch {
-                            // Polling resiliente: só corre com a tela em primeiro
-                            // plano, usa backoff exponencial em falha e pula o
-                            // ciclo quando a resposta não mudou (fim do ruído de
-                            // 6 hits/15s no gateway). Antes era um while cego e
-                            // ininterrupto, rodando até com o app em background.
-                            var consecutiveFailures = 0
-                            var lastPayloadHash: String? = null
-                            while (isActive) {
-                                if (!isChatScreenVisible.value) {
+                            // collectLatest cancela o ciclo ao sair da tela e inicia
+                            // uma consulta sem espera ao retornar ao primeiro plano.
+                            isChatScreenVisible.collectLatest visibility@{ visible ->
+                                if (!visible) {
                                     _chatSyncState.value = _chatSyncState.value.copy(isPolling = false)
-                                    // Pausa barata até a tela voltar (gate de ciclo).
-                                    delay(VISIBILITY_GATE_INTERVAL_MS)
-                                    continue
+                                    return@visibility
                                 }
-                                _chatSyncState.value = _chatSyncState.value.copy(isPolling = true)
-                                val cycleFailed = try {
-                                    val changed = syncChatCycle(userId, targetPatientId, lastPayloadHash) { newHash ->
-                                        lastPayloadHash = newHash
+                                var consecutiveFailures = 0
+                                chatSyncRequests.tryReceive()
+                                try {
+                                    while (isActive) {
+                                        _chatSyncState.value = _chatSyncState.value.copy(isPolling = true)
+                                        val cycleFailed = try {
+                                            familyRepository.chatCycleSnapshot(userId, targetPatientId)
+                                            // Resposta vazia ou idêntica também é sucesso.
+                                            false
+                                        } catch (e: kotlinx.coroutines.CancellationException) {
+                                            throw e
+                                        } catch (e: Exception) {
+                                            android.util.Log.w("FamilyVM", "Falha no ciclo de sync do chat: ${e.message}")
+                                            true
+                                        }
+                                        consecutiveFailures = if (cycleFailed) consecutiveFailures + 1 else 0
+                                        _chatSyncState.value = ChatSyncState(
+                                            isPolling = true,
+                                            consecutiveFailures = consecutiveFailures,
+                                            warning = when (consecutiveFailures) {
+                                                0 -> null
+                                                in 1..2 -> "Tentando atualizar as mensagens…"
+                                                else -> "Não foi possível atualizar as mensagens. Mostrando as salvas no aparelho."
+                                            }
+                                        )
+                                        // Backoff apenas para falhas reais: 3s → 6s → ... → 60s.
+                                        val interval = (ACTIVE_CHAT_POLL_INTERVAL_MS *
+                                            (1L shl consecutiveFailures.coerceAtMost(BACKOFF_SHIFT_CAP)))
+                                            .coerceAtMost(POLL_INTERVAL_MAX_MS)
+                                        // Um envio interrompe inclusive o backoff, com atraso de 0 ms.
+                                        withTimeoutOrNull(interval) { chatSyncRequests.receive() }
                                     }
-                                    !changed
-                                } catch (e: kotlinx.coroutines.CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    android.util.Log.w("FamilyVM", "Falha no ciclo de sync do chat: ${e.message}")
-                                    true
+                                } finally {
+                                    _chatSyncState.value = _chatSyncState.value.copy(isPolling = false)
                                 }
-                                consecutiveFailures = if (cycleFailed) consecutiveFailures + 1 else 0
-                                _chatSyncState.value = ChatSyncState(
-                                    isPolling = true,
-                                    consecutiveFailures = consecutiveFailures,
-                                    warning = if (consecutiveFailures == 0) null
-                                        else if (consecutiveFailures in 1..2) "Tentando atualizar as mensagens…"
-                                        else "Não foi possível atualizar as mensagens. Mostrando as salvas no aparelho."
-                                )
-                                // Backoff exponencial capped: 15s → 30s → 60s (teto).
-                                val base = if (consecutiveFailures == 0) POLL_INTERVAL_MS
-                                    else POLL_INTERVAL_MS * (1L shl consecutiveFailures.coerceAtMost(BACKOFF_SHIFT_CAP))
-                                delay(base.coerceAtMost(POLL_INTERVAL_MAX_MS))
                             }
-                            _chatSyncState.value = ChatSyncState(isPolling = false)
                         }
                     }
                 }
@@ -681,6 +682,7 @@ class FamilyViewModel @Inject constructor(
                     messageText = text,
                     iconType = iconType
                 )
+                requestChatSync(targetPatientId)
                 _uiEvents.emit(FamilyUiEvent.Notice(if (message.pendingSync) "Recado salvo no aparelho, aguardando sincronização." else "Recado enviado com carinho!"))
 
                 // O destinatário é notificado pelo push do servidor (doc 10 §1A) e,
@@ -805,7 +807,8 @@ class FamilyViewModel @Inject constructor(
                 val currentBinding = familyRepository.getBindingById(binding.id)
                 check(currentBinding?.status == "ACTIVE") { "Vínculo indisponível." }
                 val message = familyRepository.createFamilyMessage(binding.patientUserId,
-                    auth.currentUser?.displayName ?: "Familiar", text)
+                    auth.currentUser?.displayName ?: "Familiar", text, iconType = "CUSTOM")
+                requestChatSync(binding.patientUserId)
                 onComplete(true)
                 _uiEvents.emit(FamilyUiEvent.Notice(if (message.pendingSync)
                     "Mensagem salva no aparelho, aguardando sincronização." else "Mensagem enviada ao grupo."))
@@ -848,7 +851,7 @@ class FamilyViewModel @Inject constructor(
                     messageText = text,
                     iconType = iconType
                 )
-
+                requestChatSync(binding.patientUserId)
                 _uiEvents.emit(FamilyUiEvent.Notice(if (message.pendingSync) "Mensagem salva no aparelho, aguardando sincronização." else "Mensagem enviada ao grupo."))
             } catch (e: Exception) {
                 _uiEvents.emit(FamilyUiEvent.Error("Erro ao enviar: ${e.message}"))
