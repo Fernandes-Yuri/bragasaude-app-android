@@ -1,16 +1,35 @@
 package br.com.bragasaude.data.remote.repository
 
 import br.com.bragasaude.data.local.FamilyMessageEntity
+import br.com.bragasaude.data.remote.api.BragaApiClient
+import com.google.firebase.auth.FirebaseAuth
+import io.mockk.*
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Test
 
-/**
- * Regressão do polling resiliente da ponte familiar (task "Ponte familiar
- * resiliente"): o fingerprint do payload de mensagens é a base do skip de
- * ciclo idêntico — sem ele, a conversa parada gerava tráfego repetido a cada
- * 15s no gateway.
- */
+/** O fingerprint descreve o payload de uma consulta bem-sucedida, mesmo sem novidades. */
 class ChatCycleSnapshotTest {
+    private lateinit var apiClient: BragaApiClient
+    private lateinit var repository: FamilyBridgeRepository
+
+    @Before fun setUp() {
+        apiClient = mockk(relaxed = true)
+        val auth = mockk<FirebaseAuth>(relaxed = true)
+        every { auth.currentUser?.uid } returns "p1"
+        repository = FamilyBridgeRepository(
+            familyDao = mockk(relaxed = true),
+            vitalSignDao = mockk(relaxed = true),
+            profileDao = mockk(relaxed = true),
+            dailyMetricsDao = mockk(relaxed = true),
+            socialFeedDao = mockk(relaxed = true),
+            apiClient = apiClient,
+            auth = auth,
+            syncScheduler = mockk(relaxed = true),
+            appContext = mockk(relaxed = true)
+        )
+    }
 
     private fun msg(id: String, sentAt: Long, deletedAt: Long? = null) =
         FamilyMessageEntity(
@@ -21,44 +40,45 @@ class ChatCycleSnapshotTest {
             iconType = "LOVE",
             isRead = false,
             sentAt = sentAt,
-            senderUserId = "c1",
+            senderUserId = "p1",
             remoteId = null,
             pendingSync = false,
             expiresAt = System.currentTimeMillis() + 86_400_000L,
             deletedAt = deletedAt
         )
 
-    @Test fun nullFingerprint_meansCycleFailed() {
-        // Ciclo em falha: snapshot sem fingerprint, a UI mostra aviso.
-        val failed = ChatCycleSnapshot(messagesFingerprint = null)
-        assertNull(failed.messagesFingerprint)
+    @Test fun emptyPayloadStillProducesSuccessfulSnapshot() = runBlocking {
+        coEvery { apiClient.getFamilyMessages("p1") } returns emptyList()
+        val first = repository.chatCycleSnapshot("p1", "p1")
+        val repeated = repository.chatCycleSnapshot("p1", "p1")
+        assertEquals(first, repeated)
+        coVerify(exactly=2) { apiClient.getFamilyMessages("p1") }
     }
 
-    @Test fun samePayload_producesSameFingerprint() {
-        val a = listOf(msg("m1", 1000L), msg("m2", 2000L))
-        val b = listOf(msg("m1", 1000L), msg("m2", 2000L))
-        val snapshotA = ChatCycleSnapshot(messagesFingerprint = fingerprintOf(a))
-        val snapshotB = ChatCycleSnapshot(messagesFingerprint = fingerprintOf(b))
+    @Test fun samePayload_producesSameFingerprint() = runBlocking {
+        coEvery { apiClient.getFamilyMessages("p1") } returns listOf(msg("m1", 1000L), msg("m2", 2000L))
+        val snapshotA = repository.chatCycleSnapshot("p1", "p1")
+        val snapshotB = repository.chatCycleSnapshot("p1", "p1")
         assertEquals("Payload idêntico precisa ter o mesmo fingerprint", snapshotA.messagesFingerprint, snapshotB.messagesFingerprint)
     }
 
-    @Test fun newMessage_changesFingerprint() {
-        val before = listOf(msg("m1", 1000L))
-        val after = listOf(msg("m1", 1000L), msg("m2", 2000L))
-        val f1 = fingerprintOf(before)
-        val f2 = fingerprintOf(after)
-        assertNotEquals("Mensagem nova precisa mudar o fingerprint", f1, f2)
+    @Test fun newMessage_changesFingerprint() = runBlocking {
+        coEvery { apiClient.getFamilyMessages("p1") } returnsMany listOf(
+            listOf(msg("m1", 1000L)),
+            listOf(msg("m1", 1000L), msg("m2", 2000L))
+        )
+        val before = repository.chatCycleSnapshot("p1", "p1")
+        val after = repository.chatCycleSnapshot("p1", "p1")
+        assertNotEquals("Mensagem nova precisa mudar o fingerprint", before.messagesFingerprint, after.messagesFingerprint)
     }
 
-    @Test fun deletedMessage_changesFingerprint() {
-        // D47: tombstone também é variação de estado e precisa ser detectada.
-        val before = listOf(msg("m1", 1000L))
-        val after = listOf(msg("m1", 1000L, deletedAt = 1_700_000_000_000L))
-        assertNotEquals(fingerprintOf(before), fingerprintOf(after))
+    @Test fun deletedMessage_changesFingerprint() = runBlocking {
+        coEvery { apiClient.getFamilyMessages("p1") } returnsMany listOf(
+            listOf(msg("m1", 1000L)),
+            listOf(msg("m1", 1000L, deletedAt = 1_700_000_000_000L))
+        )
+        val before = repository.chatCycleSnapshot("p1", "p1")
+        val after = repository.chatCycleSnapshot("p1", "p1")
+        assertNotEquals(before.messagesFingerprint, after.messagesFingerprint)
     }
-
-    private fun fingerprintOf(messages: List<FamilyMessageEntity>): String =
-        messages.joinToString(separator = "|") { "${it.id}:${it.sentAt}:${it.deletedAt}" }
-            .hashCode()
-            .toString()
 }
