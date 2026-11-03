@@ -29,6 +29,7 @@ import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
 import br.com.bragasaude.util.BragaConstants
+import br.com.bragasaude.agent.organizer.PrescriptionOrganizerAgent
 
 @Singleton
 class MedicationRepository @Inject constructor(
@@ -38,8 +39,28 @@ class MedicationRepository @Inject constructor(
     private val medicationLogDao: MedicationLogDao,
     private val careAuditDao: CareAuditDao,
     private val syncScheduler: SyncScheduler,
-    private val doseRepository: br.com.bragasaude.data.medicationdoses.MedicationDoseRepository
+    private val doseRepository: br.com.bragasaude.data.medicationdoses.MedicationDoseRepository,
+    private val prescriptionOrganizerAgent: PrescriptionOrganizerAgent? = null
 ) {
+    /** Construtor secundário para compatibilidade com testes unitários legados. */
+    constructor(
+        context: Context,
+        apiClient: BragaApiClient,
+        medicationDao: MedicationDao,
+        medicationLogDao: MedicationLogDao,
+        careAuditDao: CareAuditDao,
+        syncScheduler: SyncScheduler,
+        doseRepository: br.com.bragasaude.data.medicationdoses.MedicationDoseRepository
+    ) : this(
+        context = context,
+        apiClient = apiClient,
+        medicationDao = medicationDao,
+        medicationLogDao = medicationLogDao,
+        careAuditDao = careAuditDao,
+        syncScheduler = syncScheduler,
+        doseRepository = doseRepository,
+        prescriptionOrganizerAgent = null
+    )
     private val guestId = BragaConstants.GUEST_UID
 
     fun getMedications(userId: String): Flow<List<MedicationEntity>> = medicationDao.getAll(userId)
@@ -440,17 +461,27 @@ class MedicationRepository @Inject constructor(
     }
 
     suspend fun analyzePrescription(patientId: String, uri: android.net.Uri): PrescriptionAnalysisResponseDto? = try {
-        val resolver = context.contentResolver
-        val mime = resolver.getType(uri)?.takeIf { it in setOf("image/jpeg", "image/png", "image/webp", "application/pdf") }
-            ?: "image/jpeg"
-        val extension = when (mime) {
-            "application/pdf" -> "pdf"
-            "image/png" -> "png"
-            "image/webp" -> "webp"
-            else -> "jpg"
+        // 1. Prioriza o agente agêntico on-device com Zero File Egress
+        val agentResult = runCatching {
+            prescriptionOrganizerAgent?.analyzePrescription(patientId, uri)
+        }.getOrNull()
+
+        if (agentResult != null && agentResult.medications.isNotEmpty()) {
+            agentResult
+        } else {
+            // 2. Fallback retrocompatível para o servidor legado se o agente on-device não estruturar itens
+            val resolver = context.contentResolver
+            val mime = resolver.getType(uri)?.takeIf { it in setOf("image/jpeg", "image/png", "image/webp", "application/pdf") }
+                ?: "image/jpeg"
+            val extension = when (mime) {
+                "application/pdf" -> "pdf"
+                "image/png" -> "png"
+                "image/webp" -> "webp"
+                else -> "jpg"
+            }
+            val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+            apiClient.analyzePrescription(patientId, "prescription-${UUID.randomUUID()}.$extension", mime, bytes)
         }
-        val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
-        apiClient.analyzePrescription(patientId, "prescription-${UUID.randomUUID()}.$extension", mime, bytes)
     } catch (e: Exception) {
         android.util.Log.w("CareOs", "analyzePrescription: ${e.message}")
         null
