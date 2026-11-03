@@ -266,9 +266,8 @@ class DetectExamSectorsTool : AgentTool {
             ).replace(Regex("""\p{M}"""), "")
 
             val sector = when {
-                listOf("eletrocardiograma", "ecocardiogra", "holter", "ergometrico", "mapa").any {
-                    Regex("""\b${Regex.escape(it)}\b""").containsMatchIn(combined)
-                } -> "Cardiológico"
+                listOf("eletrocardiograma", "ecocardiogra", "holter", "ergometrico").any { it in combined } ||
+                listOf("mapa", "ecg", "eco").any { Regex("""\b${Regex.escape(it)}\b""").containsMatchIn(combined) } -> "Cardiológico"
 
                 listOf("ultrass", "ressonancia", "tomografia", "mamografia", "radiografia", "raio-x", "densitometria").any {
                     it in combined

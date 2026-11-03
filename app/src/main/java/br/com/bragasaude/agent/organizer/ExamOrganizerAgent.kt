@@ -58,7 +58,10 @@ class ExamOrganizerAgent @Inject constructor(
         val headerRoot = runCatching { Json.parseToJsonElement(headerJson).jsonObject }.getOrNull()
 
         var title = headerRoot?.get("title")?.jsonPrimitive?.content.orEmpty()
-        if (title.isBlank() || title == "Documento de Exame") {
+        if (title.isBlank() ||
+            title.equals("documento de exame", ignoreCase = true) ||
+            title.equals("foto de exame", ignoreCase = true)
+        ) {
             title = fallbackName.substringBeforeLast('.').take(60).ifBlank { "Documento de Exame" }
         }
 
@@ -103,7 +106,10 @@ class ExamOrganizerAgent @Inject constructor(
         val headerRoot = runCatching { Json.parseToJsonElement(headerJson).jsonObject }.getOrNull()
 
         var title = headerRoot?.get("title")?.jsonPrimitive?.content.orEmpty()
-        if (title.isBlank() || title == "Documento de Exame") {
+        if (title.isBlank() ||
+            title.equals("documento de exame", ignoreCase = true) ||
+            title.equals("foto de exame", ignoreCase = true)
+        ) {
             title = fallbackName.substringBeforeLast('.').take(60).ifBlank { "Foto de Exame" }
         }
 

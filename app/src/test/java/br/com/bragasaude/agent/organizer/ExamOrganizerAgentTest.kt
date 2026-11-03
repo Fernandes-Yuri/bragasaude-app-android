@@ -71,7 +71,7 @@ class ExamOrganizerAgentTest {
 
         val page = ExtractedPage(
             pageIndex = 0,
-            text = "Declaração de saúde e rotina administrativa sem exames específicos",
+            text = "12345 67890 arquivo de teste geral 2026",
             blocks = emptyList(),
             isDigital = true
         )
