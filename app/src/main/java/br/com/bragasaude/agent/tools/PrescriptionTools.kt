@@ -129,26 +129,26 @@ class ExtractMedicationItemsTool(
                 var dosage = dosageMatch?.value.orEmpty()
                 var dosageMg = parseDosageMg(dosage)
 
-                // Posologia pode estar na linha seguinte (ex: "Tomar 1 comprimido de 8/8h por 7 dias")
-                val posologyLine = if (i + 1 < lines.size && !looksLikeMedicationHeader(lines[i + 1])) {
+                // Posologia pode se estender por linhas seguintes não-cabeçalho
+                val posologyLines = mutableListOf<String>()
+                while (i + 1 < lines.size && !looksLikeMedicationHeader(lines[i + 1]) && !isHeaderOrAdminLine(lines[i + 1])) {
                     i++
-                    lines[i]
-                } else {
-                    line
+                    posologyLines.add(lines[i])
                 }
+                val fullPosology = (listOf(line) + posologyLines).joinToString(" ")
 
                 if (dosage.isBlank()) {
-                    val fallbackDosage = DOSAGE_REGEX.find(posologyLine)
+                    val fallbackDosage = DOSAGE_REGEX.find(fullPosology)
                     if (fallbackDosage != null) {
                         dosage = fallbackDosage.value
                         dosageMg = parseDosageMg(dosage)
                     }
                 }
 
-                val (frequency, intervalHours, times, dosesCount) = parseFrequency(posologyLine)
-                val durationDays = DURATION_REGEX.find(posologyLine)?.groupValues?.get(1)?.toIntOrNull()
+                val (frequency, intervalHours, times, dosesCount) = parseFrequency(fullPosology)
+                val durationDays = DURATION_REGEX.find(fullPosology)?.groupValues?.get(1)?.toIntOrNull()
 
-                val requiresFill = dosage.isBlank() || frequency.isBlank()
+                val requiresFill = dosage.isBlank() || frequency == "Conforme prescrição"
                 val divergence = if (requiresFill) "Dosagem ou frequência necessitam de conferência humana" else null
 
                 results.add(
@@ -181,7 +181,16 @@ class ExtractMedicationItemsTool(
         }
     }
 
+    private fun isPosologyInstruction(line: String): Boolean {
+        val lower = Normalizer.normalize(line.lowercase().trim(), Normalizer.Form.NFD).replace(Regex("""\p{M}"""), "")
+        val posologyStarters = listOf("tomar", "ingerir", "aplicar", "usar", "administrar", "diluir", "pingar", "inalar", "nebulizar", "posologia", "modo de usar", "via ")
+        if (posologyStarters.any { lower.startsWith(it) }) return true
+        if (Regex("""^(?:tomar\s+)?\d+\s*(?:comprimido|capsula|gota|cp|dose|ml|unidade)""").containsMatchIn(lower)) return true
+        return false
+    }
+
     private fun looksLikeMedicationHeader(line: String): Boolean {
+        if (isPosologyInstruction(line)) return false
         val lower = Normalizer.normalize(line.lowercase(), Normalizer.Form.NFD).replace(Regex("""\p{M}"""), "")
 
         // Linha numerada clínica (ex: "1. Amoxicilina 500mg" ou "1 - Dipirona")
@@ -189,11 +198,6 @@ class ExtractMedicationItemsTool(
 
         // Medicamento conhecido
         if (KNOWN_MEDICATIONS.any { lower.contains(it) }) return true
-
-        // Forma farmacêutica ou unidade associada a nome
-        if (DOSAGE_REGEX.containsMatchIn(line) && listOf("comprimido", "capsula", "gotas", "xarope", "frasco", "solucao", "pomada").any { lower.contains(it) }) {
-            return true
-        }
 
         return false
     }
