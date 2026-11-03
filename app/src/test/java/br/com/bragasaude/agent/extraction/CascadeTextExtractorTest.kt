@@ -1,7 +1,10 @@
 package br.com.bragasaude.agent.extraction
 
 import android.app.Application
+import android.content.Context
 import android.graphics.Bitmap
+import androidx.test.core.app.ApplicationProvider
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
@@ -13,24 +16,32 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
-@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [28], manifest = Config.NONE, application = Application::class)
 class CascadeTextExtractorTest {
 
     @get:Rule
     val tempFolder = TemporaryFolder()
 
     private val ocrEngine = mockk<OcrEngine>(relaxed = true)
-    private val extractor = CascadeTextExtractor(ocrEngine)
+    private lateinit var extractor: CascadeTextExtractor
+
+    @Before
+    fun setUp() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        if (!PDFBoxResourceLoader.isReady()) {
+            PDFBoxResourceLoader.init(context)
+        }
+        extractor = CascadeTextExtractor(ocrEngine, context)
+    }
 
     @Test
     fun `isReliableDigitalText valida presenca de palavras reais e rejeita texto escasso`() {

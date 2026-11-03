@@ -1,11 +1,14 @@
 package br.com.bragasaude.agent.extraction
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -21,8 +24,18 @@ import javax.inject.Singleton
  */
 @Singleton
 class CascadeTextExtractor @Inject constructor(
-    private val ocrEngine: OcrEngine
+    private val ocrEngine: OcrEngine,
+    @ApplicationContext private val context: Context? = null
 ) {
+    init {
+        context?.let { ctx ->
+            runCatching {
+                if (!PDFBoxResourceLoader.isReady()) {
+                    PDFBoxResourceLoader.init(ctx)
+                }
+            }
+        }
+    }
     companion object {
         private const val MIN_DIGITAL_TEXT_CHARS = 30
         private const val MIN_DIGITAL_WORDS = 5
