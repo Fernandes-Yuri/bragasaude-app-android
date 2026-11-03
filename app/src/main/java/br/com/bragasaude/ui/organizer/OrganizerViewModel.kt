@@ -19,7 +19,8 @@ import javax.inject.Inject
 data class OrganizerUiState(val session: OrganizerSession? = null, val busy: Boolean = false,
     val error: String? = null, val notice: String? = null, val ready: Boolean = false, val saved: Boolean = false,
     val preview: Bitmap? = null, val previewPage: Int = -1, val resultPages: Int = 0, val newest: Boolean = true,
-    val ocrAvailability: OcrAvailability? = null, val personalization: OrganizerPersonalization = OrganizerPersonalization())
+    val ocrAvailability: OcrAvailability? = null, val personalization: OrganizerPersonalization = OrganizerPersonalization(),
+    val progressMessage: String? = null)
 
 @HiltViewModel
 class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, private val ocrCapability: OcrCapability,
@@ -33,14 +34,14 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
     internal var probeDispatcher: CoroutineDispatcher = Dispatchers.Default
     init { mutable.value = mutable.value.copy(personalization = prefs?.load() ?: OrganizerPersonalization()); refresh(); probeOcr() }
     private fun operation(block: suspend () -> Unit) {
-        mutable.value = mutable.value.copy(busy = true, error = null)
+        mutable.value = mutable.value.copy(busy = true, error = null, progressMessage = null)
         viewModelScope.launch { operations.withLock {
             mutable.value = mutable.value.copy(busy = true, error = null)
             try { block() }
             catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
             catch (problem: OrganizerProblem) { mutable.value = mutable.value.copy(error = problem.message) }
             catch (_: Exception) { mutable.value = mutable.value.copy(error = "Não foi possível concluir. Confira o arquivo, o espaço disponível e tente novamente. PDFs com senha precisam de uma cópia sem senha.") }
-            finally { mutable.value = mutable.value.copy(busy = false) }
+            finally { mutable.value = mutable.value.copy(busy = false, progressMessage = null) }
         } }
     }
     fun refresh(force: Boolean = false) = operation {
@@ -70,7 +71,9 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
         mutable.value = mutable.value.copy(session = session, ready = false, saved = false, preview = null, notice = null)
     }
     fun import(uris: List<Uri>, appendTo: String? = null) = operation {
-        val (session, failures) = store.import(requireNotNull(mutable.value.session).id, uris, appendTo)
+        val (session, failures) = store.import(requireNotNull(mutable.value.session).id, uris, appendTo) { step ->
+            mutable.value = mutable.value.copy(progressMessage = step)
+        }
         changed(session)
         if (failures.isNotEmpty()) {
             val imported = uris.size - failures.size

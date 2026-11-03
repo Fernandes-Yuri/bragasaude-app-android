@@ -11,6 +11,9 @@ import android.security.keystore.KeyProperties
 import androidx.core.content.FileProvider
 import androidx.work.*
 import br.com.bragasaude.data.util.ExamPhotoDecoder
+import br.com.bragasaude.agent.extraction.CascadeTextExtractor
+import br.com.bragasaude.agent.extraction.MlKitOcrEngine
+import br.com.bragasaude.agent.organizer.ExamOrganizerAgent
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -40,7 +43,16 @@ import kotlin.coroutines.resumeWithException
 
 /** Temporary workspace. No API, Room, account ID or clinical logging. */
 @Singleton
-class OrganizerStore @Inject constructor(@ApplicationContext private val context: Context) {
+class OrganizerStore @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val examOrganizerAgent: ExamOrganizerAgent
+) {
+    /** Construtor secundário para compatibilidade com testes que fornecem apenas Context. */
+    constructor(context: Context) : this(
+        context = context,
+        examOrganizerAgent = ExamOrganizerAgent(CascadeTextExtractor(MlKitOcrEngine(), context))
+    )
+
     companion object { private val lock = Mutex() }
     private val root get() = File(context.noBackupFilesDir, "organizer").apply { mkdirs() }
     private val cache get() = File(context.cacheDir, "organizer-work").apply { mkdirs() }
@@ -198,14 +210,20 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
         }
     }
     /** Importação atômica POR ARQUIVO: uma falha nunca apaga o lote; cada falha vira relato visível. */
-    suspend fun import(id: String, uris: List<Uri>, appendTo: String? = null): Pair<OrganizerSession, List<String>> = withContext(Dispatchers.IO) { lock.withLock {
+    suspend fun import(
+        id: String,
+        uris: List<Uri>,
+        appendTo: String? = null,
+        onProgress: ((String) -> Unit)? = null
+    ): Pair<OrganizerSession, List<String>> = withContext(Dispatchers.IO) { lock.withLock {
         var s = active(id)
         require(uris.isNotEmpty() && uris.size <= 20) { "Selecione até 20 arquivos por vez." }
         val pending = mutableListOf<Pair<OrganizerDocument, File>>()
         val failures = mutableListOf<String>()
         val work = File(temp(id), "import").apply { mkdirs() }
         try {
-            uris.forEach { uri ->
+            uris.forEachIndexed { index, uri ->
+                val fileNum = "${index + 1}/${uris.size}"
                 val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
                     if (it.moveToFirst()) it.getString(0) else null
                 } ?: "arquivo"
@@ -213,6 +231,7 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
                 require(s.documents.size + pending.size < 20 || appendTo != null) { "Limite de 20 documentos por sessão." }
                 val docId = UUID.randomUUID().toString()
                 val source = File(work, "$docId.source")
+                onProgress?.invoke("Lendo $name ($fileNum)...")
                 context.contentResolver.openInputStream(uri)?.use { input -> source.outputStream().use { out ->
                     val buffer = ByteArray(8192); var total = 0L
                     while (true) { val n = input.read(buffer); if (n < 0) break
@@ -227,30 +246,79 @@ class OrganizerStore @Inject constructor(@ApplicationContext private val context
                 val duplicate = (s.documents + pending.map { it.first }).any { it.sourceDigest == sourceDigest }
                 val normalized = File(work, "$docId.pdf")
                 val isPdf = source.inputStream().use { String(ByteArray(5).also { header -> it.read(header) }, Charsets.US_ASCII) == "%PDF-" }
-                var text = ""; var pages = 1
+                var title: String
+                var type: String
+                var topics: List<String>
+                var date: String
+                var pages = 1
                 if (isPdf) {
                     source.renameTo(normalized)
                     PDDocument.load(normalized, MemoryUsageSetting.setupTempFileOnly().setTempDir(work)).use { document ->
                         require(!document.isEncrypted) { "está protegido por senha; abra e salve uma cópia sem senha" }
                         pages = document.numberOfPages
                         require(pages in 1..100) { "tem $pages páginas (limite 100)" }
-                        text = PDFTextStripper().apply { endPage = minOf(pages, 3) }.getText(document).take(20000)
                     }
-                    if (text.isBlank()) {
-                        val bitmap = render(normalized, 0)
-                        try { text = runCatching { recognize(bitmap) }.getOrDefault("") } finally { bitmap.recycle() }
+                    val agentResult = runCatching {
+                        examOrganizerAgent.analyzeExam(normalized, name) { step ->
+                            onProgress?.invoke("$name ($fileNum): $step")
+                        }
+                    }.getOrNull()
+
+                    if (agentResult != null) {
+                        title = agentResult.title
+                        type = agentResult.type
+                        topics = agentResult.topics
+                        date = agentResult.date.ifBlank { OrganizerMetadata.suggestDate("") }
+                    } else {
+                        var text = ""
+                        PDDocument.load(normalized, MemoryUsageSetting.setupTempFileOnly().setTempDir(work)).use { document ->
+                            text = PDFTextStripper().apply { endPage = minOf(pages, 3) }.getText(document).take(20000)
+                        }
+                        if (text.isBlank()) {
+                            val bitmap = render(normalized, 0)
+                            try { text = runCatching { recognize(bitmap) }.getOrDefault("") } finally { bitmap.recycle() }
+                        }
+                        val suggested = OrganizerMetadata.suggestWithTopics(text, name)
+                        title = suggested.first
+                        type = suggested.second
+                        topics = suggested.third
+                        date = OrganizerMetadata.suggestDate(text)
                     }
                 } else {
                     val bitmap = ExamPhotoDecoder.decode(context.contentResolver, Uri.fromFile(source))
-                    try { pdf.imagePdf(bitmap, normalized); text = runCatching { recognize(bitmap) }.getOrDefault("") }
-                    finally { bitmap.recycle() }
+                    try {
+                        pdf.imagePdf(bitmap, normalized)
+                        val agentResult = runCatching {
+                            examOrganizerAgent.analyzeBitmap(bitmap, name) { step ->
+                                onProgress?.invoke("$name ($fileNum): $step")
+                            }
+                        }.getOrNull()
+
+                        if (agentResult != null) {
+                            title = agentResult.title
+                            type = agentResult.type
+                            topics = agentResult.topics
+                            date = agentResult.date.ifBlank { OrganizerMetadata.suggestDate("") }
+                        } else {
+                            val text = runCatching { recognize(bitmap) }.getOrDefault("")
+                            val suggested = OrganizerMetadata.suggestWithTopics(text, name)
+                            title = suggested.first
+                            type = suggested.second
+                            topics = suggested.third
+                            date = OrganizerMetadata.suggestDate(text)
+                        }
+                    } finally { bitmap.recycle() }
                 }
                 require(s.documents.sumOf { it.pages } + pending.sumOf { it.first.pages } + pages <= 100) { "soma de páginas estouraria o limite de 100 por sessão" }
-                val (title, type, topics) = OrganizerMetadata.suggestWithTopics(text, name)
+                val (finalTitle, finalType, finalTopics) = if (title.isBlank() || type !in OrganizerMetadata.types) {
+                    OrganizerMetadata.suggestWithTopics(title, name)
+                } else {
+                    Triple(title, type, topics)
+                }
                 require(normalized.length() <= 35L * 1024 * 1024) { "ficou com mais de 35 MB após a organização" }
                 require((folder(id).listFiles()?.filter { it.extension == "enc" }?.sumOf { it.length() } ?: 0L) +
                     pending.sumOf { it.second.length() } + normalized.length() <= 150L * 1024 * 1024) { "a sessão chegaria a 150 MB; organize em lotes menores" }
-                pending.add(OrganizerDocument(docId, title, OrganizerMetadata.suggestDate(text), type, pages, photoOnly = !isPdf, sourceDigest = sourceDigest, possibleDuplicate = duplicate, topics = topics) to normalized)
+                pending.add(OrganizerDocument(docId, finalTitle, date, finalType, pages, photoOnly = !isPdf, sourceDigest = sourceDigest, possibleDuplicate = duplicate, topics = finalTopics) to normalized)
                 }
                 catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                 catch (problem: OrganizerProblem) { failures.add("$name — ${problem.message}") }

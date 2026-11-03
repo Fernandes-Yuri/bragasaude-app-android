@@ -213,6 +213,16 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                     modifier = Modifier.fillMaxWidth(),
                     color = BragaEmerald
                 )
+                state.progressMessage?.let { msg ->
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = msg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BragaTextSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             val session = state.session
