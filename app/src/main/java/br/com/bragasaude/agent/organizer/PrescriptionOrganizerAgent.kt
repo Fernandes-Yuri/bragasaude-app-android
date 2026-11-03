@@ -10,7 +10,6 @@ import br.com.bragasaude.agent.extraction.ExtractedPage
 import br.com.bragasaude.agent.tools.ExtractMedicationItemsTool
 import br.com.bragasaude.agent.tools.GetPatientMedicationsTool
 import br.com.bragasaude.agent.tools.SearchAnvisaCatalogTool
-import br.com.bragasaude.data.local.Daos
 import br.com.bragasaude.data.local.MedicationDao
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.model.AnalyzedMedicationItemDto
