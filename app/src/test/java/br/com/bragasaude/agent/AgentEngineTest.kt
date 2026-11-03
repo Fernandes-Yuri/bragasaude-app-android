@@ -57,7 +57,7 @@ class AgentEngineTest {
 
         val states = mutableListOf<AgentState>()
         val collectJob = launch(testDispatcher) {
-            engine.state.toList(states)
+            engine.events.collect { states.add(it) }
         }
 
         val result = engine.run(
@@ -122,7 +122,7 @@ class AgentEngineTest {
 
         val states = mutableListOf<AgentState>()
         val collectJob = launch(testDispatcher) {
-            engine.state.toList(states)
+            engine.events.collect { states.add(it) }
         }
 
         val result = engine.run(userPrompt = "Para que serve a amoxicilina?")

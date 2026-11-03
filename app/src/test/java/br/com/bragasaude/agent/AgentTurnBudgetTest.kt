@@ -62,6 +62,7 @@ class AgentTurnBudgetTest {
         var currentTime = 1000L
         val budget = AgentTurnBudget(
             maxTurns = 5,
+            turnTimeoutMs = 1_000L,
             sessionTimeoutMs = 10_000L,
             timeProvider = { currentTime }
         )

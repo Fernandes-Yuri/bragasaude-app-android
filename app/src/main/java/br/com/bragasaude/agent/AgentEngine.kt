@@ -9,8 +9,11 @@ import br.com.bragasaude.agent.protocol.AgentUsage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -95,11 +98,19 @@ class AgentEngine @Inject constructor(
     private val _state = MutableStateFlow<AgentState>(AgentState.Idle)
     val state: StateFlow<AgentState> = _state.asStateFlow()
 
+    private val _events = MutableSharedFlow<AgentState>(extraBufferCapacity = 64)
+    val events: SharedFlow<AgentState> = _events.asSharedFlow()
+
+    private fun updateState(newState: AgentState) {
+        _state.value = newState
+        _events.tryEmit(newState)
+    }
+
     /**
      * Reseta o estado do agente para Idle.
      */
     fun reset() {
-        _state.value = AgentState.Idle
+        updateState(AgentState.Idle)
     }
 
     /**
@@ -138,7 +149,7 @@ class AgentEngine @Inject constructor(
         model: String? = null,
         temperature: Float = 0.0f
     ): AgentExecutionResult = withContext(ioDispatcher) {
-        _state.value = AgentState.Idle
+        updateState(AgentState.Idle)
         budget.start()
 
         val conversation = initialMessages.toMutableList()
@@ -153,7 +164,7 @@ class AgentEngine @Inject constructor(
                     turn = budget.currentTurn,
                     error = e
                 )
-                _state.value = failState
+                updateState(failState)
                 return@withContext AgentExecutionResult.Failure(
                     reason = failState.reason,
                     turnsUsed = budget.currentTurn,
@@ -162,7 +173,7 @@ class AgentEngine @Inject constructor(
                 )
             }
 
-            _state.value = AgentState.Thinking(turn = turn, maxTurns = budget.maxTurns)
+            updateState(AgentState.Thinking(turn = turn, maxTurns = budget.maxTurns))
 
             val toolDeclarations = toolRegistry.getDeclarations().ifEmpty { null }
             val request = AgentRelayRequest(
@@ -183,7 +194,7 @@ class AgentEngine @Inject constructor(
                 val reason = "Falha de rede no turno $turn: ${e.message}"
                 Log.w(TAG, reason, e)
                 val failState = AgentState.Failed(reason = reason, turn = turn, error = e)
-                _state.value = failState
+                updateState(failState)
                 return@withContext AgentExecutionResult.Failure(
                     reason = reason,
                     turnsUsed = turn,
@@ -196,7 +207,7 @@ class AgentEngine @Inject constructor(
                 val reason = "Relay retornou resposta nula ou com status de erro no turno $turn"
                 Log.w(TAG, reason)
                 val failState = AgentState.Failed(reason = reason, turn = turn)
-                _state.value = failState
+                updateState(failState)
                 return@withContext AgentExecutionResult.Failure(
                     reason = reason,
                     turnsUsed = turn,
@@ -219,7 +230,7 @@ class AgentEngine @Inject constructor(
                     totalTurns = turn,
                     usage = lastUsage
                 )
-                _state.value = completedState
+                updateState(completedState)
                 return@withContext AgentExecutionResult.Success(
                     content = assistantMessage.content.orEmpty(),
                     message = assistantMessage,
@@ -234,11 +245,13 @@ class AgentEngine @Inject constructor(
                 val toolName = toolCall.function.name
                 val toolArgs = toolCall.function.arguments
 
-                _state.value = AgentState.ExecutingTool(
-                    turn = turn,
-                    toolName = toolName,
-                    toolCallId = toolCall.id,
-                    arguments = toolArgs
+                updateState(
+                    AgentState.ExecutingTool(
+                        turn = turn,
+                        toolName = toolName,
+                        toolCallId = toolCall.id,
+                        arguments = toolArgs
+                    )
                 )
 
                 val rawOutput = try {
@@ -258,10 +271,12 @@ class AgentEngine @Inject constructor(
                 // Sanitização estrita de privacidade on-device antes do retorno ao modelo
                 val sanitizedOutput = privacySanitizer.sanitize(rawOutput)
 
-                _state.value = AgentState.Observing(
-                    turn = turn,
-                    toolName = toolName,
-                    preview = sanitizedOutput.take(MAX_OBSERVATION_PREVIEW_LENGTH)
+                updateState(
+                    AgentState.Observing(
+                        turn = turn,
+                        toolName = toolName,
+                        preview = sanitizedOutput.take(MAX_OBSERVATION_PREVIEW_LENGTH)
+                    )
                 )
 
                 conversation.add(
@@ -282,7 +297,7 @@ class AgentEngine @Inject constructor(
             "Limite de ${budget.maxTurns} turnos atingido sem conclusão pelo modelo"
         }
         val failState = AgentState.Failed(reason = exhaustedReason, turn = budget.currentTurn)
-        _state.value = failState
+        updateState(failState)
         return@withContext AgentExecutionResult.Failure(
             reason = exhaustedReason,
             turnsUsed = budget.currentTurn,
