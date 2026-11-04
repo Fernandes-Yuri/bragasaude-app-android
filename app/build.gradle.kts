@@ -35,6 +35,7 @@ android {
         versionName = "1.9.4"
 
         buildConfigField("String", "BASE_URL", "\"https://api.bragasaude.online\"")
+        buildConfigField("Boolean", "ENABLE_FAMILY_WEBSOCKET", "false")
 
         ndk {
             // Distribuição para celulares ARM; suporte experimental a PrimeOS removido.
@@ -67,6 +68,7 @@ android {
             applicationIdSuffix = ""
             isMinifyEnabled = true
             isShrinkResources = true
+            buildConfigField("Boolean", "ENABLE_FAMILY_WEBSOCKET", "false")
             if (hasKeystore) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -77,6 +79,7 @@ android {
         }
         debug {
             isDebuggable = true
+            buildConfigField("Boolean", "ENABLE_FAMILY_WEBSOCKET", "true")
             // APK interno: mantém o applicationId/Firebase da produção e pode
             // atualizar a instalação release, mas continua com BuildConfig.DEBUG=true.
             if (hasKeystore) {

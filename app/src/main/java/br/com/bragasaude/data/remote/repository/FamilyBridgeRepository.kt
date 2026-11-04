@@ -390,6 +390,53 @@ class FamilyBridgeRepository @Inject constructor(
     }
 
     /**
+     * Processa mensagem de família recebida em tempo real via WebSocket (/ws/family).
+     * Decodifica E2EE, atualiza o Room DB e emite notificação para mensagens de terceiros.
+     */
+    suspend fun receiveRealtimeMessage(msg: FamilyMessageEntity) {
+        val currentUid = auth.currentUser?.uid ?: return
+        val now = System.currentTimeMillis()
+        if (msg.expiresAt in 1..now) {
+            familyDao.deleteMessage(msg.id)
+            return
+        }
+        if (msg.deletedAt != null) {
+            familyDao.insertMessage(msg.copy(messageText = "", senderName = "", pendingSync = false))
+            return
+        }
+
+        val decodedMsg = decodeMessageForLocalStorage(currentUid, msg.patientUserId, msg)
+        val local = familyDao.getMessageById(decodedMsg.id)
+        if (local?.pendingSync != true && local?.deletedAt == null) {
+            familyDao.insertMessage(decodedMsg)
+        }
+
+        if (local == null && decodedMsg.senderUserId != currentUid && decodedMsg.messageText.isNotBlank()) {
+            try {
+                FamilyNotificationService.notifyPatientMessage(
+                    appContext,
+                    decodedMsg.senderName.ifBlank { "Familiar" },
+                    decodedMsg.messageText
+                )
+            } catch (e: Exception) {
+                android.util.Log.w("FamilyBridgeRepo", "Aviso ao notificar mensagem recebida via WebSocket: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Processa exclusão (tombstone) recebida em tempo real via WebSocket (/ws/family).
+     */
+    suspend fun receiveRealtimeMessageDeletion(messageId: String) {
+        val local = familyDao.getMessageById(messageId)
+        if (local != null) {
+            familyDao.insertMessage(local.copy(messageText = "", senderName = "", deletedAt = System.currentTimeMillis(), pendingSync = false))
+        } else {
+            familyDao.deleteMessage(messageId)
+        }
+    }
+
+    /**
      * Assinatura barata do estado atual das mensagens no servidor. Não é
      * criptográfica e não representa o sucesso ou a falha da consulta.
      */
