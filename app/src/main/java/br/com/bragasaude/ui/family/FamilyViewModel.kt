@@ -3,7 +3,11 @@ package br.com.bragasaude.ui.family
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import br.com.bragasaude.BuildConfig
 import br.com.bragasaude.data.local.*
+import br.com.bragasaude.data.remote.family.FamilyChatWebSocketClient
+import br.com.bragasaude.data.remote.family.FamilyWsListener
+import br.com.bragasaude.data.remote.family.FamilyWsStatus
 import br.com.bragasaude.data.remote.repository.FamilyBridgeRepository
 import br.com.bragasaude.data.remote.repository.MessageTemplate
 import br.com.bragasaude.ui.util.FamilyNotificationService
@@ -16,6 +20,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.*
@@ -67,8 +72,27 @@ class FamilyViewModel @Inject constructor(
     private val profileDao: ProfileDao,
     private val vitalSignDao: VitalSignDao,
     private val dailyMetricsDao: DailyMetricsDao,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val familyWsClient: FamilyChatWebSocketClient
 ) : ViewModel() {
+
+    // Construtor secundário para compatibilidade com testes unitários locais
+    constructor(
+        context: Context,
+        familyRepository: FamilyBridgeRepository,
+        profileDao: ProfileDao,
+        vitalSignDao: VitalSignDao,
+        dailyMetricsDao: DailyMetricsDao,
+        auth: FirebaseAuth
+    ) : this(
+        context,
+        familyRepository,
+        profileDao,
+        vitalSignDao,
+        dailyMetricsDao,
+        auth,
+        FamilyChatWebSocketClient()
+    )
 
     private val _uiEvents = MutableSharedFlow<FamilyUiEvent>()
     val uiEvents: SharedFlow<FamilyUiEvent> = _uiEvents.asSharedFlow()
@@ -357,8 +381,31 @@ class FamilyViewModel @Inject constructor(
                             // uma consulta sem espera ao retornar ao primeiro plano.
                             isChatScreenVisible.collectLatest visibility@{ visible ->
                                 if (!visible) {
+                                    if (BuildConfig.ENABLE_FAMILY_WEBSOCKET) {
+                                        familyWsClient.stopSession()
+                                    }
                                     _chatSyncState.value = _chatSyncState.value.copy(isPolling = false)
                                     return@visibility
+                                }
+                                if (BuildConfig.ENABLE_FAMILY_WEBSOCKET) {
+                                    familyWsClient.startSession(
+                                        patientId = targetPatientId,
+                                        tokenProvider = {
+                                            auth.currentUser?.getIdToken(false)?.await()?.token
+                                        },
+                                        listener = object : FamilyWsListener {
+                                            override fun onMessageReceived(msg: FamilyMessageEntity) {
+                                                viewModelScope.launch {
+                                                    familyRepository.receiveRealtimeMessage(msg)
+                                                }
+                                            }
+                                            override fun onMessageDeleted(messageId: String) {
+                                                viewModelScope.launch {
+                                                    familyRepository.receiveRealtimeMessageDeletion(messageId)
+                                                }
+                                            }
+                                        }
+                                    )
                                 }
                                 var consecutiveFailures = 0
                                 chatSyncRequests.tryReceive()
@@ -386,13 +433,21 @@ class FamilyViewModel @Inject constructor(
                                             }
                                         )
                                         // Backoff apenas para falhas reais: 3s → 6s → ... → 60s.
-                                        val interval = (ACTIVE_CHAT_POLL_INTERVAL_MS *
+                                        val baseInterval = (ACTIVE_CHAT_POLL_INTERVAL_MS *
                                             (1L shl consecutiveFailures.coerceAtMost(BACKOFF_SHIFT_CAP)))
                                             .coerceAtMost(POLL_INTERVAL_MAX_MS)
+                                        val interval = if (BuildConfig.ENABLE_FAMILY_WEBSOCKET && familyWsClient.status.value == FamilyWsStatus.CONNECTED) {
+                                            15_000L.coerceAtLeast(baseInterval)
+                                        } else {
+                                            baseInterval
+                                        }
                                         // Um envio interrompe inclusive o backoff, com atraso de 0 ms.
                                         withTimeoutOrNull(interval) { chatSyncRequests.receive() }
                                     }
                                 } finally {
+                                    if (BuildConfig.ENABLE_FAMILY_WEBSOCKET) {
+                                        familyWsClient.stopSession()
+                                    }
                                     _chatSyncState.value = _chatSyncState.value.copy(isPolling = false)
                                 }
                             }
@@ -896,6 +951,9 @@ class FamilyViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
+        if (BuildConfig.ENABLE_FAMILY_WEBSOCKET) {
+            familyWsClient.stopSession()
+        }
         authListener?.let { auth.removeAuthStateListener(it) }
         dataLoadJob?.cancel()
         dashboardJob?.cancel()
