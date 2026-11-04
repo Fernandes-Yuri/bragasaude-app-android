@@ -1,15 +1,16 @@
 package br.com.bragasaude.ui.care
 
 import android.net.Uri
+import br.com.bragasaude.data.local.BragaDatabase
 import br.com.bragasaude.data.local.DailyMetricsDao
 import br.com.bragasaude.data.local.FamilyDao
-import br.com.bragasaude.data.local.database.BragaDatabase
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.repository.CareOsRepository
 import br.com.bragasaude.data.remote.repository.MedicationRepository
 import br.com.bragasaude.data.remote.repository.ProfileRepository
 import br.com.bragasaude.data.remote.repository.VitalsRepository
-import br.com.bragasaude.data.util.PdfReportGenerator
+import br.com.bragasaude.domain.CareCelebrationTts
+import br.com.bragasaude.domain.PdfReportGenerator
 import com.google.firebase.auth.FirebaseAuth
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
