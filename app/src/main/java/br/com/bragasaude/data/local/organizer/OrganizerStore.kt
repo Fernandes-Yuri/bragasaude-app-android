@@ -10,6 +10,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import androidx.core.content.FileProvider
 import androidx.work.*
+import br.com.bragasaude.data.util.DocumentAutoRotator
 import br.com.bragasaude.data.util.ExamPhotoDecoder
 import br.com.bragasaude.agent.extraction.CascadeTextExtractor
 import br.com.bragasaude.agent.extraction.MlKitOcrEngine
@@ -285,7 +286,7 @@ class OrganizerStore @Inject constructor(
                         date = OrganizerMetadata.suggestDate(text)
                     }
                 } else {
-                    val bitmap = ExamPhotoDecoder.decode(context.contentResolver, Uri.fromFile(source))
+                    val bitmap = DocumentAutoRotator.decodeAndRotate(context.contentResolver, Uri.fromFile(source))
                     try {
                         pdf.imagePdf(bitmap, normalized)
                         val agentResult = runCatching {

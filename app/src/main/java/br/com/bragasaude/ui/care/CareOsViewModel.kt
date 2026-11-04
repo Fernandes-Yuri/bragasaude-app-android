@@ -375,7 +375,19 @@ class CareOsViewModel @Inject constructor(
         }
     }
 
+    private var pendingBarcodeScannerLaunch = false
     private var pendingPrescriptionPickerLaunch = false
+    private var pendingPrescriptionUri: Uri? = null
+
+    fun requestBarcodeScanner() {
+        pendingBarcodeScannerLaunch = true
+    }
+
+    fun consumeBarcodeScannerRequest(): Boolean {
+        val launch = pendingBarcodeScannerLaunch
+        pendingBarcodeScannerLaunch = false
+        return launch
+    }
 
     fun requestPrescriptionPicker() {
         pendingPrescriptionPickerLaunch = true
@@ -385,6 +397,16 @@ class CareOsViewModel @Inject constructor(
         val launch = pendingPrescriptionPickerLaunch
         pendingPrescriptionPickerLaunch = false
         return launch
+    }
+
+    fun setPendingPrescriptionUri(uri: Uri) {
+        pendingPrescriptionUri = uri
+    }
+
+    fun consumePendingPrescriptionUri(): Uri? {
+        val uri = pendingPrescriptionUri
+        pendingPrescriptionUri = null
+        return uri
     }
 
     fun analyzePrescription(patientId: String, uri: Uri, onResult: (PrescriptionAnalysisResponseDto?) -> Unit) {

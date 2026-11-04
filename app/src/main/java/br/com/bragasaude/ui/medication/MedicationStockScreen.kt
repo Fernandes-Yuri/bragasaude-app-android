@@ -27,6 +27,11 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import java.util.UUID
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
@@ -98,6 +103,41 @@ fun MedicationStockScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showAddChoice by remember { mutableStateOf(false) }
     var showManualAddDialog by remember { mutableStateOf(false) }
+
+    var tempPrescriptionUri by remember { mutableStateOf<Uri?>(null) }
+    val prescriptionCameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success && tempPrescriptionUri != null) {
+            viewModel.setPendingPrescriptionUri(tempPrescriptionUri!!)
+            onScanPrescription()
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            val file = java.io.File(doseContext.cacheDir, "medication_photos/presc-${UUID.randomUUID()}.jpg").apply { parentFile?.mkdirs() }
+            val uri = androidx.core.content.FileProvider.getUriForFile(doseContext, "${doseContext.packageName}.fileprovider", file)
+            tempPrescriptionUri = uri
+            prescriptionCameraLauncher.launch(uri)
+        }
+    }
+
+    fun launchPrescriptionCamera() {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(doseContext, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            val file = java.io.File(doseContext.cacheDir, "medication_photos/presc-${UUID.randomUUID()}.jpg").apply { parentFile?.mkdirs() }
+            val uri = androidx.core.content.FileProvider.getUriForFile(doseContext, "${doseContext.packageName}.fileprovider", file)
+            tempPrescriptionUri = uri
+            prescriptionCameraLauncher.launch(uri)
+        } else {
+            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+        }
+    }
+
+    val prescriptionPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.setPendingPrescriptionUri(uri)
+            onScanPrescription()
+        }
+    }
     var accessCode by remember(ui.selectedPatientId) { mutableStateOf<Int?>(null) }
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var resumeCount by remember { mutableIntStateOf(0) }
@@ -199,6 +239,7 @@ fun MedicationStockScreen(
                         .fillMaxWidth()
                         .clickable {
                             showAddChoice = false
+                            viewModel.requestBarcodeScanner()
                             onScanNew()
                         },
                     shape = RoundedCornerShape(16.dp),
@@ -227,13 +268,13 @@ fun MedicationStockScreen(
                         Spacer(Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Escanear Caixa (EAN-13 ANVISA)",
+                                "Escanear Caixa",
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 16.sp,
                                 color = BragaTextPrimary
                             )
                             Text(
-                                "Leitura automática da embalagem",
+                                "Leitura do código de barras da embalagem",
                                 fontSize = 13.sp,
                                 color = BragaTextSecondary
                             )
@@ -246,8 +287,54 @@ fun MedicationStockScreen(
                         .fillMaxWidth()
                         .clickable {
                             showAddChoice = false
-                            viewModel.requestPrescriptionPicker()
-                            onScanPrescription()
+                            launchPrescriptionCamera()
+                        },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
+                    border = BorderStroke(1.dp, BragaMintBorder)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = BragaEmerald,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Filled.PhotoCamera,
+                                    contentDescription = null,
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Fotografar Receita",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp,
+                                color = BragaTextPrimary
+                            )
+                            Text(
+                                "Tirar foto da receita médica impressa",
+                                fontSize = 13.sp,
+                                color = BragaTextSecondary
+                            )
+                        }
+                    }
+                }
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showAddChoice = false
+                            prescriptionPickerLauncher.launch(arrayOf("image/*", "application/pdf"))
                         },
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = BragaMintSurface),
@@ -275,13 +362,13 @@ fun MedicationStockScreen(
                         Spacer(Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Escanear ou Anexar Receita (Dupla Checagem com IA)",
+                                "Anexar Arquivo da Receita",
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 16.sp,
                                 color = BragaTextPrimary
                             )
                             Text(
-                                "Foto ou PDF com conferência ANVISA e IA",
+                                "Selecionar arquivo PDF ou foto da galeria",
                                 fontSize = 13.sp,
                                 color = BragaTextSecondary
                             )
