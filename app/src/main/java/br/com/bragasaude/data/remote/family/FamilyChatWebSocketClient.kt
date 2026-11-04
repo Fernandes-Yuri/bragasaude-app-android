@@ -36,8 +36,10 @@ interface FamilyWsListener {
  */
 @Singleton
 class FamilyChatWebSocketClient @Inject constructor(
-    @BaseUrl private val baseUrl: String = BuildConfig.BASE_URL
+    @BaseUrl private val baseUrl: String
 ) {
+    // Construtor auxiliar sem argumentos para testes e instanciação manual
+    constructor() : this(BuildConfig.BASE_URL)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var connectionJob: Job? = null
 
