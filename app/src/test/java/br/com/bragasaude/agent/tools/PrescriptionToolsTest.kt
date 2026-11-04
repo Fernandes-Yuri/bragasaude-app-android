@@ -156,4 +156,39 @@ class PrescriptionToolsTest {
         assertEquals("success", root["status"]?.jsonPrimitive?.content)
         assertEquals(1, root["total_active"]?.jsonPrimitive?.int)
     }
+
+    @Test
+    fun `ExtractMedicationItemsTool extrai assertivamente Sertralina 50mg com dosagem exata`() = runTest {
+        val prescriptionText = """
+            RECEITUÁRIO
+            Paciente: Maria Oliveira
+            1. Sertralina 50 mg
+            Tomar 1 comprimido pela manhã por 30 dias
+        """.trimIndent()
+
+        val page = ExtractedPage(pageIndex = 0, text = prescriptionText, blocks = emptyList(), isDigital = true)
+        val doc = ExtractedDocument(pages = listOf(page), fullText = prescriptionText)
+
+        val tool = ExtractMedicationItemsTool { doc }
+        val resultJson = tool.execute("{}")
+        val root = Json.parseToJsonElement(resultJson).jsonObject
+        val meds = root["medications"]?.jsonArray
+        assertEquals(1, meds?.size)
+
+        val med = meds?.get(0)?.jsonObject
+        assertEquals("Sertralina", med?.get("name")?.jsonPrimitive?.content)
+        assertEquals("50 mg", med?.get("dosage")?.jsonPrimitive?.content)
+        assertEquals(50.0, med?.get("dosage_mg")?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0, 0.01)
+        assertEquals(30, med?.get("treatment_duration_days")?.jsonPrimitive?.int)
+    }
+
+    @Test
+    fun `SearchAnvisaCatalogTool encontra sertralina no catalogo local`() = runTest {
+        val tool = SearchAnvisaCatalogTool()
+        val json = tool.execute("""{"name": "Sertralina"}""")
+        val root = Json.parseToJsonElement(json).jsonObject
+        assertTrue(root["found"]?.jsonPrimitive?.boolean ?: false)
+        assertEquals("Cloridrato de sertralina", root["active_principle"]?.jsonPrimitive?.content)
+        assertEquals("1023507110021", root["anvisa_registration_number"]?.jsonPrimitive?.content)
+    }
 }

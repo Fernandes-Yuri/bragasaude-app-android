@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import br.com.bragasaude.data.util.DocumentAutoRotator
 import br.com.bragasaude.agent.extraction.CascadeTextExtractor
 import br.com.bragasaude.agent.extraction.ExtractedDocument
 import br.com.bragasaude.agent.extraction.ExtractedPage
@@ -67,10 +68,10 @@ class PrescriptionOrganizerAgent @Inject constructor(
                 tempFile.delete()
             }
         } else {
-            onProgress?.invoke("Processando imagem da receita via OCR on-device...")
-            val bitmap = resolver.openInputStream(uri)?.use { stream ->
-                BitmapFactory.decodeStream(stream)
-            } ?: return@withContext null
+            onProgress?.invoke("Processando imagem da receita médica via OCR on-device...")
+            val bitmap = runCatching {
+                DocumentAutoRotator.decodeAndRotate(resolver, uri)
+            }.getOrNull() ?: return@withContext null
             try {
                 val page = cascadeExtractor.extractFromBitmap(bitmap, pageIndex = 0)
                 ExtractedDocument(pages = listOf(page), fullText = page.text)

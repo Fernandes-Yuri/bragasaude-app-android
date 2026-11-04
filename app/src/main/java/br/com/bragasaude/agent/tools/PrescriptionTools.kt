@@ -276,7 +276,16 @@ class SearchAnvisaCatalogTool(
             "ibuprofeno" to Triple("Ibuprofeno", "1023504120017", "7896004733418"),
             "atenolol" to Triple("Atenolol", "1023503120018", "7896004722108"),
             "clonazepam" to Triple("Clonazepam", "1023502120019", "7896004719825"),
-            "azitromicina" to Triple("Azitromicina di-hidratada", "1023501120020", "7896004709147")
+            "azitromicina" to Triple("Azitromicina di-hidratada", "1023501120020", "7896004709147"),
+            "sertralina" to Triple("Cloridrato de sertralina", "1023507110021", "7896004719999"),
+            "escitalopram" to Triple("Oxalato de escitalopram", "1023507120022", "7896004719998"),
+            "fluoxetina" to Triple("Cloridrato de fluoxetina", "1023507130023", "7896004719997"),
+            "pantoprazol" to Triple("Pantoprazol sódico sesqui-hidratado", "1023507140024", "7896004719996"),
+            "levotiroxina" to Triple("Levotiroxina sódica", "1023507150025", "7896004719995"),
+            "hidroclorotiazida" to Triple("Hidroclorotiazida", "1023507160026", "7896004719994"),
+            "enalapril" to Triple("Maleato de enalapril", "1023507170027", "7896004719993"),
+            "captopril" to Triple("Captopril", "1023507180028", "7896004719992"),
+            "prednisona" to Triple("Prednisona", "1023507190029", "7896004719991")
         )
     }
 
