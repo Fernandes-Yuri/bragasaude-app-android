@@ -433,6 +433,11 @@ class FamilyViewModel @Inject constructor(
                                                     familyRepository.receiveRealtimeMessageDeletion(messageId)
                                                 }
                                             }
+                                            override fun onMessagesRead(patientId: String) {
+                                                viewModelScope.launch {
+                                                    familyRepository.receiveRealtimeMessagesRead(patientId)
+                                                }
+                                            }
                                         }
                                     )
                                     try {
@@ -897,6 +902,7 @@ class FamilyViewModel @Inject constructor(
             try {
                 val targetId = patientUserId ?: currentUserId
                 familyRepository.markAllMessagesAsRead(targetId)
+                familyWsClient.sendReadReceipt(targetId)
             } catch (e: Exception) {
                 android.util.Log.e("FamilyVM", "Erro ao marcar mensagens como lidas: ${e.message}")
             }

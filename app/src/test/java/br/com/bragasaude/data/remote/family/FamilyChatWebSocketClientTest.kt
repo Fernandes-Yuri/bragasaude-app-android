@@ -115,6 +115,34 @@ class FamilyChatWebSocketClientTest {
     }
 
     @Test
+    fun handleIncomingJson_parsesMessageReadEvent() {
+        val client = FamilyChatWebSocketClient("https://api.bragasaude.online")
+        var readPatientId: String? = null
+        val listener = object : FamilyWsListener {
+            override fun onMessageReceived(msg: FamilyMessageEntity) {}
+            override fun onMessageDeleted(messageId: String) {}
+            override fun onMessagesRead(patientId: String) {
+                readPatientId = patientId
+            }
+        }
+
+        client.startSession("patient-123", { "dummy-token" }, listener)
+
+        val jsonEvent = """
+            {
+                "type": "MESSAGE_READ",
+                "data": {
+                    "patient_id": "patient-123"
+                }
+            }
+        """.trimIndent()
+
+        client.handleIncomingJson(jsonEvent)
+
+        assertEquals("patient-123", readPatientId)
+    }
+
+    @Test
     fun handleIncomingJson_filtersOutMessagesForOtherPatients() {
         val client = FamilyChatWebSocketClient("https://api.bragasaude.online")
         var received = false

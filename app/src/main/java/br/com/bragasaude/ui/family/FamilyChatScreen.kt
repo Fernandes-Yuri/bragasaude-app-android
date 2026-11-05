@@ -44,7 +44,7 @@ import java.util.*
 
 /**
  * Tela de Chat Familiar Bidirecional.
- * 
+ *
  * Permite que paciente e cuidador troquem mensagens em tempo real,
  * com suporte a notificações e ícones representativos (coração, remédio, água, etc).
  */
@@ -99,7 +99,7 @@ fun FamilyChatScreen(
     var showProfileBottomSheet by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showRevokeConfirmFromChat by remember { mutableStateOf(false) }
-    
+
     // Marcar mensagens como lidas ao entrar na conversa e a cada nova mensagem
     LaunchedEffect(initialPatientId, patientId, messages.size) {
         val target = patientId?.takeIf { it.isNotBlank() } ?: initialPatientId?.takeIf { it.isNotBlank() }
@@ -107,7 +107,7 @@ fun FamilyChatScreen(
             viewModel.markAllMessagesAsRead(target)
         }
     }
-    
+
     val listState = rememberLazyListState()
 
     // Scroll para as mensagens mais recentes (índice 0 com reverseLayout)
@@ -116,7 +116,7 @@ fun FamilyChatScreen(
             listState.animateScrollToItem(0)
         }
     }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -268,12 +268,12 @@ fun FamilyChatScreen(
                         ChatBubble(
                             message = message,
                             isFromMe = isFromMe,
-                            onLongClick = if (isFromMe) ({ messagePendingDelete = message }) else null,
+                            onDeleteMessage = if (isFromMe) ({ messagePendingDelete = message }) else null,
                             modifier = Modifier.fillMaxWidth(0.85f)
                         )
                     }
                 }
-                
+
                 if (messages.isEmpty()) {
                     item {
                         Box(
@@ -304,7 +304,7 @@ fun FamilyChatScreen(
                     }
                 }
             }
-            
+
             // Chips de resposta rápida
             HorizontalQuickReplyChips(
                 enabled = patientId != null && !isSending,
@@ -325,7 +325,7 @@ fun FamilyChatScreen(
                     }
                 }
             )
-            
+
             // Campo de entrada
             MessageInputField(
                 messageText = messageText,
@@ -449,7 +449,7 @@ fun FamilyChatScreen(
 private fun ChatBubble(
     message: FamilyMessageEntity,
     isFromMe: Boolean,
-    onLongClick: (() -> Unit)? = null,
+    onDeleteMessage: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -462,6 +462,12 @@ private fun ChatBubble(
     val textColor = if (isDark) Color(0xFFF1F5F9) else BragaTextPrimary
     val secondaryColor = if (isDark) Color(0xFFCBD5E1) else BragaTextSecondary
     val authorColor = if (isDark) BragaMint else BragaEmeraldDark
+
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val context = LocalContext.current
+    var showMenu by remember { mutableStateOf(false) }
+
     Row(
         modifier = modifier,
         horizontalArrangement = if (isFromMe) Arrangement.End else Arrangement.Start,
@@ -472,94 +478,172 @@ private fun ChatBubble(
             br.com.bragasaude.ui.components.ConnectedUserAvatar(message.senderUserId, message.senderName, 36.dp)
             Spacer(Modifier.width(8.dp))
         }
-        
+
         Column(
             horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
             modifier = Modifier.weight(1f, fill = false)
         ) {
-            // Balão da mensagem (toque longo na própria mensagem oferece exclusão — D47)
             val bubbleShape = RoundedCornerShape(
                 topStart = 16.dp,
                 topEnd = 16.dp,
                 bottomStart = if (isFromMe) 4.dp else 16.dp,
                 bottomEnd = if (isFromMe) 16.dp else 4.dp
             )
-            Surface(
-                modifier = if (onLongClick != null) {
-                    Modifier
+            Box {
+                Surface(
+                    modifier = Modifier
                         .clip(bubbleShape)
                         .combinedClickable(
-                            onClick = {},
-                            onLongClick = onLongClick,
-                            onLongClickLabel = "Apagar mensagem"
-                        )
-                } else {
-                    Modifier
-                },
-                shape = bubbleShape,
-                color = bubbleColor,
-                contentColor = textColor,
-                shadowElevation = if (isFromMe) 0.dp else 1.dp,
-                border = if (isFromMe) null else BorderStroke(
-                    1.dp, MaterialTheme.colorScheme.outlineVariant
-                )
-            ) {
-                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    if (!isFromMe) {
-                        Text(
-                            text = message.senderName.ifBlank { "Familiar" },
-                            fontWeight = FontWeight.Bold,
-                            color = authorColor,
-                            fontSize = 13.sp
-                        )
-                        Spacer(Modifier.height(4.dp))
-                    }
-                    // Ícone tipo de mensagem
-                    if (message.iconType != "CUSTOM" && message.iconType.isNotBlank()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                getFamilyMessageIcon(message.iconType),
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = BragaEmerald
+                            onClick = { showMenu = true },
+                            onLongClick = {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                showMenu = true
+                            },
+                            onLongClickLabel = "Opções da mensagem"
+                        ),
+                    shape = bubbleShape,
+                    color = bubbleColor,
+                    contentColor = textColor,
+                    shadowElevation = if (isFromMe) 0.dp else 1.dp,
+                    border = if (isFromMe) null else BorderStroke(
+                        1.dp, MaterialTheme.colorScheme.outlineVariant
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        if (!isFromMe) {
+                            Text(
+                                text = message.senderName.ifBlank { "Familiar" },
+                                fontWeight = FontWeight.Bold,
+                                color = authorColor,
+                                fontSize = 13.sp
                             )
-                            Spacer(Modifier.width(6.dp))
+                            Spacer(Modifier.height(4.dp))
+                        }
+                        // Ícone tipo de mensagem
+                        if (message.iconType != "CUSTOM" && message.iconType.isNotBlank()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    getFamilyMessageIcon(message.iconType),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = BragaEmerald
+                                )
+                                Spacer(Modifier.width(6.dp))
+                            }
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+
+                        // Texto da mensagem
+                        if (message.messageText.isNotBlank()) {
+                            Text(
+                                message.messageText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontSize = 15.sp,
+                                color = textColor
+                            )
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+
+                        // Carimbo de hora + botão de opções
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                formatMessageDate(message.sentAt),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 12.sp,
+                                color = secondaryColor
+                            )
+                            if (isFromMe) {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = "Opções da mensagem",
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clickable { showMenu = true },
+                                    tint = secondaryColor.copy(alpha = 0.8f)
+                                )
+                            }
                         }
                     }
-                    
-                    Spacer(Modifier.height(4.dp))
-                    
-                    // Texto da mensagem
+                }
+
+                // Menu de contexto com Opções (Copiar / Apagar)
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
                     if (message.messageText.isNotBlank()) {
-                        Text(
-                            message.messageText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontSize = 15.sp,
-                            color = textColor
+                        DropdownMenuItem(
+                            text = { Text("Copiar texto") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.ContentCopy,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            },
+                            onClick = {
+                                showMenu = false
+                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(message.messageText))
+                                android.widget.Toast.makeText(context, "Texto copiado", android.widget.Toast.LENGTH_SHORT).show()
+                            }
                         )
                     }
-                    
-                    Spacer(Modifier.height(4.dp))
-                    
-                    // Carimbo de hora
-                    Text(
-                        formatMessageDate(message.sentAt),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = 12.sp,
-                        color = secondaryColor
-                    )
+                    if (isFromMe && onDeleteMessage != null) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "Apagar mensagem",
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            },
+                            onClick = {
+                                showMenu = false
+                                onDeleteMessage()
+                            }
+                        )
+                    }
                 }
             }
-            
-            // Indicador de lida
+
+            // Indicador de visualizado (estilo mensageiro moderno)
             if (isFromMe && message.sentAt > 0) {
                 Spacer(Modifier.height(2.dp))
-                Icon(
-                    Icons.Default.Check,
-                    contentDescription = if (message.isRead) "Lido" else "Enviado",
-                    modifier = Modifier.size(14.dp),
-                    tint = if (message.isRead) BragaEmerald else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (message.isRead) {
+                        // Tique duplo verde esmeralda: mensagem lida/visualizada
+                        Icon(
+                            Icons.Default.DoneAll,
+                            contentDescription = "Visualizada",
+                            modifier = Modifier.size(16.dp),
+                            tint = BragaEmerald
+                        )
+                    } else {
+                        // Tique simples cinza: mensagem enviada
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = "Enviada",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
             }
         }
     }
@@ -578,7 +662,7 @@ private fun HorizontalQuickReplyChips(
         "Preciso beber água",
         "Vamos caminhar?"
     )
-    
+
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -652,9 +736,9 @@ private fun MessageInputField(
                 maxLines = 5,
                 enabled = hasGroup && !isSending
             )
-            
+
             Spacer(Modifier.width(12.dp))
-            
+
             Button(
                 onClick = onSend,
                 enabled = hasGroup && messageText.isNotBlank() && !isSending,

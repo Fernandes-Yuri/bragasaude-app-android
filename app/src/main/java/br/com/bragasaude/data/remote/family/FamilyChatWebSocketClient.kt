@@ -27,6 +27,7 @@ enum class FamilyWsStatus {
 interface FamilyWsListener {
     fun onMessageReceived(msg: FamilyMessageEntity)
     fun onMessageDeleted(messageId: String)
+    fun onMessagesRead(patientId: String) {}
 }
 
 /**
@@ -185,6 +186,24 @@ class FamilyChatWebSocketClient @Inject constructor(
         Log.d(TAG, "Sessão WebSocket encerrada.")
     }
 
+    /**
+     * Envia confirmação de leitura em tempo real para a família.
+     */
+    fun sendReadReceipt(patientId: String) {
+        val ws = webSocket ?: return
+        try {
+            val json = JSONObject().apply {
+                put("type", "MESSAGE_READ")
+                put("data", JSONObject().apply {
+                    put("patientId", patientId)
+                })
+            }
+            ws.send(json.toString())
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao enviar recibo de leitura pelo WebSocket: ${e.message}")
+        }
+    }
+
     internal fun buildWsUrl(httpBaseUrl: String, token: String, patientId: String): String {
         val base = httpBaseUrl.trimEnd('/')
         val wsScheme = if (base.startsWith("https://")) "wss://" else "ws://"
@@ -236,6 +255,13 @@ class FamilyChatWebSocketClient @Inject constructor(
                     val messageId = data?.optString("message_id", data.optString("messageId", "")) ?: root.optString("data")
                     if (messageId.isNotBlank()) {
                         activeListener?.onMessageDeleted(messageId)
+                    }
+                }
+                "MESSAGE_READ" -> {
+                    val data = root.optJSONObject("data")
+                    val patientId = data?.optString("patient_id", data.optString("patientId", "")) ?: root.optString("data")
+                    if (patientId.isNotBlank()) {
+                        activeListener?.onMessagesRead(patientId)
                     }
                 }
                 "ping" -> {

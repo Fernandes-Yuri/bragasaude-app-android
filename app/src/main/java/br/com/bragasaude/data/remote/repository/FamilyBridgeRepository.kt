@@ -545,6 +545,18 @@ class FamilyBridgeRepository @Inject constructor(
     }
 
     suspend fun markAllMessagesAsRead(patientUserId: String) {
+        val currentUid = auth.currentUser?.uid
+        if (!currentUid.isNullOrBlank()) {
+            familyDao.markIncomingMessagesAsRead(patientUserId, currentUid)
+        } else {
+            familyDao.markAllMessagesAsRead(patientUserId)
+        }
+        try {
+            apiClient.markFamilyMessagesRead(patientUserId)
+        } catch (_: Exception) {}
+    }
+
+    suspend fun receiveRealtimeMessagesRead(patientUserId: String) {
         familyDao.markAllMessagesAsRead(patientUserId)
     }
 

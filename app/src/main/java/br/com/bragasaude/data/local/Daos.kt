@@ -656,6 +656,10 @@ interface FamilyDao {
     @Query("UPDATE family_messages_local SET isRead = 1 WHERE patientUserId = :patientUserId")
     suspend fun markAllMessagesAsRead(patientUserId: String)
 
+    /** Marcar como lidas apenas as mensagens recebidas de terceiros (não enviadas pelo usuário atual). */
+    @Query("UPDATE family_messages_local SET isRead = 1 WHERE patientUserId = :patientUserId AND (senderUserId != :currentUserId OR senderUserId IS NULL)")
+    suspend fun markIncomingMessagesAsRead(patientUserId: String, currentUserId: String)
+
     /** Excluir mensagem. */
     @Query("DELETE FROM family_messages_local WHERE id = :messageId")
     suspend fun deleteMessage(messageId: String)
