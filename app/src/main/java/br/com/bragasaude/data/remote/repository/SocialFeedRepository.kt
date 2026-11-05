@@ -165,12 +165,25 @@ class SocialFeedRepository @Inject constructor(
         requireSession(userId)
         val profile = profileDao.getProfileOneShot(userId)
         requireSession(userId)
-        socialFeedDao.queueReaction(PostReactionEntity(
+        val reaction = PostReactionEntity(
             id = UUID.randomUUID().toString(), postId = postId, userId = userId,
             userName = profile?.fullName, reactionType = type,
-            pendingSync = true, pendingDelete = delete)) { auth.currentUser?.uid == userId }
+            pendingSync = true, pendingDelete = delete)
+        socialFeedDao.queueReaction(reaction) { auth.currentUser?.uid == userId }
         requireSession(userId)
-        syncScheduler.scheduleSync(androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE)
+        try {
+            val ok = if (delete) apiClient.removePostReaction(postId, userId)
+                else apiClient.reactToPost(postId, userId, type)
+            if (ok) {
+                socialFeedDao.completeReaction(reaction)
+            } else {
+                syncScheduler.scheduleSync(androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            syncScheduler.scheduleSync(androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE)
+        }
     }
 
     suspend fun createPost(

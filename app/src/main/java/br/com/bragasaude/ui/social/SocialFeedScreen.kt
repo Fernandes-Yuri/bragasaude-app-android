@@ -695,6 +695,7 @@ private fun SocialPostCard(
                 reactionOptions.forEach { (type, label, icon) ->
                     val isSelected = selectedReaction == type
                     val count = reactions.count { it.reactionType == type }
+                    val displayCount = if (count > 0) count else if (isSelected) 1 else 0
                     TextButton(
                         onClick = {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -706,7 +707,7 @@ private fun SocialPostCard(
                             .clip(RoundedCornerShape(10.dp))
                             .semantics {
                                 selected = isSelected
-                                stateDescription = if (count == 1) "1 reação" else "$count reações"
+                                stateDescription = if (displayCount == 1) "1 apoio" else "$displayCount apoios"
                             },
                         shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
@@ -722,7 +723,7 @@ private fun SocialPostCard(
                         Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = label,
+                            text = if (displayCount > 0) "$label ($displayCount)" else label,
                             fontSize = 13.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
