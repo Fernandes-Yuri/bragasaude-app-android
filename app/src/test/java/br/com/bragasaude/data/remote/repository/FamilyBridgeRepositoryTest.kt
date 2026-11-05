@@ -535,4 +535,27 @@ class FamilyBridgeRepositoryTest {
         assertTrue("receiveRealtimeMessage deve manter isRead = true se a mensagem já foi lida no dispositivo", insertedSlot.captured.isRead)
     }
 
+    @Test
+    fun `markAllMessagesAsRead uses markIncomingMessagesAsRead to avoid marking own sent messages`() = runBlocking {
+        val patientId = "patient-1"
+        every { auth.currentUser?.uid } returns "caregiver-1"
+        coEvery { familyDao.markIncomingMessagesAsRead(patientId, "caregiver-1") } just Runs
+        coEvery { apiClient.markFamilyMessagesRead(patientId) } returns true
+
+        repository.markAllMessagesAsRead(patientId)
+
+        coVerify(exactly = 1) { familyDao.markIncomingMessagesAsRead(patientId, "caregiver-1") }
+        coVerify(exactly = 0) { familyDao.markAllMessagesAsRead(patientId) }
+    }
+
+    @Test
+    fun `receiveRealtimeMessagesRead marks all messages as read in Room for patient`() = runBlocking {
+        val patientId = "patient-1"
+        coEvery { familyDao.markAllMessagesAsRead(patientId) } just Runs
+
+        repository.receiveRealtimeMessagesRead(patientId)
+
+        coVerify(exactly = 1) { familyDao.markAllMessagesAsRead(patientId) }
+    }
+
 }

@@ -605,6 +605,22 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    /**
+     * Confirmação de visualização / leitura de mensagens familiares no servidor.
+     */
+    suspend fun markFamilyMessagesRead(patientId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                put("patientId", patientId)
+            }
+            val res = postJson("$baseUrl/api/family/messages/read", json)
+            return@withContext res?.optString("status") == "success"
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao marcar mensagens familiares como lidas no servidor: ${e.message}")
+            return@withContext false
+        }
+    }
+
     // ==================== ATUALIZAÇÃO DO APP — OTA (doc 10 §1B) ====================
 
     /**
