@@ -100,10 +100,11 @@ fun FamilyChatScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showRevokeConfirmFromChat by remember { mutableStateOf(false) }
     
-    // Marcar mensagens como lidas quando os vínculos estiverem carregados
-    LaunchedEffect(patientId, messages.size) {
-        if (!patientId.isNullOrBlank()) {
-            viewModel.markAllMessagesAsRead(patientId)
+    // Marcar mensagens como lidas ao entrar na conversa e a cada nova mensagem
+    LaunchedEffect(initialPatientId, patientId, messages.size) {
+        val target = patientId?.takeIf { it.isNotBlank() } ?: initialPatientId?.takeIf { it.isNotBlank() }
+        if (!target.isNullOrBlank()) {
+            viewModel.markAllMessagesAsRead(target)
         }
     }
     
