@@ -478,7 +478,7 @@ class FamilyBridgeRepositoryTest {
     fun `syncFamilyMessages preserves local isRead status when remote message arrives with isRead false`() = runBlocking {
         val patientId = "patient-1"
         val msgId = "msg-preserve-read-1"
-        coEvery { familyDao.getActiveBindingForPair(patientId, "caregiver-1") } returns pendingBinding().copy(
+        coEvery { familyDao.existsActiveLink(patientId, "caregiver-1") } returns pendingBinding().copy(
             patientUserId = patientId, caregiverUserId = "caregiver-1", status = "ACTIVE"
         )
         val existingLocal = br.com.bragasaude.data.local.FamilyMessageEntity(
@@ -488,6 +488,7 @@ class FamilyBridgeRepositoryTest {
             senderUserId = "caregiver-1",
             senderName = "Filho",
             messageText = "Recado importante",
+            iconType = "LOVE",
             isRead = true,
             sentAt = System.currentTimeMillis() - 1000,
             expiresAt = System.currentTimeMillis() + 86400000,
@@ -517,6 +518,7 @@ class FamilyBridgeRepositoryTest {
             senderUserId = "caregiver-1",
             senderName = "Filho",
             messageText = "Recado em tempo real",
+            iconType = "LOVE",
             isRead = true,
             sentAt = System.currentTimeMillis() - 1000,
             expiresAt = System.currentTimeMillis() + 86400000,
