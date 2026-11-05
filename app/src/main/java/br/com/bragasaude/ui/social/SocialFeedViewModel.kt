@@ -84,10 +84,28 @@ class SocialFeedViewModel @Inject constructor(
         }
     }
 
-    val posts: StateFlow<List<SocialPostEntity>> = accountId.flatMapLatest { uid ->
+    enum class FeedFilter { RECENT, TRENDING }
+
+    private val _feedFilter = MutableStateFlow(FeedFilter.RECENT)
+    val feedFilter: StateFlow<FeedFilter> = _feedFilter.asStateFlow()
+
+    fun setFeedFilter(filter: FeedFilter) {
+        _feedFilter.value = filter
+    }
+
+    val posts: StateFlow<List<SocialPostEntity>> = combine(accountId, _feedFilter) { uid, filter ->
+        uid to filter
+    }.flatMapLatest { (uid, filter) ->
         flow {
             emit(emptyList<SocialPostEntity>())
-            if (uid != guestId) emitAll(socialFeedRepository.getGlobalFeed(uid))
+            if (uid != guestId) {
+                val feedFlow = if (filter == FeedFilter.TRENDING) {
+                    socialFeedRepository.getTrendingFeed(uid)
+                } else {
+                    socialFeedRepository.getGlobalFeed(uid)
+                }
+                emitAll(feedFlow)
+            }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(30_000), emptyList())
 

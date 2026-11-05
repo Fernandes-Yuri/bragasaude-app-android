@@ -368,6 +368,11 @@ interface SocialFeedDao {
     ) ORDER BY sp.createdAt DESC""")
     fun getUnblockedFeed(viewerId: String): Flow<List<SocialPostEntity>>
 
+    @Query("""SELECT sp.* FROM social_posts_local sp WHERE sp.isVisible = 1 AND NOT EXISTS (
+        SELECT 1 FROM social_user_blocks_local b WHERE b.userId = :viewerId AND b.blockedUserId = sp.userId
+    ) ORDER BY sp.reactionCount DESC, sp.createdAt DESC""")
+    fun getTrendingFeed(viewerId: String): Flow<List<SocialPostEntity>>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertBlock(block: BlockedUserEntity)
 

@@ -6,12 +6,14 @@ import br.com.bragasaude.data.local.PostReactionEntity
 import br.com.bragasaude.data.local.ProfileDao
 import br.com.bragasaude.data.local.ProfileEntity
 import br.com.bragasaude.data.local.SocialFeedDao
+import br.com.bragasaude.data.local.SocialPostEntity
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.sync.SocialBlockSynchronizer
 import br.com.bragasaude.data.remote.sync.SyncScheduler
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import io.mockk.*
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
@@ -119,5 +121,25 @@ class SocialFeedRepositoryTest {
         coVerify(exactly = 1) { apiClient.removePostReaction("post-1", testUserId) }
         coVerify(exactly = 0) { socialFeedDao.completeReaction(any()) }
         verify(exactly = 1) { syncScheduler.scheduleSync(androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE) }
+    }
+
+    @Test
+    fun getTrendingFeed_callsDaoTrendingFeed() = runBlocking {
+        val post1 = SocialPostEntity(
+            id = "p1", userId = "other-user", postType = "milestone",
+            title = "Top Post", reactionCount = 10, visibility = "PUBLIC"
+        )
+        every { socialFeedDao.getTrendingFeed(testUserId) } returns kotlinx.coroutines.flow.flowOf(listOf(post1))
+        every { profileDao.getProfile(testUserId) } returns kotlinx.coroutines.flow.flowOf(null)
+        every { familyDao.getActiveBindingsForPatient(testUserId) } returns kotlinx.coroutines.flow.flowOf(emptyList())
+        every { familyDao.getActiveBindingsForCaregiver(testUserId) } returns kotlinx.coroutines.flow.flowOf(emptyList())
+
+        val result = repository.getTrendingFeed(testUserId)
+        val posts = result.first()
+
+        assertEquals(1, posts.size)
+        assertEquals("p1", posts[0].id)
+        assertEquals(10, posts[0].reactionCount)
+        verify(exactly = 1) { socialFeedDao.getTrendingFeed(testUserId) }
     }
 }

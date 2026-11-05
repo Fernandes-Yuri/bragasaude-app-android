@@ -49,6 +49,20 @@ class SocialFeedRepository @Inject constructor(
         }
     }
 
+    fun getTrendingFeed(currentUserId: String? = null): Flow<List<SocialPostEntity>> {
+        if (currentUserId == null || currentUserId == guestId) return kotlinx.coroutines.flow.flowOf(emptyList())
+        val posts = socialFeedDao.getTrendingFeed(currentUserId)
+        return combine(posts, profileDao.getProfile(currentUserId),
+            familyDao.getActiveBindingsForPatient(currentUserId),
+            familyDao.getActiveBindingsForCaregiver(currentUserId)) { feed, profile, caregivers, patients ->
+            val familyAuthors = (caregivers + patients).filter { it.status == "ACTIVE" &&
+                currentUserId in listOf(it.patientUserId, it.caregiverUserId) }
+                .flatMap { listOf(it.patientUserId, it.caregiverUserId) }.toSet()
+            feed.filter { post -> br.com.bragasaude.domain.canDisplayCachedSocialPost(post, currentUserId, familyAuthors) }
+                .map { post -> if (post.userId == currentUserId) post.withProfileAvatar(profile) else post }
+        }
+    }
+
     suspend fun fetchGlobalFeed(limit: Int = 20, offset: Int = 0, currentUserId: String): Int {
         require(limit in 1..100 && offset == 0) { "Atualização do mural exige a primeira página, com até 100 publicações." }
         requireSession(currentUserId)
