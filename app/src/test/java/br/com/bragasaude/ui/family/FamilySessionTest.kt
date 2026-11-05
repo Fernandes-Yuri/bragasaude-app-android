@@ -2,6 +2,7 @@ package br.com.bragasaude.ui.family
 
 import androidx.lifecycle.ViewModelStore
 import br.com.bragasaude.data.local.*
+import br.com.bragasaude.data.remote.family.FamilyChatWebSocketClient
 import br.com.bragasaude.data.remote.repository.*
 import com.google.firebase.auth.FirebaseAuth
 import io.mockk.*
@@ -182,6 +183,48 @@ class FamilySessionTest {
             assertEquals(0, downloads)
             assertFalse(vm.chatSyncState.value.isPolling)
             assertNull(vm.chatSyncState.value.warning)
+        }
+    }
+
+    @Test fun strictWebSocketMode_doesNotPollHttpAndReflectsWsLifecycle() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val store = ViewModelStore()
+        try {
+            val auth = mockk<FirebaseAuth>(relaxed = true)
+            every { auth.currentUser?.uid } returns "patient"
+            val repo = mockk<FamilyBridgeRepository>(relaxed = true)
+            val binding = FamilyBindingEntity(id="link", patientUserId="patient", caregiverUserId="caregiver",
+                caregiverName="Familiar", caregiverRelation="Filho", connectionCode="ABC12345", status="ACTIVE",
+                createdAt=1L, expiresAt=Long.MAX_VALUE)
+            every { repo.getActiveBindingsForPatient(any()) } returns flowOf(listOf(binding))
+            every { repo.getActiveBindingsForCaregiver(any()) } returns flowOf(emptyList())
+            every { repo.getAllActiveMessages() } returns flowOf(emptyList())
+            every { repo.getRecentMessagesForPatient(any(), any()) } returns flowOf(emptyList())
+
+            val wsClient = FamilyChatWebSocketClient("https://api.bragasaude.online")
+            val vm = FamilyViewModel(
+                mockk(relaxed=true), repo, mockk(relaxed=true), mockk(relaxed=true),
+                mockk(relaxed=true), auth, enableWebSocket = true, familyWsClient = wsClient
+            )
+            store.put("family_ws", vm)
+            vm.setChatScreenVisible(true)
+            runCurrent()
+
+            // Rigorosamente zero chamadas a chatCycleSnapshot no modo WebSocket estrito
+            coVerify(exactly=0) { repo.chatCycleSnapshot(any(), any()) }
+
+            // Estado de sync reflete o WebSocket (inicialmente conectando)
+            assertTrue(vm.chatSyncState.value.isPolling)
+            assertEquals("Conectando ao canal em tempo real (WebSocket)...", vm.chatSyncState.value.warning)
+
+            // Ao sair da tela, para a sessão e encerra polling
+            vm.setChatScreenVisible(false)
+            runCurrent()
+            assertFalse(vm.chatSyncState.value.isPolling)
+        } finally {
+            store.clear()
+            runCurrent()
+            Dispatchers.resetMain()
         }
     }
 }

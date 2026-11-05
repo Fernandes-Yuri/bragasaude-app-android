@@ -76,7 +76,9 @@ class FamilyViewModel @Inject constructor(
     private val familyWsClient: FamilyChatWebSocketClient
 ) : ViewModel() {
 
-    // Construtor secundário para compatibilidade com testes unitários locais
+    internal var enableWebSocket: Boolean = BuildConfig.ENABLE_FAMILY_WEBSOCKET
+
+    // Construtor secundário para compatibilidade com testes unitários locais (modo polling clássico)
     constructor(
         context: Context,
         familyRepository: FamilyBridgeRepository,
@@ -92,7 +94,31 @@ class FamilyViewModel @Inject constructor(
         dailyMetricsDao,
         auth,
         FamilyChatWebSocketClient()
-    )
+    ) {
+        this.enableWebSocket = false
+    }
+
+    // Construtor secundário com flag explícita de websocket para testes unitários de canal em tempo real
+    constructor(
+        context: Context,
+        familyRepository: FamilyBridgeRepository,
+        profileDao: ProfileDao,
+        vitalSignDao: VitalSignDao,
+        dailyMetricsDao: DailyMetricsDao,
+        auth: FirebaseAuth,
+        enableWebSocket: Boolean,
+        familyWsClient: FamilyChatWebSocketClient = FamilyChatWebSocketClient()
+    ) : this(
+        context,
+        familyRepository,
+        profileDao,
+        vitalSignDao,
+        dailyMetricsDao,
+        auth,
+        familyWsClient
+    ) {
+        this.enableWebSocket = enableWebSocket
+    }
 
     private val _uiEvents = MutableSharedFlow<FamilyUiEvent>()
     val uiEvents: SharedFlow<FamilyUiEvent> = _uiEvents.asSharedFlow()
@@ -381,13 +407,13 @@ class FamilyViewModel @Inject constructor(
                             // uma consulta sem espera ao retornar ao primeiro plano.
                             isChatScreenVisible.collectLatest visibility@{ visible ->
                                 if (!visible) {
-                                    if (BuildConfig.ENABLE_FAMILY_WEBSOCKET) {
+                                    if (enableWebSocket) {
                                         familyWsClient.stopSession()
                                     }
                                     _chatSyncState.value = _chatSyncState.value.copy(isPolling = false)
                                     return@visibility
                                 }
-                                if (BuildConfig.ENABLE_FAMILY_WEBSOCKET) {
+                                if (enableWebSocket) {
                                     // MODO DEBUG / WEBSOCKET ESTRITO:
                                     // Sem fallback silencioso de polling. Todas as mensagens e exclusões
                                     // dependem exclusivamente da conexão WebSocket em tempo real.
@@ -977,7 +1003,7 @@ class FamilyViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        if (BuildConfig.ENABLE_FAMILY_WEBSOCKET) {
+        if (enableWebSocket) {
             familyWsClient.stopSession()
         }
         authListener?.let { auth.removeAuthStateListener(it) }
