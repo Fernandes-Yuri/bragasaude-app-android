@@ -95,17 +95,17 @@ class PatientFamilyViewModel @Inject constructor(
                 }
             }
 
-            // Observar mensagens da família no dispositivo do paciente
+            // Observar mensagens da família no dispositivo do paciente (recados recebidos de terceiros)
             launch {
                 familyRepository.getRecentMessagesForPatient(patientUid, Int.MAX_VALUE).collectLatest { messages ->
-                    _familyMessages.value = messages
+                    _familyMessages.value = messages.filter { it.senderUserId != patientUid }
                 }
             }
 
-            // Observar mensagens não lidas
+            // Observar mensagens não lidas recebidas da família
             launch {
                 familyRepository.getUnreadMessagesForPatient(patientUid).collectLatest { unread ->
-                    _unreadMessageCount.value = unread.size
+                    _unreadMessageCount.value = unread.count { it.senderUserId != patientUid }
                 }
             }
 

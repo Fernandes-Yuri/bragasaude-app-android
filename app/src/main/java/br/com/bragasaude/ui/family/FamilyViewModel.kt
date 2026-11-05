@@ -157,7 +157,7 @@ class FamilyViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun selectChatGroup(patientId: String) {
-        if (familyChatGroups(activeBindingsForCurrentUser.value, currentUserId).contains(patientId)) {
+        if (patientId.isNotBlank()) {
             selectedGroup.value = patientId
         }
     }

@@ -474,4 +474,63 @@ class FamilyBridgeRepositoryTest {
         assertEquals(plaintext, insertedSlot.captured.messageText)
     }
 
+    @Test
+    fun `syncFamilyMessages preserves local isRead status when remote message arrives with isRead false`() = runBlocking {
+        val patientId = "patient-1"
+        val msgId = "msg-preserve-read-1"
+        coEvery { familyDao.getActiveBindingForPair(patientId, "caregiver-1") } returns pendingBinding().copy(
+            patientUserId = patientId, caregiverUserId = "caregiver-1", status = "ACTIVE"
+        )
+        val existingLocal = br.com.bragasaude.data.local.FamilyMessageEntity(
+            id = msgId,
+            remoteId = msgId,
+            patientUserId = patientId,
+            senderUserId = "caregiver-1",
+            senderName = "Filho",
+            messageText = "Recado importante",
+            isRead = true,
+            sentAt = System.currentTimeMillis() - 1000,
+            expiresAt = System.currentTimeMillis() + 86400000,
+            pendingSync = false
+        )
+        coEvery { familyDao.getMessageById(msgId) } returns existingLocal
+
+        val remoteMessage = existingLocal.copy(isRead = false)
+        coEvery { apiClient.getFamilyMessages(patientId) } returns listOf(remoteMessage)
+
+        val insertedSlot = slot<br.com.bragasaude.data.local.FamilyMessageEntity>()
+        coEvery { familyDao.insertMessage(capture(insertedSlot)) } just Runs
+
+        val res = repository.syncFamilyMessages(patientId)
+        assertTrue(res.isSuccess)
+        assertTrue("O status isRead local (true) deve ser preservado contra a sobrescrita do servidor (false)", insertedSlot.captured.isRead)
+    }
+
+    @Test
+    fun `receiveRealtimeMessage preserves local isRead status when event arrives with isRead false`() = runBlocking {
+        val patientId = "patient-1"
+        val msgId = "msg-rt-preserve-read-2"
+        val existingLocal = br.com.bragasaude.data.local.FamilyMessageEntity(
+            id = msgId,
+            remoteId = msgId,
+            patientUserId = patientId,
+            senderUserId = "caregiver-1",
+            senderName = "Filho",
+            messageText = "Recado em tempo real",
+            isRead = true,
+            sentAt = System.currentTimeMillis() - 1000,
+            expiresAt = System.currentTimeMillis() + 86400000,
+            pendingSync = false
+        )
+        coEvery { familyDao.getMessageById(msgId) } returns existingLocal
+
+        val incomingWsMessage = existingLocal.copy(isRead = false)
+        val insertedSlot = slot<br.com.bragasaude.data.local.FamilyMessageEntity>()
+        coEvery { familyDao.insertMessage(capture(insertedSlot)) } just Runs
+
+        repository.receiveRealtimeMessage(incomingWsMessage)
+
+        assertTrue("receiveRealtimeMessage deve manter isRead = true se a mensagem já foi lida no dispositivo", insertedSlot.captured.isRead)
+    }
+
 }

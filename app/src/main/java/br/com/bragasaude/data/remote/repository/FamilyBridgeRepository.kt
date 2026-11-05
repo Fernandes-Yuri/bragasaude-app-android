@@ -363,7 +363,14 @@ class FamilyBridgeRepository @Inject constructor(
                 else -> {
                     val decodedMsg = decodeMessageForLocalStorage(userId, patientUserId, msg)
                     val local = familyDao.getMessageById(decodedMsg.id)
-                    if (local?.pendingSync != true && local?.deletedAt == null) familyDao.insertMessage(decodedMsg)
+                    if (local?.pendingSync != true && local?.deletedAt == null) {
+                        val messageToPersist = if (local != null && local.isRead) {
+                            decodedMsg.copy(isRead = true)
+                        } else {
+                            decodedMsg
+                        }
+                        familyDao.insertMessage(messageToPersist)
+                    }
                     // Fallback (doc 10 §1A.2): mensagem NOVA vinda do servidor e que
                     // não foi enviada por este aparelho → notificação local. É a rota
                     // que cobre quem não recebeu (ou não pode receber) o push FCM.
@@ -408,7 +415,12 @@ class FamilyBridgeRepository @Inject constructor(
         val decodedMsg = decodeMessageForLocalStorage(currentUid, msg.patientUserId, msg)
         val local = familyDao.getMessageById(decodedMsg.id)
         if (local?.pendingSync != true && local?.deletedAt == null) {
-            familyDao.insertMessage(decodedMsg)
+            val messageToPersist = if (local != null && local.isRead) {
+                decodedMsg.copy(isRead = true)
+            } else {
+                decodedMsg
+            }
+            familyDao.insertMessage(messageToPersist)
         }
 
         if (local == null && decodedMsg.senderUserId != currentUid && decodedMsg.messageText.isNotBlank()) {
