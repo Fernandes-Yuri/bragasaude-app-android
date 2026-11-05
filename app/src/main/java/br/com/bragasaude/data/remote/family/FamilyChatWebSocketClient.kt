@@ -80,6 +80,11 @@ class FamilyChatWebSocketClient @Inject constructor(
             return
         }
 
+        if (patientId.isBlank()) {
+            Log.w(TAG, "startSession chamado com patientId vazio. Abortando conexão WebSocket.")
+            return
+        }
+
         activePatientId = patientId
         activeListener = listener
 
@@ -97,7 +102,7 @@ class FamilyChatWebSocketClient @Inject constructor(
                         continue
                     }
 
-                    val wsUrl = buildWsUrl(baseUrl, token)
+                    val wsUrl = buildWsUrl(baseUrl, token, patientId)
                     val request = Request.Builder()
                         .url(wsUrl)
                         .header("Authorization", "Bearer $token")
@@ -180,11 +185,13 @@ class FamilyChatWebSocketClient @Inject constructor(
         Log.d(TAG, "Sessão WebSocket encerrada.")
     }
 
-    private fun buildWsUrl(httpBaseUrl: String, token: String): String {
+    internal fun buildWsUrl(httpBaseUrl: String, token: String, patientId: String): String {
         val base = httpBaseUrl.trimEnd('/')
         val wsScheme = if (base.startsWith("https://")) "wss://" else "ws://"
         val hostPart = base.removePrefix("https://").removePrefix("http://")
-        return "$wsScheme$hostPart/ws/family?token=$token"
+        val encodedToken = java.net.URLEncoder.encode(token, "UTF-8")
+        val encodedPatientId = java.net.URLEncoder.encode(patientId, "UTF-8")
+        return "$wsScheme$hostPart/ws/family?token=$encodedToken&patientId=$encodedPatientId"
     }
 
     internal fun handleIncomingJson(jsonStr: String) {
