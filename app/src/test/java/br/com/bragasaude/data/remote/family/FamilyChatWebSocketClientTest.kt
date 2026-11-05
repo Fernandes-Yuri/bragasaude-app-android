@@ -142,4 +142,29 @@ class FamilyChatWebSocketClientTest {
 
         assertFalse(received)
     }
+
+    @Test
+    fun buildWsUrl_includesBothTokenAndPatientIdWithEncoding() {
+        val client = FamilyChatWebSocketClient("https://api.bragasaude.online")
+        val url = client.buildWsUrl("https://api.bragasaude.online", "test_token_123", "patient_abc_456")
+
+        assertEquals("wss://api.bragasaude.online/ws/family?token=test_token_123&patientId=patient_abc_456", url)
+    }
+
+    @Test
+    fun buildWsUrl_handlesHttpSchemeAndTrailingSlashes() {
+        val client = FamilyChatWebSocketClient("http://10.0.2.2:8081/")
+        val url = client.buildWsUrl("http://10.0.2.2:8081/", "tok", "pat-1")
+
+        assertEquals("ws://10.0.2.2:8081/ws/family?token=tok&patientId=pat-1", url)
+    }
+
+    @Test
+    fun buildWsUrl_encodesSpecialCharactersInParameters() {
+        val client = FamilyChatWebSocketClient("https://api.bragasaude.online")
+        val url = client.buildWsUrl("https://api.bragasaude.online", "token with spaces", "patient+special@id")
+
+        assertTrue(url.contains("token=token+with+spaces"))
+        assertTrue(url.contains("patientId=patient%2Bspecial%40id"))
+    }
 }
