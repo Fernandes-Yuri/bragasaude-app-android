@@ -76,7 +76,9 @@ class FamilyViewModel @Inject constructor(
     private val familyWsClient: FamilyChatWebSocketClient
 ) : ViewModel() {
 
-    // Construtor secundário para compatibilidade com testes unitários locais
+    internal var enableWebSocket: Boolean = BuildConfig.ENABLE_FAMILY_WEBSOCKET
+
+    // Construtor secundário para compatibilidade com testes unitários locais (modo polling clássico)
     constructor(
         context: Context,
         familyRepository: FamilyBridgeRepository,
@@ -92,7 +94,31 @@ class FamilyViewModel @Inject constructor(
         dailyMetricsDao,
         auth,
         FamilyChatWebSocketClient()
-    )
+    ) {
+        this.enableWebSocket = false
+    }
+
+    // Construtor secundário com flag explícita de websocket para testes unitários de canal em tempo real
+    constructor(
+        context: Context,
+        familyRepository: FamilyBridgeRepository,
+        profileDao: ProfileDao,
+        vitalSignDao: VitalSignDao,
+        dailyMetricsDao: DailyMetricsDao,
+        auth: FirebaseAuth,
+        enableWebSocket: Boolean,
+        familyWsClient: FamilyChatWebSocketClient = FamilyChatWebSocketClient()
+    ) : this(
+        context,
+        familyRepository,
+        profileDao,
+        vitalSignDao,
+        dailyMetricsDao,
+        auth,
+        familyWsClient
+    ) {
+        this.enableWebSocket = enableWebSocket
+    }
 
     private val _uiEvents = MutableSharedFlow<FamilyUiEvent>()
     val uiEvents: SharedFlow<FamilyUiEvent> = _uiEvents.asSharedFlow()
@@ -381,13 +407,16 @@ class FamilyViewModel @Inject constructor(
                             // uma consulta sem espera ao retornar ao primeiro plano.
                             isChatScreenVisible.collectLatest visibility@{ visible ->
                                 if (!visible) {
-                                    if (BuildConfig.ENABLE_FAMILY_WEBSOCKET) {
+                                    if (enableWebSocket) {
                                         familyWsClient.stopSession()
                                     }
                                     _chatSyncState.value = _chatSyncState.value.copy(isPolling = false)
                                     return@visibility
                                 }
-                                if (BuildConfig.ENABLE_FAMILY_WEBSOCKET) {
+                                if (enableWebSocket) {
+                                    // MODO DEBUG / WEBSOCKET ESTRITO:
+                                    // Sem fallback silencioso de polling. Todas as mensagens e exclusões
+                                    // dependem exclusivamente da conexão WebSocket em tempo real.
                                     familyWsClient.startSession(
                                         patientId = targetPatientId,
                                         tokenProvider = {
@@ -406,49 +435,72 @@ class FamilyViewModel @Inject constructor(
                                             }
                                         }
                                     )
-                                }
-                                var consecutiveFailures = 0
-                                chatSyncRequests.tryReceive()
-                                try {
-                                    while (isActive) {
-                                        _chatSyncState.value = _chatSyncState.value.copy(isPolling = true)
-                                        val cycleFailed = try {
-                                            familyRepository.chatCycleSnapshot(userId, targetPatientId)
-                                            // Resposta vazia ou idêntica também é sucesso.
-                                            false
-                                        } catch (e: kotlinx.coroutines.CancellationException) {
-                                            throw e
-                                        } catch (e: Exception) {
-                                            android.util.Log.w("FamilyVM", "Falha no ciclo de sync do chat: ${e.message}")
-                                            true
-                                        }
-                                        consecutiveFailures = if (cycleFailed) consecutiveFailures + 1 else 0
-                                        _chatSyncState.value = ChatSyncState(
-                                            isPolling = true,
-                                            consecutiveFailures = consecutiveFailures,
-                                            warning = when (consecutiveFailures) {
-                                                0 -> null
-                                                in 1..2 -> "Tentando atualizar as mensagens…"
-                                                else -> "Não foi possível atualizar as mensagens. Mostrando as salvas no aparelho."
+                                    try {
+                                        familyWsClient.status.collectLatest { wsStatus ->
+                                            _chatSyncState.value = when (wsStatus) {
+                                                FamilyWsStatus.CONNECTED -> ChatSyncState(
+                                                    isPolling = false,
+                                                    consecutiveFailures = 0,
+                                                    warning = null
+                                                )
+                                                FamilyWsStatus.CONNECTING -> ChatSyncState(
+                                                    isPolling = true,
+                                                    consecutiveFailures = 0,
+                                                    warning = "Conectando ao canal em tempo real (WebSocket)..."
+                                                )
+                                                FamilyWsStatus.RECONNECTING -> ChatSyncState(
+                                                    isPolling = true,
+                                                    consecutiveFailures = 1,
+                                                    warning = "WebSocket desconectado. Tentando reconectar..."
+                                                )
+                                                FamilyWsStatus.DISCONNECTED -> ChatSyncState(
+                                                    isPolling = false,
+                                                    consecutiveFailures = 3,
+                                                    warning = "WebSocket desconectado. Verifique o servidor Go."
+                                                )
                                             }
-                                        )
-                                        // Backoff apenas para falhas reais: 3s → 6s → ... → 60s.
-                                        val baseInterval = (ACTIVE_CHAT_POLL_INTERVAL_MS *
-                                            (1L shl consecutiveFailures.coerceAtMost(BACKOFF_SHIFT_CAP)))
-                                            .coerceAtMost(POLL_INTERVAL_MAX_MS)
-                                        val interval = if (BuildConfig.ENABLE_FAMILY_WEBSOCKET && familyWsClient.status.value == FamilyWsStatus.CONNECTED) {
-                                            15_000L.coerceAtLeast(baseInterval)
-                                        } else {
-                                            baseInterval
                                         }
-                                        // Um envio interrompe inclusive o backoff, com atraso de 0 ms.
-                                        withTimeoutOrNull(interval) { chatSyncRequests.receive() }
-                                    }
-                                } finally {
-                                    if (BuildConfig.ENABLE_FAMILY_WEBSOCKET) {
+                                    } finally {
                                         familyWsClient.stopSession()
+                                        _chatSyncState.value = _chatSyncState.value.copy(isPolling = false)
                                     }
-                                    _chatSyncState.value = _chatSyncState.value.copy(isPolling = false)
+                                } else {
+                                    // MODO RELEASE / POLLING HTTP TRADICIONAL (Preservado 100% para Play Store)
+                                    var consecutiveFailures = 0
+                                    chatSyncRequests.tryReceive()
+                                    try {
+                                        while (isActive) {
+                                            _chatSyncState.value = _chatSyncState.value.copy(isPolling = true)
+                                            val cycleFailed = try {
+                                                familyRepository.chatCycleSnapshot(userId, targetPatientId)
+                                                // Resposta vazia ou idêntica também é sucesso.
+                                                false
+                                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                                throw e
+                                            } catch (e: Exception) {
+                                                android.util.Log.w("FamilyVM", "Falha no ciclo de sync do chat: ${e.message}")
+                                                true
+                                            }
+                                            consecutiveFailures = if (cycleFailed) consecutiveFailures + 1 else 0
+                                            _chatSyncState.value = ChatSyncState(
+                                                isPolling = true,
+                                                consecutiveFailures = consecutiveFailures,
+                                                warning = when (consecutiveFailures) {
+                                                    0 -> null
+                                                    in 1..2 -> "Tentando atualizar as mensagens…"
+                                                    else -> "Não foi possível atualizar as mensagens. Mostrando as salvas no aparelho."
+                                                }
+                                            )
+                                            // Backoff apenas para falhas reais: 3s → 6s → ... → 60s.
+                                            val baseInterval = (ACTIVE_CHAT_POLL_INTERVAL_MS *
+                                                (1L shl consecutiveFailures.coerceAtMost(BACKOFF_SHIFT_CAP)))
+                                                .coerceAtMost(POLL_INTERVAL_MAX_MS)
+                                            // Um envio interrompe inclusive o backoff, com atraso de 0 ms.
+                                            withTimeoutOrNull(baseInterval) { chatSyncRequests.receive() }
+                                        }
+                                    } finally {
+                                        _chatSyncState.value = _chatSyncState.value.copy(isPolling = false)
+                                    }
                                 }
                             }
                         }
@@ -951,7 +1003,7 @@ class FamilyViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        if (BuildConfig.ENABLE_FAMILY_WEBSOCKET) {
+        if (enableWebSocket) {
             familyWsClient.stopSession()
         }
         authListener?.let { auth.removeAuthStateListener(it) }
