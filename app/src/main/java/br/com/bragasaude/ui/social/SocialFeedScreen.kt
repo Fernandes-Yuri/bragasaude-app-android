@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Medication
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ThumbUp
@@ -68,6 +69,7 @@ import br.com.bragasaude.ui.theme.BragaMintBorder
 import br.com.bragasaude.ui.theme.BragaMintSurface
 import br.com.bragasaude.ui.theme.BragaTextPrimary
 import br.com.bragasaude.ui.theme.BragaTextSecondary
+import br.com.bragasaude.ui.theme.Warning
 import java.text.SimpleDateFormat
 import br.com.bragasaude.domain.formatSocialPostTime
 import androidx.compose.ui.semantics.contentDescription
@@ -250,6 +252,50 @@ fun SocialFeedScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             )
+
+            val currentFilter by viewModel.feedFilter.collectAsState()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = currentFilter == SocialFeedViewModel.FeedFilter.RECENT,
+                    onClick = { viewModel.setFeedFilter(SocialFeedViewModel.FeedFilter.RECENT) },
+                    label = { Text("Recentes", fontSize = 13.sp) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = BragaEmerald.copy(alpha = 0.15f),
+                        selectedLabelColor = BragaEmeraldDark,
+                        selectedLeadingIconColor = BragaEmeraldDark
+                    )
+                )
+
+                FilterChip(
+                    selected = currentFilter == SocialFeedViewModel.FeedFilter.TRENDING,
+                    onClick = { viewModel.setFeedFilter(SocialFeedViewModel.FeedFilter.TRENDING) },
+                    label = { Text("Em Destaque", fontSize = 13.sp) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.LocalFireDepartment,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = BragaEmerald.copy(alpha = 0.15f),
+                        selectedLabelColor = BragaEmeraldDark,
+                        selectedLeadingIconColor = BragaEmeraldDark
+                    )
+                )
+            }
 
             PullToRefreshBox(
                 isRefreshing = isRefreshing,
@@ -655,6 +701,32 @@ private fun SocialPostCard(
 
             // Conteúdo do Post
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (post.reactionCount >= 1) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Warning.copy(alpha = 0.15f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocalFireDepartment,
+                                contentDescription = "Em Destaque",
+                                tint = Warning,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "Em Destaque · ${post.reactionCount} ${if (post.reactionCount == 1) "apoio" else "apoios"}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Warning
+                            )
+                        }
+                    }
+                }
                 Text(
                     text = post.title,
                     style = MaterialTheme.typography.titleMedium,
