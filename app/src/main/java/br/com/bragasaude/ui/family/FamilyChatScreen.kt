@@ -445,7 +445,6 @@ fun FamilyChatScreen(
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChatBubble(
     message: FamilyMessageEntity,
