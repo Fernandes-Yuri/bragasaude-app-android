@@ -754,6 +754,16 @@ class VoiceHealthViewModel @Inject constructor(
                     )
                     healthQuerySession.rememberExternalReply(completed, owner, conversationId, contextTurn)
                     conversationMemory.recordAssistant(completed)
+                    // #14: a nuvem também pode sinalizar crise no canal de voz.
+                    // Abre o mesmo diálogo nativo de socorro usado na emergência local.
+                    val crisis = br.com.bragasaude.ai.BragaRoutingPolicy.emergencyChannel(completed)
+                    if (crisis != null) {
+                        _isLiveMode.value = false
+                        voiceSession.invalidate()
+                        destroyRecognizer()
+                        _navigationEvent.tryEmit(
+                            VoiceNavigationEvent.OpenEmergencyDialog(crisis, completed))
+                    }
                     // Amostra da nuvem para ampliar a cobertura local e mitigar custo.
                     telemetryService.logAiConversation(
                         userId = owner,

@@ -622,7 +622,9 @@ fun ChatBubble(message: ChatMessage, textScale: Float = 1f, speaking: Boolean = 
                                 HorizontalDivider(color = Color(0xFFB2DFDB))
                                 Text("Socorro e apoio", style = MaterialTheme.typography.titleSmall)
                                 emergencyActions(mentalFirst)
-                            } else if (message.action != null) {
+                            }
+                            // O card de socorro não esconde um card de registro legítimo.
+                            if (message.action != null && message.action != BragaRoutingPolicy.CLINICAL_EMERGENCY) {
                                 HorizontalDivider(color = if (user) Color.White.copy(alpha = .3f) else Color(0xFFB2DFDB))
                                 Text("Sugestão: ${actionLabel(message.action)}", color = if (user) Color.White else Color(0xFF1E293B))
                                 val preview = remember(message.parameters) { actionPreview(message.parameters) }
@@ -649,7 +651,7 @@ fun ChatBubble(message: ChatMessage, textScale: Float = 1f, speaking: Boolean = 
 private fun emergencySignal(message: ChatMessage): Boolean =
     message.emergencyType != null ||
         message.action == BragaRoutingPolicy.CLINICAL_EMERGENCY ||
-        BragaRoutingPolicy.mentionsEmergencySupport(message.text)
+        BragaRoutingPolicy.crisisSupportSignal(message.text)
 
 /** CVV 188 antes do SAMU 192 sempre que a mensagem apontar sofrimento psíquico. */
 private fun mentalHealthFirst(message: ChatMessage): Boolean =

@@ -11,9 +11,10 @@ object BragaInputLanguage {
     // A nuvem pode devolver o endereço cru de discagem no texto. O chat sempre
     // mostra o card nativo com os botões; o texto deve trazer apenas o número,
     // que o balão também transforma em discagem com um toque (ACTION_DIAL).
-    private val rawDialUri = Regex("""\btel:\s*(\d{2,6})\b""", RegexOption.IGNORE_CASE)
+    // Aceita ramais curtos (188/192), DDD, +55 e o 0800 sem deixar "tel:" cru.
+    private val rawDialUri = Regex("""\btel:\s*(\+?[\d][\d\s().-]{1,22}\d|\d)\b""", RegexOption.IGNORE_CASE)
 
-    fun withoutRawDialUris(text: String): String = rawDialUri.replace(text, "$1")
+    fun withoutRawDialUris(text: String): String = rawDialUri.replace(text) { it.groupValues[1].trim() }
 
     @Synchronized
     fun clarification(channel: InputChannel): String {

@@ -51,6 +51,37 @@ class BragaRoutingPolicyTest {
         }
     }
 
+    @Test fun `desabafo com sintoma clinico objetivo prioriza o SAMU sobre o CVV`() {
+        listOf("não aguento mais essa dor no peito", "não suporto mais, falta de ar").forEach { text ->
+            val output = BragaNluEngine.analisar(text)
+            assertEquals(text, "emergencia_dor_peito_avc", output.intent)
+            assertTrue(output.respostaLocal!!.contains("SAMU 192"))
+            assertFalse(text, output.respostaLocal!!.contains("CVV 188"))
+        }
+    }
+
+    @Test fun `desabafo cotidiano sem sinais de crise nao abre o CVV`() {
+        listOf("não aguento mais essa dor nas costas", "não aguento mais esse calor",
+            "não suporto mais esse trânsito", "quero desaparecer por uns dias",
+            "não aguento mais essa insônia").forEach { text ->
+            assertFalse(text, BragaNluEngine.analisar(text).isEmergencia)
+        }
+        // Os termos puros continuam protegidos.
+        listOf("não aguento mais", "não aguento mais viver", "quero desaparecer",
+            "vou me matar", "quero pular da ponte").forEach { text ->
+            assertTrue(text, BragaNluEngine.analisar(text).isEmergencia)
+            assertEquals(text, BragaRoutingPolicy.MENTAL_HEALTH_EMERGENCY, BragaNluEngine.analisar(text).intent)
+        }
+    }
+
+    @Test fun `sinal do card por texto exige CVV ou acionamento de socorro`() {
+        assertTrue(BragaRoutingPolicy.crisisSupportSignal("Ligue para o CVV 188."))
+        assertTrue(BragaRoutingPolicy.crisisSupportSignal("Em risco, acione o SAMU 192."))
+        assertTrue(BragaRoutingPolicy.crisisSupportSignal("Socorro, preciso de ajuda."))
+        assertFalse(BragaRoutingPolicy.crisisSupportSignal("Em emergência, procure o SAMU 192 se piorar."))
+        assertFalse(BragaRoutingPolicy.crisisSupportSignal("Beba água ao longo do dia."))
+    }
+
     @Test fun `quedas no infinitivo e trauma atual acionam socorro local`() {
         listOf("acabei de cair passando mal", "meu pai acabou de cair", "estou caindo",
             "me machuquei agora", "levei um tombo", "escorreguei no banheiro").forEach { text ->
