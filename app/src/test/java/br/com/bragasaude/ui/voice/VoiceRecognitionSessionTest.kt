@@ -91,6 +91,27 @@ class VoiceRecognitionSessionTest {
         }
     }
 
+    @Test fun `cloud voice answer with crisis support opens native SOS dialog`() = runTest(dispatcher) {
+        every { hybrid.analyze(any(), InputChannel.VOICE, any(), any(), any()) } returns
+            NluOutput("entrada_sem_clareza", "Repita")
+        every { hybrid.respond(any(), any(), any(), any(), any()) } returns
+            kotlinx.coroutines.flow.flowOf(BragaHybridEvent.Completed(
+                "Sinto muito. Ligue para o CVV 188 e, em perigo, para o SAMU 192."))
+        val events = mutableListOf<VoiceNavigationEvent>()
+        val collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.navigationEvent.collect { events.add(it) }
+        }
+        vm.startListening(context)
+        runCurrent()
+        listeners.single().onResults(result("não estou aguentando muito bem"))
+        runCurrent()
+        val dialog = events.filterIsInstance<VoiceNavigationEvent.OpenEmergencyDialog>().single()
+        assertEquals(BragaRoutingPolicy.MENTAL_HEALTH_EMERGENCY, dialog.type)
+        assertTrue(dialog.message.contains("CVV 188"))
+        assertFalse(vm.isLiveMode.value)
+        collector.cancel()
+    }
+
     @Test fun `local voice answer is not recorded`() = runTest(dispatcher) {
         every { hybrid.analyze(any(), InputChannel.VOICE, any(), any(), any()) } returns
             BragaNluEngine.analisar("não consigo respirar")

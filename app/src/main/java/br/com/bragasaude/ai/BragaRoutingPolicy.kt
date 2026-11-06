@@ -36,7 +36,15 @@ internal object BragaRoutingPolicy {
     private val currentReport = Regex("""\b(estou|tenho|sinto|sentindo|agora|socorro|nao (consigo|consegue)|cai|caiu|acabei de cair|acabou de cair|bati a cabeca|levei um tombo|escorreguei|quero morrer|vontade de me matar|quero me matar|vou me matar|nao aguento mais( viver)?|nao quero mais viver)\b|\b(meu|minha|ele|ela)\b.{0,40}\b(esta|tem|sente)\b""")
 
     // Gírias cotidianas do público 40+ que contêm termos de crise sem ideação suicida.
-    private val crisisIdiom = Regex("""\b(me matar de (rir|trabalhar|estudar|cansaco|vergonha|vontade)|morrer de rir|(esse|este) calor (vai )?me mata[r]?)\b""")
+    private val crisisIdiom = Regex("""\b(me matar de (rir|trabalhar|estudar|cansaco|vergonha|vontade)|morrer de rir|(esse|este) calor (vai )?me mata[r]?|quero desaparecer (por|uns|um) (uns )?(dias|tempo))\b""")
+
+    // Sintoma clínico objetivo: quando coexiste com desabafo genérico, o SAMU 192 vem primeiro.
+    private val hardClinical = Regex("""\b(dor (forte |insuportavel )?no peito|dor no peito (muito )?forte|aperto (insuportavel )?no peito|falta de ar|nao (consigo|consegue) respira[r]?|desmai\w*|boca (ta |esta )?torta|vomitando sangue|infarto|avc|perdi a forca|dormencia|formigamento|tontura (muito )?forte|visao escureceu|puxa pro braco|queimacao forte no meio do peito)\b""")
+    private val despairPrefix = Regex("""\b(nao aguento mais|nao suporto mais|estou cansad[oa]|cansei)\b""")
+    // Desabafo genérico sem ideação explícita + incômodo físico/rotina = não é crise suicida.
+    private val bareDespair = Regex("""\b(nao aguento mais|nao suporto mais)\b(?! (viver|essa vida))""")
+    private val ordinaryComplaint = Regex("""\b(dor (nas |na |de |no |nos )?(costas|cabeca|perna|joelho|coluna|dente|garganta)|calor|frio|trabalho|servico|transito|chefe|reuniao|insonia)\b""")
+    private val emotionalCrisisWord = Regex("""\b(morrer|viver|vida|triste\w*|chorar|sofr\w*|sozinh[oa]|solidao|desespero|sumir|desaparecer|suicid\w*|medo|sem forcas|sem saida)\b""")
 
     // Recorrência pertence ao relato da mesma oração ou a uma retomada explícita.
     private val recurrence = Regex("""\b(voltou|voltaram|de novo|outra vez|novamente|piorou|piorando|continua|ainda)\b""")
@@ -54,9 +62,23 @@ internal object BragaRoutingPolicy {
     // Evita casar um valor clínico solto (glicemia 188/192) com número de emergência:
     // o número só conta quando acompanhado do serviço ou de verbo de acionamento.
     private val emotionalSupportMention = Regex("""\b(cvv|centro de valorizacao da vida|apoio emocional|valorizacao da vida|prevencao ao suicidio)\b""")
-    private val clinicalEmergencyMention = Regex("""\b(samu|emergencia|socorro|urgencia|pronto atendimento|risco de vida|atendimento imediato)\b|\b(ligue|ligar|disque|chame|chamar|acionar)\b.{0,40}\b(192|188)\b|\b(192|188)\b.{0,40}\b(samu|cvv|socorro|emergencia)\b""")
+    private val clinicalEmergencyMention = Regex("""\b(samu|emergencia|socorro|urgencia|pronto atendimento|risco de vida|atendimento imediato)\b|\b(ligue|ligar|disque|chame|chamar|acione|acionar)\b.{0,40}\b(192|188)\b|\b(192|188)\b.{0,40}\b(samu|cvv|socorro|emergencia)\b""")
 
     fun mentionsEmergencySupport(text: String): Boolean = emergencyChannel(text) != null
+
+    /**
+     * Sinalização usada para decidir o card nativo em texto já exibido (histórico):
+     * exige CVV/188 explícito ou verbo de acionamento junto de SAMU/192, em vez de
+     * qualquer menção genérica a "emergência" numa orientação de rotina.
+     */
+    private val supportAction = Regex("""\b(ligue|ligar|disque|chame|chamar|acione|acionar)\b.{0,40}\b(188|192|samu|cvv)\b|\b(188|192|samu|cvv)\b.{0,40}\b(ligue|ligar|disque|chame|chamar|acione|acionar)\b""")
+    private val explicitSos = Regex("""\b(socorro|risco de vida)\b""")
+
+    fun crisisSupportSignal(text: String): Boolean {
+        val normalized = normalize(text)
+        return emotionalSupportMention.containsMatchIn(normalized) ||
+            supportAction.containsMatchIn(normalized) || explicitSos.containsMatchIn(normalized)
+    }
 
     /** CVV 188 (sofrimento psíquico) tem prioridade sobre o SAMU 192 (emergência clínica). */
     fun emergencyChannel(text: String): String? {
@@ -79,14 +101,28 @@ internal object BragaRoutingPolicy {
             val resumed = clauses.drop(index + 1).any {
                 Regex("""^\s*(?:(?:agora|hoje)\s+)?(?:voltou|voltaram|continua|piorou)\b""").containsMatchIn(it)
             }
-            for ((pattern, intent) in listOf(mentalCrisis to MENTAL_HEALTH_EMERGENCY,
-                chest to "emergencia_dor_peito_avc", fall to "emergencia_queda_trauma")) {
+            // Com sintoma clínico objetivo na oração, o SAMU 192 tem prioridade
+            // sobre um desabafo genérico ("não aguento mais essa dor no peito").
+            val patterns = if (hardClinical.containsMatchIn(clause))
+                listOf(chest to "emergencia_dor_peito_avc", mentalCrisis to MENTAL_HEALTH_EMERGENCY,
+                    fall to "emergencia_queda_trauma")
+            else listOf(mentalCrisis to MENTAL_HEALTH_EMERGENCY,
+                chest to "emergencia_dor_peito_avc", fall to "emergencia_queda_trauma")
+            for ((pattern, intent) in patterns) {
                 for (match in pattern.findAll(clause)) {
-                    // "vou me matar de rir" / "esse calor vai me matar" são gíria, não ideação.
-                    if (intent == MENTAL_HEALTH_EMERGENCY && crisisIdiom.containsMatchIn(clause)) continue
+                    if (intent == MENTAL_HEALTH_EMERGENCY) {
+                        // "vou me matar de rir" / "esse calor vai me matar" são gíria, não ideação.
+                        if (crisisIdiom.containsMatchIn(clause)) continue
+                        // Desabafo genérico + incômodo físico/rotina não é crise suicida.
+                        if (bareDespair.containsMatchIn(match.value) &&
+                            ordinaryComplaint.containsMatchIn(clause) &&
+                            !emotionalCrisisWord.containsMatchIn(clause)) continue
+                    }
                     val prefix = clause.take(match.range.first)
                     val denialPattern = if (intent == MENTAL_HEALTH_EMERGENCY) mentalDeniedPrefix else deniedPrefix
-                    val denial = !match.value.startsWith("nao ") && denialPattern.containsMatchIn(prefix)
+                    var denial = !match.value.startsWith("nao ") && denialPattern.containsMatchIn(prefix)
+                    // "não aguento mais essa dor no peito" não nega o sintoma clínico.
+                    if (intent != MENTAL_HEALTH_EMERGENCY && denial && despairPrefix.containsMatchIn(prefix)) denial = false
                     val past = historical.containsMatchIn(clause) && !present.containsMatchIn(clause) && !recurring && !resumed
                     // Uma pergunta sobre um sintoma presente é relato, não exemplo educativo.
                     val example = hypothetical.containsMatchIn(clause) || preventionPrefix.containsMatchIn(prefix) ||

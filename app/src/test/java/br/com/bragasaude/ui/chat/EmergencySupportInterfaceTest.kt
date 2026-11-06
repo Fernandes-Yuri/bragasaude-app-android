@@ -75,6 +75,18 @@ class EmergencySupportInterfaceTest {
         assertTrue(cvv.bottom <= samu.top)
     }
 
+    @Test fun routineOrientationMentioningSamuDoesNotOpenCrisisCard() {
+        compose.setContent {
+            BragasaudeTheme {
+                ChatBubble(ChatMessage(role = "assistant",
+                    text = "Em emergência, procure o SAMU 192 se os sintomas piorarem."),
+                    emergencyActions = { EmergencyActionButtons(it) })
+            }
+        }
+        compose.onNodeWithTag("emergencyDial188").assertDoesNotExist()
+        compose.onNodeWithTag("emergencyDial192").assertDoesNotExist()
+    }
+
     @Test fun physicalEmergencyFocusesSamuAndLargeTextFitsButtons() {
         compose.setContent {
             val density = LocalDensity.current

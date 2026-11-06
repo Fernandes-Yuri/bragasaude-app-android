@@ -108,10 +108,14 @@ object BragaNluEngine {
     )
     // Alimentação cotidiana é conversa bem-vinda: ideias e hábitos leves, sem
     // prometer plano alimentar individual nem registrar refeições.
+    // "Ideias/dicas/sugestões" é inequívoco e pode ser respondido antes da
+    // análise clínica; as demais formas seguem depois dela.
+    private val REGEX_ALIMENTACAO_IDEIAS = Regex(
+        "(ideias?|sugestao|sugestoes|opcao|opcoes|dicas?).{0,40}(cafe da manha|almoco|jantar|lanche|refeicao|comer)"
+    )
     private val REGEX_ALIMENTACAO_ACOLHEDORA = Regex(
         "(ideias?|sugestao|sugestoes|opcao|opcoes|dicas?).{0,40}(cafe da manha|almoco|jantar|lanche|refeicao|comer)|" +
             "(jantar|almoco|lanche|cafe da manha) (leve|saudavel|simples|gostos[oa])|" +
-            "o que (?:eu )?posso (?:comer|almocar|jantar)(?: hoje)?|" +
             "comida (?:leve|saudavel)|" +
             "receita (?:leve|simples|saudavel)"
     )
@@ -476,6 +480,11 @@ object BragaNluEngine {
             return NluOutput("orientacao_cadastro_medicamento", resp, tempoMs = deltaMs(inicio))
         }
 
+        // "Ideias de jantar/almoço/lanche" é conversa de bem-estar inequívoca:
+        // recebe acolhimento local mesmo sem palavra de pergunta clínica.
+        if (REGEX_ALIMENTACAO_IDEIAS.containsMatchIn(protegido)) {
+            return NluOutput("conversa_alimentacao_acolhedora", sortearResposta("conversa_alimentacao_acolhedora"), tempoMs = deltaMs(inicio))
+        }
         // Uma pergunta explicativa não pode ser reduzida à última medição pessoal.
         if (BragaRoutingPolicy.outsideScope(protegido)) return NluOutput(
             "guardrail_fora_do_escopo_tecnico", sortearResposta("guardrail_fora_do_escopo_tecnico"),

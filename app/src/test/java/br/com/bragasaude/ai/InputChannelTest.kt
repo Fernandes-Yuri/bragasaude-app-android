@@ -39,5 +39,10 @@ class InputChannelTest {
         assertEquals("Apoio no 188.", BragaInputLanguage.forChannel("Apoio no tel: 188.", InputChannel.TEXT))
         assertFalse(BragaInputLanguage.forChannel("Ligue para tel:192 agora.", InputChannel.TEXT).contains("tel:"))
         assertTrue(BragaInputLanguage.withoutRawDialUris("tel:188 e tel:192").contains("188"))
+        // Formatos longos também não podem vazar o esquema tel: no balão.
+        assertEquals("Fale no +5511987654321.", BragaInputLanguage.forChannel("Fale no tel:+5511987654321.", InputChannel.TEXT))
+        assertEquals("Suporte 08001234567.", BragaInputLanguage.forChannel("Suporte tel:08001234567.", InputChannel.TEXT))
+        assertEquals("Ligue 11987654321 hoje.", BragaInputLanguage.forChannel("Ligue tel:11987654321 hoje.", InputChannel.TEXT))
+        assertFalse(BragaInputLanguage.withoutRawDialUris("tel:+5511987654321 e tel:08001234567").contains("tel:"))
     }
 }
