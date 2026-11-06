@@ -2,8 +2,6 @@
 <resources>
     <style name="Theme.Bragasaude.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <item name="android:statusBarColor">@color/splash_background</item>
-        <item name="android:navigationBarColor">@color/splash_background</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_logo_braga_launch</item>
@@ -19,11 +17,6 @@
         <item name="colorTertiary">@color/green_health</item>
         <item name="colorOnPrimary">@color/white</item>
         <item name="colorOnSecondary">@color/white</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowTranslucentStatus">false</item>
-        <item name="android:windowTranslucentNavigation">false</item>
-        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>

@@ -46,6 +46,7 @@
     <application
         android:name=".BragaApplication"
         android:allowBackup="false"
+        android:resizeableActivity="true"
         android:networkSecurityConfig="@xml/network_security_config"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -155,10 +156,11 @@
         </receiver>
         <!-- QR Code Scanner -->
         <activity android:name=".ui.registration.FamilyQrScannerActivity" android:exported="false" />
+        <!-- Scanner do zxing (ScanContract): sem trava de orientação para telas grandes.
+             tools:remove elimina o portrait herdado do manifest da biblioteca. -->
         <activity
             android:name="com.journeyapps.barcodescanner.CaptureActivity"
-            android:screenOrientation="portrait"
-            tools:replace="screenOrientation" />
+            tools:remove="android:screenOrientation" />
     </application>
 
 </manifest>

@@ -9,26 +9,28 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
-import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import br.com.bragasaude.MainActivity
 import br.com.bragasaude.R
 import br.com.bragasaude.data.local.MedicationEntity
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import java.util.Calendar
 import br.com.bragasaude.domain.MedicationSchedule
+import kotlinx.coroutines.launch
 
 /**
- * MÓDULO 08 — Receiver para alarmes de medicação.
- * Usa AlarmManager.setExactAndAllowWhileIdle para garantir disparos precisos
- * mesmo em modo Doze (Android 6+).
+ * Receiver legado de alarmes de medicação por medicamento.
  *
- * Ações da notificação:
- * - ACTION_TAKEN: registra dose tomada (via goAsync, sem travar UI)
- * - ACTION_SNOOZE: adia 15 min (re-agenda o alarme)
+ * #21: o agendamento concorrente está formalmente DESATIVADO. A fonte única de
+ * verdade é o CareOS [br.com.bragasaude.ui.medication.doses.DoseAlarmScheduler]
+ * (grupos por ator/paciente/horário, canal medication_dose_groups). Este receiver
+ * permanece apenas para:
+ * - atender PendingIntents já persistidos no SO por versões antigas, exibindo a
+ *   notificação sem reagendar nada;
+ * - registrar a dose tomada (ACTION_TAKEN, via goAsync);
+ * - encerrar notificações antigas e limpar alarmes órfãos (cancelAlarm).
+ *
+ * Nenhum caminho deste arquivo cria novos alarmes no AlarmManager.
+ * Ações: ACTION_TAKEN (registra) e ACTION_SNOOZE (apenas encerra a notificação).
  */
 class MedicationAlarmReceiver : BroadcastReceiver() {
 
@@ -45,9 +47,14 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
         const val EXTRA_USER_ID = "user_id"
 
         /**
-         * Agenda um alarme preciso para o horário do remédio.
-         * Deve ser chamado quando o usuário cadastra/edita um medicamento.
+         * Agendamento legado DESATIVADO (#21).
+         *
+         * No-op proposital: NÃO cria PendingIntent nem chama
+         * AlarmManager.setExact/setExactAndAllowWhileIdle. O agendador canônico e
+         * único é o CareOS [br.com.bragasaude.ui.medication.doses.DoseAlarmScheduler].
+         * Mantido apenas para não quebrar chamadas/APIs antigas.
          */
+        @Deprecated("Agendamento legado desativado; use DoseAlarmScheduler (CareOS)")
         fun scheduleAlarm(
             context: Context,
             medId: String,
@@ -57,100 +64,11 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
             timeHour: Int,
             timeMinute: Int
         ) {
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-            val intent = Intent(context, MedicationAlarmReceiver::class.java).apply {
-                action = getUniqueAction("$medId:${String.format(java.util.Locale.ROOT, "%02d:%02d", timeHour, timeMinute)}")
-                putExtra(EXTRA_MED_ID, medId)
-                putExtra(EXTRA_MED_NAME, medName)
-                putExtra(EXTRA_DOSAGE, dosage ?: "")
-                putExtra(EXTRA_USER_ID, userId)
-                putExtra("schedule_time", String.format(java.util.Locale.ROOT, "%02d:%02d", timeHour, timeMinute))
-            }
-
-            val requestCode = intent.action.hashCode()
-            // Calcular o próximo horário do alarme
-            val calendar = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, timeHour)
-                set(Calendar.MINUTE, timeMinute)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-                // Se o horário já passou hoje, agenda para amanhã
-                if (timeInMillis <= System.currentTimeMillis()) {
-                    add(Calendar.DAY_OF_YEAR, 1)
-                }
-            }
-
-            intent.putExtra("scheduled_for", java.time.Instant.ofEpochMilli(calendar.timeInMillis).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString() + "T" + intent.getStringExtra("schedule_time"))
-            // Atualiza também a identidade da ocorrência utilizada pela ação de confirmação.
-            val datedPending = PendingIntent.getBroadcast(context, requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            try {
-                // setExactAndAllowWhileIdle dispara mesmo em Doze (com restrição de 1/min)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        calendar.timeInMillis,
-                        datedPending
-                    )
-                } else {
-                    alarmManager.setExact(
-                        AlarmManager.RTC_WAKEUP,
-                        calendar.timeInMillis,
-                        datedPending
-                    )
-                }
-                Log.d("MedAlarm", "Alarme agendado para ${medName} às ${timeHour}:${timeMinute}")
-            } catch (e: SecurityException) {
-                // Android 13/14+ exige que o usuario approve "Alarmes e Lembretes"
-                // (SCHEDULE_EXACT_ALARM). Sem isso o alarme exato e recusado.
-                // FALLBACK: agenda um alarme INEXATO — ele ainda dispara (em
-                // geral alguns minutos atrasado), em vez de nao tocar de jeito
-                // nenhum. O usuario e avisado de que vale a pena liberar a
-                // permissao nas Configuracoes.
-                Log.w("MedAlarm", "Sem permissão para alarme exato: ${e.message}; usando alarme inexact")
-                alarmManager.setAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    calendar.timeInMillis,
-                    datedPending
-                )
-                avisarPermissaoAlarme(context)
-            }
+            Log.w(
+                "MedAlarm",
+                "scheduleAlarm ignorado (#21): agendamento legado desativado para '$medName' em $timeHour:$timeMinute; use DoseAlarmScheduler (CareOS)"
+            )
         }
-
-        /**
-         * Avisa (uma vez por dia, nao a cada remédio) que faltou a permissão de
-         * alarmes exatos. No Android 13+ so o usuario pode concede-la; o app nao
-         * pode pedir por dialog.
-         */
-        private fun avisarPermissaoAlarme(context: Context) {
-            try {
-                val prefs = context.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
-                if (prefs.getString("aviso_alarme_exato_data", "") == hoje()) return
-                prefs.edit().putString("aviso_alarme_exato_data", hoje()).apply()
-
-                createChannel(context)
-                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                val pending = PendingIntent.getActivity(
-                    context, 7711, intent,
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                )
-                val notif = NotificationCompat.Builder(context, CHANNEL_ID)
-                    .setContentTitle("Toques de remédio limitados")
-                    .setContentText("Toque aqui e libere \"Alarmes e lembretes\" para que o lembrete toque na hora certa.")
-                    .setSmallIcon(android.R.drawable.ic_dialog_info)
-                    .setContentIntent(pending)
-                    .setAutoCancel(true)
-                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                    .build()
-                (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-                    .notify(7711, notif)
-            } catch (_: Exception) { }
-        }
-
-        private fun hoje(): String =
-            java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
 
         private const val MEDICATION_ALARM_ACTION_PREFIX = "medication_alarm_"
 
@@ -171,22 +89,21 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
         }
 
         /**
-         * Agenda alarmes para todos os medicamentos de um usuário.
-         * Canala alarmes antigos antes de agendar os novos (via FLAG_UPDATE_CURRENT).
+         * Agendamento legado DESATIVADO (#21).
+         *
+         * No-op proposital: nenhum alarme por medicamento é criado. O agendamento
+         * canônico é o CareOS [br.com.bragasaude.ui.medication.doses.DoseAlarmScheduler].
          */
+        @Deprecated("Agendamento legado desativado; use DoseAlarmScheduler (CareOS)")
         fun scheduleAllAlarms(
             context: Context,
             userId: String,
             medications: List<MedicationEntity>
         ) {
-            val filtered = medications.filter { it.userId == userId }
-            for (med in filtered) {
-                for (time in MedicationSchedule.times(med.scheduleTimes, med.scheduleTime)) {
-                    val parts = time.split(":")
-                    scheduleAlarm(context, med.id, med.name, med.dosage ?: med.dosageMg?.let { "${it}mg" },
-                        userId, parts[0].toInt(), parts[1].toInt())
-                }
-            }
+            Log.w(
+                "MedAlarm",
+                "scheduleAllAlarms ignorado (#21): agendamento legado desativado; use DoseAlarmScheduler (CareOS) [${medications.size} medicamento(s)]"
+            )
         }
 
         /**
@@ -260,9 +177,10 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
 
         val doseKey = intent.getStringExtra("scheduled_for") ?: return
         val time = intent.getStringExtra("schedule_time") ?: return
-        val parts = time.split(":")
-        if (parts.size == 2) scheduleAlarm(context, medId, medName, dosage, userId, parts[0].toInt(), parts[1].toInt())
 
+        // #21: PendingIntents antigos continuam exibindo a notificação, mas o
+        // receiver NÃO se reagenda mais. O agendamento canônico e único é o
+        // DoseAlarmScheduler (CareOS), reconciliado por MedicationDoseRepository.
         br.com.bragasaude.ui.medication.MedicationNotificationScheduler.showExactDoseNotification(
             context = context,
             medId = medId,
@@ -335,39 +253,18 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
 
     private fun handleSnooze(context: Context, intent: Intent) {
         val medId = intent.getStringExtra(EXTRA_MED_ID) ?: return
-        val medName = intent.getStringExtra(EXTRA_MED_NAME) ?: ""
-        val dosage = intent.getStringExtra(EXTRA_DOSAGE) ?: ""
-        val userId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
+        val time = intent.getStringExtra("schedule_time") ?: ""
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.cancel(medId.hashCode())
-        val time = intent.getStringExtra("schedule_time") ?: ""
         if (time.isNotBlank()) {
             manager.cancel("$medId:exact:$time".hashCode())
         }
 
-        // Re-agendar daqui a 10 minutos (conforme especificação SaMD)
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val snoozeIntent = Intent(context, MedicationAlarmReceiver::class.java).apply {
-            action = getUniqueAction(medId)
-            putExtra(EXTRA_MED_ID, medId)
-            putExtra(EXTRA_MED_NAME, medName)
-            putExtra(EXTRA_DOSAGE, dosage)
-            putExtra(EXTRA_USER_ID, userId)
-            putExtra("schedule_time", time)
-            intent.getStringExtra("scheduled_for")?.let { putExtra("scheduled_for", it) }
-        }
-        val pendingIntent = PendingIntent.getBroadcast(
-            context, medId.hashCode(), snoozeIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val snoozeTime = System.currentTimeMillis() + (10 * 60 * 1000)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, snoozeTime, pendingIntent)
-        } else {
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, snoozeTime, pendingIntent)
-        }
+        // #21: nenhum reagendamento via AlarmManager. O snooze canônico é
+        // DoseAlarmScheduler.snooze (chave por ator/grupo de horário); esta ação
+        // legada apenas encerra notificações antigas já persistidas no SO.
+        Log.d("MedAlarm", "Snooze legado de $medId em $time encerrado sem novo alarme (canônico: DoseAlarmScheduler)")
     }
 }
 

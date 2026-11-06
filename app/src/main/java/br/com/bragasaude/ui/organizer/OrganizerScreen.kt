@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -36,6 +37,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,6 +49,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import br.com.bragasaude.data.local.organizer.*
+import br.com.bragasaude.data.util.HealthFormatter
 import br.com.bragasaude.ui.components.BragaAlertDialog
 import br.com.bragasaude.ui.components.BragaBadgeType
 import br.com.bragasaude.ui.components.BragaBottomSheet
@@ -1137,9 +1140,10 @@ private fun ReviewDocument(doc: OrganizerDocument, state: OrganizerUiState, vm: 
 
             OutlinedTextField(
                 value = date,
-                onValueChange = { date = it.take(10); confirmed = false },
+                onValueChange = { date = HealthFormatter.formatDateInput(it); confirmed = false },
                 label = { Text("Data dd/mm/aaaa (opcional)") },
                 isError = !OrganizerMetadata.validDate(date),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             )

@@ -256,6 +256,8 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
         val previous=context.getSharedPreferences("dose_preferences",Context.MODE_PRIVATE).getString("last_actor",null)
         for(owner in listOfNotNull(actor,previous).distinct()) {
             val meds=database.medicationDao().getAllSync(owner)
+            // #21: apenas limpeza de alarmes/notificações legados por medicamento de
+            // versões antigas. O agendamento canônico é o DoseAlarmScheduler.reconcile abaixo.
             br.com.bragasaude.ui.util.MedicationAlarmReceiver.cancelAllAlarms(context,meds)
             meds.forEach { br.com.bragasaude.ui.medication.MedicationNotificationScheduler.cancelMedicationAlarms(context,it.id) }
         }

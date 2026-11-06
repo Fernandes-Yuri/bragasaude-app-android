@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +62,9 @@ fun FamilyChatScreen(
     val allMessages by viewModel.familyMessages.collectAsState()
     val patientId by viewModel.chatPatientId.collectAsState()
     val messages = allMessages.filter { it.patientUserId == patientId }
+    // #28: só entram na lista mensagens com conteúdo renderizável. Sem isso,
+    // um iconType vazio/"CUSTOM" com texto em branco desenhava bolha fantasma.
+    val visibleMessages = messages.filter { it.hasVisibleContent() }
     val conversations by viewModel.conversations.collectAsState()
     val currentConversation = conversations.firstOrNull { it.patientId == patientId }
     val chatSyncState by viewModel.chatSyncState.collectAsState()
@@ -99,6 +103,8 @@ fun FamilyChatScreen(
     var showProfileBottomSheet by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showRevokeConfirmFromChat by remember { mutableStateOf(false) }
+    // #13: gaveta de atalhos recolhida por padrão para devolver espaço à conversa.
+    var quickActionsExpanded by rememberSaveable { mutableStateOf(false) }
 
     // Marcar mensagens como lidas ao entrar na conversa e a cada nova mensagem
     LaunchedEffect(initialPatientId, patientId, messages.size) {
@@ -257,7 +263,7 @@ fun FamilyChatScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
             ) {
                 items(
-                    messages.filter { it.messageText.isNotBlank() || it.iconType != "CUSTOM" },
+                    visibleMessages,
                     key = { it.id }
                 ) { message ->
                     val isFromMe = message.senderUserId == currentUserId
@@ -274,7 +280,7 @@ fun FamilyChatScreen(
                     }
                 }
 
-                if (messages.isEmpty()) {
+                if (visibleMessages.isEmpty()) {
                     item {
                         Box(
                             modifier = Modifier.fillMaxWidth().height(300.dp),
@@ -305,15 +311,12 @@ fun FamilyChatScreen(
                 }
             }
 
-            // Chips de resposta rápida
-            HorizontalQuickReplyChips(
-                enabled = patientId != null && !isSending,
-                onSendQuickReply = { text ->
-                    messageText = text
-                }
-            )
-
-            FamilyQuickEmojiBar(
+            // #13: gaveta única de atalhos, recolhida por padrão. A linha
+            // compacta (~48dp) fica sempre visível; chips e emojis só ocupam
+            // espaço quando o usuário expande.
+            FamilyQuickActionsDrawer(
+                expanded = quickActionsExpanded,
+                onToggleExpanded = { quickActionsExpanded = !quickActionsExpanded },
                 enabled = patientId != null && !isSending,
                 onSendEmoji = { emoji ->
                     if (patientId != null && !isSending) {
@@ -323,6 +326,14 @@ fun FamilyChatScreen(
                             isSending = false
                         }
                     }
+                },
+                quickReplies = {
+                    HorizontalQuickReplyChips(
+                        enabled = patientId != null && !isSending,
+                        onSendQuickReply = { text ->
+                            messageText = text
+                        }
+                    )
                 }
             )
 
@@ -444,6 +455,17 @@ fun FamilyChatScreen(
     }
 }
 
+/**
+ * Mensagem com conteúdo realmente renderizável (#28).
+ *
+ * Texto em branco só vira bolha se houver ícone de família válido. Um
+ * `iconType` vazio ou "CUSTOM" (ícone do próprio sistema) sem texto não
+ * desenha nada e por isso é descartado.
+ */
+private fun FamilyMessageEntity.hasVisibleContent(): Boolean =
+    messageText.isNotBlank() ||
+        (iconType.isNotBlank() && iconType != "CUSTOM")
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChatBubble(
@@ -452,6 +474,9 @@ private fun ChatBubble(
     onDeleteMessage: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    // #28: defesa extra — nunca desenha bolha sem texto nem ícone válido.
+    if (!message.hasVisibleContent()) return
+
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val bubbleColor = when {
         isFromMe && isDark -> Color(0xFF064E3B)
@@ -546,10 +571,13 @@ private fun ChatBubble(
 
                         Spacer(Modifier.height(4.dp))
 
-                        // Carimbo de hora + botão de opções
+                        // #29: hora + status de envio/leitura na mesma linha,
+                        // no canto inferior direito INTERNO da bolha. Mensagem
+                        // recebida mostra apenas a hora.
                         Row(
+                            modifier = Modifier.align(Alignment.End),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.End)
                         ) {
                             Text(
                                 formatMessageDate(message.sentAt),
@@ -557,6 +585,25 @@ private fun ChatBubble(
                                 fontSize = 12.sp,
                                 color = secondaryColor
                             )
+                            if (isFromMe && message.sentAt > 0) {
+                                if (message.isRead) {
+                                    // Tique duplo esmeralda: mensagem lida.
+                                    Icon(
+                                        Icons.Default.DoneAll,
+                                        contentDescription = "Visualizada",
+                                        modifier = Modifier.size(16.dp),
+                                        tint = BragaEmerald
+                                    )
+                                } else {
+                                    // Tique simples cinza: mensagem enviada.
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = "Enviada",
+                                        modifier = Modifier.size(16.dp),
+                                        tint = secondaryColor.copy(alpha = 0.8f)
+                                    )
+                                }
+                            }
                             if (isFromMe) {
                                 Icon(
                                     Icons.Default.MoreVert,
@@ -614,33 +661,6 @@ private fun ChatBubble(
                                 showMenu = false
                                 onDeleteMessage()
                             }
-                        )
-                    }
-                }
-            }
-
-            // Indicador de visualizado (estilo mensageiro moderno)
-            if (isFromMe && message.sentAt > 0) {
-                Spacer(Modifier.height(2.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    if (message.isRead) {
-                        // Tique duplo verde esmeralda: mensagem lida/visualizada
-                        Icon(
-                            Icons.Default.DoneAll,
-                            contentDescription = "Visualizada",
-                            modifier = Modifier.size(16.dp),
-                            tint = BragaEmerald
-                        )
-                    } else {
-                        // Tique simples cinza: mensagem enviada
-                        Icon(
-                            Icons.Default.Check,
-                            contentDescription = "Enviada",
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
                     }
                 }

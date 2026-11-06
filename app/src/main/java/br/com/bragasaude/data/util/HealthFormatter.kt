@@ -192,6 +192,27 @@ object HealthFormatter {
     }
 
     /**
+     * Máscara para digitação de vários horários separados por vírgula (ex.: "08:00, 20:00").
+     *
+     * Divide a entrada pelas vírgulas, aplica [formatTimeInput] em cada parte e reúne as
+     * partes válidas com ", ". A vírgula final é preservada enquanto o usuário digita
+     * (ex.: "0800," vira "08:00,"), para que o próximo horário possa ser digitado sem
+     * sumir o separador; o espaço depois da vírgula entra sozinho quando o próximo
+     * dígito é digitado. Entradas vazias ou incompletas não lançam exceção.
+     */
+    fun formatTimeListInput(input: String): String {
+        val preserveTrailingComma = input.trimEnd().endsWith(",")
+        val times = input.split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .map { formatTimeInput(it) }
+            .filter { it.isNotEmpty() }
+        if (times.isEmpty()) return ""
+        val joined = times.joinToString(", ")
+        return if (preserveTrailingComma) "$joined," else joined
+    }
+
+    /**
      * Normaliza entrada de horário garantindo limites válidos (00:00 a 23:59).
      */
     fun normalizeTime(input: String, defaultTime: String = "22:00"): String {

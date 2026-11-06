@@ -583,7 +583,8 @@ internal fun SocialPostMenu(
 
 /**
  * Card contemporâneo do feed com cantos de 24.dp, borda sutil BragaMintBorder
- * e barra de 3 reações expressivas com contadores e feedback tátil.
+ * e barra de 3 reações expressivas com feedback tátil. A contagem numérica
+ * fica unificada no rodapé do card e no selo Em Destaque.
  */
 @Composable
 private fun SocialPostCard(
@@ -637,14 +638,17 @@ private fun SocialPostCard(
                         size = 44.dp
                     )
 
-                    Column {
+                    // A Column do autor recebe o peso restante para ter prioridade
+                    // de largura sobre o menu e o selo, evitando truncamento do
+                    // tipo "Yuri Fernan...". O nome pode ocupar até 2 linhas.
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = post.userName ?: "Colega de Saúde",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = BragaTextPrimary,
-                            maxLines = 1,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
@@ -766,8 +770,10 @@ private fun SocialPostCard(
             ) {
                 reactionOptions.forEach { (type, label, icon) ->
                     val isSelected = selectedReaction == type
+                    // A contagem alimenta apenas o estado de acessibilidade; o
+                    // texto do botão mostra o rótulo puro para não poluir o card.
                     val count = reactions.count { it.reactionType == type }
-                    val displayCount = if (count > 0) count else if (isSelected) 1 else 0
+                    val semanticCount = if (count > 0) count else if (isSelected) 1 else 0
                     TextButton(
                         onClick = {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -779,7 +785,7 @@ private fun SocialPostCard(
                             .clip(RoundedCornerShape(10.dp))
                             .semantics {
                                 selected = isSelected
-                                stateDescription = if (displayCount == 1) "1 apoio" else "$displayCount apoios"
+                                stateDescription = if (semanticCount == 1) "1 apoio" else "$semanticCount apoios"
                             },
                         shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
@@ -795,7 +801,7 @@ private fun SocialPostCard(
                         Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = if (displayCount > 0) "$label ($displayCount)" else label,
+                            text = label,
                             fontSize = 13.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

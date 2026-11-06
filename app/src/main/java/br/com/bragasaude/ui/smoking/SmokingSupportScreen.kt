@@ -28,6 +28,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import br.com.bragasaude.data.local.smoking.*
+import br.com.bragasaude.data.util.HealthFormatter
 import br.com.bragasaude.domain.smoking.*
 import br.com.bragasaude.ui.components.BragaAlertDialog
 import kotlinx.coroutines.delay
@@ -216,8 +217,8 @@ internal fun SmokingPlanForm(plan: SmokingSupportPlan?, today: LocalDate, editin
         Text("Você escolhe como começar. Motivo, situações difíceis e data-meta são opcionais.")
         ChoiceRow("Quero me preparar", stage == PreparationStage.PREPARING) { stage = PreparationStage.PREPARING }
         ChoiceRow("Já comecei", stage == PreparationStage.STARTED) { stage = PreparationStage.STARTED }
-        OutlinedTextField(value = start, onValueChange = { start = it.take(10) }, enabled = !editing && !busy, label = { Text("Início do acompanhamento") }, placeholder = { Text("DD/MM/AAAA") }, supportingText = { Text("Hoje ou uma data passada. Não é uma medida de abstinência.") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(value = target, onValueChange = { target = it.take(10) }, enabled = !busy, label = { Text("Data-meta para parar (opcional)") }, placeholder = { Text("DD/MM/AAAA") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = start, onValueChange = { start = HealthFormatter.formatDateInput(it) }, enabled = !editing && !busy, label = { Text("Início do acompanhamento") }, placeholder = { Text("DD/MM/AAAA") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), supportingText = { Text("Hoje ou uma data passada. Não é uma medida de abstinência.") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = target, onValueChange = { target = HealthFormatter.formatDateInput(it) }, enabled = !busy, label = { Text("Data-meta para parar (opcional)") }, placeholder = { Text("DD/MM/AAAA") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth(), singleLine = true)
         Text("A data-meta é um planejamento. Ela não acrescenta dias sem fumar.", style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(value = reason, onValueChange = { reason = it.take(300) }, enabled = !busy, label = { Text("Meu motivo (opcional)") }, supportingText = { Text("${reason.length}/300") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
         Text("Situações difíceis (opcional)", fontWeight = FontWeight.SemiBold)
@@ -253,7 +254,7 @@ internal fun SmokingDayForm(entry: SmokingDailyEntry?, today: LocalDate, busy: B
     var quantity by remember(entry) { mutableStateOf(entry?.cigaretteCount?.takeIf { it > 0 }?.toString().orEmpty()) }
     SupportCard {
         Text("Como foi seu dia?", style = MaterialTheme.typography.titleLarge)
-        OutlinedTextField(value = date, onValueChange = { date = it.take(10) }, enabled = !busy && entry == null, label = { Text("Data (DD/MM/AAAA)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = date, onValueChange = { date = HealthFormatter.formatDateInput(it) }, enabled = !busy && entry == null, label = { Text("Data (DD/MM/AAAA)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth(), singleLine = true)
         ChoiceRow("Não fumei", smoked == false) { smoked = false }
         ChoiceRow("Fumei", smoked == true) { smoked = true }
         if (smoked == true) OutlinedTextField(value = quantity, onValueChange = { quantity = it.take(10) }, enabled = !busy, label = { Text("Quantidade de cigarros (opcional)") }, supportingText = { Text("Deixe em branco se não souber a quantidade.") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())

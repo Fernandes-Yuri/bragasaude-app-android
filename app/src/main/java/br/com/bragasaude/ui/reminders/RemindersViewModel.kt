@@ -25,10 +25,32 @@ class RemindersViewModel @Inject constructor(
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading = _isLoading.asStateFlow()
+    /**
+     * #12: carregamento honesto da Rotina de Medicamentos.
+     *
+     * Começa em `true` e só vira `false` quando o primeiro `combine` de
+     * [medications] emite um valor real do Room. Antes, com `false` e um
+     * stateIn inicial `emptyList()`, a tela piscava o empty-state/"Verificando
+     * acesso aos horários" antes de o banco responder.
+     */
+    private val _firstLoadPending = MutableStateFlow(true)
 
-    val authenticatedPatientId: String? get() = auth.currentUser?.uid
+    /** Gravação em andamento; não bloqueia o carregamento inicial (nem vice-versa). */
+    private val _isSaving = MutableStateFlow(false)
+
+    /** `true` enquanto o primeiro dado não chegou ou enquanto um save está em andamento. */
+    val isLoading: StateFlow<Boolean> =
+        combine(_firstLoadPending, _isSaving) { pending, saving -> pending || saving }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /**
+     * #12: patientId reativo capturado uma vez da sessão no momento da criação do
+     * ViewModel. Substitui o getter `auth.currentUser?.uid`, que consultava o
+     * Firebase a cada recomposição.
+     */
+    private val _patientId = MutableStateFlow(auth.currentUser?.uid)
+    val patientId: StateFlow<String?> = _patientId.asStateFlow()
+
     private val userId = auth.currentUser?.uid ?: br.com.bragasaude.util.BragaConstants.GUEST_UID
 
     /**
@@ -75,23 +97,24 @@ class RemindersViewModel @Inject constructor(
             }
             MedicationReminder(entity.toRemote(), doses.isNotEmpty() && doses.all { it.taken }, doses.any { it.available }, doses)
         }
-    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.distinctUntilChanged()
+        .onEach { _firstLoadPending.value = false }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _saveError = MutableStateFlow<String?>(null)
     val saveError = _saveError.asStateFlow()
 
     fun saveMedication(name: String, dosage: String, dosageMg: Double?, pillQuantity: Int?, time: String,
                        existing: RemoteMedication? = null, onSaved: () -> Unit = {}) {
-        if (_isLoading.value) return
+        if (_isSaving.value) return
         val times = MedicationSchedule.parse(time)
         if ((dosageMg != null && (!dosageMg.isFinite() || dosageMg <= 0)) || (pillQuantity != null && pillQuantity <= 0) || name.isBlank() || times == null) {
             _saveError.value = "Informe o nome e um horário válido, como 08:00."
             return
         }
-        _isLoading.value = true
+        _isSaving.value = true
         _saveError.value = null
         viewModelScope.launch {
-            _isLoading.value = true
             try {
                 val med = RemoteMedication(
                     id = existing?.id,
@@ -109,7 +132,7 @@ class RemindersViewModel @Inject constructor(
             } catch (e: Exception) {
                 _saveError.value = "Não foi possível salvar. Seus dados continuam aqui para tentar novamente."
             } finally {
-                _isLoading.value = false
+                _isSaving.value = false
             }
         }
     }

@@ -4,7 +4,12 @@ import br.com.bragasaude.ui.components.BragaAlertDialog
 import br.com.bragasaude.ui.components.BragaFormSheet
 
 import android.Manifest
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.SpeechRecognizer
@@ -56,6 +61,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import br.com.bragasaude.ai.BragaRoutingLogger
 import br.com.bragasaude.ai.RoutingLogEntry
 import br.com.bragasaude.data.remote.ai.OrbConnectionState
@@ -588,7 +594,15 @@ fun ChatBubble(message: ChatMessage, textScale: Float = 1f, speaking: Boolean = 
                                 }
                                 Text(if (user) "Você" else "Braga", style = MaterialTheme.typography.labelMedium, color = if (user) Color.White else Color(0xFF1E293B))
                             }
-                            Text(linkedText(message.text), color = if (user) Color.White else Color(0xFF1E293B), fontSize = (17 * textScale).sp,
+                            // O texto anotado resolve links de URL e de telefone:
+                            // números tocam no discador nativo (ACTION_DIAL).
+                            // No balão do usuário o link usa branco para manter
+                            // contraste sobre o fundo turquesa.
+                            val bodyText = linkedText(
+                                message.text,
+                                if (user) Color.White else Color(0xFF00897B)
+                            )
+                            Text(bodyText, color = if (user) Color.White else Color(0xFF1E293B), fontSize = (17 * textScale).sp,
                                 modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 val statusSuffix = when (message.status) {
@@ -747,16 +761,76 @@ fun ChatInput(text: String, onTextChange: (String) -> Unit, onSend: (String) -> 
     }
 }
 
-private fun linkedText(text: String): AnnotatedString = buildAnnotatedString {
-    append(text)
-    val pattern = Regex("https?://[^\\s]+|www\\.[^\\s]+|(?:\\+?55[ .-]?)?\\(?[1-9][0-9]\\)?[ .-]?[0-9]{4,5}[ .-]?[0-9]{4}")
-    pattern.findAll(text).forEach { match ->
-        val raw = match.value.trimEnd('.', ',', ')', ';')
-        val url = if (raw.startsWith("http")) raw else if (raw.startsWith("www.")) "https://$raw" else {
-            val digits = raw.filter { it.isDigit() }
-            "https://wa.me/" + if (digits.length in 10..11) "55$digits" else digits
+// #15: links de mensagens. URLs http(s)/www continuam abrindo o navegador;
+// números curtos de emergência (188 CVV, 190, 192 SAMU, 193) e telefones
+// (10-11 dígitos, com DDD e +55 opcional) abrem o discador nativo via tel:.
+private val messageLinkPattern = Regex(
+    "https?://[^\\s]+" +
+        "|www\\.[^\\s]+" +
+        "|(?<![0-9])(?:188|190|192|193)(?![0-9]|[.,][0-9])" +
+        "|(?:\\+?55[ .-]?)?\\(?[1-9][0-9]\\)?[ .-]?[0-9]{4,5}[ .-]?[0-9]{4}"
+)
+
+/**
+ * Abre o discador nativo já com o número preenchido. ACTION_DIAL não exige a
+ * permissão CALL_PHONE; o usuário confirma a chamada no app de telefone.
+ */
+private fun dialPhoneNumber(context: Context, digits: String) {
+    if (digits.isBlank()) return
+    val intent = Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", digits, null))
+    // Um Context que não é Activity (preview/teste) exige a flag NEW_TASK.
+    if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    try {
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        // Sem app de discagem instalado: o toque apenas não abre nada.
+    } catch (_: SecurityException) {
+        // Política do dispositivo bloqueia o discador: falha silenciosa segura.
+    }
+}
+
+@Composable
+private fun linkedText(text: String, linkColor: Color): AnnotatedString {
+    val context = LocalContext.current
+    return remember(text, context, linkColor) {
+        val linkStyles = TextLinkStyles(
+            style = SpanStyle(
+                color = linkColor,
+                textDecoration = TextDecoration.Underline,
+                fontWeight = FontWeight.SemiBold
+            )
+        )
+        buildAnnotatedString {
+            append(text)
+            messageLinkPattern.findAll(text).forEach { match ->
+                // Remove pontuação final que não faz parte do link.
+                val raw = match.value.trimEnd('.', ',', ')', ';')
+                if (raw.isBlank()) return@forEach
+                val start = match.range.first
+                val end = start + raw.length
+                if (raw.startsWith("http") || raw.startsWith("www.")) {
+                    val url = if (raw.startsWith("www.")) "https://$raw" else raw
+                    addLink(LinkAnnotation.Url(url, linkStyles), start, end)
+                } else {
+                    val digits = raw.filter { it.isDigit() }
+                    if (digits.isNotEmpty()) {
+                        addLink(
+                            LinkAnnotation.Clickable(
+                                tag = "discar:$digits",
+                                styles = linkStyles,
+                                linkInteractionListener = object : LinkInteractionListener {
+                                    override fun onClick(link: LinkAnnotation) {
+                                        dialPhoneNumber(context, digits)
+                                    }
+                                }
+                            ),
+                            start,
+                            end
+                        )
+                    }
+                }
+            }
         }
-        addLink(LinkAnnotation.Url(url, TextLinkStyles(style = SpanStyle(color = Color(0xFF00897B), textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline))), match.range.first, match.range.first + raw.length)
     }
 }
 

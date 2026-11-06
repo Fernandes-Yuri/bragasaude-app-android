@@ -13,6 +13,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -34,12 +35,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.remote.model.BarcodeMedication
 import br.com.bragasaude.data.remote.model.MedicationBatchItemCreateDto
+import br.com.bragasaude.data.util.HealthFormatter
 import br.com.bragasaude.ui.care.CareAuthenticationRequired
 import br.com.bragasaude.ui.care.CareOsViewModel
 import br.com.bragasaude.ui.care.CarePatientSelector
@@ -736,11 +739,12 @@ fun BarcodeScannerScreen(
                             OutlinedTextField(
                                 value = item.scheduleTimes.getOrElse(0) { "08:00" },
                                 onValueChange = { newTime ->
-                                    item.updateFirstTimeAndRecalculate(newTime.take(5))
+                                    item.updateFirstTimeAndRecalculate(HealthFormatter.formatTimeInput(newTime))
                                 },
                                 label = { Text("Horário da dose (HH:mm) *") },
                                 placeholder = { Text("08:00") },
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.fillMaxWidth()
                             )
                         } else {
@@ -756,18 +760,19 @@ fun BarcodeScannerScreen(
                                         OutlinedTextField(
                                             value = timeValue,
                                             onValueChange = { newTime ->
-                                                val trimmed = newTime.take(5)
+                                                val formatted = HealthFormatter.formatTimeInput(newTime)
                                                 if (globalIndex == 0) {
-                                                    item.updateFirstTimeAndRecalculate(trimmed)
+                                                    item.updateFirstTimeAndRecalculate(formatted)
                                                 } else {
                                                     if (globalIndex < item.scheduleTimes.size) {
-                                                        item.scheduleTimes[globalIndex] = trimmed
+                                                        item.scheduleTimes[globalIndex] = formatted
                                                     }
                                                 }
                                             },
                                             label = { Text("Dose ${globalIndex + 1} (HH:mm) *") },
                                             placeholder = { Text("08:00") },
                                             singleLine = true,
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                             modifier = Modifier.weight(1f)
                                         )
                                     }

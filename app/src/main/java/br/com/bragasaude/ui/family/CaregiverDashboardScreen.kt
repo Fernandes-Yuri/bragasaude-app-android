@@ -87,6 +87,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -96,6 +97,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.local.ConsultationEntity
 import br.com.bragasaude.data.local.FamilyBindingEntity
+import br.com.bragasaude.data.util.HealthFormatter
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DeleteOutline
 import java.text.SimpleDateFormat
@@ -1117,18 +1119,20 @@ private fun AppointmentDialog(
 
                 OutlinedTextField(
                     value = dateText,
-                    onValueChange = { dateText = it },
+                    onValueChange = { dateText = HealthFormatter.formatDateInput(it) },
                     label = { Text("Data (ex: 31/10/2026)") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
 
                 OutlinedTextField(
                     value = timeText,
-                    onValueChange = { timeText = it },
+                    onValueChange = { timeText = HealthFormatter.formatTimeInput(it) },
                     label = { Text("Horario (ex: 14:30)") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
