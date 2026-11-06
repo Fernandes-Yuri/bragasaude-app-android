@@ -202,9 +202,6 @@ fun AppNavHost(
         composable<Screen.ProfileEdit> {
             ProfileScreen(onBack = navigateBack, onProfileSaved = navigateBack)
         }
-        composable<Screen.League> {
-            SocialFeedScreen(onBack = navigateBack, onManagePhoto = { navController.navigate(Screen.Profile) })
-        }
         composable<Screen.SocialFeed> {
             SocialFeedScreen(onBack = navigateBack, onManagePhoto = { navController.navigate(Screen.Profile) })
         }

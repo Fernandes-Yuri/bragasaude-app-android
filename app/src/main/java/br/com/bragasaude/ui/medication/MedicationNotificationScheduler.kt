@@ -7,10 +7,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import br.com.bragasaude.MainActivity
-import br.com.bragasaude.data.local.MedicationEntity
 import br.com.bragasaude.ui.util.MedicationAlarmReceiver
 
 /**
@@ -22,10 +20,9 @@ import br.com.bragasaude.ui.util.MedicationAlarmReceiver
  * por ator/paciente/horário (canal `medication_dose_groups`) e é reconciliado por
  * `MedicationDoseRepository.refresh`/`reschedule`.
  *
- * Nenhum caminho do app cria novos alarmes por medicamento: [scheduleMedicationNotifications]
- * e [rescheduleAll] são no-op (apenas log). O que permanece ativo aqui é somente o
- * necessário para encerrar/limpar resíduos de versões antigas e atender PendingIntents
- * já persistidos no SO:
+ * Nenhum caminho do app cria novos alarmes por medicamento. O que permanece ativo
+ * aqui é somente o necessário para encerrar/limpar resíduos de versões antigas e
+ * atender PendingIntents já persistidos no SO:
  * - [cancelMedicationAlarms] (limpeza de alarmes/notificações órfãos);
  * - [dismissDoseNotification] e [exactNotificationId] (contrato de dismiss/testes);
  * - [createNotificationChannel], [showPreDoseNotification] e [showExactDoseNotification].
@@ -33,8 +30,6 @@ import br.com.bragasaude.ui.util.MedicationAlarmReceiver
  * Conformidade com AUD-AN02: ZERO emojis em strings de UI.
  */
 object MedicationNotificationScheduler {
-
-    private const val TAG = "MedNotifScheduler"
 
     const val CHANNEL_ID = "channel_medications"
     const val CHANNEL_NAME = "Lembretes de Medicamentos"
@@ -73,19 +68,6 @@ object MedicationNotificationScheduler {
             val manager = context.getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(channel)
         }
-    }
-
-    /**
-     * Agendamento legado DESATIVADO (#21).
-     *
-     * No-op proposital: NÃO cria PendingIntent nem chama AlarmManager.setExact/
-     * setExactAndAllowWhileIdle. O agendador canônico e único é o CareOS
-     * [br.com.bragasaude.ui.medication.doses.DoseAlarmScheduler], reconciliado por
-     * `MedicationDoseRepository.refresh`/`reschedule`.
-     */
-    @Deprecated("Agendamento legado desativado; use DoseAlarmScheduler (CareOS)")
-    fun scheduleMedicationNotifications(context: Context, medication: MedicationEntity) {
-        Log.w(TAG, "scheduleMedicationNotifications ignorado: agendamento legado desativado; use DoseAlarmScheduler (CareOS) [${medication.name}]")
     }
 
     /**
@@ -138,19 +120,6 @@ object MedicationNotificationScheduler {
                 notificationManager?.cancel("$medicationId:exact:$t".hashCode())
             }
         }
-    }
-
-    /**
-     * Resincronização legada DESATIVADA (#21).
-     *
-     * No-op proposital: NÃO cancela nem cria alarmes por medicamento. A
-     * reconciliação canônica é feita pelo CareOS
-     * [br.com.bragasaude.ui.medication.doses.DoseAlarmScheduler]; a limpeza de
-     * resíduos antigos acontece via [cancelMedicationAlarms].
-     */
-    @Deprecated("Agendamento legado desativado; use DoseAlarmScheduler (CareOS)")
-    fun rescheduleAll(context: Context, medications: List<MedicationEntity>) {
-        Log.w(TAG, "rescheduleAll ignorado: agendamento legado desativado; use DoseAlarmScheduler (CareOS) [${medications.size} medicamento(s)]")
     }
 
     /**
