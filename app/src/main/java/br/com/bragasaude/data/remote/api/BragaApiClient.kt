@@ -215,12 +215,27 @@ class BragaApiClient @Inject constructor(
             if (value.height > 0f) put("height", value.height)
             put("measuredAt", isoFormat.format(value.measuredAt))
         }
-        val result = postJson("$baseUrl/api/sync/biometry", json) ?: return@withContext false
-        result.optString("status") == "success" && result.optString("id") == id
+        val result = postJsonDetailed("$baseUrl/api/sync/biometry", json)
+        if (result.code == 503) {
+            // Indisponibilidade temporária do gateway: o pendente permanece na fila
+            // local (o SyncWorker isola a entidade com safeSync) e é reenviado depois.
+            Log.w(TAG, "Envio da biometria indisponível no servidor (HTTP 503); mantendo na fila local.")
+            return@withContext false
+        }
+        result.code in 200..299 &&
+            result.body?.optString("status") == "success" &&
+            result.body?.optString("id") == id
     }
 
     suspend fun getBiometry(userId: String): List<RemoteBiometry> = withContext(Dispatchers.IO) {
-        val array = getJsonArray("$baseUrl/api/biometry/$userId")
+        val read = getJsonArrayWithStatus("$baseUrl/api/biometry/$userId")
+        if (read.status == 503) {
+            // Indisponibilidade temporária: preserva o cache local e NÃO aborta a
+            // rodada do SyncManager (medicamentos/exames/mensagens seguem normalmente).
+            Log.w(TAG, "Biometria indisponível no servidor (HTTP 503); mantendo cache local e seguindo o sync.")
+            return@withContext emptyList()
+        }
+        val array = read.array
             ?: throw java.io.IOException("Não foi possível baixar a biometria")
         (0 until array.length()).map { index ->
             val value = array.getJSONObject(index)
@@ -1264,6 +1279,46 @@ class BragaApiClient @Inject constructor(
             }
         } catch (e: Exception) {
             null
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) {}
+        }
+    }
+
+    /** Resultado de um GET de array JSON com o status HTTP exposto ao chamador. */
+    private class JsonArrayRead(val array: JSONArray?, val status: Int)
+
+    /**
+     * Variante de [getJsonArray] que devolve o status HTTP, permitindo distinguir
+     * indisponibilidade temporária (503) de falha real de rede/contrato.
+     * Em falha de transporte o status é 0 e o array é nulo (comportamento anterior).
+     */
+    private fun getJsonArrayWithStatus(urlString: String, fresh: Boolean = false): JsonArrayRead {
+        var conn: HttpURLConnection? = null
+        return try {
+            val url = URL(urlString)
+            conn = openConnection(url).apply {
+                requestMethod = "GET"
+                if (fresh) {
+                    useCaches = false
+                    setRequestProperty("Cache-Control", "no-cache")
+                }
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                setRequestProperty("Accept", "application/json")
+                instanceFollowRedirects = false
+                attachIdentity(urlString)
+            }
+            val responseCode = conn.responseCode
+            if (responseCode in 200..299) {
+                BufferedReader(InputStreamReader(conn.inputStream, Charsets.UTF_8)).use { reader ->
+                    JsonArrayRead(JSONArray(reader.readText()), responseCode)
+                }
+            } else {
+                JsonArrayRead(null, responseCode)
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            JsonArrayRead(null, 0)
         } finally {
             try { conn?.disconnect() } catch (_: Exception) {}
         }

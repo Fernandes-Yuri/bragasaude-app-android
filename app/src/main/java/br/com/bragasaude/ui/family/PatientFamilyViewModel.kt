@@ -83,6 +83,10 @@ class PatientFamilyViewModel @Inject constructor(
             launch {
                 try {
                     familyRepository.syncBindingsForPatient(patientUid)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    // Troca de conta/tela não é falha de sync: propaga o cancelamento
+                    // para não gerar o falso aviso "StandaloneCoroutine was cancelled".
+                    throw e
                 } catch (e: Exception) {
                     android.util.Log.w("PatientFamilyVM", "Falha ao sincronizar vínculos remotos do paciente: ${e.message}")
                 }
@@ -141,6 +145,8 @@ class PatientFamilyViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 familyRepository.syncBindingsForPatient(uid)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (_: Exception) {}
 
             familyRepository.getGeneratedCodesForPatient(uid).firstOrNull()?.let { codes ->

@@ -42,8 +42,10 @@ class EmergencySupportInterfaceTest {
             }
         }
         compose.onNodeWithText("Confirmar").assertDoesNotExist()
-        compose.onNodeWithText("Ligar para o CVV 188 (Apoio Emocional)").assertIsDisplayed()
-        compose.onNodeWithText("Ligar para o SAMU 192 (Urgência Médica)").assertIsDisplayed()
+        compose.onNodeWithText("Ligar para o CVV 188").assertIsDisplayed()
+        compose.onNodeWithText("Apoio emocional 24h gratuito").assertIsDisplayed()
+        compose.onNodeWithText("Ligar para o SAMU 192").assertIsDisplayed()
+        compose.onNodeWithText("Urgência e socorro médico").assertIsDisplayed()
         val cvv = compose.onNodeWithTag("emergencyDial188").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val samu = compose.onNodeWithTag("emergencyDial192").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertTrue(cvv.bottom <= samu.top)
@@ -53,7 +55,9 @@ class EmergencySupportInterfaceTest {
         assertDial("tel:192")
         compose.onNodeWithText("Ligar para Maria").performClick()
         assertDial("tel:11999990000")
-        compose.onNodeWithText("Buscar UPA mais próxima (Google Maps)").assertHasClickAction().performClick()
+        compose.onNodeWithText("Buscar UPA mais próxima").assertHasClickAction().assertIsDisplayed()
+        compose.onNodeWithText("Pronto atendimento no Google Maps").assertIsDisplayed()
+        compose.onNodeWithText("Buscar UPA mais próxima").performClick()
         val maps = shadowOf(RuntimeEnvironment.getApplication()).nextStartedActivity
         assertEquals(Intent.ACTION_VIEW, maps.action)
         assertTrue(maps.dataString!!.startsWith("geo:"))
