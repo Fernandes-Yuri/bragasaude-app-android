@@ -245,6 +245,15 @@ class ProfileViewModel @Inject constructor(
      * fullName + userRole = "CAREGIVER" + caregiverMode + consentAcceptedAt.
      * Isso garante que o AuthViewModel avalie _isProfileComplete = true e o
      * MainActivity siga direto para o painel do familiar, sem voltar ao cadastro.
+     *
+     * DT-054: auditoria da Fase 8C. Call site ÚNICO: CaregiverRegistrationScreen
+     * ("Conectar familiar", após connectWithCode ter sucesso) — é o onboarding
+     * explícito de cuidador, então a gravação do papel aqui é intencional e
+     * permanece. O "papel fantasma" que motivou a dívida é neutralizado em duas
+     * frentes: (1) o menu inferior (MainScaffold) só exibe o Painel quando existe
+     * vínculo ATIVO como cuidador, não apenas a string do papel; (2) a tela de
+     * Perfil oferece "Atuar apenas como cuidado(a)", que regrava userRole=PATIENT
+     * via saveUserRole (servidor continua sendo a fonte da verdade).
      */
     fun saveCaregiverProfile(fullName: String, caregiverMode: String, onComplete: (Boolean) -> Unit) {
         val userId = auth.currentUser?.uid

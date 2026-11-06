@@ -23,6 +23,7 @@ import br.com.bragasaude.ui.auth.LoginScreen
 import br.com.bragasaude.ui.components.RiskNotificationDialog
 import br.com.bragasaude.ui.legal.PrivacyPolicyScreen
 import br.com.bragasaude.ui.legal.TermsOfUseScreen
+import br.com.bragasaude.ui.family.CaregiverDashboardViewModel
 import br.com.bragasaude.ui.navigation.MainScaffold
 import br.com.bragasaude.ui.profile.ConsentScreen
 import br.com.bragasaude.ui.profile.ProfileScreen
@@ -60,6 +61,12 @@ fun AppContent(activity: MainActivity) {
     val userRole by authViewModel.userRole.collectAsState()
     val caregiverMode by authViewModel.caregiverMode.collectAsState()
     val needsSelfCare by authViewModel.needsSelfCare.collectAsState()
+    // DT-054: vínculo efetivo como cuidador (Room SSOT, reativo). É a fonte do
+    // menu inferior e do destino inicial — não confiar apenas na string userRole,
+    // que pode ter sido gravada por engano (Painel fantasma para quem é cuidado).
+    val caregiverDashboardViewModel: CaregiverDashboardViewModel = hiltViewModel()
+    val watchedPatients by caregiverDashboardViewModel.watchedPatients.collectAsState()
+    val hasActiveCaregiverBinding = watchedPatients.isNotEmpty()
     var tempRole by rememberSaveable { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
@@ -308,7 +315,7 @@ fun AppContent(activity: MainActivity) {
                                         openHydration -> Screen.Hydration()
                                         else -> Screen.Home
                                     }
-                                    val startDestination = if (userRole == "CAREGIVER" && caregiverMode != "HYBRID") {
+                                    val startDestination = if (userRole == "CAREGIVER" && caregiverMode != "HYBRID" && hasActiveCaregiverBinding) {
                                         Screen.CaregiverDashboard
                                     } else initialScreen
 
@@ -317,7 +324,8 @@ fun AppContent(activity: MainActivity) {
                                         navController = navController,
                                         startDestination = startDestination,
                                         userRole = userRole,
-                                        caregiverMode = caregiverMode
+                                        caregiverMode = caregiverMode,
+                                        hasActiveCaregiverBinding = hasActiveCaregiverBinding
                                     )
                                 }
                                 else -> LoadingOverlay()

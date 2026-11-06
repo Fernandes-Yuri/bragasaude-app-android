@@ -38,6 +38,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
+ * DT-053: janela de recência para notificação local de mensagem recebida.
+ * Mensagens com `sentAt` mais antigo que isso NÃO geram alerta local — após
+ * wipe do app/troca de conta o primeiro sync baixa o histórico inteiro e,
+ * sem este filtro, o app notificava mensagens antigas já lidas ("fantasmas").
+ */
+private const val RECENT_MESSAGE_NOTIFY_WINDOW_MS = 300_000L // 5 minutos
+
+/**
  * Repository do Módulo Ponte Familiar & Modo Cuidador.
  * Gerencia vínculos familiares, códigos de conexão, mensagens e sincronização via REST/PostgreSQL.
  */
@@ -431,7 +439,12 @@ class FamilyBridgeRepository @Inject constructor(
                     // Fallback (doc 10 §1A.2): mensagem NOVA vinda do servidor e que
                     // não foi enviada por este aparelho → notificação local. É a rota
                     // que cobre quem não recebeu (ou não pode receber) o push FCM.
-                    if (local == null && decodedMsg.senderUserId != auth.currentUser?.uid && decodedMsg.messageText.isNotBlank()) {
+                    // DT-053: só notifica mensagem RECENTE (≤ 5 min) e NÃO LIDA. Sem
+                    // isso, após wipe/troca de conta (Room vazio) o primeiro sync
+                    // baixava o histórico antigo e disparava alertas de mensagens já
+                    // visualizadas dias antes.
+                    val isRecent = System.currentTimeMillis() - decodedMsg.sentAt < RECENT_MESSAGE_NOTIFY_WINDOW_MS
+                    if (local == null && decodedMsg.senderUserId != auth.currentUser?.uid && decodedMsg.messageText.isNotBlank() && isRecent && !decodedMsg.isRead) {
                         try {
                             FamilyNotificationService.notifyPatientMessage(
                                 appContext,
