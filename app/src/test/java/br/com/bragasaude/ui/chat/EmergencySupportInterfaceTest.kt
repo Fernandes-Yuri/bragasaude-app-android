@@ -42,6 +42,8 @@ class EmergencySupportInterfaceTest {
             }
         }
         compose.onNodeWithText("Confirmar").assertDoesNotExist()
+        compose.onNodeWithText("Ligar para o CVV 188 (Apoio Emocional)").assertIsDisplayed()
+        compose.onNodeWithText("Ligar para o SAMU 192 (Urgência Médica)").assertIsDisplayed()
         val cvv = compose.onNodeWithTag("emergencyDial188").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val samu = compose.onNodeWithTag("emergencyDial192").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertTrue(cvv.bottom <= samu.top)
@@ -51,11 +53,26 @@ class EmergencySupportInterfaceTest {
         assertDial("tel:192")
         compose.onNodeWithText("Ligar para Maria").performClick()
         assertDial("tel:11999990000")
-        compose.onNodeWithText("Localizar UPA mais próxima").assertHasClickAction().performClick()
+        compose.onNodeWithText("Buscar UPA mais próxima (Google Maps)").assertHasClickAction().performClick()
         val maps = shadowOf(RuntimeEnvironment.getApplication()).nextStartedActivity
         assertEquals(Intent.ACTION_VIEW, maps.action)
         assertTrue(maps.dataString!!.startsWith("geo:"))
         screenshot("socorro-chat")
+    }
+
+    @Test fun legacyCrisisTextWithoutFlagStillShowsNativeButtons() {
+        compose.setContent {
+            BragasaudeTheme {
+                ChatBubble(ChatMessage(role = "assistant",
+                    text = "Sinto muito pela dor. Ligue para o CVV 188. Se houver perigo, acione o SAMU 192."),
+                    emergencyActions = { EmergencyActionButtons(it) })
+            }
+        }
+        compose.onNodeWithTag("emergencyDial188").assertIsDisplayed()
+        compose.onNodeWithTag("emergencyDial192").assertIsDisplayed()
+        val cvv = compose.onNodeWithTag("emergencyDial188").fetchSemanticsNode().boundsInRoot
+        val samu = compose.onNodeWithTag("emergencyDial192").fetchSemanticsNode().boundsInRoot
+        assertTrue(cvv.bottom <= samu.top)
     }
 
     @Test fun physicalEmergencyFocusesSamuAndLargeTextFitsButtons() {

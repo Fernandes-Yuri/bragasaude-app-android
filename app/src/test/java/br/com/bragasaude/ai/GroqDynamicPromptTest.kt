@@ -23,6 +23,21 @@ class GroqDynamicPromptTest {
         assertTrue(prompt.length < 4500)
     }
 
+    @Test fun `persona acolhedora de cuidador sem travas de modulo removido`() {
+        val prompt = GroqDynamicPrompt().build(emptyList())
+        assertTrue(prompt.contains("cuidador"))
+        assertTrue(prompt.contains("acolhedora"))
+        assertTrue(prompt.contains("alimentação"))
+        assertTrue(prompt.contains("sono"))
+        assertTrue(prompt.contains("nutricionista"))
+        assertTrue(prompt.contains("CVV 188"))
+        assertTrue(prompt.contains("SAMU 192"))
+        assertTrue(prompt.indexOf("CVV 188") < prompt.indexOf("SAMU 192"))
+        assertFalse(prompt.lowercase().contains("descontinuado"))
+        assertFalse(prompt.lowercase().contains("modulo desativado"))
+        assertFalse(prompt.contains("O módulo de alimentação, compras, despensa e receitas"))
+    }
+
     @Test fun `buffer mantem palavras parciais e ordem das frases`() {
         val buffer = BragaSpeechBuffer()
         assertTrue(buffer.append("Conver").isEmpty())

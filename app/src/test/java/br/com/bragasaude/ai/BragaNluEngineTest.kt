@@ -11,7 +11,7 @@ import org.junit.Test
 class BragaNluEngineTest {
     private val parser = VoiceHealthParser()
 
-    @Test fun `recursos descontinuados recebem orientacao sem acao nem nuvem nos dois canais`() = runTest {
+    @Test fun `pedidos de plano alimentar e canais de suporte recebem acolhimento sem acao nem nuvem`() = runTest {
         var calls = 0
         val hybrid = BragaHybridOrchestrator(GroqStreamSource { _, _ -> calls++; flowOf("remoto") }, GroqDynamicPrompt())
         for (channel in InputChannel.entries) {
@@ -20,14 +20,35 @@ class BragaNluEngineTest {
                 "Monte meu plano alimentar", "Quero um plano de alimentação", "Abra a lista de compras", "Anote minha refeição",
                 "Obrigado, onde fica o cardapio?", "Me chama no zap", "Suporte via whats app")) {
                 val output = hybrid.analyze(text, channel)
-                assertEquals(text, BragaProductScope.RETIRED, output.intent)
+                assertEquals(text, BragaProductScope.APP_LIMITS, output.intent)
                 assertFalse(text, BragaActionGate.canParse(text, output))
                 assertFalse(text, BragaCloudFallback.afterLocal(text, output).delegarParaNuvem)
-                assertTrue(output.respostaLocal!!.contains("contato@bragasaude.online"))
+                val reply = output.respostaLocal!!
+                assertFalse(text, reply.lowercase().contains("descontinuado"))
+                assertFalse(text, reply.lowercase().contains("modulo desativado"))
+                assertTrue(text, reply.contains("contato@bragasaude.online"))
+                assertTrue(text, reply.contains("nutricionista") || reply.contains("cuidando"))
                 assertTrue(hybrid.respond(text, emptyList(), channel).toList().single() is BragaHybridEvent.Local)
             }
         }
         assertEquals(0, calls)
+    }
+
+    @Test fun `duvidas leves de alimentacao recebem conversa acolhedora sem falar de modulo removido`() {
+        for (channel in InputChannel.entries) listOf(
+            "Ideias para um jantar leve", "Sugestão de lanche saudável",
+            "Quero ideias para um almoço leve", "Dicas de comida saudável"
+        ).forEach { text ->
+            val output = BragaNluEngine.analisar(text, channel)
+            assertEquals(text, "conversa_alimentacao_acolhedora", output.intent)
+            assertEquals(text, BragaRoute.LOCAL_CONVERSATION, output.route)
+            assertFalse(output.delegarParaNuvem)
+            assertFalse(text, output.respostaLocal!!.lowercase().contains("descontinuado"))
+            assertTrue(text, output.respostaLocal!!.contains("legumes") || output.respostaLocal!!.contains("fruta") ||
+                output.respostaLocal!!.contains("aveia") || output.respostaLocal!!.contains("salada"))
+            assertTrue(text, output.respostaLocal!!.contains("nutricionista") || output.respostaLocal!!.contains("médico") ||
+                output.respostaLocal!!.contains("corpo"))
+        }
     }
 
     @Test fun `contexto de consulta anterior nao substitui guardiao de escopo ou painel de doses`() {
@@ -35,7 +56,7 @@ class BragaNluEngineTest {
         val session = HealthQuerySession()
         session.remember(HealthQuery(HealthMetric.PRESSURE), "dono", "conversa")
         for (channel in InputChannel.entries) {
-            assertEquals(BragaProductScope.RETIRED,
+            assertEquals(BragaProductScope.APP_LIMITS,
                 hybrid.analyze("E minha dieta?", channel, session, "dono", "conversa").intent)
             assertEquals(BragaProductScope.DOSES,
                 hybrid.analyze("Tomei meu remédio da manhã", channel, session, "dono", "conversa").intent)
@@ -83,7 +104,7 @@ class BragaNluEngineTest {
 
     @Test fun `receita medica e contexto da glicemia continuam ativos`() {
         assertEquals("orientacao_cadastro_medicamento", BragaNluEngine.analisar("Quero cadastrar medicamento pela receita").intent)
-        assertNotEquals(BragaProductScope.RETIRED, BragaNluEngine.analisar("Glicemia 105 após a refeição").intent)
+        assertNotEquals(BragaProductScope.APP_LIMITS, BragaNluEngine.analisar("Glicemia 105 após a refeição").intent)
         assertTrue(GroqDynamicPrompt().build(emptyList()).contains(BragaProductScope.PROMPT))
     }
 }

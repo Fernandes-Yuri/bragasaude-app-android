@@ -169,11 +169,13 @@ class VoiceHealthParserTest {
     }
 
     @Test
-    fun `detect direct grocery list request redirects user to nutrition screen`() {
+    fun `detect direct grocery list request replies with warm conversation`() {
         val result = parser.parse("abrir lista de compras")
         assertTrue(result is VoiceHealthIntent.ConversationalReply)
         val reply = result as VoiceHealthIntent.ConversationalReply
-        assertTrue(reply.message.contains("descontinuado"))
+        assertFalse(reply.message.lowercase().contains("descontinuado"))
+        assertTrue(reply.message.contains("nutricionista") || reply.message.contains("médico"))
+        assertFalse(reply.message.contains("registrei", ignoreCase = true))
     }
 
     @Test
@@ -252,19 +254,21 @@ class VoiceHealthParserTest {
     }
 
     @Test
-    fun `detect adding food to daily meal goal redirects to nutrition screen`() {
+    fun `detect adding food to daily meal goal replies with warm conversation`() {
         val result = parser.parse("adicione farelo de aveia na minha meta diária de alimentação")
         assertTrue(result is VoiceHealthIntent.ConversationalReply)
         val reply = result as VoiceHealthIntent.ConversationalReply
-        assertTrue(reply.message.contains("descontinuado"))
+        assertFalse(reply.message.lowercase().contains("descontinuado"))
+        assertTrue(reply.message.contains("nutricionista") || reply.message.contains("médico"))
     }
 
     @Test
-    fun `detect adding food to shopping list with direct trigger redirects to nutrition screen`() {
+    fun `detect adding food to shopping list with direct trigger replies with warm conversation`() {
         val result = parser.parse("adicione chia na lista de compras")
         assertTrue(result is VoiceHealthIntent.ConversationalReply)
         val reply = result as VoiceHealthIntent.ConversationalReply
-        assertTrue(reply.message.contains("descontinuado"))
+        assertFalse(reply.message.lowercase().contains("descontinuado"))
+        assertTrue(reply.message.contains("nutricionista") || reply.message.contains("médico"))
     }
 
     @Test

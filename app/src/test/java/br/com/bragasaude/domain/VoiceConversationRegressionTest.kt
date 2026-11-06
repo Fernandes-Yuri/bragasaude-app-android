@@ -26,7 +26,8 @@ class VoiceConversationRegressionTest {
         }
         listOf("registre meu almoço", "adicione chia na lista de compras").forEach {
             val reply = parser.parse(it) as VoiceHealthIntent.ConversationalReply
-            assertTrue(reply.message.contains("descontinuado"))
+            assertFalse(it, reply.message.lowercase().contains("descontinuado"))
+            assertTrue(it, reply.message.contains("nutricionista") || reply.message.contains("médico"))
             assertFalse(reply.message.contains("registrei", ignoreCase = true))
         }
     }

@@ -616,10 +616,10 @@ fun ChatBubble(message: ChatMessage, textScale: Float = 1f, speaking: Boolean = 
                                     if (speaking) AudioWaves() else Icon(Icons.Default.VolumeUp, "Ouvir resposta", tint = Color(0xFF64748B))
                                 }
                             }
-                            if (!user && (message.emergencyType != null || message.action == "EMERGENCIA")) {
+                            if (!user && emergencySignal(message)) {
                                 HorizontalDivider(color = Color(0xFFB2DFDB))
                                 Text("Socorro e apoio", style = MaterialTheme.typography.titleSmall)
-                                emergencyActions(message.emergencyType == BragaRoutingPolicy.MENTAL_HEALTH_EMERGENCY)
+                                emergencyActions(mentalHealthFirst(message))
                             } else if (message.action != null) {
                                 HorizontalDivider(color = if (user) Color.White.copy(alpha = .3f) else Color(0xFFB2DFDB))
                                 Text("Sugestão: ${actionLabel(message.action)}", color = if (user) Color.White else Color(0xFF1E293B))
@@ -637,6 +637,22 @@ fun ChatBubble(message: ChatMessage, textScale: Float = 1f, speaking: Boolean = 
         }
     }
 }
+
+/**
+ * #14/#32: o card nativo de socorro aparece quando a mensagem foi marcada como
+ * emergência (local ou remota) ou quando o próprio texto sinaliza apoio do
+ * CVV 188 / SAMU 192. Assim, nem uma resposta antiga do histórico fica sem os
+ * botões de discagem direta.
+ */
+private fun emergencySignal(message: ChatMessage): Boolean =
+    message.emergencyType != null ||
+        message.action == BragaRoutingPolicy.CLINICAL_EMERGENCY ||
+        BragaRoutingPolicy.mentionsEmergencySupport(message.text)
+
+/** CVV 188 antes do SAMU 192 sempre que a mensagem apontar sofrimento psíquico. */
+private fun mentalHealthFirst(message: ChatMessage): Boolean =
+    message.emergencyType == BragaRoutingPolicy.MENTAL_HEALTH_EMERGENCY ||
+        BragaRoutingPolicy.emergencyChannel(message.text) == BragaRoutingPolicy.MENTAL_HEALTH_EMERGENCY
 
 @Composable
 fun StreamingText(text: String, textScale: Float = 1f) {

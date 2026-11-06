@@ -8,6 +8,12 @@ object BragaInputLanguage {
     private val auditoryRepair = Regex(
         """nao (consegui|consigo|deu para) (te |lhe )?(ouvir|escutar)|nao (te |lhe )?ouvi|fal[ea] (um pouco )?mais alto|repita.{0,20}(alto|volume)|audio.{0,20}(baixo|inaudivel)|nao entendi.{0,20}(fala|audio)"""
     )
+    // A nuvem pode devolver o endereço cru de discagem no texto. O chat sempre
+    // mostra o card nativo com os botões; o texto deve trazer apenas o número,
+    // que o balão também transforma em discagem com um toque (ACTION_DIAL).
+    private val rawDialUri = Regex("""\btel:\s*(\d{2,6})\b""", RegexOption.IGNORE_CASE)
+
+    fun withoutRawDialUris(text: String): String = rawDialUri.replace(text, "$1")
 
     @Synchronized
     fun clarification(channel: InputChannel): String {
@@ -29,9 +35,10 @@ object BragaInputLanguage {
     }
 
     fun forChannel(text: String, channel: InputChannel): String {
-        if (channel == InputChannel.VOICE) return br.com.bragasaude.util.PortuguesePhoneticHelper.cleanTextForTts(text)
-        val normalized = java.text.Normalizer.normalize(text.lowercase(java.util.Locale.ROOT),
+        val sanitized = withoutRawDialUris(text)
+        if (channel == InputChannel.VOICE) return br.com.bragasaude.util.PortuguesePhoneticHelper.cleanTextForTts(sanitized)
+        val normalized = java.text.Normalizer.normalize(sanitized.lowercase(java.util.Locale.ROOT),
             java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
-        return if (auditoryRepair.containsMatchIn(normalized)) clarification(channel) else text
+        return if (auditoryRepair.containsMatchIn(normalized)) clarification(channel) else sanitized
     }
 }
