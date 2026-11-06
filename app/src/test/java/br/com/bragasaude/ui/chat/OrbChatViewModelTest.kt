@@ -361,7 +361,7 @@ class OrbChatViewModelTest {
         vm.sendMessage("Como minha pressão afeta os rins?"); runCurrent()
         val answer = vm.state.value.messages.last()
         assertEquals("Ligue para 192 agora.", answer.text)
-        assertFalse(answer.text.toLowerCase().contains("tel:"))
+        assertFalse(answer.text.lowercase().contains("tel:"))
         assertEquals("EMERGENCIA", answer.emergencyType)
     }
 
