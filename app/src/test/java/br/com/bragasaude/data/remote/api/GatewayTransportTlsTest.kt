@@ -1,5 +1,6 @@
 package br.com.bragasaude.data.remote.api
 
+import br.com.bragasaude.data.local.security.FamilyE2eeManager
 import br.com.bragasaude.data.remote.auth.AuthService
 import br.com.bragasaude.data.remote.network.GatewayConnection
 import br.com.bragasaude.data.remote.network.GatewayTlsPolicy
@@ -40,7 +41,7 @@ class GatewayTransportTlsTest {
         server().use { server ->
             val auth = mockk<AuthService>()
             every { auth.getTokenBlocking() } returns "synthetic-session"
-            val api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), auth, client(wrong))
+            val api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), auth, client(wrong), FamilyE2eeManager())
             for (method in listOf("GET", "POST", "PATCH", "DELETE")) {
                 val result = api.doseRequest(method, "/api/synthetic", if (method in listOf("POST", "PATCH")) JSONObject().put("value", 1) else null)
                 assertEquals(method, 0, result.code)
@@ -54,7 +55,7 @@ class GatewayTransportTlsTest {
             server().use { server ->
                 val auth = mockk<AuthService>()
                 every { auth.getTokenBlocking() } returns "synthetic-session"
-                val api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), auth, client(pin))
+                val api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), auth, client(pin), FamilyE2eeManager())
                 for (method in listOf("GET", "POST", "PATCH", "DELETE")) {
                     server.enqueue(MockResponse().setBody("{\"ok\":true}"))
                     val result = api.doseRequest(method, "/api/synthetic", if (method in listOf("POST", "PATCH")) JSONObject().put("value", 1) else null)

@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.model.*
+import br.com.bragasaude.data.local.security.FamilyE2eeManager
 import br.com.bragasaude.data.remote.auth.AuthService
 import br.com.bragasaude.di.BaseUrl
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -11,6 +12,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import br.com.bragasaude.util.safeEither
+import br.com.bragasaude.util.safeEitherBoolean
+import br.com.bragasaude.util.safeNullableEither
 import br.com.bragasaude.util.safeString
 import br.com.bragasaude.util.safeNullableString
 import br.com.bragasaude.util.BragaTime
@@ -53,7 +57,10 @@ class BragaApiClient @Inject constructor(
     // Imutavel; producao vem do @BaseUrl (BuildConfig) e testes injetam o mock.
     @BaseUrl private val _baseUrl: String = DEFAULT_BASE_URL,
     private val authService: AuthService,
-    private val httpClient: OkHttpClient = GatewayTlsPolicy.defaultClient()
+    private val httpClient: OkHttpClient = GatewayTlsPolicy.defaultClient(),
+    // AUD-CHAT1: Hilt injeta o @Singleton FamilyE2eeManager (AndroidKeyStore).
+    // Nenhuma instanciação avulsa: a chave mora no mesmo keystore em todo o app.
+    internal val familyE2eeManager: FamilyE2eeManager
 ) {
     companion object {
         private const val TAG = "BragaApiClient"
@@ -63,10 +70,6 @@ class BragaApiClient @Inject constructor(
     }
 
     val baseUrl: String get() = _baseUrl
-
-    internal var familyE2eeManager: br.com.bragasaude.data.local.security.FamilyE2eeManager =
-        runCatching { br.com.bragasaude.data.local.security.FamilyE2eeManager(context) }
-            .getOrElse { br.com.bragasaude.data.local.security.FamilyE2eeManager() }
 
     private val isoFormat get() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
     private val dateFormat get() = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -515,7 +518,7 @@ class BragaApiClient @Inject constructor(
 
     suspend fun syncFamilyMessage(m: FamilyMessageEntity): String? = withContext(Dispatchers.IO) {
         try {
-            val encryptedBlob = if (br.com.bragasaude.data.local.security.FamilyE2eeManager.isEncryptedEnvelope(m.messageText)) {
+            val encryptedBlob = if (FamilyE2eeManager.isEncryptedEnvelope(m.messageText)) {
                 m.messageText
             } else {
                 familyE2eeManager.encryptForConversation(
@@ -531,7 +534,7 @@ class BragaApiClient @Inject constructor(
                 put("senderName", m.senderName)
                 put("messageText", encryptedBlob)
                 put("bodyEncrypted", encryptedBlob)
-                put("encryptionVersion", br.com.bragasaude.data.local.security.FamilyE2eeManager.CURRENT_ENCRYPTION_VERSION)
+                put("encryptionVersion", FamilyE2eeManager.CURRENT_ENCRYPTION_VERSION)
                 put("iconType", m.iconType)
                 put("isRead", m.isRead)
                 put("sentAt", isoFormat.format(Date(m.sentAt)))
@@ -557,22 +560,28 @@ class BragaApiClient @Inject constructor(
             val list = mutableListOf<FamilyMessageEntity>()
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
-                val sAt = parseIsoMillis(obj.optString("sent_at", null)) ?: System.currentTimeMillis()
+                // Contrato dual Welisa <-> Yuri: Go braga-chat (camelCase) e gateway
+                // Python (snake_case) no mesmo payload evitam perda de campo.
+                val sAt = parseIsoMillis(obj.safeNullableEither("sent_at", "sentAt"))
+                    ?: System.currentTimeMillis()
                 // D47: TTL e tombstone vindos do servidor (retrocompatível com gateway antigo)
-                val expAt = parseIsoMillis(obj.optString("expires_at", null)) ?: (sAt + FAMILY_MESSAGE_TTL_MS)
-                val delAt = parseIsoMillis(obj.optString("deleted_at", null))
-                val bodyEnc = if (obj.isNull("body_encrypted")) "" else obj.optString("body_encrypted", "")
-                val msgText = bodyEnc.ifBlank { obj.optString("message_text", "") }
+                val expAt = parseIsoMillis(obj.safeNullableEither("expires_at", "expiresAt"))
+                    ?: (sAt + FAMILY_MESSAGE_TTL_MS)
+                val delAt = parseIsoMillis(obj.safeNullableEither("deleted_at", "deletedAt"))
+                val bodyEnc = obj.safeNullableEither("body_encrypted", "bodyEncrypted") ?: ""
+                val msgText = bodyEnc.ifBlank {
+                    obj.safeNullableEither("message_text", "messageText") ?: ""
+                }
                 list.add(
                     FamilyMessageEntity(
                         id = obj.getString("id"),
                         remoteId = obj.getString("id"),
-                        patientUserId = obj.getString("patient_id"),
-                        senderUserId = obj.getString("sender_id"),
-                        senderName = obj.getString("sender_name"),
+                        patientUserId = obj.safeEither("patient_id", "patientId"),
+                        senderUserId = obj.safeEither("sender_id", "senderId"),
+                        senderName = obj.safeEither("sender_name", "senderName"),
                         messageText = msgText,
-                        iconType = obj.optString("icon_type", "LOVE"),
-                        isRead = obj.optBoolean("is_read", false),
+                        iconType = obj.safeEither("icon_type", "iconType").ifBlank { "LOVE" },
+                        isRead = obj.safeEitherBoolean(false, "is_read", "isRead"),
                         sentAt = sAt,
                         pendingSync = false,
                         expiresAt = expAt,
@@ -1000,16 +1009,20 @@ class BragaApiClient @Inject constructor(
     suspend fun findBindingByCode(code: String): FamilyBindingEntity? = withContext(Dispatchers.IO) {
         try {
             val res = getJson("$baseUrl/api/family/find-by-code/$code") ?: return@withContext null
-            val cAt = try { isoFormat.parse(res.getString("created_at"))?.time ?: System.currentTimeMillis() } catch (_: Exception) { System.currentTimeMillis() }
-            val eAt = try { isoFormat.parse(res.getString("expires_at"))?.time ?: System.currentTimeMillis() } catch (_: Exception) { System.currentTimeMillis() }
+            val createdAtRaw = res.safeNullableEither("created_at", "createdAt")
+            val expiresAtRaw = res.safeNullableEither("expires_at", "expiresAt")
+            val cAt = createdAtRaw?.let { runCatching { java.time.OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() }
+                ?: parseIsoMillis(createdAtRaw) ?: System.currentTimeMillis()
+            val eAt = expiresAtRaw?.let { runCatching { java.time.OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() }
+                ?: parseIsoMillis(expiresAtRaw) ?: System.currentTimeMillis()
             return@withContext FamilyBindingEntity(
                 id = res.getString("id"),
-                patientUserId = res.getString("patient_id"),
-                caregiverUserId = res.optString("caregiver_id", ""),
-                caregiverName = res.getString("caregiver_name"),
-                caregiverRelation = res.getString("caregiver_relation"),
-                connectionCode = res.getString("connection_code"),
-                status = res.optString("status", "PENDING"),
+                patientUserId = res.safeEither("patient_id", "patientId"),
+                caregiverUserId = res.safeNullableEither("caregiver_id", "caregiverId") ?: "",
+                caregiverName = res.safeEither("caregiver_name", "caregiverName"),
+                caregiverRelation = res.safeEither("caregiver_relation", "caregiverRelation"),
+                connectionCode = res.safeEither("connection_code", "connectionCode"),
+                status = res.safeEither("status").ifBlank { "PENDING" },
                 createdAt = cAt,
                 expiresAt = eAt,
                 pendingSync = false
@@ -1038,10 +1051,14 @@ class BragaApiClient @Inject constructor(
     private fun JSONObject.nullableString(key: String): String? = safeNullableString(key)
 
     private fun parseBinding(obj: JSONObject): FamilyBindingEntity {
-        val patientId = obj.getString("patient_id")
-        val caregiverId = if (obj.isNull("caregiver_id")) "" else obj.getString("caregiver_id")
-        val patientPubKey = if (obj.isNull("patient_public_key")) null else obj.optString("patient_public_key", "").takeIf { it.isNotBlank() }
-        val caregiverPubKey = if (obj.isNull("caregiver_public_key")) null else obj.optString("caregiver_public_key", "").takeIf { it.isNotBlank() }
+        // Contrato dual Welisa <-> Yuri: aceita tanto camelCase (Go braga-chat)
+        // quanto snake_case (gateway Python) nos campos de vínculo.
+        val patientId = obj.safeEither("patient_id", "patientId")
+        val caregiverId = obj.safeNullableEither("caregiver_id", "caregiverId") ?: ""
+        val patientPubKey = obj.safeNullableEither("patient_public_key", "patientPublicKey")
+            ?.takeIf { it.isNotBlank() }
+        val caregiverPubKey = obj.safeNullableEither("caregiver_public_key", "caregiverPublicKey")
+            ?.takeIf { it.isNotBlank() }
         if (patientPubKey != null || caregiverPubKey != null) {
             runCatching {
                 familyE2eeManager.registerBindingKeys(
@@ -1052,17 +1069,24 @@ class BragaApiClient @Inject constructor(
                 )
             }
         }
+        val createdAtRaw = obj.safeNullableEither("created_at", "createdAt")
+        val expiresAtRaw = obj.safeNullableEither("expires_at", "expiresAt")
+        val createdAtMs = createdAtRaw?.let { runCatching { java.time.OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() }
+            ?: parseIsoMillis(createdAtRaw) ?: 0L
+        val expiresAtMs = expiresAtRaw?.let { runCatching { java.time.OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() }
+            ?: parseIsoMillis(expiresAtRaw) ?: 0L
         return FamilyBindingEntity(
             id = obj.getString("id"), remoteId = obj.getString("id"),
             patientUserId = patientId,
             caregiverUserId = caregiverId,
-            caregiverName = obj.optString("caregiver_name", ""),
-            caregiverRelation = obj.optString("caregiver_relation", ""),
-            patientName = obj.optString("patient_name", null),
-            connectionCode = obj.getString("connection_code"), status = obj.getString("status"),
-            createdAt = java.time.OffsetDateTime.parse(obj.getString("created_at")).toInstant().toEpochMilli(),
-            expiresAt = if (obj.isNull("expires_at")) 0L else java.time.OffsetDateTime.parse(obj.getString("expires_at")).toInstant().toEpochMilli(),
-            caregiverRole = obj.optString("caregiver_role", "CAREGIVER_VIEWER"),
+            caregiverName = obj.safeEither("caregiver_name", "caregiverName"),
+            caregiverRelation = obj.safeEither("caregiver_relation", "caregiverRelation"),
+            patientName = obj.safeNullableEither("patient_name", "patientName"),
+            connectionCode = obj.safeEither("connection_code", "connectionCode"),
+            status = obj.safeEither("status").ifBlank { "PENDING" },
+            createdAt = createdAtMs,
+            expiresAt = expiresAtMs,
+            caregiverRole = obj.safeEither("caregiver_role", "caregiverRole").ifBlank { "CAREGIVER_VIEWER" },
             permissionsJson = (obj.optJSONArray("permissions") ?: JSONArray()).toString(),
             pendingSync = false
         )

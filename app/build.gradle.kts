@@ -68,7 +68,9 @@ android {
             applicationIdSuffix = ""
             isMinifyEnabled = true
             isShrinkResources = true
-            buildConfigField("Boolean", "ENABLE_FAMILY_WEBSOCKET", "false")
+            // AUD-CHAT1: chat familiar em produção via WebSocket Go de baixa
+            // latência (/ws/family), unificado com o fallback REST offline.
+            buildConfigField("Boolean", "ENABLE_FAMILY_WEBSOCKET", "true")
             if (hasKeystore) {
                 signingConfig = signingConfigs.getByName("release")
             }

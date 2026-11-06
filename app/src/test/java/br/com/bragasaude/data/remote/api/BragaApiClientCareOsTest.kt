@@ -1,5 +1,6 @@
 package br.com.bragasaude.data.remote.api
 
+import br.com.bragasaude.data.local.security.FamilyE2eeManager
 import br.com.bragasaude.data.local.MedicationEntity
 import br.com.bragasaude.data.remote.auth.AuthService
 import br.com.bragasaude.data.remote.model.MedicationCreate
@@ -31,7 +32,7 @@ class BragaApiClientCareOsTest {
         server = MockWebServer().also { it.start() }
         val authService = mockk<AuthService>()
         every { authService.getTokenBlocking(any(), any()) } returns "care-os-token"
-        api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), authService)
+        api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), authService, FamilyE2eeManager())
     }
 
     @After
@@ -536,7 +537,7 @@ class BragaApiClientCareOsTest {
     fun `getLatestAppVersionCode succeeds without auth token`() = runBlocking {
         val publicAuthService = mockk<AuthService>()
         every { publicAuthService.getTokenBlocking(any(), any()) } returns null
-        val publicApi = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), publicAuthService)
+        val publicApi = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), publicAuthService, FamilyE2eeManager())
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"version_code": 42}"""))
 
         val version = publicApi.getLatestAppVersionCode()

@@ -86,6 +86,14 @@ object FamilyNotificationService {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // AUD-CHAT1: um envelope E2EE bruto (ex.: casando com '{"v":1,...}') pode
+        // chegar aqui quando a mensagem ainda não pôde ser decifrada. Em hipótese
+        // nenhuma exibimos a chave/ciphertext na barra de notificações.
+        val rawPrefix = messageText.trimStart()
+        val displayText =
+            if (messageText.isNotBlank() && rawPrefix.startsWith("{\"v\":")) "Nova mensagem criptografada."
+            else messageText
+
         val builder = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
             .setSmallIcon(R.drawable.ic_shield_ecg)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -95,11 +103,11 @@ object FamilyNotificationService {
                 .setContentText("Você recebeu uma mensagem da família.")
                 .build())
             .setContentTitle("Mensagem de $senderName")
-            .setContentText(messageText)
+            .setContentText(displayText)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(messageText))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(displayText))
 
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
