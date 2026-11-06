@@ -7,6 +7,7 @@ import br.com.bragasaude.data.remote.model.RemoteProfile
 import br.com.bragasaude.data.remote.repository.ProfileRepository
 import br.com.bragasaude.data.remote.repository.VitalsRepository
 import br.com.bragasaude.domain.HealthEngine
+import br.com.bragasaude.domain.VitalSaveStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -59,11 +60,30 @@ class VitalSignsViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
+    // DT-052: desfecho do último salvamento — alimenta o chip de sincronização
+    // ("Salvando…" -> "Enviado à nuvem ✓" / "Aguardando rede").
+    private val _saveStatus = MutableStateFlow<VitalSaveStatus?>(null)
+    val saveStatus = _saveStatus.asStateFlow()
+
     init {
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         viewModelScope.launch {
             repository.getVitalSigns(userId).collectLatest { entities ->
                 _allVitals.value = entities.map { it.toRemote() }
+            }
+        }
+        // DT-052: Room vazio (wipe/troca de conta) precisa puxar o histórico da
+        // nuvem ao abrir a tela; syncUserData é throttled internamente e não
+        // bloqueia a UI (o Room observa e atualiza sozinho).
+        if (userId != BragaConstants.GUEST_UID) {
+            viewModelScope.launch {
+                try {
+                    if (repository.getVitalSignsSync(userId).isEmpty()) {
+                        syncManager.syncUserData(userId, force = false)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("VitalSignsVM", "Sync ao abrir a tela de vitais falhou: ${e.message}")
+                }
             }
         }
     }
@@ -87,7 +107,15 @@ class VitalSignsViewModel @Inject constructor(
                     glucoseType = if (glucose > 0) "jejum" else null // Default
                 )
 
-                repository.saveVitalSigns(listOf(vital))
+                _saveStatus.value = VitalSaveStatus.SAVING
+                val synced = repository.saveVitalSigns(listOf(vital))
+                _saveStatus.value = if (userId != BragaConstants.GUEST_UID && synced.all { it }) {
+                    VitalSaveStatus.SYNCED
+                } else if (userId == BragaConstants.GUEST_UID) {
+                    null // convidado não tem nuvem — sem indicador de sync
+                } else {
+                    VitalSaveStatus.PENDING_RETRY
+                }
                 
                 // ACIONA O CÉREBRO (HEALTH ENGINE)
                 val analysis = healthEngine.analyzeVitals(userId, listOf(vital))

@@ -270,9 +270,12 @@ class BragaApiClient @Inject constructor(
         }
     }
 
-    suspend fun getVitalSigns(userId: String): List<RemoteVitalSign> = withContext(Dispatchers.IO) {
+    // DT-052: retorna null em falha de rede/contrato (NUNCA lista vazia) — o
+    // SyncManager precisa distinguir "não há novidades" de "não consegui baixar"
+    // para não avançar o cursor de delta sync e perder registros silenciosamente.
+    suspend fun getVitalSigns(userId: String): List<RemoteVitalSign>? = withContext(Dispatchers.IO) {
         try {
-            val arr = getJsonArray("$baseUrl/api/vitals/$userId") ?: return@withContext emptyList()
+            val arr = getJsonArray("$baseUrl/api/vitals/$userId") ?: return@withContext null
             val list = mutableListOf<RemoteVitalSign>()
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
@@ -297,7 +300,7 @@ class BragaApiClient @Inject constructor(
             return@withContext list
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao buscar sinais vitais do servidor: ${e.message}")
-            return@withContext emptyList()
+            return@withContext null
         }
     }
 
@@ -325,9 +328,10 @@ class BragaApiClient @Inject constructor(
         }
     }
 
-    suspend fun getDailyMetrics(userId: String, days: Int = 30): List<DailyMetricsEntity> = withContext(Dispatchers.IO) {
+    // DT-052: mesma regra dos vitais — falha de rede devolve null, não lista vazia.
+    suspend fun getDailyMetrics(userId: String, days: Int = 30): List<DailyMetricsEntity>? = withContext(Dispatchers.IO) {
         try {
-            val arr = getJsonArray("$baseUrl/api/metrics/daily/$userId?days=$days") ?: return@withContext emptyList()
+            val arr = getJsonArray("$baseUrl/api/metrics/daily/$userId?days=$days") ?: return@withContext null
             val list = mutableListOf<DailyMetricsEntity>()
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
@@ -360,7 +364,7 @@ class BragaApiClient @Inject constructor(
             list
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao buscar métricas diárias do servidor: ${e.message}")
-            emptyList()
+            null
         }
     }
 

@@ -53,7 +53,7 @@ class DailyMetricsApiTest {
             ]
         """.trimIndent()
         server.enqueue(MockResponse().setResponseCode(200).setBody(json))
-        val metrics = api.getDailyMetrics("user123")
+        val metrics = requireNotNull(api.getDailyMetrics("user123")) { "métricas deveriam ter sido baixadas" }
         assertEquals(1, metrics.size)
         val m = metrics.first()
         assertEquals("user123", m.userId)
@@ -64,9 +64,11 @@ class DailyMetricsApiTest {
         assertFalse(m.pendingSync)
     }
 
-    @Test fun testGetDailyMetricsEmptyOnError() = runBlocking {
+    @Test fun testGetDailyMetricsNullOnError() = runBlocking {
+        // DT-052: falha de rede/HTTP agora é null (não lista vazia) para o
+        // SyncManager não confundir "sem dados" com "não consegui baixar".
         server.enqueue(MockResponse().setResponseCode(500))
         val metrics = api.getDailyMetrics("user123")
-        assertTrue(metrics.isEmpty())
+        assertNull(metrics)
     }
 }

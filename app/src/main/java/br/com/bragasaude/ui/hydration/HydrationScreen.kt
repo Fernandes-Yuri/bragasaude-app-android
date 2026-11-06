@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import br.com.bragasaude.domain.VitalSaveStatus
 import br.com.bragasaude.ui.components.MetricInfoBottomSheet
 import br.com.bragasaude.ui.components.MetricInfoCatalog
 import br.com.bragasaude.ui.theme.Success
@@ -63,6 +64,8 @@ fun HydrationScreen(
     val todayLogs by viewModel.todayLogs.collectAsState()
     val hydrationHistory by viewModel.hydrationHistory.collectAsState()
     val isReminderEnabled by viewModel.isReminderEnabled.collectAsState()
+    // DT-052: indicador de sincronização do último registro de água.
+    val saveStatus by viewModel.saveStatus.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     var showCustomDialog by remember { mutableStateOf(false) }
@@ -250,6 +253,11 @@ fun HydrationScreen(
                         WaterQuickButton(label = "+500 ml", painter = painterResource(br.com.bragasaude.R.drawable.ic_water_bottle), sub = "Garrafa") {
                             viewModel.addWater(500)
                         }
+                    }
+
+                    saveStatus?.let { status ->
+                        Spacer(Modifier.height(10.dp))
+                        HydrationSaveStatusChip(status)
                     }
                 }
             }
@@ -710,4 +718,36 @@ private fun WaterQuickButton(
 @Composable
 private fun WaterQuickButton(label: String, icon: ImageVector, sub: String, onClick: () -> Unit) {
     WaterQuickButton(label, rememberVectorPainter(icon), sub, onClick)
+}
+
+/**
+ * DT-052: chip discreto de sincronização do último registro de água.
+ */
+@Composable
+private fun HydrationSaveStatusChip(status: VitalSaveStatus) {
+    val label: String
+    val dotColor: Color
+    when (status) {
+        VitalSaveStatus.SAVING -> {
+            label = "Salvando…"
+            dotColor = MaterialTheme.colorScheme.onSurfaceVariant
+        }
+        VitalSaveStatus.SYNCED -> {
+            label = "Enviado à nuvem ✓"
+            dotColor = Success
+        }
+        VitalSaveStatus.PENDING_RETRY -> {
+            label = "Aguardando rede (envio automático)"
+            dotColor = Color(0xFFB26B00)
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(dotColor))
+        Spacer(Modifier.width(8.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = dotColor)
+    }
 }
