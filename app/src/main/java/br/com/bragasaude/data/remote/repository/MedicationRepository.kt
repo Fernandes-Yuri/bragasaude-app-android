@@ -75,7 +75,9 @@ class MedicationRepository @Inject constructor(
         val entity = med.toEntity().copy(pendingSync = true)
         medicationDao.insert(entity)
 
-        // Re-agendar todos os alarmes do usuário após inserir/atualizar
+        // #21: alarmes legados por medicamento estão desativados. Aqui apenas
+        // limpamos órfãos de versões antigas; o agendamento canônico é o CareOS
+        // (MedicationDoseRepository.refresh/reschedule via syncAlarmsWithDatabase).
         syncAlarmsWithDatabase(entity.userId)
         triggerSync()
 
@@ -156,7 +158,8 @@ class MedicationRepository @Inject constructor(
 
     /**
      * Atualiza os horários e contexto alimentar de um medicamento (Care OS SaMD).
-     * Reagenda as notificações inteligentes (15m antes + hora exata).
+     * #21: não agenda mais alarmes por medicamento; limpa resíduos legados e deixa
+     * o agendamento canônico com o CareOS DoseAlarmScheduler (via syncAlarmsWithDatabase).
      */
     suspend fun updateMedicationSchedule(
         patientId: String,
@@ -217,9 +220,11 @@ class MedicationRepository @Inject constructor(
     }
 
     /**
-     * TASK-MED-02: sincroniza alarmes do AlarmManager com o banco local.
-     * Cancela TODOS os alarmes do usuário e reagenda baseado nos medicamentos atuais.
-     * Garante consistência após inserir, atualizar ou remover medicamentos.
+     * TASK-MED-02: limpa alarmes/notificações legados órfãos e delega o agendamento
+     * canônico ao CareOS (MedicationDoseRepository.refresh/reschedule).
+     *
+     * #21: nenhum alarme por medicamento é agendado aqui; o MedicationNotificationScheduler
+     * legado está desativado e só permanece a API de cancelamento.
      */
     suspend fun syncAlarmsWithDatabase(userId: String) = withContext(Dispatchers.IO) {
         try {

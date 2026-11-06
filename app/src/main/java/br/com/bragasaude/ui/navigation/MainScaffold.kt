@@ -41,6 +41,8 @@ fun MainScaffold(
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    // #31/#13: a conversa familiar usa a tela inteira e esconde a barra global.
+    val showBottomBar = shouldShowBottomBar(currentRoute)
     val appContext = LocalContext.current.applicationContext
     val orbEnabled = shouldShowAssistantOrb(currentRoute) &&
         AppPreferences.isVoiceAssistantEnabled(appContext)
@@ -79,34 +81,36 @@ fun MainScaffold(
             modifier = Modifier.fillMaxSize(),
             contentWindowInsets = WindowInsets.safeDrawing,
             bottomBar = {
-                NavigationBar(
-                    modifier = Modifier.height(64.dp),
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 0.dp
-                ) {
-                    navItems.forEach { item ->
-                        val selected = isCurrentRoute(currentRoute, item.route)
-                        NavigationBarItem(
-                            icon = { Icon(item.icon, contentDescription = item.label) },
-                            label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
-                            selected = selected,
-                            onClick = {
-                                navController.navigate(item.route) {
-                                    popUpTo(navController.graph.startDestinationId) {
-                                        inclusive = false
+                if (showBottomBar) {
+                    NavigationBar(
+                        modifier = Modifier.height(64.dp),
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 0.dp
+                    ) {
+                        navItems.forEach { item ->
+                            val selected = isCurrentRoute(currentRoute, item.route)
+                            NavigationBarItem(
+                                icon = { Icon(item.icon, contentDescription = item.label) },
+                                label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
+                                selected = selected,
+                                onClick = {
+                                    navController.navigate(item.route) {
+                                        popUpTo(navController.graph.startDestinationId) {
+                                            inclusive = false
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                unselectedIconColor = MaterialTheme.colorScheme.outline,
-                                unselectedTextColor = MaterialTheme.colorScheme.outline,
-                                indicatorColor = androidx.compose.ui.graphics.Color.Transparent
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    unselectedIconColor = MaterialTheme.colorScheme.outline,
+                                    unselectedTextColor = MaterialTheme.colorScheme.outline,
+                                    indicatorColor = androidx.compose.ui.graphics.Color.Transparent
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
@@ -163,6 +167,16 @@ internal fun isCurrentRoute(currentRoute: String?, screen: Screen): Boolean {
            withoutArgs.endsWith(".$simpleName") ||
            withoutArgs.endsWith("\$$simpleName")
 }
+
+
+/**
+ * A barra de navegação global fica oculta na conversa familiar (#31/#13):
+ * o chat precisa da tela inteira para as mensagens e os atalhos do rodapé.
+ * As demais rotas continuam exibindo a barra — inclusive OrbChat, que é
+ * destino da própria barra e não pode perder o item selecionado.
+ */
+internal fun shouldShowBottomBar(currentRoute: String?): Boolean =
+    !isCurrentRoute(currentRoute, Screen.FamilyChat())
 
 
 /** Telas novas começam sem sobreposição, até uma decisão explícita de produto. */

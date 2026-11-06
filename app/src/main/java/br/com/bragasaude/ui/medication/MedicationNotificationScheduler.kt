@@ -11,18 +11,25 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import br.com.bragasaude.MainActivity
 import br.com.bragasaude.data.local.MedicationEntity
-import br.com.bragasaude.domain.MedicationSchedule
 import br.com.bragasaude.ui.util.MedicationAlarmReceiver
-import java.util.Calendar
 
 /**
- * Motor Próprio de Notificações Inteligentes e Afetuosas de Medicamentos.
+ * APIs legadas de notificação de medicamentos por medicamento (canal [CHANNEL_ID]).
  *
- * Dispara dois momentos para cada dose configurada:
- * 1) 15 minutos ANTES do horário da dose (lembrete afetuoso preventivo).
- * 2) No HORÁRIO EXATO da dose (com ações imediatas "Já Tomei" e "Lembrar em 10 min").
+ * #21: o AGENDAMENTO legado está formalmente desativado. A fonte única de verdade
+ * de lembretes de medicação é o CareOS
+ * [br.com.bragasaude.ui.medication.doses.DoseAlarmScheduler], que agrupa alarmes
+ * por ator/paciente/horário (canal `medication_dose_groups`) e é reconciliado por
+ * `MedicationDoseRepository.refresh`/`reschedule`.
  *
- * Utiliza AlarmManager.setExactAndAllowWhileIdle e canal de alta prioridade.
+ * Nenhum caminho do app cria novos alarmes por medicamento: [scheduleMedicationNotifications]
+ * e [rescheduleAll] são no-op (apenas log). O que permanece ativo aqui é somente o
+ * necessário para encerrar/limpar resíduos de versões antigas e atender PendingIntents
+ * já persistidos no SO:
+ * - [cancelMedicationAlarms] (limpeza de alarmes/notificações órfãos);
+ * - [dismissDoseNotification] e [exactNotificationId] (contrato de dismiss/testes);
+ * - [createNotificationChannel], [showPreDoseNotification] e [showExactDoseNotification].
+ *
  * Conformidade com AUD-AN02: ZERO emojis em strings de UI.
  */
 object MedicationNotificationScheduler {
@@ -33,6 +40,8 @@ object MedicationNotificationScheduler {
     const val CHANNEL_NAME = "Lembretes de Medicamentos"
     const val CHANNEL_DESC = "Avisos prévios e alarmes na hora certa para medicação"
 
+    // Constantes legadas mantidas apenas por compatibilidade; o pré-aviso canônico
+    // agora é controlado pelo DoseAlarmScheduler (`dose_preferences/pre_alert`).
     const val PRE_ALERT_MINUTES = 15
     const val SNOOZE_MINUTES = 10
 
@@ -67,81 +76,16 @@ object MedicationNotificationScheduler {
     }
 
     /**
-     * Agenda as notificações de um medicamento (15 min antes + hora exata) para todos os horários cadastrados.
+     * Agendamento legado DESATIVADO (#21).
+     *
+     * No-op proposital: NÃO cria PendingIntent nem chama AlarmManager.setExact/
+     * setExactAndAllowWhileIdle. O agendador canônico e único é o CareOS
+     * [br.com.bragasaude.ui.medication.doses.DoseAlarmScheduler], reconciliado por
+     * `MedicationDoseRepository.refresh`/`reschedule`.
      */
+    @Deprecated("Agendamento legado desativado; use DoseAlarmScheduler (CareOS)")
     fun scheduleMedicationNotifications(context: Context, medication: MedicationEntity) {
-        createNotificationChannel(context)
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-
-        val times = MedicationSchedule.times(medication.scheduleTimes, medication.scheduleTime)
-        val now = System.currentTimeMillis()
-        val dosage = medication.dosage ?: medication.dosageMg?.let { "${it}mg" } ?: ""
-
-        for (time in times) {
-            val parts = time.split(":")
-            if (parts.size != 2) continue
-            val hour = parts[0].toIntOrNull() ?: continue
-            val minute = parts[1].toIntOrNull() ?: continue
-
-            // 1) Próximo horário exato da dose
-            val doseCal = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, hour)
-                set(Calendar.MINUTE, minute)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-                if (timeInMillis <= now) {
-                    add(Calendar.DAY_OF_YEAR, 1)
-                }
-            }
-            val doseTimeMillis = doseCal.timeInMillis
-            val scheduledDate = java.time.Instant.ofEpochMilli(doseTimeMillis)
-                .atZone(java.time.ZoneId.systemDefault())
-                .toLocalDate()
-            val doseKey = "${scheduledDate}T$time"
-
-            // Alarme exato da dose
-            val exactIntent = Intent(context, MedicationAlarmReceiver::class.java).apply {
-                action = MedicationAlarmReceiver.ACTION_MED_REMINDER
-                putExtra(MedicationAlarmReceiver.EXTRA_MED_ID, medication.id)
-                putExtra(MedicationAlarmReceiver.EXTRA_MED_NAME, medication.name)
-                putExtra(MedicationAlarmReceiver.EXTRA_DOSAGE, dosage)
-                putExtra(MedicationAlarmReceiver.EXTRA_USER_ID, medication.userId)
-                putExtra("schedule_time", time)
-                putExtra("scheduled_for", doseKey)
-            }
-            val exactCode = "${medication.id}_exact_$time".hashCode()
-            val exactPending = PendingIntent.getBroadcast(
-                context,
-                exactCode,
-                exactIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            scheduleExact(alarmManager, doseTimeMillis, exactPending)
-
-            // 2) Alarme preventivo afetuoso: 15 minutos antes da dose
-            val preTimeMillis = doseTimeMillis - (PRE_ALERT_MINUTES * 60 * 1000)
-            if (preTimeMillis > now) {
-                val preIntent = Intent(context, MedicationAlarmReceiver::class.java).apply {
-                    action = MedicationAlarmReceiver.ACTION_MED_PRE_REMINDER
-                    putExtra(MedicationAlarmReceiver.EXTRA_MED_ID, medication.id)
-                    putExtra(MedicationAlarmReceiver.EXTRA_MED_NAME, medication.name)
-                    putExtra(MedicationAlarmReceiver.EXTRA_DOSAGE, dosage)
-                    putExtra(MedicationAlarmReceiver.EXTRA_USER_ID, medication.userId)
-                    putExtra("schedule_time", time)
-                    putExtra("scheduled_for", doseKey)
-                }
-                val preCode = "${medication.id}_pre_$time".hashCode()
-                val prePending = PendingIntent.getBroadcast(
-                    context,
-                    preCode,
-                    preIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                scheduleExact(alarmManager, preTimeMillis, prePending)
-            }
-
-            Log.d(TAG, "Notificações agendadas para ${medication.name} às $time (dose e pré-aviso 15m)")
-        }
+        Log.w(TAG, "scheduleMedicationNotifications ignorado: agendamento legado desativado; use DoseAlarmScheduler (CareOS) [${medication.name}]")
     }
 
     /**
@@ -197,14 +141,16 @@ object MedicationNotificationScheduler {
     }
 
     /**
-     * Resincroniza todos os alarmes de uma lista de medicamentos.
+     * Resincronização legada DESATIVADA (#21).
+     *
+     * No-op proposital: NÃO cancela nem cria alarmes por medicamento. A
+     * reconciliação canônica é feita pelo CareOS
+     * [br.com.bragasaude.ui.medication.doses.DoseAlarmScheduler]; a limpeza de
+     * resíduos antigos acontece via [cancelMedicationAlarms].
      */
+    @Deprecated("Agendamento legado desativado; use DoseAlarmScheduler (CareOS)")
     fun rescheduleAll(context: Context, medications: List<MedicationEntity>) {
-        createNotificationChannel(context)
-        for (med in medications) {
-            cancelMedicationAlarms(context, med.id)
-            scheduleMedicationNotifications(context, med)
-        }
+        Log.w(TAG, "rescheduleAll ignorado: agendamento legado desativado; use DoseAlarmScheduler (CareOS) [${medications.size} medicamento(s)]")
     }
 
     /**
@@ -321,33 +267,5 @@ object MedicationNotificationScheduler {
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         notificationManager?.notify(notifId, notification)
-    }
-
-    private fun scheduleExact(
-        alarmManager: AlarmManager,
-        triggerAtMillis: Long,
-        pendingIntent: PendingIntent
-    ) {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    triggerAtMillis,
-                    pendingIntent
-                )
-            } else {
-                alarmManager.setExact(
-                    AlarmManager.RTC_WAKEUP,
-                    triggerAtMillis,
-                    pendingIntent
-                )
-            }
-        } catch (_: SecurityException) {
-            alarmManager.setAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                triggerAtMillis,
-                pendingIntent
-            )
-        }
     }
 }

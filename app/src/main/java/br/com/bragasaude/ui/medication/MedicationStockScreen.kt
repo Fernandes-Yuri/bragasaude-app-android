@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import android.content.Intent
 import android.provider.CalendarContract
@@ -42,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,6 +51,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.local.MedicationEntity
 import br.com.bragasaude.data.medicationdoses.medicationStockDose
 import br.com.bragasaude.data.medicationdoses.MedicationStockDose
+import br.com.bragasaude.data.util.HealthFormatter
 import br.com.bragasaude.ui.medication.doses.MedicationDoseViewModel
 import java.time.Instant
 import br.com.bragasaude.domain.MedicationSchedule
@@ -722,7 +725,7 @@ private fun ManualMedicationDialog(
 
                 OutlinedTextField(
                     value = scheduleTimeText,
-                    onValueChange = { scheduleTimeText = it },
+                    onValueChange = { scheduleTimeText = HealthFormatter.formatTimeListInput(it) },
                     label = { Text("Horários da rotina (ex: 08:00, 20:00) *") },
                     placeholder = { Text("08:00") },
                     singleLine = true,
@@ -1522,13 +1525,11 @@ private fun EditScheduleSheet(
             ) {
                 OutlinedTextField(
                     value = newTimeText,
-                    onValueChange = {
-                        val filtered = it.filter { c -> c.isDigit() || c == ':' }.take(5)
-                        newTimeText = filtered
-                    },
+                    onValueChange = { newTimeText = HealthFormatter.formatTimeInput(it) },
                     label = { Text("Novo horário (HH:mm)") },
                     placeholder = { Text("14:00") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f)
                 )
                 Button(

@@ -59,16 +59,22 @@ fun VitalSignsScreen(
     initialValue: String? = null, // ex: "120/80" ou "105"
     onBack: () -> Unit
 ) {
+    // #17: initialType apenas define a aba inicial. Depois disso, a aba
+    // selecionada passa a ser a única fonte da verdade do tipo em edição.
+    val initialTab = when (initialType) {
+        "GLUCOSE" -> 1
+        else -> 0
+    }
     var systolicInput by remember(initialValue) {
-        mutableStateOf(if (initialType != "GLUCOSE" && initialValue != null) initialValue.substringBefore("/") else "")
+        mutableStateOf(if (initialTab == 0 && initialValue != null) initialValue.substringBefore("/") else "")
     }
     var diastolicInput by remember(initialValue) {
-        mutableStateOf(if (initialType != "GLUCOSE" && initialValue != null && initialValue.contains("/")) initialValue.substringAfter("/") else "")
+        mutableStateOf(if (initialTab == 0 && initialValue != null && initialValue.contains("/")) initialValue.substringAfter("/") else "")
     }
     // D-VIT1: formato "120/80" derivado dos dois campos numericos separados.
     val bloodPressure = remember(systolicInput, diastolicInput) { "$systolicInput/$diastolicInput" }
     var glucose by remember(initialValue) { 
-        mutableStateOf(if (initialType == "GLUCOSE" && initialValue != null) initialValue else "") 
+        mutableStateOf(if (initialTab == 1 && initialValue != null) initialValue else "")
     }
     var hydration by remember { mutableStateOf("") }
 
@@ -79,14 +85,8 @@ fun VitalSignsScreen(
     // eventos de emergência eram descartados silenciosamente.
     var sosMessage by remember { mutableStateOf<String?>(null) }
     
-    var selectedTab by remember { 
-        mutableIntStateOf(
-            when (initialType) {
-                "GLUCOSE" -> 1
-                else -> 0
-            }
-        ) 
-    }
+    // Apenas posição inicial; a troca de aba fica sempre livre em runtime.
+    var selectedTab by remember { mutableIntStateOf(initialTab) }
 
     var voiceHint by remember { mutableStateOf<String?>(null) }
     val voiceLauncher = rememberVoiceInputLauncher { transcription ->
@@ -107,7 +107,10 @@ fun VitalSignsScreen(
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
 
-    val currentType = initialType ?: when(selectedTab) {
+    // #17: a aba selecionada é a única fonte da verdade do tipo em edição.
+    // initialType apenas define a aba inicial; a troca de aba precisa refletir
+    // imediatamente no banner, no formulário, no gráfico e no histórico.
+    val currentType = when (selectedTab) {
         0 -> "PRESSURE"
         else -> "GLUCOSE"
     }
@@ -165,7 +168,9 @@ fun VitalSignsScreen(
         containerColor = BragaBackground,
         topBar = {
             Column {
-                val bannerTitle = when(initialType) {
+                // O banner acompanha a aba ativa, inclusive quando a tela foi
+                // aberta por um atalho com initialType predefinido.
+                val bannerTitle = when (currentType) {
                     "PRESSURE" -> "Registrar Pressão"
                     "GLUCOSE" -> "Registrar Glicose"
                     else -> "Registrar Sinais Vitais"
@@ -175,22 +180,22 @@ fun VitalSignsScreen(
                     subtitle = "Informações de autocuidado",
                     onBack = onBack
                 )
-                if (initialType == null) {
-                    SecondaryTabRow(
-                        selectedTabIndex = selectedTab,
-                        containerColor = BragaMint.copy(alpha = 0.6f)
-                    ) {
-                        Tab(
-                            selected = selectedTab == 0,
-                            onClick = { selectedTab = 0 },
-                            text = { Text("Pressão", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 0) BragaEmerald else BragaTextSecondary) }
-                        )
-                        Tab(
-                            selected = selectedTab == 1,
-                            onClick = { selectedTab = 1 },
-                            text = { Text("Glicose", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 1) BragaEmerald else BragaTextSecondary) }
-                        )
-                    }
+                // As abas ficam sempre disponíveis: initialType não trava mais
+                // a seleção (era um gate `if (initialType == null)`).
+                SecondaryTabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = BragaMint.copy(alpha = 0.6f)
+                ) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Pressão", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 0) BragaEmerald else BragaTextSecondary) }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Glicose", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 1) BragaEmerald else BragaTextSecondary) }
+                    )
                 }
             }
         }
