@@ -174,6 +174,13 @@ class VoiceHealthViewModel @Inject constructor(
 
     private var speechRecognizer: SpeechRecognizer? = null
     private var currentContext: Context? = null
+    /**
+     * Só fica `true` depois de [SpeechRecognizer.startListening] concluído com sucesso
+     * e é resetado em destroyRecognizer/onResults/onError/cancel/onCleared. Evita
+     * chamar stopListening()/destroy() num recognizer já desconectado pelo SO
+     * ("SpeechRecognizer: not connected to the recognition service").
+     */
+    private var recognitionActive = false
 
     init {
         auth.addAuthStateListener(authStateListener)
@@ -211,10 +218,18 @@ class VoiceHealthViewModel @Inject constructor(
     private fun destroyRecognizer() {
         recognitionJob?.cancel()
         recognitionJob = null
+        recognitionActive = false
+        // Anula o campo ANTES de cancel/destroy: callbacks e reentrâncias já não
+        // enxergam o recognizer e a segunda chamada vira no-op (idempotente).
         val previous = speechRecognizer
         speechRecognizer = null
-        runCatching { previous?.cancel() }
-        runCatching { previous?.destroy() }
+        if (previous == null) return
+        runCatching { previous.cancel() }.onFailure {
+            android.util.Log.w("VoiceHealthVM", "Falha ao cancelar o reconhecimento de voz: ${it.message}")
+        }
+        runCatching { previous.destroy() }.onFailure {
+            android.util.Log.w("VoiceHealthVM", "Falha ao destruir o reconhecimento de voz: ${it.message}")
+        }
     }
 
     private fun invalidateConversationWork() {
@@ -365,6 +380,8 @@ class VoiceHealthViewModel @Inject constructor(
                 if (!_isLiveMode.value || !voiceSession.accepts(listenTicket) || !currentTurn(owner, turn)) return@launch
                 android.util.Log.i("VoiceHealthVM", "Iniciando reconhecimento de voz on-device em português brasileiro")
                 localRecognizer.startListening(request)
+                // Marca escuta ativa SÓ depois do startListening bem-sucedido.
+                recognitionActive = true
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -386,9 +403,20 @@ class VoiceHealthViewModel @Inject constructor(
      * Para a escuta manualmente quando a pessoa encerra a captura.
      */
     fun stopListening() {
-        try {
-            speechRecognizer?.stopListening()
-        } catch (_: Exception) { }
+        stopRecognitionSafely()
+    }
+
+    /**
+     * Para a captura sem tocar um SpeechRecognizer já desconectado pelo SO.
+     * Nunca relança: falha aqui é apenas ruído de ciclo de vida.
+     */
+    private fun stopRecognitionSafely() {
+        val recognizer = speechRecognizer ?: return
+        if (!recognitionActive) return
+        recognitionActive = false
+        runCatching { recognizer.stopListening() }.onFailure {
+            android.util.Log.w("VoiceHealthVM", "Falha ao parar o reconhecimento de voz: ${it.message}")
+        }
     }
 
     /**
@@ -399,6 +427,7 @@ class VoiceHealthViewModel @Inject constructor(
     /** Cancela reconhecimento, geração e áudio sem permitir callbacks de sessões anteriores. */
     fun cancel() {
         _isLiveMode.value = false
+        recognitionActive = false
         invalidateConversationWork()
         voiceSession.reset()
         conversationMemory.clear()
@@ -482,10 +511,8 @@ class VoiceHealthViewModel @Inject constructor(
         stopLiveMode()
         auth.removeAuthStateListener(authStateListener)
         super.onCleared()
-        try {
-            speechRecognizer?.destroy()
-        } catch (_: Exception) { }
-        speechRecognizer = null
+        // Caminho único de descarte: idempotente, sem destroy duplicado direto.
+        destroyRecognizer()
         try {
             neuralAudioPlayer.stop()
         } catch (_: Exception) { }
@@ -514,6 +541,8 @@ class VoiceHealthViewModel @Inject constructor(
 
         override fun onError(error: Int) {
             if (!current()) return
+            // O reconhecedor encerrou a escuta: o próximo stopListening() não deve tocar nele.
+            recognitionActive = false
             android.util.Log.w("VoiceHealthVM", "VoiceRecognitionListener.onError code=$error isLiveMode=${_isLiveMode.value}")
             if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || error == SpeechRecognizer.ERROR_NO_MATCH) {
                 if (voiceSession.consume(ticket)) handleSilence()
@@ -526,7 +555,10 @@ class VoiceHealthViewModel @Inject constructor(
         }
 
         override fun onResults(results: Bundle?) {
-            if (!current() || !voiceSession.consume(ticket)) return
+            if (!current()) return
+            // Resultado entregue: a escuta terminou no lado do reconhecedor.
+            recognitionActive = false
+            if (!voiceSession.consume(ticket)) return
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val bestMatch = matches?.firstOrNull()
 

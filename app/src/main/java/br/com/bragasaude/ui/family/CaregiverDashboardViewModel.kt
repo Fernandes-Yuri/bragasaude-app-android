@@ -92,6 +92,10 @@ class CaregiverDashboardViewModel @Inject constructor(
             launch {
                 try {
                     familyRepository.syncBindingsForCaregiver(caregiverUid)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    // Troca de conta/tela não é falha de sync: propaga o cancelamento
+                    // para não gerar o falso aviso "StandaloneCoroutine was cancelled".
+                    throw e
                 } catch (e: Exception) {
                     android.util.Log.w("CaregiverDashboardVM", "Falha ao sincronizar vínculos do cuidador: ${e.message}")
                 }
@@ -372,6 +376,8 @@ class CaregiverDashboardViewModel @Inject constructor(
             viewModelScope.launch {
                 try {
                     familyRepository.syncBindingsForCaregiver(uid)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     android.util.Log.e("CaregiverDashboardVM", "Erro ao sincronizar vínculos no refresh: ${e.message}")
                 }
@@ -382,6 +388,8 @@ class CaregiverDashboardViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 familyRepository.syncPatientDataForCaregiver(currentPatientId)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e("CaregiverDashboardVM", "Erro ao sincronizar dados do paciente: ${e.message}")
             }

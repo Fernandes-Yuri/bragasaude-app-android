@@ -86,6 +86,12 @@ class FamilyBridgeRepository @Inject constructor(
     // AUD-AN22: escopo único para o ticker de purga compartilhado.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    // Etapa 5 (item 3): a purga LGPD dispara apenas na TRANSIÇÃO ACTIVE -> não-ACTIVE.
+    // Defesa extra: guarda em memória dos patientIds já purgados nesta sessão, para
+    // nunca reemitir os mesmos DELETEs (locks Room/JNI) a cada ciclo de sync. É
+    // limpa quando o vínculo volta a ACTIVE (acesso legítimo recuperado).
+    private val purgedPatientIds: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
     // ==================== VÍNCULOS FAMILIARES ====================
 
     fun generateConnectionCode(): String {
@@ -209,13 +215,20 @@ class FamilyBridgeRepository @Inject constructor(
     }
 
     suspend fun purgePatientDataFromCache(patientUserId: String) {
+        if (patientUserId.isBlank()) return
+        // Defesa extra: nada a deletar se este paciente já foi purgado nesta sessão.
+        if (purgedPatientIds.contains(patientUserId)) return
         try {
             e2eeManager.clearKeysForPatient(patientUserId)
             vitalSignDao.deleteByUserId(patientUserId)
             dailyMetricsDao.deleteByUserId(patientUserId)
             familyDao.deleteMessagesForPatient(patientUserId)
             profileDao.deleteProfile(patientUserId)
+            purgedPatientIds.add(patientUserId)
+            // Log apenas quando houve purga de fato.
             android.util.Log.d("FamilyBridgeRepo", "Purga LGPD concluída com sucesso para dados do paciente")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("FamilyBridgeRepo", "Erro ao executar purga LGPD de dados médicos: ${e.message}")
         }
@@ -241,11 +254,18 @@ class FamilyBridgeRepository @Inject constructor(
             val list = apiClient.getFamilyBindings(patientUserId)
             list.forEach { item ->
                 if (item.status == "ACTIVE") {
+                    // Vínculo reativado: libera a guarda para que uma futura revogação purge de novo.
+                    purgedPatientIds.remove(item.patientUserId)
                     familyDao.deletePendingBindingsByCode(item.connectionCode)
                 }
+                // Estado local é capturado ANTES do insert: a purga LGPD só pode
+                // disparar na transição ACTIVE -> não-ACTIVE, nunca em PENDING/
+                // EXPIRED/REVOKED já vistos em ciclos anteriores.
                 val local = familyDao.getBindingById(item.id)
+                val wasActive = local?.status == "ACTIVE"
                 if (local?.pendingSync != true) familyDao.insertBinding(item)
-                if (item.status != "ACTIVE" && item.caregiverUserId == auth.currentUser?.uid && item.patientUserId != auth.currentUser?.uid) {
+                if (wasActive && item.status != "ACTIVE" &&
+                    item.caregiverUserId == auth.currentUser?.uid && item.patientUserId != auth.currentUser?.uid) {
                     purgePatientDataFromCache(item.patientUserId)
                 }
             }
@@ -261,9 +281,17 @@ class FamilyBridgeRepository @Inject constructor(
         try {
             val list = apiClient.getFamilyBindings(caregiverUserId)
             list.forEach { item ->
+                if (item.status == "ACTIVE") {
+                    // Vínculo reativado: libera a guarda para que uma futura revogação purge de novo.
+                    purgedPatientIds.remove(item.patientUserId)
+                }
+                // Estado local é capturado ANTES do insert: purga apenas na transição
+                // ACTIVE -> não-ACTIVE (evita DELETEs repetidos a cada ciclo de sync).
                 val local = familyDao.getBindingById(item.id)
+                val wasActive = local?.status == "ACTIVE"
                 if (local?.pendingSync != true) familyDao.insertBinding(item)
-                if (item.status != "ACTIVE" && item.caregiverUserId == auth.currentUser?.uid && item.patientUserId != auth.currentUser?.uid) {
+                if (wasActive && item.status != "ACTIVE" &&
+                    item.caregiverUserId == auth.currentUser?.uid && item.patientUserId != auth.currentUser?.uid) {
                     purgePatientDataFromCache(item.patientUserId)
                 }
             }

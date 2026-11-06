@@ -11,13 +11,16 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.ui.profile.ProfileViewModel
@@ -70,10 +73,12 @@ internal fun EmergencyActionButtons(
                     contentColor = if (emotionalSupport) Color(0xFF451A03) else Color.White
                 )
             ) {
-                Icon(Icons.Default.Call, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(if (emotionalSupport) "Ligar para o CVV 188 (Apoio Emocional)"
-                    else "Ligar para o SAMU 192 (Urgência Médica)")
+                EmergencyActionLabel(
+                    icon = Icons.Default.Call,
+                    title = if (emotionalSupport) "Ligar para o CVV 188" else "Ligar para o SAMU 192",
+                    subtitle = if (emotionalSupport) "Apoio emocional 24h gratuito" else "Urgência e socorro médico",
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
         Button(
@@ -90,9 +95,12 @@ internal fun EmergencyActionButtons(
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = BragaEmeraldDark, contentColor = Color.White)
         ) {
-            Icon(Icons.Default.LocationOn, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Buscar UPA mais próxima (Google Maps)")
+            EmergencyActionLabel(
+                icon = Icons.Default.LocationOn,
+                title = "Buscar UPA mais próxima",
+                subtitle = "Pronto atendimento no Google Maps",
+                modifier = Modifier.fillMaxWidth()
+            )
         }
         if (!contactPhone.isNullOrBlank()) {
             OutlinedButton(
@@ -104,6 +112,40 @@ internal fun EmergencyActionButtons(
                 Spacer(Modifier.width(8.dp))
                 Text("Ligar para ${contactName?.takeIf { it.isNotBlank() } ?: "contato de emergência"}")
             }
+        }
+    }
+}
+
+/**
+ * Hierarquia de duas linhas usada nos botões de socorro: a primeira linha nomeia
+ * a ação e a segunda explica, em linguagem simples, para que ela serve. O texto
+ * quebra linha em vez de ser truncado, então funciona também com fonte ampliada.
+ */
+@Composable
+private fun EmergencyActionLabel(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier
+) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                color = LocalContentColor.current.copy(alpha = 0.9f)
+            )
         }
     }
 }
