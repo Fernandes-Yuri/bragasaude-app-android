@@ -71,9 +71,18 @@ class SyncManager @Inject constructor(
                 profileDao.cacheRemoteProfile(p.toEntity(), profileBeforeDownload)
             }
 
-            // 2. Vital Signs (Delta Sync baseado no último registro)
+            // 2. Vital Signs (Delta Sync autoritativo do servidor)
+            // DT-052: duas correções sobre o desvio AUD-AN29:
+            //  (a) falha de rede (null) NÃO pode parecer "sem novidades" — senão o
+            //      cursor avança e a janela de leituras é descartada para sempre;
+            //  (b) o cursor avança apenas até o MAIOR measuredAt efetivamente
+            //      persistido a partir da resposta do servidor — nunca para o
+            //      relógio do cliente (System.currentTimeMillis()).
+            // O ganho de dados do AUD-AN29 (não reprocessar a lista inteira) é
+            // preservado: o filtro estrito `>` pula tudo o que já foi persistido.
             val lastVitalsSync = if (fullSync) 0L else syncPreferences.getEntityLastSync(userId, "vitals")
             val remoteVitals = apiClient.getVitalSigns(userId)
+                ?: throw java.io.IOException("Falha ao baixar sinais vitais; cursor de sync preservado")
             val filteredVitals = if (lastVitalsSync > 0) {
                 remoteVitals.filter { v ->
                     val measured = v.measuredAt?.let { parseDate(it) }?.time ?: 0L
@@ -82,9 +91,11 @@ class SyncManager @Inject constructor(
             } else {
                 remoteVitals
             }
+            var maxVitalsMeasured = 0L
             if (filteredVitals.isNotEmpty()) {
                 filteredVitals.forEach { v ->
                     val measuredDate = v.measuredAt?.let { parseDate(it) } ?: Date()
+                    maxVitalsMeasured = maxOf(maxVitalsMeasured, measuredDate.time)
                     vitalSignDao.insert(
                         VitalSignEntity(
                             remoteId = v.id,
@@ -108,14 +119,12 @@ class SyncManager @Inject constructor(
                     )
                 }
                 vitalSignDao.deduplicateVitals()
-                syncPreferences.recordEntitySyncSuccess(userId, "vitals", nowUtc)
-            } else {
-                // AUD-AN29: o cursor só avançava quando havia resultados. Se
-                // nada mudou, o sync TEVE SUCESSO — mas como o cursor nunca
-                // avançava, a próxima execução baixava a lista COMPLETA de
-                // novo (filtro em memória sobre tudo). Custo de dados móveis
-                // a cada ciclo. Agora registramos o sucesso mesmo sem novidades.
-                syncPreferences.recordEntitySyncSuccess(userId, "vitals", nowUtc)
+            }
+            // Cursor = maior measuredAt persistido. Se nada novo chegou, mantém
+            // o cursor atual (estável, sem risco de pular leituras).
+            val newVitalsCursor = maxOf(lastVitalsSync, maxVitalsMeasured)
+            if (newVitalsCursor > lastVitalsSync) {
+                syncPreferences.recordEntitySyncSuccess(userId, "vitals", newVitalsCursor)
             }
 
             // Biometria compartilhada entre app e WhatsApp; cache por ID remoto.
@@ -125,8 +134,12 @@ class SyncManager @Inject constructor(
 
             // 3. Daily Metrics (Delta Sync)
             try {
+                // DT-052: getDailyMetrics devolve null em falha de rede — não
+                // registrar sucesso (o cursor não avança com dados ausentes).
                 val remoteMetrics = apiClient.getDailyMetrics(userId)
-                for (m in remoteMetrics) {
+                if (remoteMetrics == null) {
+                    android.util.Log.w(BragaConstants.SYNC_LOG_TAG, "Falha ao baixar métricas diárias; cursor de métricas preservado.")
+                } else for (m in remoteMetrics) {
                     val local = dailyMetricsDao.getByDate(userId, m.date)
                     if (local == null) {
                         dailyMetricsDao.insert(m.copy(pendingSync = false))
@@ -145,7 +158,9 @@ class SyncManager @Inject constructor(
                         )
                     }
                 }
-                syncPreferences.recordEntitySyncSuccess(userId, "metrics", nowUtc)
+                if (remoteMetrics != null) {
+                    syncPreferences.recordEntitySyncSuccess(userId, "metrics", nowUtc)
+                }
                 movementManagerProvider.get().loadTodayMetrics()
             } catch (e: Exception) {
                 android.util.Log.e(BragaConstants.SYNC_LOG_TAG, "Erro ao sincronizar métricas diárias: ${e.message}")

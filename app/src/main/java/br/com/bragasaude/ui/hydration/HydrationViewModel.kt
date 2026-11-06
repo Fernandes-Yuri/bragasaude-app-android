@@ -9,7 +9,9 @@ import br.com.bragasaude.data.remote.model.RemoteVitalSign
 import br.com.bragasaude.data.remote.repository.ProfileRepository
 import br.com.bragasaude.data.remote.repository.VitalsRepository
 import br.com.bragasaude.data.util.toRemote
+import br.com.bragasaude.data.remote.sync.SyncManager
 import br.com.bragasaude.domain.HealthEngine
+import br.com.bragasaude.domain.VitalSaveStatus
 import br.com.bragasaude.ui.util.NotificationHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.google.firebase.auth.FirebaseAuth
@@ -32,6 +34,7 @@ data class HydrationEntry(
 class HydrationViewModel @Inject constructor(
     private val repository: VitalsRepository,
     private val profileRepository: ProfileRepository,
+    private val syncManager: SyncManager,
     private val healthEngine: HealthEngine,
     private val auth: FirebaseAuth,
     @ApplicationContext private val context: Context
@@ -65,6 +68,10 @@ class HydrationViewModel @Inject constructor(
 
     private val _milestoneAlert = MutableSharedFlow<String>()
     val milestoneAlert = _milestoneAlert.asSharedFlow()
+
+    // DT-052: desfecho do último registro de água — alimenta o chip de sync.
+    private val _saveStatus = MutableStateFlow<VitalSaveStatus?>(null)
+    val saveStatus = _saveStatus.asStateFlow()
 
     private val userId: String
         get() = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
@@ -149,6 +156,20 @@ class HydrationViewModel @Inject constructor(
                 _hydrationHistory.value = daysList.map { day -> groupedByDay[day] ?: 0.0 }
             }
         }
+
+        // DT-052: Room vazio (wipe/troca de conta) precisa puxar o histórico da
+        // nuvem ao abrir a tela; syncUserData é throttled internamente.
+        if (userId != BragaConstants.GUEST_UID) {
+            viewModelScope.launch {
+                try {
+                    if (repository.getVitalSignsSync(userId).isEmpty()) {
+                        syncManager.syncUserData(userId, force = false)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("HydrationVM", "Sync ao abrir a tela de hidratação falhou: ${e.message}")
+                }
+            }
+        }
     }
 
     fun setReminderEnabled(enabled: Boolean) {
@@ -225,7 +246,15 @@ class HydrationViewModel @Inject constructor(
                         hydrationMl = ml,
                         measuredAt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.getDefault()).format(Date())
                     )
-                    repository.saveVitalSigns(listOf(newVital))
+                    _saveStatus.value = VitalSaveStatus.SAVING
+                    val synced = repository.saveVitalSigns(listOf(newVital))
+                    _saveStatus.value = if (currentUserId != BragaConstants.GUEST_UID && synced.all { it }) {
+                        VitalSaveStatus.SYNCED
+                    } else if (currentUserId == BragaConstants.GUEST_UID) {
+                        null // convidado não tem nuvem — sem indicador de sync
+                    } else {
+                        VitalSaveStatus.PENDING_RETRY
+                    }
 
                     val analysis = healthEngine.analyzeVitals(currentUserId, listOf(newVital))
                     analysis.newMilestones.firstOrNull()?.let {

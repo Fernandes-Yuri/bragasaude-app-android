@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.remote.repository.ProfileRepository
 import br.com.bragasaude.data.remote.repository.VitalsRepository
+import br.com.bragasaude.data.remote.sync.SyncManager
 import br.com.bragasaude.domain.HealthEngine
 import br.com.bragasaude.util.BragaConstants
 import com.google.firebase.auth.FirebaseAuth
@@ -24,15 +25,17 @@ class HydrationViewModelTest {
         val profiles = mockk<ProfileRepository>()
         val engine = mockk<HealthEngine>()
         val auth = mockk<FirebaseAuth>()
+        val syncManager = mockk<SyncManager>(relaxed = true)
         val context = mockk<Context>(relaxed = true)
         every { auth.currentUser } returns null
         every { profiles.getProfile(any()) } returns flowOf(null)
         every { vitals.getVitalSigns(any()) } returns flowOf(emptyList())
         val finishSaving = CompletableDeferred<Unit>()
-        coEvery { vitals.saveVitalSigns(any()) } coAnswers { finishSaving.await() }
+        // DT-052: saveVitalSigns agora devolve o desfecho por medição (List<Boolean>).
+        coEvery { vitals.saveVitalSigns(any()) } coAnswers { finishSaving.await(); listOf(false) }
         coEvery { engine.analyzeVitals(any(), any(), any()) } returns HealthEngine.AnalysisResult(emptyList())
         coEvery { engine.removeLastHydration(any()) } just Runs
-        val vm = HydrationViewModel(vitals, profiles, engine, auth, context)
+        val vm = HydrationViewModel(vitals, profiles, syncManager, engine, auth, context)
         try {
             vm.addWater(500)
             runCurrent()
@@ -58,12 +61,13 @@ class HydrationViewModelTest {
         val profiles = mockk<ProfileRepository>()
         val engine = mockk<HealthEngine>()
         val auth = mockk<FirebaseAuth>()
+        val syncManager = mockk<SyncManager>(relaxed = true)
         val context = mockk<Context>(relaxed = true)
         every { auth.currentUser } returns null
         every { profiles.getProfile(any()) } returns flowOf(null)
         every { vitals.getVitalSigns(any()) } returns flowOf(emptyList())
         coEvery { engine.removeLastHydration(any()) } just Runs
-        val vm = HydrationViewModel(vitals, profiles, engine, auth, context)
+        val vm = HydrationViewModel(vitals, profiles, syncManager, engine, auth, context)
         try {
             vm.removeLastWater()
             advanceUntilIdle()

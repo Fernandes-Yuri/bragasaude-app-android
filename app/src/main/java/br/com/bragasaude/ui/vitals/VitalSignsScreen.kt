@@ -3,7 +3,9 @@ package br.com.bragasaude.ui.vitals
 import br.com.bragasaude.ui.components.BragaAlertDialog
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.remote.model.RemoteVitalSign
+import br.com.bragasaude.domain.VitalSaveStatus
 import br.com.bragasaude.domain.util.BloodPressureParser
 import br.com.bragasaude.domain.util.GlucoseClassifier
 import br.com.bragasaude.domain.model.GlucoseContext
@@ -106,6 +109,8 @@ fun VitalSignsScreen(
     val allVitals by viewModel.allVitals.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    // DT-052: indicador de sincronização da última medição salva.
+    val saveStatus by viewModel.saveStatus.collectAsStateWithLifecycle()
 
     // #17: a aba selecionada é a única fonte da verdade do tipo em edição.
     // initialType apenas define a aba inicial; a troca de aba precisa refletir
@@ -215,6 +220,13 @@ fun VitalSignsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
             item { Spacer(Modifier.height(8.dp)) }
+
+            // Captura local: saveStatus é propriedade delegada (by ...collectAsState)
+            // e não admite smart cast dentro do lambda do item.
+            val currentSaveStatus = saveStatus
+            if (currentSaveStatus != null) {
+                item { VitalSaveStatusChip(currentSaveStatus) }
+            }
             
             item {
                 Text(
@@ -823,5 +835,39 @@ fun GlucoseRiskBadge(glucose: Int) {
                 lineHeight = 17.sp
             )
         }
+    }
+}
+
+/**
+ * DT-052: chip discreto de sincronização da última medição.
+ * SAVING -> "Salvando…"; SYNCED -> "Enviado à nuvem"; PENDING_RETRY ->
+ * "Aguardando rede (envio automático)".
+ */
+@Composable
+private fun VitalSaveStatusChip(status: VitalSaveStatus) {
+    val label: String
+    val dotColor: Color
+    when (status) {
+        VitalSaveStatus.SAVING -> {
+            label = "Salvando…"
+            dotColor = BragaTextSecondary
+        }
+        VitalSaveStatus.SYNCED -> {
+            label = "Enviado à nuvem"
+            dotColor = BragaEmerald
+        }
+        VitalSaveStatus.PENDING_RETRY -> {
+            label = "Aguardando rede (envio automático)"
+            dotColor = Color(0xFFB26B00)
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(dotColor))
+        Spacer(Modifier.width(8.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = dotColor)
     }
 }

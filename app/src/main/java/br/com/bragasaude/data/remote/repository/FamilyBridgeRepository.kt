@@ -562,27 +562,33 @@ class FamilyBridgeRepository @Inject constructor(
 
         // 2. Sincronizar sinais vitais
         try {
+            // DT-052: getVitalSigns devolve null em falha de rede — pular o
+            // download de vitais sem interromper o sync do restante do paciente.
             val vitals = apiClient.getVitalSigns(patientUserId)
-            vitals.forEach { v ->
-                val measuredDate = v.measuredAt?.let { parseDate(it) } ?: Date()
-                vitalSignDao.insert(
-                    VitalSignEntity(
-                        remoteId = v.id,
-                        userId = patientUserId,
-                        systolicPressure = v.systolicPressure,
-                        diastolicPressure = v.diastolicPressure,
-                        heartRate = v.heartRate,
-                        oxygenSaturation = v.oxygenSaturation,
-                        glucoseLevel = v.glucoseLevel,
-                        glucoseType = v.glucoseType,
-                        hydrationMl = v.hydrationMl,
-                        measuredAt = measuredDate,
-                        status = "recorded",
-                        pendingSync = false
+            if (vitals == null) {
+                android.util.Log.w("FamilyBridgeRepo", "Aviso: vitais do paciente indisponíveis agora (rede); mantendo cache local.")
+            } else {
+                vitals.forEach { v ->
+                    val measuredDate = v.measuredAt?.let { parseDate(it) } ?: Date()
+                    vitalSignDao.insert(
+                        VitalSignEntity(
+                            remoteId = v.id,
+                            userId = patientUserId,
+                            systolicPressure = v.systolicPressure,
+                            diastolicPressure = v.diastolicPressure,
+                            heartRate = v.heartRate,
+                            oxygenSaturation = v.oxygenSaturation,
+                            glucoseLevel = v.glucoseLevel,
+                            glucoseType = v.glucoseType,
+                            hydrationMl = v.hydrationMl,
+                            measuredAt = measuredDate,
+                            status = "recorded",
+                            pendingSync = false
+                        )
                     )
-                )
+                }
+                vitalSignDao.deduplicateVitals()
             }
-            vitalSignDao.deduplicateVitals()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

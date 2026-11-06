@@ -756,33 +756,47 @@ class AuthViewModel @Inject constructor(
             }
         }
 
-        // (issue #11) Desvincular token FCM do aparelho desta conta antes de limpar dados locais.
-        userId?.let { uid ->
-            try {
-                val token = FirebaseMessaging.getInstance().token.await()
-                notificationClient.unregisterDeviceToken(uid, token)
-            } catch (e: Exception) {
-                android.util.Log.w("AuthViewModel", "Erro ao desvincular token FCM no signOut: ${e.message}")
-            }
-        }
-
         // Cancelar workers pendentes, limpar tabelas locais, prefs, organizador e relatórios em cache.
         withContext(Dispatchers.IO) {
+            // (issue #9 + DT-052) O FLUSH vem primeiro: envia vitais e passos
+            // pendentes (sync_pending = 1) ao backend antes de qualquer limpeza.
+            // Teto de 5s (era 3s) e sem concorrência com FCM/WorkManager — era
+            // exatamente aí que o logout rápido descartava medições.
+            userId?.let { uid ->
+                try {
+                    val flushed = withTimeoutOrNull(5000L) {
+                        flushPendingVitalsAndMetrics(uid)
+                        true
+                    }
+                    if (flushed == null) {
+                        val pendingVitals = database.vitalSignDao().getPendingSync().size
+                        val pendingMetrics = database.dailyMetricsDao().getPendingSync().size
+                        android.util.Log.w(
+                            "AuthViewModel",
+                            "Flush no signOut estourou 5s: $pendingVitals vitais e $pendingMetrics métricas seguem pendentes."
+                        )
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("AuthViewModel", "Flush de vitais/metricas no signOut: ${e.message}")
+                }
+            }
+
+            // Só DEPOIS do flush: cancelar workers (o fallback de rede já cumpriu
+            // seu papel; cancelar antes matava o retry de pendências).
             try {
                 androidx.work.WorkManager.getInstance(appContext).cancelAllWork()
             } catch (e: Exception) {
                 android.util.Log.w("AuthViewModel", "Erro ao cancelar workers: ${e.message}")
             }
 
-            // (issue #9) Flush síncrono com teto de 3s: envia vitais e passos
-            // pendentes (sync_pending = 1) ao backend ANTES de descartar o local.
+            // (issue #11) Desvincular token FCM por ÚLTIMO, best-effort: é chamada
+            // de rede e não pode consumir o orçamento do flush de pendências.
             userId?.let { uid ->
                 try {
-                    withTimeoutOrNull(3000L) {
-                        flushPendingVitalsAndMetrics(uid)
-                    }
+                    val token = FirebaseMessaging.getInstance().token.await()
+                    notificationClient.unregisterDeviceToken(uid, token)
                 } catch (e: Exception) {
-                    android.util.Log.w("AuthViewModel", "Flush de vitais/metricas no signOut: ${e.message}")
+                    android.util.Log.w("AuthViewModel", "Erro ao desvincular token FCM no signOut: ${e.message}")
                 }
             }
 

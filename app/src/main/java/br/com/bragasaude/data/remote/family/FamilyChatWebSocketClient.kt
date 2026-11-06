@@ -89,6 +89,13 @@ class FamilyChatWebSocketClient @Inject constructor(
         activePatientId = patientId
         activeListener = listener
 
+        // A sessão foi solicitada: o estado CONNECTING precisa ser visível
+        // IMEDIATAMENTE, antes do launch na thread IO. Sem isso, um coletor
+        // recém-assinado em `status` lê o valor antigo (DISCONNECTED) e a UI
+        // pisca "desconectado" antes de conectar (corrida observada no
+        // FamilySessionTest.strictWebSocketMode... do CI da fase 8B).
+        _status.value = FamilyWsStatus.CONNECTING
+
         connectionJob?.cancel()
         connectionJob = scope.launch {
             var attempt = 0

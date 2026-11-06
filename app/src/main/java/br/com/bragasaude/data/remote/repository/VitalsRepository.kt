@@ -116,19 +116,34 @@ class VitalsRepository @Inject constructor(
         return vitalSignDao.getAll(userId).first().map { it.toRemote() }
     }
 
-    suspend fun saveVitalSigns(vitals: List<RemoteVitalSign>) {
+    /**
+     * Grava as medições no Room e tenta enviá-las imediatamente ao backend.
+     *
+     * DT-052: o retorno informa, na mesma ordem da entrada, se a medição foi
+     * confirmada pelo servidor (true) ou ficou pendente no aparelho (false) —
+     * é o insumo do indicador visual de salvamento nas telas de vitais e
+     * hidratação. A gravação local continua acontecendo antes do envio, para o
+     * modal nunca perder a medição mesmo sem rede.
+     */
+    suspend fun saveVitalSigns(vitals: List<RemoteVitalSign>): List<Boolean> {
+        val syncedResults = mutableListOf<Boolean>()
         vitals.forEach { vital ->
             val remoteWithId = if (vital.id == null) vital.copy(id = UUID.randomUUID().toString()) else vital
             val entity = remoteWithId.toEntity().copy(pendingSync = false)
             
             val localRowId = vitalSignDao.insert(entity)
             
-            if (vital.userId == guestId) return@forEach
+            if (vital.userId == guestId) {
+                syncedResults += false
+                return@forEach
+            }
             
+            var confirmedByServer = false
             try {
                 val serverUuid = apiClient.syncVitalSign(entity)
                 if (serverUuid != null) {
                     vitalSignDao.insert(entity.copy(localId = localRowId, remoteId = serverUuid, pendingSync = false))
+                    confirmedByServer = true
                 } else {
                     vitalSignDao.insert(entity.copy(localId = localRowId, pendingSync = true))
                     triggerSync()
@@ -138,12 +153,14 @@ class VitalsRepository @Inject constructor(
                 vitalSignDao.insert(entity.copy(localId = localRowId, pendingSync = true))
                 triggerSync()
             }
+            syncedResults += confirmedByServer
 
             // TASK-VIT-01: verifica sinais criticos e notifica cuidadores
             if (vital.userId != guestId) {
                 checkAndNotifyCriticalVitals(entity)
             }
         }
+        return syncedResults
     }
 
     suspend fun deleteLastHydration(userId: String, day: LocalDate = LocalDate.now()) {
