@@ -46,30 +46,6 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
         const val EXTRA_DOSAGE = "med_dosage"
         const val EXTRA_USER_ID = "user_id"
 
-        /**
-         * Agendamento legado DESATIVADO (#21).
-         *
-         * No-op proposital: NÃO cria PendingIntent nem chama
-         * AlarmManager.setExact/setExactAndAllowWhileIdle. O agendador canônico e
-         * único é o CareOS [br.com.bragasaude.ui.medication.doses.DoseAlarmScheduler].
-         * Mantido apenas para não quebrar chamadas/APIs antigas.
-         */
-        @Deprecated("Agendamento legado desativado; use DoseAlarmScheduler (CareOS)")
-        fun scheduleAlarm(
-            context: Context,
-            medId: String,
-            medName: String,
-            dosage: String?,
-            userId: String,
-            timeHour: Int,
-            timeMinute: Int
-        ) {
-            Log.w(
-                "MedAlarm",
-                "scheduleAlarm ignorado (#21): agendamento legado desativado para '$medName' em $timeHour:$timeMinute; use DoseAlarmScheduler (CareOS)"
-            )
-        }
-
         private const val MEDICATION_ALARM_ACTION_PREFIX = "medication_alarm_"
 
         fun getUniqueAction(medId: String) = "${MEDICATION_ALARM_ACTION_PREFIX}$medId"
@@ -86,24 +62,6 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
             )
             pendingIntent?.let { alarmManager.cancel(it); it.cancel() }
             PendingIntent.getBroadcast(context, medId.hashCode(), intent, PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)?.let { alarmManager.cancel(it); it.cancel() }
-        }
-
-        /**
-         * Agendamento legado DESATIVADO (#21).
-         *
-         * No-op proposital: nenhum alarme por medicamento é criado. O agendamento
-         * canônico é o CareOS [br.com.bragasaude.ui.medication.doses.DoseAlarmScheduler].
-         */
-        @Deprecated("Agendamento legado desativado; use DoseAlarmScheduler (CareOS)")
-        fun scheduleAllAlarms(
-            context: Context,
-            userId: String,
-            medications: List<MedicationEntity>
-        ) {
-            Log.w(
-                "MedAlarm",
-                "scheduleAllAlarms ignorado (#21): agendamento legado desativado; use DoseAlarmScheduler (CareOS) [${medications.size} medicamento(s)]"
-            )
         }
 
         /**
