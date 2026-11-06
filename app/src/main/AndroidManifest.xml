@@ -37,6 +37,9 @@
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
         <package android:name="com.google.android.apps.healthdata" />
+        <!-- DT-055: visibilidade do WhatsApp para o resolveActivity do compartilhamento
+             direto do código de conexão familiar (API 30+ filtra pacotes sem queries). -->
+        <package android:name="com.whatsapp" />
     </queries>
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
