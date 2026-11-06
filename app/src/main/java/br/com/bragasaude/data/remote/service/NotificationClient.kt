@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.service
+package br.com.bragasaude.data.remote.service
 
 import android.util.Log
 import br.com.bragasaude.data.remote.auth.AuthService
@@ -55,6 +55,28 @@ class NotificationClient @Inject constructor(
             return@withContext sendJsonPost(endpoint, payload)
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao registrar dispositivo no Hub: ${e.message}")
+            return@withContext false
+        }
+    }
+
+    /**
+     * Desvincula o token FCM do dispositivo desta conta no servidor de notificações
+     * (issue #11: pushes de uma conta não devem chegar após logout em aparelho compartilhado).
+     */
+    suspend fun unregisterDeviceToken(
+        userId: String,
+        token: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val endpoint = URL("$serverBaseUrl/api/device/unregister")
+            val payload = JSONObject().apply {
+                put("userId", userId)
+                put("token", token)
+                put("platform", "android")
+            }
+            return@withContext sendJsonPost(endpoint, payload)
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao desvincular dispositivo no Hub: ${e.message}")
             return@withContext false
         }
     }

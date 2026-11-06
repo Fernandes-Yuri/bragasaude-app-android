@@ -104,7 +104,19 @@ fun AppContent(activity: MainActivity) {
                     if (caregiverMode == "VIEWER_ONLY") {
                         NotificationHelper.cancelHydrationReminders(appContext)
                     } else if (userRole != null) {
-                        NotificationHelper.scheduleHydrationReminders(appContext)
+                        // Trava de silêncio noturno: não dispara lembretes de hidratação
+                        // entre 20h00 e 08h00 (doc 10, item #7).
+                        val horaAtual = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                        val silencioNoturno = horaAtual >= 20 || horaAtual < 8
+                        // Bloqueia disparos enquanto o onboarding/tutorial não foi concluído.
+                        val tutorialConcluido = appContext.getSharedPreferences(
+                            "braga_prefs", android.content.Context.MODE_PRIVATE
+                        ).getBoolean("tutorial_seen", false)
+                        if (!tutorialConcluido || silencioNoturno) {
+                            NotificationHelper.cancelHydrationReminders(appContext)
+                        } else {
+                            NotificationHelper.scheduleHydrationReminders(appContext)
+                        }
                     }
                 }
 

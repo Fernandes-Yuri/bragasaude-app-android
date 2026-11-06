@@ -1,6 +1,10 @@
 package br.com.bragasaude
 
+import android.app.ActivityManager
 import android.app.Application
+import android.content.ComponentCallbacks2
+import android.content.Context
+import android.content.res.Configuration
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import br.com.bragasaude.data.remote.auth.AuthService
@@ -9,7 +13,9 @@ import okhttp3.OkHttpClient
 import br.com.bragasaude.data.remote.network.GatewayTlsPolicy
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import coil3.ImageLoader
+import coil3.MemoryCache
 import coil3.SingletonImageLoader
+import coil3.cache.LruMemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import br.com.bragasaude.data.remote.sync.BragaFirebaseMessagingService
 import br.com.bragasaude.data.remote.sync.SyncManager
@@ -23,7 +29,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltAndroidApp
-class BragaApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory {
+class BragaApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory, ComponentCallbacks2 {
 
     @Inject lateinit var authService: AuthService
     @Inject lateinit var workerFactory: HiltWorkerFactory
@@ -75,8 +81,41 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
             br.com.bragasaude.data.local.organizer.OrganizerStore(this@BragaApplication).cleanup()
         }
 
-
+        // Ouve eventos de pressão de memória do SO para liberar caches voláteis
+        // (Coil 3) antes do Low Memory Killer encerrar o processo.
+        registerComponentCallbacks(this)
     }
+
+    /**
+     * Libera o cache de memória do Coil 3 nos níveis de corte do SO, evitando
+     * que o LMK (Low Memory Killer) aborte o app em dispositivos com pouca RAM.
+     */
+    override fun onTrimMemory(level: Int) {
+        when (level) {
+            ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN,
+            ComponentCallbacks2.TRIM_MEMORY_RUNNING_MODERATE,
+            ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW,
+            ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL,
+            ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
+                try {
+                    SingletonImageLoader.get(this).memoryCache.evictAll()
+                } catch (e: Exception) {
+                    android.util.Log.w("BragaApp", "Falha ao evictar cache Coil no onTrimMemory: ${e.message}")
+                }
+            }
+        }
+    }
+
+    override fun onLowMemory() {
+        try {
+            SingletonImageLoader.get(this).memoryCache.evictAll()
+        } catch (e: Exception) {
+            android.util.Log.w("BragaApp", "Falha ao evictar cache Coil no onLowMemory: ${e.message}")
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {}
+    override fun onMemoryWarning() {}
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -84,7 +123,11 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
             .build()
 
     override fun newImageLoader(context: coil3.PlatformContext): ImageLoader {
+        // Limite o MemoryCache do Coil 3 a 20% da memória disponível do app,
+        // evitando estouro de RAM em telas com muitas imagens (ex: feedback, organizador).
+        val maxCacheBytes = availableMemoryBytes(this) * 0.20
         return ImageLoader.Builder(context)
+            .memoryCacheFactory { ctx -> LruMemoryCache(ctx, (maxCacheBytes).coerceAtLeast(0L)) }
             .components {
                 add(OkHttpNetworkFetcherFactory(callFactory = {
                     GatewayTlsPolicy.configure(OkHttpClient.Builder(), !BuildConfig.DEBUG)
@@ -95,5 +138,10 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
                 }))
             }
             .build()
+    }
+
+    private fun availableMemoryBytes(context: Context): Long {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        return (am.memoryClass * 1024 * 1024).toLong()
     }
 }

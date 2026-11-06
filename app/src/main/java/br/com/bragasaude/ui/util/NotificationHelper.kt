@@ -329,11 +329,14 @@ object NotificationHelper {
 
             val hydrationWork = androidx.work.PeriodicWorkRequestBuilder<br.com.bragasaude.data.remote.sync.HydrationReminderWorker>(
                 2, java.util.concurrent.TimeUnit.HOURS
-            ).setConstraints(constraints).build()
+            ).setConstraints(constraints)
+             // Delay inicial de 2 horas: não dispara lembretes assim que o app é aberto.
+             .setInitialDelay(2, java.util.concurrent.TimeUnit.HOURS)
+             .build()
 
             androidx.work.WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 "braga_hydration_reminders",
-                androidx.work.ExistingPeriodicWorkPolicy.UPDATE,
+                androidx.work.ExistingPeriodicWorkPolicy.KEEP,
                 hydrationWork
             )
         } catch (e: Exception) {

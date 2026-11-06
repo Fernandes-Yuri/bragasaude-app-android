@@ -117,6 +117,10 @@ class SyncWorker @AssistedInject constructor(
             val serverId = apiClient.syncVitalSign(v)
             if (serverId != null) {
                 vitalSignDao.insert(v.copy(remoteId = serverId, pendingSync = false))
+            } else {
+                // Sem ID remoto de confirmação: re-enfileira via Result.retry() para
+                // não considerar o vital como sincronizado quando não está no backend.
+                throw java.io.IOException("Sinal vital sem ID remoto de confirmação")
             }
         }
     }

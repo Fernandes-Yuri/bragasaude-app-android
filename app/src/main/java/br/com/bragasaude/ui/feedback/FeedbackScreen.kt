@@ -480,20 +480,36 @@ fun FeedbackScreen(
 private fun loadAndCompressBitmap(context: Context, uri: Uri): Bitmap? {
     return try {
         val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
-        val original = BitmapFactory.decodeStream(inputStream)
+        // Passo 1: decodifica apenas as dimensões (inJustDecodeBounds = true) para
+        // não alocar a imagem completa na RAM antes de saber o tamanho real.
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeStream(inputStream, null, bounds)
         inputStream?.close()
 
-        if (original == null) return null
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
-        // Redimensiona proporcionalmente para no máximo 800px para economizar banda e memória
-        val maxDimension = 800
-        val ratio = Math.min(maxDimension.toFloat() / original.width, maxDimension.toFloat() / original.height)
+        // Passo 2: calcula inSampleSize para limitar a imagem a no máximo 1024px,
+        // impedindo estouro de 200MB+ de RAM com fotos de alta resolução (50MP/108MP).
+        val maxDimension = 1024
+        var inSampleSize = 1
+        while (bounds.outWidth / (inSampleSize * 2) > maxDimension ||
+               bounds.outHeight / (inSampleSize * 2) > maxDimension) {
+            inSampleSize *= 2
+        }
+
+        val stream2: InputStream? = context.contentResolver.openInputStream(uri)
+        val decodeOptions = BitmapFactory.Options().apply { inSampleSize = inSampleSize }
+        val bitmap = BitmapFactory.decodeStream(stream2, null, decodeOptions)
+        stream2?.close()
+
+        if (bitmap == null) return null
+
+        // Ajuste proporcional final para no máximo 1024px, se ainda exceder.
+        val ratio = Math.min(maxDimension.toFloat() / bitmap.width, maxDimension.toFloat() / bitmap.height)
         if (ratio < 1.0f) {
-            val width = (original.width * ratio).toInt()
-            val height = (original.height * ratio).toInt()
-            Bitmap.createScaledBitmap(original, width, height, true)
+            Bitmap.createScaledBitmap(bitmap, (bitmap.width * ratio).toInt(), (bitmap.height * ratio).toInt(), true)
         } else {
-            original
+            bitmap
         }
     } catch (e: Exception) {
         e.printStackTrace()
