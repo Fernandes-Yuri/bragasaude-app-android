@@ -15,6 +15,7 @@ import br.com.bragasaude.MainActivity
 import br.com.bragasaude.R
 import br.com.bragasaude.data.local.MedicationEntity
 import br.com.bragasaude.domain.MedicationSchedule
+import kotlinx.coroutines.launch
 
 /**
  * Receiver legado de alarmes de medicação por medicamento.
