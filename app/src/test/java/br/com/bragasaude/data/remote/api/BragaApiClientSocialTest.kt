@@ -1,6 +1,7 @@
 package br.com.bragasaude.data.remote.api
 
 import br.com.bragasaude.data.local.security.FamilyE2eeManager
+import okhttp3.OkHttpClient
 import br.com.bragasaude.data.remote.auth.AuthService
 import io.mockk.every
 import io.mockk.mockk
@@ -14,7 +15,7 @@ class BragaApiClientSocialTest {
     private fun client(server: MockWebServer): BragaApiClient {
         val auth = mockk<AuthService>()
         every { auth.getTokenBlocking(any(), any()) } returns "test-session"
-        return BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), auth, FamilyE2eeManager())
+        return BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), auth, OkHttpClient(), FamilyE2eeManager())
     }
 
     @Test fun offlineModeIsNotAcknowledgmentAndDeletionUsesAuthenticatedEndpoint() = runBlocking {
