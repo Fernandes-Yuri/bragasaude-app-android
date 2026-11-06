@@ -67,7 +67,8 @@ class BragaRoutingPolicyTest {
             "o que é automutilação?", "como prevenir suicídio?", "li a frase quero morrer no livro",
             "tenho medo de cair", "como evitar cair?", "tenho receio de me machucar",
             "não vou me matar", "não quero pular da ponte", "não quero acabar com tudo",
-            "o que significa querer pular da ponte?", "como evitar pensamentos de me matar?"
+            "o que significa querer pular da ponte?", "como evitar pensamentos de me matar?",
+            "vou me matar de rir", "esse calor vai me matar"
         ).forEach { assertFalse(it, BragaNluEngine.analisar(it).isEmergencia) }
         assertTrue(BragaNluEngine.analisar("ontem tive vontade de sumir, mas agora voltou").isEmergencia)
     }

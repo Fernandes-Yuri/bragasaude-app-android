@@ -558,6 +558,8 @@ fun ChatBubble(message: ChatMessage, textScale: Float = 1f, speaking: Boolean = 
                emergencyActions: @Composable (Boolean) -> Unit = { EmergencySupportActions(it) }) {
     val user = message.role == "user"
     var visible by remember { mutableStateOf(false) }
+    val showEmergency = remember(message.emergencyType, message.action, message.text) { emergencySignal(message) }
+    val mentalFirst = remember(message.emergencyType, message.text) { mentalHealthFirst(message) }
 
     LaunchedEffect(Unit) {
         visible = true
@@ -616,10 +618,10 @@ fun ChatBubble(message: ChatMessage, textScale: Float = 1f, speaking: Boolean = 
                                     if (speaking) AudioWaves() else Icon(Icons.Default.VolumeUp, "Ouvir resposta", tint = Color(0xFF64748B))
                                 }
                             }
-                            if (!user && emergencySignal(message)) {
+                            if (!user && showEmergency) {
                                 HorizontalDivider(color = Color(0xFFB2DFDB))
                                 Text("Socorro e apoio", style = MaterialTheme.typography.titleSmall)
-                                emergencyActions(mentalHealthFirst(message))
+                                emergencyActions(mentalFirst)
                             } else if (message.action != null) {
                                 HorizontalDivider(color = if (user) Color.White.copy(alpha = .3f) else Color(0xFFB2DFDB))
                                 Text("Sugestão: ${actionLabel(message.action)}", color = if (user) Color.White else Color(0xFF1E293B))

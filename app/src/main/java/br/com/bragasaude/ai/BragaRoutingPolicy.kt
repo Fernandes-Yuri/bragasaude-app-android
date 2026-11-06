@@ -35,6 +35,9 @@ internal object BragaRoutingPolicy {
     private val educational = Regex("""\b(o que (e|significa|causa)|por que|porque|como evitar|como prevenir)\b""")
     private val currentReport = Regex("""\b(estou|tenho|sinto|sentindo|agora|socorro|nao (consigo|consegue)|cai|caiu|acabei de cair|acabou de cair|bati a cabeca|levei um tombo|escorreguei|quero morrer|vontade de me matar|quero me matar|vou me matar|nao aguento mais( viver)?|nao quero mais viver)\b|\b(meu|minha|ele|ela)\b.{0,40}\b(esta|tem|sente)\b""")
 
+    // Gírias cotidianas do público 40+ que contêm termos de crise sem ideação suicida.
+    private val crisisIdiom = Regex("""\b(me matar de (rir|trabalhar|estudar|cansaco|vergonha|vontade)|morrer de rir|(esse|este) calor (vai )?me mata[r]?)\b""")
+
     // Recorrência pertence ao relato da mesma oração ou a uma retomada explícita.
     private val recurrence = Regex("""\b(voltou|voltaram|de novo|outra vez|novamente|piorou|piorando|continua|ainda)\b""")
 
@@ -79,6 +82,8 @@ internal object BragaRoutingPolicy {
             for ((pattern, intent) in listOf(mentalCrisis to MENTAL_HEALTH_EMERGENCY,
                 chest to "emergencia_dor_peito_avc", fall to "emergencia_queda_trauma")) {
                 for (match in pattern.findAll(clause)) {
+                    // "vou me matar de rir" / "esse calor vai me matar" são gíria, não ideação.
+                    if (intent == MENTAL_HEALTH_EMERGENCY && crisisIdiom.containsMatchIn(clause)) continue
                     val prefix = clause.take(match.range.first)
                     val denialPattern = if (intent == MENTAL_HEALTH_EMERGENCY) mentalDeniedPrefix else deniedPrefix
                     val denial = !match.value.startsWith("nao ") && denialPattern.containsMatchIn(prefix)

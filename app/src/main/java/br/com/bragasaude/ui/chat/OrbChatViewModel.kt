@@ -312,8 +312,7 @@ class OrbChatViewModel @Inject constructor(
                 // perder o card nativo. O anúncio bruto do modelo continua bloqueado pelo
                 // BragaRemoteContract; aqui preservamos a sinalização de emergência.
                 val remoteEmergency = local.delegarParaNuvem && (
-                    BragaRoutingPolicy.emergencyChannel(value) != null ||
-                        BragaRoutingPolicy.mentionsEmergencySupport(reply.content) ||
+                    BragaRoutingPolicy.mentionsEmergencySupport(reply.content) ||
                         BragaRoutingPolicy.mentionsEmergencySupport(parsed.optString("fala")) ||
                         runCatching { JSONObject(reply.content).optString("acao") }.getOrNull() == BragaRoutingPolicy.CLINICAL_EMERGENCY
                     )
