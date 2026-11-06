@@ -221,8 +221,11 @@ fun VitalSignsScreen(
             ) {
             item { Spacer(Modifier.height(8.dp)) }
 
-            if (saveStatus != null) {
-                item { VitalSaveStatusChip(saveStatus) }
+            // Captura local: saveStatus é propriedade delegada (by ...collectAsState)
+            // e não admite smart cast dentro do lambda do item.
+            val currentSaveStatus = saveStatus
+            if (currentSaveStatus != null) {
+                item { VitalSaveStatusChip(currentSaveStatus) }
             }
             
             item {
