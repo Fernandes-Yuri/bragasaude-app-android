@@ -1,12 +1,10 @@
 package br.com.bragasaude
 
-import android.app.ActivityManager
 import android.app.Application
 import android.content.ComponentCallbacks2
-import android.content.Context
 import android.content.res.Configuration
 import androidx.hilt.work.HiltWorkerFactory
-import androidx.work.Configuration
+import androidx.work.Configuration as WorkConfiguration
 import br.com.bragasaude.data.remote.auth.AuthService
 import br.com.bragasaude.data.remote.network.AvatarAuthInterceptor
 import okhttp3.OkHttpClient
@@ -14,7 +12,6 @@ import br.com.bragasaude.data.remote.network.GatewayTlsPolicy
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
-import coil3.cache.LruMemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import br.com.bragasaude.data.remote.sync.BragaFirebaseMessagingService
 import br.com.bragasaude.data.remote.sync.SyncManager
@@ -28,7 +25,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltAndroidApp
-class BragaApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory, ComponentCallbacks2 {
+class BragaApplication : Application(), WorkConfiguration.Provider, SingletonImageLoader.Factory, ComponentCallbacks2 {
 
     @Inject lateinit var authService: AuthService
     @Inject lateinit var workerFactory: HiltWorkerFactory
@@ -97,9 +94,9 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
             ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL,
             ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
                 try {
-                    SingletonImageLoader.get(this).memoryCache?.evictAll()
+                    SingletonImageLoader.get(this).memoryCache?.clear()
                 } catch (e: Exception) {
-                    android.util.Log.w("BragaApp", "Falha ao evictar cache Coil no onTrimMemory: ${e.message}")
+                    android.util.Log.w("BragaApp", "Falha ao liberar cache Coil no onTrimMemory: ${e.message}")
                 }
             }
         }
@@ -107,27 +104,24 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
 
     override fun onLowMemory() {
         try {
-            SingletonImageLoader.get(this).memoryCache?.evictAll()
+            SingletonImageLoader.get(this).memoryCache?.clear()
         } catch (e: Exception) {
-            android.util.Log.w("BragaApp", "Falha ao evictar cache Coil no onLowMemory: ${e.message}")
+            android.util.Log.w("BragaApp", "Falha ao liberar cache Coil no onLowMemory: ${e.message}")
         }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {}
-    override fun onMemoryWarning() {}
 
-    override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder()
+    override val workManagerConfiguration: WorkConfiguration
+        get() = WorkConfiguration.Builder()
             .setWorkerFactory(workerFactory)
             .build()
 
     override fun newImageLoader(context: coil3.PlatformContext): ImageLoader {
-        // Limite o MemoryCache do Coil 3 a 20% da memória disponível do app,
-        // evitando estouro de RAM em telas com muitas imagens (ex: feedback, organizador).
-        val maxCacheBytes = availableMemoryBytes(context as Context) * 0.20
+        // Em pressao de memoria, onTrimMemory/onLowMemory liberam o cache do Coil 3,
+        // protegendo o app contra o Low Memory Killer em dispositivos com pouca RAM.
         return ImageLoader.Builder(context)
             .components {
-                add(LruMemoryCache(context, (maxCacheBytes).coerceAtLeast(0L)))
                 add(OkHttpNetworkFetcherFactory(callFactory = {
                     GatewayTlsPolicy.configure(OkHttpClient.Builder(), !BuildConfig.DEBUG)
                         .addInterceptor(AvatarAuthInterceptor(BuildConfig.BASE_URL.toHttpUrl()) { forceRefresh ->
@@ -137,10 +131,5 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
                 }))
             }
             .build()
-    }
-
-    private fun availableMemoryBytes(context: Context): Long {
-        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        return (am.memoryClass * 1024 * 1024).toLong()
     }
 }

@@ -865,7 +865,7 @@ class AuthViewModel @Inject constructor(
             if (m.userId != userId) continue
             val serverId = apiClient.syncDailyMetric(m)
             if (serverId != null) {
-                database.dailyMetricsDao().insert(m.copy(remoteId = serverId, pendingSync = false))
+                database.dailyMetricsDao().insert(m.copy(pendingSync = false))
             }
         }
     }
