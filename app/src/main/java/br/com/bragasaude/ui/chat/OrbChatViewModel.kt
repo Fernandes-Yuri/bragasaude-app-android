@@ -51,7 +51,7 @@ data class OrbChatUiState(
 
 sealed interface OrbChatEvent {
     data class Navigate(val screen: Screen) : OrbChatEvent
-    data class Emergency(val type: String = "EMERGENCIA", val message: String = "Se precisar de socorro imediato, ligue para o SAMU 192. Para apoio emocional, ligue para o CVV 188.") : OrbChatEvent
+    data class Emergency(val type: String = "EMERGENCIA", val message: String = "Para apoio emocional, ligue para o CVV 188. Se houver perigo imediato, ligue para o SAMU 192.") : OrbChatEvent
 }
 
 @HiltViewModel
@@ -308,14 +308,32 @@ class OrbChatViewModel @Inject constructor(
                 val parsed = JSONObject(safeContent)
                 val rawAction = parsed.optString("acao", "CONVERSA").takeUnless { it == "CONVERSA" }
                 val rawParams = parsed.optJSONObject("parametros") ?: JSONObject()
+                // #14: uma resposta remota que sinaliza crise, socorro, SAMU ou CVV não pode
+                // perder o card nativo. O anúncio bruto do modelo continua bloqueado pelo
+                // BragaRemoteContract; aqui preservamos a sinalização de emergência.
+                val remoteEmergency = local.delegarParaNuvem && (
+                    BragaRoutingPolicy.mentionsEmergencySupport(reply.content) ||
+                        BragaRoutingPolicy.mentionsEmergencySupport(parsed.optString("fala")) ||
+                        runCatching { JSONObject(reply.content).optString("acao") }.getOrNull() == BragaRoutingPolicy.CLINICAL_EMERGENCY
+                    )
                 val (action, finalParams) = if (shortcut != null) {
                     shortcut to rawParams
+                } else if (remoteEmergency) {
+                    BragaRoutingPolicy.CLINICAL_EMERGENCY to JSONObject()
                 } else if (local.delegarParaNuvem) {
                     null to JSONObject()
                 } else {
                     resolveHealthAction(value, rawAction, rawParams)
                 }
                 val answerText = BragaInputLanguage.forChannel(parsed.getString("fala"), channel)
+                val emergencyType = when {
+                    local.isEmergencia -> local.intent
+                    remoteEmergency -> BragaRoutingPolicy.emergencyChannel(answerText)
+                        ?: BragaRoutingPolicy.emergencyChannel(value)
+                        ?: BragaRoutingPolicy.CLINICAL_EMERGENCY
+                    action == BragaRoutingPolicy.CLINICAL_EMERGENCY -> BragaRoutingPolicy.CLINICAL_EMERGENCY
+                    else -> null
+                }
 
                 val totalMs = elapsedMs()
                 val elapsedMs = totalMs.toLong()
@@ -341,7 +359,7 @@ class OrbChatViewModel @Inject constructor(
 
                 val answer = ChatMessage(role = "assistant", text = answerText, status = "received",
                     action = action, parameters = finalParams.toString(),
-                    emergencyType = if (local.isEmergencia) local.intent else if (action == "EMERGENCIA") "EMERGENCIA" else null,
+                    emergencyType = emergencyType,
                     rawContent = if (channel == InputChannel.TEXT) JSONObject(safeContent)
                         .put("fala", answerText).toString() else safeContent,
                     metrics = listOfNotNull(reply.metrics, diagnostic).joinToString("\n"))

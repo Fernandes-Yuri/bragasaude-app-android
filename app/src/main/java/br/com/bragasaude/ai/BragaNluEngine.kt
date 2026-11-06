@@ -106,6 +106,15 @@ object BragaNluEngine {
         "(insônia|insonia|pregar o olho|não consigo dormir|perco o sono|dormir à noite|acordo de madrugada)",
         RegexOption.IGNORE_CASE
     )
+    // Alimentação cotidiana é conversa bem-vinda: ideias e hábitos leves, sem
+    // prometer plano alimentar individual nem registrar refeições.
+    private val REGEX_ALIMENTACAO_ACOLHEDORA = Regex(
+        "(ideias?|sugestao|sugestoes|opcao|opcoes|dicas?).{0,40}(cafe da manha|almoco|jantar|lanche|refeicao|comer)|" +
+            "(jantar|almoco|lanche|cafe da manha) (leve|saudavel|simples|gostos[oa])|" +
+            "o que (?:eu )?posso (?:comer|almocar|jantar)(?: hoje)?|" +
+            "comida (?:leve|saudavel)|" +
+            "receita (?:leve|simples|saudavel)"
+    )
 
     // 4. ROTINA, TRABALHO E LAZER (40+)
     private val REGEX_ESTRESSE_TRABALHO = Regex(
@@ -255,6 +264,12 @@ object BragaNluEngine {
             "Tente observar horários e hábitos próximos ao sono. Dificuldades frequentes merecem avaliação profissional.",
             "O descanso faz parte do autocuidado. Se dormir tem sido difícil com frequência, procure orientação.",
             "Anotar quando a dificuldade para dormir acontece pode ajudar na consulta. Evite usar remédios para dormir sem orientação."
+        ),
+        "conversa_alimentacao_acolhedora" to listOf(
+            "Que bom que você está pensando no seu bem-estar. Para um jantar leve, uma sopa de legumes, um omelete com salada ou arroz com feijão e verduras caem bem. Você prefere algo quentinho ou mais leve? Se quiser algo sob medida, nutricionista ou médico podem orientar com carinho.",
+            "Gosto de conversar sobre isso com você. Ideias simples ajudam: frango grelhado com legumes, salada com ovo cozido ou uma tapioca com queijo. Se houver alguma condição de saúde, vale alinhar com nutricionista ou médico.",
+            "Vamos pensar juntos? Um café da manhã tranquilo pode ter fruta, aveia ou pão com queijo. Coma com calma, sem pressa, prestando atenção no que o seu corpo pede.",
+            "Para uma refeição mais leve, capriche nos legumes, prefira preparos assados ou cozidos e beba água ao longo do dia. Se quiser algo sob medida para você, nutricionista ou médico podem orientar com carinho."
         ),
         "conversa_estresse_rotina_trabalho" to listOf(
             "A rotina pode exigir bastante. O que mais pesou no seu dia hoje?",
@@ -497,6 +512,9 @@ object BragaNluEngine {
         }
         if (REGEX_DUVIDA_SONO.containsMatchIn(limpo)) {
             return NluOutput("duvida_sono_insonia", sortearResposta("duvida_sono_insonia"), tempoMs = deltaMs(inicio))
+        }
+        if (REGEX_ALIMENTACAO_ACOLHEDORA.containsMatchIn(protegido)) {
+            return NluOutput("conversa_alimentacao_acolhedora", sortearResposta("conversa_alimentacao_acolhedora"), tempoMs = deltaMs(inicio))
         }
 
         // 4. ROTINA E LAZER (40+)

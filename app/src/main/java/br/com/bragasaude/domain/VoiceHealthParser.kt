@@ -338,12 +338,13 @@ class VoiceHealthParser @Inject constructor() {
         return message?.let { VoiceHealthIntent.ConversationalReply(it) }
     }
 
-    // Conversas sobre comida seguem para a IA; somente pedidos de ação recebem orientação local.
+    // Conversas sobre comida seguem para a IA; pedidos de ação recebem uma
+    // resposta humana, sem jargão de software nem discurso de módulo removido.
     private fun detectFoodAction(text: String): VoiceHealthIntent.ConversationalReply? {
         val action = Regex("\\b(adicion\\w*|registr\\w*|anot\\w*|abrir|abra|abr\\w*|coloc\\w*)\\b").containsMatchIn(text)
         val food = Regex("\\b(refeicao|refeicoes|alimento|alimentos|alimentacao|lista de compras|almoco|jantar|cafe da manha|lanche|arroz|feijao|frango|banana|maca|leite|aveia|chia)\\b").containsMatchIn(text)
         return if (action && food) VoiceHealthIntent.ConversationalReply(
-            "O módulo de alimentação, compras, despensa e receitas foi descontinuado no Braga Saúde."
+            "Posso conversar com você sobre alimentação e dar ideias simples, mas não consigo anotar refeições nem listas de compras por aqui. Se quiser um plano alimentar personalizado, vale conversar com nutricionista ou médico."
         ) else null
     }
 

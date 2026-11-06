@@ -34,4 +34,10 @@ class InputChannelTest {
         assertTrue(voice.contains("VOICE"))
         assertEquals("Gosto de ouvir música.", BragaInputLanguage.forChannel("Gosto de ouvir música.", InputChannel.TEXT))
     }
+    @Test fun `uri tel crua da nuvem vira numero discavel sem perder o texto`() {
+        assertEquals("Ligue para 192 agora.", BragaInputLanguage.forChannel("Ligue para tel:192 agora.", InputChannel.TEXT))
+        assertEquals("Apoio no 188.", BragaInputLanguage.forChannel("Apoio no tel: 188.", InputChannel.TEXT))
+        assertFalse(BragaInputLanguage.forChannel("Ligue para tel:192 agora.", InputChannel.TEXT).contains("tel:"))
+        assertTrue(BragaInputLanguage.withoutRawDialUris("tel:188 e tel:192").contains("188"))
+    }
 }

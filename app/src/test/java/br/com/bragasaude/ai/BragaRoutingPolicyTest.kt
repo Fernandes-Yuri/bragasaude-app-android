@@ -15,7 +15,10 @@ class BragaRoutingPolicyTest {
             "desespero total", "socorro não aguento mais", "quero me machucar",
             "automutilação", "quero cortar meus pulsos", "estou pensando em suicídio",
             "Não tenho dor no peito, mas quero morrer", "não consigo dormir, quero morrer",
-            "não aguento mais, quero morrer"
+            "não aguento mais, quero morrer",
+            "quero pular da ponte", "vontade de me matar", "vou me matar",
+            "não aguento mais", "quero desaparecer", "cansei de viver",
+            "pular do viaduto", "me jogar da ponte", "quero acabar com tudo"
         ).forEach { text ->
             val output = BragaNluEngine.analisar(text, channel)
             assertEquals(text, BragaRoutingPolicy.MENTAL_HEALTH_EMERGENCY, output.intent)
@@ -23,6 +26,28 @@ class BragaRoutingPolicyTest {
             assertFalse(output.delegarParaNuvem)
             assertTrue(output.respostaLocal!!.contains("CVV 188"))
             assertTrue(output.respostaLocal.contains("SAMU 192"))
+            // CVV 188 é o canal número 1 em sofrimento psíquico: aparece antes do SAMU 192.
+            assertTrue(output.respostaLocal!!.indexOf("CVV 188") < output.respostaLocal!!.indexOf("SAMU 192"))
+        }
+    }
+
+    @Test fun `ideacao suicida e desespero agudo preservam a prioridade do CVV na resposta remota`() {
+        assertEquals(BragaRoutingPolicy.MENTAL_HEALTH_EMERGENCY,
+            BragaRoutingPolicy.emergencyChannel("Ligue para o CVV 188 e, se houver perigo, para o SAMU 192."))
+        assertEquals(BragaRoutingPolicy.CLINICAL_EMERGENCY,
+            BragaRoutingPolicy.emergencyChannel("Ligue para o SAMU 192 agora."))
+        assertNull(BragaRoutingPolicy.emergencyChannel("Sua glicemia registrada foi 188 mg/dL."))
+        assertNull(BragaRoutingPolicy.emergencyChannel("Beba mais água ao longo do dia."))
+        assertTrue(BragaRoutingPolicy.mentionsEmergencySupport("Se precisar, procure socorro imediato."))
+    }
+
+    @Test fun `dor no peito forte e falta de ar insuportavel acionam o SAMU`() {
+        listOf("estou com dor no peito forte", "falta de ar insuportável",
+            "dor insuportável no peito").forEach { text ->
+            val output = BragaNluEngine.analisar(text)
+            assertEquals(text, "emergencia_dor_peito_avc", output.intent)
+            assertTrue(output.isEmergencia)
+            assertTrue(output.respostaLocal!!.contains("SAMU 192"))
         }
     }
 
@@ -40,7 +65,10 @@ class BragaRoutingPolicyTest {
         listOf("não quero morrer", "não tenho vontade de sumir", "não quero me machucar",
             "ontem tive vontade de sumir", "não acabei de cair", "ontem levei um tombo",
             "o que é automutilação?", "como prevenir suicídio?", "li a frase quero morrer no livro",
-            "tenho medo de cair", "como evitar cair?", "tenho receio de me machucar"
+            "tenho medo de cair", "como evitar cair?", "tenho receio de me machucar",
+            "não vou me matar", "não quero pular da ponte", "não quero acabar com tudo",
+            "o que significa querer pular da ponte?", "como evitar pensamentos de me matar?",
+            "vou me matar de rir", "esse calor vai me matar"
         ).forEach { assertFalse(it, BragaNluEngine.analisar(it).isEmergencia) }
         assertTrue(BragaNluEngine.analisar("ontem tive vontade de sumir, mas agora voltou").isEmergencia)
     }

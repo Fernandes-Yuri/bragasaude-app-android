@@ -72,7 +72,8 @@ internal fun EmergencyActionButtons(
             ) {
                 Icon(Icons.Default.Call, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text(if (emotionalSupport) "Ligar para o CVV (188)" else "Ligar para o SAMU (192)")
+                Text(if (emotionalSupport) "Ligar para o CVV 188 (Apoio Emocional)"
+                    else "Ligar para o SAMU 192 (Urgência Médica)")
             }
         }
         Button(
@@ -91,7 +92,7 @@ internal fun EmergencyActionButtons(
         ) {
             Icon(Icons.Default.LocationOn, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("Localizar UPA mais próxima")
+            Text("Buscar UPA mais próxima (Google Maps)")
         }
         if (!contactPhone.isNullOrBlank()) {
             OutlinedButton(

@@ -332,15 +332,37 @@ class OrbChatViewModelTest {
         coVerify(exactly = 0) { gateway.sendRemote(any(), any(), any(), any()) }
     }
 
-    @Test fun clinicalDelegationRejectsRemoteEmergencyAndItsAnnouncement() = runTest(dispatcher) {
+    @Test fun remoteEmergencyMentionKeepsNativeCardEvenWhenAnnouncementIsBlocked() = runTest(dispatcher) {
         coEvery { gateway.sendRemote(any(), any(), any(), any()) } returns OrbReply(
             """{"fala":"Já deixei as opções de socorro na sua tela.","acao":"EMERGENCIA","parametros":{}}""")
         vm.sendMessage("o que significa dor no peito?"); runCurrent()
         val answer = vm.state.value.messages.last()
-        assertNull(answer.action)
+        // #14: o card nativo é preservado mesmo quando o contrato bloqueia o anúncio do modelo.
+        assertEquals("EMERGENCIA", answer.emergencyType)
+        assertEquals("EMERGENCIA", answer.action)
         assertFalse(answer.text.contains("Já deixei"))
         assertEquals("{}", answer.parameters)
         coVerify(exactly = 1) { gateway.sendRemote(any(), any(), any(), any()) }
+    }
+
+    @Test fun remoteReplyWithCvvKeepsEmotionalSupportCardFirst() = runTest(dispatcher) {
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } returns OrbReply(
+            """{"fala":"Se estiver em sofrimento, ligue para o CVV 188. Em emergência clínica, acione o SAMU 192.","acao":"CONVERSA","parametros":{}}""")
+        vm.sendMessage("Como minha pressão afeta os rins?"); runCurrent()
+        val answer = vm.state.value.messages.last()
+        assertEquals(BragaRoutingPolicy.MENTAL_HEALTH_EMERGENCY, answer.emergencyType)
+        assertEquals("EMERGENCIA", answer.action)
+        assertEquals("{}", answer.parameters)
+    }
+
+    @Test fun remoteRawDialUriNeverAppearsAsLooseText() = runTest(dispatcher) {
+        coEvery { gateway.sendRemote(any(), any(), any(), any()) } returns OrbReply(
+            """{"fala":"Ligue para tel:192 agora.","acao":"CONVERSA","parametros":{}}""")
+        vm.sendMessage("Como minha pressão afeta os rins?"); runCurrent()
+        val answer = vm.state.value.messages.last()
+        assertEquals("Ligue para 192 agora.", answer.text)
+        assertFalse(answer.text.lowercase().contains("tel:"))
+        assertEquals("EMERGENCIA", answer.emergencyType)
     }
 
     @Test fun cloudTurnIsRecordedForLocalCoverage() = runTest(dispatcher) {
