@@ -51,4 +51,10 @@ class SyncPreferences @Inject constructor(
         }
         editor.apply()
     }
+
+    /** Remove todas as entradas de sincronizacao (usado no logout para evitar
+     *  cache delta falso na proxima sessao — issue #8). */
+    fun clearAll() {
+        prefs.edit().clear().apply()
+    }
 }

@@ -13,7 +13,6 @@ import okhttp3.OkHttpClient
 import br.com.bragasaude.data.remote.network.GatewayTlsPolicy
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import coil3.ImageLoader
-import coil3.MemoryCache
 import coil3.SingletonImageLoader
 import coil3.cache.LruMemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
@@ -98,7 +97,7 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
             ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL,
             ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
                 try {
-                    SingletonImageLoader.get(this).memoryCache.evictAll()
+                    SingletonImageLoader.get(this).memoryCache?.evictAll()
                 } catch (e: Exception) {
                     android.util.Log.w("BragaApp", "Falha ao evictar cache Coil no onTrimMemory: ${e.message}")
                 }
@@ -108,7 +107,7 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
 
     override fun onLowMemory() {
         try {
-            SingletonImageLoader.get(this).memoryCache.evictAll()
+            SingletonImageLoader.get(this).memoryCache?.evictAll()
         } catch (e: Exception) {
             android.util.Log.w("BragaApp", "Falha ao evictar cache Coil no onLowMemory: ${e.message}")
         }
@@ -125,10 +124,10 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
     override fun newImageLoader(context: coil3.PlatformContext): ImageLoader {
         // Limite o MemoryCache do Coil 3 a 20% da memória disponível do app,
         // evitando estouro de RAM em telas com muitas imagens (ex: feedback, organizador).
-        val maxCacheBytes = availableMemoryBytes(this) * 0.20
+        val maxCacheBytes = availableMemoryBytes(context as Context) * 0.20
         return ImageLoader.Builder(context)
-            .memoryCacheFactory { ctx -> LruMemoryCache(ctx, (maxCacheBytes).coerceAtLeast(0L)) }
             .components {
+                add(LruMemoryCache(context, (maxCacheBytes).coerceAtLeast(0L)))
                 add(OkHttpNetworkFetcherFactory(callFactory = {
                     GatewayTlsPolicy.configure(OkHttpClient.Builder(), !BuildConfig.DEBUG)
                         .addInterceptor(AvatarAuthInterceptor(BuildConfig.BASE_URL.toHttpUrl()) { forceRefresh ->
