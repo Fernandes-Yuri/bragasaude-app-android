@@ -15,6 +15,7 @@ import br.com.bragasaude.data.local.VitalSignEntity
 import br.com.bragasaude.data.local.security.FamilyE2eeManager
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.sync.SyncScheduler
+import androidx.annotation.VisibleForTesting
 import br.com.bragasaude.data.util.parseDate
 import br.com.bragasaude.ui.util.FamilyNotificationService
 import br.com.bragasaude.ui.util.NotificationHelper
@@ -53,6 +54,12 @@ class FamilyBridgeRepository @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val e2eeManager: FamilyE2eeManager
 ) {
+    /**
+     * Construtor reservado exclusivamente a testes unitários JVM: nesse contexto
+     * o Hilt não está ativo e o E2EE usa [InMemoryE2eeKeyStoreProvider]. Em
+     * produção o Hilt injeta o @Singleton FamilyE2eeManager (AndroidKeyStore).
+     */
+    @VisibleForTesting(otherwise = VisibleForTesting.NONE)
     constructor(
         familyDao: FamilyDao,
         vitalSignDao: VitalSignDao,
@@ -125,6 +132,22 @@ class FamilyBridgeRepository @Inject constructor(
             familyDao.deletePendingBindingsByCode(code)
             familyDao.insertBinding(synced)
             if (remoteId == null) syncScheduler.scheduleSync()
+            // AUD-CHAT1: publicação IMEDIATA da chave pública E2EE do paciente na
+            // criação do convite, além da inclusão no payload de sync. Assim o
+            // cuidador consegue decifrar mensagens no primeiro ciclo, mesmo que o
+            // novo convite chegue ao cuidador antes do próximo sync de vínculos.
+            runCatching {
+                val patientPubKey = e2eeManager.getOrCreatePublicKeyBase64(patientUserId)
+                if (remoteId != null && patientPubKey.isNotBlank()) {
+                    apiClient.publishFamilyE2eePublicKey(
+                        bindingId = remoteId,
+                        patientId = patientUserId,
+                        publicKey = patientPubKey
+                    )
+                }
+            }.onFailure {
+                android.util.Log.w("FamilyBridgeRepo", "Chave E2EE do convite será sincronizada depois: ${it.message}")
+            }
             synced
         } catch (e: Exception) {
             android.util.Log.e("FamilyBridgeRepo", "Falha ao sincronizar vínculo, salvando local: ${e.message}")
@@ -326,9 +349,15 @@ class FamilyBridgeRepository @Inject constructor(
                 senderUserId = msg.senderUserId
             ).text
         }.getOrElse {
+            // AUD-CHAT1: em falha de decifragem (chave do cuidador ainda não
+            // recebida, indisponibilidade temporária do keystore) NUNCA
+            // persistimos o JSON bruto com 'ciphertext' no Room. O conteudo
+            // fica em branco e o proximo ciclo de sync (que ainda encontra a
+            // mensagem no servidor) cobre o texto quando a chave chega.
             android.util.Log.w("FamilyBridgeRepo", "Mensagem E2EE indecifrável no momento: ${it.message}")
-            msg.messageText
+            ""
         }
+        if (clearText.isEmpty()) return msg.copy(messageText = "")
         return msg.copy(messageText = clearText)
     }
 

@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import androidx.annotation.VisibleForTesting
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -280,6 +281,12 @@ class FamilyE2eeManager {
         this.keyStoreProvider = AndroidKeyStoreE2eeProvider(context)
     }
 
+    /**
+     * Construtor reservado exclusivamente a testes unitários JVM (provê
+     * [InMemoryE2eeKeyStoreProvider]). Em produção o Hilt sempre instancia o
+     * gerenciador via [FamilyE2eeManager(Context)] (@Singleton, AndroidKeyStore).
+     */
+    @VisibleForTesting(otherwise = VisibleForTesting.NONE)
     constructor(keyStoreProvider: E2eeKeyStoreProvider = InMemoryE2eeKeyStoreProvider()) {
         this.keyStoreProvider = keyStoreProvider
     }

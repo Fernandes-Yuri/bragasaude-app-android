@@ -1,5 +1,7 @@
 package br.com.bragasaude.data.remote.ai
 
+import br.com.bragasaude.data.local.security.FamilyE2eeManager
+import okhttp3.OkHttpClient
 import br.com.bragasaude.data.util.toEntity
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.model.ProfileLookup
@@ -26,7 +28,7 @@ class ProfileLookupApiTest {
         authService = mockk()
         every { authService.getTokenBlocking(any(), any()) } returns "test-token"
         // AUD-AN40: baseUrl agora imutavel — injeta a URL do mock no construtor.
-        api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), authService)
+        api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'), authService, OkHttpClient(), FamilyE2eeManager())
     }
     @After fun cleanup() { server.shutdown(); unmockkStatic(FirebaseAuth::class) }
     @Test fun only404MeansMissing() = runBlocking {
@@ -63,7 +65,7 @@ class ProfileLookupApiTest {
     @Test fun refusedConnectionIsUnavailable() = runBlocking {
         val closedServer = MockWebServer()
         closedServer.start()
-        val deadApi = BragaApiClient(mockk(relaxed = true), closedServer.url("/").toString().trimEnd('/'), authService)
+        val deadApi = BragaApiClient(mockk(relaxed = true), closedServer.url("/").toString().trimEnd('/'), authService, OkHttpClient(), FamilyE2eeManager())
         closedServer.shutdown()
         assertTrue(deadApi.getProfileLookup("owner") is ProfileLookup.Unavailable)
     }
