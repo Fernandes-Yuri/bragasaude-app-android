@@ -853,7 +853,7 @@ private fun VitalSaveStatusChip(status: VitalSaveStatus) {
             dotColor = BragaTextSecondary
         }
         VitalSaveStatus.SYNCED -> {
-            label = "Enviado à nuvem ✓"
+            label = "Enviado à nuvem"
             dotColor = BragaEmerald
         }
         VitalSaveStatus.PENDING_RETRY -> {

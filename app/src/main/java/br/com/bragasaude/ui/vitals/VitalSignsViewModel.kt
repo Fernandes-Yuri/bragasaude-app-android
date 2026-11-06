@@ -61,7 +61,7 @@ class VitalSignsViewModel @Inject constructor(
     val isLoading = _isLoading.asStateFlow()
 
     // DT-052: desfecho do último salvamento — alimenta o chip de sincronização
-    // ("Salvando…" -> "Enviado à nuvem ✓" / "Aguardando rede").
+    // ("Salvando…" -> "Enviado à nuvem" / "Aguardando rede").
     private val _saveStatus = MutableStateFlow<VitalSaveStatus?>(null)
     val saveStatus = _saveStatus.asStateFlow()
 

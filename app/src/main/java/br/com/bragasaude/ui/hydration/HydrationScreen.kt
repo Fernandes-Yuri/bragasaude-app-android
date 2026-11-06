@@ -733,7 +733,7 @@ private fun HydrationSaveStatusChip(status: VitalSaveStatus) {
             dotColor = MaterialTheme.colorScheme.onSurfaceVariant
         }
         VitalSaveStatus.SYNCED -> {
-            label = "Enviado à nuvem ✓"
+            label = "Enviado à nuvem"
             dotColor = Success
         }
         VitalSaveStatus.PENDING_RETRY -> {
