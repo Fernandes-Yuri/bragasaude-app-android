@@ -3,6 +3,7 @@ package br.com.bragasaude.ui.family
 import br.com.bragasaude.ui.components.BragaAlertDialog
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -68,7 +69,6 @@ fun FamilyConnectScreen(
     val inviteHistory by viewModel.inviteHistory.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
-    var showShareDialog by remember { mutableStateOf(false) }
     var showRevokeConfirm by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showRegenerateConfirm by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
@@ -257,13 +257,21 @@ fun FamilyConnectScreen(
                         }
 
                         OutlinedButton(
-                            onClick = { showShareDialog = true },
+                            onClick = {
+                                connectionCode?.let { code ->
+                                    shareConnectionCodeViaWhatsApp(context, code)
+                                }
+                            },
                             modifier = Modifier.weight(1f).heightIn(min = 56.dp),
-                            shape = RoundedCornerShape(14.dp)
+                            shape = RoundedCornerShape(14.dp),
+                            // DT-055: padding horizontal reduzido para "WhatsApp" caber em
+                            // 1 linha mesmo em 360 dp (ícone 18 + espaço 8 + rótulo ~70 +
+                            // padding 24 ≈ 120 dp < ~160 dp da metade da linha útil).
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("WhatsApp")
+                            Text("WhatsApp", maxLines = 1)
                         }
                     }
 
@@ -298,13 +306,8 @@ fun FamilyConnectScreen(
                 )
             }
 
-            // Diálogo de compartilhamento por WhatsApp
-            if (showShareDialog && connectionCode != null) {
-                ShareViaWhatsAppDialog(
-                    code = connectionCode!!,
-                    onDismiss = { showShareDialog = false }
-                )
-            }
+            // Diálogo de compartilhamento por WhatsApp removido (DT-055):
+            // o botão dispara a intent diretamente, sem etapa intermediária.
 
             Spacer(Modifier.height(16.dp))
 
@@ -519,61 +522,52 @@ private fun CaregiverListItem(
     }
 }
 
-@Composable
-private fun ShareViaWhatsAppDialog(code: String, onDismiss: () -> Unit) {
-    val context = LocalContext.current
+/** Pacote oficial do WhatsApp (DT-055). */
+private const val WHATSAPP_PACKAGE = "com.whatsapp"
 
-    BragaAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Compartilhar via WhatsApp") },
-        text = {
-            Column {
-                Text("Envie esta mensagem para seu filho ou familiar:")
-                Spacer(Modifier.height(12.dp))
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = """Olá! Aqui é do Braga Saúde. Meu código de conexão familiar é: $code
+/**
+ * Monta a mensagem de convite enviada junto com o código de conexão familiar.
+ * Função pura/top-level para facilitar teste unitário (DT-055).
+ */
+private fun buildShareMessage(code: String): String =
+    "Olá! Aqui é do Braga Saúde. Meu código de conexão familiar é: $code\n\n" +
+        "Use este código no app Braga Saúde para se conectar comigo como meu cuidador."
 
-Use este código no app Braga Saúde para se conectar comigo como meu cuidador.""",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(12.dp)
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val message = "Olá! Aqui é do Braga Saúde. Meu código de conexão familiar é: $code\n\nUse este código no app Braga Saúde para se conectar comigo como meu cuidador."
-                    try {
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, message)
-                            setPackage("com.whatsapp")
-                        }
-                        context.startActivity(intent)
-                        onDismiss()
-                    } catch (e: ActivityNotFoundException) {
-                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("BragaSaude", message))
-                        onDismiss()
-                    }
-                },
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Abrir WhatsApp")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        }
+/**
+ * DT-055: compartilhamento direto, sem diálogo intermediário do app.
+ * - WhatsApp instalado (resolvido via resolveActivity no pacote com.whatsapp):
+ *   abre o WhatsApp com a mensagem pronta.
+ * - Caso contrário: folha nativa de compartilhamento do sistema (createChooser).
+ * - ActivityNotFoundException em qualquer etapa cai no chooser; se não houver
+ *   nenhum alvo de compartilhamento no dispositivo, a ação é ignorada sem crash.
+ */
+private fun shareConnectionCodeViaWhatsApp(context: Context, code: String) {
+    val message = buildShareMessage(code)
+    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, message)
+    }
+    val whatsappIntent = Intent(shareIntent).apply { setPackage(WHATSAPP_PACKAGE) }
+    val chooserIntent = Intent.createChooser(
+        shareIntent,
+        "Compartilhar código de conexão familiar"
     )
+    val target = if (whatsappIntent.resolveActivity(context.packageManager) != null) {
+        whatsappIntent
+    } else {
+        chooserIntent
+    }
+    try {
+        context.startActivity(target)
+    } catch (e: ActivityNotFoundException) {
+        // Alvo direto sumiu entre a checagem e o clique (ex.: desinstalação):
+        // cai para o chooser nativo.
+        try {
+            context.startActivity(chooserIntent)
+        } catch (ignored: ActivityNotFoundException) {
+            // Nenhum alvo de compartilhamento disponível no dispositivo.
+        }
+    }
 }
 
 // ========================== ITEM DE HISTÓRICO DE CONVITE ==========================
