@@ -42,6 +42,9 @@ fun ProfileScreen(
     val profile by viewModel.profile.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     var showLeaveDialog by rememberSaveable { mutableStateOf(false) }
+    // DT-054: redefinição explícita de papel (reparo de contas que viraram
+    // CAREGIVER/HYBRID ao testar conexões e hoje só querem ser cuidadas).
+    var showRoleResetConfirm by rememberSaveable { mutableStateOf(false) }
     androidx.activity.compose.BackHandler(enabled = onBack != null) {
         showLeaveDialog = true
     }
@@ -54,6 +57,32 @@ fun ProfileScreen(
                 TextButton(enabled = !isLoading, onClick = { showLeaveDialog = false; onBack?.invoke() }) { Text("Sair sem salvar") }
             },
             dismissButton = { TextButton(onClick = { showLeaveDialog = false }) { Text("Continuar editando") } }
+        )
+    }
+    if (showRoleResetConfirm) {
+        BragaAlertDialog(
+            onDismissRequest = { showRoleResetConfirm = false },
+            title = { Text("Atuar apenas como cuidado(a)?") },
+            text = {
+                Text(
+                    "O papel de cuidador será removido do seu perfil e a aba Painel deixará de " +
+                        "aparecer. Os vínculos em que você é cuidado(a) permanecem intactos. Você " +
+                        "pode voltar a ser cuidador depois, concluindo o cadastro de familiar novamente."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRoleResetConfirm = false
+                    viewModel.saveUserRole("PATIENT") {
+                        // Recarrega o perfil da tela para o card "Modo de uso"
+                        // desaparecer imediatamente (o AuthViewModel já reage
+                        // sozinho à observação do Room e atualiza o menu).
+                        viewModel.loadProfile()
+                        Toast.makeText(context, "Pronto! Agora você atua apenas como cuidado(a).", Toast.LENGTH_LONG).show()
+                    }
+                }) { Text("Confirmar") }
+            },
+            dismissButton = { TextButton(onClick = { showRoleResetConfirm = false }) { Text("Cancelar") } }
         )
     }
     val saveError by viewModel.saveError.collectAsState()
@@ -616,6 +645,32 @@ fun ProfileScreen(
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done),
                                 placeholder = { Text("06:00") }
                             )
+                        }
+                    }
+                }
+            }
+
+            // DT-054: conta que hoje está com papel de cuidador (inclusive por
+            // ter testado conexões) pode voltar explicitamente a "apenas cuidado(a)".
+            // O servidor continua sendo a fonte da verdade: a ação grava via
+            // saveUserRole (Room + PATCH de perfil) e o AuthViewModel re-renderiza
+            // o menu a partir da observação do perfil.
+            if (profile?.userRole == "CAREGIVER") {
+                item {
+                    WhiteProfileDataCard {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Modo de uso", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(
+                                "Se você usa o Braga Saúde apenas para cuidar da sua própria saúde, " +
+                                    "pode atuar apenas como pessoa cuidada. A aba Painel deixa de aparecer.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                            OutlinedButton(
+                                onClick = { showRoleResetConfirm = true },
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                            ) { Text("Atuar apenas como cuidado(a)") }
                         }
                     }
                 }

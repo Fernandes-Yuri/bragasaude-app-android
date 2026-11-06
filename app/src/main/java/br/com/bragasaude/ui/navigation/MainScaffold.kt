@@ -37,6 +37,13 @@ fun MainScaffold(
     startDestination: Screen,
     userRole: String?,
     caregiverMode: String?,
+    /**
+     * DT-054: existência de vínculo familiar ATIVO em que o usuário é o cuidador.
+     * O menu inferior deriva do vínculo efetivo, não apenas da string de papel:
+     * conta contaminada (userRole=CAREGIVER sem vínculo ativo) volta a ver o menu
+     * de quem é cuidado; cuidador real (com vínculo) mantém o Painel.
+     */
+    hasActiveCaregiverBinding: Boolean = false,
     voiceViewModel: VoiceHealthViewModel = hiltViewModel()
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -69,9 +76,13 @@ fun MainScaffold(
         BottomNavItem("Braga", Icons.Default.ChatBubbleOutline, Screen.OrbChat),
         BottomNavItem("Perfil", Icons.Default.Person, Screen.Profile)
     )
+    // DT-054: "área de cuidador" só é efetiva quando existe vínculo ativo como
+    // cuidador. O papel no perfil (string) pode ter sido gravado por engano —
+    // a barra inferior não deve refletir papel sem vínculo (Painel fantasma).
+    val isActiveCaregiver = userRole == "CAREGIVER" && hasActiveCaregiverBinding
     val navItems = when {
-        userRole == "CAREGIVER" && caregiverMode == "HYBRID" -> hybridCaregiverNavItems
-        userRole == "CAREGIVER" -> viewerCaregiverNavItems
+        isActiveCaregiver && caregiverMode == "HYBRID" -> hybridCaregiverNavItems
+        isActiveCaregiver -> viewerCaregiverNavItems
         else -> patientNavItems
     }
 
