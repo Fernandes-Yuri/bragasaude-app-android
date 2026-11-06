@@ -1,4 +1,4 @@
-﻿package br.com.bragasaude.data.remote.sync
+package br.com.bragasaude.data.remote.sync
 
 import android.content.Context
 import androidx.hilt.work.HiltWorker
@@ -33,6 +33,7 @@ class HydrationReminderWorker @AssistedInject constructor(
             val profile = profileDao.getProfileOneShot(userId) ?: return Result.success()
 
             // 1. O Cuidador em modo VIEWER_ONLY NÃO deve receber lembretes de autocuidado de hidratação pessoal
+            // (limpeza sempre executada, independentemente de horario/tutorial).
             if (profile.caregiverMode == "VIEWER_ONLY") {
                 NotificationHelper.cancelHydrationReminders(appContext)
                 return Result.success()
@@ -40,6 +41,20 @@ class HydrationReminderWorker @AssistedInject constructor(
 
             // 2. Respeita preferências de notificação do usuário
             if (!profile.notificationsEnabled) {
+                return Result.success()
+            }
+
+            // (issue #7) Trava de silêncio noturno: não dispara lembretes entre 20h00 e 08h00,
+            // independentemente do agendador, garantindo que não acorde o usuário à noite.
+            val horaAtual = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+            if (horaAtual >= 20 || horaAtual < 8) {
+                return Result.success()
+            }
+
+            // (issue #7) Não dispara lembretes enquanto o onboarding/tutorial não foi concluído.
+            val tutorialConcluido = appContext.getSharedPreferences("braga_prefs", android.content.Context.MODE_PRIVATE)
+                .getBoolean("tutorial_seen", false)
+            if (!tutorialConcluido) {
                 return Result.success()
             }
 

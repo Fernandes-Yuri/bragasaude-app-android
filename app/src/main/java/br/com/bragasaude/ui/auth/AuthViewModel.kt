@@ -5,6 +5,8 @@ import br.com.bragasaude.domain.ProfileOnboarding
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.local.BragaDatabase
+import br.com.bragasaude.data.local.SyncPreferences
+import br.com.bragasaude.data.local.organizer.OrganizerStore
 import br.com.bragasaude.data.remote.repository.ProfileRepository
 import br.com.bragasaude.data.remote.model.RemoteProfile
 import br.com.bragasaude.data.remote.service.NotificationClient
@@ -43,6 +45,8 @@ class AuthViewModel @Inject constructor(
     private val medicationRepository: br.com.bragasaude.data.remote.repository.MedicationRepository,
     private val apiClient: br.com.bragasaude.data.remote.api.BragaApiClient,
     private val notificationClient: NotificationClient,
+    private val syncPreferences: SyncPreferences,
+    private val organizerStore: OrganizerStore,
     private val smokingSession: br.com.bragasaude.data.local.smoking.SmokingSupportSession,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
@@ -740,58 +744,130 @@ class AuthViewModel @Inject constructor(
         br.com.bragasaude.ai.BragaRoutingLogger.clear()
         smokingSession.closeForCleanup()
         movementManager.flush()
-        
-        // Cancelar todos os alarmes de medicação antes do logout (TASK-MED-02)
+
         val userId = auth.currentUser?.uid
-        if (userId != null) {
+
+        // Cancelar todos os alarmes de medicação antes do logout (TASK-MED-02)
+        userId?.let { uid ->
             try {
-                medicationRepository.cancelAllUserAlarms(userId)
+                medicationRepository.cancelAllUserAlarms(uid)
             } catch (e: Exception) {
                 android.util.Log.w("AuthViewModel", "Erro ao cancelar alarmes no signOut: ${e.message}")
             }
         }
 
-        // Cancelar todos os workers pendentes (SyncWorker, HydrationReminderWorker)
+        // (issue #11) Desvincular token FCM do aparelho desta conta antes de limpar dados locais.
+        userId?.let { uid ->
+            try {
+                val token = FirebaseMessaging.getInstance().token.await()
+                notificationClient.unregisterDeviceToken(uid, token)
+            } catch (e: Exception) {
+                android.util.Log.w("AuthViewModel", "Erro ao desvincular token FCM no signOut: ${e.message}")
+            }
+        }
+
+        // Cancelar workers pendentes, limpar tabelas locais, prefs, organizador e relatórios em cache.
         withContext(Dispatchers.IO) {
             try {
                 androidx.work.WorkManager.getInstance(appContext).cancelAllWork()
             } catch (e: Exception) {
                 android.util.Log.w("AuthViewModel", "Erro ao cancelar workers: ${e.message}")
             }
-            
-            // Limpar todas as tabelas locais — sem exceções: o schema 63 não tem
-            // mais tabelas do módulo de alimentação (retirado no ADR-010) e o
-            // catálogo/prefs legados são zerados pelo RetiredNutritionCleanup no boot.
-            // AUD-AN17 corrigido: Room gerencia o ciclo de vida do SQLite sob Hilt @Singleton.
-            // NUNCA chamar database.close() ou appContext.deleteDatabase():
-            // 1) database.close() antes de clearAllTables() causa IllegalStateException
-            //    ("attempt to re-open an already-closed object").
-            // 2) deleteDatabase() com o app em execução desvincula o inode no disco e
-            //    quebra qualquer acesso subsequente na mesma sessão.
-            // clearAllTables() executa DELETE FROM em todas as tabelas registradas mantendo
-            // a conexão e a integridade da instância Singleton.
+
+            // (issue #9) Flush síncrono com teto de 3s: envia vitais e passos
+            // pendentes (sync_pending = 1) ao backend ANTES de descartar o local.
+            userId?.let { uid ->
+                try {
+                    withTimeoutOrNull(3000L) {
+                        flushPendingVitalsAndMetrics(uid)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("AuthViewModel", "Flush de vitais/metricas no signOut: ${e.message}")
+                }
+            }
+
+            // Limpar todas as tabelas locais — depois do flush de vitais/metricas pendentes.
             try {
                 database.clearAllTables()
             } catch (e: Exception) {
                 android.util.Log.e("AuthViewModel", "Erro ao limpar tabelas locais no signOut: ${e.message}", e)
             }
-            
-            // Limpar SharedPreferences com dados de sessão
+
+            // (issue #8) Limpar syncPreferences e SharedPreferences auxiliares de sessão/alarme.
             try {
-                appContext.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
-                    .edit().clear().apply()
+                syncPreferences.clearAll()
             } catch (e: Exception) {
-                android.util.Log.w("AuthViewModel", "Erro ao limpar prefs: ${e.message}")
+                android.util.Log.w("AuthViewModel", "Erro ao limpar SyncPreferences: ${e.message}")
+            }
+            listOf(
+                "braga_movement_prefs",
+                "dose_alarms",
+                "dose_preferences",
+                "account_pause",
+                "hydration_achievements",
+                "organizer-prefs",
+                "braga_prefs"
+            ).forEach { prefName ->
+                try {
+                    appContext.getSharedPreferences(prefName, Context.MODE_PRIVATE)
+                        .edit().clear().apply()
+                } catch (e: Exception) {
+                    android.util.Log.w("AuthViewModel", "Erro ao limpar prefs $prefName: ${e.message}")
+                }
+            }
+
+            // (issue #18 + #23) Organizador: limpar sessões do usuário isolado por
+            // files/organizer/{userId}/ e apagar relatórios clínicos em cache.
+            try {
+                userId?.let { uid ->
+                    organizerStore.userId = uid
+                    organizerStore.clearAll()
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("AuthViewModel", "Erro ao limpar OrganizerStore: ${e.message}")
             }
         }
-        
+
+        // Apagar recursivamente o diretório cacheDir/relatorios/ (relatórios em cache).
+        try {
+            java.io.File(appContext.cacheDir, "relatorios").deleteRecursively()
+        } catch (e: Exception) {
+            android.util.Log.w("AuthViewModel", "Erro ao apagar cacheDir/relatorios: ${e.message}")
+        }
+
         auth.signOut()
-        
+
         _sessionStatus.value = AppSessionStatus.NotAuthenticated
         _isProfileComplete.value = null
         _hasAcceptedConsent.value = null
         _userRole.value = null
         _caregiverMode.value = null
+    }
+
+    /**
+     * Envia ao backend os sinais vitais e as métricas diárias (passos) que ainda
+     * estão com pendingSync = true, respeitando o dono da sessão. Usado no flush
+     * de logout para não perder registros offline ou em trânsito.
+     */
+    private suspend fun flushPendingVitalsAndMetrics(userId: String) {
+        // Sinais vitais pendentes
+        val pendingVitals = database.vitalSignDao().getPendingSync()
+        for (v in pendingVitals) {
+            if (v.userId != userId) continue
+            val serverId = apiClient.syncVitalSign(v)
+            if (serverId != null) {
+                database.vitalSignDao().insert(v.copy(remoteId = serverId, pendingSync = false))
+            }
+        }
+        // Métricas diárias pendentes (inclui passos)
+        val pendingMetrics = database.dailyMetricsDao().getPendingSync()
+        for (m in pendingMetrics) {
+            if (m.userId != userId) continue
+            val serverId = apiClient.syncDailyMetric(m)
+            if (serverId != null) {
+                database.dailyMetricsDao().insert(m.copy(pendingSync = false))
+            }
+        }
     }
 
     /**

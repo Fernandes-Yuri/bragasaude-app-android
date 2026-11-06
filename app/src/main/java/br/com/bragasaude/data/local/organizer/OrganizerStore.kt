@@ -54,8 +54,11 @@ class OrganizerStore @Inject constructor(
         examOrganizerAgent = ExamOrganizerAgent(CascadeTextExtractor(MlKitOcrEngine(), context))
     )
 
+    /** Usuário proprietário da sessão; isola exames e PDFs sob files/organizer/{userId}/. */
+    var userId: String = ""
+
     companion object { private val lock = Mutex() }
-    private val root get() = File(context.noBackupFilesDir, "organizer").apply { mkdirs() }
+    private val root get() = File(context.filesDir, "organizer/$userId").apply { mkdirs() }
     private val cache get() = File(context.cacheDir, "organizer-work").apply { mkdirs() }
     private val pdf by lazy { OrganizerPdfBuilder(context) }
     private val keys get() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }

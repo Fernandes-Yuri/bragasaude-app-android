@@ -1,8 +1,10 @@
 package br.com.bragasaude
 
 import android.app.Application
+import android.content.ComponentCallbacks2
+import android.content.res.Configuration
 import androidx.hilt.work.HiltWorkerFactory
-import androidx.work.Configuration
+import androidx.work.Configuration as WorkConfiguration
 import br.com.bragasaude.data.remote.auth.AuthService
 import br.com.bragasaude.data.remote.network.AvatarAuthInterceptor
 import okhttp3.OkHttpClient
@@ -23,7 +25,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltAndroidApp
-class BragaApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory {
+class BragaApplication : Application(), WorkConfiguration.Provider, SingletonImageLoader.Factory, ComponentCallbacks2 {
 
     @Inject lateinit var authService: AuthService
     @Inject lateinit var workerFactory: HiltWorkerFactory
@@ -75,15 +77,49 @@ class BragaApplication : Application(), Configuration.Provider, SingletonImageLo
             br.com.bragasaude.data.local.organizer.OrganizerStore(this@BragaApplication).cleanup()
         }
 
-
+        // Ouve eventos de pressão de memória do SO para liberar caches voláteis
+        // (Coil 3) antes do Low Memory Killer encerrar o processo.
+        registerComponentCallbacks(this)
     }
 
-    override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder()
+    /**
+     * Libera o cache de memória do Coil 3 nos níveis de corte do SO, evitando
+     * que o LMK (Low Memory Killer) aborte o app em dispositivos com pouca RAM.
+     */
+    override fun onTrimMemory(level: Int) {
+        when (level) {
+            ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN,
+            ComponentCallbacks2.TRIM_MEMORY_RUNNING_MODERATE,
+            ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW,
+            ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL,
+            ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
+                try {
+                    SingletonImageLoader.get(this).memoryCache?.clear()
+                } catch (e: Exception) {
+                    android.util.Log.w("BragaApp", "Falha ao liberar cache Coil no onTrimMemory: ${e.message}")
+                }
+            }
+        }
+    }
+
+    override fun onLowMemory() {
+        try {
+            SingletonImageLoader.get(this).memoryCache?.clear()
+        } catch (e: Exception) {
+            android.util.Log.w("BragaApp", "Falha ao liberar cache Coil no onLowMemory: ${e.message}")
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {}
+
+    override val workManagerConfiguration: WorkConfiguration
+        get() = WorkConfiguration.Builder()
             .setWorkerFactory(workerFactory)
             .build()
 
     override fun newImageLoader(context: coil3.PlatformContext): ImageLoader {
+        // Em pressao de memoria, onTrimMemory/onLowMemory liberam o cache do Coil 3,
+        // protegendo o app contra o Low Memory Killer em dispositivos com pouca RAM.
         return ImageLoader.Builder(context)
             .components {
                 add(OkHttpNetworkFetcherFactory(callFactory = {
