@@ -48,6 +48,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import br.com.bragasaude.BuildConfig
 import br.com.bragasaude.data.local.organizer.*
 import br.com.bragasaude.data.util.HealthFormatter
 import br.com.bragasaude.ui.components.BragaAlertDialog
@@ -125,12 +126,17 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer) }
     }
-    // Proteção de segurança: impede capturas de tela e gravação de prévias clínicas
+    // Proteção de segurança: impede capturas de tela e gravação de prévias clínicas em produção.
+    // Em debug/testes fica destravado para permitir inspeção visual, Robo test e automações.
     val activity = context as? android.app.Activity
     DisposableEffect(activity) {
-        val alreadySecure = activity?.window?.attributes?.flags?.and(WindowManager.LayoutParams.FLAG_SECURE) != 0
-        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        onDispose { if (!alreadySecure) activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+        if (!BuildConfig.DEBUG) {
+            val alreadySecure = activity?.window?.attributes?.flags?.and(WindowManager.LayoutParams.FLAG_SECURE) != 0
+            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            onDispose { if (!alreadySecure) activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+        } else {
+            onDispose { }
+        }
     }
     BackHandler { onBack() }
 
