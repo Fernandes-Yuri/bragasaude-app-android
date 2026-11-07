@@ -416,8 +416,8 @@ class FamilyBridgeRepository @Inject constructor(
     ): FamilyMessageEntity = createFamilyMessage(patientUserId, senderName, messageText, iconType)
 
     /**
-     * Polling exclusivo de mensagens. Vínculos são atualizados ao abrir o chat
-     * ou por push. Uma resposta idêntica/vazia é sucesso; falhas são propagadas.
+     * Recupera as chaves ativas antes de tentar novamente a decifragem do histórico.
+     * Uma resposta idêntica/vazia é sucesso; falhas são propagadas.
      */
     suspend fun chatCycleSnapshot(userId: String, patientId: String): ChatCycleSnapshot {
         check(auth.currentUser?.uid == userId) { "Sua conta mudou. Abra a conversa novamente." }
@@ -649,7 +649,8 @@ class FamilyBridgeRepository @Inject constructor(
     }
 
     suspend fun markMessageAsRead(messageId: String) {
-        familyDao.markMessageAsRead(messageId)
+        val message = familyDao.getMessageById(messageId) ?: return
+        markVisibleMessagesAsRead(message.patientUserId, listOf(messageId))
     }
 
     suspend fun markVisibleMessagesAsRead(patientUserId: String, messageIds: List<String>) {
@@ -665,8 +666,11 @@ class FamilyBridgeRepository @Inject constructor(
         }
     }
 
-    // Bulk receipts from older screens cannot prove which messages were visible.
-    suspend fun markAllMessagesAsRead(patientUserId: String) = Unit
+    // Ação explícita “marcar todas”: limita-se às cópias locais legíveis.
+    suspend fun markAllMessagesAsRead(patientUserId: String) {
+        val unread = familyDao.getUnreadMessagesForPatient(patientUserId).first()
+        unread.map { it.id }.chunked(100).forEach { markVisibleMessagesAsRead(patientUserId, it) }
+    }
 
     suspend fun receiveRealtimeMessagesRead(patientUserId: String, readerId: String, messageIds: List<String>) {
         val userId = requireConversationAccess(patientUserId)

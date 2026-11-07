@@ -201,7 +201,9 @@ class FamilySessionTest {
             every { repo.getAllActiveMessages() } returns flowOf(emptyList())
             every { repo.getRecentMessagesForPatient(any(), any()) } returns flowOf(emptyList())
 
-            val wsClient = FamilyChatWebSocketClient("https://api.bragasaude.online")
+            val wsStatus = kotlinx.coroutines.flow.MutableStateFlow(br.com.bragasaude.data.remote.family.FamilyWsStatus.CONNECTING)
+            val wsClient = mockk<FamilyChatWebSocketClient>(relaxed=true)
+            every { wsClient.status } returns wsStatus
             val vm = FamilyViewModel(
                 mockk(relaxed=true), repo, mockk(relaxed=true), mockk(relaxed=true),
                 mockk(relaxed=true), auth, enableWebSocket = true, familyWsClient = wsClient
@@ -213,11 +215,25 @@ class FamilySessionTest {
             coVerify(atLeast=1) { repo.prepareConversation("patient") }
             coVerify(atLeast=1) { repo.chatCycleSnapshot("patient", "patient") }
             assertNull(vm.chatSyncState.value.warning)
+            clearMocks(repo, answers=false, recordedCalls=true)
+            wsStatus.value = br.com.bragasaude.data.remote.family.FamilyWsStatus.CONNECTED
+            runCurrent()
+            coVerify(exactly=1) { repo.chatCycleSnapshot("patient", "patient") }
+            wsStatus.value = br.com.bragasaude.data.remote.family.FamilyWsStatus.RECONNECTING
+            runCurrent()
+            wsStatus.value = br.com.bragasaude.data.remote.family.FamilyWsStatus.CONNECTED
+            runCurrent()
+            coVerify(exactly=2) { repo.chatCycleSnapshot("patient", "patient") }
 
             // Ao sair da tela, para a sessão e encerra polling
             vm.setChatScreenVisible(false)
             runCurrent()
             assertFalse(vm.chatSyncState.value.isPolling)
+            clearMocks(repo, answers=false, recordedCalls=true)
+            advanceTimeBy(60_000)
+            runCurrent()
+            coVerify(exactly=0) { repo.chatCycleSnapshot(any(), any()) }
+            verify { wsClient.stopSession() }
         } finally {
             store.clear()
             runCurrent()

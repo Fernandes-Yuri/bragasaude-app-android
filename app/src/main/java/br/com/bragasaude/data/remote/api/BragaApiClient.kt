@@ -646,7 +646,7 @@ class BragaApiClient @Inject constructor(
     /**
      * Confirmação de visualização / leitura de mensagens familiares no servidor.
      */
-    suspend fun markFamilyMessagesRead(patientId: String, messageIds: List<String> = emptyList()): Boolean = withContext(Dispatchers.IO) {
+    suspend fun markFamilyMessagesRead(patientId: String, messageIds: List<String>): Boolean = withContext(Dispatchers.IO) {
         try {
             val json = JSONObject().apply {
                 put("patientId", patientId)

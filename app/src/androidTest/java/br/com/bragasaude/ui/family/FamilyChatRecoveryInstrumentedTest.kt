@@ -2,7 +2,6 @@ package br.com.bragasaude.ui.family
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -42,7 +41,7 @@ class FamilyChatRecoveryInstrumentedTest {
         assertEquals("Resposta de teste",p.decryptForConversation(patient,patient,reply,caregiver).text)
     }
 
-    @Test fun unreadableMessageHasVisibleExplanationAndPendingSendHasClock() {
+    @Test fun unreadableMessageHasVisibleExplanation() {
         val pending = FamilyMessageEntity("pending","qa","Teste","","CUSTOM",awaitingDecryption=true)
         compose.setContent { MaterialTheme { ChatBubble(pending,isFromMe=false) } }
         compose.onNodeWithText("Não foi possível abrir esta mensagem. Abra a conversa nos dois aparelhos para atualizar as chaves.").assertIsDisplayed()
