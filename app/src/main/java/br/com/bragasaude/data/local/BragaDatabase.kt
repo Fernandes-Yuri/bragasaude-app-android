@@ -36,7 +36,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 65, // Bloqueios do mural por conta, com sincronização durável
+    version = 66, // Estado explícito de mensagens aguardando decifragem
     exportSchema = true
 )
 @TypeConverters(Converters::class, SmokingSupportConverters::class)

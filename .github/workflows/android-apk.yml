@@ -171,6 +171,13 @@ jobs:
             echo "retention=30" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Salvar schemas Room gerados
+        uses: actions/upload-artifact@v4
+        with:
+          name: braga-room-schemas
+          path: app/schemas/
+          retention-days: 7
+
       - name: Verificar APK e gerar manifesto de origem
         env:
           APK_PATH: ${{ steps.apk.outputs.path }}

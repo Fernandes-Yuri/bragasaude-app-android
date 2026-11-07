@@ -379,24 +379,33 @@ class FamilyBridgeRepository @Inject constructor(
         msg: FamilyMessageEntity
     ): FamilyMessageEntity {
         if (!FamilyE2eeManager.isEncryptedEnvelope(msg.messageText)) return msg
-        val clearText = runCatching {
-            e2eeManager.decryptForConversation(
-                currentUserId = currentUserId,
-                patientId = patientUserId,
-                rawPayload = msg.messageText,
-                senderUserId = msg.senderUserId
-            ).text
-        }.getOrElse {
-            // AUD-CHAT1: em falha de decifragem (chave do cuidador ainda não
-            // recebida, indisponibilidade temporária do keystore) NUNCA
-            // persistimos o JSON bruto com 'ciphertext' no Room. O conteudo
-            // fica em branco e o proximo ciclo de sync (que ainda encontra a
-            // mensagem no servidor) cobre o texto quando a chave chega.
-            android.util.Log.w("FamilyBridgeRepo", "Mensagem E2EE indecifrável no momento: ${it.message}")
-            ""
+        return try {
+            msg.copy(messageText = e2eeManager.decryptForConversation(
+                currentUserId = currentUserId, patientId = patientUserId,
+                rawPayload = msg.messageText, senderUserId = msg.senderUserId
+            ).text, awaitingDecryption = false)
+        } catch (e: java.security.GeneralSecurityException) {
+            android.util.Log.w("FamilyBridgeRepo", "Mensagem aguardando decifragem: ${e.javaClass.simpleName}")
+            msg.copy(messageText = "", awaitingDecryption = true)
         }
-        if (clearText.isEmpty()) return msg.copy(messageText = "")
-        return msg.copy(messageText = clearText)
+    }
+
+    private fun preserveReadableCopy(remote: FamilyMessageEntity, local: FamilyMessageEntity?): FamilyMessageEntity {
+        val readable = if (remote.awaitingDecryption && local != null &&
+            !local.awaitingDecryption && local.messageText.isNotBlank()) {
+            remote.copy(messageText = local.messageText, awaitingDecryption = false)
+        } else remote
+        return readable.copy(isRead = readable.isRead || local?.isRead == true)
+    }
+
+    suspend fun prepareConversation(patientId: String) {
+        val userId = requireConversationAccess(patientId)
+        val publicKey = e2eeManager.getOrCreatePublicKeyBase64(userId)
+        check(apiClient.publishFamilyE2eePublicKey(patientId = patientId, publicKey = publicKey)) {
+            "Não foi possível preparar a conversa. Tente novamente."
+        }
+        check(requireConversationAccess(patientId) == userId) { "Sua conta mudou." }
+        apiClient.getFamilyBindings(userId)
     }
 
     suspend fun sendCareMessage(
@@ -407,11 +416,22 @@ class FamilyBridgeRepository @Inject constructor(
     ): FamilyMessageEntity = createFamilyMessage(patientUserId, senderName, messageText, iconType)
 
     /**
-     * Polling exclusivo de mensagens. Vínculos são atualizados ao abrir o chat
-     * ou por push. Uma resposta idêntica/vazia é sucesso; falhas são propagadas.
+     * Recupera as chaves ativas antes de tentar novamente a decifragem do histórico.
+     * Uma resposta idêntica/vazia é sucesso; falhas são propagadas.
      */
     suspend fun chatCycleSnapshot(userId: String, patientId: String): ChatCycleSnapshot {
         check(auth.currentUser?.uid == userId) { "Sua conta mudou. Abra a conversa novamente." }
+        apiClient.getFamilyBindings(userId)
+        check(auth.currentUser?.uid == userId) { "Sua conta mudou." }
+        // Uma mensagem pendente por falta de handshake é reenviada assim que a chave chega.
+        for (pending in familyDao.getPendingSyncMessages().filter {
+            it.patientUserId == patientId && it.senderUserId == userId
+        }) {
+            check(requireConversationAccess(patientId) == userId) { "Sua conta mudou." }
+            val remoteId = apiClient.syncFamilyMessage(pending) ?: continue
+            check(requireConversationAccess(patientId) == userId) { "Sua conta mudou." }
+            familyDao.markMessageSynced(pending.id, remoteId)
+        }
         return ChatCycleSnapshot(messagesFingerprint = syncFamilyMessages(patientId).getOrThrow())
     }
 
@@ -431,11 +451,7 @@ class FamilyBridgeRepository @Inject constructor(
                     val decodedMsg = decodeMessageForLocalStorage(userId, patientUserId, msg)
                     val local = familyDao.getMessageById(decodedMsg.id)
                     if (local?.pendingSync != true && local?.deletedAt == null) {
-                        val messageToPersist = if (local != null && local.isRead) {
-                            decodedMsg.copy(isRead = true)
-                        } else {
-                            decodedMsg
-                        }
+                        val messageToPersist = preserveReadableCopy(decodedMsg, local)
                         familyDao.insertMessage(messageToPersist)
                     }
                     // Fallback (doc 10 §1A.2): mensagem NOVA vinda do servidor e que
@@ -487,11 +503,7 @@ class FamilyBridgeRepository @Inject constructor(
         val decodedMsg = decodeMessageForLocalStorage(currentUid, msg.patientUserId, msg)
         val local = familyDao.getMessageById(decodedMsg.id)
         if (local?.pendingSync != true && local?.deletedAt == null) {
-            val messageToPersist = if (local != null && local.isRead) {
-                decodedMsg.copy(isRead = true)
-            } else {
-                decodedMsg
-            }
+            val messageToPersist = preserveReadableCopy(decodedMsg, local)
             familyDao.insertMessage(messageToPersist)
         }
 
@@ -646,23 +658,38 @@ class FamilyBridgeRepository @Inject constructor(
     }
 
     suspend fun markMessageAsRead(messageId: String) {
-        familyDao.markMessageAsRead(messageId)
+        val message = familyDao.getMessageById(messageId) ?: return
+        markVisibleMessagesAsRead(message.patientUserId, listOf(messageId))
     }
 
-    suspend fun markAllMessagesAsRead(patientUserId: String) {
-        val currentUid = auth.currentUser?.uid
-        if (!currentUid.isNullOrBlank()) {
-            familyDao.markIncomingMessagesAsRead(patientUserId, currentUid)
-        } else {
-            familyDao.markAllMessagesAsRead(patientUserId)
+    suspend fun markVisibleMessagesAsRead(patientUserId: String, messageIds: List<String>) {
+        val userId = requireConversationAccess(patientUserId)
+        val eligible = messageIds.distinct().take(100).mapNotNull { familyDao.getMessageById(it) }
+            .filter { it.patientUserId == patientUserId && it.senderUserId != userId &&
+                !it.isRead && !it.awaitingDecryption && !it.pendingSync && it.deletedAt == null &&
+                it.expiresAt > System.currentTimeMillis() }
+        if (eligible.isEmpty()) return
+        if (apiClient.markFamilyMessagesRead(patientUserId, eligible.map { it.remoteId ?: it.id })) {
+            check(requireConversationAccess(patientUserId) == userId) { "Sua conta mudou." }
+            eligible.forEach { familyDao.markMessageAsRead(it.id) }
         }
-        try {
-            apiClient.markFamilyMessagesRead(patientUserId)
-        } catch (_: Exception) {}
     }
 
-    suspend fun receiveRealtimeMessagesRead(patientUserId: String) {
-        familyDao.markAllMessagesAsRead(patientUserId)
+    // Ação explícita “marcar todas”: limita-se às cópias locais legíveis.
+    suspend fun markAllMessagesAsRead(patientUserId: String) {
+        val unread = familyDao.getUnreadMessagesForPatient(patientUserId).first()
+        unread.map { it.id }.chunked(100).forEach { markVisibleMessagesAsRead(patientUserId, it) }
+    }
+
+    suspend fun receiveRealtimeMessagesRead(patientUserId: String, readerId: String, messageIds: List<String>) {
+        val userId = requireConversationAccess(patientUserId)
+        if (readerId.isBlank() || readerId == userId) return
+        for (id in messageIds.distinct()) {
+            val local = familyDao.getMessageById(id) ?: familyDao.getMessageByRemoteId(id) ?: continue
+            if (local.patientUserId == patientUserId && local.senderUserId == userId && !local.pendingSync) {
+                familyDao.markMessageAsRead(local.id)
+            }
+        }
     }
 
     /**

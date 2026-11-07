@@ -49,9 +49,13 @@ class RetiredNutritionMigrationTest {
             repeat(snapshotEntities.length()) { index ->
                 val table = snapshotEntities.getJSONObject(index)
                 val tableName = table.getString("tableName")
-                if (tableName in setOf("post_reactions_local", "social_posts_local")) {
+                if (tableName in setOf("post_reactions_local", "social_posts_local", "family_messages_local")) {
                     old.execSQL("DROP TABLE `$tableName`")
                     old.execSQL(table.getString("createSql").replace("\${TABLE_NAME}", tableName))
+                    val indexes = table.optJSONArray("indices") ?: org.json.JSONArray()
+                    repeat(indexes.length()) { n ->
+                        old.execSQL(indexes.getJSONObject(n).getString("createSql").replace("\${TABLE_NAME}", tableName))
+                    }
                 }
             }
             old.version = 62
@@ -74,7 +78,7 @@ class RetiredNutritionMigrationTest {
         context.deleteDatabase(name)
         val db = open()
         try {
-            assertEquals(65, db.openHelper.readableDatabase.version)
+            assertEquals(66, db.openHelper.readableDatabase.version)
             retired.forEach { table ->
                 db.openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'").use { assertFalse(it.moveToFirst()) }
             }

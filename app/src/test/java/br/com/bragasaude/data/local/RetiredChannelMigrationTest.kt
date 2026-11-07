@@ -59,9 +59,13 @@ class RetiredChannelMigrationTest {
             repeat(snapshotEntities.length()) { index ->
                 val table = snapshotEntities.getJSONObject(index)
                 val tableName = table.getString("tableName")
-                if (tableName in setOf("post_reactions_local", "social_posts_local")) {
+                if (tableName in setOf("post_reactions_local", "social_posts_local", "family_messages_local")) {
                     db.execSQL("DROP TABLE `$tableName`")
                     db.execSQL(table.getString("createSql").replace("\${TABLE_NAME}", tableName))
+                    val indexes = table.optJSONArray("indices") ?: org.json.JSONArray()
+                    repeat(indexes.length()) { n ->
+                        db.execSQL(indexes.getJSONObject(n).getString("createSql").replace("\${TABLE_NAME}", tableName))
+                    }
                 }
             }
             db.version = 58

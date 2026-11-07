@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,15 +107,21 @@ fun FamilyChatScreen(
     // #13: gaveta de atalhos recolhida por padrão para devolver espaço à conversa.
     var quickActionsExpanded by rememberSaveable { mutableStateOf(false) }
 
-    // Marcar mensagens como lidas ao entrar na conversa e a cada nova mensagem
-    LaunchedEffect(initialPatientId, patientId, messages.size) {
-        val target = patientId?.takeIf { it.isNotBlank() } ?: initialPatientId?.takeIf { it.isNotBlank() }
-        if (!target.isNullOrBlank()) {
-            viewModel.markAllMessagesAsRead(target)
+    val listState = rememberLazyListState()
+    val currentVisibleMessages by rememberUpdatedState(visibleMessages)
+    LaunchedEffect(patientId, lifecycleOwner, visibleMessages) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+          snapshotFlow {
+            listState.layoutInfo.visibleItemsInfo.mapNotNull { item ->
+                currentVisibleMessages.firstOrNull { it.id == item.key }?.takeIf {
+                    it.senderUserId != currentUserId && !it.isRead && !it.awaitingDecryption
+                }?.id
+            }
+          }.collect { ids ->
+              patientId?.takeIf { it.isNotBlank() }?.let { viewModel.markVisibleMessagesAsRead(it, ids) }
+          }
         }
     }
-
-    val listState = rememberLazyListState()
 
     // Scroll para as mensagens mais recentes (índice 0 com reverseLayout)
     LaunchedEffect(Unit) {
@@ -463,16 +470,17 @@ fun FamilyChatScreen(
  * desenha nada e por isso é descartado.
  */
 private fun FamilyMessageEntity.hasVisibleContent(): Boolean =
-    messageText.isNotBlank() ||
+    awaitingDecryption || messageText.isNotBlank() ||
         (iconType.isNotBlank() && iconType != "CUSTOM")
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ChatBubble(
+internal fun ChatBubble(
     message: FamilyMessageEntity,
     isFromMe: Boolean,
     onDeleteMessage: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    avatarContent: (@Composable () -> Unit)? = null
 ) {
     // #28: defesa extra — nunca desenha bolha sem texto nem ícone válido.
     if (!message.hasVisibleContent()) return
@@ -500,7 +508,11 @@ private fun ChatBubble(
     ) {
         // Avatar
         if (!isFromMe) {
-            br.com.bragasaude.ui.components.ConnectedUserAvatar(message.senderUserId, message.senderName, 36.dp)
+            if (avatarContent != null) {
+                avatarContent()
+            } else {
+                br.com.bragasaude.ui.components.ConnectedUserAvatar(message.senderUserId, message.senderName, 36.dp)
+            }
             Spacer(Modifier.width(8.dp))
         }
 
@@ -559,6 +571,10 @@ private fun ChatBubble(
 
                         Spacer(Modifier.height(4.dp))
 
+                        if (message.awaitingDecryption) {
+                            Text("Não foi possível abrir esta mensagem. Abra a conversa nos dois aparelhos para atualizar as chaves.",
+                                style = MaterialTheme.typography.bodyMedium, color = secondaryColor)
+                        }
                         // Texto da mensagem
                         if (message.messageText.isNotBlank()) {
                             Text(
@@ -586,7 +602,10 @@ private fun ChatBubble(
                                 color = secondaryColor
                             )
                             if (isFromMe && message.sentAt > 0) {
-                                if (message.isRead) {
+                                if (message.pendingSync) {
+                                    Icon(Icons.Default.Schedule, contentDescription = "Aguardando envio",
+                                        modifier = Modifier.size(16.dp), tint = secondaryColor)
+                                } else if (message.isRead) {
                                     // Tique duplo esmeralda: mensagem lida.
                                     Icon(
                                         Icons.Default.DoneAll,

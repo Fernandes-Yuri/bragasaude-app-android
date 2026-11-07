@@ -530,8 +530,11 @@ class FamilyE2eeManager {
         patientId: String,
         caregiverId: String,
         patientPublicKey: String?,
-        caregiverPublicKey: String?
+        caregiverPublicKey: String?,
+        bindingStatus: String = "ACTIVE"
     ) {
+        // Revogados/pendentes nunca substituem as chaves da conversa ativa.
+        if (bindingStatus != "ACTIVE") return
         val cleanPatient = patientId.trim()
         val cleanCaregiver = caregiverId.trim()
         if (cleanPatient.isEmpty()) return
@@ -599,8 +602,8 @@ class FamilyE2eeManager {
     /**
      * Cifra uma mensagem para a conversa familiar de [patientId].
      * Prioriza a chave de sessão ECDH + HKDF-SHA256 quando a chave pública da contraparte já foi
-     * sincronizada; caso o vínculo ainda esteja em transição pré-handshake, aplica derivação HKDF
-     * de conversa para que nenhuma mensagem saia do aparelho em texto plano.
+     * sincronizada. Sem chave da contraparte, o envio permanece pendente até o handshake.
+     * A derivação antiga de transição é aceita somente na leitura do legado.
      */
     fun encryptForConversation(
         senderUserId: String,
@@ -739,7 +742,7 @@ class FamilyE2eeManager {
             }
         }
 
-        return deriveFallbackConversationKey(cleanPatient)
+        throw GeneralSecurityException("Aguardando a chave do familiar. Abra a conversa nos dois aparelhos e tente novamente.")
     }
 
     private fun buildCandidateSessionKeys(

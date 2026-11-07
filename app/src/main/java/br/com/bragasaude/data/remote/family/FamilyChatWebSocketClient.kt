@@ -27,7 +27,7 @@ enum class FamilyWsStatus {
 interface FamilyWsListener {
     fun onMessageReceived(msg: FamilyMessageEntity)
     fun onMessageDeleted(messageId: String)
-    fun onMessagesRead(patientId: String) {}
+    fun onMessagesRead(patientId: String, readerId: String, messageIds: List<String>) {}
 }
 
 /**
@@ -259,7 +259,7 @@ class FamilyChatWebSocketClient @Inject constructor(
                 }
                 "MESSAGE_DELETED" -> {
                     val data = root.optJSONObject("data")
-                    val messageId = data?.optString("message_id", data.optString("messageId", "")) ?: root.optString("data")
+                    val messageId = data?.optString("message_id", data.optString("messageId", data.optString("id", ""))) ?: root.optString("data")
                     if (messageId.isNotBlank()) {
                         activeListener?.onMessageDeleted(messageId)
                     }
@@ -268,7 +268,12 @@ class FamilyChatWebSocketClient @Inject constructor(
                     val data = root.optJSONObject("data")
                     val patientId = data?.optString("patient_id", data.optString("patientId", "")) ?: root.optString("data")
                     if (patientId.isNotBlank()) {
-                        activeListener?.onMessagesRead(patientId)
+                        val readerId = data?.optString("reader_id", data.optString("readerId", "")) ?: ""
+                        val ids = data?.optJSONArray("messageIds") ?: data?.optJSONArray("message_ids")
+                        val messageIds = if (ids == null) emptyList() else (0 until ids.length()).map { ids.getString(it) }
+                        if (patientId == activePatientId && readerId.isNotBlank()) {
+                            activeListener?.onMessagesRead(patientId, readerId, messageIds)
+                        }
                     }
                 }
                 "ping" -> {

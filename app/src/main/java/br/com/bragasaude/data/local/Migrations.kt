@@ -639,6 +639,12 @@ object Migrations {
         }
     }
 
+    val MIGRATION_65_66 = object : Migration(65, 66) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE family_messages_local ADD COLUMN awaitingDecryption INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -679,6 +685,7 @@ object Migrations {
         MIGRATION_61_62,
         MIGRATION_62_63,
         MIGRATION_63_64,
-        MIGRATION_64_65
+        MIGRATION_64_65,
+        MIGRATION_65_66
     )
 }

@@ -280,7 +280,7 @@ class FamilyBridgeRepositoryTest {
     // [5] POLLING DO CHAT (SPEC-16)
     // ==================================================================
     @Test
-    fun emptyChatResponseIsSuccessfulWithoutDownloadingBindings() = runBlocking {
+    fun emptyChatResponseIsSuccessfulAfterRefreshingKeys() = runBlocking {
         every { auth.currentUser?.uid } returns "patient"
         coEvery { apiClient.getFamilyMessages("patient") } returns emptyList()
 
@@ -289,7 +289,7 @@ class FamilyBridgeRepositoryTest {
 
         assertEquals(first, repeated)
         coVerify(exactly=2) { apiClient.getFamilyMessages("patient") }
-        coVerify(exactly=0) { apiClient.getFamilyBindings(any()) }
+        coVerify(exactly=2) { apiClient.getFamilyBindings("patient") }
     }
 
     @Test
@@ -554,27 +554,69 @@ class FamilyBridgeRepositoryTest {
         assertTrue("receiveRealtimeMessage deve manter isRead = true se a mensagem já foi lida no dispositivo", insertedSlot.captured.isRead)
     }
 
-    @Test
-    fun `markAllMessagesAsRead uses markIncomingMessagesAsRead to avoid marking own sent messages`() = runBlocking {
-        val patientId = "patient-1"
-        every { auth.currentUser?.uid } returns "caregiver-1"
-        coEvery { familyDao.markIncomingMessagesAsRead(patientId, "caregiver-1") } just Runs
-        coEvery { apiClient.markFamilyMessagesRead(patientId) } returns true
 
-        repository.markAllMessagesAsRead(patientId)
-
-        coVerify(exactly = 1) { familyDao.markIncomingMessagesAsRead(patientId, "caregiver-1") }
-        coVerify(exactly = 0) { familyDao.markAllMessagesAsRead(patientId) }
+    @Test fun `read receipts exclude own unreadable and unseen messages`() = runBlocking {
+        every { auth.currentUser?.uid } returns "patient"
+        fun msg(id: String, sender: String = "caregiver", locked: Boolean = false) =
+            br.com.bragasaude.data.local.FamilyMessageEntity(id, "patient", "Familiar", "Olá", "CUSTOM",
+                senderUserId = sender, remoteId = id, awaitingDecryption = locked)
+        coEvery { familyDao.getMessageById("visible") } returns msg("visible")
+        coEvery { familyDao.getMessageById("locked") } returns msg("locked", locked = true)
+        coEvery { familyDao.getMessageById("own") } returns msg("own", sender = "patient")
+        coEvery { apiClient.markFamilyMessagesRead("patient", listOf("visible")) } returns true
+        repository.markVisibleMessagesAsRead("patient", listOf("visible", "locked", "own"))
+        coVerify(exactly=1) { apiClient.markFamilyMessagesRead("patient", listOf("visible")) }
+        coVerify(exactly=1) { familyDao.markMessageAsRead("visible") }
+        coVerify(exactly=0) { familyDao.markMessageAsRead("locked") }
+        coVerify(exactly=0) { familyDao.markMessageAsRead("own") }
+        coVerify(exactly=0) { familyDao.markAllMessagesAsRead(any()) }
     }
 
-    @Test
-    fun `receiveRealtimeMessagesRead marks all messages as read in Room for patient`() = runBlocking {
-        val patientId = "patient-1"
-        coEvery { familyDao.markAllMessagesAsRead(patientId) } just Runs
+    @Test fun `own read receipt echo cannot mark sent messages read`() = runBlocking {
+        every { auth.currentUser?.uid } returns "patient"
+        repository.receiveRealtimeMessagesRead("patient", "patient", listOf("sent"))
+        coVerify(exactly=0) { familyDao.markMessageAsRead(any()) }
+    }
 
-        repository.receiveRealtimeMessagesRead(patientId)
+    @Test fun `peer receipt marks only IDs sent by this user in this room`() = runBlocking {
+        every { auth.currentUser?.uid } returns "patient"
+        val sent = br.com.bragasaude.data.local.FamilyMessageEntity("sent", "patient", "Paciente", "Olá", "CUSTOM", senderUserId = "patient")
+        coEvery { familyDao.getMessageById("sent") } returns sent
+        coEvery { familyDao.getMessageById("foreign") } returns sent.copy(id="foreign", patientUserId="other")
+        repository.receiveRealtimeMessagesRead("patient", "caregiver", listOf("sent", "foreign"))
+        coVerify(exactly=1) { familyDao.markMessageAsRead("sent") }
+        coVerify(exactly=0) { familyDao.markMessageAsRead("foreign") }
+    }
 
-        coVerify(exactly = 1) { familyDao.markAllMessagesAsRead(patientId) }
+    @Test fun `decryption failure stays visible and preserves readable sender copy`() = runBlocking {
+        every { auth.currentUser?.uid } returns "patient"
+        val envelope = "{\"v\":1,\"iv\":\"AAAAAAAAAAAAAAAA\",\"ciphertext\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}"
+        val incoming = br.com.bragasaude.data.local.FamilyMessageEntity("encrypted", "patient", "Familiar", envelope, "CUSTOM", senderUserId="caregiver")
+        coEvery { familyDao.getMessageById("encrypted") } returns null
+        val saved = slot<br.com.bragasaude.data.local.FamilyMessageEntity>()
+        coEvery { familyDao.insertMessage(capture(saved)) } just Runs
+        repository.receiveRealtimeMessage(incoming)
+        assertTrue(saved.captured.awaitingDecryption)
+        assertEquals("", saved.captured.messageText)
+        coEvery { familyDao.getMessageById("encrypted") } returns incoming.copy(messageText="Cópia local legível")
+        repository.receiveRealtimeMessage(incoming)
+        assertEquals("Cópia local legível", saved.captured.messageText)
+        assertFalse(saved.captured.awaitingDecryption)
+    }
+    @Test fun `catchup retries pending message after peer keys are refreshed`() = runBlocking {
+        every { auth.currentUser?.uid } returns "patient"
+        val pending = br.com.bragasaude.data.local.FamilyMessageEntity("outbox", "patient", "Paciente", "Olá", "CUSTOM",senderUserId="patient",pendingSync=true)
+        coEvery { familyDao.getPendingSyncMessages(any()) } returns listOf(pending, pending.copy(id="foreign",patientUserId="other"))
+        coEvery { apiClient.syncFamilyMessage(pending) } returns "outbox"
+        coEvery { apiClient.getFamilyMessages("patient") } returns emptyList()
+        repository.chatCycleSnapshot("patient", "patient")
+        coVerifyOrder {
+            apiClient.getFamilyBindings("patient")
+            apiClient.syncFamilyMessage(pending)
+            familyDao.markMessageSynced("outbox","outbox")
+            apiClient.getFamilyMessages("patient")
+        }
+        coVerify(exactly=1) { apiClient.syncFamilyMessage(any()) }
     }
 
 }
