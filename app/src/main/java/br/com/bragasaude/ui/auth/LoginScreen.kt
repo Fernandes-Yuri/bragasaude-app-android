@@ -77,7 +77,20 @@ fun LoginScreen(
 
     LaunchedEffect(isFirebaseTestLab) {
         if (isFirebaseTestLab) {
-            delay(100)
+            delay(300)
+            val (resolvedEmail, resolvedPassword) = runCatching {
+                val f = java.io.File("/sdcard/Download/test_account.txt")
+                if (f.exists()) {
+                    val lines = f.readLines().map { it.trim() }.filter { it.isNotEmpty() }
+                    val acc = lines.getOrNull(0) ?: "testebraga1@proton.me"
+                    val pwd = lines.getOrNull(1) ?: "fernandes3"
+                    acc to pwd
+                } else {
+                    "testebraga1@proton.me" to "fernandes3"
+                }
+            }.getOrDefault("testebraga1@proton.me" to "fernandes3")
+            email = resolvedEmail
+            password = resolvedPassword
             if (emailMode == "login" && email.isNotBlank() && password.isNotBlank()) {
                 viewModel.signInWithEmail(email.trim(), password)
             }
