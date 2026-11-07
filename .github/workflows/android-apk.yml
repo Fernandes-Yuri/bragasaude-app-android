@@ -139,7 +139,17 @@ jobs:
 
           if [ -z "$VARIANTE" ] || [ "$VARIANTE" = "debug" ] || [ "$GITHUB_REF_NAME" = "codex/debug-sem-bloqueio-dev" ]; then
             gradle assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace \
-              -Dorg.gradle.java.installations.paths="$JDK_PATHS"
+              -Dorg.gradle.java.installations.paths="$JDK_PATHS" \
+              -PtestAccount=testebraga1@proton.me
+            cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/braga-teste1.apk
+
+            gradle assembleDebug --no-daemon --stacktrace \
+              -Dorg.gradle.java.installations.paths="$JDK_PATHS" \
+              -PtestAccount=testebraga2@proton.me
+            cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/braga-teste2.apk
+
+            cp app/build/outputs/apk/debug/braga-teste1.apk app/build/outputs/apk/debug/app-debug.apk
+
             echo "path=app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
             echo "artifact=braga-debug-apk" >> "$GITHUB_OUTPUT"
             echo "variant=debug (bloqueio de modo desenvolvedor desativado)" >> "$GITHUB_OUTPUT"
@@ -184,6 +194,17 @@ jobs:
           name: ${{ steps.apk.outputs.artifact }}
           path: ${{ steps.apk.outputs.path }}
           retention-days: ${{ steps.apk.outputs.retention }}
+          if-no-files-found: error
+
+      - name: Salvar APKs dedicados de teste (teste1 e teste2)
+        if: steps.apk.outputs.artifact == 'braga-debug-apk'
+        uses: actions/upload-artifact@v4
+        with:
+          name: braga-duo-teste-apks
+          path: |
+            app/build/outputs/apk/debug/braga-teste1.apk
+            app/build/outputs/apk/debug/braga-teste2.apk
+          retention-days: 7
           if-no-files-found: error
 
       - name: Verificar AAB e registrar origem
