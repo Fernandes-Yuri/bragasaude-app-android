@@ -423,6 +423,15 @@ class FamilyBridgeRepository @Inject constructor(
         check(auth.currentUser?.uid == userId) { "Sua conta mudou. Abra a conversa novamente." }
         apiClient.getFamilyBindings(userId)
         check(auth.currentUser?.uid == userId) { "Sua conta mudou." }
+        // Uma mensagem pendente por falta de handshake é reenviada assim que a chave chega.
+        for (pending in familyDao.getPendingSyncMessages().filter {
+            it.patientUserId == patientId && it.senderUserId == userId
+        }) {
+            check(requireConversationAccess(patientId) == userId) { "Sua conta mudou." }
+            val remoteId = apiClient.syncFamilyMessage(pending) ?: continue
+            check(requireConversationAccess(patientId) == userId) { "Sua conta mudou." }
+            familyDao.markMessageSynced(pending.id, remoteId)
+        }
         return ChatCycleSnapshot(messagesFingerprint = syncFamilyMessages(patientId).getOrThrow())
     }
 

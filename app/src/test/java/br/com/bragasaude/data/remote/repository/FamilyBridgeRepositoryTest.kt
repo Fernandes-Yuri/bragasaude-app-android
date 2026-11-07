@@ -603,4 +603,20 @@ class FamilyBridgeRepositoryTest {
         assertEquals("Cópia local legível", saved.captured.messageText)
         assertFalse(saved.captured.awaitingDecryption)
     }
+    @Test fun `catchup retries pending message after peer keys are refreshed`() = runBlocking {
+        every { auth.currentUser?.uid } returns "patient"
+        val pending = br.com.bragasaude.data.local.FamilyMessageEntity("outbox", "patient", "Paciente", "Olá", "CUSTOM",senderUserId="patient",pendingSync=true)
+        coEvery { familyDao.getPendingSyncMessages() } returns listOf(pending, pending.copy(id="foreign",patientUserId="other"))
+        coEvery { apiClient.syncFamilyMessage(pending) } returns "outbox"
+        coEvery { apiClient.getFamilyMessages("patient") } returns emptyList()
+        repository.chatCycleSnapshot("patient", "patient")
+        coVerifyOrder {
+            apiClient.getFamilyBindings("patient")
+            apiClient.syncFamilyMessage(pending)
+            familyDao.markMessageSynced("outbox","outbox")
+            apiClient.getFamilyMessages("patient")
+        }
+        coVerify(exactly=1) { apiClient.syncFamilyMessage(any()) }
+    }
+
 }
