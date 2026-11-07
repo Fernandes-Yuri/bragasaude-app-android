@@ -69,6 +69,25 @@ class FamilyBridgeRepositoryTest {
         )
     }
 
+    @Test
+    fun `patient download failure is not reported as fresh data`() = runBlocking {
+        coEvery { apiClient.getProfile("patient-1") } returns null
+        coEvery { apiClient.getVitalSigns("patient-1") } returns null
+        coEvery { apiClient.getDailyMetrics("patient-1") } returns emptyList()
+        assertTrue(repository.syncPatientDataForCaregiver("patient-1").isFailure)
+        coVerify(exactly = 0) { vitalSignDao.insert(any()) }
+    }
+
+    @Test
+    fun `cancellation of patient download is propagated`() = runBlocking {
+        coEvery { apiClient.getProfile("patient-1") } throws kotlinx.coroutines.CancellationException("session changed")
+        try {
+            repository.syncPatientDataForCaregiver("patient-1")
+            fail("O cancelamento deve interromper o worker e o polling")
+        } catch (_: kotlinx.coroutines.CancellationException) {}
+        coVerify(exactly = 0) { apiClient.getVitalSigns(any()) }
+    }
+
     private fun pendingBinding(
         code: String = "A1B2C3D4",
         expiresAt: Long = System.currentTimeMillis() + sevenDaysMs

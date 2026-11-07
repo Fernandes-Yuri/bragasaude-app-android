@@ -48,6 +48,8 @@ class HomeViewModelTest {
         val guidance = "Faça uma pausa para caminhar ou alongar.\n\nAcompanhe seus passos ao longo do dia."
         val fullAlert = "Momento de Movimento\n\n$guidance"
         every { auth.currentUser } returns null
+        every { auth.addAuthStateListener(any()) } just Runs
+        every { auth.removeAuthStateListener(any()) } just Runs
         every { context.getSharedPreferences(any(), any()) } returns preferences
         every { preferences.getStringSet(any(), any()) } returns emptySet()
         every { profiles.getProfile(any()) } returns flowOf(null)

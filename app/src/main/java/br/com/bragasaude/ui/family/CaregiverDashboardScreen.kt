@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.family
 
+import androidx.lifecycle.repeatOnLifecycle
+
 import br.com.bragasaude.ui.components.BragaFormSheet
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Forum
@@ -114,6 +116,8 @@ fun CaregiverDashboardScreen(
 ) {
     val watchedPatients by viewModel.watchedPatients.collectAsState()
     val dashboard by viewModel.dashboard.collectAsState()
+    val lastCloudSync by viewModel.lastCloudSync.collectAsState()
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val upcomingConsultations by viewModel.upcomingConsultations.collectAsState()
     val messages by remember(dashboard.patientUserId) {
         viewModel.recentMessages(dashboard.patientUserId)
@@ -137,12 +141,10 @@ fun CaregiverDashboardScreen(
         }
     }
 
-    // Polling de fallback (2 min) para atualizar métricas diárias/perfil que não possuem stream realtime
-    LaunchedEffect(dashboard.patientUserId) {
+    LaunchedEffect(lifecycleOwner, dashboard.patientUserId) {
         if (dashboard.patientUserId.isNotBlank()) {
-            while (true) {
-                kotlinx.coroutines.delay(120_000L)
-                viewModel.refreshPatientData()
+            lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                viewModel.pollPatientData()
             }
         }
     }
@@ -238,6 +240,15 @@ fun CaregiverDashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
             ) {
+                item {
+                    Text(
+                        text = lastCloudSync?.let {
+                            "Atualizado às ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(it))}"
+                        } ?: "Aguardando atualização da nuvem",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
                 // Seletor quando acompanha mais de um familiar
                 if (watchedPatients.size > 1) {
                     item {

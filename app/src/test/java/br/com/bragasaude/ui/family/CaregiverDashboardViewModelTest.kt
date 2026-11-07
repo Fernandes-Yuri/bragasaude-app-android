@@ -7,6 +7,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.*
@@ -40,6 +41,7 @@ class CaregiverDashboardViewModelTest {
 
         every { familyRepository.getActiveBindingsForCaregiver("caregiver-1") } returns bindingsFlow
         every { familyRepository.getQuickMessageTemplates() } returns emptyMap()
+        coEvery { familyRepository.syncPatientDataForCaregiver(any()) } returns Result.success(Unit)
 
         viewModel = CaregiverDashboardViewModel(
             context = context,
@@ -54,6 +56,45 @@ class CaregiverDashboardViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `visible dashboard polls every fifteen seconds and stops when cancelled`() = runTest(testDispatcher) {
+        val binding = FamilyBindingEntity(
+            id = "poll-binding", patientUserId = "patient-100", caregiverUserId = "caregiver-1",
+            caregiverName = "Ana", caregiverRelation = "Filha", connectionCode = "POLL1234", status = "ACTIVE"
+        )
+        every { profileDao.getProfile("patient-100") } returns flowOf(null)
+        every { vitalSignDao.getAll("patient-100") } returns flowOf(emptyList())
+        every { dailyMetricsDao.getRecent30Days("patient-100") } returns flowOf(emptyList())
+        bindingsFlow.value = listOf(binding)
+        runCurrent()
+        clearMocks(familyRepository, answers = false, recordedCalls = true)
+        val polling = backgroundScope.launch { viewModel.pollPatientData() }
+        runCurrent()
+        coVerify(exactly = 1) { familyRepository.syncPatientDataForCaregiver("patient-100") }
+        advanceTimeBy(15_000L)
+        runCurrent()
+        coVerify(exactly = 2) { familyRepository.syncPatientDataForCaregiver("patient-100") }
+        polling.cancel()
+        advanceTimeBy(30_000L)
+        runCurrent()
+        coVerify(exactly = 2) { familyRepository.syncPatientDataForCaregiver("patient-100") }
+    }
+
+    @Test
+    fun `failed cloud download never publishes a successful timestamp`() = runTest(testDispatcher) {
+        val binding = FamilyBindingEntity(
+            id = "failure-binding", patientUserId = "patient-100", caregiverUserId = "caregiver-1",
+            caregiverName = "Ana", caregiverRelation = "Filha", connectionCode = "FAIL1234", status = "ACTIVE"
+        )
+        every { profileDao.getProfile("patient-100") } returns flowOf(null)
+        every { vitalSignDao.getAll("patient-100") } returns flowOf(emptyList())
+        every { dailyMetricsDao.getRecent30Days("patient-100") } returns flowOf(emptyList())
+        coEvery { familyRepository.syncPatientDataForCaregiver(any()) } returns Result.failure(java.io.IOException("offline"))
+        bindingsFlow.value = listOf(binding)
+        runCurrent()
+        assertEquals(null, viewModel.lastCloudSync.value)
     }
 
     @Test

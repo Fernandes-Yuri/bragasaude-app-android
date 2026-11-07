@@ -58,10 +58,15 @@ class CaregiverDashboardViewModel @Inject constructor(
     private val _quickTemplates = MutableStateFlow(familyRepository.getQuickMessageTemplates())
     val quickTemplates: StateFlow<Map<String, MessageTemplate>> = _quickTemplates.asStateFlow()
 
+    private val _lastCloudSync = MutableStateFlow<Long?>(null)
+    val lastCloudSync = _lastCloudSync.asStateFlow()
+    private val refreshLock = kotlinx.coroutines.sync.Mutex()
+
     private var dashboardJob: Job? = null
     private var realtimeSubscriptionJob: Job? = null
     private var consultationsJob: Job? = null
     private var bindingsJob: Job? = null
+    private var dataOwner: String? = null
     private var authListener: FirebaseAuth.AuthStateListener? = null
 
     init {
@@ -73,6 +78,11 @@ class CaregiverDashboardViewModel @Inject constructor(
             val uid = firebaseAuth.currentUser?.uid
             if (uid != null && uid != br.com.bragasaude.util.BragaConstants.GUEST_UID) {
                 loadData(uid)
+            } else {
+                bindingsJob?.cancel()
+                dataOwner = null
+                clearPatient()
+                _watchedPatients.value = emptyList()
             }
         }
         authListener?.let { auth.addAuthStateListener(it) }
@@ -86,6 +96,11 @@ class CaregiverDashboardViewModel @Inject constructor(
     private fun loadData(caregiverUid: String = currentUserId) {
         if (caregiverUid.isBlank() || caregiverUid == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
 
+        if (dataOwner != caregiverUid) {
+            clearPatient()
+            _watchedPatients.value = emptyList()
+            dataOwner = caregiverUid
+        }
         bindingsJob?.cancel()
         bindingsJob = viewModelScope.launch {
             // 1. Baixar vínculos atualizados da nuvem (evita tela vazia se o cache local foi limpo)
@@ -107,11 +122,7 @@ class CaregiverDashboardViewModel @Inject constructor(
                 if (bindings.isNotEmpty() && bindings.none { it.patientUserId == _dashboard.value.patientUserId }) {
                     selectPatient(bindings.first())
                 } else if (bindings.isEmpty()) {
-                    dashboardJob?.cancel()
-                    realtimeSubscriptionJob?.cancel()
-                    consultationsJob?.cancel()
-                    _upcomingConsultations.value = emptyList()
-                    _dashboard.value = CaregiverDashboardState()
+                    clearPatient()
                 }
             }
         }
@@ -120,10 +131,17 @@ class CaregiverDashboardViewModel @Inject constructor(
     fun recentMessages(patientId: String): Flow<List<FamilyMessageEntity>> =
         if (patientId.isBlank()) flowOf(emptyList()) else familyRepository.getRecentMessagesForPatient(patientId)
 
-    fun selectPatient(binding: FamilyBindingEntity) {
+    private fun clearPatient() {
         dashboardJob?.cancel()
         realtimeSubscriptionJob?.cancel()
         consultationsJob?.cancel()
+        _upcomingConsultations.value = emptyList()
+        _dashboard.value = CaregiverDashboardState()
+        _lastCloudSync.value = null
+    }
+
+    fun selectPatient(binding: FamilyBindingEntity) {
+        clearPatient()
 
         viewModelScope.launch {
             try {
@@ -173,10 +191,8 @@ class CaregiverDashboardViewModel @Inject constructor(
                 isLoading = true
             )
 
-            // Disparar sincronização remota inicial dos dados mais recentes do paciente
-            launch {
-                familyRepository.syncPatientDataForCaregiver(binding.patientUserId)
-            }
+
+            launch { syncSelectedPatient() }
 
             try {
                 combine(
@@ -235,6 +251,8 @@ class CaregiverDashboardViewModel @Inject constructor(
                 }.collectLatest { state ->
                     _dashboard.value = state
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _dashboard.value = _dashboard.value.copy(isLoading = false)
             }
@@ -371,28 +389,36 @@ class CaregiverDashboardViewModel @Inject constructor(
     }
 
     fun refreshPatientData() {
-        val uid = currentUserId
-        if (uid.isNotBlank() && uid != br.com.bragasaude.util.BragaConstants.GUEST_UID) {
-            viewModelScope.launch {
-                try {
-                    familyRepository.syncBindingsForCaregiver(uid)
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    android.util.Log.e("CaregiverDashboardVM", "Erro ao sincronizar vínculos no refresh: ${e.message}")
-                }
-            }
+        viewModelScope.launch { syncSelectedPatient() }
+    }
+
+    /** A tela controla a duração do ciclo; cada download termina antes do próximo. */
+    suspend fun pollPatientData() {
+        while (true) {
+            syncSelectedPatient()
+            kotlinx.coroutines.delay(15_000L)
         }
-        val currentPatientId = _dashboard.value.patientUserId
-        if (currentPatientId.isBlank()) return
-        viewModelScope.launch {
-            try {
-                familyRepository.syncPatientDataForCaregiver(currentPatientId)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                android.util.Log.e("CaregiverDashboardVM", "Erro ao sincronizar dados do paciente: ${e.message}")
+    }
+
+    private suspend fun syncSelectedPatient() {
+        if (!refreshLock.tryLock()) return
+        try {
+            val owner = auth.currentUser?.uid ?: return
+            familyRepository.syncBindingsForCaregiver(owner, strict = true)
+            if (auth.currentUser?.uid != owner) return
+            val patientId = _dashboard.value.patientUserId
+            val bindings = familyRepository.getActiveBindingsForCaregiver(owner).first()
+            if (patientId.isBlank() || bindings.none { it.patientUserId == patientId }) return
+            familyRepository.syncPatientDataForCaregiver(patientId).getOrThrow()
+            if (auth.currentUser?.uid == owner && _dashboard.value.patientUserId == patientId) {
+                _lastCloudSync.value = System.currentTimeMillis()
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("CaregiverDashboardVM", "Falha no download do familiar: ${e.message}")
+        } finally {
+            refreshLock.unlock()
         }
     }
 

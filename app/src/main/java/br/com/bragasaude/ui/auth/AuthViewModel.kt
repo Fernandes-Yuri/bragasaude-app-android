@@ -54,6 +54,16 @@ class AuthViewModel @Inject constructor(
     private val _sessionStatus = MutableStateFlow<AppSessionStatus>(AppSessionStatus.Initializing)
     val sessionStatus = _sessionStatus.asStateFlow()
 
+    private val _initialDataReady = MutableStateFlow(false)
+    val initialDataReady = _initialDataReady.asStateFlow()
+    private val _initialSyncError = MutableStateFlow<String?>(null)
+    val initialSyncError = _initialSyncError.asStateFlow()
+    private var restoreJob: Job? = null
+    private var restoreOwner: String? = null
+    private val _sessionNotice = MutableStateFlow<String?>(null)
+    val sessionNotice = _sessionNotice.asStateFlow()
+    fun dismissSessionNotice() { _sessionNotice.value = null }
+
     private val _isProfileComplete = MutableStateFlow<Boolean?>(null)
     val isProfileComplete = _isProfileComplete.asStateFlow()
 
@@ -105,13 +115,15 @@ class AuthViewModel @Inject constructor(
         val user = firebaseAuth.currentUser
         if (user != null) {
             _sessionStatus.value = AppSessionStatus.Authenticated(user.uid)
-            viewModelScope.launch {
-                syncManager.syncUserData(user.uid, force = false)
-            }
+            startSessionRestore(user.uid)
             // G2 (doc 10 §3.2): garante o token FCM do aparelho logado no gateway.
             registerFcmToken()
             checkProfile(user.uid)
         } else {
+            restoreJob?.cancel()
+            restoreOwner = null
+            _initialDataReady.value = false
+            _initialSyncError.value = null
             profileJob?.cancel()
             profileOwner = null
             _profileError.value = null
@@ -133,6 +145,7 @@ class AuthViewModel @Inject constructor(
         val initialUser = auth.currentUser
         if (initialUser != null) {
             _sessionStatus.value = AppSessionStatus.Authenticated(initialUser.uid)
+            startSessionRestore(initialUser.uid)
             checkProfile(initialUser.uid)
         } else {
             _sessionStatus.value = AppSessionStatus.NotAuthenticated
@@ -146,23 +159,34 @@ class AuthViewModel @Inject constructor(
 
     fun retryProfile() { auth.currentUser?.uid?.let { checkProfile(it, force = true) } }
 
-    /**
-     * D-NEWUSER: o sync pós-login nunca pode travar a tela de entrada.
-     * Roda com teto de 45s e falha isolada; o perfil é resolvido em paralelo
-     * pelo checkProfile (ouvinte de auth), que tem tela de retry em erro.
-     * TimeoutCancellationException é tratado aqui para não cair no catch
-     * genérico dos chamadores (que mostraria "erro" com login já válido).
-     */
-    private suspend fun syncAfterLogin(userId: String) {
-        try {
-            withTimeout(45_000L) { syncManager.downloadAllUserData(userId) }
-        } catch (e: TimeoutCancellationException) {
-            android.util.Log.w("AuthViewModel", "Sync pós-login estourou 45s; segue sem bloquear a entrada.")
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            android.util.Log.w("AuthViewModel", "Sync pós-login falhou sem bloquear a entrada: ${e.message}")
+    /** Uma restauração por sessão; falha explícita permite retry sem exibir histórico vazio. */
+    private fun startSessionRestore(userId: String, retry: Boolean = false) {
+        if (!retry && restoreOwner == userId && (restoreJob?.isActive == true || _initialDataReady.value)) return
+        restoreJob?.cancel()
+        restoreOwner = userId
+        _initialDataReady.value = false
+        _initialSyncError.value = null
+        restoreJob = viewModelScope.launch {
+            try {
+                withTimeout(45_000L) { syncManager.downloadAllUserData(userId).getOrThrow() }
+                if (auth.currentUser?.uid == userId) _initialDataReady.value = true
+            } catch (e: TimeoutCancellationException) {
+                if (auth.currentUser?.uid == userId) _initialSyncError.value = "A restauração dos seus dados demorou. Tente novamente com conexão."
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (auth.currentUser?.uid == userId) _initialSyncError.value = "Não foi possível restaurar seu histórico. Seus dados continuam na nuvem. Tente novamente."
+            }
         }
+    }
+
+    fun retryInitialSync() {
+        auth.currentUser?.uid?.let { startSessionRestore(it, retry = true) }
+    }
+
+    private suspend fun syncAfterLogin(userId: String) {
+        startSessionRestore(userId)
+        restoreJob?.join()
     }
 
     private var lastRegisteredToken: String? = null
@@ -724,6 +748,8 @@ class AuthViewModel @Inject constructor(
             )
             _hasAcceptedConsent.value = acceptedBeforeAuth
             _isProfileComplete.value = true
+            _initialDataReady.value = true
+            _initialSyncError.value = null
             _sessionStatus.value = AppSessionStatus.Authenticated(guestUid)
         }
     }
@@ -742,10 +768,30 @@ class AuthViewModel @Inject constructor(
 
     suspend fun signOut() {
         br.com.bragasaude.ai.BragaRoutingLogger.clear()
-        smokingSession.closeForCleanup()
         movementManager.flush()
-
         val userId = auth.currentUser?.uid
+        val hasPendingData = withContext(Dispatchers.IO) {
+            if (userId != null) {
+                withTimeoutOrNull(5_000L) {
+                    try {
+                        flushPendingVitalsAndMetrics(userId)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        android.util.Log.w("AuthViewModel", "Dados aguardando envio antes de sair: ${e.message}")
+                    }
+                }
+            }
+            database.vitalSignDao().getPendingSync().any { it.userId == userId } ||
+                database.dailyMetricsDao().getPendingSync().any { it.userId == userId } ||
+                database.biometryDao().getPendingSync().any { it.userId == userId }
+        }
+        if (hasPendingData) {
+            _sessionNotice.value = "Há medições salvas neste aparelho aguardando envio. Conecte-se à internet e tente sair novamente para preservar seus dados."
+            return
+        }
+        restoreJob?.cancelAndJoin()
+        smokingSession.closeForCleanup()
 
         // Cancelar todos os alarmes de medicação antes do logout (TASK-MED-02)
         userId?.let { uid ->
@@ -758,29 +804,6 @@ class AuthViewModel @Inject constructor(
 
         // Cancelar workers pendentes, limpar tabelas locais, prefs, organizador e relatórios em cache.
         withContext(Dispatchers.IO) {
-            // (issue #9 + DT-052) O FLUSH vem primeiro: envia vitais e passos
-            // pendentes (sync_pending = 1) ao backend antes de qualquer limpeza.
-            // Teto de 5s (era 3s) e sem concorrência com FCM/WorkManager — era
-            // exatamente aí que o logout rápido descartava medições.
-            userId?.let { uid ->
-                try {
-                    val flushed = withTimeoutOrNull(5000L) {
-                        flushPendingVitalsAndMetrics(uid)
-                        true
-                    }
-                    if (flushed == null) {
-                        val pendingVitals = database.vitalSignDao().getPendingSync().size
-                        val pendingMetrics = database.dailyMetricsDao().getPendingSync().size
-                        android.util.Log.w(
-                            "AuthViewModel",
-                            "Flush no signOut estourou 5s: $pendingVitals vitais e $pendingMetrics métricas seguem pendentes."
-                        )
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.w("AuthViewModel", "Flush de vitais/metricas no signOut: ${e.message}")
-                }
-            }
-
             // Só DEPOIS do flush: cancelar workers (o fallback de rede já cumpriu
             // seu papel; cancelar antes matava o retry de pendências).
             try {
@@ -799,6 +822,8 @@ class AuthViewModel @Inject constructor(
                     android.util.Log.w("AuthViewModel", "Erro ao desvincular token FCM no signOut: ${e.message}")
                 }
             }
+
+            auth.signOut()
 
             // Limpar todas as tabelas locais — depois do flush de vitais/metricas pendentes.
             try {
@@ -849,8 +874,6 @@ class AuthViewModel @Inject constructor(
             android.util.Log.w("AuthViewModel", "Erro ao apagar cacheDir/relatorios: ${e.message}")
         }
 
-        auth.signOut()
-
         _sessionStatus.value = AppSessionStatus.NotAuthenticated
         _isProfileComplete.value = null
         _hasAcceptedConsent.value = null
@@ -872,6 +895,12 @@ class AuthViewModel @Inject constructor(
             if (serverId != null) {
                 database.vitalSignDao().insert(v.copy(remoteId = serverId, pendingSync = false))
             }
+        }
+        for (b in database.biometryDao().getPendingSync()) {
+            if (b.userId != userId) continue
+            val identified = if (b.remoteId == null) b.copy(remoteId = java.util.UUID.randomUUID().toString()) else b
+            if (identified != b) database.biometryDao().insert(identified)
+            if (apiClient.syncBiometry(identified)) database.biometryDao().acknowledgeSync(identified)
         }
         // Métricas diárias pendentes (inclui passos)
         val pendingMetrics = database.dailyMetricsDao().getPendingSync()

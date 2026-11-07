@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /** Mantém leitura separada do descarte e sincroniza as telas que usam os mesmos avisos. */
-internal class AlertReadStateStore(private val preferences: SharedPreferences, private val key: String) {
+internal class AlertReadStateStore(private val preferences: SharedPreferences, private var key: String) {
     private val _readAlerts = MutableStateFlow(load())
     val readAlerts = _readAlerts.asStateFlow()
     private var activeAlerts = emptySet<String>()
@@ -18,6 +18,14 @@ internal class AlertReadStateStore(private val preferences: SharedPreferences, p
 
     init {
         preferences.registerOnSharedPreferenceChangeListener(listener)
+    }
+
+    fun switchKey(newKey: String) {
+        if (key == newKey) return
+        key = newKey
+        activeAlerts = emptySet()
+        _readAlerts.value = load()
+        _identifiedAt.value = emptyMap()
     }
 
     fun markRead(alerts: Set<String>) {

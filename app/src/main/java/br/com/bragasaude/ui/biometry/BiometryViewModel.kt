@@ -17,6 +17,7 @@ import javax.inject.Inject
 
 import br.com.bragasaude.data.util.toRemote
 import kotlinx.coroutines.flow.collectLatest
+import br.com.bragasaude.data.remote.sync.userIds
 import br.com.bragasaude.util.BragaConstants
 
 @HiltViewModel
@@ -36,10 +37,12 @@ class BiometryViewModel @Inject constructor(
     val alertMessage = _alertMessage.asSharedFlow()
 
     init {
-        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         viewModelScope.launch {
-            repository.getBiometry(userId).collectLatest { entities ->
-                _latestBiometry.value = entities.firstOrNull()?.toRemote()
+            auth.userIds().collectLatest { userId ->
+                _latestBiometry.value = null
+                repository.getBiometry(userId).collectLatest { entities ->
+                    _latestBiometry.value = entities.firstOrNull()?.toRemote()
+                }
             }
         }
     }
@@ -68,7 +71,9 @@ class BiometryViewModel @Inject constructor(
                     analysis.alerts.firstOrNull()?.let { _alertMessage.emit(it) }
                 }
 
-                _latestBiometry.value = biometry
+                if ((auth.currentUser?.uid ?: BragaConstants.GUEST_UID) == userId) {
+                    _latestBiometry.value = biometry
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {

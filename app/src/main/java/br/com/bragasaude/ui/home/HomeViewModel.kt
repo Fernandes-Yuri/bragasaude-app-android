@@ -11,6 +11,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
+import br.com.bragasaude.data.remote.sync.userIds
 import javax.inject.Inject
 
 import br.com.bragasaude.ui.util.NotificationHelper
@@ -55,35 +57,40 @@ class HomeViewModel @Inject constructor(
     private val _clinicalAlerts = MutableStateFlow<List<String>>(emptyList())
     val clinicalAlerts = _clinicalAlerts.asStateFlow()
 
-    val userStepGoal: StateFlow<Int> = profileRepository
-        .getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
+    private val userIds = auth.userIds().stateIn(
+        viewModelScope, SharingStarted.Eagerly, auth.currentUser?.uid ?: BragaConstants.GUEST_UID
+    )
+
+    val userStepGoal: StateFlow<Int> = userIds
+        .flatMapLatest { profileRepository.getProfile(it) }
         .map { it?.stepGoal ?: 8000 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 8000)
 
-    val avatarProfile = profileRepository.getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
+    val avatarProfile = userIds.flatMapLatest { profileRepository.getProfile(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val profile: StateFlow<RemoteProfile?> = profileRepository
-        .getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
+    val profile: StateFlow<RemoteProfile?> = userIds
+        .flatMapLatest { profileRepository.getProfile(it) }
         .map { it?.toRemote() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val medications = medicationRepository
-        .getMedications(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
+    val medications = userIds
+        .flatMapLatest { medicationRepository.getMedications(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val readingsUid = auth.currentUser?.uid.orEmpty()
-    private fun readingHistory(metric: String) = combine(
-        database.wearableReadingDao().observeRecent(readingsUid, metric),
-        vitalsRepository.getVitalSigns(readingsUid)
-    ) { wearable, vitals -> br.com.bragasaude.domain.HealthReadingHistory.merge(readingsUid, metric, wearable, vitals) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private fun readingHistory(metric: String) = userIds.flatMapLatest { uid ->
+        combine(
+            database.wearableReadingDao().observeRecent(uid, metric),
+            vitalsRepository.getVitalSigns(uid)
+        ) { wearable, vitals -> br.com.bragasaude.domain.HealthReadingHistory.merge(uid, metric, wearable, vitals) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val heartReadings = readingHistory(br.com.bragasaude.domain.HealthReadingInput.HEART)
     val oxygenReadings = readingHistory(br.com.bragasaude.domain.HealthReadingInput.OXYGEN)
 
     private val alertPrefs = context.getSharedPreferences("braga_alerts_prefs", Context.MODE_PRIVATE)
-    private val dismissedAlerts: MutableSet<String> = alertPrefs.getStringSet("dismissed_alerts_$todayDateStr", emptySet())?.toMutableSet() ?: mutableSetOf()
+    private var dismissedAlertsKey = "dismissed_alerts_${userIds.value}_$todayDateStr"
+    private val dismissedAlerts: MutableSet<String> = alertPrefs.getStringSet(dismissedAlertsKey, emptySet())?.toMutableSet() ?: mutableSetOf()
 
     private val readAlertsKey = "read_alerts_${auth.currentUser?.uid ?: BragaConstants.GUEST_UID}_$todayDateStr"
     private val readStateStore = br.com.bragasaude.data.local.AlertReadStateStore(alertPrefs, readAlertsKey)
@@ -91,7 +98,7 @@ class HomeViewModel @Inject constructor(
     val alertIdentifiedAt = readStateStore.identifiedAt
     private val alertPrefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
         when (key) {
-            "dismissed_alerts_$todayDateStr" -> {
+            dismissedAlertsKey -> {
                 dismissedAlerts.clear()
                 dismissedAlerts.addAll(prefs.getStringSet(key, emptySet()).orEmpty())
                 _clinicalAlerts.value = _clinicalAlerts.value.filterNot { it in dismissedAlerts }
@@ -100,20 +107,32 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun saveDismissedAlerts() {
-        alertPrefs.edit().putStringSet("dismissed_alerts_$todayDateStr", dismissedAlerts).apply()
+        alertPrefs.edit().putStringSet(dismissedAlertsKey, dismissedAlerts).apply()
     }
 
     init {
         alertPrefs.registerOnSharedPreferenceChangeListener(alertPrefsListener)
-        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
-
         viewModelScope.launch {
             try {
                 vitalsRepository.deduplicateVitals()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (_: Exception) {}
         }
+        viewModelScope.launch { userIds.collectLatest { observeUser(it) } }
+    }
 
-        viewModelScope.launch {
+    private suspend fun observeUser(userId: String) = coroutineScope {
+        _userName.value = "Usuário"
+        _dashboardVitals.value = RemoteVitalSign(userId = userId)
+        _latestMilestone.value = null
+        _clinicalAlerts.value = emptyList()
+        dismissedAlertsKey = "dismissed_alerts_${userId}_$todayDateStr"
+        dismissedAlerts.clear()
+        dismissedAlerts.addAll(alertPrefs.getStringSet(dismissedAlertsKey, emptySet()).orEmpty())
+        readStateStore.switchKey("read_alerts_${userId}_$todayDateStr")
+
+        launch {
             profileRepository.getProfile(userId).collectLatest { profile ->
                 _userName.value = profile?.fullName?.split(" ")?.firstOrNull() ?: "Visitante"
             }
@@ -159,17 +178,17 @@ class HomeViewModel @Inject constructor(
             }
 
             Pair(latest, Triple(userId, vitals, updatedMetrics))
-        }.shareIn(viewModelScope, SharingStarted.WhileSubscribed())
+        }.shareIn(this, SharingStarted.WhileSubscribed())
 
         // Atualiza UI principal
-        viewModelScope.launch {
+        launch {
             healthDataFlow.collect { (latest, _) ->
                 _dashboardVitals.value = latest
             }
         }
 
         // Análise de Alertas (com collectLatest para evitar processamento pesado repetitivo)
-        viewModelScope.launch {
+        launch {
             healthDataFlow.map { it.second }.collectLatest { (uid, vitals, metrics) ->
                 val profile = profileRepository.getProfile(uid).firstOrNull()?.toRemote()
 
@@ -207,18 +226,25 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
+        launch {
             milestonesRepository.getMilestones(userId).collectLatest { entities ->
                 _latestMilestone.value = entities.firstOrNull()?.toRemote()
             }
         }
 
-        viewModelScope.launch {
+        launch {
             kotlinx.coroutines.delay(350)
-            medicationRepository.syncMedicationsFromServer(userId)
-            syncManager.syncUserData(userId, force = false)
-            if (healthConnectManager.isAvailable() && healthConnectManager.checkHasPermissions()) {
-                healthConnectManager.syncHealthConnectData()
+            if (userId == BragaConstants.GUEST_UID) return@launch
+            try {
+                medicationRepository.syncMedicationsFromServer(userId)
+                syncManager.syncUserData(userId, force = false)
+                if (healthConnectManager.isAvailable() && healthConnectManager.checkHasPermissions()) {
+                    healthConnectManager.syncHealthConnectData()
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("HomeViewModel", "Falha ao sincronizar início: ${e.message}")
             }
         }
     }
