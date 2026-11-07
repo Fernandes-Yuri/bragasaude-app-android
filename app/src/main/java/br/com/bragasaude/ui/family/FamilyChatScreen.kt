@@ -479,7 +479,8 @@ internal fun ChatBubble(
     message: FamilyMessageEntity,
     isFromMe: Boolean,
     onDeleteMessage: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    avatarContent: (@Composable () -> Unit)? = null
 ) {
     // #28: defesa extra — nunca desenha bolha sem texto nem ícone válido.
     if (!message.hasVisibleContent()) return
@@ -507,7 +508,11 @@ internal fun ChatBubble(
     ) {
         // Avatar
         if (!isFromMe) {
-            br.com.bragasaude.ui.components.ConnectedUserAvatar(message.senderUserId, message.senderName, 36.dp)
+            if (avatarContent != null) {
+                avatarContent()
+            } else {
+                br.com.bragasaude.ui.components.ConnectedUserAvatar(message.senderUserId, message.senderName, 36.dp)
+            }
             Spacer(Modifier.width(8.dp))
         }
 

@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
@@ -12,6 +13,7 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import br.com.bragasaude.data.local.FamilyMessageEntity
 import br.com.bragasaude.data.local.Migrations
 import br.com.bragasaude.data.local.security.FamilyE2eeManager
+import br.com.bragasaude.ui.components.SharedProfileAvatar
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -43,7 +45,13 @@ class FamilyChatRecoveryInstrumentedTest {
 
     @Test fun unreadableMessageHasVisibleExplanation() {
         val pending = FamilyMessageEntity("pending","qa","Teste","","CUSTOM",awaitingDecryption=true)
-        compose.setContent { MaterialTheme { ChatBubble(pending,isFromMe=false) } }
+        compose.setContent {
+            MaterialTheme {
+                ChatBubble(pending,isFromMe=false,avatarContent = {
+                    SharedProfileAvatar("Teste",null,null,36.dp)
+                })
+            }
+        }
         compose.onNodeWithText("Não foi possível abrir esta mensagem. Abra a conversa nos dois aparelhos para atualizar as chaves.").assertIsDisplayed()
     }
 
