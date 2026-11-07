@@ -248,4 +248,31 @@ class FamilyE2eeManagerTest {
         assertTrue(error is GeneralSecurityException)
     }
 
+
+    @Test fun `fresh installation replaces stale peer and new messages become readable`() {
+        val previousPatient = FamilyE2eeManager(InMemoryE2eeKeyStoreProvider())
+        val oldPublic = previousPatient.getOrCreatePublicKeyBase64(patientId)
+        val newPublic = patientE2ee.getOrCreatePublicKeyBase64(patientId)
+        val caregiverPublic = caregiverE2ee.getOrCreatePublicKeyBase64(caregiverId)
+        caregiverE2ee.registerBindingKeys(patientId,caregiverId,oldPublic,caregiverPublic)
+        val staleMessage = caregiverE2ee.encryptForConversation(caregiverId,patientId,"Antes da troca")
+        patientE2ee.registerBindingKeys(patientId,caregiverId,newPublic,caregiverPublic)
+        assertTrue(runCatching { patientE2ee.decryptForConversation(patientId,patientId,staleMessage,caregiverId) }.isFailure)
+        caregiverE2ee.registerBindingKeys(patientId,caregiverId,newPublic,caregiverPublic)
+        val newMessage = caregiverE2ee.encryptForConversation(caregiverId,patientId,"Depois da troca")
+        assertEquals("Depois da troca",patientE2ee.decryptForConversation(patientId,patientId,newMessage,caregiverId).text)
+        val reply = patientE2ee.encryptForConversation(patientId,patientId,"Confirmado")
+        assertEquals("Confirmado",caregiverE2ee.decryptForConversation(caregiverId,patientId,reply,patientId).text)
+        assertTrue(runCatching { patientE2ee.decryptForConversation(patientId,patientId,staleMessage,caregiverId) }.isFailure)
+    }
+
+    @Test fun `trace identifies encrypted envelope regardless of JSON field order and excludes plaintext`() {
+        val a = "{\"v\":1,\"iv\":\"aXY=\",\"ciphertext\":\"Y3Q=\"}"
+        val b = "{\"ciphertext\":\"Y3Q=\",\"iv\":\"aXY=\",\"v\":1}"
+        assertEquals(FamilyCryptoTrace.envelope(a),FamilyCryptoTrace.envelope(b))
+        assertEquals("legacy",FamilyCryptoTrace.envelope("Texto privado que não pode ir ao log"))
+        assertEquals("untracked",FamilyCryptoTrace.message("texto não é ID de mensagem"))
+        assertEquals(64,FamilyCryptoTrace.publicKey(patientE2ee.getOrCreatePublicKeyBase64(patientId)).length)
+    }
+
 }

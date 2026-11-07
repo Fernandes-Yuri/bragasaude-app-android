@@ -353,7 +353,8 @@ class FamilyBridgeRepository @Inject constructor(
             val encryptedPayload = e2eeManager.encryptForConversation(
                 senderUserId = userId,
                 patientId = patientUserId,
-                plaintext = cleanText
+                plaintext = cleanText,
+                messageId = localId
             )
             val wireMessage = message.copy(messageText = encryptedPayload)
             val remoteId = apiClient.syncFamilyMessage(wireMessage)
@@ -382,7 +383,7 @@ class FamilyBridgeRepository @Inject constructor(
         return try {
             msg.copy(messageText = e2eeManager.decryptForConversation(
                 currentUserId = currentUserId, patientId = patientUserId,
-                rawPayload = msg.messageText, senderUserId = msg.senderUserId
+                rawPayload = msg.messageText, senderUserId = msg.senderUserId, messageId = msg.id
             ).text, awaitingDecryption = false)
         } catch (e: java.security.GeneralSecurityException) {
             android.util.Log.w("FamilyBridgeRepo", "Mensagem aguardando decifragem: ${e.javaClass.simpleName}")
@@ -396,6 +397,25 @@ class FamilyBridgeRepository @Inject constructor(
             remote.copy(messageText = local.messageText, awaitingDecryption = false)
         } else remote
         return readable.copy(isRead = readable.isRead || local?.isRead == true)
+    }
+
+    /** Publica a identidade da instalação antes dos demais downloads da sessão autenticada. */
+    suspend fun prepareSessionKeys(userId: String) {
+        check(auth.currentUser?.uid == userId) { "Sua conta mudou." }
+        val bindings = apiClient.getFamilyBindings(userId)
+        check(auth.currentUser?.uid == userId) { "Sua conta mudou." }
+        val rooms = bindings.filter { it.status == "ACTIVE" &&
+            (it.patientUserId == userId || it.caregiverUserId == userId) }.map { it.patientUserId }.distinct()
+        if (rooms.isEmpty()) return
+        val publicKey = e2eeManager.getOrCreatePublicKeyBase64(userId)
+        for (room in rooms) {
+            check(auth.currentUser?.uid == userId) { "Sua conta mudou." }
+            check(apiClient.publishFamilyE2eePublicKey(patientId = room, publicKey = publicKey)) {
+                "Não foi possível preparar as mensagens desta instalação. Tente novamente."
+            }
+        }
+        check(auth.currentUser?.uid == userId) { "Sua conta mudou." }
+        apiClient.getFamilyBindings(userId)
     }
 
     suspend fun prepareConversation(patientId: String) {
