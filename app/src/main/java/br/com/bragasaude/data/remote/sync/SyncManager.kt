@@ -128,7 +128,7 @@ class SyncManager @Inject constructor(
             }
 
             // Biometria compartilhada entre app e WhatsApp; cache por ID remoto.
-            for (biometry in apiClient.getBiometry(userId)) {
+            for (biometry in apiClient.getBiometry(userId, requireAvailable = fullSync)) {
                 biometryDao.cacheRemote(biometry.toEntity())
             }
 
@@ -162,22 +162,29 @@ class SyncManager @Inject constructor(
                     syncPreferences.recordEntitySyncSuccess(userId, "metrics", nowUtc)
                 }
                 movementManagerProvider.get().loadTodayMetrics()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e(BragaConstants.SYNC_LOG_TAG, "Erro ao sincronizar métricas diárias: ${e.message}")
             }
 
             // 4. Vínculos Familiares
             try {
-                familyBridgeRepository.syncBindingsForPatient(userId)
-                familyBridgeRepository.syncBindingsForCaregiver(userId)
+                familyBridgeRepository.syncBindingsForPatient(userId, strict = fullSync)
+                familyBridgeRepository.syncBindingsForCaregiver(userId, strict = fullSync)
                 familyBridgeRepository.cleanExpiredCodes()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (fullSync) throw e
                 android.util.Log.e(BragaConstants.SYNC_LOG_TAG, "Erro ao sincronizar vínculos familiares: ${e.message}")
             }
 
             // 5. Mensagens Familiares
             try {
                 familyBridgeRepository.syncFamilyMessages(userId)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e(BragaConstants.SYNC_LOG_TAG, "Erro ao sincronizar mensagens: ${e.message}")
             }
@@ -188,6 +195,8 @@ class SyncManager @Inject constructor(
                 bindings.forEach { binding ->
                     familyBridgeRepository.syncPatientDataForCaregiver(binding.patientUserId)
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.w(BragaConstants.SYNC_LOG_TAG, "Aviso: Falha ao sincronizar dependentes: ${e.message}")
             }
@@ -202,6 +211,8 @@ class SyncManager @Inject constructor(
                 vitalSignDao.purgeOlderThan(thirtyDaysAgoMillis)
                 biometryDao.purgeOlderThan(thirtyDaysAgoMillis)
                 dailyMetricsDao.purgeOlderThan(cutoffDateStr)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.w(BragaConstants.SYNC_LOG_TAG, "Aviso: Falha na retenção de dados locais: ${e.message}")
             }
@@ -209,6 +220,9 @@ class SyncManager @Inject constructor(
             syncPreferences.recordSyncSuccess(userId)
             _syncState.value = SyncState.Success(nowUtc)
             Result.success(Unit)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            _syncState.value = SyncState.Idle
+            throw e
         } catch (e: Exception) {
             val errorMsg = e.message ?: "Erro ao baixar dados do usuário"
             android.util.Log.e(BragaConstants.SYNC_LOG_TAG, "Falha no sync delta: $errorMsg", e)

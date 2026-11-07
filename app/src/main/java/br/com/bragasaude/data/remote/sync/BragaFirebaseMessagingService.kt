@@ -119,9 +119,16 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
         val message = remoteMessage.notification?.body ?: remoteMessage.data["message"] ?: remoteMessage.data["body"] ?: ""
         val type = remoteMessage.data["type"] ?: "PROACTIVE_BRAGA"
 
+        if (type == "HEALTH_ALERT" || type == "ALERT_CRITICAL") {
+            val owner = FirebaseAuth.getInstance().currentUser?.uid ?: return
+            val patient = remoteMessage.data["sourceUserId"]
+            if (!patient.isNullOrBlank()) CaregiverSyncWorker.enqueue(applicationContext, owner, patient)
+        }
+
         if (message.isNotBlank()) {
             when (type) {
                 "EMERGENCY" -> showEmergencyNotification(title, message)
+                "HEALTH_ALERT" -> showClinicNotification(title, message, isCritical = false)
                 "ALERT_CRITICAL" -> showClinicNotification(title, message, isCritical = true)
                 "FAMILY_MESSAGE" -> showFamilyMessageNotification(title, message)
                 "CONSULTATION_CREATED", "CONSULTATION_ACCEPTED", "CONSULTATION_REJECTED",

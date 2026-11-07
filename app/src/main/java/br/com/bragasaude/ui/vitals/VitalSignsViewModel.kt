@@ -24,6 +24,9 @@ import javax.inject.Inject
 import br.com.bragasaude.data.remote.sync.SyncManager
 import br.com.bragasaude.data.util.toRemote
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.coroutineScope
+import br.com.bragasaude.data.remote.sync.userIds
 
 import br.com.bragasaude.domain.util.BloodPressureParser
 import br.com.bragasaude.util.BragaConstants
@@ -37,8 +40,12 @@ class VitalSignsViewModel @Inject constructor(
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
-    val profile: StateFlow<RemoteProfile?> = profileRepository
-        .getProfile(auth.currentUser?.uid ?: BragaConstants.GUEST_UID)
+    private val userIds = auth.userIds().stateIn(
+        viewModelScope, SharingStarted.Eagerly, auth.currentUser?.uid ?: BragaConstants.GUEST_UID
+    )
+
+    val profile: StateFlow<RemoteProfile?> = userIds
+        .flatMapLatest { profileRepository.getProfile(it) }
         .map { it?.toRemote() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
@@ -66,23 +73,27 @@ class VitalSignsViewModel @Inject constructor(
     val saveStatus = _saveStatus.asStateFlow()
 
     init {
-        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         viewModelScope.launch {
-            repository.getVitalSigns(userId).collectLatest { entities ->
-                _allVitals.value = entities.map { it.toRemote() }
-            }
-        }
-        // DT-052: Room vazio (wipe/troca de conta) precisa puxar o histórico da
-        // nuvem ao abrir a tela; syncUserData é throttled internamente e não
-        // bloqueia a UI (o Room observa e atualiza sozinho).
-        if (userId != BragaConstants.GUEST_UID) {
-            viewModelScope.launch {
-                try {
-                    if (repository.getVitalSignsSync(userId).isEmpty()) {
-                        syncManager.syncUserData(userId, force = false)
+            userIds.collectLatest { userId ->
+                _allVitals.value = emptyList()
+                _saveStatus.value = null
+                coroutineScope {
+                    launch {
+                        repository.getVitalSigns(userId).collectLatest { entities ->
+                            _allVitals.value = entities.map { it.toRemote() }
+                        }
                     }
-                } catch (e: Exception) {
-                    android.util.Log.w("VitalSignsVM", "Sync ao abrir a tela de vitais falhou: ${e.message}")
+                    if (userId != BragaConstants.GUEST_UID) launch {
+                        try {
+                            if (repository.getVitalSignsSync(userId).isEmpty()) {
+                                syncManager.syncUserData(userId, force = true).getOrThrow()
+                            }
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            android.util.Log.w("VitalSignsVM", "Falha ao restaurar histórico: ${e.message}")
+                        }
+                    }
                 }
             }
         }

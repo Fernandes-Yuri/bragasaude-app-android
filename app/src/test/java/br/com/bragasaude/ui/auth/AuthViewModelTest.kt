@@ -36,6 +36,7 @@ class AuthViewModelTest {
     private lateinit var medicationRepository: br.com.bragasaude.data.remote.repository.MedicationRepository
     private lateinit var appContext: android.content.Context
     private lateinit var viewModel: AuthViewModel
+    private lateinit var authListener: FirebaseAuth.AuthStateListener
 
     private val mainDispatcher = UnconfinedTestDispatcher()
 
@@ -86,6 +87,8 @@ class AuthViewModelTest {
         medicationRepository = mockk(relaxed = true)
         appContext = mockk(relaxed = true)
         every { auth.currentUser } returns null
+        every { auth.addAuthStateListener(any()) } answers { authListener = firstArg() }
+        coEvery { syncManager.downloadAllUserData(any()) } returns Result.success(Unit)
 
         viewModel = AuthViewModel(auth, database, repository, syncManager, movementManager, medicationRepository,
             mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), appContext)
@@ -232,6 +235,39 @@ class AuthViewModelTest {
         verify(exactly = 0) { appContext.deleteDatabase(any()) }
         verify(exactly = 1) { auth.signOut() }
         assertEquals(AppSessionStatus.NotAuthenticated, viewModel.sessionStatus.value)
+    }
+
+    @Test
+    fun `failed restore does not mark data ready and retry can complete it`() = kotlinx.coroutines.test.runTest {
+        val user = mockk<FirebaseUser>(relaxed = true)
+        every { user.uid } returns "restored-user"
+        every { auth.currentUser } returns user
+        coEvery { syncManager.downloadAllUserData("restored-user") } returns Result.failure(java.io.IOException("offline"))
+        authListener.onAuthStateChanged(auth)
+        assertFalse(viewModel.initialDataReady.value)
+        assertNotNull(viewModel.initialSyncError.value)
+        coEvery { syncManager.downloadAllUserData("restored-user") } returns Result.success(Unit)
+        viewModel.retryInitialSync()
+        assertTrue(viewModel.initialDataReady.value)
+        assertNull(viewModel.initialSyncError.value)
+        every { auth.currentUser } returns null
+        authListener.onAuthStateChanged(auth)
+        assertFalse(viewModel.initialDataReady.value)
+    }
+
+    @Test
+    fun `signOut preserves unsent measurements and the authenticated session`() = kotlinx.coroutines.test.runTest {
+        val user = mockk<FirebaseUser>(relaxed = true)
+        every { user.uid } returns "test-uid"
+        every { auth.currentUser } returns user
+        val pending = br.com.bragasaude.data.local.VitalSignEntity(
+            userId = "test-uid", hydrationMl = 250, pendingSync = true
+        )
+        coEvery { database.vitalSignDao().getPendingSync() } returns listOf(pending)
+        viewModel.signOut()
+        verify(exactly = 0) { database.clearAllTables() }
+        verify(exactly = 0) { auth.signOut() }
+        assertNotNull(viewModel.sessionNotice.value)
     }
 
     @Test

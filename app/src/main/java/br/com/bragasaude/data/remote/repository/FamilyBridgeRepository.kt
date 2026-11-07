@@ -256,7 +256,7 @@ class FamilyBridgeRepository @Inject constructor(
 
     // ==================== SINCRONIZAÇÃO REMOTA ====================
 
-    suspend fun syncBindingsForPatient(patientUserId: String) {
+    suspend fun syncBindingsForPatient(patientUserId: String, strict: Boolean = false) {
         if (patientUserId.isBlank() || patientUserId == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
         try {
             val list = apiClient.getFamilyBindings(patientUserId)
@@ -280,11 +280,12 @@ class FamilyBridgeRepository @Inject constructor(
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (strict) throw e
             android.util.Log.e("FamilyBridgeRepo", "Falha ao baixar vínculos do paciente: ${e.message}")
         }
     }
 
-    suspend fun syncBindingsForCaregiver(caregiverUserId: String) {
+    suspend fun syncBindingsForCaregiver(caregiverUserId: String, strict: Boolean = false) {
         if (caregiverUserId.isBlank() || caregiverUserId == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
         try {
             val list = apiClient.getFamilyBindings(caregiverUserId)
@@ -306,6 +307,7 @@ class FamilyBridgeRepository @Inject constructor(
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (strict) throw e
             android.util.Log.e("FamilyBridgeRepo", "Falha ao baixar vínculos do cuidador: ${e.message}")
         }
     }
@@ -528,10 +530,18 @@ class FamilyBridgeRepository @Inject constructor(
             .toString()
 
     suspend fun syncPatientDataForCaregiver(patientUserId: String): Result<Unit> = runCatching {
+        val sessionOwner = auth.currentUser?.uid
+            ?: throw IllegalStateException("Sessão encerrada")
+        fun ensureSession() {
+            if (auth.currentUser?.uid != sessionOwner) throw kotlinx.coroutines.CancellationException("Sessão alterada")
+        }
+        var downloadError: Exception? = null
         // 1. Sincronizar perfil
         try {
             val p = apiClient.getProfile(patientUserId)
-            if (p != null) {
+                ?: throw java.io.IOException("Não foi possível baixar o perfil do familiar")
+            ensureSession()
+            run {
                 val existing = profileDao.getProfileOneShot(patientUserId)
                 val updated = existing?.copy(
                     fullName = p.fullName,
@@ -557,6 +567,7 @@ class FamilyBridgeRepository @Inject constructor(
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
+            downloadError = e
             android.util.Log.w("FamilyBridgeRepo", "Aviso ao sincronizar perfil do paciente: ${e.message}")
         }
 
@@ -566,8 +577,9 @@ class FamilyBridgeRepository @Inject constructor(
             // download de vitais sem interromper o sync do restante do paciente.
             val vitals = apiClient.getVitalSigns(patientUserId)
             if (vitals == null) {
-                android.util.Log.w("FamilyBridgeRepo", "Aviso: vitais do paciente indisponíveis agora (rede); mantendo cache local.")
+                throw java.io.IOException("Não foi possível baixar os sinais vitais do familiar")
             } else {
+                ensureSession()
                 vitals.forEach { v ->
                     val measuredDate = v.measuredAt?.let { parseDate(it) } ?: Date()
                     vitalSignDao.insert(
@@ -592,12 +604,29 @@ class FamilyBridgeRepository @Inject constructor(
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
+            downloadError = e
             android.util.Log.w("FamilyBridgeRepo", "Aviso ao sincronizar vitais do paciente: ${e.message}")
         }
 
-        // 3. Sincronizar mensagens
-        syncFamilyMessages(patientUserId)
-    }
+        // Métricas também alimentam o painel; falha parcial não é atualização confirmada.
+        try {
+            val metrics = apiClient.getDailyMetrics(patientUserId)
+                ?: throw java.io.IOException("Não foi possível baixar as métricas do familiar")
+            ensureSession()
+            metrics.forEach { metric ->
+                val local = dailyMetricsDao.getByDate(patientUserId, metric.date)
+                if (local?.pendingSync != true) dailyMetricsDao.insert(metric.copy(pendingSync = false))
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            downloadError = e
+        }
+        downloadError?.let { throw it }
+        ensureSession()
+        syncFamilyMessages(patientUserId).getOrThrow()
+        Unit
+    }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
 
     fun getUnreadMessagesForPatient(patientUserId: String): Flow<List<FamilyMessageEntity>> {
         return liveMessages(familyDao.getUnreadMessagesForPatient(patientUserId))

@@ -14,7 +14,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.compose.rememberNavController
 import br.com.bragasaude.MainActivity
 import br.com.bragasaude.ui.auth.AppSessionStatus
@@ -30,10 +29,8 @@ import br.com.bragasaude.ui.profile.ProfileScreen
 import br.com.bragasaude.ui.registration.CaregiverModeSelectionScreen
 import br.com.bragasaude.ui.registration.CaregiverRegistrationScreen
 import br.com.bragasaude.ui.registration.RoleSelectionScreen
-import br.com.bragasaude.ui.security.DeveloperModeBlockedScreen
 import br.com.bragasaude.ui.util.NotificationHelper
 import br.com.bragasaude.ui.util.Screen
-import br.com.bragasaude.util.DeveloperModeDetector
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -56,6 +53,9 @@ fun AppContent(activity: MainActivity) {
     val sessionStatus by authViewModel.sessionStatus.collectAsState()
     val isProfileComplete by authViewModel.isProfileComplete.collectAsState()
     val profileError by authViewModel.profileError.collectAsState()
+    val initialDataReady by authViewModel.initialDataReady.collectAsState()
+    val initialSyncError by authViewModel.initialSyncError.collectAsState()
+    val sessionNotice by authViewModel.sessionNotice.collectAsState()
     val hasAcceptedConsent by authViewModel.hasAcceptedConsent.collectAsState()
     val activeRisk by mainViewModel.activeRisk.collectAsState()
     val userRole by authViewModel.userRole.collectAsState()
@@ -70,24 +70,10 @@ fun AppContent(activity: MainActivity) {
     var tempRole by rememberSaveable { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val appContext = context.applicationContext
 
     val appUpdateClient = remember {
         EntryPointAccessors.fromApplication(appContext, AppUpdateEntryPoint::class.java).bragaApiClient()
-    }
-
-    var isDevModeBlocked by remember {
-        mutableStateOf(DeveloperModeDetector.isDeveloperModeEnabled(context))
-    }
-    DisposableEffect(lifecycleOwner) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                isDevModeBlocked = DeveloperModeDetector.isDeveloperModeEnabled(context)
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Surface(
@@ -96,14 +82,7 @@ fun AppContent(activity: MainActivity) {
             .windowInsetsPadding(WindowInsets.safeDrawing),
         color = MaterialTheme.colorScheme.background
     ) {
-        if (isDevModeBlocked) {
-            DeveloperModeBlockedScreen(
-                onExit = { activity.finish() },
-                onOpenSettings = { DeveloperModeDetector.openDeveloperSettings(context) },
-                onRetry = { isDevModeBlocked = DeveloperModeDetector.isDeveloperModeEnabled(context) }
-            )
-        } else {
-            Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize()) {
                 var legalSubView by remember { mutableStateOf<String?>(null) }
                 androidx.activity.compose.BackHandler(enabled = legalSubView != null) { legalSubView = null }
 
@@ -235,6 +214,13 @@ fun AppContent(activity: MainActivity) {
                                     userRole = userRole,
                                     onFinishTour = { hasSeenTutorial = true }
                                 )
+                                isProfileComplete == true && !initialDataReady -> {
+                                    if (initialSyncError != null) ProfileErrorState(
+                                        error = initialSyncError,
+                                        onRetry = authViewModel::retryInitialSync,
+                                        onSignOut = { sessionScope.launch { authViewModel.signOut() } }
+                                    ) else LoadingOverlay(onExit = { sessionScope.launch { authViewModel.signOut() } })
+                                }
                                 isProfileComplete == true -> {
                                     // Permissões e serviço de rastreamento
                                     LaunchedEffect(Unit) {
@@ -349,6 +335,16 @@ fun AppContent(activity: MainActivity) {
                             }
                         }
                     }
+
+                sessionNotice?.let { notice ->
+                    BragaAlertDialog(
+                        onDismissRequest = authViewModel::dismissSessionNotice,
+                        title = { Text("Medições aguardando envio") },
+                        text = { Text(notice) },
+                        confirmButton = {
+                            TextButton(onClick = authViewModel::dismissSessionNotice) { Text("Entendi") }
+                        }
+                    )
                 }
 
                 // Risco clínico global

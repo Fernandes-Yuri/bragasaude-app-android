@@ -8,6 +8,7 @@ import br.com.bragasaude.data.local.security.FamilyE2eeManager
 import br.com.bragasaude.data.remote.auth.AuthService
 import br.com.bragasaude.di.BaseUrl
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -227,9 +228,9 @@ class BragaApiClient @Inject constructor(
             result.body?.optString("id") == id
     }
 
-    suspend fun getBiometry(userId: String): List<RemoteBiometry> = withContext(Dispatchers.IO) {
+    suspend fun getBiometry(userId: String, requireAvailable: Boolean = false): List<RemoteBiometry> = withContext(Dispatchers.IO) {
         val read = getJsonArrayWithStatus("$baseUrl/api/biometry/$userId")
-        if (read.status == 503) {
+        if (read.status == 503 && !requireAvailable) {
             // Indisponibilidade temporária: preserva o cache local e NÃO aborta a
             // rodada do SyncManager (medicamentos/exames/mensagens seguem normalmente).
             Log.w(TAG, "Biometria indisponível no servidor (HTTP 503); mantendo cache local e seguindo o sync.")
@@ -275,29 +276,38 @@ class BragaApiClient @Inject constructor(
     // para não avançar o cursor de delta sync e perder registros silenciosamente.
     suspend fun getVitalSigns(userId: String): List<RemoteVitalSign>? = withContext(Dispatchers.IO) {
         try {
-            val arr = getJsonArray("$baseUrl/api/vitals/$userId") ?: return@withContext null
             val list = mutableListOf<RemoteVitalSign>()
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                list.add(
-                    RemoteVitalSign(
-                        id = obj.getString("id"),
-                        userId = obj.getString("user_id"),
-                        systolicPressure = if (obj.isNull("systolic_pressure")) null else obj.getInt("systolic_pressure"),
-                        diastolicPressure = if (obj.isNull("diastolic_pressure")) null else obj.getInt("diastolic_pressure"),
-                        heartRate = if (obj.isNull("heart_rate")) null else obj.getInt("heart_rate"),
-                        oxygenSaturation = if (obj.isNull("oxygen_saturation")) null else obj.getInt("oxygen_saturation"),
-                        glucoseLevel = if (obj.isNull("glucose_level")) null else obj.getInt("glucose_level"),
-                        glucoseType = obj.optString("glucose_type", null),
-                        hydrationMl = if (obj.isNull("hydration_ml")) null else obj.getInt("hydration_ml"),
-                        measuredAt = obj.getString("measured_at"),
-                        status = "recorded",
-                        confirmedVia = obj.optString("confirmed_via", null),
-                        confirmationCode = obj.optString("confirmation_code", null)
+            var offset = 0
+            while (true) {
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                val arr = getJsonArray("$baseUrl/api/vitals/$userId?limit=200&offset=$offset")
+                    ?: return@withContext null // Falha parcial nunca avança o cursor do SyncManager.
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    list.add(
+                        RemoteVitalSign(
+                            id = obj.getString("id"),
+                            userId = obj.getString("user_id"),
+                            systolicPressure = if (obj.isNull("systolic_pressure")) null else obj.getInt("systolic_pressure"),
+                            diastolicPressure = if (obj.isNull("diastolic_pressure")) null else obj.getInt("diastolic_pressure"),
+                            heartRate = if (obj.isNull("heart_rate")) null else obj.getInt("heart_rate"),
+                            oxygenSaturation = if (obj.isNull("oxygen_saturation")) null else obj.getInt("oxygen_saturation"),
+                            glucoseLevel = if (obj.isNull("glucose_level")) null else obj.getInt("glucose_level"),
+                            glucoseType = obj.optString("glucose_type", null),
+                            hydrationMl = if (obj.isNull("hydration_ml")) null else obj.getInt("hydration_ml"),
+                            measuredAt = obj.getString("measured_at"),
+                            status = "recorded",
+                            confirmedVia = obj.optString("confirmed_via", null),
+                            confirmationCode = obj.optString("confirmation_code", null)
+                        )
                     )
-                )
+                }
+                if (arr.length() < 200) break
+                offset += arr.length()
             }
-            return@withContext list
+            return@withContext list.distinctBy { it.id }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao buscar sinais vitais do servidor: ${e.message}")
             return@withContext null
