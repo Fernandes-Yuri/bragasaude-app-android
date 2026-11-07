@@ -62,6 +62,9 @@ class SyncManager @Inject constructor(
         )
 
         return try {
+            // Nova instalação publica sua chave antes de baixar dados ou habilitar o chat.
+            // Sync incremental não deve disputar a identidade com outra instalação em segundo plano.
+            if (fullSync) familyBridgeRepository.prepareSessionKeys(userId)
             val nowUtc = System.currentTimeMillis()
 
             // 1. Profile (Download sempre completo por ser leve e único)

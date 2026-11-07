@@ -48,7 +48,7 @@ interface E2eeKeyStoreProvider {
 
 /**
  * Provedor em memória baseado no JCA padrão (`EC` secp256r1 + `ECDH`).
- * Usado em testes unitários locais e como fallback quando o AndroidKeyStore não está acessível.
+ * Usado nos testes JVM; o provedor Android utiliza seu cache de chaves públicas.
  */
 class InMemoryE2eeKeyStoreProvider(
     private val sharePeerKeysAcrossInstances: Boolean = false
@@ -144,7 +144,8 @@ class AndroidKeyStoreE2eeProvider(
                 loadOrCreateWrappedKeyPair(ks, cleanId)
             }
         }.getOrElse {
-            fallbackMemory.getOrCreateKeyPair(userId)
+            FamilyCryptoTrace.record("KEYSTORE_FAILED", mapOf("owner" to FamilyCryptoTrace.reference(userId), "error" to it.javaClass.simpleName))
+            throw GeneralSecurityException("Não foi possível acessar a chave desta instalação.", it)
         }
     }
 
@@ -160,9 +161,16 @@ class AndroidKeyStoreE2eeProvider(
             }
             agreement.init(keyPair.private)
             agreement.doPhase(peerPublicKey, true)
-            agreement.generateSecret()
+            val sharedSecret = agreement.generateSecret()
+            FamilyCryptoTrace.record("KEY_AGREEMENT", mapOf(
+                "owner" to FamilyCryptoTrace.reference(userId),
+                "own_pub" to FamilyCryptoTrace.publicKey(Base64.getEncoder().encodeToString(keyPair.public.encoded)),
+                "peer_pub" to FamilyCryptoTrace.publicKey(Base64.getEncoder().encodeToString(peerPublicKey.encoded))))
+            sharedSecret
         }.getOrElse {
-            fallbackMemory.computeEcdhSharedSecret(userId, peerPublicKey)
+            FamilyCryptoTrace.record("KEY_AGREEMENT_FAILED", mapOf("owner" to FamilyCryptoTrace.reference(userId), "error" to it.javaClass.simpleName))
+            // Acordar com outra chave privada quebraria a identidade pública já publicada.
+            throw GeneralSecurityException("Não foi possível preparar a chave da conversa.", it)
         }
     }
 
@@ -190,7 +198,7 @@ class AndroidKeyStoreE2eeProvider(
     }
 
     private fun loadOrCreateWrappedKeyPair(ks: KeyStore, cleanId: String): KeyPair {
-        val prefs = securePrefs ?: return fallbackMemory.getOrCreateKeyPair(cleanId)
+        val prefs = securePrefs ?: throw GeneralSecurityException("Armazenamento seguro de chaves indisponível.")
         val pubB64 = prefs.getString("${PREF_WRAPPED_PUB}_$cleanId", null)
         val privEncB64 = prefs.getString("${PREF_WRAPPED_PRIV}_$cleanId", null)
         val wrapKey = getOrCreateWrapSecretKey(ks, "$WRAP_KEY_ALIAS_PREFIX$cleanId")
@@ -274,6 +282,7 @@ class FamilyE2eeManager {
 
     private val keyStoreProvider: E2eeKeyStoreProvider
     private val secureRandom = SecureRandom()
+    private val ownPublicKeys = ConcurrentHashMap<String, String>()
     private val knownCaregiversByPatient = ConcurrentHashMap<String, MutableSet<String>>()
 
     @Inject
@@ -349,7 +358,9 @@ class FamilyE2eeManager {
     fun getOrCreatePublicKeyBase64(userId: String): String {
         require(userId.isNotBlank()) { "userId não pode ser vazio para geração de chave E2EE." }
         val keyPair = keyStoreProvider.getOrCreateKeyPair(userId.trim())
-        return Base64.getEncoder().encodeToString(keyPair.public.encoded)
+        return Base64.getEncoder().encodeToString(keyPair.public.encoded).also {
+            ownPublicKeys[userId.trim()] = it
+        }
     }
 
     /**
@@ -551,6 +562,10 @@ class FamilyE2eeManager {
         if (!caregiverPublicKey.isNullOrBlank() && cleanCaregiver.isNotEmpty()) {
             keyStoreProvider.savePeerPublicKey(pairCaregiverSlot(cleanPatient, cleanCaregiver), caregiverPublicKey.trim())
         }
+        FamilyCryptoTrace.record("BINDING_KEYS", mapOf(
+            "patient" to FamilyCryptoTrace.reference(cleanPatient), "caregiver" to FamilyCryptoTrace.reference(cleanCaregiver),
+            "patient_pub" to FamilyCryptoTrace.publicKey(patientPublicKey),
+            "caregiver_pub" to FamilyCryptoTrace.publicKey(caregiverPublicKey)))
     }
 
     fun getRegisteredPeerPublicKey(
@@ -609,7 +624,8 @@ class FamilyE2eeManager {
         senderUserId: String,
         patientId: String,
         plaintext: String,
-        caregiverIdHint: String? = null
+        caregiverIdHint: String? = null,
+        messageId: String? = null
     ): String {
         if (isEncryptedEnvelope(plaintext)) return plaintext
         val sessionKey = resolveConversationSessionKey(
@@ -617,7 +633,9 @@ class FamilyE2eeManager {
             patientId = patientId,
             caregiverIdHint = caregiverIdHint
         )
-        return encryptMessage(plaintext, sessionKey)
+        val payload = encryptMessage(plaintext, sessionKey.key)
+        traceMessage("ENCRYPTED", senderUserId, patientId, messageId, payload, sessionKey, "ok")
+        return payload
     }
 
     /**
@@ -668,7 +686,8 @@ class FamilyE2eeManager {
         patientId: String,
         rawPayload: String,
         senderUserId: String? = null,
-        caregiverIdHint: String? = null
+        caregiverIdHint: String? = null,
+        messageId: String? = null
     ): DecodedFamilyMessage {
         if (!isEncryptedEnvelope(rawPayload)) {
             return DecodedFamilyMessage(
@@ -687,10 +706,11 @@ class FamilyE2eeManager {
             caregiverIdHint = caregiverIdHint
         )
 
-        var lastError: Exception? = null
-        for (key in candidateKeys) {
+        var firstError: Exception? = null
+        for (candidate in candidateKeys) {
             try {
-                val clear = decryptMessage(rawPayload, key)
+                val clear = decryptMessage(rawPayload, candidate.key)
+                traceMessage("DECRYPTED", currentUserId, patientId, messageId, rawPayload, candidate, "ok")
                 return DecodedFamilyMessage(
                     text = clear,
                     isEncrypted = true,
@@ -699,10 +719,12 @@ class FamilyE2eeManager {
                     legacyNotice = null
                 )
             } catch (e: Exception) {
-                lastError = e
+                if (firstError == null) firstError = e
+                traceMessage("DECRYPT_FAILED", currentUserId, patientId, messageId, rawPayload, candidate, e.javaClass.simpleName)
             }
         }
-        throw (lastError ?: GeneralSecurityException("Não foi possível decifrar a mensagem E2EE."))
+        // A tentativa legada não pode substituir a causa da primeira tentativa ECDH.
+        throw (firstError ?: GeneralSecurityException("Não foi possível decifrar a mensagem E2EE."))
     }
 
     /**
@@ -716,11 +738,24 @@ class FamilyE2eeManager {
         keyStoreProvider.removePeerPublicKeysForPrefix("patient:$cleanPatient")
     }
 
+    private data class SessionCandidate(val key: SecretKey, val caregiverId: String, val peerPublicKey: String?, val source: String)
+
+    private fun traceMessage(stage: String, ownId: String, patientId: String, messageId: String?, payload: String,
+        candidate: SessionCandidate, result: String) {
+        if (!br.com.bragasaude.BuildConfig.DEBUG) return
+        val ownPublic = ownPublicKeys[ownId.trim()]
+        FamilyCryptoTrace.record(stage, mapOf(
+            "message" to FamilyCryptoTrace.message(messageId), "owner" to FamilyCryptoTrace.reference(ownId),
+            "patient" to FamilyCryptoTrace.reference(patientId), "caregiver" to FamilyCryptoTrace.reference(candidate.caregiverId),
+            "own_pub" to FamilyCryptoTrace.publicKey(ownPublic), "peer_pub" to FamilyCryptoTrace.publicKey(candidate.peerPublicKey),
+            "envelope" to FamilyCryptoTrace.envelope(payload), "source" to candidate.source, "result" to result))
+    }
+
     private fun resolveConversationSessionKey(
         ownUserId: String,
         patientId: String,
         caregiverIdHint: String?
-    ): SecretKey {
+    ): SessionCandidate {
         val cleanOwn = ownUserId.trim()
         val cleanPatient = patientId.trim()
         val candidateCaregivers = buildSet {
@@ -737,7 +772,10 @@ class FamilyE2eeManager {
             val peerPub = getRegisteredPeerPublicKey(cleanPatient, caregiverId, cleanOwn)
             if (!peerPub.isNullOrBlank()) {
                 runCatching {
-                    return deriveSessionKeyFromPeer(cleanOwn, peerPub, cleanPatient, caregiverId)
+                    return SessionCandidate(deriveSessionKeyFromPeer(cleanOwn, peerPub, cleanPatient, caregiverId), caregiverId, peerPub, "ecdh")
+                }.onFailure {
+                    FamilyCryptoTrace.record("DERIVATION_FAILED", mapOf("owner" to FamilyCryptoTrace.reference(cleanOwn),
+                        "peer_pub" to FamilyCryptoTrace.publicKey(peerPub), "error" to it.javaClass.simpleName))
                 }
             }
         }
@@ -750,7 +788,7 @@ class FamilyE2eeManager {
         patientId: String,
         senderUserId: String?,
         caregiverIdHint: String?
-    ): List<SecretKey> {
+    ): List<SessionCandidate> {
         val cleanOwn = ownUserId.trim()
         val cleanPatient = patientId.trim()
         val caregivers = buildSet {
@@ -766,16 +804,19 @@ class FamilyE2eeManager {
             knownCaregiversByPatient[cleanPatient]?.let { addAll(it) }
         }
 
-        val keys = mutableListOf<SecretKey>()
+        val keys = mutableListOf<SessionCandidate>()
         for (caregiverId in caregivers) {
             val peerPub = getRegisteredPeerPublicKey(cleanPatient, caregiverId, cleanOwn)
             if (!peerPub.isNullOrBlank()) {
                 runCatching {
-                    keys.add(deriveSessionKeyFromPeer(cleanOwn, peerPub, cleanPatient, caregiverId))
+                    keys.add(SessionCandidate(deriveSessionKeyFromPeer(cleanOwn, peerPub, cleanPatient, caregiverId), caregiverId, peerPub, "ecdh"))
+                }.onFailure {
+                    FamilyCryptoTrace.record("DERIVATION_FAILED", mapOf("owner" to FamilyCryptoTrace.reference(cleanOwn),
+                        "peer_pub" to FamilyCryptoTrace.publicKey(peerPub), "error" to it.javaClass.simpleName))
                 }
             }
         }
-        keys.add(deriveFallbackConversationKey(cleanPatient))
+        keys.add(SessionCandidate(deriveFallbackConversationKey(cleanPatient), "legacy", null, "transition-v1"))
         return keys
     }
 

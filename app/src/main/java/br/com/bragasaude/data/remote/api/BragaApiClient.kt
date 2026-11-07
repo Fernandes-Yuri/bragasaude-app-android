@@ -553,7 +553,8 @@ class BragaApiClient @Inject constructor(
                 familyE2eeManager.encryptForConversation(
                     senderUserId = m.senderUserId ?: m.patientUserId,
                     patientId = m.patientUserId,
-                    plaintext = m.messageText
+                    plaintext = m.messageText,
+                    messageId = m.id
                 )
             }
             val json = JSONObject().apply {
@@ -569,6 +570,10 @@ class BragaApiClient @Inject constructor(
                 put("sentAt", isoFormat.format(Date(m.sentAt)))
             }
             val res = postJson("$baseUrl/api/sync/family-message", json)
+            br.com.bragasaude.data.local.security.FamilyCryptoTrace.record("SEND_RESULT", mapOf(
+                "message" to br.com.bragasaude.data.local.security.FamilyCryptoTrace.message(m.id),
+                "envelope" to br.com.bragasaude.data.local.security.FamilyCryptoTrace.envelope(encryptedBlob),
+                "result" to if (res == null) "pending" else "accepted"))
             return@withContext res?.optString("id", null)
         } catch (e: Exception) {
             return@withContext null
@@ -1145,6 +1150,10 @@ class BragaApiClient @Inject constructor(
                 put("publicKey", publicKey)
             }
             val res = postJson("$baseUrl/api/family/e2ee/public-key", json)
+            br.com.bragasaude.data.local.security.FamilyCryptoTrace.record("KEY_PUBLISH", mapOf(
+                "patient" to br.com.bragasaude.data.local.security.FamilyCryptoTrace.reference(patientId),
+                "public_key" to br.com.bragasaude.data.local.security.FamilyCryptoTrace.publicKey(publicKey),
+                "result" to if (res == null) "failed" else "accepted"))
             return@withContext res != null
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao publicar chave pública E2EE: ${e.message}")

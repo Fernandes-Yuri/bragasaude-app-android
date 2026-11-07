@@ -619,4 +619,40 @@ class FamilyBridgeRepositoryTest {
         coVerify(exactly=1) { apiClient.syncFamilyMessage(any()) }
     }
 
+
+    @Test fun `session startup publishes installation key once per active room before refreshing peers`() = runBlocking {
+        val active = pendingBinding().copy(caregiverUserId="caregiver-1",status="ACTIVE")
+        coEvery { apiClient.getFamilyBindings("caregiver-1") } returns listOf(active,active.copy(id="duplicate"),active.copy(id="revoked",patientUserId="old",status="REVOKED"))
+        coEvery { apiClient.publishFamilyE2eePublicKey(null,"patient-1",any()) } returns true
+        repository.prepareSessionKeys("caregiver-1")
+        coVerifyOrder {
+            apiClient.getFamilyBindings("caregiver-1")
+            apiClient.publishFamilyE2eePublicKey(null,"patient-1",any())
+            apiClient.getFamilyBindings("caregiver-1")
+        }
+        coVerify(exactly=1) { apiClient.publishFamilyE2eePublicKey(any(),any(),any()) }
+    }
+
+    @Test fun `failed key publication cannot report a prepared session`() = runBlocking {
+        coEvery { apiClient.getFamilyBindings("caregiver-1") } returns listOf(pendingBinding().copy(caregiverUserId="caregiver-1",status="ACTIVE"))
+        coEvery { apiClient.publishFamilyE2eePublicKey(any(),any(),any()) } returns false
+        assertTrue(runCatching { repository.prepareSessionKeys("caregiver-1") }.isFailure)
+        coVerify(exactly=1) { apiClient.getFamilyBindings(any()) }
+    }
+
+    @Test fun `account change while fetching bindings prevents publication for previous session`() = runBlocking {
+        coEvery { apiClient.getFamilyBindings("caregiver-1") } coAnswers {
+            every { auth.currentUser?.uid } returns "other"
+            listOf(pendingBinding().copy(caregiverUserId="caregiver-1",status="ACTIVE"))
+        }
+        assertTrue(runCatching { repository.prepareSessionKeys("caregiver-1") }.isFailure)
+        coVerify(exactly=0) { apiClient.publishFamilyE2eePublicKey(any(),any(),any()) }
+    }
+
+    @Test fun `session with no active family does not publish keys`() = runBlocking {
+        coEvery { apiClient.getFamilyBindings("caregiver-1") } returns listOf(pendingBinding())
+        repository.prepareSessionKeys("caregiver-1")
+        coVerify(exactly=0) { apiClient.publishFamilyE2eePublicKey(any(),any(),any()) }
+    }
+
 }
