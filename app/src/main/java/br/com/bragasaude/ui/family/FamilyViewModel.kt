@@ -414,9 +414,7 @@ class FamilyViewModel @Inject constructor(
                                     return@visibility
                                 }
                                 if (enableWebSocket) {
-                                    // MODO DEBUG / WEBSOCKET ESTRITO:
-                                    // Sem fallback silencioso de polling. Todas as mensagens e exclusões
-                                    // dependem exclusivamente da conexão WebSocket em tempo real.
+                                    // WS entrega eventos; HTTP recupera lacunas na abertura e reconexão.
                                     familyWsClient.startSession(
                                         patientId = targetPatientId,
                                         tokenProvider = {
@@ -433,36 +431,45 @@ class FamilyViewModel @Inject constructor(
                                                     familyRepository.receiveRealtimeMessageDeletion(messageId)
                                                 }
                                             }
-                                            override fun onMessagesRead(patientId: String) {
+                                            override fun onMessagesRead(patientId: String, readerId: String, messageIds: List<String>) {
                                                 viewModelScope.launch {
-                                                    familyRepository.receiveRealtimeMessagesRead(patientId)
+                                                    familyRepository.receiveRealtimeMessagesRead(patientId, readerId, messageIds)
                                                 }
                                             }
                                         }
                                     )
                                     try {
-                                        familyWsClient.status.collectLatest { wsStatus ->
-                                            _chatSyncState.value = when (wsStatus) {
-                                                FamilyWsStatus.CONNECTED -> ChatSyncState(
-                                                    isPolling = false,
-                                                    consecutiveFailures = 0,
-                                                    warning = null
+                                        coroutineScope {
+                                            launch {
+                                                familyWsClient.status.collectLatest { status ->
+                                                    if (status == FamilyWsStatus.CONNECTED) chatSyncRequests.trySend(Unit)
+                                                }
+                                            }
+                                            var prepared = false
+                                            var failures = 0
+                                            while (isActive) {
+                                                _chatSyncState.value = _chatSyncState.value.copy(isPolling = true)
+                                                try {
+                                                    if (!prepared) {
+                                                        familyRepository.prepareConversation(targetPatientId)
+                                                        prepared = true
+                                                    }
+                                                    familyRepository.chatCycleSnapshot(userId, targetPatientId)
+                                                    failures = 0
+                                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                                    throw e
+                                                } catch (e: Exception) {
+                                                    failures++
+                                                    android.util.Log.w("FamilyVM", "Falha ao recuperar conversa: ${e.javaClass.simpleName}")
+                                                }
+                                                _chatSyncState.value = ChatSyncState(
+                                                    isPolling = false, consecutiveFailures = failures,
+                                                    warning = if (failures == 0) null else
+                                                        "Não foi possível atualizar a conversa. Tentando novamente…"
                                                 )
-                                                FamilyWsStatus.CONNECTING -> ChatSyncState(
-                                                    isPolling = true,
-                                                    consecutiveFailures = 0,
-                                                    warning = "Conectando ao canal em tempo real (WebSocket)..."
-                                                )
-                                                FamilyWsStatus.RECONNECTING -> ChatSyncState(
-                                                    isPolling = true,
-                                                    consecutiveFailures = 1,
-                                                    warning = "WebSocket desconectado. Tentando reconectar..."
-                                                )
-                                                FamilyWsStatus.DISCONNECTED -> ChatSyncState(
-                                                    isPolling = false,
-                                                    consecutiveFailures = 3,
-                                                    warning = "WebSocket desconectado. Verifique o servidor Go."
-                                                )
+                                                val interval = if (familyWsClient.status.value == FamilyWsStatus.CONNECTED && failures == 0) 30_000L
+                                                    else (3_000L * (1L shl failures.coerceAtMost(4))).coerceAtMost(60_000L)
+                                                withTimeoutOrNull(interval) { chatSyncRequests.receive() }
                                             }
                                         }
                                     } finally {
@@ -897,12 +904,22 @@ class FamilyViewModel @Inject constructor(
         }
     }
 
+    fun markVisibleMessagesAsRead(patientId: String, ids: List<String>) {
+        viewModelScope.launch {
+            try {
+                familyRepository.markVisibleMessagesAsRead(patientId, ids)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+            } catch (e: Exception) {
+                android.util.Log.w("FamilyVM", "Recibo de leitura pendente")
+            }
+        }
+    }
+
     fun markAllMessagesAsRead(patientUserId: String? = null) {
         viewModelScope.launch {
             try {
                 val targetId = patientUserId ?: currentUserId
                 familyRepository.markAllMessagesAsRead(targetId)
-                familyWsClient.sendReadReceipt(targetId)
             } catch (e: Exception) {
                 android.util.Log.e("FamilyVM", "Erro ao marcar mensagens como lidas: ${e.message}")
             }

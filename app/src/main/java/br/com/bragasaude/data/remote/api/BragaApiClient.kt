@@ -646,10 +646,11 @@ class BragaApiClient @Inject constructor(
     /**
      * Confirmação de visualização / leitura de mensagens familiares no servidor.
      */
-    suspend fun markFamilyMessagesRead(patientId: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun markFamilyMessagesRead(patientId: String, messageIds: List<String> = emptyList()): Boolean = withContext(Dispatchers.IO) {
         try {
             val json = JSONObject().apply {
                 put("patientId", patientId)
+                put("messageIds", JSONArray(messageIds))
             }
             val res = postJson("$baseUrl/api/family/messages/read", json)
             return@withContext res?.optString("status") == "success"
@@ -1094,7 +1095,8 @@ class BragaApiClient @Inject constructor(
                     patientId = patientId,
                     caregiverId = caregiverId,
                     patientPublicKey = patientPubKey,
-                    caregiverPublicKey = caregiverPubKey
+                    caregiverPublicKey = caregiverPubKey,
+                    bindingStatus = obj.safeEither("status")
                 )
             }
         }

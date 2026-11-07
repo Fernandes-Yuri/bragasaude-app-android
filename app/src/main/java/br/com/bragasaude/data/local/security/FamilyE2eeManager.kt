@@ -530,8 +530,11 @@ class FamilyE2eeManager {
         patientId: String,
         caregiverId: String,
         patientPublicKey: String?,
-        caregiverPublicKey: String?
+        caregiverPublicKey: String?,
+        bindingStatus: String = "ACTIVE"
     ) {
+        // Revogados/pendentes nunca substituem as chaves da conversa ativa.
+        if (bindingStatus != "ACTIVE") return
         val cleanPatient = patientId.trim()
         val cleanCaregiver = caregiverId.trim()
         if (cleanPatient.isEmpty()) return
@@ -739,7 +742,7 @@ class FamilyE2eeManager {
             }
         }
 
-        return deriveFallbackConversationKey(cleanPatient)
+        throw GeneralSecurityException("Aguardando a chave do familiar. Abra a conversa nos dois aparelhos e tente novamente.")
     }
 
     private fun buildCandidateSessionKeys(

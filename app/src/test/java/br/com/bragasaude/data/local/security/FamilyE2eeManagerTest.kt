@@ -229,4 +229,23 @@ class FamilyE2eeManagerTest {
         caregiverE2ee.clearKeysForPatient(patientId)
         assertNull(caregiverE2ee.getRegisteredPeerPublicKey(patientId, caregiverId, caregiverId))
     }
+    @Test fun `revoked key arriving after active key cannot break bidirectional decryption`() {
+        val patientPublic = patientE2ee.getOrCreatePublicKeyBase64(patientId)
+        val caregiverPublic = caregiverE2ee.getOrCreatePublicKeyBase64(caregiverId)
+        val oldPublic = intruderE2ee.getOrCreatePublicKeyBase64(caregiverId)
+        for (manager in listOf(patientE2ee, caregiverE2ee)) {
+            manager.registerBindingKeys(patientId, caregiverId, patientPublic, caregiverPublic, "ACTIVE")
+            manager.registerBindingKeys(patientId, caregiverId, null, oldPublic, "REVOKED")
+        }
+        val fromPatient = patientE2ee.encryptForConversation(patientId, patientId, "Olá")
+        assertEquals("Olá", caregiverE2ee.decryptForConversation(caregiverId, patientId, fromPatient, patientId).text)
+        val fromCaregiver = caregiverE2ee.encryptForConversation(caregiverId, patientId, "Recebido")
+        assertEquals("Recebido", patientE2ee.decryptForConversation(patientId, patientId, fromCaregiver, caregiverId).text)
+    }
+
+    @Test fun `new messages cannot use publicly derivable fallback without peer key`() {
+        val error = runCatching { patientE2ee.encryptForConversation(patientId, patientId, "Não enviar") }.exceptionOrNull()
+        assertTrue(error is GeneralSecurityException)
+    }
+
 }

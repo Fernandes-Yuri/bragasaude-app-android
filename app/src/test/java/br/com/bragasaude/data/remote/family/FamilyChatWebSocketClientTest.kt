@@ -104,7 +104,7 @@ class FamilyChatWebSocketClientTest {
             {
                 "type": "MESSAGE_DELETED",
                 "data": {
-                    "message_id": "msg-to-delete-999"
+                    "id": "msg-to-delete-999"
                 }
             }
         """.trimIndent()
@@ -121,7 +121,9 @@ class FamilyChatWebSocketClientTest {
         val listener = object : FamilyWsListener {
             override fun onMessageReceived(msg: FamilyMessageEntity) {}
             override fun onMessageDeleted(messageId: String) {}
-            override fun onMessagesRead(patientId: String) {
+            override fun onMessagesRead(patientId: String, readerId: String, messageIds: List<String>) {
+                assertEquals("caregiver-456", readerId)
+                assertEquals(listOf("msg-read"), messageIds)
                 readPatientId = patientId
             }
         }
@@ -132,7 +134,9 @@ class FamilyChatWebSocketClientTest {
             {
                 "type": "MESSAGE_READ",
                 "data": {
-                    "patient_id": "patient-123"
+                    "patient_id": "patient-123",
+                    "readerId": "caregiver-456",
+                    "messageIds": ["msg-read"]
                 }
             }
         """.trimIndent()

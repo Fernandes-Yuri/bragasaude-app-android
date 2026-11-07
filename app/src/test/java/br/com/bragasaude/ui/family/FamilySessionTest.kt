@@ -186,7 +186,7 @@ class FamilySessionTest {
         }
     }
 
-    @Test fun strictWebSocketMode_doesNotPollHttpAndReflectsWsLifecycle() = runTest {
+    @Test fun webSocketMode_recoversHistoryOnOpenAndStopsWhenHidden() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val store = ViewModelStore()
         try {
@@ -210,12 +210,9 @@ class FamilySessionTest {
             vm.setChatScreenVisible(true)
             runCurrent()
 
-            // Rigorosamente zero chamadas a chatCycleSnapshot no modo WebSocket estrito
-            coVerify(exactly=0) { repo.chatCycleSnapshot(any(), any()) }
-
-            // Estado de sync reflete o WebSocket (inicialmente conectando)
-            assertTrue(vm.chatSyncState.value.isPolling)
-            assertEquals("Conectando ao canal em tempo real (WebSocket)...", vm.chatSyncState.value.warning)
+            coVerify(atLeast=1) { repo.prepareConversation("patient") }
+            coVerify(atLeast=1) { repo.chatCycleSnapshot("patient", "patient") }
+            assertNull(vm.chatSyncState.value.warning)
 
             // Ao sair da tela, para a sessão e encerra polling
             vm.setChatScreenVisible(false)
