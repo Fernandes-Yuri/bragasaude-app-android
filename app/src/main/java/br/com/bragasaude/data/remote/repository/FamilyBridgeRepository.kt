@@ -624,7 +624,8 @@ class FamilyBridgeRepository @Inject constructor(
         }
         downloadError?.let { throw it }
         ensureSession()
-        syncFamilyMessages(patientUserId)
+        syncFamilyMessages(patientUserId).getOrThrow()
+        Unit
     }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
 
     fun getUnreadMessagesForPatient(patientUserId: String): Flow<List<FamilyMessageEntity>> {
