@@ -39,6 +39,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.hilt.navigation.compose.hiltViewModel
+import br.com.bragasaude.BuildConfig
 import br.com.bragasaude.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -66,7 +67,8 @@ fun LoginScreen(
 
     var emailMode by rememberSaveable { mutableStateOf("login") } // "login", "signup" ou "forgot"
     var forgotStep by rememberSaveable { mutableStateOf(1) } // 1: e-mail, 2: código OTP, 3: nova senha
-    var email by rememberSaveable { mutableStateOf(if (isFirebaseTestLab) "testebraga1@proton.me" else "") }
+    val defaultEmail = if (isFirebaseTestLab) BuildConfig.TEST_LAB_ACCOUNT.ifBlank { "testebraga1@proton.me" } else ""
+    var email by rememberSaveable { mutableStateOf(defaultEmail) }
     var password by rememberSaveable { mutableStateOf(if (isFirebaseTestLab) "fernandes3" else "") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
     var otpCode by rememberSaveable { mutableStateOf("") }
@@ -77,20 +79,10 @@ fun LoginScreen(
 
     LaunchedEffect(isFirebaseTestLab) {
         if (isFirebaseTestLab) {
-            delay(300)
-            val (resolvedEmail, resolvedPassword) = runCatching {
-                val f = java.io.File("/sdcard/Download/test_account.txt")
-                if (f.exists()) {
-                    val lines = f.readLines().map { it.trim() }.filter { it.isNotEmpty() }
-                    val acc = lines.getOrNull(0) ?: "testebraga1@proton.me"
-                    val pwd = lines.getOrNull(1) ?: "fernandes3"
-                    acc to pwd
-                } else {
-                    "testebraga1@proton.me" to "fernandes3"
-                }
-            }.getOrDefault("testebraga1@proton.me" to "fernandes3")
-            email = resolvedEmail
-            password = resolvedPassword
+            delay(200)
+            val configuredAccount = BuildConfig.TEST_LAB_ACCOUNT.ifBlank { "testebraga1@proton.me" }
+            email = configuredAccount
+            password = "fernandes3"
             if (emailMode == "login" && email.isNotBlank() && password.isNotBlank()) {
                 viewModel.signInWithEmail(email.trim(), password)
             }
