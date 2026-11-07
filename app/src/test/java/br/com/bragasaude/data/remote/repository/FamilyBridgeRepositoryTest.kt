@@ -606,7 +606,7 @@ class FamilyBridgeRepositoryTest {
     @Test fun `catchup retries pending message after peer keys are refreshed`() = runBlocking {
         every { auth.currentUser?.uid } returns "patient"
         val pending = br.com.bragasaude.data.local.FamilyMessageEntity("outbox", "patient", "Paciente", "Olá", "CUSTOM",senderUserId="patient",pendingSync=true)
-        coEvery { familyDao.getPendingSyncMessages() } returns listOf(pending, pending.copy(id="foreign",patientUserId="other"))
+        coEvery { familyDao.getPendingSyncMessages(any()) } returns listOf(pending, pending.copy(id="foreign",patientUserId="other"))
         coEvery { apiClient.syncFamilyMessage(pending) } returns "outbox"
         coEvery { apiClient.getFamilyMessages("patient") } returns emptyList()
         repository.chatCycleSnapshot("patient", "patient")
