@@ -183,8 +183,11 @@ class ClinicalIntegrityPersistenceTest {
         }
         server.start()
         try {
-            val authService = io.mockk.mockk<br.com.bragasaude.data.remote.auth.AuthService> {
-                io.mockk.coEvery { getValidIdToken() } returns "token-mariana"
+            val authService = io.mockk.mockk<br.com.bragasaude.data.remote.auth.AuthService>(relaxed = true) {
+                io.mockk.coEvery { getFreshToken(any()) } returns "token-mariana"
+                io.mockk.every { getTokenBlocking(any(), any()) } returns "token-mariana"
+                io.mockk.every { cachedTokenNow() } returns "token-mariana"
+                io.mockk.every { currentUserId } returns "mariana"
             }
             val api = br.com.bragasaude.data.remote.api.BragaApiClient(
                 context = RuntimeEnvironment.getApplication(),
