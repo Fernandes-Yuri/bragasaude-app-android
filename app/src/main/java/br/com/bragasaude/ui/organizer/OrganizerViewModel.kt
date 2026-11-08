@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -32,16 +33,19 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
     /** Dispatcher da sonda de OCR fora da thread principal; testável para determinismo. */
     @VisibleForTesting
     internal var probeDispatcher: CoroutineDispatcher = Dispatchers.Default
-    init { mutable.value = mutable.value.copy(personalization = prefs?.load() ?: OrganizerPersonalization()); refresh(); probeOcr() }
+    init {
+        mutable.update { it.copy(personalization = prefs?.load() ?: OrganizerPersonalization()) }
+        refresh()
+    }
     private fun operation(block: suspend () -> Unit) {
-        mutable.value = mutable.value.copy(busy = true, error = null, progressMessage = null)
+        mutable.update { it.copy(busy = true, error = null, progressMessage = null) }
         viewModelScope.launch { operations.withLock {
-            mutable.value = mutable.value.copy(busy = true, error = null)
+            mutable.update { it.copy(busy = true, error = null) }
             try { block() }
             catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-            catch (problem: OrganizerProblem) { mutable.value = mutable.value.copy(error = problem.message) }
-            catch (_: Exception) { mutable.value = mutable.value.copy(error = "Não foi possível concluir. Confira o arquivo, o espaço disponível e tente novamente. PDFs com senha precisam de uma cópia sem senha.") }
-            finally { mutable.value = mutable.value.copy(busy = false, progressMessage = null) }
+            catch (problem: OrganizerProblem) { mutable.update { it.copy(error = problem.message) } }
+            catch (_: Exception) { mutable.update { it.copy(error = "Não foi possível concluir. Confira o arquivo, o espaço disponível e tente novamente. PDFs com senha precisam de uma cópia sem senha.") } }
+            finally { mutable.update { it.copy(busy = false, progressMessage = null) } }
         } }
     }
     fun refresh(force: Boolean = false) = operation {
@@ -51,36 +55,47 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
         }
         val session = store.restore()
         lastRestoredAt = System.currentTimeMillis()
-        mutable.value = mutable.value.copy(session = session,
-            ready = mutable.value.ready && session?.id == mutable.value.session?.id)
+        mutable.update { current ->
+            current.copy(
+                session = session,
+                ready = current.ready && session?.id == current.session?.id
+            )
+        }
         probeOcr()
     }
     /** Sonda a infraestrutura de leitura assistida sem nunca bloquear ou derrubar a área. */
     fun probeOcr() {
         viewModelScope.launch(probeDispatcher) {
             val availability = ocrCapability.probe()
-            if (mutable.value.ocrAvailability != availability) {
-                mutable.value = mutable.value.copy(ocrAvailability = availability)
+            mutable.update { current ->
+                if (current.ocrAvailability != availability) {
+                    current.copy(ocrAvailability = availability)
+                } else {
+                    current
+                }
             }
         }
     }
     fun start() = operation {
-        mutable.value = OrganizerUiState(session = store.start(), busy = true, personalization = mutable.value.personalization)
+        val newSession = store.start()
+        mutable.update { current ->
+            OrganizerUiState(session = newSession, busy = true, personalization = current.personalization)
+        }
     }
     private fun changed(session: OrganizerSession) {
-        mutable.value = mutable.value.copy(session = session, ready = false, saved = false, preview = null, notice = null)
+        mutable.update { it.copy(session = session, ready = false, saved = false, preview = null, notice = null) }
     }
     fun import(uris: List<Uri>, appendTo: String? = null) = operation {
         val (session, failures) = store.import(requireNotNull(mutable.value.session).id, uris, appendTo) { step ->
-            mutable.value = mutable.value.copy(progressMessage = step)
+            mutable.update { it.copy(progressMessage = step) }
         }
         changed(session)
         if (failures.isNotEmpty()) {
             val imported = uris.size - failures.size
-            mutable.value = mutable.value.copy(
+            mutable.update { it.copy(
                 notice = "Importei $imported de ${uris.size} arquivo(s). Não consegui importar:\n" +
                     failures.joinToString("\n") { "• $it" }.take(900)
-            )
+            ) }
         }
     }
     fun update(item: OrganizerDocument) = operation { changed(store.update(requireNotNull(mutable.value.session).id, item)) }
@@ -90,37 +105,37 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
     }
     fun saveOriginal(id: String, uri: Uri) = operation {
         store.saveOriginal(requireNotNull(mutable.value.session).id, id, uri)
-        mutable.value = mutable.value.copy(notice = "Cópia do documento salva no destino escolhido.")
+        mutable.update { it.copy(notice = "Cópia do documento salva no destino escolhido.") }
     }
     fun preview(id: String, page: Int) = operation {
-        mutable.value = mutable.value.copy(preview = null)
+        mutable.update { it.copy(preview = null) }
         val bitmap = store.preview(requireNotNull(mutable.value.session).id, id, page)
-        mutable.value = mutable.value.copy(preview = bitmap, previewPage = page)
+        mutable.update { it.copy(preview = bitmap, previewPage = page) }
     }
     fun previewResult(page: Int) = operation {
-        mutable.value = mutable.value.copy(preview = null)
+        mutable.update { it.copy(preview = null) }
         val (bitmap, pages) = store.previewResult(requireNotNull(mutable.value.session).id, page)
-        mutable.value = mutable.value.copy(preview = bitmap, previewPage = page, resultPages = pages)
+        mutable.update { it.copy(preview = bitmap, previewPage = page, resultPages = pages) }
     }
-    fun clearPreview() { mutable.value = mutable.value.copy(preview = null) }
-    fun order(newest: Boolean) { if (!mutable.value.busy) mutable.value = mutable.value.copy(newest = newest, ready = false, saved = false) }
+    fun clearPreview() { mutable.update { it.copy(preview = null) } }
+    fun order(newest: Boolean) { if (!mutable.value.busy) mutable.update { it.copy(newest = newest, ready = false, saved = false) } }
     /** Personalizacao de capa: persistida localmente (sem dado de exame) e passada ao builder na geracao. */
     fun updatePersonalization(next: OrganizerPersonalization) {
         prefs?.save(next)
-        mutable.value = mutable.value.copy(personalization = next, ready = false, saved = false)
+        mutable.update { it.copy(personalization = next, ready = false, saved = false) }
     }
     fun resetPersonalization() = updatePersonalization(OrganizerPersonalization())
     fun generate() = operation {
         store.generate(requireNotNull(mutable.value.session).id, mutable.value.newest, mutable.value.personalization)
-        mutable.value = mutable.value.copy(ready = true, saved = false)
+        mutable.update { it.copy(ready = true, saved = false) }
     }
     fun save(uri: Uri) = operation {
         store.saveResult(requireNotNull(mutable.value.session).id, uri)
-        mutable.value = mutable.value.copy(saved = true)
+        mutable.update { it.copy(saved = true) }
     }
     fun share(onReady: (Uri) -> Unit) = operation { onReady(store.shareResult(requireNotNull(mutable.value.session).id)) }
     fun end() = operation {
         mutable.value.session?.let { store.end(it.id) }
-        mutable.value = OrganizerUiState(busy = true, personalization = mutable.value.personalization)
+        mutable.update { current -> OrganizerUiState(busy = true, personalization = current.personalization) }
     }
 }

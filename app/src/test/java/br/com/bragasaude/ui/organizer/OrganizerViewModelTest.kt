@@ -69,6 +69,7 @@ class OrganizerViewModelTest {
             every { capability.probe() } returns OcrAvailability.Ready
             coEvery { store.restore() } returns session
             val viewModel = OrganizerViewModel(store, capability)
+            viewModel.probeDispatcher = StandardTestDispatcher(testScheduler)
             advanceUntilIdle()
             coVerify(exactly = 1) { store.restore() }
 
