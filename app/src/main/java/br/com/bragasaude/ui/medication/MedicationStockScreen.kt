@@ -27,7 +27,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Medication
-import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
@@ -586,10 +585,6 @@ fun MedicationStockScreen(
                                 if (dose.canConfirm) selectedOccurrence = dose.item?.occurrenceId
                                 else openAllDoses()
                             },
-                            onSendReminder = {
-                                val times = MedicationSchedule.times(med.scheduleTimes, med.scheduleTime)
-                                viewModel.sendMedicationReminder(med.name, times)
-                            },
                             onRestock = { units -> viewModel.restock(med.id, units) },
                             onDelete = { viewModel.deleteMedication(med.id) },
                             onEditSchedule = { times, mealContext, intervalHours ->
@@ -798,7 +793,6 @@ internal fun MedicationStockCard(
     dose: MedicationStockDose,
     doseActionEnabled: Boolean,
     onTake: () -> Unit,
-    onSendReminder: () -> Unit = {},
     onRestock: (Int) -> Unit,
     onDelete: () -> Unit,
     onEditSchedule: (times: List<String>, mealContext: String?, intervalHours: Int?) -> Unit,
@@ -812,6 +806,7 @@ internal fun MedicationStockCard(
 ) {
     val context = LocalContext.current
     var showRestock by remember { mutableStateOf(false) }
+    LaunchedEffect(canRestock) { if (!canRestock) showRestock = false }
     var restockQty by remember { mutableStateOf(medication.totalUnits.toString()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     // Guardrail anti-toque: a exclusão só é liberada após marcação consciente.
@@ -1053,18 +1048,11 @@ internal fun MedicationStockCard(
                         }
                     }
                 } else {
-                    Button(
-                        onClick = onSendReminder,
-                        enabled = !loading,
-                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmeraldDark),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp)
-                    ) {
-                        Icon(Icons.Filled.NotificationsActive, contentDescription = null, tint = Color.White)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Enviar Lembrete", color = Color.White, fontSize = 15.sp)
-                    }
+                    Text(
+                        if (!canRestock) "Você pode visualizar os medicamentos." else "Seu vínculo não permite confirmar doses.",
+                        fontSize = 13.sp,
+                        color = BragaTextSecondary
+                    )
                 }
                 if (canRestock) {
                     OutlinedButton(
@@ -1128,7 +1116,7 @@ internal fun MedicationStockCard(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(Modifier.width(4.dp))
-                    Text("Agenda / Alarme", color = BragaEmeraldDark, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("Agenda do aparelho", color = BragaEmeraldDark, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (canEdit) {

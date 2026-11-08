@@ -1,9 +1,6 @@
 package br.com.bragasaude.ui.medication
 
 import android.app.Application
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.view.inspector.WindowInspector
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -31,47 +28,60 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import java.io.File
 import java.util.Date
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class, qualifiers = "w320dp-h740dp-mdpi")
+@Config(sdk = [34], application = Application::class, qualifiers = "w411dp-h1000dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class RtlCardsInterfaceTest {
     @get:Rule val compose = createComposeRule()
     private val medication = MedicationEntity("med", "patient",
         "Cloridrato de metformina de liberação prolongada", dosageMg = 12.5, currentUnits = 28)
 
-    @Test fun dosageAndOneThreeSixTimesFitAtLargeFont() {
+    @Test fun dosageAndOneThreeSixTimesFitAcrossCompactWidthsAndFontScales() {
         val allTimes = listOf("06:00", "09:00", "12:00", "15:00", "18:00", "21:00")
         val times = mutableStateOf(allTimes.take(1))
+        val width = mutableStateOf(320)
+        val fontScale = mutableStateOf(1f)
+        val record = mutableStateOf(medication)
         compose.setContent {
             val density = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density.density, 1.5f)) {
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale.value)) {
                 BragasaudeTheme {
-                    Column(Modifier.width(320.dp).padding(16.dp)) {
-                        MedicationStockHeader(medication, false)
+                    Column(Modifier.width(width.value.dp).padding(32.dp)) {
+                        MedicationStockHeader(record.value, false)
                         Spacer(Modifier.height(12.dp))
                         MedicationScheduleDetails(times.value, "APOS_CAFE")
                     }
                 }
             }
         }
-        val name = layout(medication.name)
-        assertTrue(name.lineCount <= 2)
-        assertEquals(1, layout("12,5 mg").lineCount)
-        assertFalse(layout("12,5 mg").hasVisualOverflow)
-        compose.onNodeWithText("28 comprimidos restantes").assertIsDisplayed()
-        for (count in listOf(1, 3, 6)) {
-            compose.runOnIdle { times.value = allTimes.take(count) }
-            for (time in allTimes.take(count)) {
-                val node = compose.onNodeWithText(time).assertIsDisplayed()
-                assertEquals(1, layout(time).lineCount)
-                assertFalse(layout(time).hasVisualOverflow)
-                assertTrue(node.fetchSemanticsNode().boundsInRoot.right <= 304f)
+        val scenarios = listOf(
+            medication.copy(name = "Losartana", dosageMg = 50.0) to "50 mg",
+            medication to "12,5 mg",
+            medication.copy(dosage = "50/12,5 mg", currentUnits = 1234) to "50/12,5 mg",
+            medication.copy(dosage = null, dosageMg = null) to null
+        )
+        for (size in listOf(320, 360, 411)) for (scale in listOf(1f, 1.3f, 2f)) {
+            for ((item, doseLabel) in scenarios) {
+                compose.runOnIdle { width.value = size; fontScale.value = scale; record.value = item }
+                assertTrue(layout(item.name).lineCount <= 2)
+                doseLabel?.let {
+                    assertEquals(1, layout(it).lineCount)
+                    assertFalse(layout(it).hasVisualOverflow)
+                } ?: compose.onNodeWithText("12,5 mg").assertDoesNotExist()
+                compose.onNodeWithText("${item.currentUnits} comprimidos restantes").assertIsDisplayed()
+                for (count in listOf(1, 3, 6)) {
+                    compose.runOnIdle { times.value = allTimes.take(count) }
+                    for (time in allTimes.take(count)) {
+                        val node = compose.onNodeWithText(time).assertIsDisplayed()
+                        assertEquals(1, layout(time).lineCount)
+                        assertFalse(layout(time).hasVisualOverflow)
+                        assertTrue(node.fetchSemanticsNode().boundsInRoot.right <= size - 32f)
+                    }
+                    compose.onNodeWithText("Após o café da manhã").assertIsDisplayed()
+                }
             }
-            compose.onNodeWithText("Após o café da manhã").assertIsDisplayed()
-            screenshot("rtl-medicamento-$count-horarios-fonte-ampliada")
         }
     }
 
@@ -93,8 +103,10 @@ class RtlCardsInterfaceTest {
         compose.onNodeWithText("Reabastecer").assertDoesNotExist()
         compose.onNodeWithText("Confirmar reposição").assertDoesNotExist()
         compose.onNodeWithText("Editar").assertDoesNotExist()
-        compose.onNodeWithText("Enviar Lembrete").performScrollTo().assertIsDisplayed()
-        screenshot("rtl-medicamento-visualizacao")
+        compose.onNodeWithText("Enviar Lembrete").assertDoesNotExist()
+        compose.onNodeWithText("Você pode visualizar os medicamentos.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Agenda do aparelho").performScrollTo().performClick()
+        compose.onNodeWithText("Adicionar à Agenda do Celular").assertIsDisplayed()
     }
 
     @Test fun patientMenuExplainsWhoseMedicationAndEffectiveAccess() {
@@ -118,26 +130,25 @@ class RtlCardsInterfaceTest {
         val status = mutableStateOf(ConsultationReminderStatus(setOf("24h", "1h"), loading = false))
         compose.setContent {
             val density = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density.density, 1.5f)) {
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
                 BragasaudeTheme {
-                    Box(Modifier.width(320.dp).padding(16.dp)) {
+                    Box(Modifier.width(320.dp).padding(32.dp)) {
                         ConsultationSummaryItem(ConsultationEntity("c", "patient", "self", "Ana", "Filha",
                             "Cardiologia", scheduledDate = Date(1_900_000_000_000)), status.value, { cancelled = true })
                     }
                 }
             }
         }
-        val badge = compose.onNodeWithText("Avisos: 24h e 1h antes").assertIsDisplayed()
+        val badge = compose.onNodeWithContentDescription(status.value.accessibilityLabel).assertIsDisplayed()
         val cancel = compose.onNodeWithContentDescription("Cancelar Consulta")
         assertTrue(badge.fetchSemanticsNode().boundsInRoot.top >= cancel.fetchSemanticsNode().boundsInRoot.bottom)
-        assertEquals(1, layout("Avisos: 24h e 1h antes").lineCount)
-        assertFalse(layout("Avisos: 24h e 1h antes").hasVisualOverflow)
+        assertEquals(1, layout("24h e 1h antes").lineCount)
+        assertFalse(layout("24h e 1h antes").hasVisualOverflow)
         cancel.performClick()
         assertTrue(cancelled)
-        screenshot("rtl-consulta-avisos-fonte-ampliada")
         compose.runOnIdle { status.value = status.value.copy(deviceEnabled = false) }
         compose.onNodeWithText("Avisos bloqueados no aparelho").assertIsDisplayed()
-        compose.onNodeWithText("Avisos: 24h e 1h antes").assertDoesNotExist()
+        compose.onNodeWithText("24h e 1h antes", useUnmergedTree = true).assertDoesNotExist()
     }
 
     private fun layout(text: String): TextLayoutResult {
@@ -145,15 +156,5 @@ class RtlCardsInterfaceTest {
         compose.onNodeWithText(text, useUnmergedTree = true)
             .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
         return layouts.single()
-    }
-
-    private fun screenshot(name: String) = compose.runOnIdle {
-        val view = WindowInspector.getGlobalWindowViews().first()
-        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-        view.draw(Canvas(bitmap))
-        val file = File("build/outputs/ui-review/$name.png")
-        file.parentFile.mkdirs()
-        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        bitmap.recycle()
     }
 }

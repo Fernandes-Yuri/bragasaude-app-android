@@ -9,6 +9,13 @@ internal data class ConsultationReminderStatus(
 ) {
     val active: Boolean get() = !loading && !unavailable && appEnabled && deviceEnabled && scheduledTags.isNotEmpty()
 
+    val timingLabel: String get() = listOf("24h", "1h").filter { it in scheduledTags }.joinToString(" e ") + " antes"
+
+    val accessibilityLabel: String get() = if (active) {
+        "Avisos programados neste aparelho: " + listOf("24h" to "24 horas", "1h" to "1 hora")
+            .filter { it.first in scheduledTags }.joinToString(" e ") { it.second } + " antes da consulta."
+    } else label
+
     val label: String get() = when {
         loading -> "Verificando avisos…"
         unavailable -> "Avisos: verificação indisponível"
