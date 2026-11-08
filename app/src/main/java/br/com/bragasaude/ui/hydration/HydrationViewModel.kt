@@ -81,6 +81,15 @@ class HydrationViewModel @Inject constructor(
         _isReminderEnabled.value = prefs.getBoolean("hydration_reminders_2h_enabled", true)
 
         viewModelScope.launch {
+            repository.hydrationPending(userId).collectLatest { pending ->
+                if (userId != BragaConstants.GUEST_UID) {
+                    if (pending) _saveStatus.value = VitalSaveStatus.PENDING_RETRY
+                    else if (_saveStatus.value != null && _saveStatus.value != VitalSaveStatus.SAVING) _saveStatus.value = VitalSaveStatus.SYNCED
+                }
+            }
+        }
+
+        viewModelScope.launch {
             profileRepository.getProfile(userId).collectLatest { profile ->
                 val weight = profile?.weight
                 _userWeight.value = weight

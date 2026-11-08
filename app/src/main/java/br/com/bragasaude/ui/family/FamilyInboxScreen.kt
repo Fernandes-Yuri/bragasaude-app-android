@@ -89,8 +89,8 @@ fun FamilyInboxScreen(
         containerColor = BragaBackground,
         topBar = {
             EmeraldHeaderBanner(
-                title = "Mensagens da Família",
-                subtitle = "Círculo de cuidado e acompanhamento",
+                title = "Família",
+                subtitle = "Mensagens e acompanhamento",
                 onBack = onBack,
                 trailingContent = {
                     IconButton(onClick = onNavigateToConnect) {
@@ -129,7 +129,7 @@ fun FamilyInboxScreen(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Mensagens protegidas por retenção de 24h",
+                        text = "Mensagens disponíveis por 24h",
                         style = MaterialTheme.typography.labelSmall,
                         color = BragaEmerald,
                         fontWeight = FontWeight.SemiBold

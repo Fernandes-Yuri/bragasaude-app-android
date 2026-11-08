@@ -9,7 +9,7 @@ import androidx.room.TypeConverters
     entities = [
         SmokingSupportSettings::class, SmokingSupportPlan::class, SmokingDailyEntry::class, SmokingCravingEntry::class,
         DoseGroupEntity::class, DoseIntentEntity::class, DoseReservationEntity::class, DoseScheduleEntity::class,
-        VitalSignEntity::class,
+        VitalSignEntity::class, ClinicalSyncCursor::class, FamilyReadReceipt::class,
         ProfileEntity::class,
         MilestoneEntity::class,
         BiometryEntity::class,
@@ -36,7 +36,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 66, // Estado explícito de mensagens aguardando decifragem
+    version = 67, // Sincronização clínica e recibos duráveis
     exportSchema = true
 )
 @TypeConverters(Converters::class, SmokingSupportConverters::class)

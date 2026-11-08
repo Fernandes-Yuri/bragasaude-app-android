@@ -67,7 +67,8 @@ fun MedicalReportScreen(
         }
     }
 
-    MedicalReportContent(isGeneratingPdf, snackbarHostState, onBack, viewModel::generatePdfReport)
+    val recordedDays by viewModel.recordedDays.collectAsState()
+    MedicalReportContent(isGeneratingPdf, snackbarHostState, onBack, viewModel::generatePdfReport, recordedDays)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,67 +77,49 @@ internal fun MedicalReportContent(
     isGeneratingPdf: Boolean,
     snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
-    onExport: () -> Unit
+    onExport: () -> Unit,
+    recordedDays: Int = 0
 ) {
+    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val today = java.time.LocalDate.now()
+    val format = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")
     Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(title = { Text("Dados e Relatórios", fontWeight = FontWeight.Bold) },
-                navigationIcon = { IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
-                } })
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { innerPadding ->
-        LazyColumn(Modifier.fillMaxSize().padding(innerPadding).testTag("reportContent"),
-            contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp,
-                bottom = br.com.bragasaude.ui.components.AssistantOrbScrollClearance), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(Icons.Default.PictureAsPdf, contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
-                    Text("Seus registros contam uma história", style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold)
-                    Text("O PDF reúne o que você registrou nos últimos 30 dias. Assim, fica mais fácil levar essas informações para uma conversa sobre sua saúde.",
-                        style = MaterialTheme.typography.bodyLarge)
-                }
-            }
-            item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), shape = RoundedCornerShape(20.dp)) {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                        ReportBenefit("Leve para a consulta", "Mostre seus registros à equipe de saúde sem depender só da memória.")
-                        ReportBenefit("Reveja o período com calma", "Consulte datas, gráficos e anotações reunidos no mesmo documento.")
-                        ReportBenefit("Tenha seu histórico à mão", "Abra uma cópia organizada para acompanhar suas próximas conversas e consultas.")
-                    }
-                }
-            }
-            item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), shape = RoundedCornerShape(20.dp)) {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Seu relatório de 30 dias", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("Inclui os registros disponíveis de pressão, glicemia, hidratação e atividade física. Quanto mais você registrar, mais completo ficará o relatório.",
-                            style = MaterialTheme.typography.bodyMedium)
-                        Button(onClick = onExport, enabled = !isGeneratingPdf, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
-                            if (isGeneratingPdf) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary)
-                            else Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(if (isGeneratingPdf) "Gerando relatório..." else "Baixar relatório em PDF")
-                        }
-                        Text("O relatório organiza seus registros; ele não realiza diagnóstico nem substitui uma avaliação profissional.",
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+        topBar = { CenterAlignedTopAppBar(title = { Text("Dados e relatórios") },
+            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar") } }) },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            Surface(tonalElevation = 2.dp) {
+                Button(onClick = onExport, enabled = !isGeneratingPdf,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp).heightIn(min = 52.dp)) {
+                    if (isGeneratingPdf) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Default.Download, null, Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (isGeneratingPdf) "Gerando relatório..." else "Baixar relatório em PDF")
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ReportBenefit(title: String, description: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    ) { padding ->
+        LazyColumn(Modifier.fillMaxSize().padding(padding).testTag("reportContent"),
+            contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            item {
+                Icon(Icons.Default.PictureAsPdf, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
+                Spacer(Modifier.height(12.dp))
+                Text("Seu relatório de 30 dias", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("${today.minusDays(29).format(format)} — ${today.format(format)}")
+            }
+            item {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("$recordedDays de 30 dias com registros", style = MaterialTheme.typography.titleMedium)
+                        Text("Pressão, glicemia, hidratação, biometria e atividade, conforme os dados disponíveis.")
+                        Text("Leve o documento à sua próxima consulta.")
+                    }
+                }
+            }
+            item {
+                TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Menos informações" else "Sobre o relatório") }
+                if (expanded) Text("O PDF reúne seus registros do período. Dias sem registro ficam identificados; o documento não substitui uma avaliação profissional.")
+            }
+        }
     }
 }

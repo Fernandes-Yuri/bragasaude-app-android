@@ -5,6 +5,9 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.inspector.WindowInspector
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.remember
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -31,13 +34,11 @@ class MedicalReportInterfaceTest {
                 MedicalReportContent(false, remember { SnackbarHostState() }, {}, { exports++ })
             }
         }
-        compose.onNodeWithText("Seus registros contam uma história").assertIsDisplayed()
-        compose.onNodeWithText("Leve para a consulta").assertIsDisplayed()
-        compose.onNodeWithText("Reveja o período com calma").assertIsDisplayed()
+        compose.onNodeWithText("Seu relatório de 30 dias").assertIsDisplayed()
         compose.onNodeWithText("Últimos registros vitais").assertDoesNotExist()
         compose.onNodeWithText("Resumo corporal").assertDoesNotExist()
         screenshot("01-por-que-usar-o-pdf")
-        compose.onNodeWithTag("reportContent").performScrollToNode(hasText("Baixar relatório em PDF"))
+        compose.onNodeWithText("Baixar relatório em PDF").assertIsDisplayed()
         compose.onNodeWithText("Baixar relatório em PDF").performClick()
         compose.runOnIdle { assertEquals(1, exports) }
         screenshot("02-exportar-relatorio")
@@ -49,9 +50,27 @@ class MedicalReportInterfaceTest {
                 MedicalReportContent(true, remember { SnackbarHostState() }, {}, {})
             }
         }
-        compose.onNodeWithText("Seus registros contam uma história").assertIsDisplayed()
-        compose.onNodeWithTag("reportContent").performScrollToNode(hasText("Gerando relatório..."))
+        compose.onNodeWithText("Seu relatório de 30 dias").assertIsDisplayed()
+        compose.onNodeWithText("Gerando relatório...").assertIsDisplayed()
         compose.onNodeWithText("Gerando relatório...").assertIsNotEnabled()
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-mdpi")
+    fun exportIsVisibleWithoutScrollingWithLargeFontAndBottomNavigationSpace() {
+        compose.setContent {
+            val density = androidx.compose.ui.platform.LocalDensity.current.density
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density, 1.5f)) {
+                BragasaudeTheme(forceThemeMode = "LIGHT") {
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier
+                        .fillMaxSize().padding(bottom = 80.dp)) {
+                        MedicalReportContent(false, remember { SnackbarHostState() }, {}, {})
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("Baixar relatório em PDF").assertIsDisplayed()
     }
 
     private fun screenshot(name: String) {

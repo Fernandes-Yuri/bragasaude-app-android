@@ -56,7 +56,7 @@ class MainScaffoldRouteMatchingTest {
     }
     @Test fun `orbe aparece somente na Home e nos Relatorios`() {
         assertTrue(shouldShowAssistantOrb("Screen\$Home"))
-        assertTrue(shouldShowAssistantOrb("Screen\$Report"))
+        assertFalse(shouldShowAssistantOrb("Screen\$Report"))
         assertTrue(shouldShowAssistantOrb("br.com.bragasaude.ui.util.Screen.Home"))
         assertFalse(shouldShowAssistantOrb("br.com.bragasaude.ui.util.Screen.Vitals?type=PRESSURE"))
         assertFalse(shouldShowAssistantOrb("Screen\$Vitals?type=PRESSURE"))

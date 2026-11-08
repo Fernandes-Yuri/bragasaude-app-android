@@ -77,6 +77,14 @@ fun AppNavHost(
         viewModel = smokingViewModel
     )
 
+    val consultationDestination by ConsultationNavigation.pending.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(consultationDestination) {
+        consultationDestination?.let { route ->
+            navController.navigate(route) { launchSingleTop = true }
+            ConsultationNavigation.pending.value = null
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -208,6 +216,14 @@ fun AppNavHost(
         composable<Screen.FamilyConnect> {
             FamilyConnectScreen(onClose = navigateBack)
         }
+        composable<Screen.ClinicalHistory> { entry ->
+            val route = entry.toRoute<Screen.ClinicalHistory>()
+            br.com.bragasaude.ui.family.ClinicalHistoryScreen(route.patientId, route.metric, navigateBack)
+        }
+        composable<Screen.Consultations> { entry ->
+            val route = entry.toRoute<Screen.Consultations>()
+            br.com.bragasaude.ui.family.ConsultationsScreen(route.patientId, route.consultationId, navigateBack)
+        }
         composable<Screen.FamilyInbox> {
             FamilyInboxScreen(
                 onBack = navigateBack,
@@ -236,7 +252,9 @@ fun AppNavHost(
             CaregiverDashboardScreen(
                 onBack = if (isRootDestination) null else navigateBack,
                 onConnectFamily = { navController.navigate(Screen.FamilyConnect) },
-                onOpenChat = { navController.navigate(Screen.FamilyInbox) }
+                onOpenChat = { navController.navigate(Screen.FamilyInbox) },
+                onOpenConsultations = { patient -> navController.navigate(Screen.Consultations(patient)) },
+                onOpenHistory = { patient, metric -> navController.navigate(Screen.ClinicalHistory(patient, metric)) }
             )
         }
 

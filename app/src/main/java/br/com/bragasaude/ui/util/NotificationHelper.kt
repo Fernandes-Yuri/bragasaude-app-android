@@ -195,7 +195,8 @@ object NotificationHelper {
         title: String,
         dateText: String,
         timeText: String,
-        reminderTag: String = "24h"
+        reminderTag: String = "24h",
+        consultationId: String? = null, patientId: String? = null
     ) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -211,8 +212,10 @@ object NotificationHelper {
         }
 
         val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("OPEN_CONSULTATION", true)
+            putExtra("consultationId", consultationId)
+            putExtra("patientId", patientId)
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -357,7 +360,7 @@ object NotificationHelper {
      * WorkManager one-time com atraso — sobrevive a reinicialização do app.
      * Lembretes cujo horário já passou são ignorados.
      */
-    fun scheduleConsultationReminders(context: Context, consultationId: String, title: String, scheduledDateMillis: Long) {
+    fun scheduleConsultationReminders(context: Context, consultationId: String, title: String, scheduledDateMillis: Long, ownerId: String? = null, patientId: String? = null) {
         try {
             val now = System.currentTimeMillis()
 
@@ -368,13 +371,16 @@ object NotificationHelper {
                     .putString("title", title)
                     .putLong("scheduledAt", scheduledDateMillis)
                     .putString("reminderTag", tag)
+                    .putString("ownerId", ownerId)
+                    .putString("patientId", patientId)
+                    .putString("consultationId", consultationId)
                     .build()
                 val work = androidx.work.OneTimeWorkRequestBuilder<br.com.bragasaude.data.remote.sync.ConsultationReminderWorker>()
                     .setInitialDelay(delay, java.util.concurrent.TimeUnit.MILLISECONDS)
                     .setInputData(data)
                     .build()
                 androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
-                    "braga_consultation_reminder_${consultationId}_$tag",
+                    "braga_consultation_reminder_${ownerId}_${consultationId}_$tag",
                     androidx.work.ExistingWorkPolicy.REPLACE,
                     work
                 )
@@ -385,11 +391,13 @@ object NotificationHelper {
     }
 
     /** Cancela lembretes pendentes de uma consulta (ex.: foi cancelada/recusada). */
-    fun cancelConsultationReminders(context: Context, consultationId: String) {
+    fun cancelConsultationReminders(context: Context, consultationId: String, ownerId: String? = null) {
         try {
             val wm = androidx.work.WorkManager.getInstance(context)
             wm.cancelUniqueWork("braga_consultation_reminder_${consultationId}_24h")
             wm.cancelUniqueWork("braga_consultation_reminder_${consultationId}_1h")
+            wm.cancelUniqueWork("braga_consultation_reminder_${ownerId}_${consultationId}_24h")
+            wm.cancelUniqueWork("braga_consultation_reminder_${ownerId}_${consultationId}_1h")
         } catch (e: Exception) {
             e.printStackTrace()
         }

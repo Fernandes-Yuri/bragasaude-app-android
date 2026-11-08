@@ -47,7 +47,7 @@ class SocialReactionMigrationTest {
                 assertEquals("fixture", reaction.id)
                 assertFalse(reaction.pendingDelete)
                 assertNull(db.socialFeedDao().getPostById("fixture")!!.viewerReactionType)
-                assertEquals(66, db.openHelper.readableDatabase.version)
+                assertEquals(67, db.openHelper.readableDatabase.version)
             } finally { db.close() }
         } finally { context.deleteDatabase(name) }
     }

@@ -11,6 +11,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import br.com.bragasaude.data.remote.sync.userIds
 import java.io.File
 import javax.inject.Inject
 import br.com.bragasaude.util.BragaConstants
@@ -42,26 +43,35 @@ class ReportViewModel @Inject constructor(
     private val _pdfErrorMessage = MutableSharedFlow<String>()
     val pdfErrorMessage = _pdfErrorMessage.asSharedFlow()
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val recordedDays = auth.userIds().flatMapLatest { owner ->
+        combine(vitalsRepository.getVitalSigns(owner), dailyMetricsDao.getRecent30Days(owner),
+            biometryRepository.getBiometry(owner)) { vitals, metrics, biometry ->
+            val today = java.time.LocalDate.now()
+            val start = today.minusDays(29)
+            val dates = vitals.map { it.measuredAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate() } +
+                metrics.mapNotNull { runCatching { java.time.LocalDate.parse(it.date) }.getOrNull() } +
+                biometry.map { it.measuredAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate() }
+            dates.filter { !it.isBefore(start) && !it.isAfter(today) }.toSet().size
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     init {
-        val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
-        
-        // Observe Biometry
         viewModelScope.launch {
-            biometryRepository.getBiometry(userId).collectLatest { entities ->
-                _latestBiometry.value = entities.firstOrNull()?.toRemote()
+            auth.userIds().collectLatest { userId ->
+                _latestBiometry.value = null
+                _vitalsHistory.value = emptyList()
+                kotlinx.coroutines.coroutineScope {
+                    launch { biometryRepository.getBiometry(userId).collectLatest { _latestBiometry.value = it.firstOrNull()?.toRemote() } }
+                    launch { vitalsRepository.getVitalSigns(userId).collectLatest { _vitalsHistory.value = it.map { e -> e.toRemote() }.sortedBy { e -> e.measuredAt } } }
+                }
             }
         }
-
-        // Observe Daily Vitals (for charts)
-        viewModelScope.launch {
-            vitalsRepository.getVitalSigns(userId).collectLatest { entities ->
-                _vitalsHistory.value = entities.map { it.toRemote() }.sortedBy { it.measuredAt }
-            }
-        }
-
     }
 
     fun generatePdfReport() {
+        if (_isGeneratingPdf.value) return
+        _isGeneratingPdf.value = true
         val userId = auth.currentUser?.uid ?: BragaConstants.GUEST_UID
         viewModelScope.launch {
             _isGeneratingPdf.value = true
@@ -76,7 +86,7 @@ class ReportViewModel @Inject constructor(
                 val file = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     pdfGenerator.generateReport(profile, allVitals, dailyMetrics, wearableReadings)
                 }
-                _pdfFile.emit(file)
+                if ((auth.currentUser?.uid ?: BragaConstants.GUEST_UID) == userId) _pdfFile.emit(file) else file?.delete()
             } catch (e: Exception) {
                 e.printStackTrace()
                 _pdfErrorMessage.emit("Erro ao gerar PDF: ${e.localizedMessage}")

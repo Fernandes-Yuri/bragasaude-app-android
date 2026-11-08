@@ -112,6 +112,7 @@ class MovementManager @Inject constructor(
     private var movementSessionStartTimestamp = 0L
     private var movementSessionSteps = 0
     private var movementSessionGpsMeters = 0f
+    private val metricWrites = java.util.concurrent.ConcurrentHashMap.newKeySet<Job>()
     private var restingDetectionJob: Job? = null
     private var activeTimerJob: Job? = null
     private var periodicRefreshJob: Job? = null
@@ -731,7 +732,7 @@ class MovementManager @Inject constructor(
             .apply()
 
         // Grava no Room Database de forma atômica
-        scope.launch {
+        val write = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             val entity = DailyMetricsEntity(
                 userId = userId,
                 date = dateToSave,
@@ -748,11 +749,19 @@ class MovementManager @Inject constructor(
             dailyMetricsDao.mergePhoneMetrics(entity)
             triggerSmartCloudSync()
         }
+        metricWrites.add(write)
+        write.invokeOnCompletion { metricWrites.remove(write) }
+        write.start()
     }
 
     /** Força a gravação imediata de todos os acumuladores na memória para o banco Room. */
     fun flush() {
         persistCurrentMetricsToDatabase()
+    }
+
+    suspend fun flushAndAwait() {
+        persistCurrentMetricsToDatabase()
+        metricWrites.toList().forEach { it.join() }
     }
 
     private fun triggerSmartCloudSync() {

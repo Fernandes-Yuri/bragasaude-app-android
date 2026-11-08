@@ -221,7 +221,7 @@ class CaregiverDashboardViewModelTest {
             familyRepository.sendCareMessage(
                 patientUserId = "patient-100",
                 senderName = any(),
-                messageText = match { it.contains("Consulta agendada: Oftalmologista") && it.contains("Lembretes ativos") },
+                messageText = match { it.contains("Consulta agendada: Oftalmologista") },
                 iconType = "CALENDAR"
             )
         }

@@ -38,6 +38,7 @@ class SyncWorker @AssistedInject constructor(
     private val bleTelemetryReceiptDao: BleTelemetryReceiptDao,
     private val auth: com.google.firebase.auth.FirebaseAuth,
     private val doseRepository: br.com.bragasaude.data.medicationdoses.MedicationDoseRepository,
+    private val familyRepository: br.com.bragasaude.data.remote.repository.FamilyBridgeRepository,
     private val blockSynchronizer: SocialBlockSynchronizer
 ) : CoroutineWorker(appContext, workerParams) {
 
@@ -69,6 +70,8 @@ class SyncWorker @AssistedInject constructor(
         if (!safeSync { syncPostReactions() }) hasErrors = true
         if (!safeSync { syncFamilyBindings() }) hasErrors = true
         if (!safeSync { syncFamilyMessages() }) hasErrors = true
+        if (!safeSync { familyRepository.flushConsultations() }) hasErrors = true
+        if (!safeSync { familyRepository.flushReadReceipts() }) hasErrors = true
         if (!safeSync { syncAuditLogs() }) hasErrors = true
 
         return if (hasErrors) {
@@ -113,18 +116,17 @@ class SyncWorker @AssistedInject constructor(
 
     private suspend fun syncVitalSigns() {
         val pending = vitalSignDao.getPendingSync()
-        for (v in pending) {
-            val serverId = apiClient.syncVitalSign(v)
-            if (serverId != null) {
-                vitalSignDao.insert(v.copy(remoteId = serverId, pendingSync = false))
-            } else {
-                // Sem ID remoto de confirmação: re-enfileira via Result.retry() para
-                // não considerar o vital como sincronizado quando não está no backend.
-                throw java.io.IOException("Sinal vital sem ID remoto de confirmação")
-            }
+        val owner = auth.currentUser?.uid ?: return
+        for (original in pending) {
+            if (original.userId != owner) continue
+            check(auth.currentUser?.uid == owner)
+            val v = if (original.remoteId == null) original.copy(remoteId = java.util.UUID.randomUUID().toString()).also { vitalSignDao.insert(it) } else original
+            val id = v.remoteId!!
+            val confirmed = if (v.hydrationUndoPending) apiClient.undoHydration(id) else apiClient.syncVitalSign(v) == id
+            if (confirmed) vitalSignDao.acknowledgeSync(v, id)
+            else throw java.io.IOException("Medição aguardando confirmação")
         }
     }
-
 
     private suspend fun syncMedications() {
         for (medication in medicationDao.getPendingSync()) {
@@ -203,7 +205,9 @@ class SyncWorker @AssistedInject constructor(
         for (d in pending) {
             val serverId = apiClient.syncDailyMetric(d)
             if (serverId != null) {
-                dailyMetricsDao.insert(d.copy(pendingSync = false))
+                dailyMetricsDao.acknowledgeSync(d)
+            } else {
+                throw java.io.IOException("Métrica diária aguardando envio")
             }
         }
     }

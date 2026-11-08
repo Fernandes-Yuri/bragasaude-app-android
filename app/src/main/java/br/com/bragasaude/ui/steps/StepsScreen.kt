@@ -634,7 +634,10 @@ fun WeeklyProgressSection(avgSteps: Int, avgMinutes: Int, onClick: () -> Unit) {
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("Média Semanal (Seg – Dom)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Column {
+                        Text("Média da semana", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text("Segunda a domingo", style = MaterialTheme.typography.labelSmall)
+                    }
                     Text("$avgSteps passos/dia • $avgMinutes min ativos", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -1012,12 +1015,12 @@ fun HeartPointsCard(
                         Spacer(Modifier.width(10.dp))
                         Column {
                             Text(
-                                "Evolução Semanal (Seg – Dom)",
+                                "Evolução da semana",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                "Toque para ver gráfico diário de 7 dias e metas",
+                                "Segunda a domingo · Ver gráfico",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

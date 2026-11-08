@@ -32,7 +32,9 @@ data class VitalSignEntity(
     val status: String = "recorded",
     val pendingSync: Boolean = false,
     val confirmedVia: String? = null,
-    val confirmationCode: String? = null
+    val confirmationCode: String? = null,
+    val hydrationUndoPending: Boolean = false,
+    val deletedAt: Long? = null
 )
 
 @Entity(tableName = "profiles_local")
@@ -415,7 +417,11 @@ data class ConsultationEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val googleCalendarEventId: String? = null, // ID do evento no Google Calendar
-    val pendingSync: Boolean = false
+    val pendingSync: Boolean = false,
+    val pendingAction: String? = null,
+    val pendingActorId: String? = null,
+    val remoteConfirmed: Boolean = false,
+    val createdBy: String? = null
 )
 
 data class ConsultationStatusCount(
@@ -490,3 +496,9 @@ data class BleTelemetryReceiptEntity(
     val glucoseLevel: Int? = null,
     val pendingSync: Boolean = false
 )
+
+@Entity(tableName = "clinical_sync_cursors", primaryKeys = ["ownerId", "patientId"])
+data class ClinicalSyncCursor(val ownerId: String, val patientId: String, val revision: Long)
+
+@Entity(tableName = "family_read_receipts", primaryKeys = ["ownerId", "patientId", "messageId"])
+data class FamilyReadReceipt(val ownerId: String, val patientId: String, val messageId: String, val expiresAt: Long)

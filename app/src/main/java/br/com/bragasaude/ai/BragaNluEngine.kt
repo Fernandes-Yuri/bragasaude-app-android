@@ -483,7 +483,7 @@ object BragaNluEngine {
         // "Ideias de jantar/almoço/lanche" é conversa de bem-estar inequívoca:
         // recebe acolhimento local mesmo sem palavra de pergunta clínica.
         if (REGEX_ALIMENTACAO_IDEIAS.containsMatchIn(protegido)) {
-            return NluOutput("conversa_alimentacao_acolhedora", sortearResposta("conversa_alimentacao_acolhedora"), tempoMs = deltaMs(inicio))
+            return NluOutput("conversa_alimentacao_acolhedora", MealResponses.respond(protegido), tempoMs = deltaMs(inicio))
         }
         // Uma pergunta explicativa não pode ser reduzida à última medição pessoal.
         if (BragaRoutingPolicy.outsideScope(protegido)) return NluOutput(
@@ -523,7 +523,7 @@ object BragaNluEngine {
             return NluOutput("duvida_sono_insonia", sortearResposta("duvida_sono_insonia"), tempoMs = deltaMs(inicio))
         }
         if (REGEX_ALIMENTACAO_ACOLHEDORA.containsMatchIn(protegido)) {
-            return NluOutput("conversa_alimentacao_acolhedora", sortearResposta("conversa_alimentacao_acolhedora"), tempoMs = deltaMs(inicio))
+            return NluOutput("conversa_alimentacao_acolhedora", MealResponses.respond(protegido), tempoMs = deltaMs(inicio))
         }
 
         // 4. ROTINA E LAZER (40+)

@@ -44,10 +44,14 @@ class BragaNluEngineTest {
             assertEquals(text, BragaRoute.LOCAL_CONVERSATION, output.route)
             assertFalse(output.delegarParaNuvem)
             assertFalse(text, output.respostaLocal!!.lowercase().contains("descontinuado"))
-            assertTrue(text, output.respostaLocal!!.contains("legumes") || output.respostaLocal!!.contains("fruta") ||
-                output.respostaLocal!!.contains("aveia") || output.respostaLocal!!.contains("salada"))
-            assertTrue(text, output.respostaLocal!!.contains("nutricionista") || output.respostaLocal!!.contains("médico") ||
-                output.respostaLocal!!.contains("corpo"))
+            val response = output.respostaLocal!!.lowercase()
+            assertTrue(text, response.length <= 240)
+            when {
+                "jantar" in text.lowercase() -> assertTrue(response.contains("jantar"))
+                "lanche" in text.lowercase() -> assertTrue(response.contains("lanche"))
+                "almoço" in text.lowercase() -> assertTrue(response.contains("almoço"))
+                else -> assertTrue(response.endsWith("?"))
+            }
         }
     }
 

@@ -109,7 +109,7 @@ class PatientFamilyViewModel @Inject constructor(
             // Observar mensagens não lidas recebidas da família
             launch {
                 familyRepository.getUnreadMessagesForPatient(patientUid).collectLatest { unread ->
-                    _unreadMessageCount.value = unread.count { it.senderUserId != patientUid }
+                    _unreadMessageCount.value = unread.count { it.senderUserId != patientUid && !it.awaitingDecryption && it.messageText.isNotBlank() }
                 }
             }
 

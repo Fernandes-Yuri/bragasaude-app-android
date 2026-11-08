@@ -228,7 +228,7 @@ class AuthViewModelTest {
 
         viewModel.signOut()
 
-        verify(exactly = 1) { movementManager.flush() }
+        coVerify(exactly = 1) { movementManager.flushAndAwait() }
         coVerify(exactly = 1) { medicationRepository.cancelAllUserAlarms("test-uid") }
         verify(exactly = 1) { database.clearAllTables() }
         verify(exactly = 0) { database.close() }
@@ -253,6 +253,20 @@ class AuthViewModelTest {
         every { auth.currentUser } returns null
         authListener.onAuthStateChanged(auth)
         assertFalse(viewModel.initialDataReady.value)
+    }
+
+    @Test
+    fun `logout does not discard a pending family message without pending measurements`() = kotlinx.coroutines.test.runTest {
+        val user = mockk<FirebaseUser>(relaxed = true)
+        every { user.uid } returns "test-uid"
+        every { auth.currentUser } returns user
+        coEvery { database.familyDao().getPendingSyncMessages(any()) } returns listOf(
+            br.com.bragasaude.data.local.FamilyMessageEntity(id = "queued", patientUserId = "patient",
+                senderName = "Caregiver", senderUserId = "test-uid", messageText = "offline", iconType = "CUSTOM", pendingSync = true))
+        viewModel.signOut()
+        verify(exactly = 0) { database.clearAllTables() }
+        verify(exactly = 0) { auth.signOut() }
+        assertNotNull(viewModel.sessionNotice.value)
     }
 
     @Test

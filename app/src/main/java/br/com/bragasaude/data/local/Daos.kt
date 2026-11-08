@@ -12,10 +12,10 @@ interface VitalSignDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(vitalSign: VitalSignEntity): Long
 
-    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId ORDER BY measuredAt DESC")
+    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND deletedAt IS NULL ORDER BY measuredAt DESC")
     fun getAll(userId: String): Flow<List<VitalSignEntity>>
 
-    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId ORDER BY measuredAt DESC")
+    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND deletedAt IS NULL ORDER BY measuredAt DESC")
     suspend fun getAllOneShot(userId: String): List<VitalSignEntity>
 
     @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND (systolicPressure IS NOT NULL OR diastolicPressure IS NOT NULL) ORDER BY measuredAt DESC")
@@ -38,6 +38,14 @@ interface VitalSignDao {
 
     @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND measuredAt >= :sinceMillis ORDER BY measuredAt DESC")
     fun getRecent30Days(userId: String, sinceMillis: Long): Flow<List<VitalSignEntity>>
+
+    @Query("""SELECT * FROM vital_signs_local WHERE userId=:patient AND deletedAt IS NULL
+        AND ((:metric='PRESSURE' AND systolicPressure IS NOT NULL AND diastolicPressure IS NOT NULL)
+          OR (:metric='GLUCOSE' AND glucoseLevel IS NOT NULL)) ORDER BY measuredAt DESC, localId DESC LIMIT :limit""")
+    fun metricWindow(patient: String, metric: String, limit: Int): Flow<List<VitalSignEntity>>
+
+    @Query("SELECT COUNT(*)>0 FROM vital_signs_local WHERE userId=:owner AND pendingSync=1 AND (hydrationMl IS NOT NULL OR hydrationUndoPending=1)")
+    fun observeHydrationPending(owner: String): Flow<Boolean>
 
     // Memória pessoal: intervalos no fuso do aparelho, sem carregar o histórico inteiro.
     @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND systolicPressure > 0 AND diastolicPressure > 0 AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis ORDER BY measuredAt DESC, localId DESC LIMIT 1")
@@ -70,6 +78,48 @@ interface VitalSignDao {
     @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND remoteId IS NULL AND hydrationMl = :hydrationMl AND abs(measuredAt - :measuredAtMillis) < 10000 ORDER BY measuredAt DESC LIMIT 1")
     suspend fun findMatchingLocalHydration(userId: String, measuredAtMillis: Long, hydrationMl: Int): VitalSignEntity?
 
+    @Query("SELECT * FROM vital_signs_local WHERE localId = :localId")
+    suspend fun getByLocalId(localId: Long): VitalSignEntity?
+
+    @Transaction
+    suspend fun acknowledgeSync(expected: VitalSignEntity, remoteId: String) {
+        if (getByLocalId(expected.localId) == expected) insert(expected.copy(remoteId = remoteId, pendingSync = false, hydrationUndoPending = false))
+    }
+
+    @Transaction
+    suspend fun cacheRemote(vital: VitalSignEntity) {
+        val current = vital.remoteId?.let { getByRemoteId(it) }
+        if (current?.pendingSync == true || current?.hydrationUndoPending == true) return
+        insert(vital.copy(localId = current?.localId ?: 0L))
+    }
+
+    @Query("SELECT revision FROM clinical_sync_cursors WHERE ownerId=:owner AND patientId=:patient")
+    suspend fun getCursor(owner: String, patient: String): Long?
+
+    @Query("DELETE FROM clinical_sync_cursors WHERE ownerId=:owner AND patientId=:patient")
+    suspend fun clearCursor(owner: String, patient: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveCursor(cursor: ClinicalSyncCursor)
+
+    @Transaction
+    suspend fun cachePage(owner: String, patient: String, records: List<VitalSignEntity>, cursor: Long) {
+        records.forEach { cacheRemote(it) }
+        saveCursor(ClinicalSyncCursor(owner, patient, maxOf(getCursor(owner, patient) ?: 0L, cursor)))
+    }
+
+    @Transaction
+    suspend fun undoHydration(userId: String, start: Long, end: Long, cloud: Boolean): VitalSignEntity? {
+        val current = getLatestHydrationForMemory(userId, start, end) ?: return null
+        val onlyWater = listOf(current.systolicPressure, current.diastolicPressure, current.heartRate,
+            current.oxygenSaturation, current.glucoseLevel, current.steps, current.distanceMeters).all { it == null }
+        val undone = current.copy(remoteId = current.remoteId ?: java.util.UUID.randomUUID().toString(),
+            hydrationMl = null, hydrationUndoPending = cloud, pendingSync = cloud,
+            deletedAt = if (onlyWater) System.currentTimeMillis() else null)
+        insert(undone)
+        return undone
+    }
+
     // AUD-AN30: a chave era só measuredAt + hydrationMl. A voz que registra
     // "pressão 12x8 e glicemia 100" cria DUAS entidades no mesmo milissegundo
     // com hydrationMl null → mesma chave → uma era apagada (perda silenciosa
@@ -97,13 +147,13 @@ interface VitalSignDao {
     @Query("DELETE FROM vital_signs_local WHERE localId = (SELECT localId FROM vital_signs_local WHERE userId = :userId AND hydrationMl > 0 AND measuredAt >= :startMillis AND measuredAt < :endMillis ORDER BY measuredAt DESC, localId DESC LIMIT 1)")
     suspend fun deleteLastHydration(userId: String, startMillis: Long, endMillis: Long)
 
-    @Query("DELETE FROM vital_signs_local WHERE measuredAt < :cutoffMillis")
+    @Query("DELETE FROM vital_signs_local WHERE measuredAt < :cutoffMillis AND pendingSync = 0 AND hydrationUndoPending = 0")
     suspend fun purgeOlderThan(cutoffMillis: Long)
 
     @Query("DELETE FROM vital_signs_local WHERE userId = :userId")
     suspend fun deleteByUserId(userId: String)
 
-    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId ORDER BY measuredAt DESC LIMIT :count")
+    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND deletedAt IS NULL ORDER BY measuredAt DESC LIMIT :count")
     suspend fun getLastN(userId: String, count: Int): List<VitalSignEntity>
 }
 
@@ -180,7 +230,7 @@ interface BiometryDao {
         if (getByLocalId(expected.localId) == expected) insert(expected.copy(pendingSync = false))
     }
 
-    @Query("DELETE FROM biometry_local WHERE measuredAt < :cutoffMillis")
+    @Query("DELETE FROM biometry_local WHERE measuredAt < :cutoffMillis AND pendingSync = 0")
     suspend fun purgeOlderThan(cutoffMillis: Long)
 }
 
@@ -321,6 +371,17 @@ interface DailyMetricsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(metrics: DailyMetricsEntity)
 
+    @Transaction
+    suspend fun acknowledgeSync(expected: DailyMetricsEntity) {
+        if (getByDate(expected.userId, expected.date) == expected) insert(expected.copy(pendingSync = false))
+    }
+
+    @Transaction
+    suspend fun cacheRemote(metrics: DailyMetricsEntity) {
+        if (getByDate(metrics.userId, metrics.date)?.pendingSync == true) return
+        insert(metrics.copy(pendingSync = false))
+    }
+
     @Query("SELECT * FROM daily_metrics_local WHERE userId = :userId AND date = :date")
     suspend fun getByDate(userId: String, date: String): DailyMetricsEntity?
 
@@ -333,7 +394,7 @@ interface DailyMetricsDao {
     @Query("SELECT * FROM daily_metrics_local WHERE pendingSync = 1")
     suspend fun getPendingSync(): List<DailyMetricsEntity>
 
-    @Query("DELETE FROM daily_metrics_local WHERE date < :cutoffDate")
+    @Query("DELETE FROM daily_metrics_local WHERE date < :cutoffDate AND pendingSync = 0")
     suspend fun purgeOlderThan(cutoffDate: String)
 
     @Query("DELETE FROM daily_metrics_local WHERE userId = :userId")
@@ -714,6 +775,9 @@ interface FamilyDao {
     suspend fun abandonDeletion(id: String, maxAttempts: Int)
 
     /** Purga local D47: remove definitivamente tudo o que completou 24h (com ou sem tombstone). */
+    @Query("DELETE FROM family_read_receipts WHERE expiresAt <= :now")
+    suspend fun purgeReceipts(now: Long = System.currentTimeMillis())
+
     @Query("DELETE FROM family_messages_local WHERE expiresAt > 0 AND expiresAt <= :now")
     suspend fun purgeExpiredMessages(now: Long = System.currentTimeMillis())
 
@@ -737,6 +801,57 @@ interface FamilyDao {
     /** Buscar consulta por ID. */
     @Query("SELECT * FROM consultations_local WHERE id = :consultationId LIMIT 1")
     suspend fun getConsultationById(consultationId: String): ConsultationEntity?
+
+    @Query("SELECT * FROM consultations_local WHERE userId=:patient")
+    suspend fun consultationsForCleanup(patient: String): List<ConsultationEntity>
+
+    @Query("DELETE FROM family_read_receipts WHERE ownerId=:owner AND patientId=:patient")
+    suspend fun deleteReceiptsForPatient(owner: String, patient: String)
+
+    @Query("SELECT * FROM consultations_local WHERE remoteConfirmed=0 AND pendingSync=0 AND status IN ('SUGGESTED','ACCEPTED') AND scheduledDate>=:now")
+    suspend fun localConsultationsToReview(now: Long = System.currentTimeMillis()): List<ConsultationEntity>
+
+    @Query("SELECT * FROM consultations_local WHERE pendingSync=1")
+    suspend fun getPendingConsultations(): List<ConsultationEntity>
+
+    @Transaction
+    suspend fun acknowledgeConsultation(expected: ConsultationEntity, remote: ConsultationEntity) {
+        if (getConsultationById(expected.id) == expected) insertConsultation(remote.copy(pendingSync = false, pendingAction = null, pendingActorId = null, remoteConfirmed = true))
+    }
+
+    @Transaction
+    suspend fun cacheConsultation(remote: ConsultationEntity) {
+        val current = getConsultationById(remote.id)
+        if (current?.pendingSync == true) return
+        insertConsultation(remote.copy(googleCalendarEventId = current?.googleCalendarEventId))
+    }
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun queueReceipt(receipt: FamilyReadReceipt)
+
+    @Query("SELECT * FROM family_read_receipts WHERE ownerId=:owner AND expiresAt > :now")
+    suspend fun pendingReceipts(owner: String, now: Long = System.currentTimeMillis()): List<FamilyReadReceipt>
+
+    @Query("DELETE FROM family_read_receipts WHERE ownerId=:owner AND messageId=:id")
+    suspend fun acknowledgeReceipt(owner: String, id: String)
+
+    @Transaction
+    suspend fun markSeen(owner: String, messages: List<FamilyMessageEntity>) {
+        for (message in messages) {
+            markMessageAsRead(message.id)
+            queueReceipt(FamilyReadReceipt(owner, message.patientUserId, message.remoteId ?: message.id, message.expiresAt))
+        }
+    }
+
+    @Query("SELECT * FROM consultations_local WHERE id=:id")
+    fun observeConsultation(id: String): Flow<ConsultationEntity?>
+
+    @Query("""SELECT * FROM consultations_local WHERE userId=:userId AND
+        ((:upcoming=1 AND scheduledDate>=:now AND status IN ('SUGGESTED','ACCEPTED')) OR
+         (:upcoming=0 AND (scheduledDate<:now OR status NOT IN ('SUGGESTED','ACCEPTED'))))
+        ORDER BY CASE WHEN :upcoming=1 THEN scheduledDate END ASC,
+                 CASE WHEN :upcoming=0 THEN scheduledDate END DESC LIMIT :limit""")
+    fun getConsultationsWindow(userId: String, now: Long, upcoming: Boolean, limit: Int): Flow<List<ConsultationEntity>>
 
     /** Buscar todas as consultas do usuário. */
     @Query("SELECT * FROM consultations_local WHERE userId = :userId ORDER BY scheduledDate DESC")
@@ -775,11 +890,11 @@ interface FamilyDao {
     suspend fun countConsultationsByStatus(userId: String): List<ConsultationStatusCount>
 
     /** Buscar consultas ativas (não canceladas e não recusadas) ordenadas por data crescente. */
-    @Query("SELECT * FROM consultations_local WHERE userId = :userId AND status NOT IN ('CANCELLED', 'REJECTED') ORDER BY scheduledDate ASC")
-    fun getActiveConsultationsForUser(userId: String): Flow<List<ConsultationEntity>>
+    @Query("SELECT * FROM consultations_local WHERE userId = :userId AND status IN ('SUGGESTED', 'ACCEPTED') AND scheduledDate >= :nowMillis ORDER BY scheduledDate ASC")
+    fun getActiveConsultationsForUser(userId: String, nowMillis: Long = System.currentTimeMillis()): Flow<List<ConsultationEntity>>
 
     /** Buscar consulta marcada para hoje ou próxima. */
-    @Query("SELECT * FROM consultations_local WHERE userId = :userId AND scheduledDate >= :nowMillis AND status NOT IN ('CANCELLED', 'REJECTED') ORDER BY scheduledDate ASC LIMIT 1")
+    @Query("SELECT * FROM consultations_local WHERE userId = :userId AND scheduledDate >= :nowMillis AND status IN ('SUGGESTED', 'ACCEPTED') ORDER BY scheduledDate ASC LIMIT 1")
     suspend fun getNextConsultation(userId: String, nowMillis: Long): ConsultationEntity?
 }
 

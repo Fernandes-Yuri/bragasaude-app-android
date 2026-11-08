@@ -193,6 +193,5 @@ internal fun shouldShowBottomBar(currentRoute: String?): Boolean =
 /** Telas novas começam sem sobreposição, até uma decisão explícita de produto. */
 internal fun shouldShowAssistantOrb(currentRoute: String?, hasOpenModal: Boolean = false): Boolean =
     !hasOpenModal && listOf(
-        Screen.Home,
-        Screen.Report
+        Screen.Home
     ).any { isCurrentRoute(currentRoute, it) }

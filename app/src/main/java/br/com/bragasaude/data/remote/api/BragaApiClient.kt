@@ -36,6 +36,8 @@ import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class VitalChangesPage(val records: List<VitalSignEntity>, val nextCursor: Long, val hasMore: Boolean)
+
 data class SyncProfileResult(
     val success: Boolean
 )
@@ -252,7 +254,11 @@ class BragaApiClient @Inject constructor(
 
     suspend fun syncVitalSign(v: VitalSignEntity): String? = withContext(Dispatchers.IO) {
         try {
+            val id = v.remoteId ?: return@withContext null
+            java.util.UUID.fromString(id)
+            if (v.hydrationUndoPending) return@withContext if (undoHydration(id)) id else null
             val json = JSONObject().apply {
+                put("id", id)
                 put("userId", v.userId)
                 if (v.systolicPressure != null) put("systolicPressure", v.systolicPressure)
                 if (v.diastolicPressure != null) put("diastolicPressure", v.diastolicPressure)
@@ -264,7 +270,7 @@ class BragaApiClient @Inject constructor(
                 put("measuredAt", isoFormat.format(v.measuredAt))
             }
             val res = postJson("$baseUrl/api/sync/vitals", json)
-            return@withContext res?.optString("id", null)
+            return@withContext res?.takeIf { it.optString("status") == "success" && it.optString("id") == id }?.getString("id")
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao sincronizar sinal vital: ${e.message}")
             return@withContext null
@@ -312,6 +318,35 @@ class BragaApiClient @Inject constructor(
             Log.w(TAG, "Falha ao buscar sinais vitais do servidor: ${e.message}")
             return@withContext null
         }
+    }
+
+    suspend fun undoHydration(id: String): Boolean = withContext(Dispatchers.IO) {
+        val response = postJson("$baseUrl/api/vitals/$id/undo-hydration", JSONObject())
+        response?.optString("status") == "success" && response.optString("id") == id
+    }
+
+    suspend fun getVitalChanges(patient: String, after: Long): VitalChangesPage? = withContext(Dispatchers.IO) {
+        try {
+            val page = getJson("$baseUrl/api/vitals/$patient/changes?after=$after") ?: return@withContext null
+            val changes = page.getJSONArray("changes")
+            val records = (0 until changes.length()).map { index ->
+                val v = changes.getJSONObject(index).getJSONObject("vital")
+                check(v.getString("user_id") == patient)
+                fun number(key: String): Int? = if (v.isNull(key)) null else v.getInt(key)
+                VitalSignEntity(remoteId = v.getString("id"), userId = patient,
+                    systolicPressure = number("systolic_pressure"), diastolicPressure = number("diastolic_pressure"),
+                    heartRate = number("heart_rate"), oxygenSaturation = number("oxygen_saturation"),
+                    glucoseLevel = number("glucose_level"), glucoseType = v.optString("glucose_type").takeUnless { it.isBlank() || it == "null" },
+                    hydrationMl = number("hydration_ml"),
+                    measuredAt = Date(parseIsoMillis(v.getString("measured_at")) ?: error("Data inválida")),
+                    deletedAt = parseIsoMillis(v.optString("deleted_at")), pendingSync = false)
+            }
+            val cursor = page.getLong("nextCursor")
+            val more = page.getBoolean("hasMore")
+            check(cursor >= after && (!more || cursor > after))
+            VitalChangesPage(records, cursor, more)
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
+        } catch (e: Exception) { Log.w(TAG, "Falha ao recuperar alterações clínicas"); null }
     }
 
     // ==================== MÉTRICAS DIÁRIAS ====================
@@ -769,7 +804,7 @@ class BragaApiClient @Inject constructor(
                 if (!caregiverName.isNullOrBlank()) put("caregiverName", caregiverName)
                 if (!caregiverRelation.isNullOrBlank()) put("caregiverRelation", caregiverRelation)
             })
-            res?.optString("status") == "success"
+            res?.optString("status") == "ACCEPTED"
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao aceitar consulta: ${e.message}")
             false
@@ -781,7 +816,7 @@ class BragaApiClient @Inject constructor(
             val res = postJson("$baseUrl/api/consultation/reject", JSONObject().apply {
                 put("consultationId", consultationId)
             })
-            res?.optString("status") == "success"
+            res?.optString("status") == "REJECTED"
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao recusar consulta: ${e.message}")
             false
@@ -793,7 +828,7 @@ class BragaApiClient @Inject constructor(
             val res = postJson("$baseUrl/api/consultation/complete", JSONObject().apply {
                 put("consultationId", consultationId)
             })
-            res?.optString("status") == "success"
+            res?.optString("status") == "COMPLETED"
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao concluir consulta: ${e.message}")
             false
@@ -805,11 +840,57 @@ class BragaApiClient @Inject constructor(
             val res = postJson("$baseUrl/api/consultation/cancel", JSONObject().apply {
                 put("consultationId", consultationId)
             })
-            res?.optString("status") == "success"
+            res?.optString("status") == "CANCELLED"
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao cancelar consulta: ${e.message}")
             false
         }
+    }
+
+    private fun consultationFromJson(obj: JSONObject): ConsultationEntity {
+        fun optional(key: String) = obj.optString(key).takeUnless { it.isBlank() || it == "null" }
+        val created = parseIsoMillis(optional("createdAt")) ?: System.currentTimeMillis()
+        return ConsultationEntity(id = obj.getString("id"), userId = obj.getString("patientId"),
+            caregiverUserId = optional("caregiverId"), caregiverName = optional("caregiverName"),
+            caregiverRelation = optional("caregiverRelation"), title = obj.getString("title"),
+            scheduledDate = Date(parseIsoMillis(obj.getString("scheduledDate")) ?: error("Data inválida")),
+            status = obj.getString("status"), createdAt = created,
+            updatedAt = parseIsoMillis(optional("updatedAt")) ?: created,
+            remoteConfirmed = true, createdBy = optional("createdBy"))
+    }
+
+    suspend fun createConsultationRecord(c: ConsultationEntity): ConsultationEntity? = withContext(Dispatchers.IO) {
+        val result = postJson("$baseUrl/api/consultation/create", JSONObject().apply {
+            put("id", c.id); put("patientId", c.userId); put("title", c.title)
+            put("scheduledDate", java.time.Instant.ofEpochMilli(c.scheduledDate.time).toString())
+            put("caregiverName", c.caregiverName); put("caregiverRelation", c.caregiverRelation)
+        }) ?: return@withContext null
+        consultationFromJson(result).takeIf { it.id == c.id && it.userId == c.userId }
+    }
+
+    suspend fun changeConsultation(id: String, status: String): ConsultationEntity? = withContext(Dispatchers.IO) {
+        val action = mapOf("ACCEPTED" to "accept", "REJECTED" to "reject", "COMPLETED" to "complete", "CANCELLED" to "cancel")[status]
+            ?: error("Estado inválido")
+        postJson("$baseUrl/api/consultation/$action", JSONObject().put("consultationId", id))?.let { consultationFromJson(it) }
+    }
+
+    suspend fun getConsultations(patient: String): List<ConsultationEntity>? = withContext(Dispatchers.IO) {
+        try {
+            val result = mutableListOf<ConsultationEntity>()
+            var offset = 0
+            while (true) {
+                val page = getJsonArray("$baseUrl/api/consultations/$patient?offset=$offset") ?: return@withContext null
+                for (index in 0 until page.length()) {
+                    val consultation = consultationFromJson(page.getJSONObject(index))
+                    check(consultation.userId == patient)
+                    result.add(consultation)
+                }
+                if (page.length() < 100) break
+                offset += page.length()
+            }
+            result.distinctBy { it.id }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
+        } catch (e: Exception) { Log.w(TAG, "Falha ao baixar consultas"); null }
     }
 
     // ==================== MEDICAMENTOS ====================
