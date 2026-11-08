@@ -893,6 +893,44 @@ class BragaApiClient @Inject constructor(
         postJson("$baseUrl/api/consultation/$action", JSONObject().put("consultationId", id))?.let { consultationFromJson(it) }
     }
 
+    suspend fun updateConsultation(
+        consultationId: String,
+        title: String? = null,
+        scheduledDateMillis: Long? = null
+    ): ConsultationEntity? = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                if (!title.isNullOrBlank()) put("title", title.trim())
+                if (scheduledDateMillis != null) {
+                    put("scheduledDate", java.time.Instant.ofEpochMilli(scheduledDateMillis).toString())
+                }
+            }
+            val token = authService.getTokenBlocking()
+            val mediaType = "application/json; charset=utf-8".toMediaType()
+            val body = payload.toString().toRequestBody(mediaType)
+            val requestBuilder = Request.Builder()
+                .url("$baseUrl/api/consultation/$consultationId")
+                .patch(body)
+                .header("Content-Type", "application/json; charset=utf-8")
+                .header("Accept", "application/json")
+            if (token != null) {
+                requestBuilder.header("Authorization", "Bearer $token")
+            }
+            httpClient.newBuilder().followRedirects(false).followSslRedirects(false).build()
+                .newCall(requestBuilder.build()).execute().use { response ->
+                    if (!response.isSuccessful) return@withContext null
+                    val raw = response.body?.string().orEmpty()
+                    if (raw.isBlank()) return@withContext null
+                    consultationFromJson(JSONObject(raw))
+                }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao atualizar consulta: ${e.message}")
+            null
+        }
+    }
+
     suspend fun getConsultations(patient: String): List<ConsultationEntity>? = withContext(Dispatchers.IO) {
         try {
             val result = mutableListOf<ConsultationEntity>()
@@ -2233,6 +2271,248 @@ class BragaApiClient @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao atualizar horários do medicamento: ${e.message}")
             false
+        }
+    }
+
+    // ==================== CENTRAL DE NOTIFICAÇÕES (RTL-07) ====================
+
+    data class RemoteNotificationPage(
+        val items: List<br.com.bragasaude.data.local.NotificationItemEntity>,
+        val snapshotRevision: Long,
+        val latestRevision: Long,
+        val unreadCount: Int,
+        val hasMore: Boolean,
+        val nextCursor: String?
+    )
+
+    data class RemoteNotificationChange(
+        val revision: Long,
+        val item: br.com.bragasaude.data.local.NotificationItemEntity
+    )
+
+    data class RemoteNotificationChangesPage(
+        val changes: List<RemoteNotificationChange>,
+        val nextCursor: Long,
+        val latestRevision: Long,
+        val unreadCount: Int,
+        val hasMore: Boolean
+    )
+
+    data class RemoteNotificationMutationResult(
+        val latestRevision: Long,
+        val unreadCount: Int
+    )
+
+    private fun parseNotificationItem(
+        recipientId: String,
+        obj: JSONObject
+    ): br.com.bragasaude.data.local.NotificationItemEntity {
+        fun optNullableString(vararg keys: String): String? {
+            for (k in keys) {
+                if (obj.has(k) && !obj.isNull(k)) {
+                    val v = obj.optString(k, "").trim()
+                    if (v.isNotEmpty() && v != "null") return v
+                }
+            }
+            return null
+        }
+        val occurredAt = parseIsoMillis(optNullableString("occurredAt", "occurred_at"))
+            ?: System.currentTimeMillis()
+        val expiresAt = parseIsoMillis(optNullableString("expiresAt", "expires_at"))
+            ?: (occurredAt + 30L * 24L * 60L * 60L * 1000L)
+        val readAt = parseIsoMillis(optNullableString("readAt", "read_at"))
+        val dataObj = obj.optJSONObject("data")
+        val deleted = obj.optBoolean("deleted", false)
+        val archived = obj.optBoolean("archived", false)
+        val isRead = obj.optBoolean("isRead", obj.optBoolean("is_read", false)) || deleted || archived
+        val count = obj.optInt("count", 1).coerceAtLeast(1)
+        val rawUnread = obj.optInt("unreadCount", obj.optInt("unread_count", if (isRead) 0 else 1))
+        val unreadCount = if (isRead) 0 else rawUnread.coerceAtLeast(1)
+
+        return br.com.bragasaude.data.local.NotificationItemEntity(
+            recipientId = recipientId,
+            id = obj.getString("id"),
+            revision = obj.optLong("revision", 0L),
+            kind = optNullableString("kind") ?: "CARE_ALERT",
+            category = optNullableString("category") ?: "CARE",
+            actorId = optNullableString("actorId", "actor_id"),
+            patientId = optNullableString("patientId", "patient_id"),
+            resourceType = optNullableString("resourceType", "resource_type") ?: "care",
+            resourceId = optNullableString("resourceId", "resource_id") ?: obj.getString("id"),
+            occurredAt = occurredAt,
+            expiresAt = expiresAt,
+            count = count,
+            unreadCount = unreadCount,
+            isRead = isRead,
+            readAt = readAt,
+            archived = archived,
+            deleted = deleted,
+            dataJson = dataObj?.toString() ?: "{}"
+        )
+    }
+
+    suspend fun getNotifications(
+        recipientId: String,
+        cursor: String? = null,
+        limit: Int = 20,
+        category: String? = null,
+        includeArchived: Boolean = false
+    ): RemoteNotificationPage? = withContext(Dispatchers.IO) {
+        try {
+            val params = mutableListOf("limit=${limit.coerceIn(1, 50)}")
+            if (!cursor.isNullOrBlank()) {
+                params += "cursor=${java.net.URLEncoder.encode(cursor, "UTF-8")}"
+            }
+            if (!category.isNullOrBlank()) {
+                params += "category=${java.net.URLEncoder.encode(category, "UTF-8")}"
+            }
+            if (includeArchived) {
+                params += "includeArchived=true"
+            }
+            val res = getJson("$baseUrl/api/notifications?${params.joinToString("&")}")
+                ?: return@withContext null
+            val arr = res.optJSONArray("items") ?: JSONArray()
+            val items = (0 until arr.length()).map { idx ->
+                parseNotificationItem(recipientId, arr.getJSONObject(idx))
+            }
+            val nextCursor = if (res.isNull("nextCursor")) null else res.optString("nextCursor", "").takeIf { it.isNotBlank() && it != "null" }
+            RemoteNotificationPage(
+                items = items,
+                snapshotRevision = res.optLong("snapshotRevision", 0L),
+                latestRevision = res.optLong("latestRevision", res.optLong("snapshotRevision", 0L)),
+                unreadCount = res.optInt("unreadCount", 0),
+                hasMore = res.optBoolean("hasMore", false),
+                nextCursor = nextCursor
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao consultar /api/notifications: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun getNotificationChanges(
+        recipientId: String,
+        afterRevision: Long,
+        limit: Int = 50
+    ): RemoteNotificationChangesPage? = withContext(Dispatchers.IO) {
+        try {
+            val res = getJson("$baseUrl/api/notifications/changes?after=${afterRevision.coerceAtLeast(0L)}&limit=${limit.coerceIn(1, 200)}")
+                ?: return@withContext null
+            val arr = res.optJSONArray("changes") ?: JSONArray()
+            val changes = (0 until arr.length()).mapNotNull { idx ->
+                val changeObj = arr.getJSONObject(idx)
+                val itemObj = changeObj.optJSONObject("item") ?: return@mapNotNull null
+                val rev = changeObj.optLong("revision", itemObj.optLong("revision", 0L))
+                val parsed = parseNotificationItem(recipientId, itemObj)
+                RemoteNotificationChange(
+                    revision = rev,
+                    item = if (parsed.revision > 0L) parsed else parsed.copy(revision = rev)
+                )
+            }
+            RemoteNotificationChangesPage(
+                changes = changes,
+                nextCursor = res.optLong("nextCursor", afterRevision),
+                latestRevision = res.optLong("latestRevision", afterRevision),
+                unreadCount = res.optInt("unreadCount", 0),
+                hasMore = res.optBoolean("hasMore", false)
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao consultar /api/notifications/changes: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun getNotificationUnreadCount(): RemoteNotificationMutationResult? = withContext(Dispatchers.IO) {
+        try {
+            val res = getJson("$baseUrl/api/notifications/unread") ?: return@withContext null
+            RemoteNotificationMutationResult(
+                latestRevision = res.optLong("latestRevision", 0L),
+                unreadCount = res.optInt("unreadCount", 0)
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao consultar /api/notifications/unread: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun markNotificationRead(
+        itemId: String,
+        throughRevision: Long? = null,
+        archive: Boolean = false
+    ): RemoteNotificationMutationResult? = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("itemId", itemId)
+                if (throughRevision != null && throughRevision > 0L && throughRevision != Long.MAX_VALUE) {
+                    put("throughRevision", throughRevision)
+                }
+                if (archive) {
+                    put("archive", true)
+                }
+            }
+            val res = postJson("$baseUrl/api/notifications/read", payload) ?: return@withContext null
+            RemoteNotificationMutationResult(
+                latestRevision = res.optLong("latestRevision", 0L),
+                unreadCount = res.optInt("unreadCount", 0)
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao confirmar leitura de notificação: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun markAllNotificationsRead(
+        throughRevision: Long
+    ): RemoteNotificationMutationResult? = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                if (throughRevision > 0L && throughRevision != Long.MAX_VALUE) {
+                    put("throughRevision", throughRevision)
+                }
+            }
+            val res = postJson("$baseUrl/api/notifications/mark-all-read", payload) ?: return@withContext null
+            RemoteNotificationMutationResult(
+                latestRevision = res.optLong("latestRevision", throughRevision),
+                unreadCount = res.optInt("unreadCount", 0)
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao marcar todas as notificações como lidas: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun archiveNotification(
+        itemId: String,
+        throughRevision: Long? = null
+    ): RemoteNotificationMutationResult? = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("itemId", itemId)
+                put("archive", true)
+                if (throughRevision != null && throughRevision > 0L && throughRevision != Long.MAX_VALUE) {
+                    put("throughRevision", throughRevision)
+                }
+            }
+            val res = postJson("$baseUrl/api/notifications/archive", payload) ?: return@withContext null
+            RemoteNotificationMutationResult(
+                latestRevision = res.optLong("latestRevision", 0L),
+                unreadCount = res.optInt("unreadCount", 0)
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao arquivar notificação: ${e.message}")
+            null
         }
     }
 

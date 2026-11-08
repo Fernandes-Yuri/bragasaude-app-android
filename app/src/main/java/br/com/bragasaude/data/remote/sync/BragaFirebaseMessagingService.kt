@@ -25,6 +25,7 @@ import javax.inject.Inject
 class BragaFirebaseMessagingService : FirebaseMessagingService() {
 
     @Inject lateinit var notificationClient: NotificationClient
+    @Inject lateinit var notificationCenterRepository: br.com.bragasaude.data.remote.repository.NotificationCenterRepository
 
     companion object {
         const val CHANNEL_EMERGENCY = "bragasaude_emergency"
@@ -115,18 +116,30 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
 
+        val currentUid = FirebaseAuth.getInstance().currentUser?.uid
+        val targetRecipient = remoteMessage.data["recipientId"]?.trim()
+        if (!targetRecipient.isNullOrEmpty() && targetRecipient != currentUid) {
+            return
+        }
+
         val title = remoteMessage.notification?.title ?: remoteMessage.data["title"] ?: "Braga Saúde"
         val message = remoteMessage.notification?.body ?: remoteMessage.data["message"] ?: remoteMessage.data["body"] ?: ""
-        val type = remoteMessage.data["type"] ?: "PROACTIVE_BRAGA"
+        val type = remoteMessage.data["type"] ?: remoteMessage.data["kind"] ?: "PROACTIVE_BRAGA"
+
+        if (!currentUid.isNullOrBlank() && ::notificationCenterRepository.isInitialized) {
+            CoroutineScope(Dispatchers.IO).launch {
+                runCatching { notificationCenterRepository.syncNotifications() }
+            }
+        }
 
         if (type == "HEALTH_ALERT" || type == "ALERT_CRITICAL") {
-            val owner = FirebaseAuth.getInstance().currentUser?.uid ?: return
+            val owner = currentUid ?: return
             val patient = remoteMessage.data["sourceUserId"]
             if (!patient.isNullOrBlank()) CaregiverSyncWorker.enqueue(applicationContext, owner, patient)
         }
 
         if (type.startsWith("CONSULTATION_")) {
-            val owner = FirebaseAuth.getInstance().currentUser?.uid
+            val owner = currentUid
             val patient = remoteMessage.data["patientId"]
             if (owner != null && !patient.isNullOrBlank()) ConsultationSyncWorker.enqueue(applicationContext, owner, patient)
         }
@@ -138,7 +151,7 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
                 "ALERT_CRITICAL" -> showClinicNotification(title, message, isCritical = true)
                 "FAMILY_MESSAGE" -> showFamilyMessageNotification(title, message)
                 "CONSULTATION_CREATED", "CONSULTATION_ACCEPTED", "CONSULTATION_REJECTED",
-                "CONSULTATION_CANCELLED", "CONSULTATION_COMPLETED" ->
+                "CONSULTATION_CANCELLED", "CONSULTATION_COMPLETED", "CONSULTATION_UPDATED" ->
                     showConsultationNotification(title, message, remoteMessage.data["consultationId"], remoteMessage.data["patientId"])
                 "APP_UPDATE" -> {
                     val rawUrl = remoteMessage.data["download_url"]
@@ -157,16 +170,16 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
             .putString("fcm_token", token)
             .apply()
 
-        // Sincronizar token com o Hub do Lenovo G460
         val auth = FirebaseAuth.getInstance()
-        val userId = auth.currentUser?.uid ?: "anonymous"
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                notificationClient.registerDevice(
-                    userId = userId,
-                    token = token,
+                notificationClient.onNewToken(
+                    newToken = token,
+                    userId = auth.currentUser?.uid,
                     role = "USER",
-                    name = auth.currentUser?.displayName ?: "Usuário Braga"
+                    name = auth.currentUser?.displayName ?: "Usuário Braga",
+                    context = applicationContext,
+                    currentUserIdProvider = { auth.currentUser?.uid }
                 )
             } catch (_: Exception) {}
         }

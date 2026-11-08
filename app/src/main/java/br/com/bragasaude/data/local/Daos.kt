@@ -1102,3 +1102,214 @@ interface BleTelemetryReceiptDao {
 
 /** Agregado de hidratação lido diretamente pelo Room, sem valores clínicos inferidos. */
 data class HydrationMemoryAggregate(val totalMl: Long, val recordCount: Int)
+
+/**
+ * DAO da Central de Notificações persistente por destinatário (RTL-07).
+ */
+@Dao
+interface NotificationDao {
+
+    @Query(
+        "SELECT * FROM notification_items_local " +
+            "WHERE recipientId = :recipientId AND archived = 0 AND deleted = 0 AND expiresAt > :nowMillis " +
+            "AND (:category = '' OR category = :category) " +
+            "ORDER BY occurredAt DESC, id DESC"
+    )
+    fun observeActiveItems(
+        recipientId: String,
+        category: String = "",
+        nowMillis: Long = System.currentTimeMillis()
+    ): Flow<List<NotificationItemEntity>>
+
+    @Query(
+        "SELECT * FROM notification_items_local " +
+            "WHERE recipientId = :recipientId AND archived = 0 AND deleted = 0 AND expiresAt > :nowMillis " +
+            "ORDER BY occurredAt DESC, id DESC"
+    )
+    suspend fun getActiveItemsOneShot(
+        recipientId: String,
+        nowMillis: Long = System.currentTimeMillis()
+    ): List<NotificationItemEntity>
+
+    @Query(
+        "SELECT COUNT(*) FROM notification_items_local " +
+            "WHERE recipientId = :recipientId AND archived = 0 AND deleted = 0 " +
+            "AND isRead = 0 AND unreadCount > 0 AND expiresAt > :nowMillis"
+    )
+    fun observeUnreadGroupCount(
+        recipientId: String,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Flow<Int>
+
+    @Query(
+        "SELECT COUNT(*) FROM notification_items_local " +
+            "WHERE recipientId = :recipientId AND archived = 0 AND deleted = 0 " +
+            "AND isRead = 0 AND unreadCount > 0 AND expiresAt > :nowMillis"
+    )
+    suspend fun getUnreadGroupCountOneShot(
+        recipientId: String,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Int
+
+    @Query("SELECT * FROM notification_items_local WHERE recipientId = :recipientId AND id = :id LIMIT 1")
+    suspend fun getById(recipientId: String, id: String): NotificationItemEntity?
+
+    @Query("SELECT COALESCE(MAX(revision), 0) FROM notification_items_local WHERE recipientId = :recipientId")
+    suspend fun getMaxLocalRevision(recipientId: String): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertItem(item: NotificationItemEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertItems(items: List<NotificationItemEntity>)
+
+    @Query("SELECT * FROM notification_sync_state_local WHERE recipientId = :recipientId LIMIT 1")
+    suspend fun getSyncState(recipientId: String): NotificationSyncStateEntity?
+
+    @Query("SELECT * FROM notification_sync_state_local WHERE recipientId = :recipientId LIMIT 1")
+    fun observeSyncState(recipientId: String): Flow<NotificationSyncStateEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSyncState(state: NotificationSyncStateEntity)
+
+    @Transaction
+    suspend fun applyRemoteItem(
+        remote: NotificationItemEntity,
+        pendingMarkAllThroughRevision: Long? = null
+    ) {
+        val current = getById(remote.recipientId, remote.id)
+        if (current != null && remote.revision < current.revision && remote.revision > 0L) {
+            return
+        }
+        val pendingReadRev = current?.pendingReadThroughRevision
+        val pendingArchiveRev = current?.pendingArchiveThroughRevision
+        val coveredByMarkAll = pendingMarkAllThroughRevision != null &&
+            remote.revision in 1..pendingMarkAllThroughRevision
+        val coveredByPendingRead = pendingReadRev != null &&
+            (remote.revision <= pendingReadRev || pendingReadRev == Long.MAX_VALUE)
+        val coveredByPendingArchive = pendingArchiveRev != null &&
+            (remote.revision <= pendingArchiveRev || pendingArchiveRev == Long.MAX_VALUE)
+
+        val effectiveRead = remote.isRead || coveredByMarkAll || coveredByPendingRead || coveredByPendingArchive
+        val effectiveArchived = remote.archived || coveredByPendingArchive
+        val effectiveUnreadCount = if (effectiveRead || remote.deleted || effectiveArchived) 0 else remote.unreadCount.coerceAtLeast(1)
+
+        val merged = remote.copy(
+            isRead = effectiveRead,
+            unreadCount = effectiveUnreadCount,
+            readAt = if (effectiveRead) (remote.readAt ?: current?.readAt ?: System.currentTimeMillis()) else null,
+            archived = effectiveArchived,
+            pendingReadThroughRevision = if (coveredByPendingRead && !remote.isRead) pendingReadRev else null,
+            pendingArchiveThroughRevision = if (coveredByPendingArchive && !remote.archived) pendingArchiveRev else null
+        )
+        upsertItem(merged)
+    }
+
+    @Transaction
+    suspend fun markItemReadLocal(recipientId: String, itemId: String, nowMillis: Long): NotificationItemEntity? {
+        val item = getById(recipientId, itemId) ?: return null
+        val targetRev = item.revision.takeIf { it > 0L } ?: Long.MAX_VALUE
+        val updated = item.copy(
+            isRead = true,
+            unreadCount = 0,
+            readAt = item.readAt ?: nowMillis,
+            pendingReadThroughRevision = maxOf(item.pendingReadThroughRevision ?: 0L, targetRev)
+        )
+        upsertItem(updated)
+        return updated
+    }
+
+    @Transaction
+    suspend fun markItemArchivedLocal(recipientId: String, itemId: String, nowMillis: Long): NotificationItemEntity? {
+        val item = getById(recipientId, itemId) ?: return null
+        val targetRev = item.revision.takeIf { it > 0L } ?: Long.MAX_VALUE
+        val updated = item.copy(
+            isRead = true,
+            unreadCount = 0,
+            readAt = item.readAt ?: nowMillis,
+            archived = true,
+            pendingArchiveThroughRevision = maxOf(item.pendingArchiveThroughRevision ?: 0L, targetRev)
+        )
+        upsertItem(updated)
+        return updated
+    }
+
+    @Transaction
+    suspend fun markAllReadThroughRevisionLocal(
+        recipientId: String,
+        throughRevision: Long,
+        nowMillis: Long
+    ) {
+        val items = getActiveItemsOneShot(recipientId, 0L)
+        val updated = items.mapNotNull { item ->
+            if (!item.isRead && item.revision <= throughRevision) {
+                item.copy(
+                    isRead = true,
+                    unreadCount = 0,
+                    readAt = item.readAt ?: nowMillis
+                )
+            } else {
+                null
+            }
+        }
+        if (updated.isNotEmpty()) {
+            upsertItems(updated)
+        }
+        val state = getSyncState(recipientId) ?: NotificationSyncStateEntity(recipientId = recipientId)
+        val effectiveWatermark = maxOf(state.pendingMarkAllReadThroughRevision ?: 0L, throughRevision)
+        upsertSyncState(
+            state.copy(
+                latestRevision = maxOf(state.latestRevision, throughRevision),
+                pendingMarkAllReadThroughRevision = effectiveWatermark
+            )
+        )
+    }
+
+    @Query(
+        "SELECT * FROM notification_items_local " +
+            "WHERE recipientId = :recipientId AND (pendingReadThroughRevision IS NOT NULL OR pendingArchiveThroughRevision IS NOT NULL)"
+    )
+    suspend fun getPendingAckItems(recipientId: String): List<NotificationItemEntity>
+
+    @Query(
+        "UPDATE notification_items_local SET pendingReadThroughRevision = NULL " +
+            "WHERE recipientId = :recipientId AND id = :itemId AND pendingReadThroughRevision = :acknowledgedRevision"
+    )
+    suspend fun clearPendingReadAck(recipientId: String, itemId: String, acknowledgedRevision: Long)
+
+    @Query(
+        "UPDATE notification_items_local SET pendingArchiveThroughRevision = NULL " +
+            "WHERE recipientId = :recipientId AND id = :itemId AND pendingArchiveThroughRevision = :acknowledgedRevision"
+    )
+    suspend fun clearPendingArchiveAck(recipientId: String, itemId: String, acknowledgedRevision: Long)
+
+    @Query(
+        "UPDATE notification_items_local " +
+            "SET isRead = 1, unreadCount = 0, readAt = COALESCE(readAt, :nowMillis) " +
+            "WHERE recipientId = :recipientId AND kind = 'FAMILY_MESSAGE' " +
+            "AND (patientId = :patientId OR resourceId = :patientId) AND isRead = 0"
+    )
+    suspend fun reconcileChatConversationReadLocal(recipientId: String, patientId: String, nowMillis: Long): Int
+
+    @Query(
+        "DELETE FROM notification_items_local " +
+            "WHERE recipientId = :recipientId AND patientId = :patientId " +
+            "AND kind != 'FAMILY_BINDING_REVOKED'"
+    )
+    suspend fun deleteForRevokedPatient(recipientId: String, patientId: String)
+
+    @Query(
+        "DELETE FROM notification_items_local " +
+            "WHERE recipientId = :recipientId AND actorId = :blockedUserId"
+    )
+    suspend fun deleteForBlockedActor(recipientId: String, blockedUserId: String)
+
+    @Query("DELETE FROM notification_items_local WHERE expiresAt <= :nowMillis AND pendingReadThroughRevision IS NULL AND pendingArchiveThroughRevision IS NULL")
+    suspend fun purgeExpired(nowMillis: Long)
+
+    @Query("DELETE FROM notification_items_local WHERE recipientId = :recipientId")
+    suspend fun deleteAllForRecipient(recipientId: String)
+
+    @Query("DELETE FROM notification_sync_state_local WHERE recipientId = :recipientId")
+    suspend fun deleteSyncStateForRecipient(recipientId: String)
+}

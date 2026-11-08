@@ -502,3 +502,55 @@ data class ClinicalSyncCursor(val ownerId: String, val patientId: String, val re
 
 @Entity(tableName = "family_read_receipts", primaryKeys = ["ownerId", "patientId", "messageId"])
 data class FamilyReadReceipt(val ownerId: String, val patientId: String, val messageId: String, val expiresAt: Long)
+
+/**
+ * Item/grupo persistido da Central de Notificações (RTL-07).
+ * Escopado estritamente por [recipientId] + [id] para isolamento entre contas.
+ * Nunca armazena texto em claro de mensagens familiares cifradas.
+ */
+@Entity(
+    tableName = "notification_items_local",
+    primaryKeys = ["recipientId", "id"],
+    indices = [
+        Index(value = ["recipientId", "archived", "deleted", "occurredAt"]),
+        Index(value = ["recipientId", "category", "archived", "deleted", "occurredAt"]),
+        Index(value = ["recipientId", "patientId"]),
+        Index(value = ["recipientId", "revision"])
+    ]
+)
+data class NotificationItemEntity(
+    val recipientId: String,
+    val id: String,
+    val revision: Long = 0L,
+    val kind: String,
+    val category: String,
+    val actorId: String? = null,
+    val patientId: String? = null,
+    val resourceType: String,
+    val resourceId: String,
+    val occurredAt: Long,
+    val expiresAt: Long,
+    val count: Int = 1,
+    val unreadCount: Int = 1,
+    val isRead: Boolean = false,
+    val readAt: Long? = null,
+    val archived: Boolean = false,
+    val deleted: Boolean = false,
+    val dataJson: String = "{}",
+    val pendingReadThroughRevision: Long? = null,
+    val pendingArchiveThroughRevision: Long? = null
+)
+
+/**
+ * Estado de sincronização e marca d'água de revisão da Central de Notificações por destinatário (RTL-07).
+ */
+@Entity(tableName = "notification_sync_state_local")
+data class NotificationSyncStateEntity(
+    @PrimaryKey val recipientId: String,
+    val cursorRevision: Long = 0L,
+    val latestRevision: Long = 0L,
+    val nextPageCursor: String? = null,
+    val hasMorePages: Boolean = false,
+    val pendingMarkAllReadThroughRevision: Long? = null,
+    val lastSyncedAt: Long = 0L
+)

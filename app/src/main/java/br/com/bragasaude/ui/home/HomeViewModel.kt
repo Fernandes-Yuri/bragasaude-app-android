@@ -37,8 +37,38 @@ class HomeViewModel @Inject constructor(
     private val healthEngine: HealthEngine,
     private val healthConnectManager: br.com.bragasaude.data.util.HealthConnectManager,
     private val auth: FirebaseAuth,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val notificationCenterRepository: NotificationCenterRepository? = null
 ) : ViewModel() {
+
+    constructor(
+        vitalsRepository: VitalsRepository,
+        milestonesRepository: MilestonesRepository,
+        profileRepository: ProfileRepository,
+        medicationRepository: MedicationRepository,
+        database: br.com.bragasaude.data.local.BragaDatabase,
+        syncManager: SyncManager,
+        movementManager: br.com.bragasaude.data.util.MovementManager,
+        dailyMetricsDao: br.com.bragasaude.data.local.DailyMetricsDao,
+        healthEngine: HealthEngine,
+        healthConnectManager: br.com.bragasaude.data.util.HealthConnectManager,
+        auth: FirebaseAuth,
+        context: Context
+    ) : this(
+        vitalsRepository = vitalsRepository,
+        milestonesRepository = milestonesRepository,
+        profileRepository = profileRepository,
+        medicationRepository = medicationRepository,
+        database = database,
+        syncManager = syncManager,
+        movementManager = movementManager,
+        dailyMetricsDao = dailyMetricsDao,
+        healthEngine = healthEngine,
+        healthConnectManager = healthConnectManager,
+        auth = auth,
+        context = context,
+        notificationCenterRepository = null
+    )
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing = _isRefreshing.asStateFlow()
@@ -98,6 +128,57 @@ class HomeViewModel @Inject constructor(
     private val readStateStore = br.com.bragasaude.data.local.AlertReadStateStore(alertPrefs, readAlertsKey)
     val readAlerts = readStateStore.readAlerts
     val alertIdentifiedAt = readStateStore.identifiedAt
+
+    private val _selectedNotificationCategory = MutableStateFlow(NotificationCategoryFilter.ALL)
+    val selectedNotificationCategory: StateFlow<NotificationCategoryFilter> = _selectedNotificationCategory.asStateFlow()
+
+    private val _notificationsLoading = MutableStateFlow(false)
+    val notificationsLoading: StateFlow<Boolean> = _notificationsLoading.asStateFlow()
+
+    private val _notificationsLoadingMore = MutableStateFlow(false)
+    val notificationsLoadingMore: StateFlow<Boolean> = _notificationsLoadingMore.asStateFlow()
+
+    private val _notificationsSyncError = MutableStateFlow<String?>(null)
+    val notificationsSyncError: StateFlow<String?> = _notificationsSyncError.asStateFlow()
+
+    private val _unavailableDestinationMessage = MutableStateFlow<String?>(null)
+    val unavailableDestinationMessage: StateFlow<String?> = _unavailableDestinationMessage.asStateFlow()
+
+    private val rawPersistedNotifications: StateFlow<List<br.com.bragasaude.data.local.NotificationItemEntity>> =
+        combine(userIds, _selectedNotificationCategory) { uid, category -> uid to category }
+            .flatMapLatest { (uid, category) ->
+                notificationCenterRepository?.observeActiveItems(uid, category) ?: flowOf(emptyList())
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val persistedNotifications: StateFlow<List<NotificationDisplayItem>> =
+        rawPersistedNotifications
+            .map { entities ->
+                val repo = notificationCenterRepository ?: return@map emptyList()
+                entities.map { repo.toDisplayItem(it) }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val persistedUnreadCount: StateFlow<Int> = userIds
+        .flatMapLatest { uid ->
+            notificationCenterRepository?.observeUnreadGroupCount(uid) ?: flowOf(0)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val notificationsHasMore: StateFlow<Boolean> = userIds
+        .flatMapLatest { uid ->
+            notificationCenterRepository?.observeSyncState(uid)?.map { it?.hasMorePages == true } ?: flowOf(false)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val totalUnreadNotificationsCount: StateFlow<Int> = combine(
+        persistedUnreadCount,
+        _clinicalAlerts,
+        readAlerts
+    ) { persistedUnread, alerts, readSet ->
+        val localUnread = alerts.count { it !in readSet }
+        persistedUnread + localUnread
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
     private val alertPrefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
         when (key) {
             dismissedAlertsKey -> {
@@ -130,6 +211,8 @@ class HomeViewModel @Inject constructor(
         _readings.value = br.com.bragasaude.domain.HomeReadingSummary(userId = userId)
         _latestMilestone.value = null
         _clinicalAlerts.value = emptyList()
+        _notificationsSyncError.value = null
+        _unavailableDestinationMessage.value = null
         dismissedAlertsKey = "dismissed_alerts_${userId}_$todayDateStr"
         dismissedAlerts.clear()
         dismissedAlerts.addAll(alertPrefs.getStringSet(dismissedAlertsKey, emptySet()).orEmpty())
@@ -242,6 +325,7 @@ class HomeViewModel @Inject constructor(
             try {
                 vitalsRepository.migrateAndSyncLegacyManualReadings(userId) { auth.currentUser?.uid }
                 medicationRepository.syncMedicationsFromServer(userId)
+                notificationCenterRepository?.syncNotifications()
                 syncManager.syncUserData(userId, force = false)
                 if (healthConnectManager.isAvailable() && healthConnectManager.checkHasPermissions()) {
                     healthConnectManager.syncHealthConnectData()
@@ -314,6 +398,76 @@ class HomeViewModel @Inject constructor(
 
     fun markAlertsAsRead() {
         readStateStore.markRead(_clinicalAlerts.value.toSet())
+        val repo = notificationCenterRepository ?: return
+        viewModelScope.launch {
+            runCatching { repo.markAllRead() }
+        }
+    }
+
+    fun selectNotificationCategory(filter: NotificationCategoryFilter) {
+        _selectedNotificationCategory.value = filter
+    }
+
+    fun refreshNotifications(forceSnapshotIfEmpty: Boolean = false) {
+        val repo = notificationCenterRepository ?: return
+        val uid = auth.currentUser?.uid ?: return
+        if (uid.isBlank() || uid == BragaConstants.GUEST_UID) return
+        viewModelScope.launch {
+            _notificationsLoading.value = true
+            _notificationsSyncError.value = null
+            try {
+                repo.syncNotifications(forceSnapshotIfEmpty = forceSnapshotIfEmpty)
+                    .onFailure {
+                        _notificationsSyncError.value = "Não foi possível atualizar todos os avisos agora. Exibindo o histórico salvo neste aparelho."
+                    }
+            } finally {
+                _notificationsLoading.value = false
+            }
+        }
+    }
+
+    fun loadMoreNotifications() {
+        val repo = notificationCenterRepository ?: return
+        if (_notificationsLoadingMore.value) return
+        viewModelScope.launch {
+            _notificationsLoadingMore.value = true
+            _notificationsSyncError.value = null
+            try {
+                repo.loadMore(_selectedNotificationCategory.value)
+                    .onFailure {
+                        _notificationsSyncError.value = "Não foi possível carregar mais avisos. Verifique sua conexão e tente novamente."
+                    }
+            } finally {
+                _notificationsLoadingMore.value = false
+            }
+        }
+    }
+
+    fun openPersistedNotification(
+        item: NotificationDisplayItem,
+        onNavigate: (br.com.bragasaude.ui.util.Screen) -> Unit
+    ) {
+        val repo = notificationCenterRepository ?: return
+        val rawEntity = rawPersistedNotifications.value.firstOrNull { it.id == item.id } ?: return
+        viewModelScope.launch {
+            when (val result = repo.openItemAndResolveNavigation(rawEntity)) {
+                is NotificationNavigationResult.Navigate -> onNavigate(result.screen)
+                is NotificationNavigationResult.Unavailable -> {
+                    _unavailableDestinationMessage.value = result.message
+                }
+            }
+        }
+    }
+
+    fun archivePersistedNotification(item: NotificationDisplayItem) {
+        val repo = notificationCenterRepository ?: return
+        viewModelScope.launch {
+            runCatching { repo.archiveItem(item.id) }
+        }
+    }
+
+    fun dismissUnavailableDestinationMessage() {
+        _unavailableDestinationMessage.value = null
     }
 
     override fun onCleared() {

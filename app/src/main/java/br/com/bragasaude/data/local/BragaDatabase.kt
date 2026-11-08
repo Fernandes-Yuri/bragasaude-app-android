@@ -34,9 +34,12 @@ import androidx.room.TypeConverters
         // Care OS — D62 (First Contract)
         SymptomsDiaryEntity::class,
         CareAuditEntity::class,
-        BleTelemetryReceiptEntity::class
+        BleTelemetryReceiptEntity::class,
+        // RTL-07 — Central de Notificações persistente por destinatário
+        NotificationItemEntity::class,
+        NotificationSyncStateEntity::class
     ],
-    version = 68, // Contrato decimal de oxigenação e migração canônica de leituras manuais/voz
+    version = 69, // Central de notificações persistente no Room (RTL-07)
     exportSchema = true
 )
 @TypeConverters(Converters::class, SmokingSupportConverters::class)
@@ -62,6 +65,7 @@ abstract class BragaDatabase : RoomDatabase() {
     abstract fun symptomsDiaryDao(): SymptomsDiaryDao
     abstract fun careAuditDao(): CareAuditDao
     abstract fun bleTelemetryReceiptDao(): BleTelemetryReceiptDao
+    abstract fun notificationDao(): NotificationDao
 
     companion object {
         const val DATABASE_NAME = "braga_saude_db"

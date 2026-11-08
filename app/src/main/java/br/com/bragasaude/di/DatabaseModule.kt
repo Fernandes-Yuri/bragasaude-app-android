@@ -141,6 +141,11 @@ object DatabaseModule {
     }
 
     @Provides
+    fun provideNotificationDao(database: BragaDatabase): NotificationDao {
+        return database.notificationDao()
+    }
+
+    @Provides
     @Singleton
     fun providePdfReportGenerator(@ApplicationContext context: Context): br.com.bragasaude.domain.PdfReportGenerator {
         return br.com.bragasaude.domain.PdfReportGenerator(context)

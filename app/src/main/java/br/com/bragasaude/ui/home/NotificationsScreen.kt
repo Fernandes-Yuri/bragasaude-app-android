@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,11 +21,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.compose.ui.unit.dp
+import br.com.bragasaude.data.remote.repository.NotificationCategoryFilter
+import br.com.bragasaude.data.remote.repository.NotificationDisplayItem
 import br.com.bragasaude.ui.MainViewModel
 import br.com.bragasaude.ui.components.BragaFormSheet
 import br.com.bragasaude.ui.components.EmeraldHeaderBanner
@@ -49,6 +52,14 @@ fun NotificationsScreen(
     val alerts by viewModel.clinicalAlerts.collectAsState()
     val readAlerts by viewModel.readAlerts.collectAsState()
     val identifiedAt by viewModel.alertIdentifiedAt.collectAsState()
+    val persistedItems by viewModel.persistedNotifications.collectAsState()
+    val selectedCategory by viewModel.selectedNotificationCategory.collectAsState()
+    val isLoading by viewModel.notificationsLoading.collectAsState()
+    val isLoadingMore by viewModel.notificationsLoadingMore.collectAsState()
+    val hasMorePages by viewModel.notificationsHasMore.collectAsState()
+    val syncError by viewModel.notificationsSyncError.collectAsState()
+    val unavailableMessage by viewModel.unavailableDestinationMessage.collectAsState()
+
     val lifecycleOwner = LocalLifecycleOwner.current
     var batteryAllowed by remember(context) { mutableStateOf(BatteryOptimizationHelper.estaLiberado(context)) }
     var batteryGuidance by rememberSaveable { mutableStateOf<String?>(null) }
@@ -65,6 +76,7 @@ fun NotificationsScreen(
                 batteryAllowed = BatteryOptimizationHelper.estaLiberado(context)
                 if (batteryAllowed) batteryGuidance = null
                 viewModel.syncGrantedPermissions(context)
+                viewModel.refreshNotifications(forceSnapshotIfEmpty = true)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -84,27 +96,65 @@ fun NotificationsScreen(
     }
 
     NotificationsContent(
-        alerts = alerts, readAlerts = readAlerts, identifiedAt = identifiedAt,
-        batteryAllowed = batteryAllowed, batteryGuidance = batteryGuidance,
-        onBack = onBack, onBatterySettings = openBatterySettings,
+        alerts = alerts,
+        readAlerts = readAlerts,
+        identifiedAt = identifiedAt,
+        batteryAllowed = batteryAllowed,
+        batteryGuidance = batteryGuidance,
+        onBack = onBack,
+        onBatterySettings = openBatterySettings,
         onMarkAllRead = viewModel::markAlertsAsRead,
         onOpen = viewModel::markAlertAsRead,
         onDismiss = viewModel::dismissAlert,
         onNotificationPermission = mainViewModel::triggerNotificationPrompt,
         onMonitoringPermission = mainViewModel::requestPermissions,
-        onNavigateToScreen = onNavigateToScreen
+        onNavigateToScreen = onNavigateToScreen,
+        persistedItems = persistedItems,
+        selectedCategory = selectedCategory,
+        onSelectCategory = viewModel::selectNotificationCategory,
+        showCategoryFilters = true,
+        isLoading = isLoading,
+        syncError = syncError,
+        hasMorePages = hasMorePages,
+        isLoadingMore = isLoadingMore,
+        onLoadMore = viewModel::loadMoreNotifications,
+        onRetrySync = { viewModel.refreshNotifications(forceSnapshotIfEmpty = true) },
+        onOpenPersistedItem = { item -> viewModel.openPersistedNotification(item, onNavigateToScreen) },
+        onArchivePersistedItem = viewModel::archivePersistedNotification,
+        unavailableMessage = unavailableMessage,
+        onDismissUnavailableMessage = viewModel::dismissUnavailableDestinationMessage
     )
 }
 
 @Composable
 internal fun NotificationsContent(
-    alerts: List<String>, readAlerts: Set<String>, identifiedAt: Map<String, Long>,
-    batteryAllowed: Boolean, batteryGuidance: String?, onBack: () -> Unit,
-    onBatterySettings: () -> Unit, onMarkAllRead: () -> Unit,
-    onOpen: (String) -> Unit, onDismiss: (String) -> Unit,
+    alerts: List<String>,
+    readAlerts: Set<String>,
+    identifiedAt: Map<String, Long>,
+    batteryAllowed: Boolean,
+    batteryGuidance: String?,
+    onBack: () -> Unit,
+    onBatterySettings: () -> Unit,
+    onMarkAllRead: () -> Unit,
+    onOpen: (String) -> Unit,
+    onDismiss: (String) -> Unit,
     onNotificationPermission: () -> Unit = {},
     onMonitoringPermission: () -> Unit = {},
-    onNavigateToScreen: (Screen) -> Unit = {}
+    onNavigateToScreen: (Screen) -> Unit = {},
+    persistedItems: List<NotificationDisplayItem> = emptyList(),
+    selectedCategory: NotificationCategoryFilter = NotificationCategoryFilter.ALL,
+    onSelectCategory: (NotificationCategoryFilter) -> Unit = {},
+    showCategoryFilters: Boolean = persistedItems.isNotEmpty() || selectedCategory != NotificationCategoryFilter.ALL,
+    isLoading: Boolean = false,
+    syncError: String? = null,
+    hasMorePages: Boolean = false,
+    isLoadingMore: Boolean = false,
+    onLoadMore: () -> Unit = {},
+    onRetrySync: () -> Unit = {},
+    onOpenPersistedItem: (NotificationDisplayItem) -> Unit = {},
+    onArchivePersistedItem: (NotificationDisplayItem) -> Unit = {},
+    unavailableMessage: String? = null,
+    onDismissUnavailableMessage: () -> Unit = {}
 ) {
     var selectedAlert by rememberSaveable { mutableStateOf<String?>(null) }
     val openAlert: (String) -> Unit = { alert ->
@@ -113,70 +163,215 @@ internal fun NotificationsContent(
     }
     var batteryExpanded by rememberSaveable { mutableStateOf(false) }
     var batteryDismissed by rememberSaveable { mutableStateOf(false) }
-    val unread = alerts.filter { it !in readAlerts }
-    val previous = alerts.filter { it in readAlerts }
-    Scaffold(containerColor = BragaBackground,
+
+    val visibleLocalAlerts = remember(alerts, selectedCategory) {
+        if (selectedCategory == NotificationCategoryFilter.ALL || selectedCategory == NotificationCategoryFilter.CARE) {
+            alerts
+        } else {
+            emptyList()
+        }
+    }
+    val visiblePersistedItems = remember(persistedItems, selectedCategory) {
+        if (selectedCategory == NotificationCategoryFilter.ALL) {
+            persistedItems
+        } else {
+            persistedItems.filter { it.category.equals(selectedCategory.apiValue, ignoreCase = true) }
+        }
+    }
+
+    val unreadPersisted = visiblePersistedItems.filter { !it.isRead }
+    val readPersisted = visiblePersistedItems.filter { it.isRead }
+    val unreadLocal = visibleLocalAlerts.filter { it !in readAlerts }
+    val previousLocal = visibleLocalAlerts.filter { it in readAlerts }
+
+    val totalUnread = unreadPersisted.size + unreadLocal.size
+    val totalRead = readPersisted.size + previousLocal.size
+    val isCompletelyEmpty = totalUnread == 0 && totalRead == 0
+
+    Scaffold(
+        containerColor = BragaBackground,
         topBar = { EmeraldHeaderBanner(title = "Notificações", subtitle = "Seus avisos de cuidado", onBack = onBack) }
     ) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(
+            Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             if (!batteryAllowed && !batteryDismissed) item(key = "batteryGuidance") {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
                     Column(Modifier.fillMaxWidth().padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.BatteryStd, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("Avisos em segundo plano", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                             IconButton(onClick = { batteryExpanded = !batteryExpanded }) {
-                                Icon(if (batteryExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    contentDescription = if (batteryExpanded) "Recolher orientação de bateria" else "Ver orientação de bateria")
+                                Icon(
+                                    if (batteryExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (batteryExpanded) "Recolher orientação de bateria" else "Ver orientação de bateria"
+                                )
                             }
                             IconButton(onClick = { batteryDismissed = true }) {
                                 Icon(Icons.Default.Close, contentDescription = "Dispensar orientação de bateria")
                             }
                         }
                         if (batteryExpanded) {
-                            Text(batteryGuidance ?: "O Android pode limitar os avisos com o app fechado. Revise a bateria se os lembretes atrasarem.",
-                                style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                batteryGuidance ?: "O Android pode limitar os avisos com o app fechado. Revise a bateria se os lembretes atrasarem.",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
                             TextButton(onClick = onBatterySettings) { Text("Configurar bateria") }
                         }
                     }
                 }
             }
-            if (alerts.isEmpty()) item(key = "empty") {
-                Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(Icons.Default.NotificationsNone, contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(56.dp))
-                    Text("Tudo tranquilo por aqui", style = MaterialTheme.typography.titleLarge)
-                    Text("Nenhum aviso no momento.", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-            if (unread.isNotEmpty()) {
-                item(key = "unreadHeading") {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Novas (${unread.size})", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                        TextButton(onClick = onMarkAllRead) { Text("Marcar todas como lidas") }
+
+            if (showCategoryFilters) {
+                item(key = "categoryFilters") {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("notificationCategoryFilters")
+                    ) {
+                        items(NotificationCategoryFilter.entries, key = { it.name }) { filter ->
+                            val selected = filter == selectedCategory
+                            FilterChip(
+                                selected = selected,
+                                onClick = { onSelectCategory(filter) },
+                                label = { Text(filter.label, style = MaterialTheme.typography.labelLarge) },
+                                modifier = Modifier.heightIn(min = 48.dp).testTag("notificationFilterChip_${filter.name}")
+                            )
+                        }
                     }
                 }
-                items(unread, key = { it }) { alert ->
-                    NotificationCard(alertDisplayText(alert).substringBefore("\n\n"),
-                        alertCategory(alert), true, identifiedAt[alert], { openAlert(alert) }, { onDismiss(alert) })
+            }
+
+            if (!syncError.isNullOrBlank()) {
+                item(key = "syncError") {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("notificationSyncErrorBanner")
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                syncError,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            TextButton(
+                                onClick = onRetrySync,
+                                modifier = Modifier.heightIn(min = 48.dp)
+                            ) {
+                                Text("Tentar novamente")
+                            }
+                        }
+                    }
                 }
             }
-            if (previous.isNotEmpty()) {
-                item(key = "readHeading") {
-                    Text(if (unread.isEmpty()) "Histórico de avisos" else "Lidas (${previous.size})",
-                        style = MaterialTheme.typography.titleMedium)
+
+            if (isLoading && isCompletelyEmpty) {
+                item(key = "loading") {
+                    Column(
+                        Modifier.fillMaxWidth().padding(vertical = 36.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator()
+                        Text("Carregando notificações…", style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
-                items(previous, key = { it }) { alert ->
-                    NotificationCard(alertDisplayText(alert).substringBefore("\n\n"),
-                        alertCategory(alert), false, identifiedAt[alert], { openAlert(alert) }, { onDismiss(alert) })
+            } else if (isCompletelyEmpty) {
+                item(key = "empty") {
+                    Column(
+                        Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.NotificationsNone,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(56.dp)
+                        )
+                        Text("Tudo tranquilo por aqui", style = MaterialTheme.typography.titleLarge)
+                        Text("Nenhum aviso no momento.", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+
+            if (totalUnread > 0) {
+                item(key = "unreadHeading") {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Novas ($totalUnread)", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        TextButton(
+                            onClick = onMarkAllRead,
+                            modifier = Modifier.heightIn(min = 48.dp)
+                        ) {
+                            Text("Marcar todas como lidas")
+                        }
+                    }
+                }
+                items(unreadPersisted, key = { "persisted_unread_${it.id}" }) { item ->
+                    PersistedNotificationCard(
+                        item = item,
+                        onOpen = { onOpenPersistedItem(item) },
+                        onArchive = { onArchivePersistedItem(item) }
+                    )
+                }
+                items(unreadLocal, key = { it }) { alert ->
+                    NotificationCard(
+                        alertDisplayText(alert).substringBefore("\n\n"),
+                        alertCategory(alert),
+                        true,
+                        identifiedAt[alert],
+                        { openAlert(alert) },
+                        { onDismiss(alert) }
+                    )
+                }
+            }
+
+            if (totalRead > 0) {
+                item(key = "readHeading") {
+                    Text(
+                        if (totalUnread == 0) "Histórico de avisos" else "Lidas ($totalRead)",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                items(readPersisted, key = { "persisted_read_${it.id}" }) { item ->
+                    PersistedNotificationCard(
+                        item = item,
+                        onOpen = { onOpenPersistedItem(item) },
+                        onArchive = { onArchivePersistedItem(item) }
+                    )
+                }
+                items(previousLocal, key = { it }) { alert ->
+                    NotificationCard(
+                        alertDisplayText(alert).substringBefore("\n\n"),
+                        alertCategory(alert),
+                        false,
+                        identifiedAt[alert],
+                        { openAlert(alert) },
+                        { onDismiss(alert) }
+                    )
+                }
+            }
+
+            if (hasMorePages) {
+                item(key = "loadMore") {
+                    OutlinedButton(
+                        onClick = onLoadMore,
+                        enabled = !isLoadingMore,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("notificationLoadMoreButton")
+                    ) {
+                        Text(if (isLoadingMore) "Carregando mais..." else "Carregar mais avisos")
+                    }
                 }
             }
         }
     }
+
     selectedAlert?.let { alert ->
         NotificationDetailsSheet(
             alert = alert,
@@ -186,6 +381,119 @@ internal fun NotificationsContent(
             onMonitoringPermission = onMonitoringPermission,
             onNavigateToScreen = onNavigateToScreen
         )
+    }
+
+    unavailableMessage?.let { msg ->
+        BragaFormSheet(
+            onDismissRequest = onDismissUnavailableMessage,
+            title = { Text("Conteúdo indisponível") },
+            text = {
+                Text(
+                    msg,
+                    modifier = Modifier.testTag("notificationUnavailableMessage"),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = onDismissUnavailableMessage,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                ) {
+                    Text("Entendi", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun PersistedNotificationCard(
+    item: NotificationDisplayItem,
+    onOpen: () -> Unit,
+    onArchive: () -> Unit
+) {
+    val unread = !item.isRead
+    val icon = when (item.kind) {
+        "FAMILY_MESSAGE" -> Icons.Default.ChatBubbleOutline
+        "CONSULTATION_CREATED", "CONSULTATION_ACCEPTED", "CONSULTATION_REJECTED",
+        "CONSULTATION_CANCELLED", "CONSULTATION_COMPLETED", "CONSULTATION_UPDATED" -> Icons.Default.Event
+        "POST_REACTION" -> Icons.Default.ThumbUp
+        "FAMILY_BINDING_ACCEPTED", "FAMILY_BINDING_REVOKED" -> Icons.Default.Groups
+        "MEDICATION_LOW_STOCK", "MEDICATION_REMINDER" -> Icons.Default.Medication
+        else -> Icons.Default.Favorite
+    }
+    val actionLabel = when (item.kind) {
+        "FAMILY_MESSAGE" -> "Abrir conversa"
+        "CONSULTATION_CREATED", "CONSULTATION_ACCEPTED", "CONSULTATION_REJECTED",
+        "CONSULTATION_CANCELLED", "CONSULTATION_COMPLETED", "CONSULTATION_UPDATED" -> "Abrir consulta"
+        "POST_REACTION" -> "Abrir publicação"
+        "FAMILY_BINDING_ACCEPTED" -> "Ver família"
+        "FAMILY_BINDING_REVOKED" -> "Ver detalhes"
+        "MEDICATION_LOW_STOCK" -> "Ver estoque"
+        "MEDICATION_REMINDER" -> "Ver horários"
+        else -> "Abrir aviso"
+    }
+    val formattedDate = remember(item.occurredAt) {
+        java.text.SimpleDateFormat("dd/MM 'às' HH:mm", java.util.Locale.forLanguageTag("pt-BR"))
+            .format(java.util.Date(item.occurredAt))
+    }
+
+    Card(
+        onClick = onOpen,
+        modifier = Modifier.fillMaxWidth().testTag("persistedNotificationCard_${item.id}"),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(
+            1.dp,
+            if (unread) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(item.categoryLabel, style = MaterialTheme.typography.titleSmall)
+                    val statusLabel = buildString {
+                        append(if (unread) "Não lido" else "Lido")
+                        if (!item.personLabel.isNullOrBlank()) {
+                            append(" · ")
+                            append(item.personLabel)
+                        }
+                    }
+                    Text(
+                        statusLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onArchive, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Arquivar aviso")
+                }
+            }
+            Text(
+                item.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal
+            )
+            Text(item.body, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Recebido em $formattedDate",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                actionLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
     }
 }
 
@@ -235,11 +543,19 @@ private fun NotificationDetailsSheet(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 title?.let {
-                    Text(it, modifier = Modifier.testTag("notificationAlertTitle"),
-                        style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        it,
+                        modifier = Modifier.testTag("notificationAlertTitle"),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
-                Text(body, modifier = Modifier.testTag("notificationAlertBody"),
-                    style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    body,
+                    modifier = Modifier.testTag("notificationAlertBody"),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
         },
         confirmButton = {
@@ -288,7 +604,14 @@ private fun alertCategory(alert: String): String {
 }
 
 @Composable
-private fun NotificationCard(message: String, category: String, unread: Boolean, identifiedAt: Long?, onOpen: () -> Unit, onDismiss: () -> Unit) {
+private fun NotificationCard(
+    message: String,
+    category: String,
+    unread: Boolean,
+    identifiedAt: Long?,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit
+) {
     Card(
         onClick = onOpen,
         modifier = Modifier.fillMaxWidth(),
@@ -300,20 +623,27 @@ private fun NotificationCard(message: String, category: String, unread: Boolean,
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
                     Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                        Icon(when (category) {
-                            "Configurações" -> Icons.Default.Settings
-                            "Hidratação" -> Icons.Default.WaterDrop
-                            "Atividade" -> Icons.Default.DirectionsWalk
-                            "Medicamentos" -> Icons.Default.Medication
-                            else -> Icons.Default.Favorite
-                        }, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Icon(
+                            when (category) {
+                                "Configurações" -> Icons.Default.Settings
+                                "Hidratação" -> Icons.Default.WaterDrop
+                                "Atividade" -> Icons.Default.DirectionsWalk
+                                "Medicamentos" -> Icons.Default.Medication
+                                else -> Icons.Default.Favorite
+                            },
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(category, style = MaterialTheme.typography.titleSmall)
-                    Text(if (unread) "Não lido" else "Lido", style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        if (unread) "Não lido" else "Lido",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Default.Close, contentDescription = "Dispensar aviso")
@@ -323,10 +653,18 @@ private fun NotificationCard(message: String, category: String, unread: Boolean,
             identifiedAt?.let { timestamp ->
                 val time = java.text.SimpleDateFormat("dd/MM 'às' HH:mm", java.util.Locale.forLanguageTag("pt-BR"))
                     .format(java.util.Date(timestamp))
-                Text("Identificado em $time", style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "Identificado em $time",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            Text("Ler aviso", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Ler aviso",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }

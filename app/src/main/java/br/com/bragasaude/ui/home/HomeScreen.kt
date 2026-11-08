@@ -91,7 +91,9 @@ fun HomeScreen(
     val milestone by viewModel.latestMilestone.collectAsState()
     val clinicalAlerts by viewModel.clinicalAlerts.collectAsState()
     val readAlerts by viewModel.readAlerts.collectAsState()
-    val hasUnreadAlerts = clinicalAlerts.any { it !in readAlerts }
+    val totalUnreadNotificationsCount by viewModel.totalUnreadNotificationsCount.collectAsState()
+    val badgeLabel = br.com.bragasaude.data.remote.repository.NotificationCenterRepository.formatBadgeCount(totalUnreadNotificationsCount)
+    val bellContentDescription = br.com.bragasaude.data.remote.repository.NotificationCenterRepository.badgeContentDescription(totalUnreadNotificationsCount)
     val userStepGoal by viewModel.userStepGoal.collectAsState()
     val profile by viewModel.profile.collectAsState()
     val medications by viewModel.medications.collectAsState()
@@ -108,6 +110,7 @@ fun HomeScreen(
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 viewModel.syncGrantedPermissions(context)
+                viewModel.refreshNotifications()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -136,20 +139,29 @@ fun HomeScreen(
                 trailingContent = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         br.com.bragasaude.ui.smoking.SmokingHomeAction(onOpen = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.SmokingSupport) })
-                        IconButton(onClick = onNavigateToNotifications) {
+                        IconButton(
+                            onClick = onNavigateToNotifications,
+                            modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                        ) {
                             BadgedBox(
                                 badge = {
-                                    if (hasUnreadAlerts) {
+                                    if (badgeLabel != null) {
                                         Badge(
                                             containerColor = MaterialTheme.colorScheme.error,
+                                            contentColor = Color.White,
                                             modifier = Modifier.offset(x = (-4).dp, y = 4.dp)
-                                        )
+                                        ) {
+                                            Text(
+                                                text = badgeLabel,
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        }
                                     }
                                 }
                             ) {
                                 Icon(
                                     Icons.Default.Notifications,
-                                    contentDescription = "Notificações",
+                                    contentDescription = bellContentDescription,
                                     tint = Color.White
                                 )
                             }

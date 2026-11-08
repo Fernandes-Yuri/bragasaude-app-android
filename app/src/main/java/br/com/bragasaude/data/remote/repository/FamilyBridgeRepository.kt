@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -63,8 +64,33 @@ class FamilyBridgeRepository @Inject constructor(
     private val auth: FirebaseAuth,
     private val syncScheduler: SyncScheduler,
     @ApplicationContext private val appContext: Context,
-    private val e2eeManager: FamilyE2eeManager
+    private val e2eeManager: FamilyE2eeManager,
+    private val notificationDao: br.com.bragasaude.data.local.NotificationDao? = null
 ) {
+    constructor(
+        familyDao: FamilyDao,
+        vitalSignDao: VitalSignDao,
+        profileDao: ProfileDao,
+        dailyMetricsDao: DailyMetricsDao,
+        socialFeedDao: SocialFeedDao,
+        apiClient: BragaApiClient,
+        auth: FirebaseAuth,
+        syncScheduler: SyncScheduler,
+        appContext: Context,
+        e2eeManager: FamilyE2eeManager
+    ) : this(
+        familyDao = familyDao,
+        vitalSignDao = vitalSignDao,
+        profileDao = profileDao,
+        dailyMetricsDao = dailyMetricsDao,
+        socialFeedDao = socialFeedDao,
+        apiClient = apiClient,
+        auth = auth,
+        syncScheduler = syncScheduler,
+        appContext = appContext,
+        e2eeManager = e2eeManager,
+        notificationDao = null
+    )
     private val clinicalSyncLock = Mutex()
 
     suspend fun syncVitalChanges(patientId: String) = clinicalSyncLock.withLock {
@@ -306,6 +332,7 @@ class FamilyBridgeRepository @Inject constructor(
                 familyDao.consultationsForCleanup(patientUserId).forEach { NotificationHelper.cancelConsultationReminders(appContext, it.id, owner) }
                 familyDao.deleteReceiptsForPatient(owner, patientUserId)
                 vitalSignDao.clearCursor(owner, patientUserId)
+                notificationDao?.deleteForRevokedPatient(owner, patientUserId)
             }
             familyDao.deleteAllConsultationsForUser(patientUserId)
             profileDao.deleteProfile(patientUserId)
@@ -811,6 +838,11 @@ class FamilyBridgeRepository @Inject constructor(
                 it.expiresAt > System.currentTimeMillis() }
         if (eligible.isEmpty()) return
         familyDao.markSeen(userId, eligible)
+        val remainingUnread = runCatching { familyDao.getUnreadMessagesForPatient(patientUserId).firstOrNull() }.getOrNull()
+            ?.any { it.senderUserId != userId && !it.awaitingDecryption && it.deletedAt == null && it.expiresAt > System.currentTimeMillis() } ?: false
+        if (!remainingUnread) {
+            notificationDao?.reconcileChatConversationReadLocal(userId, patientUserId, System.currentTimeMillis())
+        }
         syncScheduler.scheduleSync()
         flushReadReceipts()
     }

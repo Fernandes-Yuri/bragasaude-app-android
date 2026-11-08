@@ -33,8 +33,33 @@ class SyncManager @Inject constructor(
     private val dailyMetricsDao: DailyMetricsDao,
     private val syncPreferences: SyncPreferences,
     private val familyBridgeRepository: br.com.bragasaude.data.remote.repository.FamilyBridgeRepository,
-    private val movementManagerProvider: javax.inject.Provider<br.com.bragasaude.data.util.MovementManager>
+    private val movementManagerProvider: javax.inject.Provider<br.com.bragasaude.data.util.MovementManager>,
+    private val notificationCenterRepository: br.com.bragasaude.data.remote.repository.NotificationCenterRepository? = null
 ) {
+    constructor(
+        apiClient: BragaApiClient,
+        profileDao: ProfileDao,
+        vitalSignDao: VitalSignDao,
+        biometryDao: BiometryDao,
+        medicationDao: MedicationDao,
+        milestoneDao: MilestoneDao,
+        dailyMetricsDao: DailyMetricsDao,
+        syncPreferences: SyncPreferences,
+        familyBridgeRepository: br.com.bragasaude.data.remote.repository.FamilyBridgeRepository,
+        movementManagerProvider: javax.inject.Provider<br.com.bragasaude.data.util.MovementManager>
+    ) : this(
+        apiClient = apiClient,
+        profileDao = profileDao,
+        vitalSignDao = vitalSignDao,
+        biometryDao = biometryDao,
+        medicationDao = medicationDao,
+        milestoneDao = milestoneDao,
+        dailyMetricsDao = dailyMetricsDao,
+        syncPreferences = syncPreferences,
+        familyBridgeRepository = familyBridgeRepository,
+        movementManagerProvider = movementManagerProvider,
+        notificationCenterRepository = null
+    )
     private val scope = CoroutineScope(Dispatchers.IO)
 
     private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
@@ -135,6 +160,15 @@ class SyncManager @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 android.util.Log.w(BragaConstants.SYNC_LOG_TAG, "Aviso: Falha ao sincronizar dependentes: ${e.message}")
+            }
+
+            // 6B. Central de Notificações persistente (RTL-07)
+            try {
+                notificationCenterRepository?.syncNotifications(forceSnapshotIfEmpty = fullSync)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w(BragaConstants.SYNC_LOG_TAG, "Aviso: Falha ao sincronizar central de notificações: ${e.message}")
             }
 
             // 7. Retenção de 30 Dias

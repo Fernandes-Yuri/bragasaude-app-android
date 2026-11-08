@@ -130,4 +130,67 @@ class FamilyChatMigrationTest {
         } finally { context.deleteDatabase(name) }
     }
 
+    @Test fun schema68CreatesNotificationCenterTablesAndPreservesExistingVitals() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        val name = "notifications-68.db"
+        context.deleteDatabase(name)
+        val relative = "schemas/br.com.bragasaude.data.local.BragaDatabase/68.json"
+        val source = sequenceOf(File(relative), File("app/$relative")).first { it.isFile }
+        val entities = JSONObject(source.readText()).getJSONObject("database").getJSONArray("entities")
+        try {
+            context.openOrCreateDatabase(name, 0, null).use { old ->
+                repeat(entities.length()) { index ->
+                    val table = entities.getJSONObject(index)
+                    val tableName = table.getString("tableName")
+                    old.execSQL(table.getString("createSql").replace("\${TABLE_NAME}", tableName))
+                    val indexes = table.optJSONArray("indices") ?: org.json.JSONArray()
+                    repeat(indexes.length()) { j ->
+                        old.execSQL(indexes.getJSONObject(j).getString("createSql").replace("\${TABLE_NAME}", tableName))
+                    }
+                }
+                old.execSQL(
+                    "INSERT INTO vital_signs_local(localId,remoteId,userId,systolicPressure,diastolicPressure,oxygenSaturation,measuredAt,status,pendingSync,hydrationUndoPending,confirmedVia) " +
+                        "VALUES(1,'v-68','mariana',118,76,98.2,5000,'recorded',0,0,'braga.manual')"
+                )
+                old.version = 68
+            }
+            val db = Room.databaseBuilder(context, BragaDatabase::class.java, name)
+                .allowMainThreadQueries()
+                .addMigrations(*Migrations.ALL)
+                .build()
+            try {
+                assertEquals(69, db.openHelper.readableDatabase.version)
+                val vitals = db.vitalSignDao().getAllOneShot("mariana")
+                assertEquals(1, vitals.size)
+                assertEquals(98.2, vitals.single().oxygenSaturation!!, 0.001)
+
+                db.notificationDao().upsertItem(
+                    NotificationItemEntity(
+                        recipientId = "mariana",
+                        id = "notif-1",
+                        revision = 10L,
+                        kind = "FAMILY_MESSAGE",
+                        category = "FAMILY",
+                        actorId = "fred",
+                        patientId = "mariana",
+                        resourceType = "family_chat",
+                        resourceId = "mariana",
+                        occurredAt = 6000L,
+                        expiresAt = 9999999999999L,
+                        count = 2,
+                        unreadCount = 2,
+                        isRead = false
+                    )
+                )
+                val stored = db.notificationDao().getById("mariana", "notif-1")
+                assertNotNull(stored)
+                assertEquals(2, stored!!.unreadCount)
+            } finally {
+                db.close()
+            }
+        } finally {
+            context.deleteDatabase(name)
+        }
+    }
+
 }
