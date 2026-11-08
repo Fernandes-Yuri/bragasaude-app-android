@@ -658,6 +658,101 @@ object Migrations {
         }
     }
 
+    val MIGRATION_67_68 = object : Migration(67, 68) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""CREATE TABLE IF NOT EXISTS `vital_signs_local_v68` (
+                `localId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `remoteId` TEXT,
+                `userId` TEXT NOT NULL,
+                `systolicPressure` INTEGER,
+                `diastolicPressure` INTEGER,
+                `heartRate` INTEGER,
+                `oxygenSaturation` REAL,
+                `glucoseLevel` INTEGER,
+                `glucoseType` TEXT,
+                `hydrationMl` INTEGER,
+                `steps` INTEGER,
+                `distanceMeters` REAL,
+                `measuredAt` INTEGER NOT NULL,
+                `status` TEXT NOT NULL,
+                `pendingSync` INTEGER NOT NULL,
+                `confirmedVia` TEXT,
+                `confirmationCode` TEXT,
+                `hydrationUndoPending` INTEGER NOT NULL,
+                `deletedAt` INTEGER)""")
+            db.execSQL("""INSERT INTO `vital_signs_local_v68` (
+                `localId`, `remoteId`, `userId`, `systolicPressure`, `diastolicPressure`,
+                `heartRate`, `oxygenSaturation`, `glucoseLevel`, `glucoseType`,
+                `hydrationMl`, `steps`, `distanceMeters`, `measuredAt`, `status`,
+                `pendingSync`, `confirmedVia`, `confirmationCode`, `hydrationUndoPending`, `deletedAt`)
+                SELECT `localId`, `remoteId`, `userId`, `systolicPressure`, `diastolicPressure`,
+                `heartRate`, CAST(`oxygenSaturation` AS REAL), `glucoseLevel`, `glucoseType`,
+                `hydrationMl`, `steps`, `distanceMeters`, `measuredAt`, `status`,
+                `pendingSync`, `confirmedVia`, `confirmationCode`, `hydrationUndoPending`, `deletedAt`
+                FROM `vital_signs_local`""")
+            db.execSQL("DROP TABLE `vital_signs_local`")
+            db.execSQL("ALTER TABLE `vital_signs_local_v68` RENAME TO `vital_signs_local`")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_vital_signs_local_userId_measuredAt` ON `vital_signs_local` (`userId`, `measuredAt`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_vital_signs_local_remoteId` ON `vital_signs_local` (`remoteId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_vital_signs_local_pendingSync` ON `vital_signs_local` (`pendingSync`)")
+
+            val legacyRows = mutableListOf<WearableReading>()
+            db.query("SELECT userId, recordKey, metric, value, measuredAt, sourcePackage, deviceModel FROM wearable_readings_local WHERE sourcePackage IN ('braga.manual', 'braga.voice') ORDER BY measuredAt ASC").use { cursor ->
+                while (cursor.moveToNext()) {
+                    legacyRows += WearableReading(
+                        userId = cursor.getString(0),
+                        recordKey = cursor.getString(1),
+                        metric = cursor.getString(2),
+                        value = cursor.getDouble(3),
+                        measuredAt = cursor.getLong(4),
+                        sourcePackage = cursor.getString(5),
+                        deviceModel = if (cursor.isNull(6)) null else cursor.getString(6)
+                    )
+                }
+            }
+            for (row in legacyRows) {
+                val rawString = if (row.metric == br.com.bragasaude.domain.HealthReadingInput.HEART && row.value % 1.0 == 0.0) {
+                    row.value.toInt().toString()
+                } else {
+                    row.value.toString()
+                }
+                val validated = br.com.bragasaude.domain.HealthReadingInput.value(row.metric, rawString) ?: continue
+                val candidateUuid = br.com.bragasaude.domain.HealthReadingHistory.canonicalUuidForLegacyReading(row.userId, row.metric, row.recordKey)
+                var existingOwner: String? = null
+                db.query("SELECT userId FROM vital_signs_local WHERE remoteId = ? LIMIT 1", arrayOf(candidateUuid)).use { c ->
+                    if (c.moveToFirst()) existingOwner = c.getString(0)
+                }
+                val effectiveUuid = if (existingOwner != null && existingOwner != row.userId) {
+                    java.util.UUID.nameUUIDFromBytes("${row.userId}:${row.metric}:${row.recordKey}".toByteArray(Charsets.UTF_8)).toString()
+                } else {
+                    candidateUuid
+                }
+                var alreadyInVitals = false
+                db.query("SELECT localId, confirmedVia FROM vital_signs_local WHERE remoteId = ? AND userId = ? LIMIT 1", arrayOf(effectiveUuid, row.userId)).use { c ->
+                    if (c.moveToFirst()) {
+                        alreadyInVitals = true
+                        val localId = c.getLong(0)
+                        val existingVia = if (c.isNull(1)) null else c.getString(1)
+                        if (existingVia.isNullOrBlank() || existingVia == "app") {
+                            db.execSQL("UPDATE vital_signs_local SET confirmedVia = ? WHERE localId = ?", arrayOf<Any?>(row.sourcePackage, localId))
+                        }
+                    }
+                }
+                if (!alreadyInVitals) {
+                    val pending = if (row.userId == br.com.bragasaude.util.BragaConstants.GUEST_UID) 0 else 1
+                    val hr: Any? = if (row.metric == br.com.bragasaude.domain.HealthReadingInput.HEART) validated.toInt() else null
+                    val spo2: Any? = if (row.metric == br.com.bragasaude.domain.HealthReadingInput.OXYGEN) validated else null
+                    db.execSQL(
+                        """INSERT INTO vital_signs_local (remoteId, userId, heartRate, oxygenSaturation, measuredAt, status, pendingSync, confirmedVia, hydrationUndoPending)
+                           VALUES (?, ?, ?, ?, ?, 'recorded', ?, ?, 0)""",
+                        arrayOf<Any?>(effectiveUuid, row.userId, hr, spo2, row.measuredAt, pending, row.sourcePackage)
+                    )
+                }
+                db.execSQL("DELETE FROM wearable_readings_local WHERE userId = ? AND recordKey = ?", arrayOf<Any?>(row.userId, row.recordKey))
+            }
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -700,6 +795,7 @@ object Migrations {
         MIGRATION_63_64,
         MIGRATION_64_65,
         MIGRATION_65_66,
-        MIGRATION_66_67
+        MIGRATION_66_67,
+        MIGRATION_67_68
     )
 }

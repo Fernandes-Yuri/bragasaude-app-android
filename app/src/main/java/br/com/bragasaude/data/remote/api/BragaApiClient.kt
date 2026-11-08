@@ -67,6 +67,7 @@ class BragaApiClient @Inject constructor(
 ) {
     companion object {
         private const val TAG = "BragaApiClient"
+        const val VITALS_CONTRACT_VERSION = 2
         val DEFAULT_BASE_URL = br.com.bragasaude.BuildConfig.BASE_URL
         private const val CONNECT_TIMEOUT_MS = 5000
         private const val READ_TIMEOUT_MS = 10000
@@ -257,6 +258,8 @@ class BragaApiClient @Inject constructor(
             val id = v.remoteId ?: return@withContext null
             java.util.UUID.fromString(id)
             if (v.hydrationUndoPending) return@withContext if (undoHydration(id)) id else null
+            val requiresContractV2 = (v.oxygenSaturation != null && kotlin.math.abs(v.oxygenSaturation % 1.0) > 1e-6) ||
+                v.confirmedVia in setOf("braga.manual", "braga.voice", "braga.whatsapp")
             val json = JSONObject().apply {
                 put("id", id)
                 put("userId", v.userId)
@@ -267,10 +270,16 @@ class BragaApiClient @Inject constructor(
                 if (v.glucoseLevel != null) put("glucoseLevel", v.glucoseLevel)
                 if (v.glucoseType != null) put("glucoseType", v.glucoseType)
                 if (v.hydrationMl != null) put("hydrationMl", v.hydrationMl)
+                if (!v.confirmedVia.isNullOrBlank()) put("confirmedVia", v.confirmedVia)
                 put("measuredAt", isoFormat.format(v.measuredAt))
             }
-            val res = postJson("$baseUrl/api/sync/vitals", json)
-            return@withContext res?.takeIf { it.optString("status") == "success" && it.optString("id") == id }?.getString("id")
+            val res = postJson("$baseUrl/api/sync/vitals", json) ?: return@withContext null
+            if (res.optString("status") != "success" || res.optString("id") != id) return@withContext null
+            if (requiresContractV2 && res.optInt("vitalsContract", 0) < VITALS_CONTRACT_VERSION) {
+                Log.w(TAG, "Servidor ainda em contrato v1 de vitais; mantendo leitura decimal/origem pendente.")
+                return@withContext null
+            }
+            return@withContext res.getString("id")
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao sincronizar sinal vital: ${e.message}")
             return@withContext null
@@ -286,7 +295,7 @@ class BragaApiClient @Inject constructor(
             var offset = 0
             while (true) {
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
-                val arr = getJsonArray("$baseUrl/api/vitals/$userId?limit=200&offset=$offset")
+                val arr = getJsonArray("$baseUrl/api/vitals/$userId?limit=200&offset=$offset&contract=$VITALS_CONTRACT_VERSION")
                     ?: return@withContext null // Falha parcial nunca avança o cursor do SyncManager.
                 for (i in 0 until arr.length()) {
                     val obj = arr.getJSONObject(i)
@@ -297,14 +306,14 @@ class BragaApiClient @Inject constructor(
                             systolicPressure = if (obj.isNull("systolic_pressure")) null else obj.getInt("systolic_pressure"),
                             diastolicPressure = if (obj.isNull("diastolic_pressure")) null else obj.getInt("diastolic_pressure"),
                             heartRate = if (obj.isNull("heart_rate")) null else obj.getInt("heart_rate"),
-                            oxygenSaturation = if (obj.isNull("oxygen_saturation")) null else obj.getInt("oxygen_saturation"),
+                            oxygenSaturation = if (obj.isNull("oxygen_saturation")) null else obj.getDouble("oxygen_saturation"),
                             glucoseLevel = if (obj.isNull("glucose_level")) null else obj.getInt("glucose_level"),
-                            glucoseType = obj.optString("glucose_type", null),
+                            glucoseType = obj.optString("glucose_type").takeUnless { it.isBlank() || it == "null" },
                             hydrationMl = if (obj.isNull("hydration_ml")) null else obj.getInt("hydration_ml"),
                             measuredAt = obj.getString("measured_at"),
                             status = "recorded",
-                            confirmedVia = obj.optString("confirmed_via", null),
-                            confirmationCode = obj.optString("confirmation_code", null)
+                            confirmedVia = obj.optString("confirmed_via").takeUnless { it.isBlank() || it == "null" },
+                            confirmationCode = obj.optString("confirmation_code").takeUnless { it.isBlank() || it == "null" }
                         )
                     )
                 }
@@ -327,19 +336,29 @@ class BragaApiClient @Inject constructor(
 
     suspend fun getVitalChanges(patient: String, after: Long): VitalChangesPage? = withContext(Dispatchers.IO) {
         try {
-            val page = getJson("$baseUrl/api/vitals/$patient/changes?after=$after") ?: return@withContext null
+            val page = getJson("$baseUrl/api/vitals/$patient/changes?after=$after&contract=$VITALS_CONTRACT_VERSION") ?: return@withContext null
             val changes = page.getJSONArray("changes")
             val records = (0 until changes.length()).map { index ->
                 val v = changes.getJSONObject(index).getJSONObject("vital")
                 check(v.getString("user_id") == patient)
                 fun number(key: String): Int? = if (v.isNull(key)) null else v.getInt(key)
-                VitalSignEntity(remoteId = v.getString("id"), userId = patient,
-                    systolicPressure = number("systolic_pressure"), diastolicPressure = number("diastolic_pressure"),
-                    heartRate = number("heart_rate"), oxygenSaturation = number("oxygen_saturation"),
-                    glucoseLevel = number("glucose_level"), glucoseType = v.optString("glucose_type").takeUnless { it.isBlank() || it == "null" },
+                fun decimal(key: String): Double? = if (v.isNull(key)) null else v.getDouble(key)
+                VitalSignEntity(
+                    remoteId = v.getString("id"),
+                    userId = patient,
+                    systolicPressure = number("systolic_pressure"),
+                    diastolicPressure = number("diastolic_pressure"),
+                    heartRate = number("heart_rate"),
+                    oxygenSaturation = decimal("oxygen_saturation"),
+                    glucoseLevel = number("glucose_level"),
+                    glucoseType = v.optString("glucose_type").takeUnless { it.isBlank() || it == "null" },
                     hydrationMl = number("hydration_ml"),
                     measuredAt = Date(parseIsoMillis(v.getString("measured_at")) ?: error("Data inválida")),
-                    deletedAt = parseIsoMillis(v.optString("deleted_at")), pendingSync = false)
+                    confirmedVia = v.optString("confirmed_via").takeUnless { it.isBlank() || it == "null" },
+                    confirmationCode = v.optString("confirmation_code").takeUnless { it.isBlank() || it == "null" },
+                    deletedAt = parseIsoMillis(v.optString("deleted_at")),
+                    pendingSync = false
+                )
             }
             val cursor = page.getLong("nextCursor")
             val more = page.getBoolean("hasMore")

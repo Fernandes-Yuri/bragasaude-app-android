@@ -2,23 +2,57 @@ package br.com.bragasaude.domain
 
 import java.text.Normalizer
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.round
 
 data class HealthReadingDraft(val metric: String, val value: Double)
+
+enum class HealthReadingSaveStatus {
+    SYNCED,
+    SAVED_LOCALLY_PENDING_SYNC,
+    VALIDATION_ERROR,
+    UNAUTHENTICATED,
+    ERROR
+}
+
+data class HealthReadingSaveResult(
+    val status: HealthReadingSaveStatus,
+    val remoteId: String? = null,
+    val message: String? = null
+)
 
 object HealthReadingInput {
     const val HEART = "HEART_RATE"
     const val OXYGEN = "OXYGEN_SATURATION"
     const val MANUAL = "braga.manual"
     const val VOICE = "braga.voice"
+    private val ptBrLocale = Locale("pt", "BR")
+
     fun value(metric: String, raw: String): Double? {
         val number = raw.trim().replace(',', '.').toDoubleOrNull() ?: return null
         if (!number.isFinite()) return null
         return when (metric) {
-            HEART -> number.takeIf { it in 1.0..300.0 && it % 1.0 == 0.0 }
-            OXYGEN -> number.takeIf { it > 0 && it <= 100.0 }
+            HEART -> number.takeIf { it in 20.0..250.0 && it % 1.0 == 0.0 }
+            OXYGEN -> {
+                val scaled = number * 100.0
+                if (number !in 30.0..100.0 || abs(scaled - round(scaled)) >= 1e-6) null
+                else round(scaled) / 100.0
+            }
             else -> null
         }
     }
+
+    fun formatOxygenDisplay(value: Double): String {
+        val normalized = round(value * 100.0) / 100.0
+        val hasSecondDecimal = abs(normalized * 10.0 - round(normalized * 10.0)) >= 1e-6
+        return String.format(ptBrLocale, if (hasSecondDecimal) "%.2f" else "%.1f", normalized)
+    }
+
+    fun formatOxygenCompact(value: Double): String {
+        val normalized = round(value * 100.0) / 100.0
+        return if (normalized % 1.0 == 0.0) normalized.toInt().toString() else formatOxygenDisplay(normalized)
+    }
+
     fun origin(source: String) = when (source) { MANUAL -> "Manual"; VOICE -> "Voz, conferida por você"; HealthReadingHistory.WHATSAPP -> "WhatsApp, confirmado por você"; HealthReadingHistory.SYNC -> "Registro sincronizado"; else -> "Health Connect" }
     fun spoken(raw: String, expectedMetric: String? = null): HealthReadingDraft? {
         var text = Normalizer.normalize(raw, Normalizer.Form.NFD).replace(Regex("\\p{M}"), "").lowercase(Locale.ROOT)

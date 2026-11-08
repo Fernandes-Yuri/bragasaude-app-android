@@ -279,6 +279,7 @@ class AuthViewModelTest {
         )
         coEvery { database.vitalSignDao().getPendingSync() } returns listOf(pending)
         viewModel.signOut()
+        coVerify(exactly = 1) { database.vitalSignDao().migrateLegacyManualReadings("test-uid") }
         verify(exactly = 0) { database.clearAllTables() }
         verify(exactly = 0) { auth.signOut() }
         assertNotNull(viewModel.sessionNotice.value)

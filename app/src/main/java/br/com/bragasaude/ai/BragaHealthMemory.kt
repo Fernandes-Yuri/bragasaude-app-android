@@ -314,9 +314,13 @@ class BragaHealthMemory internal constructor(
         if (query.operation !in setOf(HealthOperation.LAST, HealthOperation.AGE)) return unsupported("Para batimentos e saturação, esta consulta local apresenta a última leitura do período. Peça a última leitura e informe o período desejado.")
         val scope = interval(query, instant)
         val last = vitals.getLatestAuxiliaryForMemory(user, query.metric.name, scope.startInclusiveMillis, scope.endExclusiveMillis)
-            ?.takeIf { valid(it, user, scope) && if (query.metric == HealthMetric.HEART_RATE) (it.heartRate ?: 0) > 0 else (it.oxygenSaturation ?: 0) in 1..100 }
+            ?.takeIf { valid(it, user, scope) && if (query.metric == HealthMetric.HEART_RATE) (it.heartRate ?: 0) in 20..250 else (it.oxygenSaturation ?: 0.0) in 30.0..100.0 }
             ?: return absent(query, user)
-        val value = if (query.metric == HealthMetric.HEART_RATE) "${last.heartRate} bpm" else "${last.oxygenSaturation}%"
+        val value = if (query.metric == HealthMetric.HEART_RATE) {
+            "${last.heartRate} bpm"
+        } else {
+            "${br.com.bragasaude.domain.HealthReadingInput.formatOxygenCompact(last.oxygenSaturation!!)}%"
+        }
         val metric = if (query.metric == HealthMetric.HEART_RATE) "frequência cardíaca" else "saturação de oxigênio"
         return HealthMemoryResult("Sua última leitura de $metric ${periodLabel(query.period)} foi $value, em ${time(last)}, ${elapsed(last, instant)}.${ageSuffix(query, last, instant)} Essa leitura registrada não determina diagnóstico.", true, last.measuredAt.time, zone.id)
     }

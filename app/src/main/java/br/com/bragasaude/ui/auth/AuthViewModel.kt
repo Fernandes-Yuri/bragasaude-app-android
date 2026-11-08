@@ -774,6 +774,7 @@ class AuthViewModel @Inject constructor(
             if (userId != null) {
                 withTimeoutOrNull(5_000L) {
                     try {
+                        database.vitalSignDao().migrateLegacyManualReadings(userId)
                         flushPendingVitalsAndMetrics(userId)
                     } catch (e: CancellationException) {
                         throw e
@@ -783,6 +784,7 @@ class AuthViewModel @Inject constructor(
                 }
             }
             database.vitalSignDao().getPendingSync().any { it.userId == userId } ||
+                (userId != null && database.wearableReadingDao().getLegacyManualAndVoiceReadingsForUser(userId).isNotEmpty()) ||
                 database.dailyMetricsDao().getPendingSync().any { it.userId == userId } ||
                 database.biometryDao().getPendingSync().any { it.userId == userId } ||
                 database.profileDao().getPendingSync().any { it.userId == userId } ||

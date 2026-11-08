@@ -22,7 +22,7 @@ data class VitalSignEntity(
     val systolicPressure: Int? = null,
     val diastolicPressure: Int? = null,
     val heartRate: Int? = null,
-    val oxygenSaturation: Int? = null,
+    val oxygenSaturation: Double? = null,
     val glucoseLevel: Int? = null,
     val glucoseType: String? = null,
     val hydrationMl: Int? = null,

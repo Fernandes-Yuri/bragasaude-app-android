@@ -66,7 +66,7 @@ interface VitalSignDao {
     @Query("SELECT COALESCE(SUM(hydrationMl), 0) AS totalMl, COUNT(*) AS recordCount FROM vital_signs_local WHERE userId = :userId AND hydrationMl > 0 AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis")
     suspend fun getHydrationSummaryForMemory(userId: String, startInclusiveMillis: Long, endExclusiveMillis: Long): HydrationMemoryAggregate
 
-    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis AND ((:metric = 'HEART_RATE' AND heartRate > 0) OR (:metric = 'OXYGEN' AND oxygenSaturation BETWEEN 1 AND 100)) ORDER BY measuredAt DESC, localId DESC LIMIT 1")
+    @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis AND ((:metric = 'HEART_RATE' AND heartRate > 0) OR (:metric = 'OXYGEN' AND oxygenSaturation BETWEEN 30.0 AND 100.0)) ORDER BY measuredAt DESC, localId DESC LIMIT 1")
     suspend fun getLatestAuxiliaryForMemory(userId: String, metric: String, startInclusiveMillis: Long, endExclusiveMillis: Long): VitalSignEntity?
 
     @Query("SELECT * FROM vital_signs_local WHERE pendingSync = 1")
@@ -81,6 +81,87 @@ interface VitalSignDao {
     @Query("SELECT * FROM vital_signs_local WHERE localId = :localId")
     suspend fun getByLocalId(localId: Long): VitalSignEntity?
 
+    @Query("SELECT * FROM wearable_readings_local WHERE sourcePackage IN ('braga.manual', 'braga.voice') ORDER BY measuredAt ASC")
+    suspend fun getAllLegacyManualWearableReadings(): List<WearableReading>
+
+    @Query("SELECT * FROM wearable_readings_local WHERE userId = :userId AND sourcePackage IN ('braga.manual', 'braga.voice') ORDER BY measuredAt ASC")
+    suspend fun getLegacyManualWearableReadingsForUser(userId: String): List<WearableReading>
+
+    @Query("DELETE FROM wearable_readings_local WHERE userId = :userId AND recordKey = :recordKey")
+    suspend fun deleteLegacyWearableReading(userId: String, recordKey: String)
+
+    @Transaction
+    suspend fun upsertManualReading(vital: VitalSignEntity): VitalSignEntity {
+        val remoteId = vital.remoteId ?: java.util.UUID.randomUUID().toString()
+        val existing = getByRemoteId(remoteId)
+        if (existing != null && existing.userId == vital.userId) {
+            val updated = vital.copy(localId = existing.localId, remoteId = remoteId)
+            insert(updated)
+            return getByLocalId(existing.localId) ?: updated
+        }
+        val effectiveId = if (existing != null && existing.userId != vital.userId) {
+            java.util.UUID.randomUUID().toString()
+        } else {
+            remoteId
+        }
+        val toInsert = vital.copy(localId = 0L, remoteId = effectiveId)
+        val insertedId = insert(toInsert)
+        return getByLocalId(insertedId) ?: toInsert.copy(localId = insertedId)
+    }
+
+    @Transaction
+    suspend fun migrateLegacyManualReadings(userId: String? = null): List<VitalSignEntity> {
+        val rows = if (userId.isNullOrBlank()) {
+            getAllLegacyManualWearableReadings()
+        } else {
+            getLegacyManualWearableReadingsForUser(userId)
+        }
+        if (rows.isEmpty()) return emptyList()
+        val migrated = mutableListOf<VitalSignEntity>()
+        for (row in rows) {
+            val rawValueStr = if (row.metric == br.com.bragasaude.domain.HealthReadingInput.HEART && row.value % 1.0 == 0.0) {
+                row.value.toInt().toString()
+            } else {
+                row.value.toString()
+            }
+            val validated = br.com.bragasaude.domain.HealthReadingInput.value(row.metric, rawValueStr) ?: continue
+            val candidateUuid = br.com.bragasaude.domain.HealthReadingHistory.canonicalUuidForLegacyReading(row.userId, row.metric, row.recordKey)
+            val existingByCandidate = getByRemoteId(candidateUuid)
+            val effectiveUuid = if (existingByCandidate != null && existingByCandidate.userId != row.userId) {
+                java.util.UUID.nameUUIDFromBytes("${row.userId}:${row.metric}:${row.recordKey}".toByteArray(Charsets.UTF_8)).toString()
+            } else {
+                candidateUuid
+            }
+            val existingForUser = getByRemoteId(effectiveUuid)?.takeIf { it.userId == row.userId }
+            val persisted = if (existingForUser != null) {
+                val updated = if (existingForUser.confirmedVia.isNullOrBlank() || existingForUser.confirmedVia == "app") {
+                    existingForUser.copy(confirmedVia = row.sourcePackage).also { insert(it) }
+                } else {
+                    existingForUser
+                }
+                updated
+            } else {
+                val entity = VitalSignEntity(
+                    remoteId = effectiveUuid,
+                    userId = row.userId,
+                    heartRate = if (row.metric == br.com.bragasaude.domain.HealthReadingInput.HEART) validated.toInt() else null,
+                    oxygenSaturation = if (row.metric == br.com.bragasaude.domain.HealthReadingInput.OXYGEN) validated else null,
+                    measuredAt = java.util.Date(row.measuredAt),
+                    status = "recorded",
+                    pendingSync = row.userId != br.com.bragasaude.util.BragaConstants.GUEST_UID,
+                    confirmedVia = row.sourcePackage
+                )
+                val insertedId = insert(entity)
+                getByLocalId(insertedId) ?: entity.copy(localId = insertedId)
+            }
+            if (getByLocalId(persisted.localId) != null) {
+                deleteLegacyWearableReading(row.userId, row.recordKey)
+                migrated += persisted
+            }
+        }
+        return migrated
+    }
+
     @Transaction
     suspend fun acknowledgeSync(expected: VitalSignEntity, remoteId: String) {
         if (getByLocalId(expected.localId) == expected) insert(expected.copy(remoteId = remoteId, pendingSync = false, hydrationUndoPending = false))
@@ -90,7 +171,12 @@ interface VitalSignDao {
     suspend fun cacheRemote(vital: VitalSignEntity) {
         val current = vital.remoteId?.let { getByRemoteId(it) }
         if (current?.pendingSync == true || current?.hydrationUndoPending == true) return
-        insert(vital.copy(localId = current?.localId ?: 0L))
+        val preservedOrigin = if (vital.confirmedVia.isNullOrBlank() || vital.confirmedVia == "app") {
+            current?.confirmedVia ?: vital.confirmedVia
+        } else {
+            vital.confirmedVia
+        }
+        insert(vital.copy(localId = current?.localId ?: 0L, confirmedVia = preservedOrigin))
     }
 
     @Query("SELECT revision FROM clinical_sync_cursors WHERE ownerId=:owner AND patientId=:patient")

@@ -110,7 +110,8 @@ class VoiceHealthExecutor @Inject constructor(
                     userId = userId,
                     heartRate = intent.heartRateBpm,
                     measuredAt = nowIso,
-                    status = "recorded"
+                    status = "recorded",
+                    confirmedVia = HealthReadingInput.VOICE
                 )
                 vitalsRepository.saveVitalSigns(listOf(vital))
                 "Batimentos: ${intent.heartRateBpm} bpm registrado!"
@@ -120,9 +121,10 @@ class VoiceHealthExecutor @Inject constructor(
                 val vital = RemoteVitalSign(
                     id = UUID.randomUUID().toString(),
                     userId = userId,
-                    oxygenSaturation = intent.oxygenPercent,
+                    oxygenSaturation = intent.oxygenPercent.toDouble(),
                     measuredAt = nowIso,
-                    status = "recorded"
+                    status = "recorded",
+                    confirmedVia = HealthReadingInput.VOICE
                 )
                 vitalsRepository.saveVitalSigns(listOf(vital))
                 "Saturação: ${intent.oxygenPercent}% registrado!"

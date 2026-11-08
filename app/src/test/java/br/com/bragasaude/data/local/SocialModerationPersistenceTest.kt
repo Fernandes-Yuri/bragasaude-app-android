@@ -44,7 +44,7 @@ class SocialModerationPersistenceTest {
             var db = open()
             try {
                 assertEquals("Meta preservada", db.socialFeedDao().getPostById("post")!!.title)
-                assertEquals(67, db.openHelper.readableDatabase.version)
+                assertEquals(68, db.openHelper.readableDatabase.version)
                 db.socialFeedDao().queueBlock("reader", "author")
             } finally { db.close() }
             db = open()

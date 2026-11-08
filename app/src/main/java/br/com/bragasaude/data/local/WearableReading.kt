@@ -22,4 +22,10 @@ interface WearableReadingDao {
     fun observeRecent(userId: String, metric: String): Flow<List<WearableReading>>
     @Query("SELECT * FROM wearable_readings_local WHERE userId = :userId AND measuredAt >= :since ORDER BY measuredAt DESC")
     suspend fun getForReport(userId: String, since: Long): List<WearableReading>
+    @Query("SELECT * FROM wearable_readings_local WHERE sourcePackage IN ('braga.manual', 'braga.voice') ORDER BY measuredAt ASC")
+    suspend fun getLegacyManualAndVoiceReadings(): List<WearableReading>
+    @Query("SELECT * FROM wearable_readings_local WHERE userId = :userId AND sourcePackage IN ('braga.manual', 'braga.voice') ORDER BY measuredAt ASC")
+    suspend fun getLegacyManualAndVoiceReadingsForUser(userId: String): List<WearableReading>
+    @Query("DELETE FROM wearable_readings_local WHERE userId = :userId AND recordKey = :recordKey")
+    suspend fun deleteByKey(userId: String, recordKey: String)
 }

@@ -79,7 +79,7 @@ class RetiredNutritionMigrationTest {
         context.deleteDatabase(name)
         val db = open()
         try {
-            assertEquals(67, db.openHelper.readableDatabase.version)
+            assertEquals(68, db.openHelper.readableDatabase.version)
             retired.forEach { table ->
                 db.openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'").use { assertFalse(it.moveToFirst()) }
             }
