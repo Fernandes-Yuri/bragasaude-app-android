@@ -256,6 +256,7 @@ class BragaApiClient @Inject constructor(
         try {
             val id = v.remoteId ?: return@withContext null
             java.util.UUID.fromString(id)
+            if (v.hydrationUndoPending) return@withContext if (undoHydration(id)) id else null
             val json = JSONObject().apply {
                 put("id", id)
                 put("userId", v.userId)

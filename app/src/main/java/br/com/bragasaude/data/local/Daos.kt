@@ -44,6 +44,9 @@ interface VitalSignDao {
           OR (:metric='GLUCOSE' AND glucoseLevel IS NOT NULL)) ORDER BY measuredAt DESC, localId DESC LIMIT :limit""")
     fun metricWindow(patient: String, metric: String, limit: Int): Flow<List<VitalSignEntity>>
 
+    @Query("SELECT COUNT(*)>0 FROM vital_signs_local WHERE userId=:owner AND pendingSync=1 AND (hydrationMl IS NOT NULL OR hydrationUndoPending=1)")
+    fun observeHydrationPending(owner: String): Flow<Boolean>
+
     // Memória pessoal: intervalos no fuso do aparelho, sem carregar o histórico inteiro.
     @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND systolicPressure > 0 AND diastolicPressure > 0 AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis ORDER BY measuredAt DESC, localId DESC LIMIT 1")
     suspend fun getLatestPressureForMemory(userId: String, startInclusiveMillis: Long, endExclusiveMillis: Long): VitalSignEntity?

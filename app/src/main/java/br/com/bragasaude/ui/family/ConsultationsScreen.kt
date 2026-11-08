@@ -20,6 +20,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Locale
 import javax.inject.Inject
@@ -29,8 +31,11 @@ import javax.inject.Inject
 class ConsultationsViewModel @Inject constructor(
     private val repository: FamilyBridgeRepository,
     private val dao: FamilyDao,
+    private val profileDao: ProfileDao,
     private val auth: FirebaseAuth
 ) : ViewModel() {
+    private val refreshLock = Mutex()
+    private data class Query(val patient: String, val upcoming: Boolean, val limit: Int, val now: Long)
     private val target = MutableStateFlow("")
     private val focus = MutableStateFlow("")
     private val clock = MutableStateFlow(System.currentTimeMillis())
@@ -46,12 +51,13 @@ class ConsultationsViewModel @Inject constructor(
                 patient.takeIf { p -> bindings.any { it.patientUserId == p } } ?: ""
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val patientName = room.flatMapLatest { patient -> profileDao.getProfile(patient) }
+        .map { it?.fullName ?: "familiar" }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "familiar")
     val records = combine(room, upcoming, limit, clock) { patient, future, count, now ->
-        arrayOf(patient, future, count, now)
+        Query(patient, future, count, now)
     }.flatMapLatest { values ->
-        val patient = values[0] as String
-        if (patient.isBlank()) flowOf(emptyList()) else dao.getConsultationsWindow(patient,
-            values[3] as Long, values[1] as Boolean, (values[2] as Int) + 1)
+        if (values.patient.isBlank()) flowOf(emptyList()) else dao.getConsultationsWindow(values.patient,
+            values.now, values.upcoming, values.limit + 1)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val next = combine(auth.userIds(), clock) { owner, now -> owner to now }.flatMapLatest { (owner, now) ->
         dao.getActiveConsultationsForUser(owner, now).map { it.take(3) }
@@ -70,18 +76,17 @@ class ConsultationsViewModel @Inject constructor(
     fun visible(records: List<ConsultationEntity>) = records.take(limit.value)
     fun hasMore(records: List<ConsultationEntity>) = records.size > limit.value
     fun refresh() {
-        viewModelScope.launch {
-            if (refreshing.value) return@launch
+        viewModelScope.launch { refreshLock.withLock {
             refreshing.value = true
             try {
-                val patient = target.value.ifBlank { auth.currentUser?.uid ?: return@launch }
+                val patient = target.value.ifBlank { auth.currentUser?.uid ?: return@withLock }
                 repository.flushConsultations()
                 repository.syncConsultations(patient)
                 error.value = null
             } catch (e: kotlinx.coroutines.CancellationException) { throw e
             } catch (_: Exception) { error.value = "Não foi possível atualizar. Os registros salvos continuam disponíveis." }
             finally { refreshing.value = false }
-        }
+        } }
     }
 }
 
@@ -106,11 +111,12 @@ private fun ConsultationItem(c: ConsultationEntity) {
 @Composable
 fun PersonalConsultationsCard(onOpen: () -> Unit, viewModel: ConsultationsViewModel = hiltViewModel()) {
     val next by viewModel.next.collectAsState()
+    val error by viewModel.error.collectAsState()
     Card(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Consultas", style = MaterialTheme.typography.titleMedium)
             val first = next.firstOrNull()
-            if (first == null) Text("Nenhuma consulta agendada.") else {
+            if (first == null) Text(if (error == null) "Nenhuma consulta agendada." else "Agenda indisponível. Toque para atualizar.") else {
                 Text(first.title)
                 Text(SimpleDateFormat("dd/MM 'às' HH:mm", Locale.getDefault()).format(first.scheduledDate))
                 Text(consultationState(first), style = MaterialTheme.typography.labelMedium)
@@ -124,12 +130,13 @@ fun PersonalConsultationsCard(onOpen: () -> Unit, viewModel: ConsultationsViewMo
 fun ConsultationsScreen(patientId: String, consultationId: String, onBack: () -> Unit,
                         viewModel: ConsultationsViewModel = hiltViewModel()) {
     val records by viewModel.records.collectAsState()
+    val patientName by viewModel.patientName.collectAsState()
     val focused by viewModel.focused.collectAsState()
     val upcoming by viewModel.upcoming.collectAsState()
     val error by viewModel.error.collectAsState()
     val refreshing by viewModel.refreshing.collectAsState()
     LaunchedEffect(patientId, consultationId) { viewModel.select(patientId, consultationId) }
-    Scaffold(topBar = { EmeraldHeaderBanner(title = "Consultas", subtitle = if (patientId.isBlank()) "Minha agenda" else "Agenda do familiar", onBack = onBack) }) { padding ->
+    Scaffold(topBar = { EmeraldHeaderBanner(title = "Consultas", subtitle = if (patientId.isBlank()) "Minha agenda" else "Agenda de $patientName", onBack = onBack) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = upcoming, onClick = { viewModel.upcoming.value = true }, label = { Text("Próximas") })

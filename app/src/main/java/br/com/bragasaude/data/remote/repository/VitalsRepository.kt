@@ -49,6 +49,8 @@ class VitalsRepository @Inject constructor(
     /** Cache em memoria das ultimas notificaciones de crise por (caregiverUserId + alertType). */
     private val recentAlertLog = mutableMapOf<String, Long>()
 
+    fun hydrationPending(userId: String): Flow<Boolean> = vitalSignDao.observeHydrationPending(userId)
+
     fun getVitalSigns(userId: String): Flow<List<VitalSignEntity>> = vitalSignDao.getAll(userId)
 
     fun getBloodPressureRecords(userId: String): Flow<List<VitalSignEntity>> = vitalSignDao.getBloodPressureRecords(userId)
@@ -145,12 +147,10 @@ class VitalsRepository @Inject constructor(
                     vitalSignDao.acknowledgeSync(entity.copy(localId = localRowId), serverUuid)
                     confirmedByServer = true
                 } else {
-                    vitalSignDao.insert(entity.copy(localId = localRowId, pendingSync = true))
                     triggerSync()
                 }
             } catch (e: Exception) {
                 android.util.Log.e("VitalsRepository", "Erro na sincronização de sinal vital com servidor: ${e.message}")
-                vitalSignDao.insert(entity.copy(localId = localRowId, pendingSync = true))
                 triggerSync()
             }
             syncedResults += confirmedByServer

@@ -74,6 +74,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -294,14 +295,16 @@ fun CaregiverDashboardScreen(
 
                     val sdf = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()) }
 
-                    val now = remember { java.util.Date() }
-                    val cutoff7d = remember {
+                    val now by produceState(initialValue = java.util.Date(), dashboard.patientUserId) {
+                        while (true) { value = java.util.Date(); kotlinx.coroutines.delay(60_000) }
+                    }
+                    val cutoff7d = remember(now) {
                         java.util.Calendar.getInstance().apply {
                             time = now
                             add(java.util.Calendar.DAY_OF_YEAR, -7)
                         }.time
                     }
-                    val cutoff30d = remember {
+                    val cutoff30d = remember(now) {
                         java.util.Calendar.getInstance().apply {
                             time = now
                             add(java.util.Calendar.DAY_OF_YEAR, -30)

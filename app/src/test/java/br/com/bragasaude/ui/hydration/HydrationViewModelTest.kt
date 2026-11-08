@@ -30,6 +30,7 @@ class HydrationViewModelTest {
         every { auth.currentUser } returns null
         every { profiles.getProfile(any()) } returns flowOf(null)
         every { vitals.getVitalSigns(any()) } returns flowOf(emptyList())
+        every { vitals.hydrationPending(any()) } returns flowOf(false)
         val finishSaving = CompletableDeferred<Unit>()
         // DT-052: saveVitalSigns agora devolve o desfecho por medição (List<Boolean>).
         coEvery { vitals.saveVitalSigns(any()) } coAnswers { finishSaving.await(); listOf(false) }
@@ -66,6 +67,7 @@ class HydrationViewModelTest {
         every { auth.currentUser } returns null
         every { profiles.getProfile(any()) } returns flowOf(null)
         every { vitals.getVitalSigns(any()) } returns flowOf(emptyList())
+        every { vitals.hydrationPending(any()) } returns flowOf(false)
         coEvery { engine.removeLastHydration(any()) } just Runs
         val vm = HydrationViewModel(vitals, profiles, syncManager, engine, auth, context)
         try {

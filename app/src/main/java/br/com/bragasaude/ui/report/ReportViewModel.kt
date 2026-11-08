@@ -84,7 +84,7 @@ class ReportViewModel @Inject constructor(
                 val file = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     pdfGenerator.generateReport(profile, allVitals, dailyMetrics, wearableReadings)
                 }
-                if ((auth.currentUser?.uid ?: BragaConstants.GUEST_UID) == userId) _pdfFile.emit(file) else file.delete()
+                if ((auth.currentUser?.uid ?: BragaConstants.GUEST_UID) == userId) _pdfFile.emit(file) else file?.delete()
             } catch (e: Exception) {
                 e.printStackTrace()
                 _pdfErrorMessage.emit("Erro ao gerar PDF: ${e.localizedMessage}")
