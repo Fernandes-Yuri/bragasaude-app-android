@@ -134,7 +134,7 @@ class RtlCardsInterfaceTest {
                 BragasaudeTheme {
                     Box(Modifier.width(320.dp).padding(32.dp)) {
                         ConsultationSummaryItem(ConsultationEntity("c", "patient", "self", "Ana", "Filha",
-                            "Cardiologia", scheduledDate = Date(1_900_000_000_000)), status.value, { cancelled = true })
+                            "Cardiologia", scheduledDate = Date(1_900_000_000_000), status = "ACCEPTED"), status.value, { cancelled = true })
                     }
                 }
             }
