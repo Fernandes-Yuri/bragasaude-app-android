@@ -645,6 +645,18 @@ object Migrations {
         }
     }
 
+    val MIGRATION_66_67 = object : Migration(66, 67) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE vital_signs_local ADD COLUMN hydrationUndoPending INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE vital_signs_local ADD COLUMN deletedAt INTEGER")
+            db.execSQL("ALTER TABLE consultations_local ADD COLUMN pendingAction TEXT")
+            db.execSQL("ALTER TABLE consultations_local ADD COLUMN remoteConfirmed INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE consultations_local ADD COLUMN createdBy TEXT")
+            db.execSQL("CREATE TABLE clinical_sync_cursors (ownerId TEXT NOT NULL, patientId TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(ownerId,patientId))")
+            db.execSQL("CREATE TABLE family_read_receipts (ownerId TEXT NOT NULL, patientId TEXT NOT NULL, messageId TEXT NOT NULL, expiresAt INTEGER NOT NULL, PRIMARY KEY(ownerId,patientId,messageId))")
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -686,6 +698,7 @@ object Migrations {
         MIGRATION_62_63,
         MIGRATION_63_64,
         MIGRATION_64_65,
-        MIGRATION_65_66
+        MIGRATION_65_66,
+        MIGRATION_66_67
     )
 }

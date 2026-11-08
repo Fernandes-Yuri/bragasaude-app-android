@@ -129,7 +129,7 @@ class VitalsRepository @Inject constructor(
         val syncedResults = mutableListOf<Boolean>()
         vitals.forEach { vital ->
             val remoteWithId = if (vital.id == null) vital.copy(id = UUID.randomUUID().toString()) else vital
-            val entity = remoteWithId.toEntity().copy(pendingSync = false)
+            val entity = remoteWithId.toEntity().copy(pendingSync = vital.userId != guestId)
             
             val localRowId = vitalSignDao.insert(entity)
             
@@ -142,7 +142,7 @@ class VitalsRepository @Inject constructor(
             try {
                 val serverUuid = apiClient.syncVitalSign(entity)
                 if (serverUuid != null) {
-                    vitalSignDao.insert(entity.copy(localId = localRowId, remoteId = serverUuid, pendingSync = false))
+                    vitalSignDao.acknowledgeSync(entity.copy(localId = localRowId), serverUuid)
                     confirmedByServer = true
                 } else {
                     vitalSignDao.insert(entity.copy(localId = localRowId, pendingSync = true))
@@ -165,11 +165,14 @@ class VitalsRepository @Inject constructor(
 
     suspend fun deleteLastHydration(userId: String, day: LocalDate = LocalDate.now()) {
         val zone = ZoneId.systemDefault()
-        vitalSignDao.deleteLastHydration(
-            userId,
+        val undone = vitalSignDao.undoHydration(userId,
             day.atStartOfDay(zone).toInstant().toEpochMilli(),
-            day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        )
+            day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(), userId != guestId) ?: return
+        if (userId != guestId) {
+            triggerSync()
+            val id = undone.remoteId!!
+            if (apiClient.undoHydration(id)) vitalSignDao.acknowledgeSync(undone, id)
+        }
     }
 
     suspend fun deduplicateVitals() {

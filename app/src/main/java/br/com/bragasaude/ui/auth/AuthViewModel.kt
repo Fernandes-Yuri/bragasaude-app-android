@@ -768,7 +768,7 @@ class AuthViewModel @Inject constructor(
 
     suspend fun signOut() {
         br.com.bragasaude.ai.BragaRoutingLogger.clear()
-        movementManager.flush()
+        movementManager.flushAndAwait()
         val userId = auth.currentUser?.uid
         val hasPendingData = withContext(Dispatchers.IO) {
             if (userId != null) {
@@ -784,10 +784,22 @@ class AuthViewModel @Inject constructor(
             }
             database.vitalSignDao().getPendingSync().any { it.userId == userId } ||
                 database.dailyMetricsDao().getPendingSync().any { it.userId == userId } ||
-                database.biometryDao().getPendingSync().any { it.userId == userId }
+                database.biometryDao().getPendingSync().any { it.userId == userId } ||
+                database.profileDao().getPendingSync().any { it.userId == userId } ||
+                database.medicationDao().getPendingSync().any { it.userId == userId } ||
+                database.medicationLogDao().getPendingSync().any { it.userId == userId } ||
+                database.familyDao().getPendingSyncMessages().any { it.senderUserId == userId } ||
+                database.familyDao().getPendingDeletionMessages().any { it.senderUserId == userId } ||
+                database.familyDao().getPendingSyncBindings().any { it.patientUserId == userId || it.caregiverUserId == userId } ||
+                database.familyDao().getPendingConsultations().any { it.createdBy == userId || it.userId == userId } ||
+                database.symptomsDiaryDao().getPendingSync().any { it.reportedBy == userId } ||
+                database.bleTelemetryReceiptDao().getPendingSync().any { it.patientId == userId } ||
+                (userId != null && database.medicationDoseDao().pending(userId).isNotEmpty()) ||
+                database.feedbackDao().getPendingSync().any { it.userId == userId } ||
+                database.socialFeedDao().getPendingPosts().any { it.userId == userId }
         }
         if (hasPendingData) {
-            _sessionNotice.value = "Há medições salvas neste aparelho aguardando envio. Conecte-se à internet e tente sair novamente para preservar seus dados."
+            _sessionNotice.value = "Há registros neste aparelho aguardando envio. Conecte-se à internet e tente sair novamente para preservar seus dados."
             return
         }
         restoreJob?.cancelAndJoin()
@@ -893,7 +905,7 @@ class AuthViewModel @Inject constructor(
             if (v.userId != userId) continue
             val serverId = apiClient.syncVitalSign(v)
             if (serverId != null) {
-                database.vitalSignDao().insert(v.copy(remoteId = serverId, pendingSync = false))
+                database.vitalSignDao().acknowledgeSync(v, serverId)
             }
         }
         for (b in database.biometryDao().getPendingSync()) {
@@ -908,7 +920,7 @@ class AuthViewModel @Inject constructor(
             if (m.userId != userId) continue
             val serverId = apiClient.syncDailyMetric(m)
             if (serverId != null) {
-                database.dailyMetricsDao().insert(m.copy(pendingSync = false))
+                database.dailyMetricsDao().acknowledgeSync(m)
             }
         }
     }

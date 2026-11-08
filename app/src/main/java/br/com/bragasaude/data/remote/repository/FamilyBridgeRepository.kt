@@ -32,6 +32,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.Date
 import java.util.UUID
 import javax.inject.Inject
@@ -62,6 +64,66 @@ class FamilyBridgeRepository @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val e2eeManager: FamilyE2eeManager
 ) {
+    private val clinicalSyncLock = Mutex()
+
+    suspend fun syncVitalChanges(patientId: String) = clinicalSyncLock.withLock {
+        val owner = auth.currentUser?.uid ?: error("Sessão encerrada")
+        var cursor = vitalSignDao.getCursor(owner, patientId) ?: 0L
+        do {
+            val page = apiClient.getVitalChanges(patientId, cursor) ?: throw java.io.IOException("Histórico clínico indisponível")
+            check(auth.currentUser?.uid == owner) { "Sessão alterada" }
+            vitalSignDao.cachePage(owner, patientId, page.records, page.nextCursor)
+            cursor = page.nextCursor
+        } while (page.hasMore)
+    }
+
+    private fun reconcileReminder(c: ConsultationEntity) {
+        val owner = auth.currentUser?.uid ?: return
+        if (c.status in setOf("SUGGESTED", "ACCEPTED") && c.scheduledDate.time > System.currentTimeMillis() &&
+            (c.remoteConfirmed || c.pendingSync)) {
+            NotificationHelper.scheduleConsultationReminders(appContext, c.id, c.title, c.scheduledDate.time, owner, c.userId)
+        } else NotificationHelper.cancelConsultationReminders(appContext, c.id, owner)
+    }
+
+    suspend fun syncConsultations(patientId: String) {
+        val owner = auth.currentUser?.uid ?: error("Sessão encerrada")
+        val records = apiClient.getConsultations(patientId) ?: throw java.io.IOException("Agenda indisponível")
+        check(auth.currentUser?.uid == owner)
+        for (record in records) {
+            familyDao.cacheConsultation(record)
+            familyDao.getConsultationById(record.id)?.let { reconcileReminder(it) }
+        }
+    }
+
+    suspend fun flushConsultations() {
+        val owner = auth.currentUser?.uid ?: return
+        for (c in familyDao.getPendingConsultations()) {
+            if (auth.currentUser?.uid != owner) throw kotlinx.coroutines.CancellationException("Sessão alterada")
+            if (c.createdBy != owner && c.userId != owner && !c.remoteConfirmed) continue
+            var remote = if (!c.remoteConfirmed) apiClient.createConsultationRecord(c)
+                ?: throw java.io.IOException("Consulta aguardando envio") else c
+            if (c.pendingAction != null && c.pendingAction != "CREATE") {
+                remote = apiClient.changeConsultation(c.id, c.pendingAction)
+                    ?: throw java.io.IOException("Alteração de consulta pendente")
+            }
+            check(auth.currentUser?.uid == owner)
+            familyDao.acknowledgeConsultation(c, remote)
+            familyDao.getConsultationById(c.id)?.let { reconcileReminder(it) }
+        }
+    }
+
+    suspend fun flushReadReceipts() {
+        val owner = auth.currentUser?.uid ?: return
+        for ((patient, receipts) in familyDao.pendingReceipts(owner).groupBy { it.patientId }) {
+            requireConversationAccess(patient)
+            for (batch in receipts.chunked(100)) {
+                if (!apiClient.markFamilyMessagesRead(patient, batch.map { it.messageId })) throw java.io.IOException("Recibo pendente")
+                check(auth.currentUser?.uid == owner)
+                batch.forEach { familyDao.acknowledgeReceipt(owner, it.messageId) }
+            }
+        }
+    }
+
     /**
      * Construtor reservado exclusivamente a testes unitários JVM: nesse contexto
      * o Hilt não está ativo e o E2EE usa [InMemoryE2eeKeyStoreProvider]. Em
@@ -498,6 +560,7 @@ class FamilyBridgeRepository @Inject constructor(
         }
         // D47: higiene local a cada ciclo de sincronização
         familyDao.purgeExpiredMessages(now)
+                familyDao.purgeReceipts(now)
         messagesFingerprint(remote)
     }.onFailure {
         // Sair da tela ou trocar de conta deve interromper a consulta, sem alerta.
@@ -607,32 +670,9 @@ class FamilyBridgeRepository @Inject constructor(
         try {
             // DT-052: getVitalSigns devolve null em falha de rede — pular o
             // download de vitais sem interromper o sync do restante do paciente.
-            val vitals = apiClient.getVitalSigns(patientUserId)
-            if (vitals == null) {
-                throw java.io.IOException("Não foi possível baixar os sinais vitais do familiar")
-            } else {
-                ensureSession()
-                vitals.forEach { v ->
-                    val measuredDate = v.measuredAt?.let { parseDate(it) } ?: Date()
-                    vitalSignDao.insert(
-                        VitalSignEntity(
-                            remoteId = v.id,
-                            userId = patientUserId,
-                            systolicPressure = v.systolicPressure,
-                            diastolicPressure = v.diastolicPressure,
-                            heartRate = v.heartRate,
-                            oxygenSaturation = v.oxygenSaturation,
-                            glucoseLevel = v.glucoseLevel,
-                            glucoseType = v.glucoseType,
-                            hydrationMl = v.hydrationMl,
-                            measuredAt = measuredDate,
-                            status = "recorded",
-                            pendingSync = false
-                        )
-                    )
-                }
-                vitalSignDao.deduplicateVitals()
-            }
+            syncVitalChanges(patientUserId)
+            syncConsultations(patientUserId)
+
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -647,7 +687,7 @@ class FamilyBridgeRepository @Inject constructor(
             ensureSession()
             metrics.forEach { metric ->
                 val local = dailyMetricsDao.getByDate(patientUserId, metric.date)
-                if (local?.pendingSync != true) dailyMetricsDao.insert(metric.copy(pendingSync = false))
+                dailyMetricsDao.cacheRemote(metric)
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -689,10 +729,9 @@ class FamilyBridgeRepository @Inject constructor(
                 !it.isRead && !it.awaitingDecryption && !it.pendingSync && it.deletedAt == null &&
                 it.expiresAt > System.currentTimeMillis() }
         if (eligible.isEmpty()) return
-        if (apiClient.markFamilyMessagesRead(patientUserId, eligible.map { it.remoteId ?: it.id })) {
-            check(requireConversationAccess(patientUserId) == userId) { "Sua conta mudou." }
-            eligible.forEach { familyDao.markMessageAsRead(it.id) }
-        }
+        familyDao.markSeen(userId, eligible)
+        syncScheduler.scheduleSync()
+        flushReadReceipts()
     }
 
     // Ação explícita “marcar todas”: limita-se às cópias locais legíveis.
@@ -746,6 +785,7 @@ class FamilyBridgeRepository @Inject constructor(
             val now = System.currentTimeMillis()
             if (now / 30_000 != lastPurge / 30_000) {
                 familyDao.purgeExpiredMessages(now)
+                familyDao.purgeReceipts(now)
                 lastPurge = now
             }
             emit(now)
@@ -806,76 +846,39 @@ class FamilyBridgeRepository @Inject constructor(
         caregiverName: String?,
         caregiverRelation: String?
     ): ConsultationEntity? {
-        val consultation = ConsultationEntity(
-            id = UUID.randomUUID().toString(),
-            userId = userId,
-            caregiverUserId = caregiverUserId,
-            caregiverName = caregiverName,
-            caregiverRelation = caregiverRelation,
-            title = title,
-            scheduledDate = java.util.Date(scheduledDate),
-            status = "SUGGESTED",
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis()
-        )
+        val owner = auth.currentUser?.uid ?: error("Sessão encerrada")
+        require(title.isNotBlank() && scheduledDate > System.currentTimeMillis())
+        val consultation = ConsultationEntity(id = UUID.randomUUID().toString(), userId = userId,
+            caregiverUserId = caregiverUserId, caregiverName = caregiverName, caregiverRelation = caregiverRelation,
+            title = title.trim(), scheduledDate = Date(scheduledDate),
+            status = if (owner == userId) "SUGGESTED" else "ACCEPTED",
+            pendingSync = true, pendingAction = "CREATE", createdBy = owner)
         familyDao.insertConsultation(consultation)
-        // Lembretes 24h e 1h antes (doc 10 §2.4).
-        NotificationHelper.scheduleConsultationReminders(appContext, consultation.id, title, scheduledDate)
-        // Registra no gateway: é de lá que sai o push para os cuidadores (doc 10 §2.2).
-        try {
-            val iso = java.time.Instant.ofEpochMilli(scheduledDate).toString()
-            apiClient.createConsultation(title, iso)
-        } catch (e: Exception) {
-            android.util.Log.w("FamilyBridgeRepo", "Consulta local criada, mas falhou o registro no gateway: ${e.message}")
-        }
-        return consultation
+        reconcileReminder(consultation)
+        syncScheduler.scheduleSync()
+        try { flushConsultations() } catch (e: kotlinx.coroutines.CancellationException) { throw e
+        } catch (_: Exception) { /* Comando já persistido para retry. */ }
+        return familyDao.getConsultationById(consultation.id) ?: consultation
     }
 
-    suspend fun acceptConsultation(consultationId: String, caregiverUserId: String): Boolean {
-        familyDao.updateConsultationStatus(consultationId, "ACCEPTED", System.currentTimeMillis())
-        // Aceitar no gateway dispara o push ao paciente (doc 10 §2.2). Best-effort:
-        // a ação local já foi registrada; falha de rede não desfaz o aceite.
-        try {
-            apiClient.acceptConsultation(consultationId, null, null)
-        } catch (e: Exception) {
-            android.util.Log.w("FamilyBridgeRepo", "Aceite local ok, mas falhou no gateway: ${e.message}")
-        }
+    private suspend fun queueConsultationStatus(id: String, status: String): Boolean {
+        val current = familyDao.getConsultationById(id) ?: return false
+        requireConversationAccess(current.userId)
+        val queued = current.copy(status = status, updatedAt = System.currentTimeMillis(),
+            pendingSync = current.remoteConfirmed || current.pendingSync,
+            pendingAction = if (current.remoteConfirmed || current.pendingSync) status else null)
+        familyDao.insertConsultation(queued)
+        reconcileReminder(queued)
+        syncScheduler.scheduleSync()
+        try { flushConsultations() } catch (e: kotlinx.coroutines.CancellationException) { throw e
+        } catch (_: Exception) { }
         return true
     }
 
-    suspend fun rejectConsultation(consultationId: String, userId: String): Boolean {
-        familyDao.updateConsultationStatus(consultationId, "REJECTED", System.currentTimeMillis())
-        // Consulta recusada não deve mais lembrar (doc 10 §2.4).
-        NotificationHelper.cancelConsultationReminders(appContext, consultationId)
-        try {
-            apiClient.rejectConsultation(consultationId)
-        } catch (e: Exception) {
-            android.util.Log.w("FamilyBridgeRepo", "Recusa local ok, mas falhou no gateway: ${e.message}")
-        }
-        return true
-    }
-
-    suspend fun completeConsultation(consultationId: String, userId: String): Boolean {
-        familyDao.updateConsultationStatus(consultationId, "COMPLETED", System.currentTimeMillis())
-        NotificationHelper.cancelConsultationReminders(appContext, consultationId)
-        try {
-            apiClient.completeConsultation(consultationId)
-        } catch (e: Exception) {
-            android.util.Log.w("FamilyBridgeRepo", "Conclusão local ok, mas falhou no gateway: ${e.message}")
-        }
-        return true
-    }
-
-    suspend fun cancelConsultation(consultationId: String, userId: String): Boolean {
-        familyDao.updateConsultationStatus(consultationId, "CANCELLED", System.currentTimeMillis())
-        NotificationHelper.cancelConsultationReminders(appContext, consultationId)
-        try {
-            apiClient.cancelConsultation(consultationId)
-        } catch (e: Exception) {
-            android.util.Log.w("FamilyBridgeRepo", "Cancelamento local ok, mas falhou no gateway: ${e.message}")
-        }
-        return true
-    }
+    suspend fun acceptConsultation(consultationId: String, caregiverUserId: String): Boolean = queueConsultationStatus(consultationId, "ACCEPTED")
+    suspend fun rejectConsultation(consultationId: String, userId: String): Boolean = queueConsultationStatus(consultationId, "REJECTED")
+    suspend fun completeConsultation(consultationId: String, userId: String): Boolean = queueConsultationStatus(consultationId, "COMPLETED")
+    suspend fun cancelConsultation(consultationId: String, userId: String): Boolean = queueConsultationStatus(consultationId, "CANCELLED")
 
     fun getConsultationsForUser(userId: String): Flow<List<ConsultationEntity>> {
         return familyDao.getConsultationsForUser(userId)

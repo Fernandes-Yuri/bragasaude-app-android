@@ -233,7 +233,7 @@ class FamilyViewModel @Inject constructor(
 
             val groupMessages = messages.filter { it.patientUserId == patientId }
             val lastMessage = groupMessages.firstOrNull()
-            val unreadCount = groupMessages.count { !it.isRead && it.senderUserId != userId }
+            val unreadCount = groupMessages.count { !it.isRead && !it.awaitingDecryption && it.messageText.isNotBlank() && it.senderUserId != userId }
 
             val letter = title.firstOrNull { it.isLetter() }?.uppercase() ?: "F"
 
