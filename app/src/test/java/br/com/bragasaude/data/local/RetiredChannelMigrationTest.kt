@@ -68,6 +68,7 @@ class RetiredChannelMigrationTest {
                     }
                 }
             }
+            restorePublishedClinicalFixture(db)
             db.version = 58
         }
         val db = open()

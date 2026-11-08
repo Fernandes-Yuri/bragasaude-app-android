@@ -32,6 +32,7 @@ class ConsultationWorkManagerTest {
         every { NotificationHelper.cancelConsultationReminders(any(), any(), any()) } just Runs
         every { NotificationHelper.sendConsultationReminderNotification(any(), any(), any(), any(), any(), any(), any()) } just Runs
         every { auth.currentUser?.uid } returns "caregiver"
+        coEvery { profile.getProfileOneShot("caregiver") } returns ProfileEntity(userId = "caregiver", notificationsEnabled = true)
         coEvery { dao.insertConsultation(any()) } coAnswers { saved = firstArg() }
         coEvery { dao.getConsultationById(any()) } coAnswers { saved }
         coEvery { dao.getPendingConsultations() } coAnswers { listOfNotNull(saved).filter { it.pendingSync } }

@@ -564,11 +564,12 @@ class FamilyBridgeRepositoryTest {
         coEvery { familyDao.getMessageById("locked") } returns msg("locked", locked = true)
         coEvery { familyDao.getMessageById("own") } returns msg("own", sender = "patient")
         coEvery { apiClient.markFamilyMessagesRead("patient", listOf("visible")) } returns true
+        coEvery { familyDao.pendingReceipts("patient", any()) } returns listOf(
+            br.com.bragasaude.data.local.FamilyReadReceipt("patient", "patient", "visible", System.currentTimeMillis()+86400000))
         repository.markVisibleMessagesAsRead("patient", listOf("visible", "locked", "own"))
         coVerify(exactly=1) { apiClient.markFamilyMessagesRead("patient", listOf("visible")) }
-        coVerify(exactly=1) { familyDao.markMessageAsRead("visible") }
-        coVerify(exactly=0) { familyDao.markMessageAsRead("locked") }
-        coVerify(exactly=0) { familyDao.markMessageAsRead("own") }
+        coVerify(exactly=1) { familyDao.markSeen("patient", match { it.map { m -> m.id } == listOf("visible") }) }
+        coVerify(exactly=1) { familyDao.acknowledgeReceipt("patient", "visible") }
         coVerify(exactly=0) { familyDao.markAllMessagesAsRead(any()) }
     }
 
