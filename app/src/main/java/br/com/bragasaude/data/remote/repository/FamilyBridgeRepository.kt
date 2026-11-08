@@ -261,6 +261,7 @@ class FamilyBridgeRepository @Inject constructor(
     ): FamilyBindingEntity {
         require(auth.currentUser?.uid == caregiverUserId) { "Entre na sua conta para conectar o familiar." }
         val accepted = apiClient.acceptFamilyInvitation(code, caregiverName, caregiverRelation)
+        purgedPatientIds.remove(accepted.patientUserId)
         runCatching {
             val caregiverPubKey = e2eeManager.getOrCreatePublicKeyBase64(caregiverUserId)
             if (caregiverPubKey.isNotBlank()) {
@@ -273,6 +274,10 @@ class FamilyBridgeRepository @Inject constructor(
         }
         familyDao.deletePendingBindingsByCode(accepted.connectionCode)
         familyDao.insertBinding(accepted)
+        if (accepted.status == "ACTIVE" && accepted.patientUserId.isNotBlank()) {
+            runCatching { syncConsultations(accepted.patientUserId) }
+            runCatching { syncPatientProfileIfMissing(accepted.patientUserId) }
+        }
         return accepted
     }
 
@@ -332,6 +337,7 @@ class FamilyBridgeRepository @Inject constructor(
         if (patientUserId.isBlank() || patientUserId == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
         try {
             val list = apiClient.getFamilyBindings(patientUserId)
+            val activePatientIds = list.filter { it.status == "ACTIVE" }.map { it.patientUserId }.toSet()
             list.forEach { item ->
                 if (item.status == "ACTIVE") {
                     // Vínculo reativado: libera a guarda para que uma futura revogação purge de novo.
@@ -340,11 +346,12 @@ class FamilyBridgeRepository @Inject constructor(
                 }
                 // Estado local é capturado ANTES do insert: a purga LGPD só pode
                 // disparar na transição ACTIVE -> não-ACTIVE, nunca em PENDING/
-                // EXPIRED/REVOKED já vistos em ciclos anteriores.
+                // EXPIRED/REVOKED já vistos em ciclos anteriores, e nunca quando há
+                // outro vínculo ACTIVE para o mesmo paciente após refazer o vínculo.
                 val local = familyDao.getBindingById(item.id)
                 val wasActive = local?.status == "ACTIVE"
                 if (local?.pendingSync != true) familyDao.insertBinding(item)
-                if (wasActive && item.status != "ACTIVE" &&
+                if (wasActive && item.status != "ACTIVE" && item.patientUserId !in activePatientIds &&
                     item.caregiverUserId == auth.currentUser?.uid && item.patientUserId != auth.currentUser?.uid) {
                     purgePatientDataFromCache(item.patientUserId)
                 }
@@ -361,20 +368,31 @@ class FamilyBridgeRepository @Inject constructor(
         if (caregiverUserId.isBlank() || caregiverUserId == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
         try {
             val list = apiClient.getFamilyBindings(caregiverUserId)
+            val activePatientIds = list.filter { it.status == "ACTIVE" }.map { it.patientUserId }.toSet()
+            val newlyActivatedPatients = linkedSetOf<String>()
             list.forEach { item ->
                 if (item.status == "ACTIVE") {
                     // Vínculo reativado: libera a guarda para que uma futura revogação purge de novo.
                     purgedPatientIds.remove(item.patientUserId)
                 }
                 // Estado local é capturado ANTES do insert: purga apenas na transição
-                // ACTIVE -> não-ACTIVE (evita DELETEs repetidos a cada ciclo de sync).
+                // ACTIVE -> não-ACTIVE (evita DELETEs repetidos a cada ciclo de sync) e
+                // somente se não houver outro vínculo ACTIVE vigente para o mesmo paciente.
                 val local = familyDao.getBindingById(item.id)
                 val wasActive = local?.status == "ACTIVE"
                 if (local?.pendingSync != true) familyDao.insertBinding(item)
-                if (wasActive && item.status != "ACTIVE" &&
+                if (!wasActive && item.status == "ACTIVE" &&
+                    item.caregiverUserId == auth.currentUser?.uid && item.patientUserId != auth.currentUser?.uid) {
+                    newlyActivatedPatients.add(item.patientUserId)
+                }
+                if (wasActive && item.status != "ACTIVE" && item.patientUserId !in activePatientIds &&
                     item.caregiverUserId == auth.currentUser?.uid && item.patientUserId != auth.currentUser?.uid) {
                     purgePatientDataFromCache(item.patientUserId)
                 }
+            }
+            for (patientId in newlyActivatedPatients) {
+                runCatching { syncConsultations(patientId) }
+                runCatching { syncPatientProfileIfMissing(patientId) }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -382,6 +400,35 @@ class FamilyBridgeRepository @Inject constructor(
             if (strict) throw e
             android.util.Log.e("FamilyBridgeRepo", "Falha ao baixar vínculos do cuidador: ${e.message}")
         }
+    }
+
+    suspend fun syncPatientProfileIfMissing(patientUserId: String) {
+        if (patientUserId.isBlank() || patientUserId == br.com.bragasaude.util.BragaConstants.GUEST_UID) return
+        val sessionOwner = auth.currentUser?.uid ?: return
+        val existing = profileDao.getProfileOneShot(patientUserId)
+        if (!existing?.fullName.isNullOrBlank()) return
+        val p = apiClient.getProfile(patientUserId) ?: return
+        if (auth.currentUser?.uid != sessionOwner) return
+        val updated = existing?.copy(
+            fullName = p.fullName,
+            hasDiabetes = p.hasDiabetes ?: existing.hasDiabetes,
+            hasHypertension = p.hasHypertension ?: existing.hasHypertension,
+            hydrationTargetMl = p.hydrationTargetMl,
+            stepGoal = p.stepGoal ?: existing.stepGoal,
+            weight = p.weight ?: existing.weight,
+            height = p.height ?: existing.height
+        ) ?: ProfileEntity(
+            userId = p.id,
+            fullName = p.fullName,
+            hasDiabetes = p.hasDiabetes ?: false,
+            hasHypertension = p.hasHypertension ?: false,
+            hydrationTargetMl = p.hydrationTargetMl,
+            stepGoal = p.stepGoal,
+            weight = p.weight,
+            height = p.height,
+            userRole = "PATIENT"
+        )
+        profileDao.insert(updated)
     }
 
     private suspend fun requireConversationAccess(patientUserId: String): String {

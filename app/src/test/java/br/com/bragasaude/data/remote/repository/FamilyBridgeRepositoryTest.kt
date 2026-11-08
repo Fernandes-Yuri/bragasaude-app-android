@@ -663,4 +663,56 @@ class FamilyBridgeRepositoryTest {
         coVerify(exactly=0) { apiClient.publishFamilyE2eePublicKey(any(),any(),any()) }
     }
 
+    @Test
+    fun `findAndAcceptBinding triggers immediate consultation and profile sync for accepted patient`() = runBlocking {
+        val confirmed = pendingBinding().copy(
+            status = "ACTIVE",
+            patientUserId = "patient-fred",
+            caregiverUserId = "caregiver-1",
+            caregiverName = "Mariana",
+            caregiverRelation = "Filha",
+            pendingSync = false
+        )
+        coEvery { apiClient.acceptFamilyInvitation("A1B2C3D4", "Mariana", "Filha") } returns confirmed
+        coEvery { apiClient.getConsultations("patient-fred") } returns emptyList()
+        coEvery { profileDao.getProfileSync("patient-fred") } returns null
+        coEvery { apiClient.getProfile("patient-fred") } returns br.com.bragasaude.data.local.ProfileEntity(
+            userId = "patient-fred",
+            fullName = "José Fred"
+        )
+
+        val result = repository.findAndAcceptBinding("A1B2C3D4", "caregiver-1", "Mariana", "Filha")
+
+        assertEquals("patient-fred", result.patientUserId)
+        coVerify(atLeast = 1) { apiClient.getConsultations("patient-fred") }
+        coVerify(atLeast = 1) { profileDao.insertProfile(match { it.userId == "patient-fred" && it.fullName == "José Fred" }) }
+    }
+
+    @Test
+    fun `syncBindingsForCaregiver does not purge patient consultations when active and historical revoked bindings coexist`() = runBlocking {
+        val oldRevoked = pendingBinding().copy(
+            id = "binding-old-revoked",
+            remoteId = "binding-old-revoked",
+            patientUserId = "patient-fred",
+            caregiverUserId = "caregiver-1",
+            status = "REVOKED"
+        )
+        val newActive = pendingBinding().copy(
+            id = "binding-new-active",
+            remoteId = "binding-new-active",
+            patientUserId = "patient-fred",
+            caregiverUserId = "caregiver-1",
+            status = "ACTIVE"
+        )
+        coEvery { apiClient.getFamilyBindings("caregiver-1") } returns listOf(oldRevoked, newActive)
+        coEvery { apiClient.getConsultations("patient-fred") } returns emptyList()
+
+        repository.syncBindingsForCaregiver("caregiver-1")
+
+        // O vínculo histórico REVOKED não deve apagar os dados do paciente que possui vínculo ACTIVE vigente
+        coVerify(exactly = 0) { familyDao.deleteAllConsultationsForUser("patient-fred") }
+        coVerify(exactly = 0) { vitalSignDao.deleteByUserId("patient-fred") }
+        coVerify(atLeast = 1) { apiClient.getConsultations("patient-fred") }
+    }
+
 }

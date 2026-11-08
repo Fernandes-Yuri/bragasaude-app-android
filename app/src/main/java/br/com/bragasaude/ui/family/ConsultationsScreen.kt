@@ -1,14 +1,21 @@
 package br.com.bragasaude.ui.family
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.repository.FamilyBridgeRepository
@@ -23,8 +30,42 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
+
+private const val RESUME_SYNC_COOLDOWN_MS = 15_000L
+
+data class HomeConsultationItem(
+    val consultation: ConsultationEntity,
+    val isPersonal: Boolean,
+    val holderUserId: String,
+    val holderLabel: String,
+    val navigationPatientId: String
+) {
+    val headerLine: String
+        get() = "$holderLabel · ${consultation.title}"
+}
+
+data class HomeConsultationsSummaryState(
+    val items: List<HomeConsultationItem> = emptyList(),
+    val loading: Boolean = true,
+    val error: String? = null,
+    val watchedPatientIds: List<String> = emptyList()
+)
+
+internal fun resolveWatchedPatientLabel(
+    profile: ProfileEntity?,
+    binding: FamilyBindingEntity?,
+    defaultLabel: String = "Familiar"
+): String = profile?.fullName?.takeIf { it.isNotBlank() }
+    ?: binding?.patientName?.takeIf { it.isNotBlank() }
+    ?: defaultLabel
+
+internal fun formatHomeConsultationDate(date: Date): String {
+    val sdf = SimpleDateFormat("dd/MM 'às' HH'h'mm", Locale("pt", "BR"))
+    return sdf.format(date)
+}
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -39,6 +80,9 @@ class ConsultationsViewModel @Inject constructor(
     private val target = MutableStateFlow("")
     private val focus = MutableStateFlow("")
     private val clock = MutableStateFlow(System.currentTimeMillis())
+    private val initialHomeLoaded = MutableStateFlow(false)
+    private var lastResumeSyncAtMs = 0L
+    private var lastSyncedPatients: Set<String> = emptySet()
     val upcoming = MutableStateFlow(true)
     private val limit = MutableStateFlow(20)
     val error = MutableStateFlow<String?>(null)
@@ -51,8 +95,17 @@ class ConsultationsViewModel @Inject constructor(
                 patient.takeIf { p -> bindings.any { it.patientUserId == p } } ?: ""
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
-    val patientName = room.flatMapLatest { patient -> profileDao.getProfile(patient) }
-        .map { it?.fullName ?: "familiar" }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "familiar")
+    val patientName = combine(auth.userIds(), room) { owner, patient -> owner to patient }
+        .flatMapLatest { (owner, patient) ->
+            if (patient.isBlank() || owner == BragaConstants.GUEST_UID) flowOf("familiar")
+            else combine(
+                profileDao.getProfile(patient).onStart { emit(null) },
+                dao.getActiveBindingsForCaregiver(owner).onStart { emit(emptyList()) }
+            ) { profile, bindings ->
+                val binding = bindings.firstOrNull { it.patientUserId == patient }
+                resolveWatchedPatientLabel(profile, binding, defaultLabel = "familiar")
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "familiar")
     val records = combine(room, upcoming, limit, clock) { patient, future, count, now ->
         Query(patient, future, count, now)
     }.flatMapLatest { values ->
@@ -67,9 +120,124 @@ class ConsultationsViewModel @Inject constructor(
         else dao.observeConsultation(id).map { it?.takeIf { c -> c.userId == patient } }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    private val homeItemsFlow = combine(auth.userIds(), clock) { owner, now -> owner to now }
+        .flatMapLatest { (owner, now) ->
+            if (owner == BragaConstants.GUEST_UID) {
+                flowOf(emptyList<HomeConsultationItem>() to emptyList<String>())
+            } else {
+                dao.getActiveBindingsForCaregiver(owner).onStart { emit(emptyList()) }
+                    .flatMapLatest { bindings ->
+                        val activeBindings = bindings
+                            .filter { it.status == "ACTIVE" && it.patientUserId.isNotBlank() && it.patientUserId != owner }
+                            .distinctBy { it.patientUserId }
+                        val personalFlow = dao.getActiveConsultationsForUser(owner, now)
+                            .onStart { emit(emptyList()) }
+                            .map { list ->
+                                list.filter {
+                                    it.userId == owner &&
+                                        it.status in setOf("SUGGESTED", "ACCEPTED") &&
+                                        it.scheduledDate.time >= now
+                                }.map { c ->
+                                    HomeConsultationItem(
+                                        consultation = c,
+                                        isPersonal = true,
+                                        holderUserId = owner,
+                                        holderLabel = "Você",
+                                        navigationPatientId = ""
+                                    )
+                                }
+                            }
+                        val patientFlows = activeBindings.map { binding ->
+                            val patientId = binding.patientUserId
+                            combine(
+                                dao.getActiveConsultationsForUser(patientId, now).onStart { emit(emptyList()) },
+                                profileDao.getProfile(patientId).onStart { emit(null) }
+                            ) { consultations, profile ->
+                                val label = resolveWatchedPatientLabel(profile, binding, defaultLabel = "Familiar")
+                                consultations.filter {
+                                    it.userId == patientId &&
+                                        it.status in setOf("SUGGESTED", "ACCEPTED") &&
+                                        it.scheduledDate.time >= now
+                                }.map { c ->
+                                    HomeConsultationItem(
+                                        consultation = c,
+                                        isPersonal = false,
+                                        holderUserId = patientId,
+                                        holderLabel = label,
+                                        navigationPatientId = patientId
+                                    )
+                                }
+                            }
+                        }
+                        val watchedIds = activeBindings.map { it.patientUserId }
+                        if (patientFlows.isEmpty()) {
+                            personalFlow.map { items ->
+                                items.sortedWith(
+                                    compareBy<HomeConsultationItem> { it.consultation.scheduledDate.time }
+                                        .thenBy { it.consultation.id }
+                                ).take(3) to watchedIds
+                            }
+                        } else {
+                            combine(listOf(personalFlow) + patientFlows) { groups ->
+                                val merged = groups.flatMap { it }
+                                    .distinctBy { it.consultation.id }
+                                    .sortedWith(
+                                        compareBy<HomeConsultationItem> { it.consultation.scheduledDate.time }
+                                            .thenBy { it.consultation.id }
+                                    )
+                                    .take(3)
+                                merged to watchedIds
+                            }
+                        }
+                    }
+            }
+        }
+
+    val homeSummary: StateFlow<HomeConsultationsSummaryState> = combine(
+        homeItemsFlow,
+        refreshing,
+        initialHomeLoaded,
+        error
+    ) { (items, watchedIds), isRefreshing, loaded, err ->
+        HomeConsultationsSummaryState(
+            items = items,
+            loading = items.isEmpty() && (!loaded || isRefreshing),
+            error = err,
+            watchedPatientIds = watchedIds
+        )
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        HomeConsultationsSummaryState(loading = true)
+    )
+
     init {
         viewModelScope.launch { while (true) { delay(60_000); clock.value = System.currentTimeMillis() } }
-        viewModelScope.launch { auth.userIds().collectLatest { if (it != BragaConstants.GUEST_UID) refresh() } }
+        viewModelScope.launch {
+            auth.userIds().flatMapLatest { owner ->
+                if (owner == BragaConstants.GUEST_UID) {
+                    flowOf(owner to emptyList())
+                } else {
+                    dao.getActiveBindingsForCaregiver(owner).onStart { emit(emptyList()) }.map { bindings ->
+                        owner to bindings
+                            .filter { it.status == "ACTIVE" && it.patientUserId.isNotBlank() && it.patientUserId != owner }
+                            .map { it.patientUserId }
+                            .distinct()
+                    }
+                }
+            }.collectLatest { (owner, watchedIds) ->
+                if (owner == BragaConstants.GUEST_UID) {
+                    lastSyncedPatients = emptySet()
+                    initialHomeLoaded.value = true
+                    return@collectLatest
+                }
+                val required = watchedIds.toSet() + owner
+                lastSyncedPatients = lastSyncedPatients.intersect(required)
+                if (!lastSyncedPatients.containsAll(required)) {
+                    refresh()
+                }
+            }
+        }
     }
     fun select(patient: String, id: String) { target.value = patient; focus.value = id; limit.value = 20; refresh() }
     fun more() { limit.value += 20 }
@@ -82,17 +250,67 @@ class ConsultationsViewModel @Inject constructor(
             catch (_: Exception) { error.value = "A confirmação está salva e aguarda sincronização." }
         }
     }
+    fun onResume(nowMs: Long = System.currentTimeMillis()) {
+        val owner = auth.currentUser?.uid ?: return
+        if (owner == BragaConstants.GUEST_UID) return
+        if (nowMs - lastResumeSyncAtMs >= RESUME_SYNC_COOLDOWN_MS || error.value != null) {
+            refresh()
+        }
+    }
     fun refresh() {
         viewModelScope.launch { refreshLock.withLock {
+            val owner = auth.currentUser?.uid
+            if (owner.isNullOrBlank() || owner == BragaConstants.GUEST_UID) {
+                initialHomeLoaded.value = true
+                return@withLock
+            }
             refreshing.value = true
             try {
-                val patient = target.value.ifBlank { auth.currentUser?.uid ?: return@withLock }
+                val selectedPatient = target.value
                 repository.flushConsultations()
-                repository.syncConsultations(patient)
+                if (selectedPatient.isNotBlank()) {
+                    repository.syncConsultations(selectedPatient)
+                    if (selectedPatient != owner) {
+                        runCatching { repository.syncPatientProfileIfMissing(selectedPatient) }
+                    }
+                } else {
+                    runCatching { repository.syncBindingsForCaregiver(owner) }
+                    var syncFailure: Exception? = null
+                    try {
+                        repository.syncConsultations(owner)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        syncFailure = e
+                    }
+                    val activeBindings = runCatching {
+                        dao.getActiveBindingsForCaregiver(owner).first()
+                    }.getOrDefault(emptyList())
+                    val watchedIds = activeBindings
+                        .filter { it.status == "ACTIVE" && it.patientUserId.isNotBlank() && it.patientUserId != owner }
+                        .map { it.patientUserId }
+                        .distinct()
+                    for (patientId in watchedIds) {
+                        try {
+                            repository.syncConsultations(patientId)
+                            runCatching { repository.syncPatientProfileIfMissing(patientId) }
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            if (syncFailure == null) syncFailure = e
+                        }
+                    }
+                    if (syncFailure != null) throw syncFailure
+                    lastSyncedPatients = watchedIds.toSet() + owner
+                    lastResumeSyncAtMs = System.currentTimeMillis()
+                }
                 error.value = null
             } catch (e: kotlinx.coroutines.CancellationException) { throw e
             } catch (_: Exception) { error.value = "Não foi possível atualizar. Os registros salvos continuam disponíveis." }
-            finally { refreshing.value = false }
+            finally {
+                initialHomeLoaded.value = true
+                refreshing.value = false
+            }
         } }
     }
 }
@@ -120,19 +338,86 @@ private fun ConsultationItem(c: ConsultationEntity, onConfirmLocal: (String) -> 
 }
 
 @Composable
-fun PersonalConsultationsCard(onOpen: () -> Unit, viewModel: ConsultationsViewModel = hiltViewModel()) {
-    val next by viewModel.next.collectAsState()
-    val error by viewModel.error.collectAsState()
-    Card(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Consultas", style = MaterialTheme.typography.titleMedium)
-            val first = next.firstOrNull()
-            if (first == null) Text(if (error == null) "Nenhuma consulta agendada." else "Agenda indisponível. Toque para atualizar.") else {
-                Text(first.title)
-                Text(SimpleDateFormat("dd/MM 'às' HH:mm", Locale.getDefault()).format(first.scheduledDate))
-                Text(consultationState(first), style = MaterialTheme.typography.labelMedium)
+fun PersonalConsultationsCard(
+    onOpen: () -> Unit,
+    onOpenConsultation: (patientId: String, consultationId: String) -> Unit = { _, _ -> onOpen() },
+    viewModel: ConsultationsViewModel = hiltViewModel()
+) {
+    val summary by viewModel.homeSummary.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.onResume()
             }
-            Text("Ver agenda", color = MaterialTheme.colorScheme.primary)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Próximas consultas", style = MaterialTheme.typography.titleMedium)
+                TextButton(onClick = onOpen) {
+                    Text("Minha agenda", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            when {
+                summary.loading -> {
+                    Text("Carregando compromissos…", style = MaterialTheme.typography.bodyMedium)
+                }
+                summary.items.isEmpty() -> {
+                    if (summary.error == null) {
+                        Text("Nenhuma consulta agendada.")
+                    } else {
+                        Text(
+                            text = "Agenda indisponível. Toque para atualizar.",
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.clickable { viewModel.refresh() }
+                        )
+                    }
+                }
+                else -> {
+                    summary.items.forEach { item ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onOpenConsultation(item.navigationPatientId, item.consultation.id)
+                                }
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = item.headerLine,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "${formatHomeConsultationDate(item.consultation.scheduledDate)} · ${consultationState(item.consultation)}",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                    summary.error?.let { err ->
+                        Text(
+                            text = err,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.clickable { viewModel.refresh() }
+                        )
+                    }
+                }
+            }
         }
     }
 }
