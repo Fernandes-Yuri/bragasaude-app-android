@@ -799,6 +799,9 @@ interface FamilyDao {
     @Query("SELECT * FROM consultations_local WHERE id = :consultationId LIMIT 1")
     suspend fun getConsultationById(consultationId: String): ConsultationEntity?
 
+    @Query("SELECT * FROM consultations_local WHERE remoteConfirmed=0 AND pendingSync=0 AND status IN ('SUGGESTED','ACCEPTED') AND scheduledDate>=:now")
+    suspend fun localConsultationsToReview(now: Long = System.currentTimeMillis()): List<ConsultationEntity>
+
     @Query("SELECT * FROM consultations_local WHERE pendingSync=1")
     suspend fun getPendingConsultations(): List<ConsultationEntity>
 

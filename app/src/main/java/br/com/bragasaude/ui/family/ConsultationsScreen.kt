@@ -75,6 +75,13 @@ class ConsultationsViewModel @Inject constructor(
     fun more() { limit.value += 20 }
     fun visible(records: List<ConsultationEntity>) = records.take(limit.value)
     fun hasMore(records: List<ConsultationEntity>) = records.size > limit.value
+    fun confirmLocal(id: String) {
+        viewModelScope.launch {
+            try { repository.confirmLocalConsultation(id); refresh() }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { error.value = "A confirmação está salva e aguarda sincronização." }
+        }
+    }
     fun refresh() {
         viewModelScope.launch { refreshLock.withLock {
             refreshing.value = true
@@ -98,12 +105,16 @@ internal fun consultationState(c: ConsultationEntity): String = when {
 }
 
 @Composable
-private fun ConsultationItem(c: ConsultationEntity) {
+private fun ConsultationItem(c: ConsultationEntity, onConfirmLocal: (String) -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(c.title, style = MaterialTheme.typography.titleMedium)
             Text(SimpleDateFormat("dd/MM/yyyy 'às' HH:mm", Locale.getDefault()).format(c.scheduledDate))
             Text(consultationState(c), style = MaterialTheme.typography.labelMedium)
+            if (!c.remoteConfirmed && !c.pendingSync && c.status in setOf("SUGGESTED", "ACCEPTED")) {
+                Text("Confira os dados antes de incluir esta consulta na agenda compartilhada.")
+                TextButton(onClick = { onConfirmLocal(c.id) }) { Text("Confirmar e sincronizar") }
+            }
         }
     }
 }
@@ -146,9 +157,9 @@ fun ConsultationsScreen(patientId: String, consultationId: String, onBack: () ->
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
-                focused?.let { item("focused") { ConsultationItem(it) } }
+                focused?.let { item("focused") { ConsultationItem(it, viewModel::confirmLocal) } }
                 if (records.isEmpty() && focused == null) item { Text(if (upcoming) "Nenhuma consulta agendada." else "Nenhuma consulta no histórico.") }
-                items(viewModel.visible(records).filter { it.id != focused?.id }, key = { it.id }) { ConsultationItem(it) }
+                items(viewModel.visible(records).filter { it.id != focused?.id }, key = { it.id }) { ConsultationItem(it, viewModel::confirmLocal) }
                 if (viewModel.hasMore(records)) item { TextButton(onClick = viewModel::more) { Text("Carregar mais") } }
             }
         }

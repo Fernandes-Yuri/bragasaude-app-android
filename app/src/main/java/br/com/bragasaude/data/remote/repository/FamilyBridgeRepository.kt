@@ -865,6 +865,17 @@ class FamilyBridgeRepository @Inject constructor(
         return familyDao.getConsultationById(consultation.id) ?: consultation
     }
 
+    suspend fun confirmLocalConsultation(id: String) {
+        val c = familyDao.getConsultationById(id) ?: return
+        val owner = requireConversationAccess(c.userId)
+        check(!c.remoteConfirmed && !c.pendingSync && c.status in setOf("SUGGESTED", "ACCEPTED"))
+        val queued = c.copy(createdBy = owner, pendingActorId = owner, pendingAction = "CREATE", pendingSync = true)
+        familyDao.insertConsultation(queued)
+        reconcileReminder(queued)
+        syncScheduler.scheduleSync()
+        flushConsultations()
+    }
+
     private suspend fun queueConsultationStatus(id: String, status: String): Boolean {
         val current = familyDao.getConsultationById(id) ?: return false
         requireConversationAccess(current.userId)

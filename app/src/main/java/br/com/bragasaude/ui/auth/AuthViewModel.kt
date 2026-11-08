@@ -792,6 +792,7 @@ class AuthViewModel @Inject constructor(
                 database.familyDao().getPendingDeletionMessages().any { it.senderUserId == userId } ||
                 database.familyDao().getPendingSyncBindings().any { it.patientUserId == userId || it.caregiverUserId == userId } ||
                 database.familyDao().getPendingConsultations().any { it.pendingActorId == userId } ||
+                database.familyDao().localConsultationsToReview().any { it.userId == userId || it.caregiverUserId == userId } ||
                 database.symptomsDiaryDao().getPendingSync().any { it.reportedBy == userId } ||
                 database.bleTelemetryReceiptDao().getPendingSync().any { it.patientId == userId } ||
                 (userId != null && database.medicationDoseDao().pending(userId).isNotEmpty()) ||
@@ -799,7 +800,7 @@ class AuthViewModel @Inject constructor(
                 database.socialFeedDao().getPendingPosts().any { it.userId == userId }
         }
         if (hasPendingData) {
-            _sessionNotice.value = "Há registros neste aparelho aguardando envio. Conecte-se à internet e tente sair novamente para preservar seus dados."
+            _sessionNotice.value = "Há registros locais ou aguardando envio. Confira a agenda e a conexão antes de sair para preservar seus dados."
             return
         }
         restoreJob?.cancelAndJoin()
