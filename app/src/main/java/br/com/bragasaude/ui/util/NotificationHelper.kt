@@ -8,6 +8,13 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import br.com.bragasaude.MainActivity
+import androidx.core.app.NotificationManagerCompat
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 
 object NotificationHelper {
     private const val CHANNEL_ID = "bragasaude_alerts"
@@ -376,6 +383,7 @@ object NotificationHelper {
                     .putString("consultationId", consultationId)
                     .build()
                 val work = androidx.work.OneTimeWorkRequestBuilder<br.com.bragasaude.data.remote.sync.ConsultationReminderWorker>()
+                    .addTag("consultation_at_$scheduledDateMillis")
                     .setInitialDelay(delay, java.util.concurrent.TimeUnit.MILLISECONDS)
                     .setInputData(data)
                     .build()
@@ -388,6 +396,24 @@ object NotificationHelper {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    /** Observa os trabalhos desta conta, sem presumir que o agendamento foi bem-sucedido. */
+    fun observeConsultationReminderTags(
+        context: Context, consultationId: String, ownerId: String, scheduledAt: Long
+    ): Flow<Set<String>> = flow {
+        val manager = WorkManager.getInstance(context)
+        emitAll(combine(
+            manager.getWorkInfosForUniqueWorkFlow("braga_consultation_reminder_${ownerId}_${consultationId}_24h"),
+            manager.getWorkInfosForUniqueWorkFlow("braga_consultation_reminder_${ownerId}_${consultationId}_1h")
+        ) { day, hour -> pendingConsultationReminderTags(day, hour, scheduledAt) })
+    }
+
+    fun consultationNotificationsAllowed(context: Context): Boolean {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        return manager.getNotificationChannel(CONSULTATION_CHANNEL_ID)?.importance != NotificationManager.IMPORTANCE_NONE
     }
 
     /** Cancela lembretes pendentes de uma consulta (ex.: foi cancelada/recusada). */
@@ -580,5 +606,19 @@ object NotificationHelper {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+}
+
+internal fun pendingConsultationReminderTags(
+    day: List<WorkInfo>, hour: List<WorkInfo>, scheduledAt: Long,
+    now: Long = System.currentTimeMillis()
+): Set<String> = buildSet {
+    for ((tag, hoursBefore, works) in listOf(Triple("24h", 24L, day), Triple("1h", 1L, hour))) {
+        if (scheduledAt - hoursBefore * 3_600_000 <= now) continue
+        if (works.any { work ->
+            !work.state.isFinished &&
+                // Trabalhos anteriores a este selo continuam compatíveis.
+                (work.tags.none { it.startsWith("consultation_at_") } || "consultation_at_$scheduledAt" in work.tags)
+        }) add(tag)
     }
 }

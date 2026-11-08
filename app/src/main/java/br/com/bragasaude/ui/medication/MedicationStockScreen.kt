@@ -27,7 +27,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Medication
-import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
@@ -493,7 +492,7 @@ fun MedicationStockScreen(
             }
 
             if (ui.isCaregiver && ui.patients.size > 1) {
-                CarePatientSelector(ui, viewModel::selectPatient)
+                CarePatientSelector(ui, viewModel::selectPatient, label = "De quem são os medicamentos?")
             }
 
             if (!accessAllowed) {
@@ -585,10 +584,6 @@ fun MedicationStockScreen(
                             onTake = {
                                 if (dose.canConfirm) selectedOccurrence = dose.item?.occurrenceId
                                 else openAllDoses()
-                            },
-                            onSendReminder = {
-                                val times = MedicationSchedule.times(med.scheduleTimes, med.scheduleTime)
-                                viewModel.sendMedicationReminder(med.name, times)
                             },
                             onRestock = { units -> viewModel.restock(med.id, units) },
                             onDelete = { viewModel.deleteMedication(med.id) },
@@ -791,14 +786,13 @@ private fun ManualMedicationDialog(
 }
 
 @Composable
-private fun MedicationStockCard(
+internal fun MedicationStockCard(
     medication: MedicationEntity,
     daysRemaining: Double,
     isCritical: Boolean,
     dose: MedicationStockDose,
     doseActionEnabled: Boolean,
     onTake: () -> Unit,
-    onSendReminder: () -> Unit = {},
     onRestock: (Int) -> Unit,
     onDelete: () -> Unit,
     onEditSchedule: (times: List<String>, mealContext: String?, intervalHours: Int?) -> Unit,
@@ -812,6 +806,7 @@ private fun MedicationStockCard(
 ) {
     val context = LocalContext.current
     var showRestock by remember { mutableStateOf(false) }
+    LaunchedEffect(canRestock) { if (!canRestock) showRestock = false }
     var restockQty by remember { mutableStateOf(medication.totalUnits.toString()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     // Guardrail anti-toque: a exclusão só é liberada após marcação consciente.
@@ -977,111 +972,8 @@ private fun MedicationStockCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(verticalAlignment = Alignment.Top) {
-                Icon(
-                    Icons.Filled.Medication,
-                    contentDescription = null,
-                    tint = BragaEmeraldDark,
-                    modifier = Modifier.size(32.dp)
-                )
-                Spacer(Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            medication.name,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = BragaTextPrimary
-                        )
-                        val dosageLabel = medication.dosage?.takeIf { it.isNotBlank() }
-                            ?: medication.dosageMg?.let { if (it % 1.0 == 0.0) "${it.toLong()}mg" else "${it}mg" }
-                        if (dosageLabel != null) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = BragaMintSurface,
-                                border = BorderStroke(1.dp, BragaMintBorder)
-                            ) {
-                                Text(
-                                    text = dosageLabel,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = BragaEmeraldDark,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-                    medication.activePrinciple?.takeIf { it.isNotBlank() }?.let {
-                        Text(it, fontSize = 14.sp, color = BragaTextSecondary)
-                    }
-                    medication.manufacturer?.takeIf { it.isNotBlank() }?.let {
-                        Text(it, fontSize = 13.sp, color = BragaTextSecondary)
-                    }
-                }
-                // Pílulas restantes — destaque visual grande
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        "${medication.currentUnits}",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 28.sp,
-                        color = if (isCritical) BragaEmergencyOrange else BragaEmeraldDark
-                    )
-                    Text(
-                        "comprimidos restantes",
-                        fontSize = 12.sp,
-                        color = BragaTextSecondary
-                    )
-                }
-            }
-
-            // Horários e contexto alimentar
-            if (currentTimes.isNotEmpty() || !medication.notes.isNullOrBlank()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Horários:",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = BragaTextSecondary
-                    )
-                    currentTimes.forEach { t ->
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = BragaMintSurface,
-                            border = BorderStroke(1.dp, BragaMintBorder)
-                        ) {
-                            Text(
-                                text = t,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = BragaEmeraldDark,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                    medication.notes?.takeIf { it.isNotBlank() }?.let { notes ->
-                        val label = medicationInstructionLabel(notes)
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = BragaCardSurface,
-                            border = BorderStroke(1.dp, BragaCardBorder)
-                        ) {
-                            Text(
-                                text = label,
-                                fontSize = 11.sp,
-                                color = BragaTextSecondary,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                }
-            }
+            MedicationStockHeader(medication, isCritical)
+            MedicationScheduleDetails(currentTimes, medication.notes)
 
             // Tag de alerta de reposição
             if (isCritical) {
@@ -1156,39 +1048,33 @@ private fun MedicationStockCard(
                         }
                     }
                 } else {
-                    Button(
-                        onClick = onSendReminder,
-                        enabled = !loading,
-                        colors = ButtonDefaults.buttonColors(containerColor = BragaEmeraldDark),
+                    Text(
+                        if (!canRestock) "Você pode visualizar os medicamentos." else "Seu vínculo não permite confirmar doses.",
+                        fontSize = 13.sp,
+                        color = BragaTextSecondary
+                    )
+                }
+                if (canRestock) {
+                    OutlinedButton(
+                        onClick = { showRestock = !showRestock },
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 48.dp)
                     ) {
-                        Icon(Icons.Filled.NotificationsActive, contentDescription = null, tint = Color.White)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Enviar Lembrete", color = Color.White, fontSize = 15.sp)
+                        Text(
+                            "Reabastecer",
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-                }
-                OutlinedButton(
-                    onClick = { showRestock = !showRestock },
-                    enabled = canRestock,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                ) {
-                    Text(
-                        "Reabastecer",
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
             }
 
             Text(dose.detail, fontSize = 13.sp, color = BragaTextSecondary)
 
-            if (showRestock) {
+            if (showRestock && canRestock) {
                 OutlinedTextField(
                     value = restockQty,
                     onValueChange = { restockQty = it.filter { c -> c.isDigit() } },
@@ -1230,7 +1116,7 @@ private fun MedicationStockCard(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(Modifier.width(4.dp))
-                    Text("Agenda / Alarme", color = BragaEmeraldDark, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("Agenda do aparelho", color = BragaEmeraldDark, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (canEdit) {

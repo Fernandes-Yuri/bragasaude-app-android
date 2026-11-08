@@ -251,19 +251,6 @@ class CareOsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Envia lembrete afetuoso do cuidador ao paciente sobre o horário da medicação.
-     */
-    fun sendMedicationReminder(medicationName: String, times: List<String>) {
-        viewModelScope.launch {
-            val patientName = _ui.value.selectedPatient.name
-            val timesStr = if (times.isNotEmpty()) " nos horários ${times.joinToString(", ")}" else ""
-            _ui.update {
-                it.copy(message = "Lembrete de $medicationName$timesStr enviado com carinho para $patientName.")
-            }
-        }
-    }
-
     fun restock(medId: String, units: Int) {
         viewModelScope.launch {
             if (authenticatedUserId == null) return@launch requireAuthentication()

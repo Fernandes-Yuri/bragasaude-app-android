@@ -370,6 +370,18 @@ fun CaregiverDashboardScreen(
                 item {
                     UpcomingConsultationsCard(
                         consultations = upcomingConsultations,
+                        reminderStatus = { consultation ->
+                            val status by produceState(
+                                initialValue = ConsultationReminderStatus(),
+                                consultation, viewModel.currentUserId, lifecycleOwner
+                            ) {
+                                lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+                                    value = ConsultationReminderStatus()
+                                    viewModel.observeConsultationReminders(consultation).collect { value = it }
+                                }
+                            }
+                            status
+                        },
                         onAddConsultation = { showAppointmentDialog = true },
                         onSeeAll = { onOpenConsultations(dashboard.patientUserId) },
                         onCancelConsultation = { consultationId ->
@@ -928,6 +940,7 @@ private fun EmptyCaregiverState(modifier: Modifier = Modifier) {
 @Composable
 private fun UpcomingConsultationsCard(
     consultations: List<ConsultationEntity>,
+    reminderStatus: @Composable (ConsultationEntity) -> ConsultationReminderStatus,
     onAddConsultation: () -> Unit,
     onSeeAll: () -> Unit,
     onCancelConsultation: (String) -> Unit
@@ -1004,63 +1017,14 @@ private fun UpcomingConsultationsCard(
                     }
                 }
             } else {
-                val sdfDate = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-                val sdfTime = SimpleDateFormat("HH:mm", Locale.getDefault())
-
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     consultations.take(3).forEach { consultation ->
-                        val dateFormatted = sdfDate.format(consultation.scheduledDate)
-                        val timeFormatted = sdfTime.format(consultation.scheduledDate)
-
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        consultation.title,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        "$dateFormatted às $timeFormatted",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(Modifier.height(6.dp))
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = Color(0xFF6A1B9A).copy(alpha = 0.1f)
-                                    ) {
-                                        Text(
-                                            "Lembretes ativos (24h e 1h antes)",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Medium,
-                                            color = Color(0xFF6A1B9A),
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-                                IconButton(
-                                    onClick = { onCancelConsultation(consultation.id) }
-                                ) {
-                                    Icon(
-                                        Icons.Default.DeleteOutline,
-                                        contentDescription = "Cancelar Consulta",
-                                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
-                                    )
-                                }
-                            }
+                        androidx.compose.runtime.key(consultation.id) {
+                            ConsultationSummaryItem(
+                                consultation = consultation,
+                                reminderStatus = reminderStatus(consultation),
+                                onCancel = { onCancelConsultation(consultation.id) }
+                            )
                         }
                     }
                 }

@@ -31,7 +31,11 @@ import br.com.bragasaude.ui.theme.BragaTextSecondary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CarePatientSelector(state: CareOsUiState, onSelect: (String) -> Unit) {
+fun CarePatientSelector(
+    state: CareOsUiState,
+    onSelect: (String) -> Unit,
+    label: String = "Pessoa acompanhada"
+) {
     if (!state.isAuthenticated || state.patients.size <= 1 || !state.isCaregiver || state.userRole == "PATIENT") return
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
@@ -39,7 +43,7 @@ fun CarePatientSelector(state: CareOsUiState, onSelect: (String) -> Unit) {
             value = state.selectedPatient.name,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Pessoa acompanhada") },
+            label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier.menuAnchor().fillMaxWidth()
         )
@@ -49,7 +53,7 @@ fun CarePatientSelector(state: CareOsUiState, onSelect: (String) -> Unit) {
                     text = {
                         Column {
                             Text(patient.name, fontWeight = FontWeight.SemiBold)
-                            if (patient.role != "PATIENT") Text(patient.role.replace('_', ' '), color = BragaTextSecondary)
+                            Text(carePatientAccessLabel(patient), color = BragaTextSecondary)
                         }
                     },
                     onClick = { onSelect(patient.id); expanded = false }
@@ -57,6 +61,14 @@ fun CarePatientSelector(state: CareOsUiState, onSelect: (String) -> Unit) {
             }
         }
     }
+}
+
+internal fun carePatientAccessLabel(patient: CarePatientOption): String = when {
+    patient.role == "PATIENT" -> "Minha saúde"
+    patient.canWriteMedication && patient.canTakeMedication -> "Pode gerenciar medicamentos e confirmar doses"
+    patient.canWriteMedication -> "Pode gerenciar medicamentos"
+    patient.canTakeMedication -> "Pode confirmar doses"
+    else -> "Pode visualizar"
 }
 
 @Composable
