@@ -60,6 +60,10 @@ fun LoginScreen(
     val isKeyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val credentialManager = CredentialManager.create(context)
     val authState by viewModel.authState.collectAsState()
+    val blockExternalLinksInTestLab = remember {
+        BuildConfig.DEBUG && Settings.System.getString(context.contentResolver, "firebase.test.lab") == "true"
+    }
+
 
     var emailMode by rememberSaveable { mutableStateOf("login") } // "login", "signup" ou "forgot"
     var forgotStep by rememberSaveable { mutableStateOf(1) } // 1: e-mail, 2: código OTP, 3: nova senha
@@ -714,7 +718,7 @@ fun LoginScreen(
                     ) {
                         TextButton(
                             onClick = {
-                                if (!isFirebaseTestLab) {
+                                if (!blockExternalLinksInTestLab) {
                                     uriHandler.openUri("https://bragasaude.online/termos")
                                 }
                             },
@@ -725,7 +729,7 @@ fun LoginScreen(
                         Text("e", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(
                             onClick = {
-                                if (!isFirebaseTestLab) {
+                                if (!blockExternalLinksInTestLab) {
                                     uriHandler.openUri("https://bragasaude.online/privacidade")
                                 }
                             },

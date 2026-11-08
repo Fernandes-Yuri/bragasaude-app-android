@@ -27,6 +27,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -263,28 +265,8 @@ fun VitalSignsScreen(
                         MetricInfoIcon(metricInfo = MetricInfoCatalog.bloodPressure)
                     }
 
-                    // D-VIT1: dois campos numericos separados (Máxima / Mínima).
-                    // Teclado estritamente numerico — o usuario nao precisa mais
-                    // cavar a barra "/" no teclado alfanumerico.
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        VitalNumericField(
-                            label = "Máxima",
-                            value = systolicInput,
-                            onValueChange = { systolicInput = it },
-                            unit = "mmHg",
-                            modifier = Modifier.weight(1f)
-                        )
-                        VitalNumericField(
-                            label = "Mínima",
-                            value = diastolicInput,
-                            onValueChange = { diastolicInput = it },
-                            unit = "mmHg",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
+                    PressureNumericFields(systolicInput, diastolicInput,
+                        { systolicInput = it }, { diastolicInput = it })
                     val sys = bpPair.first.toIntOrNull()
                     val dia = bpPair.second.toIntOrNull()
                     if (sys != null && dia != null && sys > 0 && dia > 0) {
@@ -564,6 +546,24 @@ fun VitalSignsScreen(
  * 120/80 mmHg.
  */
 @Composable
+internal fun PressureNumericFields(systolic: String, diastolic: String, onSystolic: (String) -> Unit, onDiastolic: (String) -> Unit) {
+    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (fontScale > 1.3f || maxWidth < 280.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                VitalNumericField("Máxima", systolic, onSystolic, "mmHg", Modifier.fillMaxWidth())
+                VitalNumericField("Mínima", diastolic, onDiastolic, "mmHg", Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                VitalNumericField("Máxima", systolic, onSystolic, "mmHg", Modifier.weight(1f))
+                VitalNumericField("Mínima", diastolic, onDiastolic, "mmHg", Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
 fun VitalNumericField(
     label: String,
     value: String,
@@ -580,7 +580,13 @@ fun VitalNumericField(
         suffix = { Text(unit, style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = modifier,
+        modifier = modifier.semantics {
+            contentDescription = when (label) {
+                "Máxima" -> "Máxima, pressão sistólica, $unit"
+                "Mínima" -> "Mínima, pressão diastólica, $unit"
+                else -> "$label, $unit"
+            }
+        },
         shape = RoundedCornerShape(16.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = BragaEmerald,
