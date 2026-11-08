@@ -6,6 +6,7 @@ import android.graphics.pdf.PdfDocument
 import br.com.bragasaude.data.local.DailyMetricsEntity
 import br.com.bragasaude.data.remote.model.RemoteProfile
 import br.com.bragasaude.data.remote.model.RemoteVitalSign
+import br.com.bragasaude.data.util.toEntity
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -68,7 +69,7 @@ class PdfReportGenerator(private val context: Context) {
             }
         }.ifEmpty { listOf("Nenhum registro informado neste período.") }
         val historyPages = historyLines.chunked(38)
-        val recentVitalEntities = recentVitals.map { br.com.bragasaude.data.util.run { it.toEntity() } }
+        val recentVitalEntities = recentVitals.map { it.toEntity() }
         val mergedWearables = (
             HealthReadingHistory.merge(profile.id, HealthReadingInput.HEART, wearableReadings, recentVitalEntities) +
                 HealthReadingHistory.merge(profile.id, HealthReadingInput.OXYGEN, wearableReadings, recentVitalEntities)

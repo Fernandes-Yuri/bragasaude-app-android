@@ -16,7 +16,7 @@ import javax.inject.Inject
 class WearablesViewModel @Inject constructor(
     val manager: HealthConnectManager,
     val bleManager: BleGattManager,
-    database: BragaDatabase,
+    private val database: BragaDatabase,
     auth: FirebaseAuth
 ) : ViewModel() {
     private val uid = auth.currentUser?.uid.orEmpty()
