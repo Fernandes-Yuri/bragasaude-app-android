@@ -98,7 +98,7 @@ class HealthEngineHydrationTest {
 
     @Test fun `jump directly above full target does not emit half notification`() = runTest {
         total = 3000
-        engine.analyzeVitals(user, water)
+        engine.analyzeVitals(user, listOf(RemoteVitalSign(userId = user, hydrationMl = 3000)))
         assertEquals("hydration_daily", saved.single().badgeType)
         verify(exactly = 0) { HydrationNotifications.notifyHalfOnce(any(), any(), any(), any(), any()) }
     }
@@ -141,7 +141,7 @@ class HealthEngineHydrationTest {
         total = 1312
         engine.analyzeVitals(user, water)
         total = 3125
-        engine.analyzeVitals(user, water)
+        engine.analyzeVitals(user, listOf(RemoteVitalSign(userId = user, hydrationMl = 1813)))
         engine.removeLastHydration(user)
         assertEquals(2625, total)
         assertEquals(2, saved.size)
@@ -222,4 +222,15 @@ class HealthEngineHydrationTest {
             HydrationNotifications.clearFullNotification(any(), user, any())
         }
     }
+    @Test fun `restored water already above target does not celebrate another small addition`() = runTest {
+        total = 4600
+        val result = engine.analyzeVitals(user, listOf(RemoteVitalSign(userId = user, hydrationMl = 150)))
+        assertTrue(result.newMilestones.isEmpty())
+        assertTrue(saved.isEmpty())
+        verify(exactly = 0) { HydrationNotifications.notifyOnce(any(), any(), any(), any(), any()) }
+        total = 2700
+        val crossed = engine.analyzeVitals(user, listOf(RemoteVitalSign(userId = user, hydrationMl = 200)))
+        assertEquals("hydration_daily", crossed.newMilestones.single().badgeType)
+    }
+
 }

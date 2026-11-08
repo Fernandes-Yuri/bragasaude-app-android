@@ -284,6 +284,10 @@ class FamilyE2eeManager {
     private val secureRandom = SecureRandom()
     private val ownPublicKeys = ConcurrentHashMap<String, String>()
     private val knownCaregiversByPatient = ConcurrentHashMap<String, MutableSet<String>>()
+    private val failedDecryptions = java.util.Collections.synchronizedMap(object : LinkedHashMap<String, Boolean>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?) = size > 256
+    })
+
 
     @Inject
     constructor(@ApplicationContext context: Context) {
@@ -706,6 +710,15 @@ class FamilyE2eeManager {
             caregiverIdHint = caregiverIdHint
         )
 
+        // Apenas falhas definitivas; uma mudança no envelope ou em QUALQUER chave invalida a entrada.
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        listOf(currentUserId, patientId, senderUserId.orEmpty(), messageId.orEmpty(), rawPayload).forEach {
+            val bytes = it.toByteArray(Charsets.UTF_8)
+            digest.update(java.nio.ByteBuffer.allocate(4).putInt(bytes.size).array()); digest.update(bytes)
+        }
+        candidateKeys.forEach { digest.update(it.key.encoded) }
+        val attempt = java.util.Base64.getEncoder().encodeToString(digest.digest())
+        if (failedDecryptions.containsKey(attempt)) throw GeneralSecurityException("Mensagem indisponível com as chaves atuais.")
         var firstError: Exception? = null
         for (candidate in candidateKeys) {
             try {
@@ -723,6 +736,7 @@ class FamilyE2eeManager {
                 traceMessage("DECRYPT_FAILED", currentUserId, patientId, messageId, rawPayload, candidate, e.javaClass.simpleName)
             }
         }
+        if (firstError is javax.crypto.AEADBadTagException) failedDecryptions[attempt] = true
         // A tentativa legada não pode substituir a causa da primeira tentativa ECDH.
         throw (firstError ?: GeneralSecurityException("Não foi possível decifrar a mensagem E2EE."))
     }

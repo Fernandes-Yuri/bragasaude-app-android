@@ -1112,9 +1112,10 @@ private fun AppointmentDialog(
                     shape = RoundedCornerShape(12.dp)
                 )
 
-                OutlinedTextField(
+                br.com.bragasaude.ui.components.MaskedInputField(
+                    mask = br.com.bragasaude.ui.components.InputMask.DATE,
                     value = dateText,
-                    onValueChange = { dateText = HealthFormatter.formatDateInput(it) },
+                    onValueChange = { dateText = it },
                     label = { Text("Data (ex: 31/10/2026)") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -1122,9 +1123,10 @@ private fun AppointmentDialog(
                     shape = RoundedCornerShape(12.dp)
                 )
 
-                OutlinedTextField(
+                br.com.bragasaude.ui.components.MaskedInputField(
+                    mask = br.com.bragasaude.ui.components.InputMask.TIME,
                     value = timeText,
-                    onValueChange = { timeText = HealthFormatter.formatTimeInput(it) },
+                    onValueChange = { timeText = it },
                     label = { Text("Horario (ex: 14:30)") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

@@ -27,7 +27,7 @@ fun medicationStockDose(
         val (group, item) = pending
         return when {
             !item.eligible -> MedicationStockDose(label = "Revisar doses", detail = "Confira a quantidade e a programação antes de registrar.")
-            group.instant.isAfter(now) -> MedicationStockDose(label = "Próxima dose: ${group.time}", detail = "A confirmação será liberada no horário da dose.")
+            group.instant.isAfter(now) -> MedicationStockDose(label = "Próxima dose: ${doseDay(group, now)} às ${group.time}", detail = "A confirmação será liberada no horário da dose.")
             else -> MedicationStockDose(group, item, "Confirmar Dose", "Dose das ${group.time}: ${item.units} unidade(s).", true)
         }
     }
@@ -37,7 +37,17 @@ fun medicationStockDose(
     val next = occurrences.firstOrNull { (group, item) -> group.instant.isAfter(now) && item.eligible && item.occurrenceId !in reserved }
     val upToDate = today.isNotEmpty() && today.all { (_, item) -> item.state == "recorded" }
     return MedicationStockDose(
-        label = next?.let { "Próxima dose: ${it.first.time}" } ?: if (upToDate) "Ver Histórico" else "Ver horários",
+        label = next?.let { "Próxima dose: ${doseDay(it.first, now)} às ${it.first.time}" } ?: if (upToDate) "Ver Histórico" else "Ver horários",
         detail = if (upToDate) "Todas as doses de hoje já tomadas" else "Nenhuma dose pendente para hoje. Confira a programação."
     )
+}
+
+private fun doseDay(group: DoseGroup, now: Instant): String {
+    val today = now.atZone(ZoneId.of(group.zone)).toLocalDate()
+    val date = java.time.LocalDate.parse(group.date)
+    return when (date) {
+        today -> "hoje"
+        today.plusDays(1) -> "amanhã"
+        else -> date.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM"))
+    }
 }

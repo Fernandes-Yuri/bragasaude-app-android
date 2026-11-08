@@ -99,7 +99,7 @@ object ClinicalReportAggregator {
         val normalBpCount = bpReadings.count {
             val sys = it.systolicPressure ?: 0
             val dia = it.diastolicPressure ?: 0
-            sys in 90..130 && dia in 60..85
+            br.com.bragasaude.domain.util.BloodPressureParser.classify(sys, dia).isNormal
         }
 
         val bpStats = BloodPressureCycleStats(

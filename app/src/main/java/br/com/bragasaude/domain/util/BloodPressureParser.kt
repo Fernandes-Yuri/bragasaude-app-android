@@ -76,9 +76,8 @@ object BloodPressureParser {
             systolic >= 180 || diastolic >= 110 -> BloodPressureCategory.STAGE_3_HYPERTENSION
             systolic >= 160 || diastolic >= 100 -> BloodPressureCategory.STAGE_2_HYPERTENSION
             systolic >= 140 || diastolic >= 90 -> BloodPressureCategory.STAGE_1_HYPERTENSION
-            systolic >= 130 || diastolic >= 85 -> BloodPressureCategory.PREHYPERTENSION
-            systolic >= 120 || diastolic >= 80 -> BloodPressureCategory.NORMAL
-            else -> BloodPressureCategory.OPTIMAL
+            systolic >= 120 || diastolic >= 80 -> BloodPressureCategory.PREHYPERTENSION
+            else -> BloodPressureCategory.NORMAL
         }
         val isNormal = category == BloodPressureCategory.OPTIMAL || category == BloodPressureCategory.NORMAL
         return BloodPressureResult(

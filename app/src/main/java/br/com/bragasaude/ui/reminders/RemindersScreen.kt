@@ -80,7 +80,7 @@ fun RemindersScreen(
                         Icon(Icons.Default.Medication, contentDescription = null, modifier = Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
                         Text("Nenhum remédio cadastrado", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
-                            "Para cadastrar novos remédios ou alterar horários, use o ícone 'Remédios' no menu superior da tela inicial.",
+                            "Para cadastrar novos remédios ou alterar horários, use o ícone 'Remédios' nos atalhos da tela Início.",
                             textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -106,7 +106,7 @@ fun RemindersScreen(
                             ) {
                                 Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                                 Text(
-                                    "Os lembretes são agrupados por horário. Para cadastrar novos remédios ou editar dosagens e horários, use a tela 'Remédios' no menu superior.",
+                                    "Os lembretes são agrupados por horário. Para cadastrar novos remédios ou editar dosagens e horários, use a tela 'Remédios' nos atalhos do Início.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

@@ -38,6 +38,9 @@ data class ProfileInput(
      */
     fun validate(enableSelfCare: Boolean = true): Map<String, String> {
         val errors = mutableMapOf<String, String>()
+        if (!br.com.bragasaude.data.util.HealthFormatter.isValidDate(birthDate)) {
+            errors["birthDate"] = "Informe uma data de nascimento válida, até hoje."
+        }
         if (name.isBlank()) {
             errors["name"] = "Informe seu nome completo."
         }

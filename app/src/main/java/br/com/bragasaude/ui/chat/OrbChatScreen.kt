@@ -437,7 +437,7 @@ fun OrbChatContent(
                         }
                     }
                     item { Button(onClick = onNew, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00897B))) { Text("Nova conversa") } }
-                    if (state.conversations.isEmpty()) item { Text("Bom dia! Comece uma conversa com o Braga sobre sua rotina de saúde.", color = Color(0xFF64748B)) }
+                    if (state.conversations.isEmpty()) item { Text("Comece uma conversa sobre sua saúde.", color = Color(0xFF64748B)) }
                     items(state.conversations, key = { it.id }) { conversation ->
                         OutlinedCard(onClick = { onOpenConversation(conversation.id) }, modifier = Modifier.fillMaxWidth()) {
                             Row(

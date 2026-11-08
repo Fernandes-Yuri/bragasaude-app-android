@@ -14,21 +14,22 @@ enum class BloodPressureCategory(
         recommendation = "Valor abaixo da faixa habitual. Converse com um profissional de saúde, especialmente se sentir sintomas.",
         colorHex = 0xFF2563EB // Blue
     ),
+    // Compatibilidade com consumidores antigos; o classificador 2025 retorna NORMAL.
     OPTIMAL(
-        displayName = "Pressão Ótima",
+        displayName = "Pressão Normal",
         description = "Sistólica < 120 mmHg e Diastólica < 80 mmHg",
         recommendation = "Níveis ideais de pressão arterial segundo a SBC. Mantenha hábitos de vida saudáveis e acompanhamento preventivo.",
         colorHex = 0xFF00A884 // Teal / Emerald
     ),
     NORMAL(
         displayName = "Pressão Normal",
-        description = "Sistólica 120-129 mmHg e/ou Diastólica 80-84 mmHg",
+        description = "Sistólica < 120 mmHg e Diastólica < 80 mmHg",
         recommendation = "Classificado como Pressão Normal conforme as Diretrizes Brasileiras de Hipertensão Arterial (SBC). Mantenha hábitos de vida saudáveis e monitoramento preventivo periódico.",
         colorHex = 0xFF16A34A // Green
     ),
     PREHYPERTENSION(
         displayName = "Faixa de pré-hipertensão",
-        description = "Sistólica 130-139 mmHg e/ou Diastólica 85-89 mmHg",
+        description = "Sistólica 120-139 mmHg e/ou Diastólica 80-89 mmHg",
         recommendation = "Valores ligeiramente elevados podem variar com estresse, cansaço, café ou esforço físico recente. Uma medição isolada não estabelece diagnóstico; mantenha o acompanhamento médico.",
         colorHex = 0xFF0284C7 // Azul suave
     ),

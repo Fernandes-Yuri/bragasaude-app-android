@@ -49,7 +49,10 @@ fun MedicationDosePanel(
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycle, patientId) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) viewModel.refresh()
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.open(patientId)
+                viewModel.refresh()
+            }
         }
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer) }

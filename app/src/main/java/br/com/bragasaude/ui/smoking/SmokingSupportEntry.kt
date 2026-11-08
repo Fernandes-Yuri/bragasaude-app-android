@@ -20,12 +20,14 @@ fun SmokingSupportEntry(onOpen: () -> Unit, viewModel: SmokingSupportViewModel =
     val message by viewModel.message.collectAsState()
     if (!visible) return
     SupportCard {
-        Text(if (eligible) "Quer um apoio para parar de fumar, no seu ritmo?" else if (state.plan != null) "Meu caminho sem cigarro" else "Apoio para parar de fumar", style = MaterialTheme.typography.titleMedium)
-        Text(if (state.enabled) "Seu plano, diário e pausa de apoio." else "Apoio opcional para parar de fumar. Conheça os recursos e escolha se quer ativar.")
-        Button(onClick = { if (eligible) viewModel.answerOffer(onOpen) else onOpen() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text(if (state.enabled) "Abrir meu apoio" else if (eligible) "Conhecer e ativar" else "Conhecer apoio para parar de fumar")
+        Text(if (state.plan != null) "Meu apoio para parar de fumar" else "Parar de fumar", style = MaterialTheme.typography.titleMedium)
+        Text(if (state.enabled) "Seu plano e diário." else "Apoio opcional, no seu ritmo.", style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            TextButton(onClick = { if (eligible) viewModel.answerOffer(onOpen) else onOpen() }, enabled = !busy) {
+                Text(if (state.enabled) "Abrir apoio" else "Conhecer apoio")
+            }
+            if (eligible) TextButton(onClick = { viewModel.answerOffer() }, enabled = !busy) { Text("Agora não") }
         }
-        if (eligible) TextButton(onClick = { viewModel.answerOffer() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Agora não") }
         message?.let { Text(it) }
     }
 }

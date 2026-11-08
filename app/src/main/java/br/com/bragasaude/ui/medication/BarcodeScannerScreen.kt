@@ -736,10 +736,11 @@ fun BarcodeScannerScreen(
 
                         // Campos de Horários Dinâmicos
                         if (item.scheduleTimes.size <= 1) {
-                            OutlinedTextField(
+                            br.com.bragasaude.ui.components.MaskedInputField(
+                                mask = br.com.bragasaude.ui.components.InputMask.TIME,
                                 value = item.scheduleTimes.getOrElse(0) { "08:00" },
                                 onValueChange = { newTime ->
-                                    item.updateFirstTimeAndRecalculate(HealthFormatter.formatTimeInput(newTime))
+                                    item.updateFirstTimeAndRecalculate(newTime)
                                 },
                                 label = { Text("Horário da dose (HH:mm) *") },
                                 placeholder = { Text("08:00") },
@@ -757,10 +758,11 @@ fun BarcodeScannerScreen(
                                     pair.forEachIndexed { colIndex, _ ->
                                         val globalIndex = rowIndex * 2 + colIndex
                                         val timeValue = item.scheduleTimes.getOrElse(globalIndex) { "" }
-                                        OutlinedTextField(
+                                        br.com.bragasaude.ui.components.MaskedInputField(
+                                            mask = br.com.bragasaude.ui.components.InputMask.TIME,
                                             value = timeValue,
                                             onValueChange = { newTime ->
-                                                val formatted = HealthFormatter.formatTimeInput(newTime)
+                                                val formatted = newTime
                                                 if (globalIndex == 0) {
                                                     item.updateFirstTimeAndRecalculate(formatted)
                                                 } else {

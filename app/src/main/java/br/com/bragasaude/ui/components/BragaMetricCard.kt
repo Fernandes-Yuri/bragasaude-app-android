@@ -130,7 +130,7 @@ fun BragaMetricCard(
                     fontWeight = FontWeight.Normal,
                     textAlign = TextAlign.Center,
                     color = BragaTextSecondary,
-                    maxLines = 1,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
             }

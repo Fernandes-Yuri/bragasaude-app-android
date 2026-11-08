@@ -13,6 +13,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Cliente HTTP para comunicação com o Hub de Notificações no Lenovo G460.
@@ -32,30 +34,33 @@ class NotificationClient @Inject constructor(
         private const val TIMEOUT_MS = 5000
     }
 
+    private val registrationLock = Mutex()
+    private var registeredDevice: List<String>? = null
+    private var registrationTime = 0L
+
     var serverBaseUrl: String = DEFAULT_SERVER_URL
 
     /**
      * Cadastra o dispositivo atual e seu token FCM no servidor Homelab.
      */
     suspend fun registerDevice(
-        userId: String,
-        token: String,
-        role: String = "PATIENT",
-        name: String = "Usuário Braga"
+        userId: String, token: String, role: String = "PATIENT", name: String = "Usuário Braga"
     ): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val endpoint = URL("$serverBaseUrl/api/device/register")
-            val payload = JSONObject().apply {
-                put("userId", userId)
-                put("token", token)
-                put("role", role)
-                put("name", name)
-                put("platform", "android")
+        registrationLock.withLock {
+            val identity = listOf(serverBaseUrl, userId, token, role, name)
+            val now = System.nanoTime() / 1_000_000
+            if (identity == registeredDevice && now - registrationTime < 900_000) return@withLock true
+            try {
+                val payload = JSONObject().put("userId", userId).put("token", token).put("role", role)
+                    .put("name", name).put("platform", "android")
+                val success = sendJsonPost(URL("$serverBaseUrl/api/device/register"), payload)
+                if (success) { registeredDevice = identity; registrationTime = now }
+                success
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Falha ao registrar dispositivo no Hub: ${e.javaClass.simpleName}")
+                false
             }
-            return@withContext sendJsonPost(endpoint, payload)
-        } catch (e: Exception) {
-            Log.w(TAG, "Falha ao registrar dispositivo no Hub: ${e.message}")
-            return@withContext false
         }
     }
 
@@ -67,6 +72,8 @@ class NotificationClient @Inject constructor(
         userId: String,
         token: String
     ): Boolean = withContext(Dispatchers.IO) {
+        registrationLock.withLock {
+        registeredDevice = null
         try {
             val endpoint = URL("$serverBaseUrl/api/device/unregister")
             val payload = JSONObject().apply {
@@ -78,6 +85,7 @@ class NotificationClient @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao desvincular dispositivo no Hub: ${e.message}")
             return@withContext false
+        }
         }
     }
 

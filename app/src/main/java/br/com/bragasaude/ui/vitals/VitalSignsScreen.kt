@@ -120,13 +120,11 @@ fun VitalSignsScreen(
         else -> "GLUCOSE"
     }
 
-    val pressureHistory = remember(allVitals) {
-        allVitals.mapNotNull { it.systolicPressure?.toDouble() }.reversed()
+    val pressureRows = remember(allVitals) {
+        allVitals.filter { it.systolicPressure != null && it.diastolicPressure != null }.reversed()
     }
-    // D-VIT1: serie diastolica para o grafico duplo de pressao arterial.
-    val diastolicHistory = remember(allVitals) {
-        allVitals.mapNotNull { it.diastolicPressure?.toDouble() }.reversed()
-    }
+    val pressureHistory = pressureRows.map { it.systolicPressure!!.toDouble() }
+    val diastolicHistory = pressureRows.map { it.diastolicPressure!!.toDouble() }
     val glucoseHistory = remember(allVitals) {
         allVitals.mapNotNull { it.glucoseLevel?.toDouble() }.reversed()
     }
@@ -273,14 +271,14 @@ fun VitalSignsScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         VitalNumericField(
-                            label = "Máxima (Sistólica)",
+                            label = "Máxima",
                             value = systolicInput,
                             onValueChange = { systolicInput = it },
                             unit = "mmHg",
                             modifier = Modifier.weight(1f)
                         )
                         VitalNumericField(
-                            label = "Mínima (Diastólica)",
+                            label = "Mínima",
                             value = diastolicInput,
                             onValueChange = { diastolicInput = it },
                             unit = "mmHg",
@@ -381,11 +379,11 @@ fun VitalSignsScreen(
                                 br.com.bragasaude.ui.components.SimpleTrendChart(
                                     data = pressureHistory,
                                     secondaryData = diastolicHistory,
-                                    timestamps = allVitals.filter { it.systolicPressure != null }.map { it.measuredAt ?: "" }.reversed(),
+                                    timestamps = pressureRows.map { it.measuredAt.orEmpty() },
                                     label = "Sistólica",
                                     secondaryLabel = "Diastólica",
                                     color = MaterialTheme.colorScheme.primary,
-                                    secondaryColor = BragaEmeraldDark,
+                                    secondaryColor = Color(0xFF7C3AED),
                                     unit = "mmHg",
                                     showPeriodSelector = true
                                 )

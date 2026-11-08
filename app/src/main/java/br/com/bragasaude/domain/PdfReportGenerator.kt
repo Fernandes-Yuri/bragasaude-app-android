@@ -123,7 +123,7 @@ class PdfReportGenerator(private val context: Context) {
         PdfTextLayout.wrap("Titular: ${profile.fullName ?: "Não informado"}", 440f, patientTitle::measureText)
             .take(2).forEachIndexed { index, line -> canvas1.drawText(line, 90f, yPos + 19f + index * 14f, patientTitle) }
         
-        val infoLine = "Idade/Nasc: ${profile.birthDate ?: "--"}  |  Gênero: ${profile.gender ?: "--"}  |  Peso: ${profile.weight ?: "--"}kg  |  Altura: ${profile.height ?: "--"}m"
+        val infoLine = br.com.bragasaude.domain.ReportPatientInfo.line(profile)
         PdfTextLayout.wrap(infoLine, 440f, subTextPaint::measureText)
             .take(2).forEachIndexed { index, line -> canvas1.drawText(line, 90f, yPos + 48f + index * 12f, subTextPaint) }
         yPos += 65f + 28f
@@ -164,7 +164,8 @@ class PdfReportGenerator(private val context: Context) {
         )
         yPos += 160f
 
-        val hydrationData = cycleReport.hydrationStats.dailySeries
+        val hydrationDates = (0L..29L).map { java.time.LocalDate.parse(cycleReport.startDate).plusDays(it).toString() }
+        val hydrationData = hydrationDates.map { cycleReport.hydrationStats.dailyTotals[it]?.toDouble() ?: Double.NaN }
         drawChartBox(
             canvas = canvas1,
             x = 50f,
@@ -493,7 +494,7 @@ class PdfReportGenerator(private val context: Context) {
             canvas.drawLine(chartLeft, gridY, chartRight, gridY, gridPaint)
         }
 
-        val allPoints = series.flatMap { it.points }
+        val allPoints = series.flatMap { it.points }.filter { it.isFinite() }
         if (allPoints.isEmpty()) {
             val emptyPaint = Paint().apply { textSize = 10f; color = Color.GRAY; isAntiAlias = true }
             canvas.drawText("Sem dados registrados para este indicador.", chartLeft + 20f, (chartTop + chartBottom) / 2, emptyPaint)
@@ -502,6 +503,11 @@ class PdfReportGenerator(private val context: Context) {
 
         val minVal = (allPoints.minOrNull() ?: 0.0) * 0.9
         val maxVal = ((allPoints.maxOrNull() ?: 100.0) * 1.1).coerceAtLeast(minVal + 1.0)
+
+        val axisPaint = Paint().apply { textSize = 7f; color = Color.rgb(71, 85, 105); isAntiAlias = true }
+        canvas.drawText(br.com.bragasaude.data.util.HealthFormatter.formatNumber(minVal), x + 2f, chartBottom, axisPaint)
+        canvas.drawText(br.com.bragasaude.data.util.HealthFormatter.formatNumber(maxVal), x + 2f, chartTop + 4f, axisPaint)
+        canvas.drawText("Sequência de registros • datas no detalhamento", chartLeft, chartBottom + 12f, axisPaint)
 
         // Linha de Meta
         if (target != null && target in minVal..maxVal) {
@@ -538,15 +544,14 @@ class PdfReportGenerator(private val context: Context) {
             val path = Path()
             val pointSpacing = if (s.points.size > 1) (chartRight - chartLeft) / (s.points.size - 1) else 0f
 
+            var connected = false
             s.points.forEachIndexed { index, value ->
+                if (!value.isFinite()) { connected = false; return@forEachIndexed }
                 val px = chartLeft + index * pointSpacing
                 val py = chartBottom - ((value - minVal) / (maxVal - minVal) * (chartBottom - chartTop)).toFloat()
 
-                if (index == 0) {
-                    path.moveTo(px, py)
-                } else {
-                    path.lineTo(px, py)
-                }
+                if (!connected) path.moveTo(px, py) else path.lineTo(px, py)
+                connected = true
                 canvas.drawCircle(px, py, 3f, dotPaint)
             }
             canvas.drawPath(path, linePaint)

@@ -71,7 +71,6 @@ android {
             // AUD-CHAT1: chat familiar em produção via WebSocket Go de baixa
             // latência (/ws/family), unificado com o fallback REST offline.
             buildConfigField("Boolean", "ENABLE_FAMILY_WEBSOCKET", "true")
-            buildConfigField("String", "TEST_LAB_ACCOUNT", "\"\"")
             if (hasKeystore) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -84,7 +83,6 @@ android {
             isDebuggable = true
             buildConfigField("Boolean", "ENABLE_FAMILY_WEBSOCKET", "true")
             val testLabAccount = project.findProperty("testAccount") as? String ?: "testebraga1@proton.me"
-            buildConfigField("String", "TEST_LAB_ACCOUNT", "\"$testLabAccount\"")
             // APK interno: mantém o applicationId/Firebase da produção e pode
             // atualizar a instalação release, mas continua com BuildConfig.DEBUG=true.
             if (hasKeystore) {

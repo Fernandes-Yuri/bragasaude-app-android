@@ -50,6 +50,8 @@ class HomeViewModel @Inject constructor(
 
     private val _dashboardVitals = MutableStateFlow(RemoteVitalSign(userId = ""))
     val dashboardVitals = _dashboardVitals.asStateFlow()
+    private val _readings = MutableStateFlow(br.com.bragasaude.domain.HomeReadingSummary())
+    val readings = _readings.asStateFlow()
 
     private val _latestMilestone = MutableStateFlow<RemoteMilestone?>(null)
     val latestMilestone = _latestMilestone.asStateFlow()
@@ -125,6 +127,7 @@ class HomeViewModel @Inject constructor(
     private suspend fun observeUser(userId: String) = coroutineScope {
         _userName.value = "Usuário"
         _dashboardVitals.value = RemoteVitalSign(userId = userId)
+        _readings.value = br.com.bragasaude.domain.HomeReadingSummary(userId = userId)
         _latestMilestone.value = null
         _clinicalAlerts.value = emptyList()
         dismissedAlertsKey = "dismissed_alerts_${userId}_$todayDateStr"
@@ -140,7 +143,7 @@ class HomeViewModel @Inject constructor(
 
         // Evita cancelar a análise de alertas a cada passo durante uma caminhada.
         // O debounce mantém a atualização dos dados de movimento e dos alertas.
-        val debouncedSteps = movementManager.currentSteps.debounce(2_000)
+        val debouncedSteps = movementManager.currentSteps.debounce(2_000).onStart { emit(movementManager.currentSteps.value) }
 
         val healthDataFlow = combine(
             vitalsRepository.getVitalSigns(userId),
@@ -182,8 +185,9 @@ class HomeViewModel @Inject constructor(
 
         // Atualiza UI principal
         launch {
-            healthDataFlow.collect { (latest, _) ->
+            healthDataFlow.collect { (latest, data) ->
                 _dashboardVitals.value = latest
+                _readings.value = br.com.bragasaude.domain.HomeReadingSummary.from(userId, data.second)
             }
         }
 

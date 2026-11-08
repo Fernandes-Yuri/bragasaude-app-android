@@ -15,41 +15,49 @@ import javax.inject.Inject
 data class DoseScreenState(val groups:List<DoseGroup> = emptyList(),val intents:List<DoseIntentEntity> = emptyList(),
     val reserved:Set<String> = emptySet(),val busy:Boolean=false,val message:String?=null,
     val selectedDate:String?=null,val schedule:JSONObject?=null,val scheduleMedication:String?=null,val patient:String="",
-    val accessVerified:Boolean=false,val accessMessage:String?=null)
+    val accessVerified:Boolean=false,val accessMessage:String?=null, val actor:String="", val context:Long=0)
 @HiltViewModel
 class MedicationDoseViewModel @Inject constructor(private val repository:MedicationDoseRepository):ViewModel() {
     private val _state=MutableStateFlow(DoseScreenState())
     val state:StateFlow<DoseScreenState> = _state.asStateFlow()
     private var watch:Job?=null
+    private var operation:Job?=null
+    private var generation = 0L
+    private fun isCurrent(snapshot: DoseScreenState) = _state.value.context == snapshot.context && actorId() == snapshot.actor
     fun actorId()=runCatching { repository.actor() }.getOrDefault("")
     fun open(patient:String) {
-        if(patient==_state.value.patient) return
-        watch?.cancel(); _state.value=DoseScreenState(patient=patient)
+        val actor = actorId()
+        val id = patient.trim()
+        if (id == _state.value.patient && actor == _state.value.actor) return
+        operation?.cancel(); watch?.cancel()
+        val snapshot = DoseScreenState(patient = id, actor = actor, context = ++generation)
+        _state.value = snapshot
+        if (id.isBlank() || actor.isBlank()) return
         watch=viewModelScope.launch {
             try {
-                combine(repository.groups(patient),repository.intents(patient)) { groups,intents -> groups to intents }
+                combine(repository.groups(id),repository.intents(id)) { groups,intents -> groups to intents }
                     .collect { (rows,intents) ->
                         val groups=rows.map { DoseGroup.parse(JSONObject(it.payload)) }
-                        _state.update { it.copy(groups=groups,intents=intents,reserved=repository.reservations(patient)) }
+                        val reserved=repository.reservations(id)
+                        if (isCurrent(snapshot)) _state.update { it.copy(groups=groups,intents=intents,reserved=reserved) }
                     }
             } catch(e:kotlinx.coroutines.CancellationException) { throw e
-            } catch(e:Exception) { _state.update { it.copy(message=e.message) } }
+            } catch(e:Exception) { if (isCurrent(snapshot)) _state.update { it.copy(message="Não foi possível carregar os horários.") } }
         }
         refresh()
     }
-    fun refresh()=run {
-        val current=_state.value
+    fun refresh()=run { current ->
         _state.update { it.copy(accessVerified=false,accessMessage=null) }
         try {
             repository.refresh(current.patient,if(current.selectedDate==null) 7 else 1,current.selectedDate)
-            _state.update { if(it.patient==current.patient) it.copy(accessVerified=true,accessMessage=null) else it }
+            _state.update { if(isCurrent(current)) it.copy(accessVerified=true,accessMessage=null) else it }
         } catch(e: DoseApiException) {
-            _state.update { if(it.patient!=current.patient) it else it.copy(accessVerified=false,
+            _state.update { if(!isCurrent(current)) it else it.copy(accessVerified=false,
                 accessMessage=if(e.http==403 || e.http==401) "Não foi possível acessar os dados desta pessoa. Confira seu vínculo e sua conta." else "Não foi possível verificar o acesso. Confira a conexão e tente novamente.") }
             return@run "Não foi possível atualizar os horários."
         } catch(e: kotlinx.coroutines.CancellationException) { throw e
         } catch(e: Exception) {
-            _state.update { if(it.patient!=current.patient) it else it.copy(accessVerified=false,accessMessage="Não foi possível verificar o acesso. Confira a conexão e tente novamente.") }
+            _state.update { if(!isCurrent(current)) it else it.copy(accessVerified=false,accessMessage="Não foi possível verificar o acesso. Confira a conexão e tente novamente.") }
             return@run "Não foi possível atualizar os horários."
         }
         repository.enqueue()
@@ -85,14 +93,19 @@ class MedicationDoseViewModel @Inject constructor(private val repository:Medicat
         val response=repository.saveSchedule(s.patient,requireNotNull(s.scheduleMedication),requireNotNull(s.schedule).getInt("schedule_revision"),slots)
         closeEditor();response
     }
-    private fun run(action:suspend ()->String) {
-        if(_state.value.busy) return
-        viewModelScope.launch {
-            _state.update { it.copy(busy=true,message=null) }
-            try { val message=action();_state.update { it.copy(message=message) } }
-            catch(e:kotlinx.coroutines.CancellationException) { throw e }
-            catch(e:Exception) { _state.update { it.copy(message="Não foi possível concluir. Confira a conexão e tente novamente.") } }
-            finally { _state.update { it.copy(busy=false) } }
+    private fun run(action:suspend (DoseScreenState)->String) {
+        val snapshot = _state.value
+        if(snapshot.busy || snapshot.patient.isBlank() || snapshot.actor.isBlank() || !isCurrent(snapshot)) return
+        // Reserve synchronously: lifecycle and composition cannot enqueue two requests.
+        _state.update { it.copy(busy=true,message=null) }
+        operation = viewModelScope.launch {
+            try {
+                val message=action(snapshot)
+                if (isCurrent(snapshot)) _state.update { it.copy(message=message) }
+            } catch(e:kotlinx.coroutines.CancellationException) { throw e
+            } catch(e:Exception) {
+                if (isCurrent(snapshot)) _state.update { it.copy(message="Não foi possível concluir. Confira a conexão e tente novamente.") }
+            } finally { if (isCurrent(snapshot)) _state.update { it.copy(busy=false) } }
         }
     }
 }

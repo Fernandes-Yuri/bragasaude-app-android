@@ -460,94 +460,17 @@ fun SocialFeedScreen(
  * Canto inferior direito 100% livre para a Orbe de IA.
  */
 @Composable
-private fun CommunityWelcomeBanner(
-    onPublishClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = BragaCardSurface
-        ),
-        border = BorderStroke(1.dp, BragaMintBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            BragaMintSurface,
-                            BragaMint.copy(alpha = 0.45f),
-                            BragaCardSurface
-                        )
-                    )
-                )
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(BragaMint),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.EmojiEvents,
-                        contentDescription = null,
-                        tint = BragaEmeraldDark,
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Compartilhe uma vitória hoje com a comunidade",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 17.sp,
-                        color = BragaTextPrimary
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Celebre pequenas conquistas, inspire outros colegas e fortaleça sua rotina.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontSize = 14.sp,
-                        color = BragaTextSecondary
-                    )
-                }
+private fun CommunityWelcomeBanner(onPublishClick: () -> Unit) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = BragaMintSurface)) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.EmojiEvents, contentDescription = null, tint = BragaEmeraldDark)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Sua conquista de hoje", style = MaterialTheme.typography.titleMedium)
+                Text("Celebre seu progresso.", style = MaterialTheme.typography.bodySmall)
             }
-
-            Button(
-                onClick = onPublishClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = BragaEmerald,
-                    contentColor = Color.White
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Publicar Conquista",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            TextButton(onClick = onPublishClick) { Text("Publicar") }
         }
     }
 }

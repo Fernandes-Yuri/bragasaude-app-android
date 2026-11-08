@@ -87,6 +87,7 @@ fun HomeScreen(
 ) {
     val userName by viewModel.userName.collectAsState()
     val vitals by viewModel.dashboardVitals.collectAsState()
+    val readings by viewModel.readings.collectAsState()
     val milestone by viewModel.latestMilestone.collectAsState()
     val clinicalAlerts by viewModel.clinicalAlerts.collectAsState()
     val readAlerts by viewModel.readAlerts.collectAsState()
@@ -250,7 +251,7 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         BragaMetricCard(
-                            value = if (stps > 0) "%,d".format(stps) else "0",
+                            value = if (!readings.loaded) "…" else if (stps > 0) "%,d".format(stps) else "0",
                             label = "passos",
                             unit = "meta %,d".format(userStepGoal),
                             icon = Icons.AutoMirrored.Filled.DirectionsWalk,
@@ -258,9 +259,9 @@ fun HomeScreen(
                             onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Steps) }
                         )
                         BragaMetricCard(
-                            value = "$cups/$targetCups",
+                            value = if (readings.loaded) "$cups/$targetCups" else "…",
                             label = "copos",
-                            unit = "$hyd de $targetMl ml",
+                            unit = if (readings.loaded) "$hyd de $targetMl ml" else "Carregando registros…",
                             icon = Icons.Default.WaterDrop,
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Hydration()) }
@@ -355,18 +356,18 @@ fun HomeScreen(
 
                 // 4. Sinais Vitais (Pressão Arterial e Glicemia - Wireframe 110827.png)
                 item {
-                    val sys = vitals.systolicPressure
-                    val dia = vitals.diastolicPressure
-                    val gluc = vitals.glucoseLevel
+                    val sys = readings.pressure?.systolicPressure
+                    val dia = readings.pressure?.diastolicPressure
+                    val gluc = readings.glucose?.glucoseLevel
 
                     Row(
                         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         BragaMetricCard(
-                            value = if (sys != null && dia != null) "$sys/$dia" else "--",
+                            value = if (!readings.loaded) "…" else if (sys != null && dia != null) "$sys/$dia" else "—",
                             label = "Pressão",
-                            unit = "mmHg",
+                            unit = if (!readings.loaded) "Carregando…" else if (sys == null) "Sem medição" else "mmHg • " + br.com.bragasaude.domain.HomeReadingSummary.date(readings.pressure?.measuredAt),
                             icon = Icons.Default.Favorite,
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Vitals("PRESSURE")) }
@@ -377,9 +378,9 @@ fun HomeScreen(
                     if (profile?.hasDiabetes == true || gluc != null) {
                         Spacer(Modifier.height(14.dp))
                         BragaMetricCard(
-                            value = gluc?.toString() ?: "--",
+                            value = if (!readings.loaded) "…" else gluc?.let { br.com.bragasaude.data.util.HealthFormatter.formatNumber(it) } ?: "—",
                             label = "Glicemia",
-                            unit = "mg/dL",
+                            unit = if (!readings.loaded) "Carregando…" else if (gluc == null) "Sem medição" else "mg/dL • " + br.com.bragasaude.domain.HomeReadingSummary.date(readings.glucose?.measuredAt),
                             icon = Icons.Default.Bloodtype,
                             modifier = Modifier.fillMaxWidth(),
                             onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Vitals("GLUCOSE")) }

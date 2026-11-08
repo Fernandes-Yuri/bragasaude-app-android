@@ -345,6 +345,7 @@ fun HydrationScreen(
                     )
                     br.com.bragasaude.ui.components.SimpleTrendChart(
                         data = hydrationHistory,
+                        timestamps = viewModel.hydrationDates.collectAsState().value,
                         label = "Consumo Hídrico",
                         color = Color(0xFF0EA5E9),
                         targetValue = target,

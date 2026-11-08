@@ -196,11 +196,11 @@ fun ProfileDetailScreen(
                     if (isWeight) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
-                                onClick = { measurementText = String.format(java.util.Locale.US, "%.1f", value!! - 0.5) },
+                                onClick = { measurementText = String.format(java.util.Locale("pt", "BR"), "%.1f", value!! - 0.5) },
                                 enabled = !savingMeasurement && valid && value!! - 0.5 in range
                             ) { Text("- 0,5 kg") }
                             OutlinedButton(
-                                onClick = { measurementText = String.format(java.util.Locale.US, "%.1f", value!! + 0.5) },
+                                onClick = { measurementText = String.format(java.util.Locale("pt", "BR"), "%.1f", value!! + 0.5) },
                                 enabled = !savingMeasurement && valid && value!! + 0.5 in range
                             ) { Text("+ 0,5 kg") }
                         }
@@ -549,12 +549,12 @@ fun ProfileDetailScreen(
                                 modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                                     .clickable(enabled = profile != null && !savingMeasurement, onClickLabel = "Editar peso") {
                                         profileViewModel.clearSaveError()
-                                        measurementText = profile?.weight?.toString().orEmpty()
+                                        measurementText = br.com.bragasaude.data.util.HealthFormatter.formatNumber(profile?.weight)
                                         editingWeight = true
                                     }
                             ) {
                                 Text(
-                                    text = "${profile?.weight?.let { String.format(java.util.Locale.US, "%.1f", it) } ?: "--"} kg",
+                                    text = "${profile?.weight?.let { String.format(java.util.Locale("pt", "BR"), "%.1f", it) } ?: "--"} kg",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -594,7 +594,7 @@ fun ProfileDetailScreen(
                                 val h = profile?.height
                                 val imc = if (w != null && h != null && h > 0) {
                                     val hMeters = h / 100.0
-                                    String.format(java.util.Locale.US, "%.1f", w / (hMeters * hMeters))
+                                    String.format(java.util.Locale("pt", "BR"), "%.1f", w / (hMeters * hMeters))
                                 } else {
                                     "--"
                                 }

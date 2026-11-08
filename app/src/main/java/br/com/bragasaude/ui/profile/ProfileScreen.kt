@@ -337,8 +337,8 @@ fun ProfileScreen(
                 Spacer(Modifier.height(16.dp))
                 br.com.bragasaude.ui.components.ShieldEcgIcon(sizeDp = 64.dp)
                 Spacer(Modifier.height(8.dp))
-                Text("Bem-vindo(a)!", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Text("Complete seu perfil para personalizarmos sua experiência.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+                Text(if (profile == null) "Seu cadastro" else "Editar cadastro", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text("Confira seus dados de saúde e preferências.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
             }
 
             item {
@@ -617,9 +617,10 @@ fun ProfileScreen(
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Ciclo de Sono (Não incomodar)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            OutlinedTextField(
+                            br.com.bragasaude.ui.components.MaskedInputField(
+                                mask = br.com.bragasaude.ui.components.InputMask.TIME,
                                 value = sleepStart,
-                                onValueChange = { sleepStart = HealthFormatter.formatTimeInput(it) },
+                                onValueChange = { sleepStart = it },
                                 label = { Text("Hora de Dormir") },
                                 modifier = Modifier.weight(1f),
                                 shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
@@ -631,9 +632,10 @@ fun ProfileScreen(
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next),
                                 placeholder = { Text("22:00") }
                             )
-                            OutlinedTextField(
+                            br.com.bragasaude.ui.components.MaskedInputField(
+                                mask = br.com.bragasaude.ui.components.InputMask.TIME,
                                 value = sleepEnd,
-                                onValueChange = { sleepEnd = HealthFormatter.formatTimeInput(it) },
+                                onValueChange = { sleepEnd = it },
                                 label = { Text("Hora de Acordar") },
                                 modifier = Modifier.weight(1f),
                                 shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),

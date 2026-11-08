@@ -42,7 +42,12 @@ class ProfileRepository @Inject constructor(
 
     suspend fun syncProfile(userId: String) {
         if (userId == guestId) return
-        refreshProfileForLogin(userId)
+        val before = profileDao.getProfileOneShot(userId)
+        val result = apiClient.getProfileLookup(userId)
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        if (result is br.com.bragasaude.data.remote.model.ProfileLookup.Found) {
+            profileDao.cacheRemoteProfile(result.profile.toEntity(), before)
+        }
     }
 
     private var lastProfileSyncAttemptTime = 0L

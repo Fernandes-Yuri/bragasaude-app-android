@@ -28,6 +28,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChatBubbleOutline
@@ -154,7 +155,7 @@ fun FamilyNotesCard(
                         fontSize = 18.sp
                     )
                     Text(
-                        if (unreadCount > 0) "$unreadCount não lida${if (unreadCount > 1) "s" else ""}" else "Todas lidas",
+                        br.com.bragasaude.domain.FamilyMessagePresentation.status(unreadCount, messages),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp
@@ -235,7 +236,7 @@ fun FamilyNotesCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
-                        if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        if (expanded) Icons.AutoMirrored.Filled.ArrowForward else Icons.Default.ExpandMore,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -515,7 +516,7 @@ private fun FamilyMessageItem(
 
             // Texto do recado em itálico sóbrio
             Text(
-                text = "\u201C${message.messageText}\u201D",
+                text = br.com.bragasaude.domain.FamilyMessagePresentation.preview(message),
                 style = MaterialTheme.typography.bodyMedium,
                 fontStyle = FontStyle.Italic,
                 fontSize = 15.sp,
