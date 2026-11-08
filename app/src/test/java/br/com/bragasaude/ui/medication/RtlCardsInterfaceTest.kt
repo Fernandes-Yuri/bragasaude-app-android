@@ -67,17 +67,13 @@ class RtlCardsInterfaceTest {
                 compose.runOnIdle { width.value = size; fontScale.value = scale; record.value = item }
                 assertTrue(layout(item.name).lineCount <= 2)
                 doseLabel?.let {
-                    assertEquals(1, layout(it).lineCount)
-                    assertFalse(layout(it).hasVisualOverflow)
+                    assertWholeSingleLine(it, size - 32f)
                 } ?: compose.onNodeWithText("12,5 mg").assertDoesNotExist()
                 compose.onNodeWithText("${item.currentUnits} comprimidos restantes").assertIsDisplayed()
                 for (count in listOf(1, 3, 6)) {
                     compose.runOnIdle { times.value = allTimes.take(count) }
                     for (time in allTimes.take(count)) {
-                        val node = compose.onNodeWithText(time).assertIsDisplayed()
-                        assertEquals(1, layout(time).lineCount)
-                        assertFalse(layout(time).hasVisualOverflow)
-                        assertTrue(node.fetchSemanticsNode().boundsInRoot.right <= size - 32f)
+                        assertWholeSingleLine(time, size - 32f)
                     }
                     compose.onNodeWithText("Após o café da manhã").assertIsDisplayed()
                 }
@@ -142,8 +138,7 @@ class RtlCardsInterfaceTest {
         val badge = compose.onNodeWithContentDescription(status.value.accessibilityLabel).assertIsDisplayed()
         val cancel = compose.onNodeWithContentDescription("Cancelar Consulta")
         assertTrue(badge.fetchSemanticsNode().boundsInRoot.top >= cancel.fetchSemanticsNode().boundsInRoot.bottom)
-        assertEquals(1, layout("24h e 1h antes").lineCount)
-        assertFalse(layout("24h e 1h antes").hasVisualOverflow)
+        assertWholeSingleLine("24h e 1h antes", 288f)
         cancel.performClick()
         assertTrue(cancelled)
         compose.runOnIdle { status.value = status.value.copy(deviceEnabled = false) }
@@ -156,5 +151,19 @@ class RtlCardsInterfaceTest {
         compose.onNodeWithText(text, useUnmergedTree = true)
             .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
         return layouts.single()
+    }
+
+    private fun assertWholeSingleLine(text: String, maxRight: Float) {
+        val result = layout(text)
+        val bounds = compose.onNodeWithText(text, useUnmergedTree = true).assertIsDisplayed()
+            .fetchSemanticsNode().boundsInRoot
+        assertEquals(1, result.lineCount)
+        assertEquals(text.length, result.getLineEnd(0, visibleEnd = true))
+        assertFalse(result.isLineEllipsized(0))
+        // Compose 1.7 reconstrói o parágrafo de String com outra largura em GetTextLayoutResult.
+        // Conferir glifos contra os limites reais detecta corte sem o falso hasVisualOverflow.
+        val glyphWidth = result.getLineRight(0) - result.getLineLeft(0)
+        assertTrue("$text: glifos $glyphWidth excedem largura real ${bounds.width}", glyphWidth <= bounds.width + 1f)
+        assertTrue("$text: fora da largura de conteúdo", bounds.left >= 32f && bounds.right <= maxRight + 1f)
     }
 }
