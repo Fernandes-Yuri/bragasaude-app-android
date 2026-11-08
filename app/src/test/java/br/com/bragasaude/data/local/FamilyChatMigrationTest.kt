@@ -50,4 +50,38 @@ class FamilyChatMigrationTest {
             } finally { db.close() }
         } finally { context.deleteDatabase(name) }
     }
+    @Test fun schema66PreservesPendingWaterAndLabelsLegacyConsultationForReview() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        val name = "clinical-66.db"
+        context.deleteDatabase(name)
+        val relative = "schemas/br.com.bragasaude.data.local.BragaDatabase/66.json"
+        val source = sequenceOf(File(relative), File("app/$relative")).first { it.isFile }
+        val entities = JSONObject(source.readText()).getJSONObject("database").getJSONArray("entities")
+        val future = System.currentTimeMillis()+86400000
+        try {
+            context.openOrCreateDatabase(name, 0, null).use { old ->
+                repeat(entities.length()) { index ->
+                    val table = entities.getJSONObject(index)
+                    val tableName = table.getString("tableName")
+                    old.execSQL(table.getString("createSql").replace("\${TABLE_NAME}", tableName))
+                    val indexes = table.optJSONArray("indices") ?: org.json.JSONArray()
+                    repeat(indexes.length()) { j -> old.execSQL(indexes.getJSONObject(j).getString("createSql").replace("\${TABLE_NAME}", tableName)) }
+                }
+                old.execSQL("INSERT INTO vital_signs_local(localId,userId,hydrationMl,measuredAt,status,pendingSync) VALUES(1,'patient',250,1,'recorded',1)")
+                old.execSQL("INSERT INTO consultations_local(id,userId,title,scheduledDate,status,createdAt,updatedAt,pendingSync) VALUES('legacy','patient','Consulta',$future,'ACCEPTED',1,1,0)")
+                old.version = 66
+            }
+            val db = Room.databaseBuilder(context, BragaDatabase::class.java, name).allowMainThreadQueries().addMigrations(*Migrations.ALL).build()
+            try {
+                assertEquals(250, db.vitalSignDao().getPendingSync().single().hydrationMl)
+                assertFalse(db.vitalSignDao().getPendingSync().single().hydrationUndoPending)
+                val legacy = db.familyDao().localConsultationsToReview().single()
+                assertEquals("legacy", legacy.id)
+                assertFalse(legacy.remoteConfirmed)
+                assertFalse(legacy.pendingSync)
+                assertNull(db.vitalSignDao().getCursor("patient", "patient"))
+            } finally { db.close() }
+        } finally { context.deleteDatabase(name) }
+    }
+
 }

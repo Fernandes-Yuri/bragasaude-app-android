@@ -797,7 +797,11 @@ class AuthViewModel @Inject constructor(
                 database.bleTelemetryReceiptDao().getPendingSync().any { it.patientId == userId } ||
                 (userId != null && database.medicationDoseDao().pending(userId).isNotEmpty()) ||
                 database.feedbackDao().getPendingSync().any { it.userId == userId } ||
-                database.socialFeedDao().getPendingPosts().any { it.userId == userId }
+                database.socialFeedDao().getPendingPosts().any { it.userId == userId } ||
+                database.socialFeedDao().getPendingMutations().any { it.userId == userId } ||
+                database.socialFeedDao().getPendingReactions().any { it.userId == userId } ||
+                database.auditLogDao().getPendingSync().any { it.userId == userId } ||
+                (userId != null && database.familyDao().pendingReceipts(userId).isNotEmpty())
         }
         if (hasPendingData) {
             _sessionNotice.value = "Há registros locais ou aguardando envio. Confira a agenda e a conexão antes de sair para preservar seus dados."
