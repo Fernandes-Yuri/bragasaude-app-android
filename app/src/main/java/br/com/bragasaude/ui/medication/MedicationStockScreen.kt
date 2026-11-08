@@ -493,7 +493,7 @@ fun MedicationStockScreen(
             }
 
             if (ui.isCaregiver && ui.patients.size > 1) {
-                CarePatientSelector(ui, viewModel::selectPatient)
+                CarePatientSelector(ui, viewModel::selectPatient, label = "De quem são os medicamentos?")
             }
 
             if (!accessAllowed) {
@@ -791,7 +791,7 @@ private fun ManualMedicationDialog(
 }
 
 @Composable
-private fun MedicationStockCard(
+internal fun MedicationStockCard(
     medication: MedicationEntity,
     daysRemaining: Double,
     isCritical: Boolean,
@@ -977,111 +977,8 @@ private fun MedicationStockCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(verticalAlignment = Alignment.Top) {
-                Icon(
-                    Icons.Filled.Medication,
-                    contentDescription = null,
-                    tint = BragaEmeraldDark,
-                    modifier = Modifier.size(32.dp)
-                )
-                Spacer(Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            medication.name,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = BragaTextPrimary
-                        )
-                        val dosageLabel = medication.dosage?.takeIf { it.isNotBlank() }
-                            ?: medication.dosageMg?.let { if (it % 1.0 == 0.0) "${it.toLong()}mg" else "${it}mg" }
-                        if (dosageLabel != null) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = BragaMintSurface,
-                                border = BorderStroke(1.dp, BragaMintBorder)
-                            ) {
-                                Text(
-                                    text = dosageLabel,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = BragaEmeraldDark,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-                    medication.activePrinciple?.takeIf { it.isNotBlank() }?.let {
-                        Text(it, fontSize = 14.sp, color = BragaTextSecondary)
-                    }
-                    medication.manufacturer?.takeIf { it.isNotBlank() }?.let {
-                        Text(it, fontSize = 13.sp, color = BragaTextSecondary)
-                    }
-                }
-                // Pílulas restantes — destaque visual grande
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        "${medication.currentUnits}",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 28.sp,
-                        color = if (isCritical) BragaEmergencyOrange else BragaEmeraldDark
-                    )
-                    Text(
-                        "comprimidos restantes",
-                        fontSize = 12.sp,
-                        color = BragaTextSecondary
-                    )
-                }
-            }
-
-            // Horários e contexto alimentar
-            if (currentTimes.isNotEmpty() || !medication.notes.isNullOrBlank()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Horários:",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = BragaTextSecondary
-                    )
-                    currentTimes.forEach { t ->
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = BragaMintSurface,
-                            border = BorderStroke(1.dp, BragaMintBorder)
-                        ) {
-                            Text(
-                                text = t,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = BragaEmeraldDark,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                    medication.notes?.takeIf { it.isNotBlank() }?.let { notes ->
-                        val label = medicationInstructionLabel(notes)
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = BragaCardSurface,
-                            border = BorderStroke(1.dp, BragaCardBorder)
-                        ) {
-                            Text(
-                                text = label,
-                                fontSize = 11.sp,
-                                color = BragaTextSecondary,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                }
-            }
+            MedicationStockHeader(medication, isCritical)
+            MedicationScheduleDetails(currentTimes, medication.notes)
 
             // Tag de alerta de reposição
             if (isCritical) {
@@ -1169,26 +1066,27 @@ private fun MedicationStockCard(
                         Text("Enviar Lembrete", color = Color.White, fontSize = 15.sp)
                     }
                 }
-                OutlinedButton(
-                    onClick = { showRestock = !showRestock },
-                    enabled = canRestock,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                ) {
-                    Text(
-                        "Reabastecer",
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                if (canRestock) {
+                    OutlinedButton(
+                        onClick = { showRestock = !showRestock },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                    ) {
+                        Text(
+                            "Reabastecer",
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 
             Text(dose.detail, fontSize = 13.sp, color = BragaTextSecondary)
 
-            if (showRestock) {
+            if (showRestock && canRestock) {
                 OutlinedTextField(
                     value = restockQty,
                     onValueChange = { restockQty = it.filter { c -> c.isDigit() } },

@@ -10,6 +10,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
+import br.com.bragasaude.ui.util.NotificationHelper
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -236,6 +238,30 @@ class CaregiverDashboardViewModelTest {
 
         coVerify(exactly = 1) {
             familyRepository.cancelConsultation("consult-99", "caregiver-1")
+        }
+    }
+
+    @Test
+    fun `reminder status uses logged in caregiver preference and device permission`() = runTest(testDispatcher) {
+        val consultation = ConsultationEntity("c", "patient-100", "caregiver-1", "Ana", "Filha", "Consulta",
+            scheduledDate = Date(System.currentTimeMillis() + 172800000), status = "ACCEPTED")
+        mockkObject(NotificationHelper)
+        try {
+            every { profileDao.getProfile("caregiver-1") } returns flowOf(
+                ProfileEntity(userId = "caregiver-1", notificationsEnabled = false))
+            every { NotificationHelper.observeConsultationReminderTags(context, "c", "caregiver-1", consultation.scheduledDate.time) } returns
+                flowOf(setOf("24h", "1h"))
+            every { NotificationHelper.consultationNotificationsAllowed(context) } returns true
+            assertEquals("Avisos desativados no app", viewModel.observeConsultationReminders(consultation).first().label)
+            every { profileDao.getProfile("caregiver-1") } returns flowOf(
+                ProfileEntity(userId = "caregiver-1", notificationsEnabled = true))
+            every { NotificationHelper.consultationNotificationsAllowed(context) } returns false
+            assertEquals("Avisos bloqueados no aparelho", viewModel.observeConsultationReminders(consultation).first().label)
+            every { NotificationHelper.consultationNotificationsAllowed(context) } returns true
+            assertEquals("Avisos: 24h e 1h antes", viewModel.observeConsultationReminders(consultation).first().label)
+            assertEquals("Avisos não agendados", viewModel.observeConsultationReminders(consultation.copy(status = "CANCELLED")).first().label)
+        } finally {
+            unmockkObject(NotificationHelper)
         }
     }
 }

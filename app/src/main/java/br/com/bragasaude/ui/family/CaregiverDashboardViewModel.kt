@@ -7,6 +7,7 @@ import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.repository.FamilyBridgeRepository
 import br.com.bragasaude.data.remote.repository.MessageTemplate
 import br.com.bragasaude.ui.util.FamilyNotificationService
+import br.com.bragasaude.ui.util.NotificationHelper
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -54,6 +55,26 @@ class CaregiverDashboardViewModel @Inject constructor(
 
     private val _upcomingConsultations = MutableStateFlow<List<ConsultationEntity>>(emptyList())
     val upcomingConsultations: StateFlow<List<ConsultationEntity>> = _upcomingConsultations.asStateFlow()
+
+    internal fun observeConsultationReminders(consultation: ConsultationEntity): Flow<ConsultationReminderStatus> = flow {
+        val owner = auth.currentUser?.uid
+        if (owner == null || owner == BragaConstants.GUEST_UID) {
+            emit(ConsultationReminderStatus(loading = false))
+            return@flow
+        }
+        emitAll(combine(
+            profileDao.getProfile(owner),
+            NotificationHelper.observeConsultationReminderTags(context, consultation.id, owner, consultation.scheduledDate.time)
+        ) { profile, tags ->
+            val active = auth.currentUser?.uid == owner && consultation.status in setOf("SUGGESTED", "ACCEPTED")
+            ConsultationReminderStatus(
+                scheduledTags = if (active) tags else emptySet(),
+                appEnabled = profile?.notificationsEnabled != false,
+                deviceEnabled = NotificationHelper.consultationNotificationsAllowed(context),
+                loading = false
+            )
+        })
+    }.catch { emit(ConsultationReminderStatus(loading = false, unavailable = true)) }
 
     private val _quickTemplates = MutableStateFlow(familyRepository.getQuickMessageTemplates())
     val quickTemplates: StateFlow<Map<String, MessageTemplate>> = _quickTemplates.asStateFlow()
