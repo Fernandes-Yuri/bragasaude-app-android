@@ -28,9 +28,14 @@ class MedicationDoseViewModel @Inject constructor(private val repository:Medicat
     fun open(patient:String) {
         val actor = actorId()
         val id = patient.trim()
-        if (id == _state.value.patient && actor == _state.value.actor) return
+        if (id.isNotBlank() && actor.isNotBlank() && id == _state.value.patient && actor == _state.value.actor) return
         operation?.cancel(); watch?.cancel()
-        val snapshot = DoseScreenState(patient = id, actor = actor, context = ++generation)
+        val snapshot = DoseScreenState(patient = id, actor = actor, context = ++generation,
+            accessMessage = when {
+                actor.isBlank() -> "Entre na sua conta para conferir os horários."
+                id.isBlank() -> "Selecione a pessoa para conferir os horários."
+                else -> null
+            })
         _state.value = snapshot
         if (id.isBlank() || actor.isBlank()) return
         watch=viewModelScope.launch {

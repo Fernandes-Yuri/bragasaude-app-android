@@ -16,6 +16,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+@OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class MaskedInputInterfaceTest {
@@ -39,7 +40,7 @@ class MaskedInputInterfaceTest {
         compose.runOnIdle { assertEquals("21:45", value) }
     }
 
-    @Test fun datePasteAndTimeListKeepTheirSeparatorsWithoutCorruptingTheBuffer() {
+    @Test fun timeListKeepsItsSeparatorsWithoutCorruptingTheBuffer() {
         var value by mutableStateOf("")
         compose.setContent { BragasaudeTheme(forceThemeMode = "LIGHT") {
             MaskedInputField(value, { value = it }, InputMask.TIME_LIST, Modifier.testTag("times"))
@@ -51,4 +52,23 @@ class MaskedInputInterfaceTest {
         field.performTextInput("07")
         compose.runOnIdle { assertEquals("07:00, 20:00", value) }
     }
+    @Test fun dateDigitsStayInOrderAcrossBothSlashesAndAPaste() {
+        var value by mutableStateOf("")
+        compose.setContent { BragasaudeTheme(forceThemeMode = "LIGHT") {
+            MaskedInputField(value, { value = it }, InputMask.DATE, Modifier.testTag("date"))
+        } }
+        val field = compose.onNodeWithTag("date")
+        val expected = listOf("0", "08", "08/1", "08/11", "08/11/2", "08/11/20", "08/11/202", "08/11/2026")
+        "08112026".forEachIndexed { index, digit ->
+            field.performTextInput(digit.toString())
+            compose.runOnIdle { assertEquals(expected[index], value) }
+        }
+        field.performTextInputSelection(TextRange(0, 2))
+        field.performTextInput("31")
+        compose.runOnIdle { assertEquals("31/11/2026", value) }
+        field.performTextClearance()
+        field.performTextInput("29/02/2024")
+        compose.runOnIdle { assertEquals("29/02/2024", value) }
+    }
+
 }

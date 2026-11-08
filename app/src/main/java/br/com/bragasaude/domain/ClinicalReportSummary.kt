@@ -111,8 +111,8 @@ object ClinicalReportAggregator {
             minDiastolic = minDia,
             normalReadingsCount = normalBpCount,
             totalReadings = bpReadings.size,
-            systolicSeries = sysList.map { it.toDouble() },
-            diastolicSeries = diaList.map { it.toDouble() }
+            systolicSeries = bpReadings.map { it.systolicPressure?.toDouble() ?: Double.NaN },
+            diastolicSeries = bpReadings.map { it.diastolicPressure?.toDouble() ?: Double.NaN }
         )
 
         // --- 3. GLICOSE (Isolada de registros hídricos) ---

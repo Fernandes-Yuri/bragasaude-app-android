@@ -94,7 +94,7 @@ fun VitalSignsScreen(
     var selectedTab by remember { mutableIntStateOf(initialTab) }
 
     var voiceHint by remember { mutableStateOf<String?>(null) }
-    val voiceLauncher = rememberVoiceInputLauncher { transcription ->
+    val voiceLauncher = br.com.bragasaude.ui.util.rememberVoiceInputLauncherWithFeedback(onFeedback = { voiceHint = it }) { transcription ->
         val draft = VitalVoiceInput.parse(transcription, glucose = selectedTab == 1)
         when (draft) {
             is VoiceHealthIntent.BloodPressure -> {

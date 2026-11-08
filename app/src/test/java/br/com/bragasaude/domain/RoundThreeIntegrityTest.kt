@@ -72,4 +72,16 @@ class RoundThreeIntegrityTest {
         val mapping = InputMask.TIME_LIST.transformation().filter(androidx.compose.ui.text.AnnotatedString(list.text)).offsetMapping
         for (offset in 0..list.text.length) assertEquals(offset, mapping.transformedToOriginal(mapping.originalToTransformed(offset)))
     }
+    @Test fun aPartialPressureRecordDoesNotShiftTheDiastolicSeriesInTheExport() {
+        val now = java.time.OffsetDateTime.now().toString()
+        val report = ClinicalReportAggregator.aggregate30DayCycle(RemoteProfile(id = "patient"), listOf(
+            RemoteVitalSign(userId = "patient", systolicPressure = 120, measuredAt = now),
+            RemoteVitalSign(userId = "patient", systolicPressure = 130, diastolicPressure = 80, measuredAt = now)
+        ), emptyList())
+        assertEquals(2, report.pressureStats.systolicSeries.size)
+        assertEquals(2, report.pressureStats.diastolicSeries.size)
+        assertTrue(report.pressureStats.diastolicSeries.first().isNaN())
+        assertEquals(80.0, report.pressureStats.diastolicSeries.last(), 0.0)
+    }
+
 }

@@ -12,6 +12,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -32,6 +33,7 @@ class OnDeviceVoiceInputLauncher internal constructor(
     private val scope: CoroutineScope,
     private val onResult: (String) -> Unit
 ) {
+    internal var onFeedback: ((String) -> Unit)? = null
     internal var requestPermission: (() -> Unit)? = null
     private var pendingIntent: Intent? = null
     private var recognizer: SpeechRecognizer? = null
@@ -108,15 +110,24 @@ class OnDeviceVoiceInputLauncher internal constructor(
         runCatching { old?.destroy() }
     }
 
-    private fun showMessage(message: String) = Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    private fun showMessage(message: String) {
+        val feedback = onFeedback
+        if (feedback != null) feedback(message) else Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    }
 }
 
 @Composable
-fun rememberVoiceInputLauncher(onResult: (String) -> Unit): OnDeviceVoiceInputLauncher {
+fun rememberVoiceInputLauncher(onResult: (String) -> Unit): OnDeviceVoiceInputLauncher =
+    rememberVoiceInputLauncherWithFeedback(null, onResult)
+
+@Composable
+fun rememberVoiceInputLauncherWithFeedback(onFeedback: ((String) -> Unit)?, onResult: (String) -> Unit): OnDeviceVoiceInputLauncher {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val callback = rememberUpdatedState(onResult)
+    val feedback = rememberUpdatedState(onFeedback)
     val launcher = remember(context, scope) { OnDeviceVoiceInputLauncher(context.applicationContext, scope) { callback.value(it) } }
+    SideEffect { launcher.onFeedback = feedback.value }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission(), launcher::permissionResult)
     launcher.requestPermission = { permission.launch(Manifest.permission.RECORD_AUDIO) }
     val owner = LocalLifecycleOwner.current

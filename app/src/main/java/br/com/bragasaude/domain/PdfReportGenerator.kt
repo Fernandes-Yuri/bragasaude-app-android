@@ -132,6 +132,12 @@ class PdfReportGenerator(private val context: Context) {
         yPos += 18f
 
         // Gráficos
+        val pressureDates = recentVitals.filter { it.systolicPressure != null || it.diastolicPressure != null }
+            .sortedBy { it.measuredAt?.let { date -> br.com.bragasaude.domain.ChartTimeline.instant(date) } }
+            .map { it.measuredAt.orEmpty() }
+        val glucoseDates = recentVitals.filter { it.glucoseLevel != null }
+            .sortedBy { it.measuredAt?.let { date -> br.com.bragasaude.domain.ChartTimeline.instant(date) } }
+            .map { it.measuredAt.orEmpty() }
         val pressureDataSys = cycleReport.pressureStats.systolicSeries
         val pressureDataDia = cycleReport.pressureStats.diastolicSeries
         drawChartBox(
@@ -142,8 +148,8 @@ class PdfReportGenerator(private val context: Context) {
             height = 140f,
             title = "Evolução da Pressão Arterial (Sistólica / Diastólica)",
             series = listOf(
-                ChartSeries("Sistólica (mmHg)", pressureDataSys, Color.rgb(0, 137, 123)),
-                ChartSeries("Diastólica (mmHg)", pressureDataDia, Color.rgb(0, 229, 255))
+                ChartSeries("Sistólica (mmHg)", pressureDataSys, Color.rgb(0, 137, 123), pressureDates),
+                ChartSeries("Diastólica (mmHg)", pressureDataDia, Color.rgb(124, 58, 237), pressureDates)
             ),
             target = null
         )
@@ -158,7 +164,7 @@ class PdfReportGenerator(private val context: Context) {
             height = 140f,
             title = "Evolução da Glicemia (mg/dL)",
             series = listOf(
-                ChartSeries("Glicose", glucoseData, Color.rgb(234, 88, 12))
+                ChartSeries("Glicose", glucoseData, Color.rgb(234, 88, 12), glucoseDates)
             ),
             target = null
         )
@@ -174,7 +180,7 @@ class PdfReportGenerator(private val context: Context) {
             height = 140f,
             title = "Consumo Hídrico Diário Consolidado (ml/dia)",
             series = listOf(
-                ChartSeries("Água (ml)", hydrationData, Color.rgb(14, 165, 233))
+                ChartSeries("Água (ml)", hydrationData, Color.rgb(14, 165, 233), hydrationDates)
             ),
             target = (profile.hydrationTargetMl ?: 2000).toDouble()
         )
@@ -434,7 +440,8 @@ class PdfReportGenerator(private val context: Context) {
     private data class ChartSeries(
         val name: String,
         val points: List<Double>,
-        val color: Int
+        val color: Int,
+        val dates: List<String> = emptyList()
     )
 
     private fun drawChartBox(
@@ -507,7 +514,16 @@ class PdfReportGenerator(private val context: Context) {
         val axisPaint = Paint().apply { textSize = 7f; color = Color.rgb(71, 85, 105); isAntiAlias = true }
         canvas.drawText(br.com.bragasaude.data.util.HealthFormatter.formatNumber(minVal), x + 2f, chartBottom, axisPaint)
         canvas.drawText(br.com.bragasaude.data.util.HealthFormatter.formatNumber(maxVal), x + 2f, chartTop + 4f, axisPaint)
-        canvas.drawText("Sequência de registros • datas no detalhamento", chartLeft, chartBottom + 12f, axisPaint)
+        val dates = series.firstOrNull()?.dates.orEmpty()
+        fun label(date: String) = ChartTimeline.instant(date)?.let {
+            java.time.format.DateTimeFormatter.ofPattern(if (date.length == 10) "dd/MM" else "dd/MM HH:mm")
+                .withZone(java.time.ZoneId.systemDefault()).format(it)
+        }.orEmpty()
+        if (dates.isNotEmpty()) {
+            canvas.drawText("1º ${label(dates.first())}", chartLeft, chartBottom + 12f, axisPaint)
+            axisPaint.textAlign = Paint.Align.RIGHT
+            canvas.drawText("Último ${label(dates.last())}", chartRight, chartBottom + 12f, axisPaint)
+        } else canvas.drawText("Sequência de registros • datas no detalhamento", chartLeft, chartBottom + 12f, axisPaint)
 
         // Linha de Meta
         if (target != null && target in minVal..maxVal) {
@@ -524,12 +540,13 @@ class PdfReportGenerator(private val context: Context) {
         }
 
         // Desenho das Curvas
-        series.forEach { s ->
-            if (s.points.isEmpty()) return@forEach
+        series.forEachIndexed { seriesIndex, s ->
+            if (s.points.isEmpty()) return@forEachIndexed
 
             val linePaint = Paint().apply {
                 color = s.color
                 strokeWidth = 2.2f
+                if (seriesIndex > 0) pathEffect = DashPathEffect(floatArrayOf(5f, 3f), 0f)
                 style = Paint.Style.STROKE
                 isAntiAlias = true
                 strokeCap = Paint.Cap.ROUND
@@ -545,8 +562,8 @@ class PdfReportGenerator(private val context: Context) {
             val pointSpacing = if (s.points.size > 1) (chartRight - chartLeft) / (s.points.size - 1) else 0f
 
             var connected = false
-            s.points.forEachIndexed { index, value ->
-                if (!value.isFinite()) { connected = false; return@forEachIndexed }
+            s.points.forEachIndexed point@{ index, value ->
+                if (!value.isFinite()) { connected = false; return@point }
                 val px = chartLeft + index * pointSpacing
                 val py = chartBottom - ((value - minVal) / (maxVal - minVal) * (chartBottom - chartTop)).toFloat()
 

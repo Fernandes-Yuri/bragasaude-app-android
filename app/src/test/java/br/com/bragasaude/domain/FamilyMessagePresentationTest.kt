@@ -6,7 +6,7 @@ import org.junit.Test
 
 class FamilyMessagePresentationTest {
     private fun message(text: String, unavailable: Boolean) = FamilyMessageEntity(
-        id = "fixture", patientUserId = "patient", senderName = "Cuidador", messageText = text, awaitingDecryption = unavailable)
+        id = "fixture", patientUserId = "patient", senderName = "Cuidador", iconType = "LOVE", messageText = text, awaitingDecryption = unavailable)
 
     @Test fun unreadableContentNeverLooksLikeAnEmptyQuoteOrAReadReceipt() {
         val unavailable = message("", true)
