@@ -39,6 +39,11 @@ interface VitalSignDao {
     @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND measuredAt >= :sinceMillis ORDER BY measuredAt DESC")
     fun getRecent30Days(userId: String, sinceMillis: Long): Flow<List<VitalSignEntity>>
 
+    @Query("""SELECT * FROM vital_signs_local WHERE userId=:patient AND deletedAt IS NULL
+        AND ((:metric='PRESSURE' AND systolicPressure IS NOT NULL AND diastolicPressure IS NOT NULL)
+          OR (:metric='GLUCOSE' AND glucoseLevel IS NOT NULL)) ORDER BY measuredAt DESC, localId DESC LIMIT :limit""")
+    fun metricWindow(patient: String, metric: String, limit: Int): Flow<List<VitalSignEntity>>
+
     // Memória pessoal: intervalos no fuso do aparelho, sem carregar o histórico inteiro.
     @Query("SELECT * FROM vital_signs_local WHERE userId = :userId AND systolicPressure > 0 AND diastolicPressure > 0 AND measuredAt >= :startInclusiveMillis AND measuredAt < :endExclusiveMillis ORDER BY measuredAt DESC, localId DESC LIMIT 1")
     suspend fun getLatestPressureForMemory(userId: String, startInclusiveMillis: Long, endExclusiveMillis: Long): VitalSignEntity?
@@ -796,7 +801,7 @@ interface FamilyDao {
 
     @Transaction
     suspend fun acknowledgeConsultation(expected: ConsultationEntity, remote: ConsultationEntity) {
-        if (getConsultationById(expected.id) == expected) insertConsultation(remote.copy(pendingSync = false, pendingAction = null, remoteConfirmed = true))
+        if (getConsultationById(expected.id) == expected) insertConsultation(remote.copy(pendingSync = false, pendingAction = null, pendingActorId = null, remoteConfirmed = true))
     }
 
     @Transaction
@@ -821,6 +826,16 @@ interface FamilyDao {
             queueReceipt(FamilyReadReceipt(owner, message.patientUserId, message.remoteId ?: message.id, message.expiresAt))
         }
     }
+
+    @Query("SELECT * FROM consultations_local WHERE id=:id")
+    fun observeConsultation(id: String): Flow<ConsultationEntity?>
+
+    @Query("""SELECT * FROM consultations_local WHERE userId=:userId AND
+        ((:upcoming=1 AND scheduledDate>=:now AND status IN ('SUGGESTED','ACCEPTED')) OR
+         (:upcoming=0 AND (scheduledDate<:now OR status NOT IN ('SUGGESTED','ACCEPTED'))))
+        ORDER BY CASE WHEN :upcoming=1 THEN scheduledDate END ASC,
+                 CASE WHEN :upcoming=0 THEN scheduledDate END DESC LIMIT :limit""")
+    fun getConsultationsWindow(userId: String, now: Long, upcoming: Boolean, limit: Int): Flow<List<ConsultationEntity>>
 
     /** Buscar todas as consultas do usuário. */
     @Query("SELECT * FROM consultations_local WHERE userId = :userId ORDER BY scheduledDate DESC")

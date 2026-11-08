@@ -125,6 +125,12 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
             if (!patient.isNullOrBlank()) CaregiverSyncWorker.enqueue(applicationContext, owner, patient)
         }
 
+        if (type.startsWith("CONSULTATION_")) {
+            val owner = FirebaseAuth.getInstance().currentUser?.uid
+            val patient = remoteMessage.data["patientId"]
+            if (owner != null && !patient.isNullOrBlank()) ConsultationSyncWorker.enqueue(applicationContext, owner, patient)
+        }
+
         if (message.isNotBlank()) {
             when (type) {
                 "EMERGENCY" -> showEmergencyNotification(title, message)
@@ -133,7 +139,7 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
                 "FAMILY_MESSAGE" -> showFamilyMessageNotification(title, message)
                 "CONSULTATION_CREATED", "CONSULTATION_ACCEPTED", "CONSULTATION_REJECTED",
                 "CONSULTATION_CANCELLED", "CONSULTATION_COMPLETED" ->
-                    showConsultationNotification(title, message)
+                    showConsultationNotification(title, message, remoteMessage.data["consultationId"], remoteMessage.data["patientId"])
                 "APP_UPDATE" -> {
                     val rawUrl = remoteMessage.data["download_url"]
                     val downloadUrl = sanitizeDownloadUrl(rawUrl)
@@ -280,7 +286,7 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
         manager.notify(ID_FAMILY_MESSAGE, notification)
     }
 
-    private fun showConsultationNotification(title: String, message: String) {
+    private fun showConsultationNotification(title: String, message: String, consultationId: String?, patientId: String?) {
         // Canal de consultas (bragasaude_consultation): mesmo id usado pelo
         // NotificationHelper, então os lembretes locais e os pushes ficam juntos.
         val context = applicationContext
@@ -301,6 +307,8 @@ class BragaFirebaseMessagingService : FirebaseMessagingService() {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("OPEN_CONSULTATION", true)
+            putExtra("consultationId", consultationId)
+            putExtra("patientId", patientId)
         }
         val pendingIntent = PendingIntent.getActivity(
             context,

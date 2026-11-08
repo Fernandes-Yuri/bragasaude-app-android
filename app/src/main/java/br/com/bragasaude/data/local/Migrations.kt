@@ -650,6 +650,7 @@ object Migrations {
             db.execSQL("ALTER TABLE vital_signs_local ADD COLUMN hydrationUndoPending INTEGER NOT NULL DEFAULT 0")
             db.execSQL("ALTER TABLE vital_signs_local ADD COLUMN deletedAt INTEGER")
             db.execSQL("ALTER TABLE consultations_local ADD COLUMN pendingAction TEXT")
+            db.execSQL("ALTER TABLE consultations_local ADD COLUMN pendingActorId TEXT")
             db.execSQL("ALTER TABLE consultations_local ADD COLUMN remoteConfirmed INTEGER NOT NULL DEFAULT 0")
             db.execSQL("ALTER TABLE consultations_local ADD COLUMN createdBy TEXT")
             db.execSQL("CREATE TABLE clinical_sync_cursors (ownerId TEXT NOT NULL, patientId TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(ownerId,patientId))")

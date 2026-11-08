@@ -33,6 +33,8 @@ import kotlinx.serialization.Serializable
 
     // Novas Rotas (Ponte Familiar e Papéis)
     @Serializable data object FamilyConnect : Screen
+    @Serializable data class ClinicalHistory(val patientId: String, val metric: String) : Screen
+    @Serializable data class Consultations(val patientId: String = "", val consultationId: String = "") : Screen
     @Serializable data object FamilyInbox : Screen
     @Serializable data class FamilyChat(val patientId: String? = null) : Screen
     @Serializable data object CaregiverDashboard : Screen

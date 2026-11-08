@@ -31,13 +31,11 @@ class MedicalReportInterfaceTest {
                 MedicalReportContent(false, remember { SnackbarHostState() }, {}, { exports++ })
             }
         }
-        compose.onNodeWithText("Seus registros contam uma história").assertIsDisplayed()
-        compose.onNodeWithText("Leve para a consulta").assertIsDisplayed()
-        compose.onNodeWithText("Reveja o período com calma").assertIsDisplayed()
+        compose.onNodeWithText("Seu relatório de 30 dias").assertIsDisplayed()
         compose.onNodeWithText("Últimos registros vitais").assertDoesNotExist()
         compose.onNodeWithText("Resumo corporal").assertDoesNotExist()
         screenshot("01-por-que-usar-o-pdf")
-        compose.onNodeWithTag("reportContent").performScrollToNode(hasText("Baixar relatório em PDF"))
+        compose.onNodeWithText("Baixar relatório em PDF").assertIsDisplayed()
         compose.onNodeWithText("Baixar relatório em PDF").performClick()
         compose.runOnIdle { assertEquals(1, exports) }
         screenshot("02-exportar-relatorio")
@@ -49,8 +47,8 @@ class MedicalReportInterfaceTest {
                 MedicalReportContent(true, remember { SnackbarHostState() }, {}, {})
             }
         }
-        compose.onNodeWithText("Seus registros contam uma história").assertIsDisplayed()
-        compose.onNodeWithTag("reportContent").performScrollToNode(hasText("Gerando relatório..."))
+        compose.onNodeWithText("Seu relatório de 30 dias").assertIsDisplayed()
+        compose.onNodeWithText("Gerando relatório...").assertIsDisplayed()
         compose.onNodeWithText("Gerando relatório...").assertIsNotEnabled()
     }
 

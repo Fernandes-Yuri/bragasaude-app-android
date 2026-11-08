@@ -791,7 +791,7 @@ class AuthViewModel @Inject constructor(
                 database.familyDao().getPendingSyncMessages().any { it.senderUserId == userId } ||
                 database.familyDao().getPendingDeletionMessages().any { it.senderUserId == userId } ||
                 database.familyDao().getPendingSyncBindings().any { it.patientUserId == userId || it.caregiverUserId == userId } ||
-                database.familyDao().getPendingConsultations().any { it.createdBy == userId || it.userId == userId } ||
+                database.familyDao().getPendingConsultations().any { it.pendingActorId == userId } ||
                 database.symptomsDiaryDao().getPendingSync().any { it.reportedBy == userId } ||
                 database.bleTelemetryReceiptDao().getPendingSync().any { it.patientId == userId } ||
                 (userId != null && database.medicationDoseDao().pending(userId).isNotEmpty()) ||

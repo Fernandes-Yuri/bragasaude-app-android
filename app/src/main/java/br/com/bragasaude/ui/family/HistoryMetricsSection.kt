@@ -55,7 +55,8 @@ fun HistoryMetricsSection(
     hydrationDaysMet30d: Int,
     hydrationDaysTotal30d: Int,
     stepsDaysMet30d: Int,
-    stepsDaysTotal30d: Int
+    stepsDaysTotal30d: Int,
+    onOpenHistory: (String) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(true) }
     var selectedWindow by remember { mutableIntStateOf(7) }
@@ -152,20 +153,7 @@ fun HistoryMetricsSection(
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(Modifier.weight(1f))
-                        if (bpRecords.isNotEmpty()) {
-                            val latest = bpRecords.first()
-                            val sys = latest.systolicPressure ?: 0
-                            val dia = latest.diastolicPressure ?: 0
-                            val classification = BloodPressureParser.classify(sys, dia)
-                        Text(
-                            classification.category.displayName,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        }
+
                     }
 
                     Spacer(Modifier.height(6.dp))
@@ -182,7 +170,7 @@ fun HistoryMetricsSection(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            bpRecords.take(10).forEach { record ->
+                            bpRecords.take(3).forEach { record ->
                                 BPRecordRow(record)
                             }
                         }
@@ -206,17 +194,21 @@ fun HistoryMetricsSection(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            glucoseRecords.take(10).forEach { record ->
+                            glucoseRecords.take(3).forEach { record ->
                                 GlucoseRecordRow(record)
                             }
                         }
                     }
                 }
 
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    TextButton(onClick = { onOpenHistory("PRESSURE") }) { Text("Histórico de pressão") }
+                    if (patientHasDiabetes) TextButton(onClick = { onOpenHistory("GLUCOSE") }) { Text("Glicemia") }
+                }
                 HorizontalDivider()
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Text(
-                        if (selectedWindow == 7) "Consistência Semanal (7 dias)" else "Consistência Mensal (30 dias)",
+                        "Últimos $selectedWindow dias concluídos",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(bottom = 8.dp)
@@ -242,6 +234,9 @@ fun HistoryMetricsSection(
                         color = Color(0xFF66BB6A)
                     )
 
+                    Text("Hidratação: ${selectedWindow - currentHydrationDaysTotal} dias sem registro. Passos: ${selectedWindow - currentStepsDaysTotal} dias sem registro.",
+                        style = MaterialTheme.typography.labelSmall)
+                    Text("Hoje aparece no progresso diário. Metas atuais usadas como referência.", style = MaterialTheme.typography.labelSmall)
                     Spacer(Modifier.height(16.dp))
                 }
             }
@@ -250,7 +245,7 @@ fun HistoryMetricsSection(
 }
 
 @Composable
-private fun BPRecordRow(record: VitalSignEntity) {
+internal fun BPRecordRow(record: VitalSignEntity) {
     val systolic = record.systolicPressure ?: 0
     val diastolic = record.diastolicPressure ?: 0
     val classification = BloodPressureParser.classify(systolic, diastolic)
@@ -292,7 +287,7 @@ private fun BPRecordRow(record: VitalSignEntity) {
 }
 
 @Composable
-private fun GlucoseRecordRow(record: VitalSignEntity) {
+internal fun GlucoseRecordRow(record: VitalSignEntity) {
     val glucose = record.glucoseLevel ?: 0
     val classification = GlucoseClassifier.classify(glucose, GlucoseContext.FASTING)
     val dateStr = SimpleDateFormat("dd/MM · HH:mm", Locale.getDefault()).format(record.measuredAt)
@@ -361,7 +356,7 @@ private fun ConsistencyBar(label: String, percentage: Int, daysMet: Int, totalDa
         )
         Spacer(Modifier.height(2.dp))
         Text(
-            if (totalDays > 0) "$daysMet de $totalDays ${if (totalDays == 1) "dia" else "dias"}"
+            if (totalDays > 0) "$daysMet de $totalDays dias com registro"
             else "Sem registros no período",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)

@@ -394,6 +394,11 @@ fun HomeScreen(
                     }
                 }
 
+                item {
+                    br.com.bragasaude.ui.family.PersonalConsultationsCard(
+                        onOpen = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.Consultations()) })
+                }
+
                 // 5. Recados da Família — Ponte Familiar & Modo Cuidador (card acolhedor e interativo)
                 item {
                     FamilyNotesCard(

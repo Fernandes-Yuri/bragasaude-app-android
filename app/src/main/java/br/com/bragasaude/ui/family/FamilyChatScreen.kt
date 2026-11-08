@@ -123,12 +123,16 @@ fun FamilyChatScreen(
         }
     }
 
-    // Scroll para as mensagens mais recentes (índice 0 com reverseLayout)
-    LaunchedEffect(Unit) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(0)
+    var followLatest by remember(patientId) { mutableStateOf(true) }
+    LaunchedEffect(listState, patientId) {
+        snapshotFlow { listState.isScrollInProgress to listState.firstVisibleItemIndex }.collect { (scrolling, index) ->
+            if (scrolling) followLatest = index == 0
         }
     }
+    LaunchedEffect(patientId, visibleMessages.firstOrNull()?.id) {
+        if (followLatest && visibleMessages.isNotEmpty()) listState.scrollToItem(0)
+    }
+    val scrollScope = androidx.compose.runtime.rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -258,6 +262,12 @@ fun FamilyChatScreen(
                             MaterialTheme.colorScheme.error
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+
+            if (!followLatest && visibleMessages.isNotEmpty()) {
+                TextButton(onClick = { followLatest = true; scrollScope.launch { listState.animateScrollToItem(0) } }) {
+                    Text("Ir às mensagens recentes")
                 }
             }
 

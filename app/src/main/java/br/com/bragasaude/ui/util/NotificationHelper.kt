@@ -195,7 +195,8 @@ object NotificationHelper {
         title: String,
         dateText: String,
         timeText: String,
-        reminderTag: String = "24h"
+        reminderTag: String = "24h",
+        consultationId: String? = null, patientId: String? = null
     ) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -211,8 +212,10 @@ object NotificationHelper {
         }
 
         val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("OPEN_CONSULTATION", true)
+            putExtra("consultationId", consultationId)
+            putExtra("patientId", patientId)
         }
 
         val pendingIntent = PendingIntent.getActivity(

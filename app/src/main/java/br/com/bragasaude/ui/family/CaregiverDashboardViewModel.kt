@@ -236,6 +236,8 @@ class CaregiverDashboardViewModel @Inject constructor(
                         caregiverRelation = binding.caregiverRelation,
                         caregiverName = binding.caregiverName,
                         systolic = latestBP?.systolicPressure,
+                        pressureDateLabel = latestBP?.measuredAt?.let { SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(it) },
+                        glucoseDateLabel = latestGlucose?.measuredAt?.let { SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(it) },
                         diastolic = latestBP?.diastolicPressure,
                         glucose = if (hasDiabetes) latestGlucose?.glucoseLevel else null,
                         hasDiabetes = hasDiabetes,
@@ -338,10 +340,10 @@ class CaregiverDashboardViewModel @Inject constructor(
 
                 val sdf = SimpleDateFormat("dd/MM/yyyy 'às' HH:mm", Locale.getDefault())
                 val formattedDate = sdf.format(Date(scheduledDateMillis))
-                val msg = "Consulta agendada: ${specialty.trim()} - $formattedDate (Lembretes ativos 24h e 1h antes)"
+                val msg = "Consulta agendada: ${specialty.trim()} - $formattedDate"
                 sendCareMessage(msg, "CALENDAR")
 
-                _uiEvents.emit(FamilyUiEvent.Notice("Consulta agendada com lembretes programados!"))
+                _uiEvents.emit(FamilyUiEvent.Notice("Consulta salva. Confira o estado de sincronização na agenda."))
             } catch (e: Exception) {
                 _uiEvents.emit(FamilyUiEvent.Error("Erro ao agendar consulta: ${e.message}"))
             }

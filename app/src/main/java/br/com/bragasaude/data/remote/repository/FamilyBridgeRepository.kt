@@ -99,7 +99,7 @@ class FamilyBridgeRepository @Inject constructor(
         val owner = auth.currentUser?.uid ?: return
         for (c in familyDao.getPendingConsultations()) {
             if (auth.currentUser?.uid != owner) throw kotlinx.coroutines.CancellationException("Sessão alterada")
-            if (c.createdBy != owner && c.userId != owner && !c.remoteConfirmed) continue
+            if (c.pendingActorId != owner) continue
             var remote = if (!c.remoteConfirmed) apiClient.createConsultationRecord(c)
                 ?: throw java.io.IOException("Consulta aguardando envio") else c
             if (c.pendingAction != null && c.pendingAction != "CREATE") {
@@ -852,7 +852,7 @@ class FamilyBridgeRepository @Inject constructor(
             caregiverUserId = caregiverUserId, caregiverName = caregiverName, caregiverRelation = caregiverRelation,
             title = title.trim(), scheduledDate = Date(scheduledDate),
             status = if (owner == userId) "SUGGESTED" else "ACCEPTED",
-            pendingSync = true, pendingAction = "CREATE", createdBy = owner)
+            pendingSync = true, pendingAction = "CREATE", pendingActorId = owner, createdBy = owner)
         familyDao.insertConsultation(consultation)
         reconcileReminder(consultation)
         syncScheduler.scheduleSync()
@@ -865,6 +865,7 @@ class FamilyBridgeRepository @Inject constructor(
         val current = familyDao.getConsultationById(id) ?: return false
         requireConversationAccess(current.userId)
         val queued = current.copy(status = status, updatedAt = System.currentTimeMillis(),
+            pendingActorId = auth.currentUser?.uid,
             pendingSync = current.remoteConfirmed || current.pendingSync,
             pendingAction = if (current.remoteConfirmed || current.pendingSync) status else null)
         familyDao.insertConsultation(queued)

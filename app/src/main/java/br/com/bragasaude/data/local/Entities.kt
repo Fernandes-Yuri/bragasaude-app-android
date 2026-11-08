@@ -419,6 +419,7 @@ data class ConsultationEntity(
     val googleCalendarEventId: String? = null, // ID do evento no Google Calendar
     val pendingSync: Boolean = false,
     val pendingAction: String? = null,
+    val pendingActorId: String? = null,
     val remoteConfirmed: Boolean = false,
     val createdBy: String? = null
 )

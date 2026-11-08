@@ -42,6 +42,8 @@ data class CaregiverDashboardState(
     val steps: Int = 0,
     val stepGoal: Int = 8000,
     val lastMeasurementLabel: String? = null,
+    val pressureDateLabel: String? = null,
+    val glucoseDateLabel: String? = null,
     val isLoading: Boolean = false
 )
 
@@ -751,6 +753,8 @@ class FamilyViewModel @Inject constructor(
                         caregiverRelation = binding.caregiverRelation,
                         caregiverName = binding.caregiverName,
                         systolic = latestBP?.systolicPressure,
+                        pressureDateLabel = latestBP?.measuredAt?.let { SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(it) },
+                        glucoseDateLabel = latestGlucose?.measuredAt?.let { SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(it) },
                         diastolic = latestBP?.diastolicPressure,
                         glucose = if (hasDiabetes) latestGlucose?.glucoseLevel else null,
                         hasDiabetes = hasDiabetes,
@@ -844,8 +848,8 @@ class FamilyViewModel @Inject constructor(
                 )
                 val sdf = SimpleDateFormat("dd/MM/yyyy 'às' HH:mm", Locale.getDefault())
                 val formattedDate = sdf.format(Date(scheduledDateMillis))
-                sendCareMessage("Consulta agendada: ${specialty.trim()} - $formattedDate (Lembretes ativos 24h e 1h antes)", "CALENDAR")
-                _uiEvents.emit(FamilyUiEvent.Notice("Consulta agendada com lembretes programados!"))
+                sendCareMessage("Consulta agendada: ${specialty.trim()} - $formattedDate", "CALENDAR")
+                _uiEvents.emit(FamilyUiEvent.Notice("Consulta salva. Confira o estado de sincronização na agenda."))
             } catch (e: Exception) {
                 _uiEvents.emit(FamilyUiEvent.Error("Erro ao agendar consulta: ${e.message}"))
             }

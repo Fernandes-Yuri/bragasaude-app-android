@@ -112,6 +112,8 @@ fun CaregiverDashboardScreen(
     onBack: (() -> Unit)? = null,
     onConnectFamily: () -> Unit = {},
     onOpenChat: () -> Unit = {},
+    onOpenConsultations: (String) -> Unit = {},
+    onOpenHistory: (String, String) -> Unit = { _, _ -> },
     viewModel: CaregiverDashboardViewModel = hiltViewModel()
 ) {
     val watchedPatients by viewModel.watchedPatients.collectAsState()
@@ -325,33 +327,13 @@ fun CaregiverDashboardScreen(
                         }.filterKeys { it.isNotBlank() }
                     }
 
-                    val recentDates7d = dailyMetrics.take(7).map { it.date }.toSet()
-                    val recentDates30d = dailyMetrics.take(30).map { it.date }.toSet()
-
-                    val hydrationDays7d = if (recentDates7d.isNotEmpty()) {
-                        recentDates7d.count { date ->
-                            val dayTotal = hydrationByDay[date]?.sumOf { it.hydrationMl ?: 0 } ?: 0
-                            dayTotal >= dashboard.hydrationTargetMl
-                        }
-                    } else {
-                        hydrationByDay.values.take(7).count { list ->
-                            list.sumOf { it.hydrationMl ?: 0 } >= dashboard.hydrationTargetMl
-                        }
-                    }
-
-                    val hydrationDays30d = if (recentDates30d.isNotEmpty()) {
-                        recentDates30d.count { date ->
-                            val dayTotal = hydrationByDay[date]?.sumOf { it.hydrationMl ?: 0 } ?: 0
-                            dayTotal >= dashboard.hydrationTargetMl
-                        }
-                    } else {
-                        hydrationByDay.values.take(30).count { list ->
-                            list.sumOf { it.hydrationMl ?: 0 } >= dashboard.hydrationTargetMl
-                        }
-                    }
-
-                    val stepsDays7d = dailyMetrics.take(7).count { it.steps >= dashboard.stepGoal }
-                    val stepsDays30d = dailyMetrics.take(30).count { it.steps >= dashboard.stepGoal }
+                    val today = java.time.LocalDate.now()
+                    val hydrationTotals = hydrationByDay.mapValues { (_, records) -> records.sumOf { it.hydrationMl ?: 0 } }
+                    val stepTotals = dailyMetrics.associate { it.date to it.steps }
+                    val hydration7 = consistencyPeriod(today, 7, hydrationTotals, dashboard.hydrationTargetMl)
+                    val hydration30 = consistencyPeriod(today, 30, hydrationTotals, dashboard.hydrationTargetMl)
+                    val steps7 = consistencyPeriod(today, 7, stepTotals, dashboard.stepGoal)
+                    val steps30 = consistencyPeriod(today, 30, stepTotals, dashboard.stepGoal)
 
                     HistoryMetricsSection(
                         patientHasDiabetes = dashboard.hasDiabetes,
@@ -361,14 +343,15 @@ fun CaregiverDashboardScreen(
                         bpRecords30d = bpRecords30d,
                         glucoseRecords7d = glucoseRecords7d,
                         glucoseRecords30d = glucoseRecords30d,
-                        hydrationDaysMet7d = hydrationDays7d,
-                        hydrationDaysTotal7d = dailyMetrics.take(7).size.coerceAtLeast(1),
-                        stepsDaysMet7d = stepsDays7d,
-                        stepsDaysTotal7d = dailyMetrics.take(7).size.coerceAtLeast(1),
-                        hydrationDaysMet30d = hydrationDays30d,
-                        hydrationDaysTotal30d = dailyMetrics.take(30).size.coerceAtLeast(1),
-                        stepsDaysMet30d = stepsDays30d,
-                        stepsDaysTotal30d = dailyMetrics.take(30).size.coerceAtLeast(1)
+                        hydrationDaysMet7d = hydration7.met,
+                        hydrationDaysTotal7d = hydration7.observed,
+                        stepsDaysMet7d = steps7.met,
+                        stepsDaysTotal7d = steps7.observed,
+                        hydrationDaysMet30d = hydration30.met,
+                        hydrationDaysTotal30d = hydration30.observed,
+                        stepsDaysMet30d = steps30.met,
+                        stepsDaysTotal30d = steps30.observed,
+                        onOpenHistory = { metric -> onOpenHistory(dashboard.patientUserId, metric) }
                     )
                 }
 
@@ -385,6 +368,7 @@ fun CaregiverDashboardScreen(
                     UpcomingConsultationsCard(
                         consultations = upcomingConsultations,
                         onAddConsultation = { showAppointmentDialog = true },
+                        onSeeAll = { onOpenConsultations(dashboard.patientUserId) },
                         onCancelConsultation = { consultationId ->
                             viewModel.cancelConsultation(consultationId)
                         }
@@ -560,16 +544,7 @@ private fun TodayVitalsCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.weight(1f))
-                if (state.lastMeasurementLabel != null) {
-                    Text(
-                        state.lastMeasurementLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f, fill = false),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+
             }
 
             Spacer(Modifier.height(16.dp))
@@ -577,7 +552,8 @@ private fun TodayVitalsCard(
             // Mini-cards de Pressao e Glicose
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 VitalMiniCard(
-                    label = "Pressao arterial",
+                    label = "Pressão arterial",
+                    measuredAt = state.pressureDateLabel,
                     value = if (state.systolic != null) "${state.systolic}/${state.diastolic ?: "--"}" else "--",
                     unit = "mmHg",
                     icon = Icons.Default.Favorite,
@@ -587,6 +563,7 @@ private fun TodayVitalsCard(
                 if (state.hasDiabetes) {
                     VitalMiniCard(
                         label = "Glicose",
+                        measuredAt = state.glucoseDateLabel,
                         value = state.glucose?.toString() ?: "--",
                         unit = "mg/dL",
                         icon = Icons.Default.Medication,
@@ -631,7 +608,7 @@ private fun TodayVitalsCard(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                "Leituras autorreportadas ou medidas no dia pelo proprio familiar.",
+                "Registros informados pelo familiar.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
@@ -647,6 +624,7 @@ private fun VitalMiniCard(
     label: String,
     value: String,
     unit: String,
+    measuredAt: String? = null,
     icon: ImageVector,
     accentColor: Color,
     modifier: Modifier = Modifier
@@ -689,6 +667,7 @@ private fun VitalMiniCard(
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
             }
+            measuredAt?.let { Text("Medido em $it", style = MaterialTheme.typography.labelSmall) }
         }
     }
 }
@@ -947,6 +926,7 @@ private fun EmptyCaregiverState(modifier: Modifier = Modifier) {
 private fun UpcomingConsultationsCard(
     consultations: List<ConsultationEntity>,
     onAddConsultation: () -> Unit,
+    onSeeAll: () -> Unit,
     onCancelConsultation: (String) -> Unit
 ) {
     Surface(
@@ -979,13 +959,13 @@ private fun UpcomingConsultationsCard(
                     Spacer(Modifier.width(10.dp))
                     Column {
                         Text(
-                            "Agenda do Cuidado",
+                            "Consultas",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            "Consultas agendadas e lembretes duráveis",
+                            "Agenda do familiar",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1025,7 +1005,7 @@ private fun UpcomingConsultationsCard(
                 val sdfTime = SimpleDateFormat("HH:mm", Locale.getDefault())
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    consultations.forEach { consultation ->
+                    consultations.take(3).forEach { consultation ->
                         val dateFormatted = sdfDate.format(consultation.scheduledDate)
                         val timeFormatted = sdfTime.format(consultation.scheduledDate)
 
@@ -1082,6 +1062,7 @@ private fun UpcomingConsultationsCard(
                     }
                 }
             }
+            TextButton(onClick = onSeeAll) { Text("Ver agenda completa") }
         }
     }
 }
@@ -1112,7 +1093,7 @@ private fun AppointmentDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState())
             ) {
                 Text(
-                    "Preencha os dados da consulta. Os lembretes no celular (24h e 1h antes) serão configurados automaticamente pelo WorkManager.",
+                    "Informe a consulta. Lembretes: 24h e 1h antes.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 3,
