@@ -66,12 +66,8 @@ object HealthFormatter {
         if (dateStr.isNullOrBlank()) return true // opcional
         val digits = dateStr.filter { it.isDigit() }
         if (digits.length != 8) return false
-        val day = digits.substring(0, 2).toIntOrNull() ?: return false
-        val month = digits.substring(2, 4).toIntOrNull() ?: return false
-        val year = digits.substring(4, 8).toIntOrNull() ?: return false
-        val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
-        if (day !in 1..31 || month !in 1..12 || year !in 1900..currentYear) return false
-        return true
+        val date = parseLocalDate(if (dateStr.trim().all(Char::isDigit)) formatDateInput(digits) else dateStr) ?: return false
+        return date.year >= 1900 && !date.isAfter(java.time.LocalDate.now())
     }
 
     /**

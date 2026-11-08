@@ -99,7 +99,7 @@ object ClinicalReportAggregator {
         val normalBpCount = bpReadings.count {
             val sys = it.systolicPressure ?: 0
             val dia = it.diastolicPressure ?: 0
-            sys in 90..130 && dia in 60..85
+            br.com.bragasaude.domain.util.BloodPressureParser.classify(sys, dia).isNormal
         }
 
         val bpStats = BloodPressureCycleStats(
@@ -111,8 +111,8 @@ object ClinicalReportAggregator {
             minDiastolic = minDia,
             normalReadingsCount = normalBpCount,
             totalReadings = bpReadings.size,
-            systolicSeries = sysList.map { it.toDouble() },
-            diastolicSeries = diaList.map { it.toDouble() }
+            systolicSeries = bpReadings.map { it.systolicPressure?.toDouble() ?: Double.NaN },
+            diastolicSeries = bpReadings.map { it.diastolicPressure?.toDouble() ?: Double.NaN }
         )
 
         // --- 3. GLICOSE (Isolada de registros hídricos) ---

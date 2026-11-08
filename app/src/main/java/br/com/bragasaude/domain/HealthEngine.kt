@@ -264,7 +264,7 @@ class HealthEngine @Inject constructor(
         // --- ANÁLISE DE SITUAÇÃO: META DE HIDRATAÇÃO ---
         hydrationLock.withLock {
             val now = ZonedDateTime.now()
-            checkHydrationMilestone(userId, newVitals, now)?.let { milestone ->
+            checkHydrationMilestone(userId, newVitals, now, transitionsOnly = !silent)?.let { milestone ->
                 milestones.add(milestone)
                 if (!silent) {
                     milestonesRepository.saveMilestone(milestone)
@@ -338,7 +338,7 @@ class HealthEngine @Inject constructor(
     }
 
     private suspend fun checkHydrationMilestone(
-        userId: String, newVitals: List<RemoteVitalSign>, now: ZonedDateTime
+        userId: String, newVitals: List<RemoteVitalSign>, now: ZonedDateTime, transitionsOnly: Boolean
     ): RemoteMilestone? {
         val hasNewHydration = newVitals.any { it.hydrationMl != null }
         if (!hasNewHydration) return null
@@ -353,6 +353,10 @@ class HealthEngine @Inject constructor(
             todayTotal > 0 && todayTotal >= target / 2 -> "hydration_half"
             else -> return null
         }
+        val added = newVitals.filter { it.userId == userId }.sumOf { it.hydrationMl?.coerceAtLeast(0) ?: 0 }
+        val threshold = if (badgeType == "hydration_daily") target else target / 2
+        // Histórico restaurado já acima do limite é estado, não uma conquista nova.
+        if (transitionsOnly && (todayTotal - added).coerceAtLeast(0) >= threshold) return null
         val alreadyAchievedToday = milestonesRepository.getMilestones(userId).first().any {
             it.badgeType == badgeType && it.achievedAt.toInstant().atZone(now.zone).toLocalDate() == today
         }

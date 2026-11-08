@@ -60,34 +60,23 @@ fun LoginScreen(
     val isKeyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val credentialManager = CredentialManager.create(context)
     val authState by viewModel.authState.collectAsState()
-
-    val isFirebaseTestLab = remember {
-        Settings.System.getString(context.contentResolver, "firebase.test.lab") == "true"
+    val blockExternalLinksInTestLab = remember {
+        BuildConfig.DEBUG && Settings.System.getString(context.contentResolver, "firebase.test.lab") == "true"
     }
+
 
     var emailMode by rememberSaveable { mutableStateOf("login") } // "login", "signup" ou "forgot"
     var forgotStep by rememberSaveable { mutableStateOf(1) } // 1: e-mail, 2: código OTP, 3: nova senha
-    val defaultEmail = if (isFirebaseTestLab) BuildConfig.TEST_LAB_ACCOUNT.ifBlank { "testebraga1@proton.me" } else ""
-    var email by rememberSaveable { mutableStateOf(defaultEmail) }
-    var password by rememberSaveable { mutableStateOf(if (isFirebaseTestLab) "fernandes3" else "") }
+    // Testes devem injetar uma identidade descartável pelo harness autenticado.
+    // Nunca selecionar automaticamente uma conta compartilhada em instalação nova.
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
     var otpCode by rememberSaveable { mutableStateOf("") }
     var newPassword by rememberSaveable { mutableStateOf("") }
     var confirmNewPassword by rememberSaveable { mutableStateOf("") }
     var signupOtpCode by rememberSaveable { mutableStateOf("") }
     var googleAccountConflictMessage by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(isFirebaseTestLab) {
-        if (isFirebaseTestLab) {
-            delay(200)
-            val configuredAccount = BuildConfig.TEST_LAB_ACCOUNT.ifBlank { "testebraga1@proton.me" }
-            email = configuredAccount
-            password = "fernandes3"
-            if (emailMode == "login" && email.isNotBlank() && password.isNotBlank()) {
-                viewModel.signInWithEmail(email.trim(), password)
-            }
-        }
-    }
 
     // Observador de Erros e Mudanças de Estado
     LaunchedEffect(authState) {
@@ -729,7 +718,7 @@ fun LoginScreen(
                     ) {
                         TextButton(
                             onClick = {
-                                if (!isFirebaseTestLab) {
+                                if (!blockExternalLinksInTestLab) {
                                     uriHandler.openUri("https://bragasaude.online/termos")
                                 }
                             },
@@ -740,7 +729,7 @@ fun LoginScreen(
                         Text("e", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(
                             onClick = {
-                                if (!isFirebaseTestLab) {
+                                if (!blockExternalLinksInTestLab) {
                                     uriHandler.openUri("https://bragasaude.online/privacidade")
                                 }
                             },

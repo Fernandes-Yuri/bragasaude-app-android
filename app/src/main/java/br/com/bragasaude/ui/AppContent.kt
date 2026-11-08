@@ -72,9 +72,6 @@ fun AppContent(activity: MainActivity) {
     val context = LocalContext.current
     val appContext = context.applicationContext
 
-    val appUpdateClient = remember {
-        EntryPointAccessors.fromApplication(appContext, AppUpdateEntryPoint::class.java).bragaApiClient()
-    }
 
     Surface(
         modifier = Modifier
@@ -106,34 +103,7 @@ fun AppContent(activity: MainActivity) {
                     }
                 }
 
-                // doc 10 §1B.6: checagem ativa de versão no startup. O push é a via
-                // principal, mas um aparelho sem push (ou com entrega falhada) ficaria
-                // sem saber da atualização. Compara só o versionCode (inteiro canônico).
-                var updateDownloadUrl by remember { mutableStateOf<String?>(null) }
-                LaunchedEffect(Unit) {
-                    val latestVersionCode = appUpdateClient.getLatestAppVersionCode()
-                    if (latestVersionCode != null && latestVersionCode > br.com.bragasaude.BuildConfig.VERSION_CODE) {
-                        updateDownloadUrl = "https://api.bragasaude.online/api/app/download"
-                    }
-                }
-                updateDownloadUrl?.let { url ->
-                    BragaAlertDialog(
-                        onDismissRequest = { updateDownloadUrl = null },
-                        title = { Text("Atualização disponível") },
-                        text = { Text("Há uma nova versão do Braga Saúde, com melhorias e mais estabilidade. Recomendamos atualizar agora.") },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                updateDownloadUrl = null
-                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                appContext.startActivity(intent)
-                            }) { Text("Baixar atualização") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { updateDownloadUrl = null }) { Text("Agora não") }
-                        }
-                    )
-                }
+                // A distribuição de APK pelo gateway foi aposentada; não consultar seus endpoints.
 
                 val prefs = context.getSharedPreferences("braga_prefs", android.content.Context.MODE_PRIVATE)
                 val isFirebaseTestLab = remember {

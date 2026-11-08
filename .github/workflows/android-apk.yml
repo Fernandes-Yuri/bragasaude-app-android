@@ -77,6 +77,9 @@ jobs:
       # JDK 21 = JVM mínima do AGP 9. O Gradle pode precisar do JDK 25
       # (pinado em gradle/gradle-daemon-jvm.properties); se precisar, ele
       # acha nas instalações da runner via org.gradle.java.installations.paths.
+      - name: Política de fixtures isoladas para Test Lab
+        run: python3 -m unittest discover -s .github/scripts -p 'test_testlab_fixture_policy.py'
+
       - name: JDK 21 e 25 (Temurin)
         uses: actions/setup-java@v5
         with:
@@ -269,6 +272,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Política de fixtures isoladas para Test Lab
+        run: python3 -m unittest discover -s .github/scripts -p 'test_testlab_fixture_policy.py'
 
       - name: JDK 21 e 25 (Temurin)
         uses: actions/setup-java@v5

@@ -62,6 +62,8 @@ class HydrationViewModel @Inject constructor(
 
     private val _hydrationHistory = MutableStateFlow<List<Double>>(emptyList())
     val hydrationHistory = _hydrationHistory.asStateFlow()
+    private val _hydrationDates = MutableStateFlow<List<String>>(emptyList())
+    val hydrationDates = _hydrationDates.asStateFlow()
 
     private val _isReminderEnabled = MutableStateFlow(true)
     val isReminderEnabled = _isReminderEnabled.asStateFlow()
@@ -162,7 +164,8 @@ class HydrationViewModel @Inject constructor(
                     SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
                 }.reversed()
 
-                _hydrationHistory.value = daysList.map { day -> groupedByDay[day] ?: 0.0 }
+                _hydrationDates.value = daysList
+                _hydrationHistory.value = daysList.map { day -> groupedByDay[day] ?: Double.NaN }
             }
         }
 

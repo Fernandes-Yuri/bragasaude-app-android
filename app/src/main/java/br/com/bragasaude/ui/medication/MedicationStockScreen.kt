@@ -551,7 +551,7 @@ fun MedicationStockScreen(
                                             color = BragaTextPrimary
                                         )
                                         Text(
-                                            text = "Escaneie a caixa EAN-13, anexe receita ou digite",
+                                            text = "Escaneie, anexe a receita ou preencha",
                                             fontSize = 13.sp,
                                             color = BragaTextSecondary
                                         )
@@ -723,9 +723,10 @@ private fun ManualMedicationDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                OutlinedTextField(
+                br.com.bragasaude.ui.components.MaskedInputField(
+                    mask = br.com.bragasaude.ui.components.InputMask.TIME_LIST,
                     value = scheduleTimeText,
-                    onValueChange = { scheduleTimeText = HealthFormatter.formatTimeListInput(it) },
+                    onValueChange = { scheduleTimeText = it },
                     label = { Text("Horários da rotina (ex: 08:00, 20:00) *") },
                     placeholder = { Text("08:00") },
                     singleLine = true,
@@ -1279,7 +1280,7 @@ private fun MedicationStockCard(
                     },
                     text = {
                         Text(
-                            "Os horários prescritos de ${medication.name} são: ${currentTimes.joinToString(", ")}.\n\nDeseja pré-preencher na agenda do seu aparelho?\n\nFique tranquilo: mesmo se não usar a agenda, o Braga Saúde avisa você 15 minutos antes e na hora exata!",
+                            "Os horários prescritos de ${medication.name} são: ${currentTimes.joinToString(", ")}.\n\nDeseja pré-preencher na agenda do seu aparelho?\n\nOs avisos do Braga dependem das permissões do Android. O pré-aviso de 15 minutos só será enviado se você o ativar em Lembretes. Confira os horários no aplicativo.",
                             fontSize = 14.sp,
                             color = BragaTextPrimary
                         )
@@ -1523,9 +1524,10 @@ private fun EditScheduleSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedTextField(
+                br.com.bragasaude.ui.components.MaskedInputField(
+                    mask = br.com.bragasaude.ui.components.InputMask.TIME,
                     value = newTimeText,
-                    onValueChange = { newTimeText = HealthFormatter.formatTimeInput(it) },
+                    onValueChange = { newTimeText = it },
                     label = { Text("Novo horário (HH:mm)") },
                     placeholder = { Text("14:00") },
                     singleLine = true,

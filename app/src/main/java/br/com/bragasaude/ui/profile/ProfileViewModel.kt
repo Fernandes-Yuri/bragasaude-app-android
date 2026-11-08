@@ -184,7 +184,9 @@ class ProfileViewModel @Inject constructor(
                 val newProfile = base.copy(
                     fullName = name,
                     birthDate = birthDate?.takeIf { it.isNotBlank() }?.let {
-                        if ('/' in it) java.time.LocalDate.parse(it, java.time.format.DateTimeFormatter.ofPattern("dd/MM/uuuu")).toString() else it
+                        val date = requireNotNull(br.com.bragasaude.data.util.HealthFormatter.parseLocalDate(it)) { "Data de nascimento inválida." }
+                        require(!date.isAfter(java.time.LocalDate.now()) && date.year >= 1900) { "Data de nascimento inválida." }
+                        date.toString()
                     },
                     gender = gender,
                     height = height,

@@ -66,6 +66,7 @@ class MedicationDoseRepository @Inject constructor(@ApplicationContext private v
         wm.enqueueUniqueWork("medication-dose-sync-$actor",ExistingWorkPolicy.APPEND_OR_REPLACE,work)
     }
     suspend fun refresh(patient:String,horizon:Int=7,date:String?=null) {
+        require(patient.isNotBlank()) { "Selecione a pessoa antes de atualizar os horários." }
         val actor=actor()
         val capabilities=request("GET","/api/medication-dose-capabilities")
         require(capabilities.optInt("medication_batch_contract")==1) { "Atualize o app para usar este contrato de medicação." }

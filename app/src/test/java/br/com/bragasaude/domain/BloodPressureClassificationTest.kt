@@ -24,20 +24,20 @@ class BloodPressureClassificationTest {
     }
 
     @Test
-    fun `test 120 over 80 mmHg is classified as NORMAL by SBC`() {
+    fun `2025 reclassifies 120 over 80 as prehypertension`() {
         val result = BloodPressureParser.classify(120, 80)
-        assertEquals(BloodPressureCategory.NORMAL, result.category)
-        assertTrue(result.isNormal)
+        assertEquals(BloodPressureCategory.PREHYPERTENSION, result.category)
+        org.junit.Assert.assertFalse(result.isNormal)
     }
 
     @Test
     fun `limites e valores assimetricos seguem o componente mais alto`() {
         val cases = listOf(
-            Triple(119, 79, BloodPressureCategory.OPTIMAL),
-            Triple(120, 79, BloodPressureCategory.NORMAL),
-            Triple(119, 80, BloodPressureCategory.NORMAL),
-            Triple(120, 80, BloodPressureCategory.NORMAL),
-            Triple(129, 84, BloodPressureCategory.NORMAL),
+            Triple(119, 79, BloodPressureCategory.NORMAL),
+            Triple(120, 79, BloodPressureCategory.PREHYPERTENSION),
+            Triple(119, 80, BloodPressureCategory.PREHYPERTENSION),
+            Triple(120, 80, BloodPressureCategory.PREHYPERTENSION),
+            Triple(129, 84, BloodPressureCategory.PREHYPERTENSION),
             Triple(130, 80, BloodPressureCategory.PREHYPERTENSION),
             Triple(122, 86, BloodPressureCategory.PREHYPERTENSION),
             Triple(139, 89, BloodPressureCategory.PREHYPERTENSION),
@@ -54,9 +54,9 @@ class BloodPressureClassificationTest {
     }
 
     @Test
-    fun `test 115 over 75 mmHg is classified as OPTIMAL by SBC`() {
+    fun `2025 classifies 115 over 75 as normal`() {
         val result = BloodPressureParser.classify(115, 75)
-        assertEquals(BloodPressureCategory.OPTIMAL, result.category)
+        assertEquals(BloodPressureCategory.NORMAL, result.category)
         assertTrue(result.isNormal)
     }
 

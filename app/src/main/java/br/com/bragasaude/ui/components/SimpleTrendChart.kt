@@ -58,7 +58,7 @@ fun SimpleTrendChart(
     timestamps: List<String> = emptyList(),
     referenceRange: ClosedFloatingPointRange<Double>? = null,
     secondaryData: List<Double> = emptyList(),
-    secondaryColor: Color = BragaEmeraldDark,
+    secondaryColor: Color = Color(0xFF7C3AED),
     secondaryLabel: String? = null,
     chartHeight: Dp = 220.dp
 ) {
@@ -67,18 +67,18 @@ fun SimpleTrendChart(
     val secondaryLegend = secondaryLabel ?: "Diastólica"
 
     var period by remember { mutableStateOf(ChartPeriod.SEVEN_DAYS) }
-    val hasDates = timestamps.size == data.size && timestamps.isNotEmpty() && timestamps.all { runCatching { Instant.parse(it) }.isSuccess }
-    val samples = remember(data, secondaryData, timestamps, period, hasDates, showPeriodSelector, dual) {
-        val cutoff = java.time.LocalDate.now().minusDays(period.days.toLong() - 1).atStartOfDay(ZoneId.systemDefault()).toInstant()
-        data.mapIndexedNotNull { index, value ->
-            when {
-                !value.isFinite() -> null
-                showPeriodSelector && hasDates && Instant.parse(timestamps[index]).isBefore(cutoff) -> null
-                dual && secondaryData.getOrNull(index)?.isFinite() != true -> null
-                else -> index to value
-            }
-        }.let { if (showPeriodSelector && !hasDates) it.takeLast(period.days) else it }
+    val hasDates = timestamps.isNotEmpty()
+    val today = java.time.LocalDate.now()
+    val zone = ZoneId.systemDefault()
+    val samples = remember(data, secondaryData, timestamps, period, showPeriodSelector, dual, today, zone) {
+        br.com.bragasaude.domain.ChartTimeline.indices(data, timestamps,
+            if (showPeriodSelector) period.days else Int.MAX_VALUE, today, zone)
+            .filter { !dual || secondaryData.getOrNull(it)?.isFinite() == true }
+            .sortedBy { timestamps.getOrNull(it)?.let { stamp -> br.com.bragasaude.domain.ChartTimeline.instant(stamp) } }
+            .map { it to data[it] }
     }
+    val fractions = br.com.bragasaude.domain.ChartTimeline.fractions(samples.map { timestamps.getOrNull(it.first).orEmpty() })
+    fun nearest(fraction: Float): Int = fractions.indices.minByOrNull { kotlin.math.abs(fractions[it] - fraction) } ?: 0
     var selected by remember(samples) { mutableIntStateOf((samples.size - 1).coerceAtLeast(0)) }
 
     val surface = MaterialTheme.colorScheme.surface
@@ -88,16 +88,16 @@ fun SimpleTrendChart(
     val selectedIndex = selected.coerceIn(0, (samples.size - 1).coerceAtLeast(0))
     val current = samples.getOrNull(selectedIndex)
     val currentSecondary = current?.let { secondaryData.getOrNull(it.first) }
-    val formatterDate = remember { DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(ZoneId.systemDefault()) }
-    val formatterTime = remember { DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()) }
+    val formatterDate = remember(zone) { DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(zone) }
+    val formatterTime = remember(zone) { DateTimeFormatter.ofPattern("HH:mm").withZone(zone) }
     val dateText = current?.first?.let { idx ->
         timestamps.getOrNull(idx)?.let {
-            runCatching { formatterDate.format(Instant.parse(it)) }.getOrNull()
+            runCatching { formatterDate.format(requireNotNull(br.com.bragasaude.domain.ChartTimeline.instant(it))) }.getOrNull()
         }
     }
     val timeText = current?.first?.let { idx ->
         timestamps.getOrNull(idx)?.let {
-            runCatching { formatterTime.format(Instant.parse(it)) }.getOrNull()
+            runCatching { formatterTime.format(requireNotNull(br.com.bragasaude.domain.ChartTimeline.instant(it))) }.getOrNull()
         }
     }
     val primaryText = current?.let { formatChartValue(it.second) }.orEmpty()
@@ -123,13 +123,13 @@ fun SimpleTrendChart(
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             label?.let { Text(it, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
             if (showPeriodSelector) {
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ChartPeriod.entries.forEach { option ->
                         FilterChip(
                             selected = period == option,
                             onClick = { period = option; onPeriodSelected(option) },
-                            label = { Text(if (hasDates) option.label else "${option.days} registros") },
-                            modifier = Modifier.heightIn(min = 48.dp), shape = RoundedCornerShape(50)
+                            label = { Text(if (hasDates) option.label else "${option.days} reg.") },
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(50)
                         )
                     }
                 }
@@ -153,7 +153,7 @@ fun SimpleTrendChart(
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val widthPx = constraints.maxWidth.toFloat()
                     val count = samples.size
-                    val selX = if (count == 1) widthPx / 2f else insetPx + selectedIndex * (widthPx - 2 * insetPx) / (count - 1)
+                    val selX = insetPx + fractions[selectedIndex] * (widthPx - 2 * insetPx)
                     val selY = current?.let { yFor(it.second) } ?: bottomPx
 
                     val tooltipX = (selX - tooltipWidthPx / 2f).coerceIn(0f, (widthPx - tooltipWidthPx).coerceAtLeast(0f))
@@ -173,14 +173,14 @@ fun SimpleTrendChart(
                                     timeText?.let { append(" às $it") }
                                 }
                             }
-                            .pointerInput(samples) {
+                            .pointerInput(samples, fractions) {
                                 detectTapGestures { point ->
-                                    selected = (((point.x - insetPx) / (size.width - insetPx * 2).coerceAtLeast(1f)) * (samples.size - 1)).roundToInt().coerceIn(samples.indices)
+                                    selected = nearest((point.x - insetPx) / (size.width - insetPx * 2).coerceAtLeast(1f))
                                 }
                             }
-                            .pointerInput(samples) {
+                            .pointerInput(samples, fractions) {
                                 detectHorizontalDragGestures { change, _ ->
-                                    selected = (((change.position.x - insetPx) / (size.width - insetPx * 2).coerceAtLeast(1f)) * (samples.size - 1)).roundToInt().coerceIn(samples.indices)
+                                    selected = nearest((change.position.x - insetPx) / (size.width - insetPx * 2).coerceAtLeast(1f))
                                     change.consume()
                                 }
                             }
@@ -201,7 +201,7 @@ fun SimpleTrendChart(
                             drawLine(color.copy(alpha = 0.4f), Offset(inset, yFor(it)), Offset(size.width - inset, yFor(it)), 1.dp.toPx())
                         }
 
-                        fun xAt(index: Int) = if (count == 1) size.width / 2 else inset + index * (size.width - 2 * inset) / (count - 1)
+                        fun xAt(index: Int) = inset + fractions[index] * (size.width - 2 * inset)
 
                         val points = samples.mapIndexed { index, sample -> Offset(xAt(index), yFor(sample.second)) }
 
@@ -219,8 +219,8 @@ fun SimpleTrendChart(
                             drawPath(fill, Brush.verticalGradient(listOf(color.copy(alpha = 0.28f), Color.Transparent)))
                         } else {
                             // 3. Série dupla: área sombreada entre as duas curvas (pressão de pulso).
-                            val secondaryPoints = samples.map { ponto ->
-                                Offset(xAt(ponto.first), yFor(secondaryData[ponto.first]))
+                            val secondaryPoints = samples.mapIndexed { index, ponto ->
+                                Offset(xAt(index), yFor(secondaryData[ponto.first]))
                             }
                             val secondaryPath = smoothPath(secondaryPoints)
                             val bandPath = Path().apply {
@@ -236,7 +236,7 @@ fun SimpleTrendChart(
                                     endY = yFor(minValue)
                                 )
                             )
-                            drawPath(secondaryPath, secondaryColor, style = Stroke(2.5.dp.toPx()))
+                            drawPath(secondaryPath, secondaryColor, style = Stroke(2.5.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(12f, 7f))))
                             secondaryPoints.forEach { drawCircle(secondaryColor, 3.dp.toPx(), it) }
                         }
 

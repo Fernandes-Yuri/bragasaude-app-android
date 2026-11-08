@@ -214,7 +214,7 @@ fun VoiceHealthIntent.toConfirmationDisplay(): ConfirmationDisplayData {
             val (spoken, stageBadge, stageIdx) = when (result.category) {
                 BloodPressureCategory.OPTIMAL -> Triple(
                     "De acordo com a Sociedade Brasileira de Cardiologia, a sua pressão se encontra dentro do ideal. Deseja confirmar e salvar?",
-                    "Pressão Ótima",
+                    "Pressão Normal",
                     0
                 )
                 BloodPressureCategory.NORMAL -> Triple(
@@ -255,8 +255,8 @@ fun VoiceHealthIntent.toConfirmationDisplay(): ConfirmationDisplayData {
             }
 
             val sbcStages = listOf(
-                ReferenceStageItem("Ideal / Normal", "< 120 / 80 mmHg", stageIdx == 0),
-                ReferenceStageItem("Pré-Hipertensão", "120-139 / 80-89 mmHg", stageIdx == 1),
+                ReferenceStageItem("Normal", "< 120 e < 80 mmHg", stageIdx == 0),
+                ReferenceStageItem("Pré-Hipertensão", "120-139 e/ou 80-89 mmHg", stageIdx == 1),
                 ReferenceStageItem("Estágio 1", "140-159 / 90-99 mmHg", stageIdx == 2),
                 ReferenceStageItem("Estágio 2", "160-179 / 100-109 mmHg", stageIdx == 3),
                 ReferenceStageItem("Estágio 3 (Atenção)", "≥ 180 / ≥ 110 mmHg", stageIdx == 4)

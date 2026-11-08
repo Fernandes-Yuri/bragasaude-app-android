@@ -49,7 +49,7 @@ class MedicationStockDoseTest {
         assertFalse(result.canConfirm)
         assertEquals("Ver Histórico", medicationStockDose("med2", listOf(recorded), emptySet(), now).label)
         assertEquals("Todas as doses de hoje já tomadas", result.detail)
-        assertEquals("Próxima dose: 08:00", result.label)
+        assertEquals("Próxima dose: amanhã às 08:00", result.label)
     }
 
     @Test fun missingQuantityRequiresReviewAndUnknownMedicationIsNotMarkedAsTaken() {

@@ -275,4 +275,18 @@ class FamilyE2eeManagerTest {
         assertEquals(64,FamilyCryptoTrace.publicKey(patientE2ee.getOrCreatePublicKeyBase64(patientId)).length)
     }
 
+    @Test fun `failed ciphertext is retried after peer key changes and another envelope is not poisoned`() {
+        val patientPublic = patientE2ee.getOrCreatePublicKeyBase64(patientId)
+        val caregiverPublic = caregiverE2ee.getOrCreatePublicKeyBase64(caregiverId)
+        val stale = intruderE2ee.getOrCreatePublicKeyBase64(caregiverId)
+        caregiverE2ee.registerBindingKeys(patientId, caregiverId, patientPublic, caregiverPublic, "ACTIVE")
+        patientE2ee.registerBindingKeys(patientId, caregiverId, patientPublic, stale, "ACTIVE")
+        val encrypted = caregiverE2ee.encryptForConversation(caregiverId, patientId, "Fixture de recuperação")
+        repeat(2) { assertTrue(runCatching { patientE2ee.decryptForConversation(patientId, patientId, encrypted, caregiverId) }.isFailure) }
+        patientE2ee.registerBindingKeys(patientId, caregiverId, patientPublic, caregiverPublic, "ACTIVE")
+        assertEquals("Fixture de recuperação", patientE2ee.decryptForConversation(patientId, patientId, encrypted, caregiverId).text)
+        val next = caregiverE2ee.encryptForConversation(caregiverId, patientId, "Outro envelope")
+        assertEquals("Outro envelope", patientE2ee.decryptForConversation(patientId, patientId, next, caregiverId).text)
+    }
+
 }

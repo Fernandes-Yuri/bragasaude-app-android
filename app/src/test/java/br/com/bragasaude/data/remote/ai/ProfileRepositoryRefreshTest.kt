@@ -65,4 +65,14 @@ class ProfileRepositoryRefreshTest {
         catch (_: CancellationException) { }
         coVerify(exactly = 0) { dao.cacheRemoteProfile(any(), any()) }
     }
+    @Test fun periodicSyncDoesNotReactivateAPausedAccount() = runTest {
+        val api = mockk<BragaApiClient>()
+        val dao = mockk<ProfileDao>(relaxed = true)
+        coEvery { api.getProfileLookup("owner") } returns ProfileLookup.Unavailable(403)
+        val repo = ProfileRepository(api, dao, mockk(relaxed = true), mockk(relaxed = true))
+        repo.syncProfile("owner")
+        coVerify(exactly = 0) { api.reactivateAccount(any()) }
+        coVerify(exactly = 0) { dao.cacheRemoteProfile(any(), any()) }
+    }
+
 }

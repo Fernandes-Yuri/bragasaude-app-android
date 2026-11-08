@@ -145,7 +145,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
         topBar = {
             EmeraldHeaderBanner(
                 title = "Organizar exames",
-                subtitle = "Reúna e prepare seus exames para a consulta",
+                subtitle = "Seus exames em um só lugar",
                 onBack = onBack,
                 trailingContent = {
                     IconButton(onClick = { showInfoSheet = true }) {
@@ -265,7 +265,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                         }
 
                         Text(
-                            text = "Prepare seus exames para a consulta",
+                            text = "Organize seus exames",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = BragaTextPrimary,
@@ -1017,7 +1017,8 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
         onDismissRequest = { ending = false },
         title = { Text("Encerrar organização?") },
         text = {
-            Text(if (state.saved) "As cópias temporárias serão apagadas. Seus arquivos de origem e o PDF salvo fora do aplicativo permanecem."
+            Text(if (state.session?.documents.isNullOrEmpty()) "Encerrar esta organização vazia?"
+            else if (state.saved) "As cópias temporárias serão apagadas. Seus arquivos de origem e o PDF salvo fora do aplicativo permanecem."
             else "Não há confirmação de um PDF salvo. Compartilhar não confirma o salvamento. As fotos feitas aqui também serão apagadas. Salve antes se precisar delas.")
         },
         confirmButton = { TextButton(onClick = { ending = false; viewModel.end() }) { Text("Apagar cópias e encerrar") } },
@@ -1144,9 +1145,10 @@ private fun ReviewDocument(doc: OrganizerDocument, state: OrganizerUiState, vm: 
                 shape = RoundedCornerShape(12.dp)
             )
 
-            OutlinedTextField(
+            br.com.bragasaude.ui.components.MaskedInputField(
+                mask = br.com.bragasaude.ui.components.InputMask.DATE,
                 value = date,
-                onValueChange = { date = HealthFormatter.formatDateInput(it); confirmed = false },
+                onValueChange = { date = it; confirmed = false },
                 label = { Text("Data dd/mm/aaaa (opcional)") },
                 isError = !OrganizerMetadata.validDate(date),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

@@ -60,7 +60,7 @@ internal object BragaLocalHelp {
         Help("ajuda_meta_agua", Regex("""^(?:como (?:eu |posso )?(?:mudo|mudar|altero|alterar|edito|editar|ajusto|ajustar)|onde (?:eu )?(?:mudo|altero|edito)) (?:a |minha |a minha )?meta (?:de agua|de hidratacao)(?: no app| no aplicativo)?$"""),
             "Na tela de hidratação, toque em Editar meta de hidratação, ajuste o valor e toque em Salvar Meta. Se você tem uma restrição de líquidos, siga a meta orientada pelo profissional que acompanha você."),
         Help("ajuda_horario_remedio", Regex("""^(?:como (?:eu |posso )?(?:mudo|mudar|altero|alterar|edito|editar|ajusto|ajustar)|onde (?:eu )?(?:mudo|altero|edito)) (?:o |meu |o meu )?horario (?:do |de |do meu )?(?:remedio|medicamento|lembrete)(?: no app| no aplicativo)?$"""),
-            "Para editar horários de medicamentos, use a tela Remédios no menu superior. Confira o medicamento e o horário antes de salvar e mantenha a orientação da sua receita. A tela de lembretes informa os avisos da rotina."),
+            "Para editar horários de medicamentos, use a tela Remédios nos atalhos do Início. Confira o medicamento e o horário antes de salvar e mantenha a orientação da sua receita. A tela de lembretes informa os avisos da rotina."),
         Help("ajuda_registro_sem_dados", Regex("""^(?:por que|porque) (?:nao aparece|nao apareceu|nao encontro|nao tem) (?:o |meu |o meu )?(?:registro|historico|pressao|glicemia|glicose)(?: no app| no aplicativo)?$"""),
             "Confira se está na conta correta e se a medição foi salva. Um período sem anotações não terá valores para mostrar. Não consigo afirmar que um registro foi perdido; confira também a tela desses dados.")
     )
@@ -70,7 +70,7 @@ internal object BragaLocalHelp {
         val input = BragaDialogueRequest.main(text)
         BragaAppHelp.answer(input)?.let { return it }
         if (Regex("""^(?:lembrete de (?:remedio|medicamento)|como (?:criar|configurar) (?:um )?lembrete de (?:remedio|medicamento))$""").matches(input)) return NluOutput(
-            "ajuda_horario_remedio", "Abra Remédios no menu superior para conferir o medicamento cadastrado e seus horários. Os avisos da rotina aparecem em Lembretes. Mantenha os horários orientados na sua receita.")
+            "ajuda_horario_remedio", "Abra Remédios nos atalhos do Início para conferir o medicamento cadastrado e seus horários. Os avisos da rotina aparecem em Lembretes. Mantenha os horários orientados na sua receita.")
         if (text.contains('?') && Regex("""^(?:eu )?(?:ja )?tomei (?:o )?(?:meu )?(?:remedio|medicamento) (?:hoje|ontem)$""").matches(input)) return NluOutput(
             "entrada_medicamento_sem_nome", "Qual é o nome exato do medicamento cadastrado em Remédios? Posso consultar as doses registradas; uma anotação não confirma, por si só, que o medicamento foi tomado.")
         if (Regex("""^(?:quanto (?:remedio|medicamento) ainda tenho|(?:ja )?registrei (?:a |uma )?dose (?:do meu remedio |do remedio )?(?:de )?(?:hoje|ontem))$""").matches(input)) return NluOutput(

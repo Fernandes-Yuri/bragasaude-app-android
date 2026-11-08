@@ -51,9 +51,8 @@ object MetricInfoCatalog {
         unit = "mmHg",
         officialUrl = "https://journals.cardiol.br/article/diretriz-brasileira-de-hipertensao-arterial-2025/",
         tableRows = listOf(
-            "Pressão Ótima" to "< 120 e < 80 mmHg",
-            "Pressão Normal" to "120–129 e/ou 80–84 mmHg",
-            "Pré-hipertensão" to "130–139 e/ou 85–89 mmHg",
+            "Pressão Normal" to "< 120 e < 80 mmHg",
+            "Pré-hipertensão" to "120–139 e/ou 80–89 mmHg",
             "Faixa de estágio 1" to "140–159 e/ou 90–99 mmHg",
             "Faixa de estágio 2" to "160–179 e/ou 100–109 mmHg",
             "Faixa de estágio 3" to "≥ 180 e/ou ≥ 110 mmHg"
@@ -281,7 +280,7 @@ fun MetricInfoBottomSheet(
             if (metricInfo.tableRows.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "Tabela Oficial de Referência",
+                        text = "Valores de referência",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = TealPrimary
@@ -341,7 +340,7 @@ fun MetricInfoBottomSheet(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Acessar portal oficial da diretriz", fontWeight = FontWeight.Bold)
+                    Text("Consultar fonte oficial", fontWeight = FontWeight.Bold)
                 }
             }
             
@@ -367,7 +366,7 @@ fun MetricInfoBottomSheet(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "As faixas e referências apresentadas seguem as diretrizes oficiais da Sociedade Brasileira de Cardiologia (SBC) e Sociedade Brasileira de Diabetes (SBD), tendo finalidade exclusivamente informativa de autocuidado. Elas não constituem diagnóstico médico nem prescrição. Em caso de dúvidas ou valores alterados, consulte sempre um médico.",
+                        text = "Fonte: ${metricInfo.referenceInstitution}. Informação para autocuidado, sem diagnóstico ou prescrição. Em caso de dúvida, converse com seu profissional de saúde.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp

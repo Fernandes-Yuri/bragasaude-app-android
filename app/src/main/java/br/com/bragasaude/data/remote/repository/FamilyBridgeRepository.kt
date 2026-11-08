@@ -446,6 +446,10 @@ class FamilyBridgeRepository @Inject constructor(
         return message
     }
 
+    private val undecipherableWarnings = object : LinkedHashMap<String, Boolean>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?) = size > 256
+    }
+
     private fun decodeMessageForLocalStorage(
         currentUserId: String,
         patientUserId: String,
@@ -458,7 +462,9 @@ class FamilyBridgeRepository @Inject constructor(
                 rawPayload = msg.messageText, senderUserId = msg.senderUserId, messageId = msg.id
             ).text, awaitingDecryption = false)
         } catch (e: java.security.GeneralSecurityException) {
-            android.util.Log.w("FamilyBridgeRepo", "Mensagem aguardando decifragem: ${e.javaClass.simpleName}")
+            val reference = "$currentUserId:$patientUserId:${msg.id}:${msg.messageText.hashCode()}"
+            val first = synchronized(undecipherableWarnings) { undecipherableWarnings.put(reference, true) == null }
+            if (first) android.util.Log.w("FamilyBridgeRepo", "Mensagem indisponível nesta instalação; aguardando atualização das chaves.")
             msg.copy(messageText = "", awaitingDecryption = true)
         }
     }
@@ -469,6 +475,22 @@ class FamilyBridgeRepository @Inject constructor(
             remote.copy(messageText = local.messageText, awaitingDecryption = false)
         } else remote
         return readable.copy(isRead = readable.isRead || local?.isRead == true)
+    }
+
+    private val publicationLock = Mutex()
+    private val publishedKeys = mutableMapOf<String, Pair<String, Long>>()
+    private suspend fun publishSessionKey(userId: String, room: String, key: String) = publicationLock.withLock {
+        check(auth.currentUser?.uid == userId) { "Sua conta mudou." }
+        val cacheKey = "$userId:$room"
+        val now = System.nanoTime() / 1_000_000
+        val previous = publishedKeys[cacheKey]
+        if (previous?.first == key && now - previous.second < 300_000) return@withLock
+        check(apiClient.publishFamilyE2eePublicKey(patientId = room, publicKey = key)) {
+            "Não foi possível preparar as mensagens desta instalação. Tente novamente."
+        }
+        check(auth.currentUser?.uid == userId) { "Sua conta mudou." }
+        if (publishedKeys.size >= 64) publishedKeys.clear()
+        publishedKeys[cacheKey] = key to now
     }
 
     /** Publica a identidade da instalação antes dos demais downloads da sessão autenticada. */
@@ -482,9 +504,7 @@ class FamilyBridgeRepository @Inject constructor(
         val publicKey = e2eeManager.getOrCreatePublicKeyBase64(userId)
         for (room in rooms) {
             check(auth.currentUser?.uid == userId) { "Sua conta mudou." }
-            check(apiClient.publishFamilyE2eePublicKey(patientId = room, publicKey = publicKey)) {
-                "Não foi possível preparar as mensagens desta instalação. Tente novamente."
-            }
+            publishSessionKey(userId, room, publicKey)
         }
         check(auth.currentUser?.uid == userId) { "Sua conta mudou." }
         apiClient.getFamilyBindings(userId)

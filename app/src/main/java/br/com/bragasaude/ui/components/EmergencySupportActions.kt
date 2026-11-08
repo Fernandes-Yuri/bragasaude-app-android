@@ -98,7 +98,7 @@ internal fun EmergencyActionButtons(
             EmergencyActionLabel(
                 icon = Icons.Default.LocationOn,
                 title = "Buscar UPA mais próxima",
-                subtitle = "Pronto atendimento no Google Maps",
+                subtitle = "Buscar pronto atendimento",
                 modifier = Modifier.fillMaxWidth()
             )
         }
