@@ -1020,7 +1020,7 @@ fun HeartPointsCard(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                "Toque para ver gráfico diário de 7 dias e metas",
+                                "Segunda a domingo · Ver gráfico",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

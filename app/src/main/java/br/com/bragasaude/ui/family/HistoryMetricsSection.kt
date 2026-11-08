@@ -214,6 +214,10 @@ fun HistoryMetricsSection(
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
 
+                    val end = java.time.LocalDate.now().minusDays(1)
+                    val start = end.minusDays(selectedWindow.toLong() - 1)
+                    Text("${start.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM"))} — ${end.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM"))}",
+                        style = MaterialTheme.typography.labelSmall)
                     ConsistencyBar(
                         label = "Hidratação (meta: ${patientHydrationTargetMl}ml/dia)",
                         percentage = hydrationPercent,

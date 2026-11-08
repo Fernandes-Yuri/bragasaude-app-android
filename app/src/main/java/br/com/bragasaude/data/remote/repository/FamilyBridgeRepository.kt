@@ -27,6 +27,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
@@ -701,7 +702,10 @@ class FamilyBridgeRepository @Inject constructor(
     }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
 
     fun getUnreadMessagesForPatient(patientUserId: String): Flow<List<FamilyMessageEntity>> {
-        return liveMessages(familyDao.getUnreadMessagesForPatient(patientUserId))
+        return liveMessages(familyDao.getUnreadMessagesForPatient(patientUserId)).map { messages ->
+            val owner = auth.currentUser?.uid
+            messages.filter { it.senderUserId != owner && !it.awaitingDecryption && it.messageText.isNotBlank() }
+        }
     }
 
     fun getRecentMessagesForPatient(patientUserId: String, limit: Int = 10): Flow<List<FamilyMessageEntity>> {
@@ -714,7 +718,7 @@ class FamilyBridgeRepository @Inject constructor(
     }
 
     suspend fun countUnreadMessages(patientUserId: String): Int {
-        return liveMessages(familyDao.getUnreadMessagesForPatient(patientUserId)).first().size
+        return getUnreadMessagesForPatient(patientUserId).first().size
     }
 
     suspend fun markMessageAsRead(messageId: String) {

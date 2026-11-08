@@ -45,11 +45,13 @@ class ReportViewModel @Inject constructor(
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val recordedDays = auth.userIds().flatMapLatest { owner ->
-        combine(vitalsRepository.getVitalSigns(owner), dailyMetricsDao.getRecent30Days(owner)) { vitals, metrics ->
+        combine(vitalsRepository.getVitalSigns(owner), dailyMetricsDao.getRecent30Days(owner),
+            biometryRepository.getBiometry(owner)) { vitals, metrics, biometry ->
             val today = java.time.LocalDate.now()
             val start = today.minusDays(29)
             val dates = vitals.map { it.measuredAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate() } +
-                metrics.mapNotNull { runCatching { java.time.LocalDate.parse(it.date) }.getOrNull() }
+                metrics.mapNotNull { runCatching { java.time.LocalDate.parse(it.date) }.getOrNull() } +
+                biometry.map { it.measuredAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate() }
             dates.filter { !it.isBefore(start) && !it.isAfter(today) }.toSet().size
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)

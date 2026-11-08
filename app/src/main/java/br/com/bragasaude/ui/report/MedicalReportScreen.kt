@@ -111,7 +111,7 @@ internal fun MedicalReportContent(
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("$recordedDays de 30 dias com registros", style = MaterialTheme.typography.titleMedium)
-                        Text("Pressão, glicemia, hidratação e atividade, conforme os dados disponíveis.")
+                        Text("Pressão, glicemia, hidratação, biometria e atividade, conforme os dados disponíveis.")
                         Text("Leve o documento à sua próxima consulta.")
                     }
                 }
