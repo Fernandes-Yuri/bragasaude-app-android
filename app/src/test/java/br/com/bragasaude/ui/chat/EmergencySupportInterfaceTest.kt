@@ -56,7 +56,7 @@ class EmergencySupportInterfaceTest {
         compose.onNodeWithText("Ligar para Maria").performClick()
         assertDial("tel:11999990000")
         compose.onNodeWithText("Buscar UPA mais próxima").assertHasClickAction().assertIsDisplayed()
-        compose.onNodeWithText("Pronto atendimento no Google Maps").assertIsDisplayed()
+        compose.onNodeWithText("Buscar pronto atendimento").assertIsDisplayed()
         compose.onNodeWithText("Buscar UPA mais próxima").performClick()
         val maps = shadowOf(RuntimeEnvironment.getApplication()).nextStartedActivity
         assertEquals(Intent.ACTION_VIEW, maps.action)
