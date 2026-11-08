@@ -247,7 +247,7 @@ class FamilyViewModel @Inject constructor(
                 isCaredByMe = isCaredByMe,
                 otherUserId = otherUserId,
                 avatarLetter = letter,
-                lastMessageText = lastMessage?.messageText,
+                lastMessageText = if (lastMessage?.awaitingDecryption == true) "Mensagem indisponível neste aparelho" else lastMessage?.messageText,
                 lastMessageSender = if (lastMessage?.senderUserId == userId) "Você" else lastMessage?.senderName,
                 lastMessageTimeMs = lastMessage?.sentAt,
                 unreadCount = unreadCount,

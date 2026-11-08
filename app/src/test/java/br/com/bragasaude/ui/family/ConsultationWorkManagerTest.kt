@@ -62,6 +62,25 @@ class ConsultationWorkManagerTest {
         coVerify { dao.acknowledgeConsultation(any(), match { it.id == saved!!.id && it.remoteConfirmed }) }
     }
 
+    @Test fun unchangedDownloadDoesNotReplaceReminderWorkAtEveryPoll() = runBlocking {
+        val record = ConsultationEntity("id", "patient", "caregiver", "Ana", "Filha", "Consulta",
+            scheduledDate = Date(System.currentTimeMillis()+172800000), status = "ACCEPTED", remoteConfirmed = true)
+        saved = record
+        coEvery { api.getConsultations("patient") } returns listOf(record)
+        repository.syncConsultations("patient")
+        repository.syncConsultations("patient")
+        verify(exactly = 0) { NotificationHelper.scheduleConsultationReminders(any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test fun changedDownloadReconcilesReminderOnce() = runBlocking {
+        val record = ConsultationEntity("id", "patient", "caregiver", "Ana", "Filha", "Consulta",
+            scheduledDate = Date(System.currentTimeMillis()+172800000), status = "ACCEPTED", remoteConfirmed = true)
+        coEvery { api.getConsultations("patient") } returns listOf(record)
+        coEvery { dao.getConsultationById("id") } returnsMany listOf(null, record)
+        repository.syncConsultations("patient")
+        verify(exactly = 1) { NotificationHelper.scheduleConsultationReminders(context, "id", "Consulta", record.scheduledDate.time, "caregiver", "patient") }
+    }
+
     private fun workerInput(owner: String, at: Long) = Data.Builder().putString("ownerId", owner)
         .putString("patientId", "patient").putString("consultationId", "id")
         .putLong("scheduledAt", at).putString("reminderTag", "1h").build()

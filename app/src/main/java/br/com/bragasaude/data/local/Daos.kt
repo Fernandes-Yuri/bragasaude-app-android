@@ -821,8 +821,9 @@ interface FamilyDao {
 
     @Transaction
     suspend fun cacheConsultation(remote: ConsultationEntity) {
-        if (getConsultationById(remote.id)?.pendingSync == true) return
-        insertConsultation(remote)
+        val current = getConsultationById(remote.id)
+        if (current?.pendingSync == true) return
+        insertConsultation(remote.copy(googleCalendarEventId = current?.googleCalendarEventId))
     }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

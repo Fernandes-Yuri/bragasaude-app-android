@@ -91,8 +91,10 @@ class FamilyBridgeRepository @Inject constructor(
         val records = apiClient.getConsultations(patientId) ?: throw java.io.IOException("Agenda indisponível")
         check(auth.currentUser?.uid == owner)
         for (record in records) {
+            val before = familyDao.getConsultationById(record.id)
             familyDao.cacheConsultation(record)
-            familyDao.getConsultationById(record.id)?.let { reconcileReminder(it) }
+            val after = familyDao.getConsultationById(record.id)
+            if (after != null && after != before) reconcileReminder(after)
         }
     }
 

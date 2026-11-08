@@ -214,7 +214,7 @@ class CaregiverDashboardViewModel @Inject constructor(
                     }.time
 
                     val hydrationMlToday = vitalsList
-                        .filter { it.hydrationMl != null && it.measuredAt != null && it.measuredAt >= startOfDay }
+                        .filter { it.hydrationMl != null && it.measuredAt != null && it.measuredAt >= startOfDay && it.measuredAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate() == java.time.LocalDate.now() }
                         .sumOf { it.hydrationMl ?: 0 }
 
                     val weight = profile?.weight?.toDouble() ?: 70.0
