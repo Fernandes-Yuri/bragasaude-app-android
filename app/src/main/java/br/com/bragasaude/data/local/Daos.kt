@@ -96,6 +96,9 @@ interface VitalSignDao {
     @Query("SELECT revision FROM clinical_sync_cursors WHERE ownerId=:owner AND patientId=:patient")
     suspend fun getCursor(owner: String, patient: String): Long?
 
+    @Query("DELETE FROM clinical_sync_cursors WHERE ownerId=:owner AND patientId=:patient")
+    suspend fun clearCursor(owner: String, patient: String)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveCursor(cursor: ClinicalSyncCursor)
 
@@ -798,6 +801,12 @@ interface FamilyDao {
     /** Buscar consulta por ID. */
     @Query("SELECT * FROM consultations_local WHERE id = :consultationId LIMIT 1")
     suspend fun getConsultationById(consultationId: String): ConsultationEntity?
+
+    @Query("SELECT * FROM consultations_local WHERE userId=:patient")
+    suspend fun consultationsForCleanup(patient: String): List<ConsultationEntity>
+
+    @Query("DELETE FROM family_read_receipts WHERE ownerId=:owner AND patientId=:patient")
+    suspend fun deleteReceiptsForPatient(owner: String, patient: String)
 
     @Query("SELECT * FROM consultations_local WHERE remoteConfirmed=0 AND pendingSync=0 AND status IN ('SUGGESTED','ACCEPTED') AND scheduledDate>=:now")
     suspend fun localConsultationsToReview(now: Long = System.currentTimeMillis()): List<ConsultationEntity>

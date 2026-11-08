@@ -555,6 +555,13 @@ class FamilyBridgeRepositoryTest {
     }
 
 
+    @Test fun `revocation purges consultation cache receipts and cursor so rebinding can restore history`() = runBlocking {
+        repository.purgePatientDataFromCache("patient-1")
+        coVerify { familyDao.deleteAllConsultationsForUser("patient-1") }
+        coVerify { familyDao.deleteReceiptsForPatient("caregiver-1", "patient-1") }
+        coVerify { vitalSignDao.clearCursor("caregiver-1", "patient-1") }
+    }
+
     @Test fun `read receipts exclude own unreadable and unseen messages`() = runBlocking {
         every { auth.currentUser?.uid } returns "patient"
         fun msg(id: String, sender: String = "caregiver", locked: Boolean = false) =

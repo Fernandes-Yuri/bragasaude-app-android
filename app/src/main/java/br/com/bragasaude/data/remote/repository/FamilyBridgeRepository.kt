@@ -294,6 +294,13 @@ class FamilyBridgeRepository @Inject constructor(
             vitalSignDao.deleteByUserId(patientUserId)
             dailyMetricsDao.deleteByUserId(patientUserId)
             familyDao.deleteMessagesForPatient(patientUserId)
+            val owner = auth.currentUser?.uid
+            if (owner != null) {
+                familyDao.consultationsForCleanup(patientUserId).forEach { NotificationHelper.cancelConsultationReminders(appContext, it.id, owner) }
+                familyDao.deleteReceiptsForPatient(owner, patientUserId)
+                vitalSignDao.clearCursor(owner, patientUserId)
+            }
+            familyDao.deleteAllConsultationsForUser(patientUserId)
             profileDao.deleteProfile(patientUserId)
             purgedPatientIds.add(patientUserId)
             // Log apenas quando houve purga de fato.
@@ -626,6 +633,7 @@ class FamilyBridgeRepository @Inject constructor(
             .toString()
 
     suspend fun syncPatientDataForCaregiver(patientUserId: String): Result<Unit> = runCatching {
+        purgedPatientIds.remove(patientUserId)
         val sessionOwner = auth.currentUser?.uid
             ?: throw IllegalStateException("Sessão encerrada")
         fun ensureSession() {
@@ -813,6 +821,7 @@ class FamilyBridgeRepository @Inject constructor(
 
     /** D47 — Purga local: remove definitivamente mensagens que completaram 24h. */
     suspend fun purgeExpiredFamilyMessages() {
+        familyDao.purgeReceipts()
         familyDao.purgeExpiredMessages()
     }
 
