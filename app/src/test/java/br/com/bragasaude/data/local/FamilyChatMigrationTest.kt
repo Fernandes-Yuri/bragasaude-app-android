@@ -182,7 +182,7 @@ class FamilyChatMigrationTest {
                         isRead = false
                     )
                 )
-                val stored = db.notificationDao().getItem("mariana", "notif-1")
+                val stored = db.notificationDao().getById("mariana", "notif-1")
                 assertNotNull(stored)
                 assertEquals(2, stored!!.unreadCount)
             } finally {

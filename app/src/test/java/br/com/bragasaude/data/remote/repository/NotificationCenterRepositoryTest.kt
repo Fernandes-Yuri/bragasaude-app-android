@@ -9,7 +9,7 @@ import br.com.bragasaude.data.local.NotificationItemEntity
 import br.com.bragasaude.data.local.NotificationSyncStateEntity
 import br.com.bragasaude.data.local.ProfileDao
 import br.com.bragasaude.data.local.ProfileEntity
-import br.com.bragasaude.data.local.SocialBlockEntity
+import br.com.bragasaude.data.local.BlockedUserEntity
 import br.com.bragasaude.data.local.SocialFeedDao
 import br.com.bragasaude.data.local.SocialPostEntity
 import br.com.bragasaude.data.remote.api.BragaApiClient
@@ -338,6 +338,7 @@ class NotificationCenterRepositoryTest {
         coEvery { socialFeedDao.getPostById("post-deleted-id") } returns SocialPostEntity(
             id = "post-deleted-id",
             userId = "mariana-uid",
+            postType = "milestone",
             title = "Removido",
             isVisible = false
         )
