@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -837,8 +838,8 @@ class FamilyBridgeRepository @Inject constructor(
                 it.expiresAt > System.currentTimeMillis() }
         if (eligible.isEmpty()) return
         familyDao.markSeen(userId, eligible)
-        val remainingUnread = familyDao.getUnreadMessagesForPatient(patientUserId).first()
-            .any { it.senderUserId != userId && !it.awaitingDecryption && it.deletedAt == null && it.expiresAt > System.currentTimeMillis() }
+        val remainingUnread = runCatching { familyDao.getUnreadMessagesForPatient(patientUserId).firstOrNull() }.getOrNull()
+            ?.any { it.senderUserId != userId && !it.awaitingDecryption && it.deletedAt == null && it.expiresAt > System.currentTimeMillis() } ?: false
         if (!remainingUnread) {
             notificationDao?.reconcileChatConversationReadLocal(userId, patientUserId, System.currentTimeMillis())
         }

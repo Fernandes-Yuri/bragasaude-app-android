@@ -164,11 +164,11 @@ class NotificationsInterfaceTest {
         }
 
         compose.onNodeWithTag("notificationCategoryFilters").assertIsDisplayed()
-        compose.onNodeWithText("Todas").assertIsDisplayed()
-        compose.onNodeWithText("Família").assertIsDisplayed()
-        compose.onNodeWithText("Agenda").assertIsDisplayed()
-        compose.onNodeWithText("Comunidade").assertIsDisplayed()
-        compose.onNodeWithText("Cuidado").assertIsDisplayed()
+        compose.onNodeWithTag("notificationFilterChip_ALL").assertIsDisplayed()
+        compose.onNodeWithTag("notificationFilterChip_FAMILY").assertIsDisplayed()
+        compose.onNodeWithTag("notificationFilterChip_AGENDA").assertIsDisplayed()
+        compose.onNodeWithTag("notificationFilterChip_COMMUNITY").assertIsDisplayed()
+        compose.onNodeWithTag("notificationFilterChip_CARE").assertIsDisplayed()
 
         compose.onNodeWithText("Nova mensagem de José").assertIsDisplayed()
         compose.onNodeWithText("Abrir conversa").assertIsDisplayed()
@@ -180,7 +180,7 @@ class NotificationsInterfaceTest {
         compose.onAllNodesWithContentDescription("Arquivar aviso")[0].performClick()
         compose.runOnIdle { assertEquals("family-1", archivedItem?.id) }
 
-        compose.onNodeWithText("Agenda").performClick()
+        compose.onNodeWithTag("notificationFilterChip_AGENDA").performClick()
         compose.runOnIdle { assertEquals(NotificationCategoryFilter.AGENDA, selectedFilter) }
     }
 

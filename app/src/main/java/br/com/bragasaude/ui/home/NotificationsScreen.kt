@@ -240,7 +240,7 @@ internal fun NotificationsContent(
                                 selected = selected,
                                 onClick = { onSelectCategory(filter) },
                                 label = { Text(filter.label, style = MaterialTheme.typography.labelLarge) },
-                                modifier = Modifier.heightIn(min = 48.dp)
+                                modifier = Modifier.heightIn(min = 48.dp).testTag("notificationFilterChip_${filter.name}")
                             )
                         }
                     }
