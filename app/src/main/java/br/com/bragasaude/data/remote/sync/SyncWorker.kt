@@ -115,8 +115,9 @@ class SyncWorker @AssistedInject constructor(
     }
 
     private suspend fun syncVitalSigns() {
-        val pending = vitalSignDao.getPendingSync()
         val owner = auth.currentUser?.uid ?: return
+        vitalSignDao.migrateLegacyManualReadings(owner)
+        val pending = vitalSignDao.getPendingSync()
         for (original in pending) {
             if (original.userId != owner) continue
             check(auth.currentUser?.uid == owner)

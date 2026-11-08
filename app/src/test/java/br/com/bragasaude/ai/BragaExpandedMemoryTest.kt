@@ -19,9 +19,9 @@ class BragaExpandedMemoryTest {
     private val logs = mockk<MedicationLogDao>(relaxed = true)
     private val memory = BragaHealthMemory(vitals, profiles, { instant }, zone, biometry, medicines, logs)
     private fun reading(hours: Long = 1, owner: String = "u", sys: Int? = null, dia: Int? = null,
-                        glucose: Int? = null, type: String? = null, heart: Int? = null, oxygen: Int? = null) = VitalSignEntity(
+                        glucose: Int? = null, type: String? = null, heart: Int? = null, oxygen: Number? = null) = VitalSignEntity(
         userId = owner, systolicPressure = sys, diastolicPressure = dia, glucoseLevel = glucose,
-        glucoseType = type, heartRate = heart, oxygenSaturation = oxygen, measuredAt = Date.from(instant.minusSeconds(hours * 3600)))
+        glucoseType = type, heartRate = heart, oxygenSaturation = oxygen?.toDouble(), measuredAt = Date.from(instant.minusSeconds(hours * 3600)))
 
     @Test fun `extremos de pressao sao calculados separadamente sem fabricar uma medicao`() = runTest {
         coEvery { vitals.getLatestPressureForMemory(any(), any(), any()) } returns null
@@ -78,6 +78,8 @@ class BragaExpandedMemoryTest {
         coEvery { biometry.getLatestWeightForMemory("u", any(), any()) } returns BiometryEntity(userId = "u", weight = 80.5f, height = 170f, imc = 27.8f, measuredAt = Date.from(instant.minusSeconds(3600)))
         assertTrue(memory.answerResult(HealthQuery(HealthMetric.HEART_RATE), "u").text.contains("72 bpm"))
         assertTrue(memory.answerResult(HealthQuery(HealthMetric.OXYGEN), "u").text.contains("97%"))
+        coEvery { vitals.getLatestAuxiliaryForMemory("u", "OXYGEN", any(), any()) } returns reading(oxygen = 98.5)
+        assertTrue(memory.answerResult(HealthQuery(HealthMetric.OXYGEN), "u").text.contains("98,5%"))
         val weight = memory.answerResult(HealthQuery(HealthMetric.WEIGHT), "u")
         assertTrue(weight.text.contains("80.5 kg"))
         assertEquals(instant.minusSeconds(3600).toEpochMilli(), weight.referenceMeasuredAtMillis)

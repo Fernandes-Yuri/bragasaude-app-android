@@ -16,16 +16,21 @@ import javax.inject.Inject
 class WearablesViewModel @Inject constructor(
     val manager: HealthConnectManager,
     val bleManager: BleGattManager,
-    database: BragaDatabase,
+    private val database: BragaDatabase,
     auth: FirebaseAuth
 ) : ViewModel() {
     private val uid = auth.currentUser?.uid.orEmpty()
     val isAuthenticated = uid.isNotEmpty()
     val bleState = bleManager.state
-    val heartReadings = database.wearableReadingDao().observeRecent(uid, "HEART_RATE")
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val oxygenReadings = database.wearableReadingDao().observeRecent(uid, "OXYGEN_SATURATION")
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private fun mergedReadings(metric: String) = combine(
+        database.wearableReadingDao().observeRecent(uid, metric),
+        database.vitalSignDao().getAll(uid)
+    ) { wearable, vitals ->
+        br.com.bragasaude.domain.HealthReadingHistory.merge(uid, metric, wearable, vitals)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val heartReadings = mergedReadings("HEART_RATE")
+    val oxygenReadings = mergedReadings("OXYGEN_SATURATION")
     val syncState = manager.syncState
     private val _granted = MutableStateFlow<Set<String>>(emptySet())
     val granted = _granted.asStateFlow()

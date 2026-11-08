@@ -10,7 +10,7 @@ data class RemoteVitalSign(
     @SerialName("systolic_pressure") val systolicPressure: Int? = null,
     @SerialName("diastolic_pressure") val diastolicPressure: Int? = null,
     @SerialName("heart_rate") val heartRate: Int? = null,
-    @SerialName("oxygen_saturation") val oxygenSaturation: Int? = null,
+    @SerialName("oxygen_saturation") val oxygenSaturation: Double? = null,
     @SerialName("glucose_level") val glucoseLevel: Int? = null,
     @SerialName("glucose_type") val glucoseType: String? = null,
     @SerialName("hydration_ml") val hydrationMl: Int? = null,

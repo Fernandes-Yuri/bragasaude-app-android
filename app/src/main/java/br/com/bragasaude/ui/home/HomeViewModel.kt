@@ -240,6 +240,7 @@ class HomeViewModel @Inject constructor(
             kotlinx.coroutines.delay(350)
             if (userId == BragaConstants.GUEST_UID) return@launch
             try {
+                vitalsRepository.migrateAndSyncLegacyManualReadings(userId) { auth.currentUser?.uid }
                 medicationRepository.syncMedicationsFromServer(userId)
                 syncManager.syncUserData(userId, force = false)
                 if (healthConnectManager.isAvailable() && healthConnectManager.checkHasPermissions()) {

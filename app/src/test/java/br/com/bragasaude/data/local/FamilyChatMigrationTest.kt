@@ -84,4 +84,50 @@ class FamilyChatMigrationTest {
         } finally { context.deleteDatabase(name) }
     }
 
+    @Test fun schema67UpgradesOxygenToRealAndMigratesOnlyManualAndVoiceReadings() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        val name = "readings-67.db"
+        context.deleteDatabase(name)
+        val relative = "schemas/br.com.bragasaude.data.local.BragaDatabase/67.json"
+        val source = sequenceOf(File(relative), File("app/$relative")).first { it.isFile }
+        val entities = JSONObject(source.readText()).getJSONObject("database").getJSONArray("entities")
+        val manualUuid = "550e8400-e29b-41d4-a716-446655440000"
+        try {
+            context.openOrCreateDatabase(name, 0, null).use { old ->
+                repeat(entities.length()) { index ->
+                    val table = entities.getJSONObject(index)
+                    val tableName = table.getString("tableName")
+                    old.execSQL(table.getString("createSql").replace("\${TABLE_NAME}", tableName))
+                    val indexes = table.optJSONArray("indices") ?: org.json.JSONArray()
+                    repeat(indexes.length()) { j -> old.execSQL(indexes.getJSONObject(j).getString("createSql").replace("\${TABLE_NAME}", tableName)) }
+                }
+                old.execSQL("INSERT INTO vital_signs_local(localId,remoteId,userId,systolicPressure,diastolicPressure,oxygenSaturation,measuredAt,status,pendingSync,hydrationUndoPending) VALUES(1,'v-existing','mariana',120,80,97,1000,'recorded',0,0)")
+                old.execSQL("INSERT INTO wearable_readings_local(userId,recordKey,metric,value,measuredAt,sourcePackage,deviceModel) VALUES('mariana','manual:$manualUuid','HEART_RATE',103.0,2000,'braga.manual',NULL)")
+                old.execSQL("INSERT INTO wearable_readings_local(userId,recordKey,metric,value,measuredAt,sourcePackage,deviceModel) VALUES('mariana','legacy-voice-key','OXYGEN_SATURATION',98.5,3000,'braga.voice',NULL)")
+                old.execSQL("INSERT INTO wearable_readings_local(userId,recordKey,metric,value,measuredAt,sourcePackage,deviceModel) VALUES('mariana','hc:watch-1','HEART_RATE',68.0,4000,'com.sec.android.app.shealth','Galaxy Watch')")
+                old.version = 67
+            }
+            val db = Room.databaseBuilder(context, BragaDatabase::class.java, name).allowMainThreadQueries().addMigrations(*Migrations.ALL).build()
+            try {
+                val vitals = db.vitalSignDao().getAllOneShot("mariana")
+                assertEquals(3, vitals.size)
+                val migratedVoice = vitals.first { it.oxygenSaturation == 98.5 }
+                assertEquals(98.5, migratedVoice.oxygenSaturation!!, 0.001)
+                assertEquals("braga.voice", migratedVoice.confirmedVia)
+                assertTrue(migratedVoice.pendingSync)
+
+                val migratedHeart = vitals.first { it.heartRate == 103 }
+                assertEquals(manualUuid, migratedHeart.remoteId)
+                assertEquals("braga.manual", migratedHeart.confirmedVia)
+                assertTrue(migratedHeart.pendingSync)
+
+                // Health Connect reading remains in wearable_readings_local and is not uploaded as manual vital
+                val remainingWearables = db.wearableReadingDao().getForReport("mariana", 0L)
+                assertEquals(1, remainingWearables.size)
+                assertEquals("hc:watch-1", remainingWearables.single().recordKey)
+                assertTrue(db.vitalSignDao().getLegacyManualWearableReadingsForUser("mariana").isEmpty())
+            } finally { db.close() }
+        } finally { context.deleteDatabase(name) }
+    }
+
 }

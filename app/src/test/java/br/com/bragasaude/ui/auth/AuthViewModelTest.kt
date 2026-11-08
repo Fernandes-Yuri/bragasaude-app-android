@@ -274,11 +274,13 @@ class AuthViewModelTest {
         val user = mockk<FirebaseUser>(relaxed = true)
         every { user.uid } returns "test-uid"
         every { auth.currentUser } returns user
+        val vitalDao = database.vitalSignDao()
         val pending = br.com.bragasaude.data.local.VitalSignEntity(
             userId = "test-uid", hydrationMl = 250, pendingSync = true
         )
-        coEvery { database.vitalSignDao().getPendingSync() } returns listOf(pending)
+        coEvery { vitalDao.getPendingSync() } returns listOf(pending)
         viewModel.signOut()
+        coVerify(exactly = 1) { vitalDao.migrateLegacyManualReadings("test-uid") }
         verify(exactly = 0) { database.clearAllTables() }
         verify(exactly = 0) { auth.signOut() }
         assertNotNull(viewModel.sessionNotice.value)

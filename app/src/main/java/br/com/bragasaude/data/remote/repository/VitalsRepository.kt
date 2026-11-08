@@ -163,6 +163,153 @@ class VitalsRepository @Inject constructor(
         return syncedResults
     }
 
+    /**
+     * RTL-03: persiste leitura manual ou por voz de batimentos/oxigenação na tabela
+     * canônica `vital_signs_local` com UUID estável, origem preservada e `pendingSync = true`
+     * antes do envio, retornando o estado explícito para a UI e garantindo isolamento por conta.
+     */
+    suspend fun saveManualHealthReading(
+        userId: String,
+        metric: String,
+        rawInput: String,
+        fromVoice: Boolean,
+        measuredAtMillis: Long = System.currentTimeMillis(),
+        recordId: String = UUID.randomUUID().toString(),
+        currentUserProvider: () -> String? = { userId }
+    ): br.com.bragasaude.domain.HealthReadingSaveResult {
+        if (userId.isBlank() || currentUserProvider() != userId) {
+            return br.com.bragasaude.domain.HealthReadingSaveResult(
+                status = br.com.bragasaude.domain.HealthReadingSaveStatus.UNAUTHENTICATED,
+                message = "Entre novamente na sua conta para salvar."
+            )
+        }
+        val validated = br.com.bragasaude.domain.HealthReadingInput.value(metric, rawInput)
+            ?: return br.com.bragasaude.domain.HealthReadingSaveResult(
+                status = br.com.bragasaude.domain.HealthReadingSaveStatus.VALIDATION_ERROR,
+                message = "Confira o valor indicado no aparelho e tente novamente."
+            )
+        val stableId = runCatching { UUID.fromString(recordId).toString() }.getOrElse { UUID.randomUUID().toString() }
+        val origin = if (fromVoice) br.com.bragasaude.domain.HealthReadingInput.VOICE else br.com.bragasaude.domain.HealthReadingInput.MANUAL
+        val isGuest = userId == guestId
+        val entity = VitalSignEntity(
+            remoteId = stableId,
+            userId = userId,
+            heartRate = if (metric == br.com.bragasaude.domain.HealthReadingInput.HEART) validated.toInt() else null,
+            oxygenSaturation = if (metric == br.com.bragasaude.domain.HealthReadingInput.OXYGEN) validated else null,
+            measuredAt = Date(measuredAtMillis),
+            status = "recorded",
+            pendingSync = !isGuest,
+            confirmedVia = origin
+        )
+        val persisted = try {
+            vitalSignDao.upsertManualReading(entity)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return br.com.bragasaude.domain.HealthReadingSaveResult(
+                status = br.com.bragasaude.domain.HealthReadingSaveStatus.ERROR,
+                message = "Não foi possível salvar. Seu valor continua aqui para tentar novamente."
+            )
+        }
+
+        if (isGuest) {
+            return br.com.bragasaude.domain.HealthReadingSaveResult(
+                status = br.com.bragasaude.domain.HealthReadingSaveStatus.SAVED_LOCALLY_PENDING_SYNC,
+                remoteId = persisted.remoteId,
+                message = "Leitura salva neste aparelho."
+            )
+        }
+
+        if (currentUserProvider() != userId) {
+            triggerSync()
+            return br.com.bragasaude.domain.HealthReadingSaveResult(
+                status = br.com.bragasaude.domain.HealthReadingSaveStatus.SAVED_LOCALLY_PENDING_SYNC,
+                remoteId = persisted.remoteId,
+                message = "Leitura salva neste aparelho e aguardando envio."
+            )
+        }
+
+        var confirmedByServer = false
+        try {
+            val serverUuid = apiClient.syncVitalSign(persisted)
+            if (serverUuid != null) {
+                vitalSignDao.acknowledgeSync(persisted, serverUuid)
+                confirmedByServer = true
+            } else {
+                triggerSync()
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("VitalsRepository", "Leitura mantida localmente aguardando envio: ${e.message}")
+            triggerSync()
+        }
+
+        if (currentUserProvider() == userId) {
+            try {
+                checkAndNotifyCriticalVitals(persisted)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {}
+        }
+
+        return if (confirmedByServer) {
+            br.com.bragasaude.domain.HealthReadingSaveResult(
+                status = br.com.bragasaude.domain.HealthReadingSaveStatus.SYNCED,
+                remoteId = persisted.remoteId,
+                message = "Leitura sincronizada na sua conta."
+            )
+        } else {
+            br.com.bragasaude.domain.HealthReadingSaveResult(
+                status = br.com.bragasaude.domain.HealthReadingSaveStatus.SAVED_LOCALLY_PENDING_SYNC,
+                remoteId = persisted.remoteId,
+                message = "Leitura salva neste aparelho e aguardando envio."
+            )
+        }
+    }
+
+    /**
+     * RTL-03: migra de forma transacional e idempotente entradas manuais/por voz legadas
+     * (`sourcePackage IN ('braga.manual', 'braga.voice')`) de `wearable_readings_local`
+     * para `vital_signs_local` e dispara o envio ao servidor para o usuário ativo.
+     */
+    suspend fun migrateAndSyncLegacyManualReadings(
+        userId: String,
+        currentUserProvider: () -> String? = { userId }
+    ): List<VitalSignEntity> {
+        if (userId.isBlank() || userId == guestId) return emptyList()
+        val migrated = vitalSignDao.migrateLegacyManualReadings(userId)
+        val pendingForUser = vitalSignDao.getPendingSync().filter {
+            it.userId == userId && it.confirmedVia in setOf(
+                br.com.bragasaude.domain.HealthReadingInput.MANUAL,
+                br.com.bragasaude.domain.HealthReadingInput.VOICE
+            )
+        }
+        if (pendingForUser.isEmpty()) return migrated
+        var anyFailed = false
+        for (pending in pendingForUser) {
+            if (currentUserProvider() != userId) {
+                anyFailed = true
+                break
+            }
+            val id = pending.remoteId ?: continue
+            val acked = try {
+                apiClient.syncVitalSign(pending) == id
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                false
+            }
+            if (acked) {
+                vitalSignDao.acknowledgeSync(pending, id)
+            } else {
+                anyFailed = true
+            }
+        }
+        if (anyFailed) triggerSync()
+        return migrated
+    }
+
     suspend fun deleteLastHydration(userId: String, day: LocalDate = LocalDate.now()) {
         val zone = ZoneId.systemDefault()
         val undone = vitalSignDao.undoHydration(userId,
@@ -259,10 +406,11 @@ class VitalsRepository @Inject constructor(
         // cuidador. Hipoxemia silenciosa é uma das maiores urgências geriátricas.
         val spo2 = vital.oxygenSaturation
         if (spo2 != null && spo2 < CriticalVitalThresholds.CRITICAL_SPO2_LOW) {
+            val spo2Label = br.com.bragasaude.domain.HealthReadingInput.formatOxygenCompact(spo2)
             alertsToNotify.add(Triple(
                 "CRITICAL_SPO2_LOW:$patientId",
-                "Aviso de cuidado: A saturação de oxigênio de $patientName foi registrada como ${spo2}%. Abaixo de 90% é sinal de alerta. Vale checar como ele(a) está respirando e considerar atendimento médico.",
-                "Sua saturação de oxigênio foi registrada como ${spo2}%. Abaixo de 90% é sinal de alerta. Se sentir falta de ar, confusão ou lábios/dedos arroxeados, procure atendimento médico imediatamente."
+                "Aviso de cuidado: A saturação de oxigênio de $patientName foi registrada como ${spo2Label}%. Abaixo de 90% é sinal de alerta. Vale checar como ele(a) está respirando e considerar atendimento médico.",
+                "Sua saturação de oxigênio foi registrada como ${spo2Label}%. Abaixo de 90% é sinal de alerta. Se sentir falta de ar, confusão ou lábios/dedos arroxeados, procure atendimento médico imediatamente."
             ))
         }
 

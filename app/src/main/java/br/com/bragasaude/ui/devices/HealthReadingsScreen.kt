@@ -28,6 +28,7 @@ import br.com.bragasaude.ui.util.*
 fun HealthReadingsScreen(metric: String, initialValue: String?, onBack: () -> Unit, onConnectWatch: () -> Unit, viewModel: HealthReadingsViewModel = hiltViewModel()) {
     val heart by viewModel.heart.collectAsState()
     val oxygen by viewModel.oxygen.collectAsState()
+    val loaded by viewModel.loaded.collectAsState()
     val saving by viewModel.saving.collectAsState()
     val error by viewModel.error.collectAsState()
     val isHeart = metric == HealthReadingInput.HEART
@@ -53,13 +54,22 @@ fun HealthReadingsScreen(metric: String, initialValue: String?, onBack: () -> Un
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         } },
         confirmButton = { TextButton(enabled = !saving, onClick = {
-            viewModel.save(metric, value, fromVoice) { value = ""; fromVoice = false; confirm = false; notice = "Leitura salva no seu histórico." }
+            viewModel.saveWithResult(metric, value, fromVoice) { result ->
+                if (result.status == br.com.bragasaude.domain.HealthReadingSaveStatus.SYNCED ||
+                    result.status == br.com.bragasaude.domain.HealthReadingSaveStatus.SAVED_LOCALLY_PENDING_SYNC
+                ) {
+                    value = ""
+                    fromVoice = false
+                    confirm = false
+                    notice = result.message ?: "Leitura salva no seu histórico."
+                }
+            }
         }) { Text(if (saving) "Salvando…" else "Salvar leitura") } },
         dismissButton = { TextButton(enabled = !saving, onClick = { confirm = false }) { Text("Corrigir") } })
     Scaffold(containerColor = BragaBackground, topBar = { EmeraldHeaderBanner(title = title, subtitle = "Suas medições, no mesmo lugar", onBack = leave) }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(vertical = 16.dp)) {
             item {
-                ReadingSummary("Última leitura", readings.firstOrNull())
+                ReadingSummary("Última leitura", readings.firstOrNull(), loaded = loaded)
             }
             item {
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = BragaCardSurface), border = BorderStroke(1.dp, BragaCardBorder)) {
@@ -69,7 +79,7 @@ fun HealthReadingsScreen(metric: String, initialValue: String?, onBack: () -> Un
                         OutlinedTextField(value = value, onValueChange = { value = it; fromVoice = false; notice = null }, label = { Text("Valor medido") },
                             suffix = { Text(unit) }, modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !saving,
                             shape = RoundedCornerShape(12.dp), keyboardOptions = KeyboardOptions(keyboardType = if (isHeart) KeyboardType.Number else KeyboardType.Decimal),
-                            supportingText = { Text(if (isHeart) "Exemplo: 72 bpm" else "Exemplo: 98%") })
+                            supportingText = { Text(if (isHeart) "Exemplo: 72 bpm (20 a 250)" else "Exemplo: 98,5% (30 a 100)") })
                         Button(onClick = { confirm = true }, enabled = !saving && HealthReadingInput.value(metric, value) != null,
                             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("Conferir e salvar") }
                         notice?.let { Text(it, color = BragaEmerald) }
@@ -81,10 +91,14 @@ fun HealthReadingsScreen(metric: String, initialValue: String?, onBack: () -> Un
             item {
                 Text("Histórico recente", style = MaterialTheme.typography.titleLarge)
                 Text("Data, hora e origem de cada leitura. Até 200 registros recentes.", color = BragaTextSecondary)
-                if (readings.isEmpty()) Text("Suas leituras aparecerão aqui após o primeiro registro.", modifier = Modifier.padding(vertical = 16.dp))
+                if (!loaded && readings.isEmpty()) {
+                    Text("Carregando seu histórico de leituras…", modifier = Modifier.padding(vertical = 16.dp), color = BragaTextSecondary)
+                } else if (readings.isEmpty()) {
+                    Text("Suas leituras aparecerão aqui após o primeiro registro.", modifier = Modifier.padding(vertical = 16.dp))
+                }
             }
-            items(readings, key = { it.recordKey }) { ReadingSummary(if (isHeart) "Batimentos" else "SpO₂", it) }
-            item { Text("Dados salvos neste celular e incluídos no relatório de consulta dos últimos 30 dias.", style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary) }
+            items(readings, key = { it.recordKey }) { ReadingSummary(if (isHeart) "Batimentos" else "SpO₂", it, loaded = true) }
+            item { Text("Dados sincronizados na sua conta e incluídos no relatório de consulta dos últimos 30 dias.", style = MaterialTheme.typography.bodySmall, color = BragaTextSecondary) }
         }
     }
 }

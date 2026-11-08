@@ -196,17 +196,23 @@ fun WearablesScreen(onBack: () -> Unit, viewModel: WearablesViewModel = hiltView
 }
 
 @Composable
-internal fun ReadingSummary(label: String, reading: WearableReading?) {
+internal fun ReadingSummary(label: String, reading: WearableReading?, loaded: Boolean = true) {
     val context = LocalContext.current
     Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = BragaCardSurface), border = BorderStroke(1.dp, BragaCardBorder)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(label, style = MaterialTheme.typography.titleMedium, color = BragaTextSecondary)
-            if (reading == null) {
+            if (!loaded && reading == null) {
+                Text("Carregando…", style = MaterialTheme.typography.titleMedium)
+                Text("Recuperando as medições registradas na sua conta.", style = MaterialTheme.typography.bodyMedium, color = BragaTextSecondary)
+            } else if (reading == null) {
                 Text("Nenhuma leitura ainda", style = MaterialTheme.typography.titleMedium)
                 Text("Registre uma medição no início ou sincronize seu dispositivo.", style = MaterialTheme.typography.bodyMedium, color = BragaTextSecondary)
             } else {
-                Text(if (reading.metric == "HEART_RATE") reading.value.toInt().toString() + " bpm" else String.format(Locale.getDefault(), "%.1f %%", reading.value),
-                    style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = BragaEmerald)
+                Text(
+                    if (reading.metric == "HEART_RATE") reading.value.toInt().toString() + " bpm"
+                    else HealthReadingInput.formatOxygenDisplay(reading.value) + " %",
+                    style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = BragaEmerald
+                )
                 Text(SimpleDateFormat("dd/MM/yyyy • HH:mm", Locale.getDefault()).format(Date(reading.measuredAt)), style = MaterialTheme.typography.bodyMedium)
                 val source = remember(reading.sourcePackage) {
                     if (reading.sourcePackage.startsWith("braga.")) HealthReadingInput.origin(reading.sourcePackage)

@@ -6,6 +6,7 @@ import android.graphics.pdf.PdfDocument
 import br.com.bragasaude.data.local.DailyMetricsEntity
 import br.com.bragasaude.data.remote.model.RemoteProfile
 import br.com.bragasaude.data.remote.model.RemoteVitalSign
+import br.com.bragasaude.data.util.toEntity
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -60,6 +61,7 @@ class PdfReportGenerator(private val context: Context) {
                     add("Pressão arterial: ${vital.systolicPressure ?: "--"}/${vital.diastolicPressure ?: "--"} mmHg")
                 vital.glucoseLevel?.let { add("Glicose: $it mg/dL (${vital.glucoseType ?: "avulso"})") }
                 vital.heartRate?.let { add("Frequência cardíaca: $it bpm") }
+                vital.oxygenSaturation?.let { add("Oxigenação: ${HealthReadingInput.formatOxygenCompact(it)}%") }
                 vital.hydrationMl?.takeIf { it > 0 }?.let { add("Hidratação: $it ml") }
             }
             values.flatMap { value ->
@@ -67,7 +69,12 @@ class PdfReportGenerator(private val context: Context) {
             }
         }.ifEmpty { listOf("Nenhum registro informado neste período.") }
         val historyPages = historyLines.chunked(38)
-        val wearablePagesData = summarizeWearableReadings(wearableReadings.filter { period.contains(it.measuredAt) }).chunked(10)
+        val recentVitalEntities = recentVitals.map { it.toEntity() }
+        val mergedWearables = (
+            HealthReadingHistory.merge(profile.id, HealthReadingInput.HEART, wearableReadings, recentVitalEntities) +
+                HealthReadingHistory.merge(profile.id, HealthReadingInput.OXYGEN, wearableReadings, recentVitalEntities)
+            ).filter { period.contains(it.measuredAt) }
+        val wearablePagesData = summarizeWearableReadings(mergedWearables).chunked(10)
         val totalPages = 2 + historyPages.size + wearablePagesData.size
 
         // ==========================================
@@ -292,7 +299,7 @@ class PdfReportGenerator(private val context: Context) {
             rows.forEach { row ->
                 val metric = if (row.metric == "HEART_RATE") "Frequência cardíaca (bpm)" else "SpO2 (%)"
                 canvas.drawText("${row.date} • $metric • ${row.count} amostras", 50f, y, textPaint)
-                canvas.drawText(String.format(Locale.getDefault(), "Mínima: %.1f   Média: %.1f   Máxima: %.1f", row.minimum, row.average, row.maximum), 50f, y + 18f, textPaint)
+                canvas.drawText(String.format(Locale("pt", "BR"), "Mínima: %.1f   Média: %.1f   Máxima: %.1f", row.minimum, row.average, row.maximum), 50f, y + 18f, textPaint)
                 val source = "Origem: " + if (row.source.startsWith("braga.")) HealthReadingInput.origin(row.source) else row.source
                 canvas.drawText(source.take(subTextPaint.breakText(source, true, 495f, null)), 50f, y + 36f, subTextPaint)
                 y += 54f

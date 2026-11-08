@@ -36,7 +36,7 @@ import androidx.room.TypeConverters
         CareAuditEntity::class,
         BleTelemetryReceiptEntity::class
     ],
-    version = 67, // Sincronização clínica e recibos duráveis
+    version = 68, // Contrato decimal de oxigenação e migração canônica de leituras manuais/voz
     exportSchema = true
 )
 @TypeConverters(Converters::class, SmokingSupportConverters::class)

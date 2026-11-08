@@ -271,22 +271,28 @@ fun HomeScreen(
 
                 val hasCardioReadings = heartReadings.isNotEmpty() || oxygenReadings.isNotEmpty()
                 val cardioVitalsItem: @Composable () -> Unit = {
+                    val latestHeart = heartReadings.firstOrNull()
+                    val latestOxygen = oxygenReadings.firstOrNull()
+                    val heartStamp = latestHeart?.let { java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(it.measuredAt)) }
+                    val oxygenStamp = latestOxygen?.let { java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(it.measuredAt)) }
+                    val heartPending = latestHeart?.deviceModel == br.com.bragasaude.domain.HealthReadingHistory.PENDING_SYNC_LABEL
+                    val oxygenPending = latestOxygen?.deviceModel == br.com.bragasaude.domain.HealthReadingHistory.PENDING_SYNC_LABEL
                     Row(
                         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         BragaMetricCard(
                             label = "Batimentos",
-                            value = heartReadings.firstOrNull()?.value?.toInt()?.toString() ?: "—",
-                            unit = if (heartReadings.isEmpty()) "Registrar medição" else "bpm • " + java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(heartReadings.first().measuredAt)),
+                            value = if (latestHeart != null) latestHeart.value.toInt().toString() else if (!readings.loaded) "…" else "—",
+                            unit = if (latestHeart != null) "bpm • $heartStamp" + (if (heartPending) " • Pendente" else "") else if (!readings.loaded) "Carregando…" else "Registrar medição",
                             iconPainter = painterResource(R.drawable.ic_shield_ecg),
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.HealthReadings("HEART_RATE")) }
                         )
                         BragaMetricCard(
                             label = "Oxigenação",
-                            value = oxygenReadings.firstOrNull()?.value?.let { String.format(java.util.Locale.getDefault(), "%.1f", it) } ?: "—",
-                            unit = if (oxygenReadings.isEmpty()) "Registrar medição" else "% • " + java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(oxygenReadings.first().measuredAt)),
+                            value = if (latestOxygen != null) br.com.bragasaude.domain.HealthReadingInput.formatOxygenDisplay(latestOxygen.value) else if (!readings.loaded) "…" else "—",
+                            unit = if (latestOxygen != null) "% • $oxygenStamp" + (if (oxygenPending) " • Pendente" else "") else if (!readings.loaded) "Carregando…" else "Registrar medição",
                             iconPainter = painterResource(R.drawable.ic_lungs),
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             onClick = { onNavigateToScreen(br.com.bragasaude.ui.util.Screen.HealthReadings("OXYGEN_SATURATION")) }

@@ -733,7 +733,8 @@ class VoiceHealthViewModel @Inject constructor(
                 if (currentUserRole != "CAREGIVER" || currentCaregiverMode == "HYBRID") {
                     br.com.bragasaude.domain.HealthReadingInput.spoken(bestMatch)?.let { draft ->
                         navigateForVoice(VoiceNavigationEvent.NavigateToVitals(draft.metric,
-                            if (draft.metric == "HEART_RATE") draft.value.toInt().toString() else draft.value.toString()))
+                            if (draft.metric == "HEART_RATE") draft.value.toInt().toString()
+                            else br.com.bragasaude.domain.HealthReadingInput.formatOxygenCompact(draft.value)))
                         speak("Confira o valor na tela e toque em salvar para registrar a medição.") { onSpeechFinished() }
                         return
                     }
