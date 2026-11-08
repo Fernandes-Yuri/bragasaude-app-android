@@ -158,7 +158,7 @@ class ClinicalIntegrityPersistenceTest {
                             .setBody("""{"status":"success","id":"$id","vitalsContract":2}""")
                     }
                     request.method == "GET" && path.startsWith("/api/vitals/mariana/changes") -> {
-                        if (!path.contains("contract=2")) {
+                        if (request.getHeader("X-Braga-Vitals-Contract") != "2" && !path.contains("contract=2")) {
                             return okhttp3.mockwebserver.MockResponse().setResponseCode(409)
                                 .setBody("""{"detail":"Atualize para contract=2"}""")
                         }
