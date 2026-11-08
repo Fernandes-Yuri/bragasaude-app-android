@@ -295,7 +295,7 @@ class BragaApiClient @Inject constructor(
             var offset = 0
             while (true) {
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
-                val arr = getJsonArray("$baseUrl/api/vitals/$userId?limit=200&offset=$offset&contract=$VITALS_CONTRACT_VERSION")
+                val arr = getJsonArray("$baseUrl/api/vitals/$userId?limit=200&offset=$offset")
                     ?: return@withContext null // Falha parcial nunca avança o cursor do SyncManager.
                 for (i in 0 until arr.length()) {
                     val obj = arr.getJSONObject(i)
@@ -336,7 +336,7 @@ class BragaApiClient @Inject constructor(
 
     suspend fun getVitalChanges(patient: String, after: Long): VitalChangesPage? = withContext(Dispatchers.IO) {
         try {
-            val page = getJson("$baseUrl/api/vitals/$patient/changes?after=$after&contract=$VITALS_CONTRACT_VERSION") ?: return@withContext null
+            val page = getJson("$baseUrl/api/vitals/$patient/changes?after=$after") ?: return@withContext null
             val changes = page.getJSONArray("changes")
             val records = (0 until changes.length()).map { index ->
                 val v = changes.getJSONObject(index).getJSONObject("vital")
@@ -1172,6 +1172,7 @@ class BragaApiClient @Inject constructor(
 
     // Called only by HTTP helpers running on Dispatchers.IO. OTP precedes login.
     private fun HttpURLConnection.attachIdentity(urlString: String) {
+        setRequestProperty("X-Braga-Vitals-Contract", VITALS_CONTRACT_VERSION.toString())
         val path = URL(urlString).path
         if (path.startsWith("/api/auth/")) return
         if (path == "/api/app/latest") {
