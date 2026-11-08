@@ -5,6 +5,9 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.inspector.WindowInspector
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.remember
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -50,6 +53,24 @@ class MedicalReportInterfaceTest {
         compose.onNodeWithText("Seu relatório de 30 dias").assertIsDisplayed()
         compose.onNodeWithText("Gerando relatório...").assertIsDisplayed()
         compose.onNodeWithText("Gerando relatório...").assertIsNotEnabled()
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-mdpi")
+    fun exportIsVisibleWithoutScrollingWithLargeFontAndBottomNavigationSpace() {
+        compose.setContent {
+            val density = androidx.compose.ui.platform.LocalDensity.current.density
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density, 1.5f)) {
+                BragasaudeTheme(forceThemeMode = "LIGHT") {
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier
+                        .fillMaxSize().padding(bottom = 80.dp)) {
+                        MedicalReportContent(false, remember { SnackbarHostState() }, {}, {})
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("Baixar relatório em PDF").assertIsDisplayed()
     }
 
     private fun screenshot(name: String) {
