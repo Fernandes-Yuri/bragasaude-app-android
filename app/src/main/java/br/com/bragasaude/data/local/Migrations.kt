@@ -753,6 +753,67 @@ object Migrations {
         }
     }
 
+    /**
+     * Migração 68 → 69 (RTL-07):
+     * Cria as tabelas locais da Central de Notificações persistente por destinatário
+     * (`notification_items_local` e `notification_sync_state_local`).
+     */
+    val MIGRATION_68_69 = object : Migration(68, 69) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `notification_items_local` (" +
+                    "`recipientId` TEXT NOT NULL, " +
+                    "`id` TEXT NOT NULL, " +
+                    "`revision` INTEGER NOT NULL, " +
+                    "`kind` TEXT NOT NULL, " +
+                    "`category` TEXT NOT NULL, " +
+                    "`actorId` TEXT, " +
+                    "`patientId` TEXT, " +
+                    "`resourceType` TEXT NOT NULL, " +
+                    "`resourceId` TEXT NOT NULL, " +
+                    "`occurredAt` INTEGER NOT NULL, " +
+                    "`expiresAt` INTEGER NOT NULL, " +
+                    "`count` INTEGER NOT NULL, " +
+                    "`unreadCount` INTEGER NOT NULL, " +
+                    "`isRead` INTEGER NOT NULL, " +
+                    "`readAt` INTEGER, " +
+                    "`archived` INTEGER NOT NULL, " +
+                    "`deleted` INTEGER NOT NULL, " +
+                    "`dataJson` TEXT NOT NULL, " +
+                    "`pendingReadThroughRevision` INTEGER, " +
+                    "`pendingArchiveThroughRevision` INTEGER, " +
+                    "PRIMARY KEY(`recipientId`, `id`))"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_notification_items_local_recipientId_archived_deleted_occurredAt` " +
+                    "ON `notification_items_local` (`recipientId`, `archived`, `deleted`, `occurredAt`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_notification_items_local_recipientId_category_archived_deleted_occurredAt` " +
+                    "ON `notification_items_local` (`recipientId`, `category`, `archived`, `deleted`, `occurredAt`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_notification_items_local_recipientId_patientId` " +
+                    "ON `notification_items_local` (`recipientId`, `patientId`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_notification_items_local_recipientId_revision` " +
+                    "ON `notification_items_local` (`recipientId`, `revision`)"
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `notification_sync_state_local` (" +
+                    "`recipientId` TEXT NOT NULL, " +
+                    "`cursorRevision` INTEGER NOT NULL, " +
+                    "`latestRevision` INTEGER NOT NULL, " +
+                    "`nextPageCursor` TEXT, " +
+                    "`hasMorePages` INTEGER NOT NULL, " +
+                    "`pendingMarkAllReadThroughRevision` INTEGER, " +
+                    "`lastSyncedAt` INTEGER NOT NULL, " +
+                    "PRIMARY KEY(`recipientId`))"
+            )
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -796,6 +857,7 @@ object Migrations {
         MIGRATION_64_65,
         MIGRATION_65_66,
         MIGRATION_66_67,
-        MIGRATION_67_68
+        MIGRATION_67_68,
+        MIGRATION_68_69
     )
 }

@@ -133,10 +133,9 @@ class AuthViewModel @Inject constructor(
             _sessionStatus.value = AppSessionStatus.NotAuthenticated
             _isProfileComplete.value = null
             _hasAcceptedConsent.value = null
-            lastRegisteredToken = null
-            lastRegisteredRole = null
-            lastRegisteredUserId = null
-            lastRegisteredName = null
+            viewModelScope.launch {
+                notificationClient.onSessionChanged(null)
+            }
         }
     }
 
@@ -189,44 +188,26 @@ class AuthViewModel @Inject constructor(
         restoreJob?.join()
     }
 
-    private var lastRegisteredToken: String? = null
-    private var lastRegisteredRole: String? = null
-    private var lastRegisteredUserId: String? = null
-    private var lastRegisteredName: String? = null
-
     /**
-     * G2 (doc 10 §3.2): registra o token FCM no gateway sempre que há um usuário
-     * autenticado. Deduplica o envio para evitar disparos redundantes a cada
-     * atualização de perfil pelo Room Flow.
+     * G2 (doc 10 §3.2) + RTL-06: registra o token FCM no gateway consolidando
+     * busca e envio por sessão (single-flight, deduplicação antes do fetch,
+     * backoff limitado e diagnóstico estruturado).
      */
     private fun registerFcmToken() {
         val user = auth.currentUser ?: return
+        val userId = user.uid
+        if (userId.isBlank() || userId == BragaConstants.GUEST_UID) return
         val currentRole = _userRole.value ?: "USER"
+        val currentName = runCatching { user.displayName }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Usuário Braga"
         viewModelScope.launch {
-            try {
-                val currentName = runCatching { user.displayName }.getOrNull() ?: "Usuário Braga"
-                val token = FirebaseMessaging.getInstance().token.await()
-                if (token == lastRegisteredToken &&
-                    currentRole == lastRegisteredRole &&
-                    user.uid == lastRegisteredUserId &&
-                    currentName == lastRegisteredName) {
-                    return@launch
-                }
-                val success = notificationClient.registerDevice(
-                    userId = user.uid,
-                    token = token,
-                    role = currentRole,
-                    name = currentName
-                )
-                if (success) {
-                    lastRegisteredToken = token
-                    lastRegisteredRole = currentRole
-                    lastRegisteredUserId = user.uid
-                    lastRegisteredName = currentName
-                }
-            } catch (e: Exception) {
-                android.util.Log.w("AuthViewModel", "Falha ao registrar token FCM: ${e.message}")
-            }
+            notificationClient.ensureSessionTokenRegistered(
+                userId = userId,
+                role = currentRole,
+                name = currentName,
+                force = false,
+                context = appContext,
+                currentUserIdProvider = { auth.currentUser?.uid }
+            )
         }
     }
 
@@ -831,14 +812,13 @@ class AuthViewModel @Inject constructor(
                 android.util.Log.w("AuthViewModel", "Erro ao cancelar workers: ${e.message}")
             }
 
-            // (issue #11) Desvincular token FCM por ÚLTIMO, best-effort: é chamada
-            // de rede e não pode consumir o orçamento do flush de pendências.
+            // (issue #11 + RTL-06) Desvincular token FCM por ÚLTIMO, best-effort:
+            // usa o token já consolidado na sessão e invalida a geração atual.
             userId?.let { uid ->
                 try {
-                    val token = FirebaseMessaging.getInstance().token.await()
-                    notificationClient.unregisterDeviceToken(uid, token)
+                    notificationClient.unregisterCurrentDevice(uid)
                 } catch (e: Exception) {
-                    android.util.Log.w("AuthViewModel", "Erro ao desvincular token FCM no signOut: ${e.message}")
+                    android.util.Log.w("AuthViewModel", "Erro ao desvincular token FCM no signOut: ${e.javaClass.simpleName}")
                 }
             }
 

@@ -3,6 +3,8 @@ package br.com.bragasaude.ui.home
 import android.app.Application
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import br.com.bragasaude.data.remote.repository.NotificationCategoryFilter
+import br.com.bragasaude.data.remote.repository.NotificationDisplayItem
 import br.com.bragasaude.ui.theme.BragasaudeTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -96,5 +98,162 @@ class NotificationsInterfaceTest {
         }
         compose.onNodeWithText("Configurações").assertIsDisplayed()
         compose.onNodeWithText("Ative as notificações para receber alertas de saúde importantes.").assertIsDisplayed()
+    }
+
+    @Test fun persisted_items_render_cards_filter_by_category_and_trigger_actions() {
+        var selectedFilter: NotificationCategoryFilter = NotificationCategoryFilter.ALL
+        var openedItem: NotificationDisplayItem? = null
+        var archivedItem: NotificationDisplayItem? = null
+
+        val familyItem = NotificationDisplayItem(
+            id = "family-1",
+            revision = 1L,
+            kind = "FAMILY_MESSAGE",
+            category = "FAMILY",
+            categoryLabel = "Família",
+            title = "Nova mensagem de José",
+            body = "Conversa de cuidado de José. Toque para abrir.",
+            personLabel = "José",
+            occurredAt = 1_700_000_000_000L,
+            count = 1,
+            unreadCount = 1,
+            isRead = false,
+            patientId = "jose-uid",
+            resourceType = "family_chat",
+            resourceId = "jose-uid"
+        )
+        val agendaItem = NotificationDisplayItem(
+            id = "agenda-1",
+            revision = 2L,
+            kind = "CONSULTATION_CREATED",
+            category = "AGENDA",
+            categoryLabel = "Agenda",
+            title = "Nova consulta agendada",
+            body = "Cardiologista · Toque para abrir.",
+            personLabel = null,
+            occurredAt = 1_700_000_000_000L,
+            count = 1,
+            unreadCount = 0,
+            isRead = true,
+            patientId = null,
+            resourceType = "consultation",
+            resourceId = "consult-1"
+        )
+
+        compose.setContent {
+            BragasaudeTheme(forceThemeMode = "LIGHT") {
+                NotificationsContent(
+                    alerts = emptyList(),
+                    readAlerts = emptySet(),
+                    identifiedAt = emptyMap(),
+                    batteryAllowed = true,
+                    batteryGuidance = null,
+                    onBack = {},
+                    onBatterySettings = {},
+                    onMarkAllRead = {},
+                    onOpen = {},
+                    onDismiss = {},
+                    persistedItems = listOf(familyItem, agendaItem),
+                    selectedCategory = selectedFilter,
+                    onSelectCategory = { selectedFilter = it },
+                    showCategoryFilters = true,
+                    onOpenPersistedItem = { openedItem = it },
+                    onArchivePersistedItem = { archivedItem = it }
+                )
+            }
+        }
+
+        compose.onNodeWithTag("notificationCategoryFilters").assertIsDisplayed()
+        compose.onNodeWithText("Todas").assertIsDisplayed()
+        compose.onNodeWithText("Família").assertIsDisplayed()
+        compose.onNodeWithText("Agenda").assertIsDisplayed()
+        compose.onNodeWithText("Comunidade").assertIsDisplayed()
+        compose.onNodeWithText("Cuidado").assertIsDisplayed()
+
+        compose.onNodeWithText("Nova mensagem de José").assertIsDisplayed()
+        compose.onNodeWithText("Abrir conversa").assertIsDisplayed()
+        compose.onNodeWithText("Nova consulta agendada").assertIsDisplayed()
+
+        compose.onNodeWithText("Nova mensagem de José").performClick()
+        compose.runOnIdle { assertEquals("family-1", openedItem?.id) }
+
+        compose.onAllNodesWithContentDescription("Arquivar aviso")[0].performClick()
+        compose.runOnIdle { assertEquals("family-1", archivedItem?.id) }
+
+        compose.onNodeWithText("Agenda").performClick()
+        compose.runOnIdle { assertEquals(NotificationCategoryFilter.AGENDA, selectedFilter) }
+    }
+
+    @Test fun load_more_button_renders_when_has_more_pages_and_triggers_callback() {
+        var loadMoreCalled = 0
+        compose.setContent {
+            BragasaudeTheme(forceThemeMode = "LIGHT") {
+                NotificationsContent(
+                    alerts = emptyList(),
+                    readAlerts = emptySet(),
+                    identifiedAt = emptyMap(),
+                    batteryAllowed = true,
+                    batteryGuidance = null,
+                    onBack = {},
+                    onBatterySettings = {},
+                    onMarkAllRead = {},
+                    onOpen = {},
+                    onDismiss = {},
+                    persistedItems = listOf(
+                        NotificationDisplayItem(
+                            id = "med-stock",
+                            revision = 1L,
+                            kind = "MEDICATION_LOW_STOCK",
+                            category = "CARE",
+                            categoryLabel = "Cuidado",
+                            title = "Estoque baixo: Losartana",
+                            body = "Restam 2 unidades.",
+                            personLabel = null,
+                            occurredAt = 1_700_000_000_000L,
+                            count = 1,
+                            unreadCount = 1,
+                            isRead = false,
+                            patientId = null,
+                            resourceType = "medication",
+                            resourceId = "med-1"
+                        )
+                    ),
+                    hasMorePages = true,
+                    isLoadingMore = false,
+                    onLoadMore = { loadMoreCalled++ }
+                )
+            }
+        }
+
+        compose.onNodeWithTag("notificationLoadMoreButton").assertIsDisplayed()
+        compose.onNodeWithText("Carregar mais avisos").performClick()
+        compose.runOnIdle { assertEquals(1, loadMoreCalled) }
+    }
+
+    @Test fun unavailable_destination_sheet_renders_message_and_dismisses() {
+        var dismissCalled = 0
+        compose.setContent {
+            BragasaudeTheme(forceThemeMode = "LIGHT") {
+                NotificationsContent(
+                    alerts = emptyList(),
+                    readAlerts = emptySet(),
+                    identifiedAt = emptyMap(),
+                    batteryAllowed = true,
+                    batteryGuidance = null,
+                    onBack = {},
+                    onBatterySettings = {},
+                    onMarkAllRead = {},
+                    onOpen = {},
+                    onDismiss = {},
+                    unavailableMessage = "O vínculo familiar foi encerrado. Os dados clínicos desta pessoa não estão mais disponíveis.",
+                    onDismissUnavailableMessage = { dismissCalled++ }
+                )
+            }
+        }
+
+        compose.onNodeWithText("Conteúdo indisponível").assertIsDisplayed()
+        compose.onNodeWithTag("notificationUnavailableMessage").assertIsDisplayed()
+        compose.onNodeWithText("Entendi").performClick()
+        compose.runOnIdle { assertEquals(1, dismissCalled) }
     }
 }
