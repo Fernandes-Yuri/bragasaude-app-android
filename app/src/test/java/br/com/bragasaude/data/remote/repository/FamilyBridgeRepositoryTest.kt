@@ -675,9 +675,9 @@ class FamilyBridgeRepositoryTest {
         )
         coEvery { apiClient.acceptFamilyInvitation("A1B2C3D4", "Mariana", "Filha") } returns confirmed
         coEvery { apiClient.getConsultations("patient-fred") } returns emptyList()
-        coEvery { profileDao.getProfileSync("patient-fred") } returns null
-        coEvery { apiClient.getProfile("patient-fred") } returns br.com.bragasaude.data.local.ProfileEntity(
-            userId = "patient-fred",
+        coEvery { profileDao.getProfileOneShot("patient-fred") } returns null
+        coEvery { apiClient.getProfile("patient-fred") } returns br.com.bragasaude.data.remote.model.RemoteProfile(
+            id = "patient-fred",
             fullName = "José Fred"
         )
 
@@ -685,7 +685,11 @@ class FamilyBridgeRepositoryTest {
 
         assertEquals("patient-fred", result.patientUserId)
         coVerify(atLeast = 1) { apiClient.getConsultations("patient-fred") }
-        coVerify(atLeast = 1) { profileDao.insertProfile(match { it.userId == "patient-fred" && it.fullName == "José Fred" }) }
+        coVerify(atLeast = 1) {
+            profileDao.insert(match<br.com.bragasaude.data.local.ProfileEntity> {
+                it.userId == "patient-fred" && it.fullName == "José Fred"
+            })
+        }
     }
 
     @Test
