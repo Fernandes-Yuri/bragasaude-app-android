@@ -155,21 +155,8 @@ class ExtractExamHeaderTool(
     }
 
     private fun extractTitle(text: String): String {
-        val plain = Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD).replace(Regex("""\p{M}"""), "")
-        val topics = extractClinicalTopics(text)
-
-        return when {
-            "hemograma" in plain -> "Hemograma Completo"
-            "ecocardiogra" in plain -> "Ecocardiograma"
-            "eletrocardiogra" in plain || Regex("""\becg\b""").containsMatchIn(plain) -> "Eletrocardiograma"
-            "ultrass" in plain -> "Ultrassonografia"
-            "ressonancia" in plain -> "Ressonância Magnética"
-            "tomografia" in plain -> "Tomografia"
-            "mamografia" in plain -> "Mamografia"
-            "radiografia" in plain || "raio-x" in plain || "raiox" in plain -> "Radiografia"
-            topics.isNotEmpty() -> topics.first()
-            else -> OrganizerMetadata.suggestWithTopics(text, "Documento de Exame").first
-        }
+        val title = OrganizerMetadata.suggestWithTopics(text, "Documento de Exame").first
+        return if (title == "Hemograma") "Hemograma Completo" else title
     }
 
     private fun extractLaboratory(text: String): String {
@@ -266,16 +253,19 @@ class DetectExamSectorsTool : AgentTool {
             ).replace(Regex("""\p{M}"""), "")
 
             val sector = when {
-                listOf("eletrocardiograma", "ecocardiogra", "holter", "ergometrico").any { it in combined } ||
-                listOf("mapa", "ecg", "eco").any { Regex("""\b${Regex.escape(it)}\b""").containsMatchIn(combined) } -> "Cardiológico"
+                listOf("eletrocardiograma", "ecocardiogra", "holter", "ergometrico", "ergometria").any { it in combined } ||
+                listOf("mapa", "ecg").any { Regex("""\b${Regex.escape(it)}\b""").containsMatchIn(combined) } -> "Cardiológico"
 
                 listOf("ultrass", "ressonancia", "tomografia", "mamografia", "radiografia", "raio-x", "densitometria").any {
                     it in combined
-                } -> "Imagem"
+                } || Regex("""\bdxa\b""").containsMatchIn(combined) -> "Imagem"
 
-                listOf("hemograma", "glicose", "glicemia", "colesterol", "creatinina", "tsh", "urina", "leucocit", "plaqueta", "eas", "sorologia").any {
-                    it in combined
-                } -> "Laboratorial"
+                listOf(
+                    "hemograma", "glicose", "glicemia", "colesterol", "creatinina", "tsh", "tireoide",
+                    "funcao renal", "ureia", "acido urico", "perfil lipidico", "lipidio", "hepatica",
+                    "enzimas", "tgo", "tgp", "gama gt", "bilirrubina", "hemoglobina glicada", "urina",
+                    "leucocit", "plaqueta", "eas", "sorologia"
+                ).any { it in combined } -> "Laboratorial"
 
                 else -> "Outros"
             }

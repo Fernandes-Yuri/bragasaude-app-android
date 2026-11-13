@@ -9,9 +9,13 @@ import br.com.bragasaude.agent.tools.InspectExamPagesTool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -72,7 +76,7 @@ class ExamOrganizerAgent @Inject constructor(
 
         onProgress?.invoke("Classificando setor clínico do exame...")
         val sectorTool = DetectExamSectorsTool()
-        val sectorArgs = """{"title": "$title"}"""
+        val sectorArgs = sectorArguments(title, topics)
         val sectorJson = sectorTool.execute(sectorArgs)
         val sectorRoot = runCatching { Json.parseToJsonElement(sectorJson).jsonObject }.getOrNull()
         val sector = sectorRoot?.get("sector")?.jsonPrimitive?.content ?: "Outros"
@@ -118,7 +122,7 @@ class ExamOrganizerAgent @Inject constructor(
 
         onProgress?.invoke("Classificando setor clínico...")
         val sectorTool = DetectExamSectorsTool()
-        val sectorArgs = """{"title": "$title"}"""
+        val sectorArgs = sectorArguments(title, topics)
         val sectorJson = sectorTool.execute(sectorArgs)
         val sectorRoot = runCatching { Json.parseToJsonElement(sectorJson).jsonObject }.getOrNull()
         val sector = sectorRoot?.get("sector")?.jsonPrimitive?.content ?: "Outros"
@@ -133,4 +137,11 @@ class ExamOrganizerAgent @Inject constructor(
             isDigital = false
         )
     }
+
+    private fun sectorArguments(title: String, topics: List<String>): String = buildJsonObject {
+        put("title", title)
+        putJsonArray("topics") {
+            topics.forEach { add(JsonPrimitive(it)) }
+        }
+    }.toString()
 }

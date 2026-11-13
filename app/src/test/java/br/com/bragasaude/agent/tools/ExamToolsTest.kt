@@ -5,11 +5,15 @@ import br.com.bragasaude.agent.extraction.ExtractedDocument
 import br.com.bragasaude.agent.extraction.ExtractedPage
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -107,5 +111,45 @@ class ExamToolsTest {
         val otherJson = tool.execute("""{"title": "Declaração de Comparecimento", "topics": []}""")
         val otherRoot = Json.parseToJsonElement(otherJson).jsonObject
         assertEquals("Outros", otherRoot["sector"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `ExtractExamHeaderTool reconhece titulos canonicos e DetectExamSectorsTool usa seus topicos`() = runTest {
+        val cases = listOf(
+            Triple("TESTE ERGOMETRICO ESTEIRA PROTOCOLO BRUCE", "Teste Ergométrico", "Cardiológico"),
+            Triple("MAPA - MONITORIZACAO AMBULATORIAL DA PRESSAO ARTERIAL 24H", "MAPA 24h", "Cardiológico"),
+            Triple("DENSITOMETRIA OSSEA DE COLUNA E FEMUR", "Densitometria Óssea", "Imagem"),
+            Triple("URINA TIPO I (EAS) COM SEDIMENTOSCOPIA\nLeucocitos: 2/campo", "Urina Tipo I (EAS)", "Laboratorial"),
+            Triple("PAINEL TIREOIDE - TSH E T4 LIVRE", "Painel de Tireoide (TSH/T4)", "Laboratorial"),
+            Triple("FUNCAO RENAL - CREATININA E UREIA", "Função Renal (Creatinina/Ureia)", "Laboratorial")
+        )
+        cases.forEach { (text, expectedTitle, expectedSector) ->
+            val page = ExtractedPage(pageIndex = 0, text = text, blocks = emptyList(), isDigital = true)
+            val document = ExtractedDocument(pages = listOf(page), fullText = text)
+            val header = Json.parseToJsonElement(ExtractExamHeaderTool { document }.execute("{}")).jsonObject
+            val title = header["title"]?.jsonPrimitive?.content
+            assertEquals(text, expectedTitle, title)
+
+            val topics = header["topics"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
+            val arguments = buildJsonObject {
+                put("title", title)
+                putJsonArray("topics") { topics.forEach { add(JsonPrimitive(it)) } }
+            }.toString()
+            val sector = Json.parseToJsonElement(DetectExamSectorsTool().execute(arguments)).jsonObject
+            assertEquals(text, expectedSector, sector["sector"]?.jsonPrimitive?.content)
+        }
+    }
+
+    @Test
+    fun `DetectExamSectorsTool amplia vocabulario laboratorial sem usar eco isolado`() = runTest {
+        val tool = DetectExamSectorsTool()
+        listOf("tireoide", "funcao renal", "ureia", "acido urico", "perfil lipidico", "enzimas hepaticas").forEach { term ->
+            val root = Json.parseToJsonElement(tool.execute("""{"title": "$term", "topics": []}""")).jsonObject
+            assertEquals(term, "Laboratorial", root["sector"]?.jsonPrimitive?.content)
+        }
+        val ultrasound = Json.parseToJsonElement(
+            tool.execute("""{"title": "Ultrassonografia pélvica", "topics": ["Ultrassonografia"]}""")
+        ).jsonObject
+        assertEquals("Imagem", ultrasound["sector"]?.jsonPrimitive?.content)
     }
 }

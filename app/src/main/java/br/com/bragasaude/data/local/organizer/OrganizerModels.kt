@@ -76,22 +76,34 @@ object OrganizerMetadata {
             }
     private fun hasWord(plain: String, word: String): Boolean =
         Regex("\\b${Regex.escape(word)}\\b").containsMatchIn(plain)
+    private fun isUrineDocument(plain: String): Boolean =
+        listOf("urina", "sedimentoscopia", "urocultura").any { it in plain } || hasWord(plain, "eas")
+    private fun isGynecologicalContext(plain: String): Boolean =
+        listOf("endometr", "folicular", "pelvica", "transvaginal", "ovario", "utero").any { it in plain }
+    private fun isErgometry(plain: String): Boolean =
+        listOf("ergometric", "ergometria", "protocolo de bruce").any { it in plain }
     fun extractTopics(text: String): List<String> {
         val plain = Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}"), "")
+        val urine = isUrineDocument(plain)
+        val gynecological = isGynecologicalContext(plain)
         val detected = mutableListOf<String>()
-        if (listOf("hemograma", "leucocit", "eritrocit", "plaqueta").any { it in plain }) detected.add("Hemograma")
-        if (listOf("glicose", "glicemia", "insulina").any { it in plain }) detected.add("Glicemia")
+        if (urine) detected.add("Urina (EAS)")
+        if (!urine && listOf("hemograma", "leucocit", "eritrocit", "plaqueta", "hemacias").any { it in plain }) detected.add("Hemograma")
+        if (!urine && listOf("glicose", "glicemia", "insulina").any { it in plain }) detected.add("Glicemia")
         if (listOf("colesterol", "hdl", "ldl", "triglicerid").any { it in plain }) detected.add("Perfil Lipídico")
         if (listOf("creatinina", "ureia", "acido urico").any { it in plain }) detected.add("Função Renal")
-        if (listOf("tgo", "tgp", "transaminase", "gama gt", "bilirrubina").any { it in plain }) detected.add("Função Hepática")
+        if (!urine && listOf("tgo", "tgp", "transaminase", "gama gt", "bilirrubina").any { it in plain }) detected.add("Função Hepática")
         // palavras curtas exigem fronteira de palavra: "t3" jamais casa com "t34", "ut3g" etc.
         if (listOf("tsh", "t4 livre", "tireoide").any { it in plain } || hasWord(plain, "t3")) detected.add("Tireoide")
-        // "eas" so vale isolada: "osseas", "ideias" e afins nao sao exame de urina
-        if (listOf("urina", "sedimentoscopia", "urocultura").any { it in plain } || hasWord(plain, "eas")) detected.add("Urina (EAS)")
+        if (isErgometry(plain)) detected.add("Teste Ergométrico")
+        if (hasWord(plain, "mapa")) detected.add("MAPA 24h")
+        if ("holter" in plain) detected.add("Holter 24h")
         if ("eletrocardiograma" in plain || hasWord(plain, "ecg")) detected.add("Eletrocardiograma")
-        if (plain.contains("ecocardiograma") || Regex("\\b(?:ecocardiograf\\w*|ecocardio\\w*|eco)\\b").containsMatchIn(plain))
-            detected.add("Ecocardiograma")
+        val explicitEcho = Regex("\\b(?:ecocardiograf\\w*|ecocardio\\w*)\\b").containsMatchIn(plain)
+        val contextualEco = hasWord(plain, "eco") && listOf("doppler", "transtorac", "cardi").any { it in plain }
+        if (!gynecological && (explicitEcho || contextualEco)) detected.add("Ecocardiograma")
         if (listOf("ultrassonografia", "ultrassom").any { it in plain }) detected.add("Ultrassonografia")
+        if ("densitometria" in plain || hasWord(plain, "dxa")) detected.add("Densitometria Óssea")
         if (listOf("tomografia").any { it in plain }) detected.add("Tomografia")
         if (listOf("ressonancia").any { it in plain }) detected.add("Ressonância Magnética")
         if (listOf("radiografia", "raio-x", "raiox").any { it in plain }) detected.add("Radiografia")
@@ -101,22 +113,35 @@ object OrganizerMetadata {
     fun suggestWithTopics(text: String, fallback: String): Triple<String, String, List<String>> {
         val plain = Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}"), "")
         val topics = extractTopics(text)
+        val urine = isUrineDocument(plain)
         val title = when {
+            urine && "urocultura" in plain -> "Urocultura"
+            urine -> "Urina Tipo I (EAS)"
             "hemograma" in plain -> "Hemograma"
+            isErgometry(plain) -> "Teste Ergométrico"
+            hasWord(plain, "mapa") -> "MAPA 24h"
+            "holter" in plain -> "Holter 24h"
+            "densitometria" in plain || hasWord(plain, "dxa") -> "Densitometria Óssea"
+            "painel tireoide" in plain || ("tsh" in plain && "t4" in plain) -> "Painel de Tireoide (TSH/T4)"
+            "funcao renal" in plain || ("creatinina" in plain && "ureia" in plain) -> "Função Renal (Creatinina/Ureia)"
+            "ecocardiogra" in plain -> "Ecocardiograma"
+            "eletrocardiograma" in plain -> "Eletrocardiograma"
             "ultrass" in plain -> "Ultrassonografia"
             "ressonancia" in plain -> "Ressonância magnética"
             "tomografia" in plain -> "Tomografia"
-            "eletrocardiograma" in plain -> "Eletrocardiograma"
-            "ecocardiogra" in plain -> "Ecocardiograma"
             "mamografia" in plain -> "Mamografia"
             topics.isNotEmpty() -> topics.first()
             else -> suggestOcrTitle(text, fallback)
         }
         val type = when {
+            urine -> "Laboratorial"
             // "mapa" so vale isolada (exame MAPA); "mapeamento"/"mapamental" nao sao cardiologia
-            listOf("eletrocardiograma", "ecocardiogra", "holter", "ergometrico").any { it in plain } || hasWord(plain, "mapa") -> "Cardiológico"
-            listOf("ultrass", "ressonancia", "tomografia", "mamografia", "radiografia", "raio-x").any { it in plain } -> "Imagem"
-            listOf("hemograma", "glicose", "colesterol", "creatinina", "tsh", "urina", "leucocit").any { it in plain } -> "Laboratorial"
+            isErgometry(plain) || "holter" in plain || hasWord(plain, "mapa") ||
+                listOf("eletrocardiograma", "ecocardiogra").any { it in plain } || "Ecocardiograma" in topics -> "Cardiológico"
+            "densitometria" in plain || hasWord(plain, "dxa") ||
+                listOf("ultrass", "ressonancia", "tomografia", "mamografia", "radiografia", "raio-x").any { it in plain } -> "Imagem"
+            listOf("hemograma", "glicose", "glicemia", "colesterol", "creatinina", "ureia", "acido urico",
+                "tsh", "tireoide", "funcao renal", "perfil lipidico", "hepatica", "leucocit").any { it in plain } -> "Laboratorial"
             else -> "Outros"
         }
         return Triple(title, type, topics)
@@ -128,7 +153,9 @@ object OrganizerMetadata {
 
     // linhas de identificacao/administrativas nunca viram titulo (e CPF/documentos nao vazam no indice)
     private val PERSONAL_OR_ADMIN_LINE = Regex(
-        "paciente|nasciment|cpf|cnpj|razao social|endereco|identidade|\\brg\\b|convenio\\b|\\bnome\\s*:"
+        "paciente|nasciment|cpf|cnpj|razao social|endereco|identidade|\\brg\\b|convenio\\b|\\bnome\\s*:|" +
+        "data\\s+(?:do\\s+exame|de\\s+coleta)|medic[oa]?(?:\\(a\\))?\\s+responsavel|" +
+        "\\bcrm\\b|recomendacao|laudo\\s+digital|conclusao"
     )
     private val ID_NUMBER_PATTERN = Regex("\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}|\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}-\\d{2}|\\b\\d{7,}\\b")
 
@@ -178,7 +205,7 @@ object OrganizerMetadata {
     private fun suggestOcrTitle(text: String, fallback: String): String {
         if (!looksLikeHealthDocument(text)) return "Foto de exame"
         val cleaned = text.lineSequence()
-            .map { it.trim().replace(Regex("\\s+"), " ") }
+            .map { it.trim().replace(Regex("\\(\\s*\\)"), "").replace(Regex("\\s+"), " ").trim() }
             .filter { it.length >= 6 && it.count { c -> c.isLetter() } >= 4 }
             .filterNot(::isLabelOnly)
             .filterNot(::isPersonalOrAdminData)
