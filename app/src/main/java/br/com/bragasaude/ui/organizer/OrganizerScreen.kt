@@ -1003,6 +1003,28 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
         }
     }
 
+    if (state.patientWarningNames.isNotEmpty()) BragaAlertDialog(
+        onDismissRequest = { if (!state.busy) viewModel.dismissPatientWarning() },
+        title = { Text("Pacientes diferentes no lote") },
+        text = {
+            Text(
+                "Identificamos exames com nomes de pacientes diferentes:\n\n" +
+                    state.patientWarningNames.joinToString("\n") +
+                    "\n\nRevise a seleção ou confirme que deseja manter todos no mesmo PDF."
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = viewModel::acceptPatientDivergence, enabled = !state.busy) {
+                Text("Manter todos e gerar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = viewModel::dismissPatientWarning, enabled = !state.busy) {
+                Text("Revisar seleção")
+            }
+        }
+    )
+
     deleting?.let { doc ->
         BragaAlertDialog(
             onDismissRequest = { deleting = null },

@@ -152,4 +152,36 @@ class ExamToolsTest {
         ).jsonObject
         assertEquals("Imagem", ultrasound["sector"]?.jsonPrimitive?.content)
     }
+
+    @Test
+    fun `ExtractPatientNameTool usa apenas rotulos explicitos e elimina duplicatas`() = runTest {
+        val text = """
+            Paciente: Joaquim Ficticio Testes
+            Médico responsável: Dr. Ficticio Modelo
+            Responsável: Heloisa Ficticia Exemplar
+            PACIENTE: joaquim ficticio testes
+            Paciente: Heloisa Ficticia Exemplar
+            Paciente internado por cinco dias
+        """.trimIndent()
+        val page = ExtractedPage(pageIndex = 0, text = text, blocks = emptyList(), isDigital = true)
+        val document = ExtractedDocument(pages = listOf(page), fullText = text)
+
+        val root = Json.parseToJsonElement(ExtractPatientNameTool { document }.execute("{}")).jsonObject
+        val names = root["patient_names"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
+
+        assertEquals(listOf("Heloisa Ficticia Exemplar", "Joaquim Ficticio Testes"), names)
+        assertEquals("Heloisa Ficticia Exemplar", root["patient_name"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `ExtractPatientNameTool ignora linhas sem identificacao confiavel`() = runTest {
+        val text = "Paciente internado por cinco dias\nMédico responsável: Dr. Ficticio Modelo"
+        val page = ExtractedPage(pageIndex = 0, text = text, blocks = emptyList(), isDigital = true)
+        val document = ExtractedDocument(pages = listOf(page), fullText = text)
+
+        val root = Json.parseToJsonElement(ExtractPatientNameTool { document }.execute("{}")).jsonObject
+
+        assertTrue(root["patient_names"]?.jsonArray?.isEmpty() == true)
+        assertEquals("", root["patient_name"]?.jsonPrimitive?.content)
+    }
 }

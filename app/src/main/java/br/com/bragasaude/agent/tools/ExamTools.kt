@@ -5,6 +5,7 @@ import br.com.bragasaude.agent.extraction.ExtractedDocument
 import br.com.bragasaude.agent.protocol.ToolDeclaration
 import br.com.bragasaude.agent.protocol.ToolFunctionDef
 import br.com.bragasaude.data.local.organizer.OrganizerMetadata
+import br.com.bragasaude.data.local.organizer.PatientNameConsistencyChecker
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -284,5 +285,64 @@ class DetectExamSectorsTool : AgentTool {
                 put("message", "Falha na classificação: ${e.message}")
             }.toString()
         }
+    }
+}
+
+/** Extrai somente identificações explícitas de paciente, sem consultar rede ou inferir médicos. */
+class ExtractPatientNameTool(
+    private val documentProvider: () -> ExtractedDocument?
+) : AgentTool {
+    companion object {
+        const val TOOL_NAME = "extract_patient_name"
+        private val PATIENT_LINE = Regex(
+            "(?i)^\\s*(?:nome\\s+(?:do|da)\\s+)?paciente\\s*[:\\-]\\s*(.+?)\\s*$"
+        )
+        private val TRAILING_ADMIN_DATA = Regex(
+            "(?i)\\s+(?:nascimento|cpf|rg|data\\s+de\\s+nascimento|médico|medico|responsável|responsavel)\\s*[:\\-].*$"
+        )
+        private val NON_PATIENT_ROLE = Regex("(?i)\\b(?:dr|dra|médico|medico|responsável|responsavel)\\b")
+
+        fun extract(text: String): List<String> {
+            val names = text.lineSequence().mapNotNull { line ->
+                val match = PATIENT_LINE.find(line) ?: return@mapNotNull null
+                val value = match.groupValues[1]
+                    .substringBefore('|')
+                    .replace(TRAILING_ADMIN_DATA, "")
+                    .trim()
+                    .trimEnd('.', ',', ';')
+                value.takeIf(::confidentName)
+            }.toList()
+            return PatientNameConsistencyChecker.distinctNames(names)
+        }
+
+        private fun confidentName(value: String): Boolean =
+            value.length in 2..80 && value.count { it.isLetter() } >= 2 &&
+                value.none { it.isDigit() } && value.split(Regex("\\s+")).size <= 10 &&
+                !NON_PATIENT_ROLE.containsMatchIn(value)
+    }
+
+    override val declaration: ToolDeclaration = ToolDeclaration(
+        type = "function",
+        function = ToolFunctionDef(
+            name = TOOL_NAME,
+            description = "Extrai nomes de pacientes apenas de rótulos explícitos no documento, para verificar divergências no lote.",
+            parameters = buildJsonObject { put("type", "object") }
+        )
+    )
+
+    override suspend fun execute(argumentsJson: String): String {
+        val document = documentProvider()
+            ?: return buildJsonObject {
+                put("status", "error")
+                put("message", "Nenhum documento disponível para identificar o paciente.")
+            }.toString()
+        val names = extract(document.fullText)
+        return buildJsonObject {
+            put("status", "success")
+            put("patient_name", names.firstOrNull().orEmpty())
+            putJsonArray("patient_names") {
+                names.forEach { add(JsonPrimitive(it)) }
+            }
+        }.toString()
     }
 }

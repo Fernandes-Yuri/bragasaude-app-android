@@ -2,6 +2,7 @@ package br.com.bragasaude.ui.organizer
 
 import br.com.bragasaude.data.local.organizer.OcrAvailability
 import br.com.bragasaude.data.local.organizer.OcrCapability
+import br.com.bragasaude.data.local.organizer.OrganizerDocument
 import br.com.bragasaude.data.local.organizer.OrganizerSession
 import br.com.bragasaude.data.local.organizer.OrganizerStore
 import io.mockk.coEvery
@@ -84,4 +85,76 @@ class OrganizerViewModelTest {
             Dispatchers.resetMain()
         }
     }
+
+    @Test fun `divergencia de pacientes exige confirmacao antes de gerar e aceite retoma fluxo`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val session = patientSession("Joaquim Ficticio Testes", "Heloisa Ficticia Exemplar")
+            val store = mockk<OrganizerStore>(relaxed = true)
+            val capability = mockk<OcrCapability>()
+            every { capability.probe() } returns OcrAvailability.Ready
+            coEvery { store.restore() } returns session
+            val viewModel = OrganizerViewModel(store, capability)
+            advanceUntilIdle()
+
+            viewModel.generate()
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("Heloisa Ficticia Exemplar", "Joaquim Ficticio Testes"),
+                viewModel.state.value.patientWarningNames
+            )
+            coVerify(exactly = 0) { store.generate(any(), any(), any()) }
+
+            viewModel.dismissPatientWarning()
+            assertTrue(viewModel.state.value.patientWarningNames.isEmpty())
+            viewModel.generate()
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value.patientWarningNames.isNotEmpty())
+
+            viewModel.acceptPatientDivergence()
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value.patientWarningNames.isEmpty())
+            assertTrue(viewModel.state.value.ready)
+            coVerify(exactly = 1) { store.generate("s", true, any()) }
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test fun `mesmo paciente normalizado gera sem aviso`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val session = patientSession("José da Silva", "jose da silva")
+            val store = mockk<OrganizerStore>(relaxed = true)
+            val capability = mockk<OcrCapability>()
+            every { capability.probe() } returns OcrAvailability.Ready
+            coEvery { store.restore() } returns session
+            val viewModel = OrganizerViewModel(store, capability)
+            advanceUntilIdle()
+
+            viewModel.generate()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.patientWarningNames.isEmpty())
+            assertTrue(viewModel.state.value.ready)
+            coVerify(exactly = 1) { store.generate("s", true, any()) }
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    private fun patientSession(vararg names: String): OrganizerSession = OrganizerSession(
+        id = "s",
+        createdAt = System.currentTimeMillis(),
+        documents = names.mapIndexed { index, name ->
+            OrganizerDocument(
+                id = "d$index",
+                title = "Exame $index",
+                pages = 1,
+                confirmed = true,
+                patientNames = listOf(name)
+            )
+        }
+    )
 }

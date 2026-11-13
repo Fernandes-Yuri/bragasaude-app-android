@@ -14,7 +14,8 @@ data class OrganizerDocument(
     val photoOnly: Boolean = false,
     val sourceDigest: String = "",
     val possibleDuplicate: Boolean = false,
-    val topics: List<String> = emptyList()
+    val topics: List<String> = emptyList(),
+    val patientNames: List<String> = emptyList()
 )
 data class OrganizerSession(val id: String, val createdAt: Long, val documents: List<OrganizerDocument> = emptyList()) {
     val expiresAt: Long get() = createdAt + SESSION_DURATION

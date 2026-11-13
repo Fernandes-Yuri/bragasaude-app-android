@@ -62,6 +62,7 @@ class ExamOrganizerAgentTest {
         assertTrue(result.topics.contains("Glicemia"))
         assertEquals(1, result.pages)
         assertTrue(result.isDigital)
+        assertEquals(listOf("Maria Silva"), result.patientNames)
         assertTrue(progressUpdates.isNotEmpty())
     }
 
