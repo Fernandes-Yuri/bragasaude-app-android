@@ -2,6 +2,9 @@ package br.com.bragasaude.data.local.organizer
 
 import android.app.Application
 import android.graphics.Bitmap
+import br.com.bragasaude.agent.extraction.ExtractedBlock
+import br.com.bragasaude.agent.extraction.ExtractedPage
+import br.com.bragasaude.agent.extraction.NormalizedBoundingBox
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
@@ -324,6 +327,41 @@ class OrganizerPdfBuilderTest {
                 assertEquals(1, document.numberOfPages)
                 assertEquals(2200f, document.getPage(0).mediaBox.width, 40f) // borda maior limitada p/ embutir
                 assertEquals(2200f * 1800f / 2400f, document.getPage(0).mediaBox.height, 40f) // aspecto preservado
+            }
+        } finally { work.deleteRecursively() }
+    }
+    @Test fun photoPagesContainInvisibleSearchableTextWithAndWithoutCoordinates() {
+        val context = RuntimeEnvironment.getApplication()
+        val work = File(context.cacheDir, "pdf-photo-ocr").apply { mkdirs() }
+        try {
+            val builder = OrganizerPdfBuilder(context)
+            val bitmap = Bitmap.createBitmap(800, 600, Bitmap.Config.ARGB_8888)
+            val blocks = listOf(
+                ExtractedBlock(
+                    text = "URINA TIPO I (EAS)",
+                    confidence = 0.98f,
+                    box = NormalizedBoundingBox(0.1f, 0.1f, 0.8f, 0.2f)
+                ),
+                ExtractedBlock(text = "Leucócitos: 2/campo", confidence = 0.93f, lineIndex = 1)
+            )
+            val page = ExtractedPage(
+                pageIndex = 0,
+                text = blocks.joinToString("\n") { it.text },
+                blocks = blocks,
+                isDigital = false
+            )
+            val output = File(work, "foto-pesquisavel.pdf")
+            builder.imagePdf(bitmap, output, page)
+            bitmap.recycle()
+
+            PDDocument.load(output).use { document ->
+                val text = PDFTextStripper().getText(document)
+                assertTrue(text.contains("URINA TIPO I (EAS)"))
+                assertTrue(text.contains("Leucócitos: 2/campo"))
+                val operators = document.getPage(0).contents.use {
+                    String(it.readBytes(), Charsets.ISO_8859_1)
+                }
+                assertTrue("texto OCR deve usar renderização invisível", operators.contains("3 Tr"))
             }
         } finally { work.deleteRecursively() }
     }

@@ -3,6 +3,7 @@ package br.com.bragasaude.agent.organizer
 import android.graphics.Bitmap
 import br.com.bragasaude.agent.extraction.CascadeTextExtractor
 import br.com.bragasaude.agent.extraction.ExtractedDocument
+import br.com.bragasaude.agent.extraction.ExtractedPage
 import br.com.bragasaude.agent.tools.DetectExamSectorsTool
 import br.com.bragasaude.agent.tools.ExtractExamHeaderTool
 import br.com.bragasaude.agent.tools.InspectExamPagesTool
@@ -30,7 +31,8 @@ data class ExamAnalysisResult(
     val topics: List<String>,
     val pages: Int,
     val confidence: Float,
-    val isDigital: Boolean
+    val isDigital: Boolean,
+    val ocrPage: ExtractedPage? = null
 )
 
 /**
@@ -134,7 +136,8 @@ class ExamOrganizerAgent @Inject constructor(
             topics = topics,
             pages = 1,
             confidence = page.averageConfidence,
-            isDigital = false
+            isDigital = false,
+            ocrPage = page
         )
     }
 

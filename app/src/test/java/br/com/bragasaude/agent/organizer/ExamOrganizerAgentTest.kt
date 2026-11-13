@@ -144,5 +144,6 @@ class ExamOrganizerAgentTest {
         assertEquals("Painel de Tireoide (TSH/T4)", result.title)
         assertEquals("Laboratorial", result.type)
         assertTrue(result.topics.contains("Tireoide"))
+        assertTrue("o PDF deve reutilizar a mesma página OCR da análise", result.ocrPage === page)
     }
 }

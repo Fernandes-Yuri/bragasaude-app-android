@@ -13,6 +13,7 @@ import androidx.work.*
 import br.com.bragasaude.data.util.DocumentAutoRotator
 import br.com.bragasaude.data.util.ExamPhotoDecoder
 import br.com.bragasaude.agent.extraction.CascadeTextExtractor
+import br.com.bragasaude.agent.extraction.ExtractedPage
 import br.com.bragasaude.agent.extraction.MlKitOcrEngine
 import br.com.bragasaude.agent.organizer.ExamOrganizerAgent
 import com.google.mlkit.vision.common.InputImage
@@ -291,12 +292,21 @@ class OrganizerStore @Inject constructor(
                 } else {
                     val bitmap = DocumentAutoRotator.decodeAndRotate(context.contentResolver, Uri.fromFile(source))
                     try {
-                        pdf.imagePdf(bitmap, normalized)
                         val agentResult = runCatching {
                             examOrganizerAgent.analyzeBitmap(bitmap, name) { step ->
                                 onProgress?.invoke("$name ($fileNum): $step")
                             }
                         }.getOrNull()
+                        val fallbackText = if (agentResult == null) {
+                            runCatching { recognize(bitmap) }.getOrDefault("")
+                        } else ""
+                        val ocrPage = agentResult?.ocrPage ?: ExtractedPage(
+                            pageIndex = 0,
+                            text = fallbackText,
+                            blocks = emptyList(),
+                            isDigital = false
+                        )
+                        pdf.imagePdf(bitmap, normalized, ocrPage)
 
                         if (agentResult != null) {
                             title = agentResult.title
@@ -304,12 +314,11 @@ class OrganizerStore @Inject constructor(
                             topics = agentResult.topics
                             date = agentResult.date.ifBlank { OrganizerMetadata.suggestDate("") }
                         } else {
-                            val text = runCatching { recognize(bitmap) }.getOrDefault("")
-                            val suggested = OrganizerMetadata.suggestWithTopics(text, name)
+                            val suggested = OrganizerMetadata.suggestWithTopics(fallbackText, name)
                             title = suggested.first
                             type = suggested.second
                             topics = suggested.third
-                            date = OrganizerMetadata.suggestDate(text)
+                            date = OrganizerMetadata.suggestDate(fallbackText)
                         }
                     } finally { bitmap.recycle() }
                 }
