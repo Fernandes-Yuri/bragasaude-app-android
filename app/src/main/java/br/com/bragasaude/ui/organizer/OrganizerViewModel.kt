@@ -138,7 +138,7 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
     fun resetPersonalization() = updatePersonalization(OrganizerPersonalization())
     fun generate() {
         val current = mutable.value
-        val divergentNames = PatientNameConsistencyChecker.divergentNames(current.session?.documents.orEmpty())
+        val divergentNames = PatientNameConsistencyChecker.divergentDocumentNames(current.session?.documents.orEmpty())
         if (divergentNames.size > 1 && divergentNames != current.acceptedPatientNames) {
             mutable.update { it.copy(patientWarningNames = divergentNames) }
             return

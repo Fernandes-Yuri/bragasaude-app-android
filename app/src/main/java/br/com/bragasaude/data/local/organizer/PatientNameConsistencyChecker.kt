@@ -16,6 +16,6 @@ object PatientNameConsistencyChecker {
 
     fun divergentNames(names: List<String>): List<String> = distinctNames(names)
 
-    fun divergentNames(documents: List<OrganizerDocument>): List<String> =
+    fun divergentDocumentNames(documents: List<OrganizerDocument>): List<String> =
         divergentNames(documents.flatMap { it.patientNames })
 }
