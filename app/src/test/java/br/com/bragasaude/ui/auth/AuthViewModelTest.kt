@@ -238,6 +238,26 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun `performSignOut launches in viewModelScope and invokes onComplete`() = kotlinx.coroutines.test.runTest {
+        val fakeUser = mockk<FirebaseUser>(relaxed = true)
+        every { fakeUser.uid } returns "test-uid"
+        every { auth.currentUser } returns fakeUser
+
+        val prefs = mockk<android.content.SharedPreferences>(relaxed = true)
+        val editor = mockk<android.content.SharedPreferences.Editor>(relaxed = true)
+        every { appContext.getSharedPreferences(any(), any()) } returns prefs
+        every { prefs.edit() } returns editor
+        every { editor.clear() } returns editor
+
+        var completed = false
+        viewModel.performSignOut { completed = true }
+
+        verify(exactly = 1) { auth.signOut() }
+        assertEquals(AppSessionStatus.NotAuthenticated, viewModel.sessionStatus.value)
+        assertTrue(completed)
+    }
+
+    @Test
     fun `failed restore does not mark data ready and retry can complete it`() = kotlinx.coroutines.test.runTest {
         val user = mockk<FirebaseUser>(relaxed = true)
         every { user.uid } returns "restored-user"

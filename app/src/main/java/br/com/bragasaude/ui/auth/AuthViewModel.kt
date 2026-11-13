@@ -747,6 +747,20 @@ class AuthViewModel @Inject constructor(
         return auth.currentUser?.uid
     }
 
+    /**
+     * Executa o encerramento de sessão no ciclo de vida do ViewModel,
+     * garantindo que a limpeza local não seja interrompida pelo desmonte da tela.
+     */
+    fun performSignOut(onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                signOut()
+            } finally {
+                onComplete()
+            }
+        }
+    }
+
     suspend fun signOut() {
         br.com.bragasaude.ai.BragaRoutingLogger.clear()
         movementManager.flushAndAwait()

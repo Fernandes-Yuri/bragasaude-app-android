@@ -14,9 +14,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,8 +81,8 @@ fun ProfileDetailScreen(
     val userFeedbacks by profileViewModel.userFeedbacks.collectAsState()
     val sessionStatus by authViewModel.sessionStatus.collectAsState()
     val scope = rememberCoroutineScope()
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var showLogoutDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
+    var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
     var showAvatarDialog by remember { mutableStateOf(false) }
     var showGooglePhotoConfirm by remember { mutableStateOf(false) }
     val communityNickname by profileViewModel.communityNickname.collectAsState()
@@ -323,6 +325,67 @@ fun ProfileDetailScreen(
             confirmButton = {
                 Button(onClick = { showAvatarDialog = false }) {
                     Text("Fechar")
+                }
+            }
+        )
+    }
+
+    if (showLogoutDialog) BragaAlertDialog(
+        onDismissRequest = { showLogoutDialog = false },
+        title = { Text("Sair da conta?") },
+        text = { Text("Os registros locais deste aparelho serão removidos. O plano e o diário de apoio para parar de fumar não são sincronizados e não voltarão após entrar novamente.") },
+        confirmButton = {
+            TextButton(onClick = {
+                showLogoutDialog = false
+                authViewModel.performSignOut()
+            }) {
+                Text("Sair da conta")
+            }
+        },
+        dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Continuar no aplicativo") } }
+    )
+
+    if (showDeleteDialog) {
+        BragaAlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.DeleteForever,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text(
+                    "Excluir Perfil e Conta?",
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Text(
+                    "Esta ação apagará permanentemente todos os seus dados de saúde, registros e metas deste dispositivo e da nuvem.\n\nSua conta será cancelada, mas você poderá criar uma nova conta com o mesmo e-mail Google a qualquer momento caso deseje retornar.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteDialog = false
+                        profileViewModel.deleteProfile {
+                            scope.launch { authViewModel.deleteAccount() }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Excluir Definitivamente", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancelar")
                 }
             }
         )
@@ -759,99 +822,30 @@ fun ProfileDetailScreen(
                 )
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    showDeleteDialog = true
-                                }
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "Excluir Perfil e Conta",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.error,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
+                        SettingsItem(
+                            title = "Sair da Conta",
+                            subtitle = "Encerrar sessão no dispositivo atual.",
+                            icon = Icons.AutoMirrored.Filled.ExitToApp,
+                            onClick = { showLogoutDialog = true }
+                        )
                         HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    showLogoutDialog = true
-                                }
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Sair da Conta", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-                        }
+                        SettingsItem(
+                            title = "Excluir Perfil e Conta",
+                            subtitle = "Apagar permanentemente todos os dados e histórico.",
+                            icon = Icons.Default.DeleteForever,
+                            titleColor = MaterialTheme.colorScheme.error,
+                            onClick = { showDeleteDialog = true }
+                        )
                     }
                 }
             }
             
-            item { Spacer(Modifier.height(40.dp)) }
-        }
-
-        if (showLogoutDialog) BragaAlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
-            title = { Text("Sair da conta?") },
-            text = { Text("Os registros locais deste aparelho serão removidos. O plano e o diário de apoio para parar de fumar não são sincronizados e não voltarão após entrar novamente.") },
-            confirmButton = { TextButton(onClick = { showLogoutDialog = false; scope.launch { authViewModel.signOut() } }) { Text("Sair da conta") } },
-            dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Continuar no aplicativo") } }
-        )
-
-        if (showDeleteDialog) {
-            BragaAlertDialog(
-                onDismissRequest = { showDeleteDialog = false },
-                icon = {
-                    Icon(
-                        Icons.Default.DeleteForever,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(36.dp)
-                    )
-                },
-                title = {
-                    Text(
-                        "Excluir Perfil e Conta?",
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    )
-                },
-                text = {
-                    Text(
-                        "Esta ação apagará permanentemente todos os seus dados de saúde, registros e metas deste dispositivo e da nuvem.\n\nSua conta será cancelada, mas você poderá criar uma nova conta com o mesmo e-mail Google a qualquer momento caso deseje retornar.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            showDeleteDialog = false
-                            profileViewModel.deleteProfile {
-                                scope.launch { authViewModel.deleteAccount() }
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text("Excluir Definitivamente", fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDeleteDialog = false }) {
-                        Text("Cancelar")
-                    }
-                }
-            )
+            item { Spacer(Modifier.height(88.dp)) }
         }
     }
 }
