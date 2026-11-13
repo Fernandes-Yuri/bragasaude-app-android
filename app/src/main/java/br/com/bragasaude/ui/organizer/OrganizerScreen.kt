@@ -7,6 +7,10 @@ import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -138,7 +142,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
             onDispose { }
         }
     }
-    BackHandler { onBack() }
+    BackHandler(enabled = state.batchProgress == null) { onBack() }
 
     Scaffold(
         containerColor = BragaBackground,
@@ -217,20 +221,26 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                 }
             }
 
-            if (state.busy) {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = BragaEmerald
-                )
-                state.progressMessage?.let { msg ->
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = msg,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = BragaTextSecondary,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
+            AnimatedVisibility(
+                visible = state.busy && state.batchProgress == null,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Column {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = BragaEmerald
                     )
+                    state.progressMessage?.let { msg ->
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = msg,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BragaTextSecondary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
 
@@ -507,7 +517,7 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                             }
                             group.documents.forEach { doc ->
                         Card(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().animateContentSize(),
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = BragaCardSurface),
                             border = BorderStroke(1.dp, if (doc.confirmed) BragaCardBorder else Warning.copy(alpha = 0.6f))
@@ -593,9 +603,10 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                                             TextButton(
                                                 onClick = { deleting = doc },
                                                 enabled = !state.busy,
+                                                modifier = Modifier.heightIn(min = 48.dp),
                                                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                             ) {
-                                                Text("Excluir repetido", style = MaterialTheme.typography.labelLarge)
+                                                Text("Excluir cópia repetida", style = MaterialTheme.typography.labelLarge)
                                             }
                                         }
                                     }
@@ -969,6 +980,10 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
         }
     }
 
+    state.batchProgress?.let { progress ->
+        OrganizerBatchLoadingDialog(progress)
+    }
+
     reviewing?.let { doc ->
         ReviewDocument(doc, state, viewModel, onClose = { reviewing = null; viewModel.clearPreview() })
     }
@@ -986,9 +1001,17 @@ fun OrganizerScreen(onBack: () -> Unit, viewModel: OrganizerViewModel = hiltView
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = { page-- }, enabled = page > 0 && !state.busy) { Text("Anterior") }
-                    Text("${page + 1}/${state.resultPages}", fontWeight = FontWeight.SemiBold)
-                    TextButton(onClick = { page++ }, enabled = page + 1 < state.resultPages && !state.busy) { Text("Próxima") }
+                    TextButton(
+                        onClick = { page-- },
+                        enabled = page > 0 && !state.busy,
+                        modifier = Modifier.heightIn(min = 48.dp)
+                    ) { Text("Anterior") }
+                    Text("Página ${page + 1} de ${state.resultPages}", fontWeight = FontWeight.Bold)
+                    TextButton(
+                        onClick = { page++ },
+                        enabled = page + 1 < state.resultPages && !state.busy,
+                        modifier = Modifier.heightIn(min = 48.dp)
+                    ) { Text("Próxima") }
                 }
                 Button(
                     onClick = { resultReview = false; viewModel.clearPreview() },
@@ -1138,9 +1161,17 @@ private fun ReviewDocument(doc: OrganizerDocument, state: OrganizerUiState, vm: 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextButton(onClick = { page-- }, enabled = page > 0 && !state.busy) { Text("Anterior") }
-                Text("${page + 1}/${doc.pages}", fontWeight = FontWeight.SemiBold)
-                TextButton(onClick = { page++ }, enabled = page + 1 < doc.pages && !state.busy) { Text("Próxima") }
+                TextButton(
+                    onClick = { page-- },
+                    enabled = page > 0 && !state.busy,
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) { Text("Anterior") }
+                Text("Página ${page + 1} de ${doc.pages}", fontWeight = FontWeight.Bold)
+                TextButton(
+                    onClick = { page++ },
+                    enabled = page + 1 < doc.pages && !state.busy,
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) { Text("Próxima") }
             }
 
             if (doc.photoOnly) {
@@ -1235,6 +1266,80 @@ private fun ReviewDocument(doc: OrganizerDocument, state: OrganizerUiState, vm: 
             }
         }
     }
+}
+
+@Composable
+private fun OrganizerBatchLoadingDialog(progress: BatchImportProgress) {
+    BragaAlertDialog(
+        onDismissRequest = {},
+        confirmButton = {},
+        title = {
+            Text(
+                "Organizando seus exames",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(BragaMint),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.HourglassTop,
+                        contentDescription = null,
+                        tint = BragaEmerald,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+                Text(
+                    "Processando exame ${progress.currentIndex} de ${progress.totalFiles}...",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = BragaTextPrimary
+                )
+                LinearProgressIndicator(
+                    progress = { progress.progressFraction },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = BragaEmerald
+                )
+                Text(
+                    progress.currentFileName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = BragaTextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    progress.currentStep,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BragaTextSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "A leitura e organização acontecem com segurança dentro do seu celular.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BragaTextSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    )
 }
 
 @Composable
