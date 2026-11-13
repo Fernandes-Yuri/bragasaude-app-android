@@ -22,6 +22,15 @@ data class OrganizerSession(val id: String, val createdAt: Long, val documents: 
     fun expired(now: Long) = now >= expiresAt || now < createdAt
     companion object { const val SESSION_DURATION = 24 * 60 * 60 * 1000L }
 }
+data class BatchImportProgress(
+    val currentIndex: Int,
+    val totalFiles: Int,
+    val currentFileName: String,
+    val currentStep: String
+) {
+    val progressFraction: Float get() = if (totalFiles <= 0) 0f
+        else (currentIndex.toFloat() / totalFiles).coerceIn(0f, 1f)
+}
 object OrganizerMetadata {
     val types = listOf("Laboratorial", "Imagem", "Cardiológico", "Outros")
     fun validDate(value: String): Boolean = value.isBlank() || runCatching {

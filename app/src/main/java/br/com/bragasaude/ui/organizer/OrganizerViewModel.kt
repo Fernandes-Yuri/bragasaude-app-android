@@ -22,7 +22,7 @@ data class OrganizerUiState(val session: OrganizerSession? = null, val busy: Boo
     val preview: Bitmap? = null, val previewPage: Int = -1, val resultPages: Int = 0, val newest: Boolean = true,
     val ocrAvailability: OcrAvailability? = null, val personalization: OrganizerPersonalization = OrganizerPersonalization(),
     val progressMessage: String? = null, val patientWarningNames: List<String> = emptyList(),
-    val acceptedPatientNames: List<String> = emptyList())
+    val acceptedPatientNames: List<String> = emptyList(), val batchProgress: BatchImportProgress? = null)
 
 @HiltViewModel
 class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, private val ocrCapability: OcrCapability,
@@ -39,14 +39,14 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
         refresh()
     }
     private fun operation(block: suspend () -> Unit) {
-        mutable.update { it.copy(busy = true, error = null, progressMessage = null) }
+        mutable.update { it.copy(busy = true, error = null, progressMessage = null, batchProgress = null) }
         viewModelScope.launch { operations.withLock {
             mutable.update { it.copy(busy = true, error = null) }
             try { block() }
             catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
             catch (problem: OrganizerProblem) { mutable.update { it.copy(error = problem.message) } }
             catch (_: Exception) { mutable.update { it.copy(error = "Não foi possível concluir. Confira o arquivo, o espaço disponível e tente novamente. PDFs com senha precisam de uma cópia sem senha.") } }
-            finally { mutable.update { it.copy(busy = false, progressMessage = null) } }
+            finally { mutable.update { it.copy(busy = false, progressMessage = null, batchProgress = null) } }
         } }
     }
     fun refresh(force: Boolean = false) = operation {
@@ -97,8 +97,17 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
         }
     }
     fun import(uris: List<Uri>, appendTo: String? = null) = operation {
-        val (session, failures) = store.import(requireNotNull(mutable.value.session).id, uris, appendTo) { step ->
-            mutable.update { it.copy(progressMessage = step) }
+        val (session, failures) = store.import(requireNotNull(mutable.value.session).id, uris, appendTo) { progress ->
+            mutable.update {
+                if (uris.size > 2) {
+                    it.copy(batchProgress = progress, progressMessage = null)
+                } else {
+                    it.copy(
+                        progressMessage = "${progress.currentFileName} (${progress.currentIndex}/${progress.totalFiles}): ${progress.currentStep}",
+                        batchProgress = null
+                    )
+                }
+            }
         }
         changed(session)
         if (failures.isNotEmpty()) {

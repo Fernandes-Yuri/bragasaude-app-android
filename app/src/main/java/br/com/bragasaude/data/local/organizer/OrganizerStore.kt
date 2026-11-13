@@ -223,7 +223,7 @@ class OrganizerStore @Inject constructor(
         id: String,
         uris: List<Uri>,
         appendTo: String? = null,
-        onProgress: ((String) -> Unit)? = null
+        onProgress: ((BatchImportProgress) -> Unit)? = null
     ): Pair<OrganizerSession, List<String>> = withContext(Dispatchers.IO) { lock.withLock {
         var s = active(id)
         require(uris.isNotEmpty() && uris.size <= 20) { "Selecione até 20 arquivos por vez." }
@@ -232,7 +232,6 @@ class OrganizerStore @Inject constructor(
         val work = File(temp(id), "import").apply { mkdirs() }
         try {
             uris.forEachIndexed { index, uri ->
-                val fileNum = "${index + 1}/${uris.size}"
                 val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
                     if (it.moveToFirst()) it.getString(0) else null
                 } ?: "arquivo"
@@ -240,7 +239,7 @@ class OrganizerStore @Inject constructor(
                 require(s.documents.size + pending.size < 20 || appendTo != null) { "Limite de 20 documentos por sessão." }
                 val docId = UUID.randomUUID().toString()
                 val source = File(work, "$docId.source")
-                onProgress?.invoke("Lendo $name ($fileNum)...")
+                onProgress?.invoke(BatchImportProgress(index + 1, uris.size, name, "Lendo arquivo..."))
                 context.contentResolver.openInputStream(uri)?.use { input -> source.outputStream().use { out ->
                     val buffer = ByteArray(8192); var total = 0L
                     while (true) { val n = input.read(buffer); if (n < 0) break
@@ -270,7 +269,7 @@ class OrganizerStore @Inject constructor(
                     }
                     val agentResult = runCatching {
                         examOrganizerAgent.analyzeExam(normalized, name) { step ->
-                            onProgress?.invoke("$name ($fileNum): $step")
+                            onProgress?.invoke(BatchImportProgress(index + 1, uris.size, name, step))
                         }
                     }.getOrNull()
 
@@ -301,7 +300,7 @@ class OrganizerStore @Inject constructor(
                     try {
                         val agentResult = runCatching {
                             examOrganizerAgent.analyzeBitmap(bitmap, name) { step ->
-                                onProgress?.invoke("$name ($fileNum): $step")
+                                onProgress?.invoke(BatchImportProgress(index + 1, uris.size, name, step))
                             }
                         }.getOrNull()
                         val fallbackText = if (agentResult == null) {
