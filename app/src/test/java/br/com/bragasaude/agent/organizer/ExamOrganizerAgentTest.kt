@@ -62,6 +62,7 @@ class ExamOrganizerAgentTest {
         assertTrue(result.topics.contains("Glicemia"))
         assertEquals(1, result.pages)
         assertTrue(result.isDigital)
+        assertEquals(listOf("Maria Silva"), result.patientNames)
         assertTrue(progressUpdates.isNotEmpty())
     }
 
@@ -115,5 +116,35 @@ class ExamOrganizerAgentTest {
         assertEquals(1, result.pages)
         assertFalse(result.isDigital)
         assertTrue(progressUpdates.isNotEmpty())
+    }
+
+    @Test
+    fun `analyzeExam preserva ultrassonografia pelvica com eco endometrial`() = runTest {
+        val testFile = tempFolder.newFile("ultrassom_pelvico.pdf")
+        val text = "ULTRASSONOGRAFIA PELVICA TRANSVAGINAL\n" +
+            "Endometrio: eco endometrial centrado. Nodulo hipoecoico no ovario."
+        val page = ExtractedPage(pageIndex = 0, text = text, blocks = emptyList(), isDigital = true)
+        coEvery { cascadeExtractor.extractFromPdf(testFile) } returns ExtractedDocument(listOf(page), text)
+
+        val result = agent.analyzeExam(testFile, "pelvica.pdf")
+
+        assertEquals("Ultrassonografia", result.title)
+        assertEquals("Imagem", result.type)
+        assertFalse(result.topics.contains("Ecocardiograma"))
+    }
+
+    @Test
+    fun `analyzeBitmap classifica painel de tireoide pelo cabecalho e pelos topicos`() = runTest {
+        val mockBitmap = mockk<Bitmap>(relaxed = true)
+        val text = "DIAGNOLAB - PAINEL TIREOIDE\nTSH e T4 livre dosados nesta amostra."
+        val page = ExtractedPage(pageIndex = 0, text = text, blocks = emptyList(), isDigital = false)
+        coEvery { cascadeExtractor.extractFromBitmap(mockBitmap, 0) } returns page
+
+        val result = agent.analyzeBitmap(mockBitmap, "tireoide.jpg")
+
+        assertEquals("Painel de Tireoide (TSH/T4)", result.title)
+        assertEquals("Laboratorial", result.type)
+        assertTrue(result.topics.contains("Tireoide"))
+        assertTrue("o PDF deve reutilizar a mesma página OCR da análise", result.ocrPage === page)
     }
 }

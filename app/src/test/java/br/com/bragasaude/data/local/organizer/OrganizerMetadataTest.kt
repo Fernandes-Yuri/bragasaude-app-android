@@ -137,4 +137,52 @@ class OrganizerMetadataTest {
         assertEquals("Cardiológico", OrganizerMetadata.suggestWithTopics("MAPA de 24 horas em repouso", "x").second)
         assertFalse(OrganizerMetadata.extractTopics("amostras t34 e ut3g lacradas").contains("Tireoide"))
     }
+    @Test fun gynecologicalUltrasoundNeverBecomesEchocardiogram() {
+        val text = "NUCLEO IMAGEM MODELO - ULTRASSONOGRAFIA PELVICA (TRANSVAGINAL)\n" +
+            "Endometrio: eco endometrial centrado. Nodulo hipoecoico no ovario e utero."
+        val (title, type, topics) = OrganizerMetadata.suggestWithTopics(text, "pelvica.pdf")
+        assertEquals("Ultrassonografia", title)
+        assertEquals("Imagem", type)
+        assertTrue(topics.contains("Ultrassonografia"))
+        assertFalse(topics.contains("Ecocardiograma"))
+    }
+    @Test fun urineHeaderPrevailsOverSedimentAnalytes() {
+        val text = "DIAGNOLAB EXEMPLO LTDA - URINA TIPO I (EAS) COM SEDIMENTOSCOPIA\n" +
+            "Leucocitos: 2/campo\nHemacias: 1/campo\nGlicose: negativo\nBilirrubina: negativo"
+        val (title, type, topics) = OrganizerMetadata.suggestWithTopics(text, "urina.pdf")
+        assertEquals("Urina Tipo I (EAS)", title)
+        assertEquals("Laboratorial", type)
+        assertTrue(topics.contains("Urina (EAS)"))
+        assertFalse(topics.contains("Hemograma"))
+        assertFalse(topics.contains("Glicemia"))
+        assertFalse(topics.contains("Função Hepática"))
+    }
+    @Test fun canonicalTitlesCoverPreviouslyUnclassifiedExams() {
+        val cases = listOf(
+            Triple("TESTE ERGOMETRICO ESTEIRA PROTOCOLO BRUCE", "Teste Ergométrico", "Cardiológico"),
+            Triple("MAPA - MONITORIZACAO AMBULATORIAL DA PRESSAO ARTERIAL 24H", "MAPA 24h", "Cardiológico"),
+            Triple("HOLTER 24 HORAS", "Holter 24h", "Cardiológico"),
+            Triple("DENSITOMETRIA OSSEA DE COLUNA E FEMUR", "Densitometria Óssea", "Imagem"),
+            Triple("PAINEL TIREOIDE - TSH E T4 LIVRE", "Painel de Tireoide (TSH/T4)", "Laboratorial"),
+            Triple("FUNCAO RENAL - CREATININA E UREIA", "Função Renal (Creatinina/Ureia)", "Laboratorial")
+        )
+        cases.forEach { (text, expectedTitle, expectedType) ->
+            val result = OrganizerMetadata.suggestWithTopics(text, "exame.pdf")
+            assertEquals(text, expectedTitle, result.first)
+            assertEquals(text, expectedType, result.second)
+        }
+    }
+    @Test fun administrativeLinesAndEmptyCheckboxesNeverPolluteFallbackTitle() {
+        val text = "TERMO DE ALTA\n" +
+            "Data do exame: 15/03/2026\n" +
+            "Medico(a) responsavel: DR. FICTICIO MODELO | CRM 111\n" +
+            "Recomendacao: nova avaliacao em 2 anos\n" +
+            "() Alta Melhorada"
+        val title = OrganizerMetadata.suggestWithTopics(text, "alta.jpg").first
+        assertFalse(title.contains("Data do exame"))
+        assertFalse(title.contains("Medico"))
+        assertFalse(title.contains("CRM"))
+        assertFalse(title.contains("Recomendacao"))
+        assertFalse(title.contains("()"))
+    }
 }

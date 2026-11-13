@@ -2,6 +2,8 @@ package br.com.bragasaude.data.local.organizer
 
 import android.content.Context
 import android.graphics.Bitmap
+import br.com.bragasaude.agent.extraction.ExtractedBlock
+import br.com.bragasaude.agent.extraction.ExtractedPage
 import br.com.bragasaude.domain.PdfTextLayout
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
@@ -63,15 +65,14 @@ class OrganizerPdfBuilder(context: Context) {
     init { PDFBoxResourceLoader.init(context) }
 
     /**
-     * Embute A FOTO do documento com compressao fotografica (JPEG DCT). Sem isso, cada foto
-     * entra como RGB bruto deflacionado e chega perto de 8 MB/pagina (batendo 150 MB com 20).
-     * Alvo: ate ~0,4 MB/pagina nitida para leitura; o OCR continua rodando no bitmap original.
+     * Embute a foto com compressao fotografica e reutiliza o OCR em uma camada invisivel pesquisavel.
+     * As coordenadas normalizadas independem do downscale aplicado a imagem.
      */
-    fun imagePdf(bitmap: Bitmap, output: File) {
+    fun imagePdf(bitmap: Bitmap, output: File, ocrPage: ExtractedPage? = null) {
         val scaled = downscale(bitmap, MAX_IMAGE_EDGE)
         try {
-            saveJpegPdf(scaled, 0.82f, output)
-            if (output.length() > 1_500_000L) saveJpegPdf(scaled, 0.65f, output) // segunda passada de seguranca
+            saveJpegPdf(scaled, 0.82f, output, ocrPage)
+            if (output.length() > 1_500_000L) saveJpegPdf(scaled, 0.65f, output, ocrPage)
         } finally { if (scaled !== bitmap) scaled.recycle() }
     }
 
@@ -82,12 +83,61 @@ class OrganizerPdfBuilder(context: Context) {
             (bitmap.width * scale).toInt().coerceAtLeast(1), (bitmap.height * scale).toInt().coerceAtLeast(1), true)
     }
 
-    private fun saveJpegPdf(bitmap: Bitmap, quality: Float, output: File) {
+    private fun saveJpegPdf(bitmap: Bitmap, quality: Float, output: File, ocrPage: ExtractedPage?) {
         PDDocument().use { doc ->
             val page = PDPage(PDRectangle(bitmap.width.toFloat(), bitmap.height.toFloat()))
             doc.addPage(page)
-            PDPageContentStream(doc, page).use { it.drawImage(JPEGFactory.createFromImage(doc, bitmap, quality), 0f, 0f) }
+            PDPageContentStream(doc, page).use { stream ->
+                stream.drawImage(JPEGFactory.createFromImage(doc, bitmap, quality), 0f, 0f)
+                if (ocrPage != null) writeInvisibleText(stream, ocrPage, page.mediaBox.width, page.mediaBox.height)
+            }
             doc.save(output)
+        }
+    }
+
+    private fun writeInvisibleText(stream: PDPageContentStream, page: ExtractedPage, width: Float, height: Float) {
+        val blocks = page.blocks.filter { it.text.isNotBlank() }.ifEmpty {
+            page.text.lineSequence().filter { it.isNotBlank() }.mapIndexed { index, line ->
+                ExtractedBlock(text = line, confidence = page.averageConfidence, lineIndex = index)
+            }.toList()
+        }
+        val font = PDType1Font.HELVETICA
+        blocks.forEachIndexed { index, block ->
+            val text = block.text.replace(Regex("\\s+"), " ").trim().let { raw ->
+                buildString {
+                    raw.forEach { char ->
+                        append(if (runCatching { font.encode(char.toString()) }.isSuccess) char else '?')
+                    }
+                }
+            }
+            if (text.isBlank()) return@forEachIndexed
+
+            val box = block.box
+            val fontSize = if (box != null) {
+                (box.height * height * 0.8f).coerceIn(1f, 72f)
+            } else {
+                (height / (blocks.size + 1) * 0.6f).coerceIn(4f, 12f)
+            }
+            val x = box?.let { it.left * width } ?: 0f
+            val y = if (box != null) {
+                val blockHeight = box.height * height
+                ((1f - box.bottom) * height + (blockHeight - fontSize) * 0.5f)
+                    .coerceIn(0f, (height - fontSize).coerceAtLeast(0f))
+            } else {
+                height - (index + 1) * height / (blocks.size + 1)
+            }
+            val textWidth = font.getStringWidth(text) / 1000f * fontSize
+            val horizontalScale = if (box != null && textWidth > 0f) {
+                (box.width * width / textWidth * 100f).coerceIn(1f, 1000f)
+            } else 100f
+
+            stream.beginText()
+            stream.setRenderingMode(com.tom_roush.pdfbox.pdmodel.graphics.state.RenderingMode.NEITHER)
+            stream.setFont(font, fontSize)
+            stream.setHorizontalScaling(horizontalScale)
+            stream.newLineAtOffset(x, y)
+            stream.showText(text)
+            stream.endText()
         }
     }
 

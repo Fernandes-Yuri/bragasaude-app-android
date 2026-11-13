@@ -21,7 +21,8 @@ data class OrganizerUiState(val session: OrganizerSession? = null, val busy: Boo
     val error: String? = null, val notice: String? = null, val ready: Boolean = false, val saved: Boolean = false,
     val preview: Bitmap? = null, val previewPage: Int = -1, val resultPages: Int = 0, val newest: Boolean = true,
     val ocrAvailability: OcrAvailability? = null, val personalization: OrganizerPersonalization = OrganizerPersonalization(),
-    val progressMessage: String? = null)
+    val progressMessage: String? = null, val patientWarningNames: List<String> = emptyList(),
+    val acceptedPatientNames: List<String> = emptyList())
 
 @HiltViewModel
 class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, private val ocrCapability: OcrCapability,
@@ -83,7 +84,17 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
         }
     }
     private fun changed(session: OrganizerSession) {
-        mutable.update { it.copy(session = session, ready = false, saved = false, preview = null, notice = null) }
+        mutable.update {
+            it.copy(
+                session = session,
+                ready = false,
+                saved = false,
+                preview = null,
+                notice = null,
+                patientWarningNames = emptyList(),
+                acceptedPatientNames = emptyList()
+            )
+        }
     }
     fun import(uris: List<Uri>, appendTo: String? = null) = operation {
         val (session, failures) = store.import(requireNotNull(mutable.value.session).id, uris, appendTo) { step ->
@@ -125,9 +136,25 @@ class OrganizerViewModel @Inject constructor(private val store: OrganizerStore, 
         mutable.update { it.copy(personalization = next, ready = false, saved = false) }
     }
     fun resetPersonalization() = updatePersonalization(OrganizerPersonalization())
-    fun generate() = operation {
-        store.generate(requireNotNull(mutable.value.session).id, mutable.value.newest, mutable.value.personalization)
-        mutable.update { it.copy(ready = true, saved = false) }
+    fun generate() {
+        val current = mutable.value
+        val divergentNames = PatientNameConsistencyChecker.divergentDocumentNames(current.session?.documents.orEmpty())
+        if (divergentNames.size > 1 && divergentNames != current.acceptedPatientNames) {
+            mutable.update { it.copy(patientWarningNames = divergentNames) }
+            return
+        }
+        operation {
+            store.generate(requireNotNull(mutable.value.session).id, mutable.value.newest, mutable.value.personalization)
+            mutable.update { it.copy(ready = true, saved = false) }
+        }
+    }
+    fun acceptPatientDivergence() {
+        val accepted = mutable.value.patientWarningNames
+        mutable.update { it.copy(patientWarningNames = emptyList(), acceptedPatientNames = accepted) }
+        generate()
+    }
+    fun dismissPatientWarning() {
+        mutable.update { it.copy(patientWarningNames = emptyList()) }
     }
     fun save(uri: Uri) = operation {
         store.saveResult(requireNotNull(mutable.value.session).id, uri)

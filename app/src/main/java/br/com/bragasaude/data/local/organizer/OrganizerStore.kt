@@ -13,8 +13,10 @@ import androidx.work.*
 import br.com.bragasaude.data.util.DocumentAutoRotator
 import br.com.bragasaude.data.util.ExamPhotoDecoder
 import br.com.bragasaude.agent.extraction.CascadeTextExtractor
+import br.com.bragasaude.agent.extraction.ExtractedPage
 import br.com.bragasaude.agent.extraction.MlKitOcrEngine
 import br.com.bragasaude.agent.organizer.ExamOrganizerAgent
+import br.com.bragasaude.agent.tools.ExtractPatientNameTool
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -87,7 +89,7 @@ class OrganizerStore @Inject constructor(
         val docs = JSONArray()
         s.documents.forEach { d -> docs.put(JSONObject().put("id", d.id).put("title", d.title)
             .put("date", d.date).put("type", d.type).put("pages", d.pages).put("confirmed", d.confirmed).put("photoOnly", d.photoOnly).put("sourceDigest", d.sourceDigest).put("possibleDuplicate", d.possibleDuplicate)
-            .put("topics", JSONArray(d.topics))) }
+            .put("topics", JSONArray(d.topics)).put("patientNames", JSONArray(d.patientNames))) }
         json.put("documents", docs)
         encrypt(s.id, json.toString().toByteArray(Charsets.UTF_8), File(folder(s.id), "session.enc"))
     }
@@ -99,8 +101,11 @@ class OrganizerStore @Inject constructor(
             val topicsList = d.optJSONArray("topics")?.let { arr ->
                 (0 until arr.length()).map { arr.getString(it) }
             }.orEmpty()
+            val patientNames = d.optJSONArray("patientNames")?.let { arr ->
+                (0 until arr.length()).map { arr.getString(it) }
+            }.orEmpty()
             OrganizerDocument(d.getString("id"), d.getString("title"), d.getString("date"),
-                d.getString("type"), d.getInt("pages"), d.getBoolean("confirmed"), d.optBoolean("photoOnly"), d.optString("sourceDigest"), d.optBoolean("possibleDuplicate"), topicsList)
+                d.getString("type"), d.getInt("pages"), d.getBoolean("confirmed"), d.optBoolean("photoOnly"), d.optString("sourceDigest"), d.optBoolean("possibleDuplicate"), topicsList, patientNames)
         })
     }
     private fun remove(id: String) {
@@ -254,6 +259,7 @@ class OrganizerStore @Inject constructor(
                 var type: String
                 var topics: List<String>
                 var date: String
+                var patientNames = emptyList<String>()
                 var pages = 1
                 if (isPdf) {
                     source.renameTo(normalized)
@@ -273,6 +279,7 @@ class OrganizerStore @Inject constructor(
                         type = agentResult.type
                         topics = agentResult.topics
                         date = agentResult.date.ifBlank { OrganizerMetadata.suggestDate("") }
+                        patientNames = agentResult.patientNames
                     } else {
                         var text = ""
                         PDDocument.load(normalized, MemoryUsageSetting.setupTempFileOnly().setTempDir(work)).use { document ->
@@ -287,29 +294,40 @@ class OrganizerStore @Inject constructor(
                         type = suggested.second
                         topics = suggested.third
                         date = OrganizerMetadata.suggestDate(text)
+                        patientNames = ExtractPatientNameTool.extract(text)
                     }
                 } else {
                     val bitmap = DocumentAutoRotator.decodeAndRotate(context.contentResolver, Uri.fromFile(source))
                     try {
-                        pdf.imagePdf(bitmap, normalized)
                         val agentResult = runCatching {
                             examOrganizerAgent.analyzeBitmap(bitmap, name) { step ->
                                 onProgress?.invoke("$name ($fileNum): $step")
                             }
                         }.getOrNull()
+                        val fallbackText = if (agentResult == null) {
+                            runCatching { recognize(bitmap) }.getOrDefault("")
+                        } else ""
+                        val ocrPage = agentResult?.ocrPage ?: ExtractedPage(
+                            pageIndex = 0,
+                            text = fallbackText,
+                            blocks = emptyList(),
+                            isDigital = false
+                        )
+                        pdf.imagePdf(bitmap, normalized, ocrPage)
 
                         if (agentResult != null) {
                             title = agentResult.title
                             type = agentResult.type
                             topics = agentResult.topics
                             date = agentResult.date.ifBlank { OrganizerMetadata.suggestDate("") }
+                            patientNames = agentResult.patientNames
                         } else {
-                            val text = runCatching { recognize(bitmap) }.getOrDefault("")
-                            val suggested = OrganizerMetadata.suggestWithTopics(text, name)
+                            val suggested = OrganizerMetadata.suggestWithTopics(fallbackText, name)
                             title = suggested.first
                             type = suggested.second
                             topics = suggested.third
-                            date = OrganizerMetadata.suggestDate(text)
+                            date = OrganizerMetadata.suggestDate(fallbackText)
+                            patientNames = ExtractPatientNameTool.extract(fallbackText)
                         }
                     } finally { bitmap.recycle() }
                 }
@@ -322,7 +340,7 @@ class OrganizerStore @Inject constructor(
                 require(normalized.length() <= 35L * 1024 * 1024) { "ficou com mais de 35 MB após a organização" }
                 require((folder(id).listFiles()?.filter { it.extension == "enc" }?.sumOf { it.length() } ?: 0L) +
                     pending.sumOf { it.second.length() } + normalized.length() <= 150L * 1024 * 1024) { "a sessão chegaria a 150 MB; organize em lotes menores" }
-                pending.add(OrganizerDocument(docId, finalTitle, date, finalType, pages, photoOnly = !isPdf, sourceDigest = sourceDigest, possibleDuplicate = duplicate, topics = finalTopics) to normalized)
+                pending.add(OrganizerDocument(docId, finalTitle, date, finalType, pages, photoOnly = !isPdf, sourceDigest = sourceDigest, possibleDuplicate = duplicate, topics = finalTopics, patientNames = patientNames) to normalized)
                 }
                 catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                 catch (problem: OrganizerProblem) { failures.add("$name — ${problem.message}") }
@@ -341,7 +359,19 @@ class OrganizerStore @Inject constructor(
                 }
                 val replacementId = UUID.randomUUID().toString()
                 encryptFile(id, merged, File(folder(id), "$replacementId.enc"))
-                s = s.copy(documents = s.documents.map { if (it.id == item.id) it.copy(id = replacementId, pages = item.pages + pending.sumOf { p -> p.first.pages }, confirmed = false, photoOnly = item.photoOnly && pending.all { it.first.photoOnly }, sourceDigest = "", possibleDuplicate = item.possibleDuplicate || pending.any { it.first.possibleDuplicate }) else it })
+                s = s.copy(documents = s.documents.map {
+                    if (it.id == item.id) it.copy(
+                        id = replacementId,
+                        pages = item.pages + pending.sumOf { p -> p.first.pages },
+                        confirmed = false,
+                        photoOnly = item.photoOnly && pending.all { p -> p.first.photoOnly },
+                        sourceDigest = "",
+                        possibleDuplicate = item.possibleDuplicate || pending.any { p -> p.first.possibleDuplicate },
+                        patientNames = PatientNameConsistencyChecker.distinctNames(
+                            item.patientNames + pending.flatMap { p -> p.first.patientNames }
+                        )
+                    ) else it
+                })
             } else {
                 pending.forEach { (item, file) -> encryptFile(id, file, File(folder(id), "${item.id}.enc")) }
                 s = s.copy(documents = s.documents + pending.map { it.first })

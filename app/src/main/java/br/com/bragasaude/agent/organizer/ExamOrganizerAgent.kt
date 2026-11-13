@@ -3,15 +3,21 @@ package br.com.bragasaude.agent.organizer
 import android.graphics.Bitmap
 import br.com.bragasaude.agent.extraction.CascadeTextExtractor
 import br.com.bragasaude.agent.extraction.ExtractedDocument
+import br.com.bragasaude.agent.extraction.ExtractedPage
 import br.com.bragasaude.agent.tools.DetectExamSectorsTool
 import br.com.bragasaude.agent.tools.ExtractExamHeaderTool
+import br.com.bragasaude.agent.tools.ExtractPatientNameTool
 import br.com.bragasaude.agent.tools.InspectExamPagesTool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -26,7 +32,9 @@ data class ExamAnalysisResult(
     val topics: List<String>,
     val pages: Int,
     val confidence: Float,
-    val isDigital: Boolean
+    val isDigital: Boolean,
+    val patientNames: List<String> = emptyList(),
+    val ocrPage: ExtractedPage? = null
 )
 
 /**
@@ -69,10 +77,11 @@ class ExamOrganizerAgent @Inject constructor(
             ?: headerRoot?.get("exam_date")?.jsonPrimitive?.content.orEmpty()
 
         val topics = headerRoot?.get("topics")?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
+        val patientNames = extractPatientNames(extractedDoc)
 
         onProgress?.invoke("Classificando setor clínico do exame...")
         val sectorTool = DetectExamSectorsTool()
-        val sectorArgs = """{"title": "$title"}"""
+        val sectorArgs = sectorArguments(title, topics)
         val sectorJson = sectorTool.execute(sectorArgs)
         val sectorRoot = runCatching { Json.parseToJsonElement(sectorJson).jsonObject }.getOrNull()
         val sector = sectorRoot?.get("sector")?.jsonPrimitive?.content ?: "Outros"
@@ -82,6 +91,7 @@ class ExamOrganizerAgent @Inject constructor(
             date = date,
             type = sector,
             topics = topics,
+            patientNames = patientNames,
             pages = extractedDoc.totalPages,
             confidence = extractedDoc.averageConfidence,
             isDigital = extractedDoc.isFullyDigital
@@ -115,10 +125,11 @@ class ExamOrganizerAgent @Inject constructor(
 
         val date = headerRoot?.get("exam_date")?.jsonPrimitive?.content.orEmpty()
         val topics = headerRoot?.get("topics")?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
+        val patientNames = extractPatientNames(extractedDoc)
 
         onProgress?.invoke("Classificando setor clínico...")
         val sectorTool = DetectExamSectorsTool()
-        val sectorArgs = """{"title": "$title"}"""
+        val sectorArgs = sectorArguments(title, topics)
         val sectorJson = sectorTool.execute(sectorArgs)
         val sectorRoot = runCatching { Json.parseToJsonElement(sectorJson).jsonObject }.getOrNull()
         val sector = sectorRoot?.get("sector")?.jsonPrimitive?.content ?: "Outros"
@@ -128,9 +139,24 @@ class ExamOrganizerAgent @Inject constructor(
             date = date,
             type = sector,
             topics = topics,
+            patientNames = patientNames,
             pages = 1,
             confidence = page.averageConfidence,
-            isDigital = false
+            isDigital = false,
+            ocrPage = page
         )
     }
+
+    private suspend fun extractPatientNames(document: ExtractedDocument): List<String> {
+        val result = ExtractPatientNameTool { document }.execute("{}")
+        val root = runCatching { Json.parseToJsonElement(result).jsonObject }.getOrNull()
+        return root?.get("patient_names")?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
+    }
+
+    private fun sectorArguments(title: String, topics: List<String>): String = buildJsonObject {
+        put("title", title)
+        putJsonArray("topics") {
+            topics.forEach { add(JsonPrimitive(it)) }
+        }
+    }.toString()
 }
