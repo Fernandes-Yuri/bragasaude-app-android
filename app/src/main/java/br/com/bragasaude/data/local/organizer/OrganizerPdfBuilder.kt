@@ -132,7 +132,7 @@ class OrganizerPdfBuilder(context: Context) {
             } else 100f
 
             stream.beginText()
-            stream.setTextRenderingMode(com.tom_roush.pdfbox.pdmodel.graphics.state.RenderingMode.Neither)
+            stream.setRenderingMode(com.tom_roush.pdfbox.pdmodel.graphics.state.RenderingMode.NEITHER)
             stream.setFont(font, fontSize)
             stream.setHorizontalScaling(horizontalScale)
             stream.newLineAtOffset(x, y)
