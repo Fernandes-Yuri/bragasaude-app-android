@@ -31,8 +31,8 @@ android {
         applicationId = "br.com.bragasaude"
         minSdk = 26
         targetSdk = 36
-        versionCode = 42
-        versionName = "1.9.5"
+        versionCode = 43
+        versionName = "1.9.6"
 
         buildConfigField("String", "BASE_URL", "\"https://api.bragasaude.online\"")
         buildConfigField("Boolean", "ENABLE_FAMILY_WEBSOCKET", "false")
