@@ -14,7 +14,7 @@ object PatientNameConsistencyChecker {
         .distinctBy(::normalized)
         .sortedBy(::normalized)
 
-    fun divergentNames(names: List<String>): List<String> = distinctNames(names)
+    fun divergentNames(names: List<String>): List<String> = distinctNames(names).takeIf { it.size > 1 }.orEmpty()
 
     fun divergentDocumentNames(documents: List<OrganizerDocument>): List<String> =
         divergentNames(documents.flatMap { it.patientNames })
