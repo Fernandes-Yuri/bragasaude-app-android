@@ -751,13 +751,11 @@ class AuthViewModel @Inject constructor(
      * Executa o encerramento de sessão no ciclo de vida do ViewModel,
      * garantindo que a limpeza local não seja interrompida pelo desmonte da tela.
      */
-    fun performSignOut(onComplete: () -> Unit = {}) {
-        viewModelScope.launch {
-            try {
-                signOut()
-            } finally {
-                onComplete()
-            }
+    fun performSignOut(onComplete: () -> Unit = {}): Job = viewModelScope.launch {
+        try {
+            signOut()
+        } finally {
+            onComplete()
         }
     }
 

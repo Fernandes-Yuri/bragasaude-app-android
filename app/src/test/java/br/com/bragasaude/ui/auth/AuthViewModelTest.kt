@@ -250,7 +250,8 @@ class AuthViewModelTest {
         every { editor.clear() } returns editor
 
         var completed = false
-        viewModel.performSignOut { completed = true }
+        val job = viewModel.performSignOut { completed = true }
+        job.join()
 
         verify(exactly = 1) { auth.signOut() }
         assertEquals(AppSessionStatus.NotAuthenticated, viewModel.sessionStatus.value)
