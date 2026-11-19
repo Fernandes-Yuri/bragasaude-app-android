@@ -80,6 +80,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         br.com.bragasaude.ui.navigation.ConsultationNavigation.receive(intent)
+        br.com.bragasaude.ui.navigation.PartnerInviteNavigation.receive(intent, applicationContext)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,6 +88,7 @@ class MainActivity : ComponentActivity() {
         val splashStartedAt = SystemClock.uptimeMillis()
         super.onCreate(savedInstanceState)
         br.com.bragasaude.ui.navigation.ConsultationNavigation.receive(intent)
+        br.com.bragasaude.ui.navigation.PartnerInviteNavigation.receive(intent, applicationContext)
         // A duração do ECG no XML não controla a permanência do splash.
         // Cada abertura recebe seu próprio prazo, mesmo com o processo já carregado.
         splashScreen.setKeepOnScreenCondition {

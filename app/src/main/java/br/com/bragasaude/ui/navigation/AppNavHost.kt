@@ -85,6 +85,17 @@ fun AppNavHost(
         }
     }
 
+    val pendingPartnerInvite by PartnerInviteNavigation.pendingInviteCode.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(pendingPartnerInvite) {
+        val code = pendingPartnerInvite
+        if (!code.isNullOrBlank()) {
+            PartnerInviteNavigation.consumePending()
+            appContext.getSharedPreferences("braga_prefs", android.content.Context.MODE_PRIVATE)
+                .edit().remove(PartnerInviteNavigation.PREF_PENDING_INVITE_CODE).apply()
+            navController.navigate(Screen.PartnerWorkspace(code)) { launchSingleTop = true }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -204,7 +215,8 @@ fun AppNavHost(
                 onNavigateToSettings = { navController.navigate(Screen.Settings) },
                 onAddCaregiving = { navController.navigate(Screen.CaregiverRegistration) },
                 onNavigateToWearables = { navController.navigate(Screen.Wearables) },
-                onSmokingSupport = { navController.navigate(Screen.SmokingSupport) }
+                onSmokingSupport = { navController.navigate(Screen.SmokingSupport) },
+                onOpenPartnerWorkspace = { navController.navigate(Screen.PartnerWorkspace()) }
             )
         }
         composable<Screen.ProfileEdit> {
@@ -305,6 +317,13 @@ fun AppNavHost(
         }
         composable<Screen.DoctorMode> {
             br.com.bragasaude.ui.care.DoctorModeScreen(onBack = navigateBack)
+        }
+        composable<Screen.PartnerWorkspace> { entry ->
+            val route = entry.toRoute<Screen.PartnerWorkspace>()
+            br.com.bragasaude.ui.b2b.PartnerWorkspaceScreen(
+                initialInviteCode = route.inviteCode,
+                onBack = navigateBack
+            )
         }
     }
 
