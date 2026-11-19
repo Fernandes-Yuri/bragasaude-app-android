@@ -47,6 +47,116 @@ enum class PartnerApprovalStatus(val labelPtBr: String) {
 }
 
 @Serializable
+data class ProgramFeaturesDto(
+    val assistantChatEnabled: Boolean = true,
+    val directPartnerChatEnabled: Boolean = false,
+    val aiReceptionistEnabled: Boolean = false,
+    val familyLinkEnabled: Boolean = false,
+    val partnerRemindersEnabled: Boolean = true,
+    val appointmentsEnabled: Boolean = true,
+    val preConsultationPdfEnabled: Boolean = true
+)
+
+@Serializable
+data class DirectChatPolicyDto(
+    val serviceHoursLabel: String = "Seg a Sex, 08h às 18h",
+    val responseSlaLabel: String = "Resposta em até 1 dia útil",
+    val allowOffHoursQueue: Boolean = true
+)
+
+@Serializable
+data class AiReceptionistPolicyDto(
+    val personaName: String = "Assistente Virtual do Programa",
+    val activationMode: String = "OUT_OF_HOURS_ONLY",
+    val greetingMessage: String = "Olá! Sou a recepcionista virtual deste programa. Posso tirar dúvidas sobre horários, funcionamento e como enviar seu resumo — ou chamar o responsável quando precisar.",
+    val partnerFaqKnowledge: String = "",
+    val autoEscalateToHumanOnUnknown: Boolean = true
+)
+
+@Serializable
+data class AppointmentsPolicyDto(
+    val allowedModalities: List<String> = listOf("IN_PERSON", "REMOTE"),
+    val bookingMode: String = "REQUEST_CONFIRMATION",
+    val availabilitiesSummary: String = "Terças e Quintas, 09h às 17h",
+    val externalBookingUrl: String? = null
+)
+
+@Serializable
+data class ProgramExperienceConfigDto(
+    val schemaVersion: Int = 1,
+    val templateKey: String = "CLINICA_GERAL",
+    val welcomeHeadline: String = "Seu espaço de acompanhamento entre consultas",
+    val welcomeMessage: String = "Organize passos, hidratação e registros de rotina para compartilhar apenas o que desejar antes do retorno.",
+    val enabledMetrics: List<String> = listOf("steps", "hydration", "medications", "authorized_records"),
+    val features: ProgramFeaturesDto = ProgramFeaturesDto(),
+    val directChatPolicy: DirectChatPolicyDto = DirectChatPolicyDto(),
+    val aiReceptionistPolicy: AiReceptionistPolicyDto = AiReceptionistPolicyDto(),
+    val appointmentsPolicy: AppointmentsPolicyDto = AppointmentsPolicyDto()
+) {
+    companion object {
+        fun defaultForTemplate(rawTemplateKey: String?): ProgramExperienceConfigDto {
+            return when (rawTemplateKey?.trim()?.uppercase()) {
+                "NUTRICAO_BEM_ESTAR" -> ProgramExperienceConfigDto(
+                    templateKey = "NUTRICAO_BEM_ESTAR",
+                    welcomeHeadline = "Hábitos diários mais leves e constantes",
+                    welcomeMessage = "Acompanhe sua hidratação, movimento e registros autorizados no seu ritmo, mantendo o controle do que compartilha.",
+                    enabledMetrics = listOf("steps", "hydration")
+                )
+                "FISIO_REABILITACAO" -> ProgramExperienceConfigDto(
+                    templateKey = "FISIO_REABILITACAO",
+                    welcomeHeadline = "Sua rotina de movimento passo a passo",
+                    welcomeMessage = "Registre sua movimentação diária e marque horários de retorno combinados com o programa.",
+                    enabledMetrics = listOf("steps", "authorized_records")
+                )
+                "CUIDADO_SENIOR_HOMECARE" -> ProgramExperienceConfigDto(
+                    templateKey = "CUIDADO_SENIOR_HOMECARE",
+                    welcomeHeadline = "Cuidado conectado com quem apoia você",
+                    welcomeMessage = "Com sua permissão, seu familiar de apoio também acompanha os lembretes e agendamentos do programa.",
+                    enabledMetrics = listOf("steps", "hydration", "medications", "authorized_records"),
+                    features = ProgramFeaturesDto(familyLinkEnabled = true)
+                )
+                "FARMACIA_ADESAO" -> ProgramExperienceConfigDto(
+                    templateKey = "FARMACIA_ADESAO",
+                    welcomeHeadline = "Lembretes e organização da sua rotina",
+                    welcomeMessage = "Use o alarme pessoal do seu app no dia a dia; aqui combinamos avisos simples de acompanhamento e apoio.",
+                    enabledMetrics = listOf("hydration", "medications"),
+                    features = ProgramFeaturesDto(appointmentsEnabled = false)
+                )
+                "SAUDE_CORPORATIVA" -> ProgramExperienceConfigDto(
+                    templateKey = "SAUDE_CORPORATIVA",
+                    welcomeHeadline = "Bem-estar preventivo no dia a dia",
+                    welcomeMessage = "Acompanhe seus objetivos de caminhada e hidratação com privacidade garantida: seus documentos clínicos não são expostos.",
+                    enabledMetrics = listOf("steps", "hydration"),
+                    features = ProgramFeaturesDto(preConsultationPdfEnabled = false, appointmentsEnabled = false)
+                )
+                "CUSTOM" -> ProgramExperienceConfigDto(
+                    templateKey = "CUSTOM",
+                    welcomeHeadline = "Programa personalizado com a nossa marca",
+                    welcomeMessage = "Escolha apenas os registros que deseja compartilhar e gerencie seu vínculo quando quiser."
+                )
+                else -> ProgramExperienceConfigDto(templateKey = "CLINICA_GERAL")
+            }
+        }
+    }
+}
+
+@Serializable
+data class TemplateCatalogItemDto(
+    val templateKey: String,
+    val title: String,
+    val subtitle: String,
+    val sampleSafeReminder: String,
+    val defaultConfig: ProgramExperienceConfigDto
+)
+
+@Serializable
+data class UpdateExperienceRequest(
+    val templateKey: String? = null,
+    val applyTemplateDefaults: Boolean = false,
+    val experienceConfig: ProgramExperienceConfigDto? = null
+)
+
+@Serializable
 data class B2BContextDescriptor(
     val mode: String = AppContextMode.PERSONAL.name,
     val userId: String = "",
@@ -56,13 +166,19 @@ data class B2BContextDescriptor(
     val primaryColor: String? = null,
     val logoUrl: String? = null,
     val approvalStatus: String? = null,
-    val sharedCategories: List<String> = emptyList()
+    val sharedCategories: List<String> = emptyList(),
+    val templateKey: String? = null,
+    val experienceConfig: ProgramExperienceConfigDto? = null,
+    val familyShareEnabled: Boolean = false
 ) {
     val parsedMode: AppContextMode
         get() = AppContextMode.fromWire(mode)
 
     val isPartnerContext: Boolean
         get() = parsedMode != AppContextMode.PERSONAL && !programId.isNullOrBlank()
+
+    fun resolvedExperienceConfig(): ProgramExperienceConfigDto =
+        experienceConfig ?: ProgramExperienceConfigDto.defaultForTemplate(templateKey)
 
     fun cacheKey(): String {
         return if (parsedMode == AppContextMode.PERSONAL || programId.isNullOrBlank()) {
@@ -125,6 +241,8 @@ data class PartnerProgramDto(
     val activeParticipants: Int = 0,
     val canPromote: Boolean = false,
     val templateKey: String = "CLINICA_GERAL",
+    val experienceConfig: ProgramExperienceConfigDto =
+        ProgramExperienceConfigDto.defaultForTemplate(templateKey),
     val responsibleName: String? = null,
     val responsibleCpfMasked: String? = null,
     val responsibleRole: String? = null,
@@ -647,6 +765,60 @@ object B2BOnboardingValidator {
             upper == "AUTO_APPROVE_DISABLED" ->
                 "Aprovação manual obrigatória habilitada no ambiente."
             else -> "Pendência cadastral em conferência ($upper)."
+        }
+    }
+
+    fun computeMissingConsentCategories(
+        config: ProgramExperienceConfigDto?,
+        sharedCategories: Collection<String>
+    ): List<SharedCategoryOption> {
+        val enabled = normalizeSharedCategories(config?.enabledMetrics.orEmpty())
+        val shared = normalizeSharedCategories(sharedCategories).toSet()
+        return enabled.filterNot { it in shared }
+            .mapNotNull { SharedCategoryOption.fromWire(it) }
+    }
+
+    fun simulateAiReceptionistReply(
+        config: ProgramExperienceConfigDto,
+        programName: String,
+        question: String
+    ): String {
+        val cleanQuestion = question.trim().lowercase()
+        val brand = programName.trim().ifBlank { "este programa" }
+        val faq = config.aiReceptionistPolicy.partnerFaqKnowledge.trim()
+
+        if (cleanQuestion.isBlank()) {
+            return config.aiReceptionistPolicy.greetingMessage
+        }
+        val clinicalKeywords = listOf("dose", "mg", "comprimido", "remedio", "remédio", "prescr", "diagn")
+        if (clinicalKeywords.any { cleanQuestion.contains(it) }) {
+            return "Não posso orientar doses, medicações ou diagnósticos. Para dúvidas sobre sua saúde, procure sua equipe ou solicite atendimento com o responsável de $brand."
+        }
+        if (cleanQuestion.contains("horario") || cleanQuestion.contains("horário") || cleanQuestion.contains("atend")) {
+            return "O atendimento humano de $brand funciona em: ${config.directChatPolicy.serviceHoursLabel} (${config.directChatPolicy.responseSlaLabel})."
+        }
+        if (cleanQuestion.contains("agend") || cleanQuestion.contains("consulta") || cleanQuestion.contains("marcar")) {
+            return if (config.features.appointmentsEnabled) {
+                "Os horários disponíveis de $brand são: ${config.appointmentsPolicy.availabilitiesSummary} (${config.appointmentsPolicy.allowedModalities.joinToString(" / ") { if (it == "REMOTE") "Remoto" else "Presencial" }})."
+            } else {
+                "O agendamento pelo app está desativado neste programa no momento."
+            }
+        }
+        if (faq.isNotBlank()) {
+            val tokens = cleanQuestion.split(Regex("\\s+")).filter { it.length >= 4 }
+            val matchedSentence = faq.split('\n', '.')
+                .map { it.trim() }
+                .firstOrNull { line ->
+                    line.length > 3 && tokens.any { tok -> line.lowercase().contains(tok) }
+                }
+            if (matchedSentence != null) {
+                return "$matchedSentence\n\n(${config.aiReceptionistPolicy.personaName} · Modo Prévia)"
+            }
+        }
+        return if (config.aiReceptionistPolicy.autoEscalateToHumanOnUnknown) {
+            "Não encontrei essa informação nas orientações de $brand. Posso encaminhar sua mensagem para o responsável responder em ${config.directChatPolicy.responseSlaLabel}."
+        } else {
+            "${config.aiReceptionistPolicy.greetingMessage}\n\nHorário do responsável: ${config.directChatPolicy.serviceHoursLabel}."
         }
     }
 

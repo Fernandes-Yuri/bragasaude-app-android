@@ -13,12 +13,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,11 +33,11 @@ import br.com.bragasaude.domain.b2b.AppContextMode
 import br.com.bragasaude.domain.b2b.B2BThemeEngine
 import br.com.bragasaude.domain.b2b.ParticipantRoutineSummaryDto
 import br.com.bragasaude.domain.b2b.PartnerApprovalStatus
+import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
 import br.com.bragasaude.domain.b2b.SharedCategoryOption
 import br.com.bragasaude.ui.components.BragaAlertDialog
 import br.com.bragasaude.ui.components.BragaBottomSheet
 import coil3.compose.AsyncImage
-import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +52,8 @@ fun PartnerWorkspaceScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val isLoadingMore by viewModel.isLoadingMore.collectAsState()
     val programInfo by viewModel.programInfo.collectAsState()
+    val templates by viewModel.templates.collectAsState()
+    val isSavingExperience by viewModel.isSavingExperience.collectAsState()
     val participants by viewModel.participants.collectAsState()
     val hasMore by viewModel.hasMore.collectAsState()
     val selectedSummary by viewModel.selectedSummary.collectAsState()
@@ -69,8 +67,17 @@ fun PartnerWorkspaceScreen(
     var showOnboardingSheet by rememberSaveable { mutableStateOf(false) }
     var showConsentSheet by rememberSaveable { mutableStateOf(false) }
     var showReceptionQrSheet by rememberSaveable { mutableStateOf(false) }
+    var showAiSimulatorSheet by rememberSaveable { mutableStateOf(false) }
+    var selectedOwnerTab by rememberSaveable { mutableStateOf(PartnerOwnerTab.WALLET) }
     var pendingInviteCode by rememberSaveable { mutableStateOf(initialInviteCode.trim().uppercase()) }
     var participantToRemove by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    val savedExperience = remember(programInfo, activeContext) {
+        programInfo?.experienceConfig ?: activeContext.resolvedExperienceConfig()
+    }
+    var draftExperience by remember(programInfo?.programId, savedExperience) {
+        mutableStateOf(savedExperience)
+    }
 
     LaunchedEffect(Unit) {
         viewModel.refreshWorkspace()
@@ -161,6 +168,16 @@ fun PartnerWorkspaceScreen(
                 }
             }
         }
+    }
+
+    if (showAiSimulatorSheet) {
+        AiReceptionistSimulatorSheet(
+            programName = programInfo?.programName ?: activeContext.programName ?: "Seu Programa",
+            config = draftExperience,
+            brandPrimary = brandPrimary,
+            brandOnPrimary = brandOnPrimary,
+            onDismiss = { showAiSimulatorSheet = false }
+        )
     }
 
     participantToRemove?.let { (targetId, targetName) ->
@@ -283,334 +300,427 @@ fun PartnerWorkspaceScreen(
             }
         }
     ) { innerPadding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(innerPadding)
         ) {
-            // Seletor de contextos autorizados + retorno rapido ao modo pessoal
             if (availableContexts.size > 1 || activeContext.isPartnerContext) {
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = "Contexto ativo",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(availableContexts, key = { it.cacheKey() }) { ctx ->
-                                val isSelected = ctx.cacheKey() == activeContext.cacheKey()
-                                val label = when (ctx.parsedMode) {
-                                    AppContextMode.PERSONAL -> "Meu espaço pessoal"
-                                    AppContextMode.PARTNER_OWNER -> "Gestão: ${ctx.programName ?: "Minha empresa"}"
-                                    AppContextMode.PARTNER_PARTICIPANT -> ctx.programName ?: "Programa"
-                                }
-                                FilterChip(
-                                    selected = isSelected,
-                                    onClick = {
-                                        if (ctx.parsedMode == AppContextMode.PERSONAL) {
-                                            viewModel.selectContext(ctx)
-                                            onBack()
-                                        } else {
-                                            viewModel.selectContext(ctx)
-                                        }
-                                    },
-                                    label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = brandPrimary,
-                                        selectedLabelColor = brandOnPrimary
-                                    )
-                                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "Contexto ativo",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(availableContexts, key = { it.cacheKey() }) { ctx ->
+                            val isSelected = ctx.cacheKey() == activeContext.cacheKey()
+                            val label = when (ctx.parsedMode) {
+                                AppContextMode.PERSONAL -> "Meu espaço pessoal"
+                                AppContextMode.PARTNER_OWNER -> "Gestão: ${ctx.programName ?: "Minha empresa"}"
+                                AppContextMode.PARTNER_PARTICIPANT -> ctx.programName ?: "Programa"
                             }
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    if (ctx.parsedMode == AppContextMode.PERSONAL) {
+                                        viewModel.selectContext(ctx)
+                                        onBack()
+                                    } else {
+                                        viewModel.selectContext(ctx)
+                                    }
+                                },
+                                label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = brandPrimary,
+                                    selectedLabelColor = brandOnPrimary
+                                )
+                            )
                         }
                     }
                 }
             }
 
-            if (isLoading) {
-                item {
+            if (!isLoading && activeContext.parsedMode == AppContextMode.PARTNER_OWNER) {
+                TabRow(
+                    selectedTabIndex = PartnerOwnerTab.entries.indexOf(selectedOwnerTab).coerceAtLeast(0),
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = brandAccentText
+                ) {
+                    PartnerOwnerTab.entries.forEach { tab ->
+                        Tab(
+                            selected = selectedOwnerTab == tab,
+                            onClick = { selectedOwnerTab = tab },
+                            text = {
+                                Text(
+                                    text = tab.title,
+                                    fontWeight = if (selectedOwnerTab == tab) FontWeight.Bold else FontWeight.Medium
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            when {
+                isLoading -> {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .fillMaxSize()
                             .padding(vertical = 32.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(color = brandAccentText)
                     }
                 }
-            } else if (!activeContext.isPartnerContext) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = brandSoftSurface),
-                        border = BorderStroke(1.dp, brandSoftBorder)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(18.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text(
-                                text = "Você ainda não está em um programa parceiro ativo",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = brandAccentText
+                activeContext.parsedMode == AppContextMode.PARTNER_OWNER &&
+                    selectedOwnerTab == PartnerOwnerTab.STUDIO -> {
+                    PartnerStudioTabContent(
+                        programInfo = programInfo,
+                        draftConfig = draftExperience,
+                        savedConfig = savedExperience,
+                        templates = templates,
+                        isSaving = isSavingExperience,
+                        brandPrimary = brandPrimary,
+                        brandOnPrimary = brandOnPrimary,
+                        brandAccent = brandAccentText,
+                        onDraftChange = { draftExperience = it },
+                        onOpenOnboarding = { showOnboardingSheet = true },
+                        onOpenSimulator = { showAiSimulatorSheet = true },
+                        onSaveChanges = {
+                            viewModel.saveExperienceConfig(
+                                templateKey = draftExperience.templateKey,
+                                applyTemplateDefaults = false,
+                                experienceConfig = draftExperience
                             )
-                            Text(
-                                text = "Informe um código de convite recebido da clínica ou configure o programa com a marca da sua empresa.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Button(
-                                    onClick = { showConsentSheet = true },
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = brandPrimary,
-                                        contentColor = brandOnPrimary
-                                    )
-                                ) {
-                                    Text("Participar por código")
-                                }
-                                OutlinedButton(
-                                    onClick = { showOnboardingSheet = true },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Minha empresa")
-                                }
-                            }
                         }
-                    }
-                }
-            } else if (activeContext.parsedMode == AppContextMode.PARTNER_OWNER) {
-                // =========================================================================
-                // VISAO DO RESPONSAVEL DO PROGRAMA (Rotina compartilhada / Registros autorizados)
-                // =========================================================================
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, brandSoftBorder)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = B2BThemeEngine.PARTNER_AREA_TITLE,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = brandAccentText
-                                    )
-                                    Text(
-                                        text = B2BThemeEngine.PARTNER_RECORDS_TITLE,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                programInfo?.let { info ->
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = brandPrimary.copy(alpha = 0.14f)
-                                    ) {
-                                        Text(
-                                            text = "${info.activeParticipants} / ${info.seatLimit} vagas",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = brandAccentText,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            programInfo?.inviteCode?.let { code ->
-                                Text(
-                                    text = "Código ativo para convite: $code",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                            if (programInfo?.parsedStatus == PartnerApprovalStatus.APPROVED &&
-                                !programInfo?.inviteCode.isNullOrBlank()
-                            ) {
-                                OutlinedButton(
-                                    onClick = { showReceptionQrSheet = true },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.QrCode2,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("QR Code e Placa PDF da Recepção")
-                                }
-                            }
-                            OutlinedButton(
-                                onClick = { showOnboardingSheet = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("Gerenciar marca, convite e franquia")
-                            }
-                        }
-                    }
-                }
-
-                if (selectedSummary != null) {
-                    item {
-                        OwnerParticipantSummaryCard(
-                            summary = selectedSummary!!,
-                            selectedDays = selectedPeriodDays,
-                            isLoading = isLoadingSummary,
-                            isRemoving = isRemovingParticipant,
-                            brandAccent = brandAccentText,
-                            brandPrimary = brandPrimary,
-                            brandOnPrimary = brandOnPrimary,
-                            onChangeDays = { newDays ->
-                                viewModel.openParticipantSummary(selectedSummary!!.patientUserId, newDays)
-                            },
-                            onRequestRemove = {
-                                val current = selectedSummary!!
-                                participantToRemove = current.patientUserId to current.participantName
-                            },
-                            onClose = { viewModel.clearSelectedSummary() }
-                        )
-                    }
-                }
-
-                item {
-                    Text(
-                        text = "Participantes vinculados (${participants.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
                     )
                 }
-
-                if (participants.isEmpty()) {
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                            )
-                        ) {
-                            Text(
-                                text = "Nenhum participante ativo vinculado até o momento. Compartilhe o código de convite após a aprovação para receber autorizações de rotina.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(16.dp)
-                            )
-                        }
-                    }
-                } else {
-                    items(participants, key = { it.patientUserId }) { item ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.openParticipantSummary(item.patientUserId) },
-                            shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(brandPrimary),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = (item.displayName.firstOrNull() ?: 'P').uppercaseChar().toString(),
-                                        color = brandOnPrimary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = item.displayName,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    val categoryLabels = item.sharedCategories.mapNotNull {
-                                        SharedCategoryOption.fromWire(it)?.titlePtBr
-                                    }
-                                    Text(
-                                        text = if (categoryLabels.isEmpty()) {
-                                            "Nenhuma categoria compartilhada"
-                                        } else {
-                                            "Autorizados: ${categoryLabels.joinToString(", ")}"
-                                        },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (hasMore) {
-                        item {
-                            OutlinedButton(
-                                onClick = { viewModel.loadMoreParticipants() },
-                                enabled = !isLoadingMore,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(if (isLoadingMore) "Carregando..." else "Carregar mais participantes")
-                            }
-                        }
-                    }
-                }
-            } else {
-                // =========================================================================
-                // VISAO DO PARTICIPANTE + GERACAO / REVISAO DO PDF PERSONALIZADO
-                // =========================================================================
-                item {
-                    ParticipantShareAndPdfSection(
-                        sharedCategories = activeContext.sharedCategories,
+                activeContext.parsedMode == AppContextMode.PARTNER_OWNER &&
+                    selectedOwnerTab == PartnerOwnerTab.PREVIEW -> {
+                    PartnerPreviewTabContent(
+                        programName = programInfo?.programName ?: activeContext.programName ?: "Seu Programa",
+                        companyName = programInfo?.companyName ?: activeContext.companyName ?: "Sua Empresa",
+                        logoUrl = programInfo?.logoUrl ?: activeContext.logoUrl,
+                        primaryColorHex = programInfo?.primaryColor ?: activeContext.primaryColor,
+                        draftConfig = draftExperience,
                         brandPrimary = brandPrimary,
                         brandOnPrimary = brandOnPrimary,
                         brandAccent = brandAccentText,
                         softSurface = brandSoftSurface,
                         softBorder = BorderStroke(1.dp, brandSoftBorder),
-                        isGeneratingPdf = isGeneratingPdf,
-                        generatedPdf = generatedPdf,
-                        onOpenConsentSheet = { showConsentSheet = true },
-                        onGeneratePdf = { days, categories ->
-                            viewModel.generatePreConsultationPdf(days, categories)
-                        },
-                        onPreviewPdf = { file ->
-                            openPartnerPdfFile(context, file, B2BThemeEngine.PDF_PRECONSULTATION_TITLE)
-                        },
-                        onSharePdf = { file ->
-                            val label = activeContext.programName?.takeIf { it.isNotBlank() } ?: "o programa"
-                            sharePartnerPdfFile(
-                                context = context,
-                                file = file,
-                                subject = "${B2BThemeEngine.PDF_PRECONSULTATION_TITLE} — $label"
-                            )
-                        }
+                        onOpenSimulator = { showAiSimulatorSheet = true }
                     )
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        if (!activeContext.isPartnerContext) {
+                            item {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = brandSoftSurface),
+                                    border = BorderStroke(1.dp, brandSoftBorder)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(18.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Text(
+                                            text = "Você ainda não está em um programa parceiro ativo",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = brandAccentText
+                                        )
+                                        Text(
+                                            text = "Informe um código de convite recebido da clínica ou configure o programa com a marca da sua empresa.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Button(
+                                                onClick = { showConsentSheet = true },
+                                                modifier = Modifier.weight(1f),
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = brandPrimary,
+                                                    contentColor = brandOnPrimary
+                                                )
+                                            ) {
+                                                Text("Participar por código")
+                                            }
+                                            OutlinedButton(
+                                                onClick = { showOnboardingSheet = true },
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("Minha empresa")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (activeContext.parsedMode == AppContextMode.PARTNER_OWNER) {
+                            // =========================================================================
+                            // ABA CARTEIRA — VISAO DO RESPONSAVEL DO PROGRAMA
+                            // =========================================================================
+                            programInfo?.let { prog ->
+                                item {
+                                    FirstAccessActivationChecklistCard(
+                                        programInfo = prog,
+                                        brandPrimary = brandPrimary,
+                                        brandAccent = brandAccentText,
+                                        softSurface = brandSoftSurface,
+                                        softBorder = BorderStroke(1.dp, brandSoftBorder),
+                                        onOpenOnboarding = { showOnboardingSheet = true },
+                                        onOpenStudio = { selectedOwnerTab = PartnerOwnerTab.STUDIO },
+                                        onOpenQr = { showReceptionQrSheet = true }
+                                    )
+                                }
+                            }
+
+                            item {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    border = BorderStroke(1.dp, brandSoftBorder)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = B2BThemeEngine.PARTNER_AREA_TITLE,
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = brandAccentText
+                                                )
+                                                Text(
+                                                    text = B2BThemeEngine.PARTNER_RECORDS_TITLE,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            programInfo?.let { info ->
+                                                Surface(
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    color = brandPrimary.copy(alpha = 0.14f)
+                                                ) {
+                                                    Text(
+                                                        text = "${info.activeParticipants} / ${info.seatLimit} vagas",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = brandAccentText,
+                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        programInfo?.inviteCode?.let { code ->
+                                            Text(
+                                                text = "Código ativo para convite: $code",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                        if (programInfo?.parsedStatus == PartnerApprovalStatus.APPROVED &&
+                                            !programInfo?.inviteCode.isNullOrBlank()
+                                        ) {
+                                            OutlinedButton(
+                                                onClick = { showReceptionQrSheet = true },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(12.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.QrCode2,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                                Text("QR Code e Placa PDF da Recepção")
+                                            }
+                                        }
+                                        OutlinedButton(
+                                            onClick = { showOnboardingSheet = true },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text("Gerenciar marca, convite e franquia")
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (selectedSummary != null) {
+                                item {
+                                    OwnerParticipantSummaryCard(
+                                        summary = selectedSummary!!,
+                                        selectedDays = selectedPeriodDays,
+                                        isLoading = isLoadingSummary,
+                                        isRemoving = isRemovingParticipant,
+                                        brandAccent = brandAccentText,
+                                        brandPrimary = brandPrimary,
+                                        brandOnPrimary = brandOnPrimary,
+                                        onChangeDays = { newDays ->
+                                            viewModel.openParticipantSummary(selectedSummary!!.patientUserId, newDays)
+                                        },
+                                        onRequestRemove = {
+                                            val current = selectedSummary!!
+                                            participantToRemove = current.patientUserId to current.participantName
+                                        },
+                                        onClose = { viewModel.clearSelectedSummary() }
+                                    )
+                                }
+                            }
+
+                            item {
+                                Text(
+                                    text = "Participantes vinculados (${participants.size})",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            if (participants.isEmpty()) {
+                                item {
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                        )
+                                    ) {
+                                        Text(
+                                            text = "Nenhum participante ativo vinculado até o momento. Compartilhe o código de convite após a aprovação para receber autorizações de rotina.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(16.dp)
+                                        )
+                                    }
+                                }
+                            } else {
+                                items(participants, key = { it.patientUserId }) { item ->
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { viewModel.openParticipantSummary(item.patientUserId) },
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(14.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                                    .clip(CircleShape)
+                                                    .background(brandPrimary),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = (item.displayName.firstOrNull() ?: 'P').uppercaseChar().toString(),
+                                                    color = brandOnPrimary,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = item.displayName,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                val categoryLabels = item.sharedCategories.mapNotNull {
+                                                    SharedCategoryOption.fromWire(it)?.titlePtBr
+                                                }
+                                                Text(
+                                                    text = if (categoryLabels.isEmpty()) {
+                                                        "Nenhuma categoria compartilhada"
+                                                    } else {
+                                                        "Autorizados: ${categoryLabels.joinToString(", ")}"
+                                                    },
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (hasMore) {
+                                    item {
+                                        OutlinedButton(
+                                            onClick = { viewModel.loadMoreParticipants() },
+                                            enabled = !isLoadingMore,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(if (isLoadingMore) "Carregando..." else "Carregar mais participantes")
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // =========================================================================
+                            // VISAO DO PARTICIPANTE ADAPTATIVA (B2B-16)
+                            // =========================================================================
+                            val participantProgramCount = availableContexts.count {
+                                it.parsedMode == AppContextMode.PARTNER_PARTICIPANT
+                            }
+                            item {
+                                ParticipantExperienceContent(
+                                    programName = activeContext.programName ?: "Programa Parceiro",
+                                    companyName = activeContext.companyName ?: "Parceiro Braga Saúde",
+                                    logoUrl = activeContext.logoUrl,
+                                    experienceConfig = activeContext.resolvedExperienceConfig(),
+                                    sharedCategories = activeContext.sharedCategories,
+                                    coParticipatedCount = participantProgramCount,
+                                    brandPrimary = brandPrimary,
+                                    brandOnPrimary = brandOnPrimary,
+                                    brandAccent = brandAccentText,
+                                    softSurface = brandSoftSurface,
+                                    softBorder = BorderStroke(1.dp, brandSoftBorder),
+                                    isGeneratingPdf = isGeneratingPdf,
+                                    generatedPdf = generatedPdf,
+                                    isPreview = false,
+                                    onOpenConsentSheet = { showConsentSheet = true },
+                                    onGeneratePdf = { days, categories ->
+                                        viewModel.generatePreConsultationPdf(days, categories)
+                                    },
+                                    onPreviewPdf = { file ->
+                                        openPartnerPdfFile(context, file, B2BThemeEngine.PDF_PRECONSULTATION_TITLE)
+                                    },
+                                    onSharePdf = { file ->
+                                        val label = activeContext.programName?.takeIf { it.isNotBlank() } ?: "o programa"
+                                        sharePartnerPdfFile(
+                                            context = context,
+                                            file = file,
+                                            subject = "${B2BThemeEngine.PDF_PRECONSULTATION_TITLE} — $label"
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -771,218 +881,4 @@ private fun SummarySectionLocked(message: String) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-}
-
-@Composable
-private fun ParticipantShareAndPdfSection(
-    sharedCategories: List<String>,
-    brandPrimary: Color,
-    brandOnPrimary: Color,
-    brandAccent: Color,
-    softSurface: Color,
-    softBorder: BorderStroke?,
-    isGeneratingPdf: Boolean,
-    generatedPdf: File?,
-    onOpenConsentSheet: () -> Unit,
-    onGeneratePdf: (Int, Set<String>) -> Unit,
-    onPreviewPdf: (File) -> Unit,
-    onSharePdf: (File) -> Unit
-) {
-    var selectedPdfDays by remember { mutableStateOf(30) }
-    var selectedPdfCategories by remember(sharedCategories) {
-        mutableStateOf(
-            sharedCategories.toSet().ifEmpty {
-                setOf(
-                    SharedCategoryOption.STEPS.wireKey,
-                    SharedCategoryOption.HYDRATION.wireKey
-                )
-            }
-        )
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        // Cartao de compartilhamento ativo no app
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = softSurface),
-            border = softBorder ?: BorderStroke(1.dp, brandAccent.copy(alpha = 0.3f))
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = brandAccent)
-                    Text(
-                        text = "Compartilhamento ativo no app",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = brandAccent
-                    )
-                }
-                val labels = sharedCategories.mapNotNull { SharedCategoryOption.fromWire(it)?.titlePtBr }
-                Text(
-                    text = if (labels.isEmpty()) {
-                        "Você ainda não autorizou categorias in-app."
-                    } else {
-                        "Categorias visíveis ao responsável do programa: ${labels.joinToString(", ")}."
-                    },
-                    style = MaterialTheme.typography.bodySmall
-                )
-                OutlinedButton(
-                    onClick = onOpenConsentSheet,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Gerenciar permissões ou encerrar vínculo", fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-
-        // Cartao de exportacao de PDF de pre-consulta personalizado
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = brandAccent)
-                    Text(
-                        text = B2BThemeEngine.PDF_PRECONSULTATION_TITLE,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Text(
-                    text = B2BThemeEngine.PDF_NON_PEP_NOTICE,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Text(
-                    text = "Período do resumo",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(7, 14, 30).forEach { days ->
-                        FilterChip(
-                            selected = selectedPdfDays == days,
-                            onClick = { selectedPdfDays = days },
-                            label = { Text("Últimos $days dias") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = brandPrimary,
-                                selectedLabelColor = brandOnPrimary
-                            )
-                        )
-                    }
-                }
-
-                Text(
-                    text = "O que incluir no PDF (arquivos pessoais do Organizador nunca são incluídos)",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-                SharedCategoryOption.entries.forEach { opt ->
-                    val checked = selectedPdfCategories.contains(opt.wireKey)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                selectedPdfCategories = if (checked) {
-                                    selectedPdfCategories - opt.wireKey
-                                } else {
-                                    selectedPdfCategories + opt.wireKey
-                                }
-                            }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = checked,
-                            onCheckedChange = { nowChecked ->
-                                selectedPdfCategories = if (nowChecked) {
-                                    selectedPdfCategories + opt.wireKey
-                                } else {
-                                    selectedPdfCategories - opt.wireKey
-                                }
-                            },
-                            colors = CheckboxDefaults.colors(checkedColor = brandPrimary)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(opt.titlePtBr, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-
-                Button(
-                    onClick = { onGeneratePdf(selectedPdfDays, selectedPdfCategories) },
-                    enabled = !isGeneratingPdf && selectedPdfCategories.isNotEmpty(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = brandPrimary,
-                        contentColor = brandOnPrimary
-                    )
-                ) {
-                    Text(
-                        text = if (isGeneratingPdf) "Gerando resumo em PDF..." else "Gerar PDF para revisão",
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                if (generatedPdf != null) {
-                    HorizontalDivider()
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = brandAccent)
-                        Text(
-                            text = "PDF gerado: ${generatedPdf.name}",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { onPreviewPdf(generatedPdf) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Visualizar PDF")
-                        }
-                        Button(
-                            onClick = { onSharePdf(generatedPdf) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = brandPrimary,
-                                contentColor = brandOnPrimary
-                            )
-                        ) {
-                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(B2BThemeEngine.PDF_SHARE_ACTION_LABEL, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                }
-            }
-        }
-    }
 }

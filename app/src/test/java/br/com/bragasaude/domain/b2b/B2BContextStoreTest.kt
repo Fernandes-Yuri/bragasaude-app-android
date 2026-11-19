@@ -1,6 +1,7 @@
 package br.com.bragasaude.domain.b2b
 
 import br.com.bragasaude.data.local.b2b.B2BContextCacheEntity
+import br.com.bragasaude.data.local.b2b.B2BContextDatabase
 import br.com.bragasaude.data.remote.b2b.ActiveContextStore
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
@@ -322,5 +323,78 @@ class B2BContextStoreTest {
                 councilUf = "SP"
             )
         )
+    }
+
+    @Test
+    fun `B2B-16 ActiveContextStore reidrata contexto ativo, Room MIGRATION_1_2 e simulador IA`() {
+        val store = ActiveContextStore()
+        val initialCfg = ProgramExperienceConfigDto.defaultForTemplate("CLINICA_GERAL")
+        val initialCtx = B2BContextDescriptor(
+            mode = AppContextMode.PARTNER_PARTICIPANT.name,
+            userId = "user-1",
+            programId = "prog-1",
+            programName = "Cardio A",
+            companyName = "Clinica A",
+            primaryColor = "#1A6B5C",
+            templateKey = "CLINICA_GERAL",
+            experienceConfig = initialCfg,
+            sharedCategories = listOf("steps")
+        )
+        store.updateAvailableContexts("user-1", listOf(initialCtx))
+        assertTrue(store.selectContext("user-1", initialCtx))
+
+        // Mesmo cacheKey com experienceConfig alterada precisa atualizar _activeContext imediatamente
+        val updatedCfg = initialCfg.copy(
+            templateKey = "NUTRICAO_BEM_ESTAR",
+            welcomeHeadline = "Novo titulo ao vivo",
+            enabledMetrics = listOf("steps", "hydration", "medications"),
+            features = initialCfg.features.copy(
+                appointmentsEnabled = false,
+                directPartnerChatEnabled = true,
+                aiReceptionistEnabled = true
+            ),
+            aiReceptionistPolicy = initialCfg.aiReceptionistPolicy.copy(
+                personaName = "Helena IA",
+                partnerFaqKnowledge = "Estacionamento gratuito na Rua A, 120."
+            )
+        )
+        val refreshedCtx = initialCtx.copy(
+            primaryColor = "#0F4C81",
+            templateKey = "NUTRICAO_BEM_ESTAR",
+            experienceConfig = updatedCfg,
+            familyShareEnabled = true
+        )
+        store.updateAvailableContexts("user-1", listOf(refreshedCtx))
+        assertEquals("Novo titulo ao vivo", store.activeContext.value.experienceConfig?.welcomeHeadline)
+        assertEquals("#0F4C81", store.activeContext.value.primaryColor)
+        assertFalse(store.activeContext.value.resolvedExperienceConfig().features.appointmentsEnabled)
+        assertTrue(store.activeContext.value.familyShareEnabled)
+
+        // Round-trip Room cache v2
+        val entity = B2BContextCacheEntity.fromDescriptor("user-1", refreshedCtx, isActive = true, json = json)
+        val roundTrip = entity.toDescriptor(json)
+        assertEquals("NUTRICAO_BEM_ESTAR", roundTrip.templateKey)
+        assertEquals("Novo titulo ao vivo", roundTrip.experienceConfig?.welcomeHeadline)
+        assertTrue(roundTrip.familyShareEnabled)
+        assertEquals(1, B2BContextDatabase.MIGRATION_1_2.startVersion)
+        assertEquals(2, B2BContextDatabase.MIGRATION_1_2.endVersion)
+
+        // Banner de novos modulos detecta categorias ligadas nao consentidas pelo paciente
+        val missing = B2BOnboardingValidator.computeMissingConsentCategories(updatedCfg, listOf("steps"))
+        assertEquals(listOf(SharedCategoryOption.HYDRATION, SharedCategoryOption.MEDICATIONS), missing)
+
+        // Simulador IA responde FAQ/horarios e bloqueia posologia Nao-SaMD
+        val faqReply = B2BOnboardingValidator.simulateAiReceptionistReply(
+            updatedCfg,
+            "Cardio A",
+            "Tem estacionamento gratuito?"
+        )
+        assertTrue(faqReply.contains("Rua A, 120"))
+        val samdBlocked = B2BOnboardingValidator.simulateAiReceptionistReply(
+            updatedCfg,
+            "Cardio A",
+            "Posso tomar dose dupla de losartana?"
+        )
+        assertTrue(samdBlocked.contains("Não posso orientar doses"))
     }
 }

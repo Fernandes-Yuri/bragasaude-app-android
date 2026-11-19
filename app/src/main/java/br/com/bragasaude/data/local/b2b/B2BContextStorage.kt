@@ -9,7 +9,10 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import br.com.bragasaude.domain.b2b.B2BContextDescriptor
+import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -36,12 +39,20 @@ data class B2BContextCacheEntity(
     val approvalStatus: String?,
     val sharedCategoriesJson: String = "[]",
     val isActive: Boolean = false,
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val templateKey: String? = null,
+    val experienceConfigJson: String? = null,
+    val familyShareEnabled: Boolean = false
 ) {
     fun toDescriptor(json: Json = DEFAULT_JSON): B2BContextDescriptor {
         val categories = runCatching {
             json.decodeFromString<List<String>>(sharedCategoriesJson)
         }.getOrDefault(emptyList())
+        val parsedExperience = experienceConfigJson
+            ?.takeIf { it.isNotBlank() }
+            ?.let { raw ->
+                runCatching { json.decodeFromString<ProgramExperienceConfigDto>(raw) }.getOrNull()
+            }
         return B2BContextDescriptor(
             mode = mode,
             userId = ownerUserId,
@@ -51,7 +62,10 @@ data class B2BContextCacheEntity(
             primaryColor = primaryColor,
             logoUrl = logoUrl,
             approvalStatus = approvalStatus,
-            sharedCategories = categories
+            sharedCategories = categories,
+            templateKey = templateKey,
+            experienceConfig = parsedExperience,
+            familyShareEnabled = familyShareEnabled
         )
     }
 
@@ -65,6 +79,9 @@ data class B2BContextCacheEntity(
             nowMs: Long = System.currentTimeMillis(),
             json: Json = DEFAULT_JSON
         ): B2BContextCacheEntity {
+            val encodedExperience = descriptor.experienceConfig?.let {
+                runCatching { json.encodeToString(it) }.getOrNull()
+            }
             return B2BContextCacheEntity(
                 ownerUserId = ownerUserId,
                 contextKey = descriptor.cacheKey(),
@@ -77,7 +94,10 @@ data class B2BContextCacheEntity(
                 approvalStatus = descriptor.approvalStatus,
                 sharedCategoriesJson = json.encodeToString(descriptor.sharedCategories),
                 isActive = isActive,
-                updatedAt = nowMs
+                updatedAt = nowMs,
+                templateKey = descriptor.templateKey,
+                experienceConfigJson = encodedExperience,
+                familyShareEnabled = descriptor.familyShareEnabled
             )
         }
     }
@@ -117,7 +137,7 @@ interface B2BContextDao {
 
 @Database(
     entities = [B2BContextCacheEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class B2BContextDatabase : RoomDatabase() {
@@ -125,5 +145,17 @@ abstract class B2BContextDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "braga_b2b_context_db"
+
+        /**
+         * Migracao aditiva v1 -> v2 (B2B-16): preserva cache local pre-existente ao gravar
+         * template_key, experience_config jsonb e opt-in familiar sem destruir dados.
+         */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE b2b_context_cache ADD COLUMN templateKey TEXT")
+                db.execSQL("ALTER TABLE b2b_context_cache ADD COLUMN experienceConfigJson TEXT")
+                db.execSQL("ALTER TABLE b2b_context_cache ADD COLUMN familyShareEnabled INTEGER NOT NULL DEFAULT 0")
+            }
+        }
     }
 }
