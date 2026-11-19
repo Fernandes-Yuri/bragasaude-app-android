@@ -512,8 +512,8 @@ class BragaB2BBackwardCompatTest {
                         {
                           "patientUserId": "patient-1",
                           "displayName": "Ana Silva",
-                          "sharedCategories": ["steps", "records"],
-                          "effectiveCategories": ["steps", "records"],
+                          "sharedCategories": ["steps", "authorized_records"],
+                          "effectiveCategories": ["steps", "authorized_records"],
                           "missingProgramCategories": ["hydration"],
                           "familySupportActive": true,
                           "familySupportSummary": "Apoio familiar ativo neste programa",
@@ -535,13 +535,13 @@ class BragaB2BBackwardCompatTest {
                 cursor = "2026-11-19T12:00:00Z|patient-0",
                 limit = 20,
                 query = "Ana Silva",
-                category = "records",
+                category = "authorized_records",
                 attentionOnly = true
             )
             assertNotNull(page)
             assertEquals(1, page!!.participants.size)
             val p = page.participants[0]
-            assertEquals(listOf("steps", "records"), p.effectiveCategories)
+            assertEquals(listOf("steps", "authorized_records"), p.effectiveCategories)
             assertEquals(listOf("hydration"), p.missingProgramCategories)
             assertTrue(p.familySupportActive)
             assertEquals("Apoio familiar ativo neste programa", p.familySupportSummary)
@@ -553,7 +553,7 @@ class BragaB2BBackwardCompatTest {
             val listReqPath = server.takeRequest().path!!
             assertTrue(listReqPath.contains("/api/b2b/program/me/participants?"))
             assertTrue(listReqPath.contains("q=Ana+Silva") || listReqPath.contains("q=Ana%20Silva"))
-            assertTrue(listReqPath.contains("category=records"))
+            assertTrue(listReqPath.contains("category=authorized_records"))
             assertTrue(listReqPath.contains("attentionOnly=true"))
             assertTrue(listReqPath.contains("cursor="))
 
@@ -568,7 +568,7 @@ class BragaB2BBackwardCompatTest {
                         "patientUserId": "patient-1",
                         "participantName": "Ana Silva",
                         "periodDays": 14,
-                        "sharedCategories": ["records"],
+                        "sharedCategories": ["authorized_records"],
                         "familySupportActive": true,
                         "familySupportSummary": "Apoio familiar ativo",
                         "stepsSection": null,

@@ -423,7 +423,7 @@ class B2BContextStoreTest {
               "patientUserId": "p-1",
               "participantName": "Maria",
               "periodDays": 30,
-              "sharedCategories": ["records"],
+              "sharedCategories": ["authorized_records"],
               "familySupportActive": true,
               "familySupportSummary": "Rede ativa",
               "authorizedRecordsSection": {

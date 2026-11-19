@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -88,7 +89,7 @@ fun PartnerWalletFiltersSection(
     val categoryOptions = if (enabledProgramMetrics.isEmpty()) {
         SharedCategoryOption.entries
     } else {
-        SharedCategoryOption.entries.filter { it.wireValue in enabledProgramMetrics }
+        SharedCategoryOption.entries.filter { it.wireKey in enabledProgramMetrics }
     }
     val hasActiveFilter = query.isNotBlank() || selectedCategory != null || attentionOnly
 
@@ -141,10 +142,10 @@ fun PartnerWalletFiltersSection(
                     )
                 )
             }
-            items(categoryOptions, key = { it.wireValue }) { opt ->
+            items(categoryOptions, key = { it.wireKey }) { opt ->
                 FilterChip(
-                    selected = selectedCategory == opt.wireValue,
-                    onClick = { onSelectCategory(opt.wireValue) },
+                    selected = selectedCategory == opt.wireKey,
+                    onClick = { onSelectCategory(opt.wireKey) },
                     label = { Text(shortCategoryFilterLabel(opt)) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = brandPrimary,
@@ -302,6 +303,7 @@ fun WalletParticipantCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ParticipantDetailBottomSheet(
     summary: ParticipantRoutineSummaryDto,
@@ -323,7 +325,7 @@ fun ParticipantDetailBottomSheet(
         mutableStateOf(ParticipantDetailSubTab.METRICS)
     }
     val enabledMetrics = experienceConfig.enabledMetrics.ifEmpty {
-        SharedCategoryOption.entries.map { it.wireValue }
+        SharedCategoryOption.entries.map { it.wireKey }
     }
 
     BragaBottomSheet(onDismissRequest = onDismiss) {
@@ -447,7 +449,7 @@ fun ParticipantDetailBottomSheet(
                     }
 
                     MetricSlotSection(
-                        metricKey = "steps",
+                        metricKey = SharedCategoryOption.STEPS.wireKey,
                         enabledMetrics = enabledMetrics,
                         sharedCategories = summary.sharedCategories,
                         disabledNote = "Passos desativados na configuração deste programa.",
@@ -465,7 +467,7 @@ fun ParticipantDetailBottomSheet(
                     }
 
                     MetricSlotSection(
-                        metricKey = "hydration",
+                        metricKey = SharedCategoryOption.HYDRATION.wireKey,
                         enabledMetrics = enabledMetrics,
                         sharedCategories = summary.sharedCategories,
                         disabledNote = "Hidratação desativada na configuração deste programa.",
@@ -483,7 +485,7 @@ fun ParticipantDetailBottomSheet(
                     }
 
                     MetricSlotSection(
-                        metricKey = "medications",
+                        metricKey = SharedCategoryOption.MEDICATIONS.wireKey,
                         enabledMetrics = enabledMetrics,
                         sharedCategories = summary.sharedCategories,
                         disabledNote = "Lembretes de medicamentos desativados neste programa.",
@@ -501,7 +503,7 @@ fun ParticipantDetailBottomSheet(
                     }
 
                     MetricSlotSection(
-                        metricKey = "records",
+                        metricKey = SharedCategoryOption.AUTHORIZED_RECORDS.wireKey,
                         enabledMetrics = enabledMetrics,
                         sharedCategories = summary.sharedCategories,
                         disabledNote = "Registros de sinais e biometria desativados neste programa.",
@@ -758,5 +760,5 @@ private fun shortCategoryFilterLabel(opt: SharedCategoryOption): String = when (
     SharedCategoryOption.STEPS -> "Passos"
     SharedCategoryOption.HYDRATION -> "Hidratação"
     SharedCategoryOption.MEDICATIONS -> "Medicações"
-    SharedCategoryOption.RECORDS -> "Sinais & Peso"
+    SharedCategoryOption.AUTHORIZED_RECORDS -> "Sinais & Peso"
 }
