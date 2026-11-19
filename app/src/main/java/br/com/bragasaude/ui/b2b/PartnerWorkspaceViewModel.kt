@@ -17,6 +17,7 @@ import br.com.bragasaude.domain.b2b.PartnerPreConsultationPdfInput
 import br.com.bragasaude.domain.b2b.PartnerProgramDto
 import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
 import br.com.bragasaude.domain.b2b.ProgramReminderDto
+import br.com.bragasaude.domain.b2b.ReportProgramAbuseRequest
 import br.com.bragasaude.domain.b2b.TemplateCatalogItemDto
 import br.com.bragasaude.domain.b2b.UpdateExperienceRequest
 import com.google.firebase.auth.FirebaseAuth
@@ -112,6 +113,9 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     private val _isUpdatingMute = MutableStateFlow(false)
     val isUpdatingMute: StateFlow<Boolean> = _isUpdatingMute.asStateFlow()
+
+    private val _isReportingProgram = MutableStateFlow(false)
+    val isReportingProgram: StateFlow<Boolean> = _isReportingProgram.asStateFlow()
 
     private val _isGeneratingPdf = MutableStateFlow(false)
     val isGeneratingPdf: StateFlow<Boolean> = _isGeneratingPdf.asStateFlow()
@@ -349,6 +353,42 @@ class PartnerWorkspaceViewModel @Inject constructor(
                 }
             } else {
                 _statusMessage.value = "Não foi possível atualizar as notificações deste programa."
+            }
+        }
+    }
+
+    fun reportProgramAbuse(
+        programId: String,
+        reason: String,
+        details: String?,
+        muteAlso: Boolean,
+        onSuccess: () -> Unit
+    ) {
+        if (_isReportingProgram.value) return
+        viewModelScope.launch {
+            _isReportingProgram.value = true
+            val result = apiClient.reportPartnerProgramAbuse(
+                programId = programId,
+                request = ReportProgramAbuseRequest(
+                    reason = reason,
+                    details = details,
+                    muteAlso = muteAlso
+                )
+            )
+            _isReportingProgram.value = false
+            if (result.isSuccess) {
+                if (result.muted) {
+                    _enrollmentRemindersFeed.value = _enrollmentRemindersFeed.value?.copy(muted = true)
+                }
+                _statusMessage.value = if (result.muted) {
+                    "Denúncia registrada para moderação Braga e avisos silenciados."
+                } else {
+                    "Denúncia registrada para moderação Braga."
+                }
+                onSuccess()
+            } else {
+                _statusMessage.value = result.errorDetail
+                    ?: "Não foi possível registrar sua denúncia agora."
             }
         }
     }

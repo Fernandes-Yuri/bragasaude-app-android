@@ -237,6 +237,7 @@ data class PartnerProgramDto(
     val reviewNote: String? = null,
     val inviteCode: String? = null,
     val invitePaused: Boolean = false,
+    val aiPaused: Boolean = false,
     val seatLimit: Int = 10,
     val activeParticipants: Int = 0,
     val canPromote: Boolean = false,
@@ -574,6 +575,31 @@ data class CreateProgramReminderResult(
     val isSuccess: Boolean
         get() = reminder != null
 }
+
+@Serializable
+data class ReportProgramAbuseRequest(
+    val reason: String,
+    val details: String? = null,
+    val muteAlso: Boolean = true
+)
+
+@Serializable
+data class ReportProgramAbuseResult(
+    val reportId: String? = null,
+    val programId: String? = null,
+    val muted: Boolean = false,
+    val errorDetail: String? = null
+) {
+    val isSuccess: Boolean
+        get() = !reportId.isNullOrBlank()
+}
+
+val ABUSE_REPORT_REASONS: List<Pair<String, String>> = listOf(
+    "PRESCRICAO_MEDICA_INDEVIDA" to "Orientação de remédio ou diagnóstico indevido",
+    "SPAM_OU_ASSEDIO" to "Spam ou mensagens excessivas",
+    "CONTEUDO_INADEQUADO" to "Conteúdo inadequado ou enganoso",
+    "OUTRO" to "Outro motivo"
+)
 
 object B2BOnboardingValidator {
     const val DEFAULT_PRIMARY_COLOR = "#1A6B5C"

@@ -456,4 +456,20 @@ class B2BContextStoreTest {
         assertEquals(PartnerReminderType.PRE_CONSULT, PartnerReminderType.fromWire("pre_consult"))
         assertEquals(PartnerReminderType.ROUTINE, PartnerReminderType.fromWire("unknown"))
     }
+
+    @Test
+    fun b2b21bAbuseReportReasonsAndAiPausedDefaults() {
+        val reasonKeys = ABUSE_REPORT_REASONS.map { it.first }
+        assertTrue(reasonKeys.containsAll(listOf("PRESCRICAO_MEDICA_INDEVIDA", "SPAM_OU_ASSEDIO", "CONTEUDO_INADEQUADO", "OUTRO")))
+        val defaultProg = PartnerProgramDto(
+            programId = "prog-1",
+            ownerUserId = "owner-1",
+            companyName = "Clinica",
+            programName = "Programa",
+            primaryColor = "#1A6B5C",
+            approvalStatus = "APPROVED"
+        )
+        assertFalse(defaultProg.aiPaused)
+        assertTrue(defaultProg.copy(aiPaused = true).aiPaused)
+    }
 }

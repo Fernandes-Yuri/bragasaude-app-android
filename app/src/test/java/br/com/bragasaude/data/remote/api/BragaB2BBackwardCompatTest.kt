@@ -7,6 +7,7 @@ import br.com.bragasaude.data.remote.network.AuthInterceptor
 import br.com.bragasaude.domain.b2b.B2BContextDescriptor
 import br.com.bragasaude.domain.b2b.CreateProgramReminderRequest
 import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
+import br.com.bragasaude.domain.b2b.ReportProgramAbuseRequest
 import br.com.bragasaude.domain.b2b.UpdateExperienceRequest
 import io.mockk.every
 import io.mockk.mockk
@@ -729,6 +730,66 @@ class BragaB2BBackwardCompatTest {
             val mutedRes = api.setEnrollmentMuted("prog-1", muted = true)
             assertEquals(true, mutedRes)
             assertEquals("/api/b2b/enrollments/prog-1/mute", server.takeRequest().path)
+        }
+    }
+
+    @Test
+    fun parseAiPausedFlagAndReportProgramAbuseRoute() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = BragaApiClient(
+                mockk(relaxed = true),
+                server.url("/").toString().trimEnd('/'),
+                stubAuthService(),
+                OkHttpClient(),
+                FamilyE2eeManager()
+            )
+
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "program": {
+                        "programId": "prog-1",
+                        "ownerUserId": "owner-1",
+                        "companyName": "Clinica Cardio",
+                        "programName": "Cuidado Cardio",
+                        "primaryColor": "#1A6B5C",
+                        "approvalStatus": "APPROVED",
+                        "aiPaused": true,
+                        "seatLimit": 5,
+                        "activeParticipants": 1
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val prog = api.getMyPartnerProgram()
+            assertNotNull(prog)
+            assertEquals(true, prog!!.aiPaused)
+            assertEquals("/api/b2b/program/me", server.takeRequest().path)
+
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(201)
+                    .setBody("""{"reportId":"rep-1","programId":"prog-1","muted":true}""")
+            )
+            val report = api.reportPartnerProgramAbuse(
+                programId = "prog-1",
+                request = ReportProgramAbuseRequest(
+                    reason = "SPAM_OU_ASSEDIO",
+                    details = "Mensagens repetidas fora do horário.",
+                    muteAlso = true
+                )
+            )
+            assertTrue(report.isSuccess)
+            assertEquals("rep-1", report.reportId)
+            assertEquals("prog-1", report.programId)
+            assertTrue(report.muted)
+            val req = server.takeRequest()
+            assertEquals("POST", req.method)
+            assertEquals("/api/b2b/enrollments/prog-1/report", req.path)
+            assertTrue(req.body.readUtf8().contains("SPAM_OU_ASSEDIO"))
         }
     }
 }
