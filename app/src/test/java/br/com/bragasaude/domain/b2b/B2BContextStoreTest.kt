@@ -493,4 +493,18 @@ class B2BContextStoreTest {
         assertNull(B2BOnboardingValidator.findDirectMessageValidationError("Posso tirar uma dúvida de horário?"))
         assertEquals(DirectMessageSenderRole.AI_RECEPTIONIST, DirectMessageSenderRole.fromWire("ai_receptionist"))
     }
+
+    @Test
+    fun b2b20bThreadHandlingModeParsesStatesAccurately() {
+        assertEquals(ThreadHandlingMode.AI_ACTIVE, ThreadHandlingMode.fromWire(null))
+        assertEquals(ThreadHandlingMode.HUMAN_ACTIVE, ThreadHandlingMode.fromWire("human_active"))
+        assertEquals(ThreadHandlingMode.WAITING_HUMAN, ThreadHandlingMode.fromWire("WAITING_HUMAN"))
+        val page = DirectChatThreadPageDto(
+            programId = "p1",
+            aiReceptionistEnabled = true,
+            aiPaused = true
+        )
+        assertTrue(page.aiReceptionistEnabled)
+        assertTrue(page.aiPaused)
+    }
 }
