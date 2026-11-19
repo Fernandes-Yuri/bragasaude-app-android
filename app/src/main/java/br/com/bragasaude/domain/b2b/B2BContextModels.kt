@@ -3,8 +3,8 @@ package br.com.bragasaude.domain.b2b
 import kotlinx.serialization.Serializable
 
 /**
- * Modelos de contexto B2C / B2B em Kotlin puro (prontos para KMP / iOS).
- * Zero dependencia de classes Android ou Room.
+ * Modelos de contexto B2C / B2B e onboarding empresarial em Kotlin puro
+ * (prontos para KMP / iOS). Zero dependencia de classes Android ou Room.
  */
 @Serializable
 enum class AppContextMode {
@@ -18,6 +18,27 @@ enum class AppContextMode {
                 "PARTNER_OWNER" -> PARTNER_OWNER
                 "PARTNER_PARTICIPANT" -> PARTNER_PARTICIPANT
                 else -> PERSONAL
+            }
+        }
+    }
+}
+
+@Serializable
+enum class PartnerApprovalStatus(val labelPtBr: String) {
+    DRAFT("Em preparação"),
+    PENDING_REVIEW("Em análise"),
+    CHANGES_REQUESTED("Ajustes solicitados"),
+    APPROVED("Empresa aprovada"),
+    REJECTED("Cadastro recusado");
+
+    companion object {
+        fun fromWire(raw: String?): PartnerApprovalStatus {
+            return when (raw?.trim()?.uppercase()) {
+                "PENDING_REVIEW" -> PENDING_REVIEW
+                "CHANGES_REQUESTED" -> CHANGES_REQUESTED
+                "APPROVED" -> APPROVED
+                "REJECTED" -> REJECTED
+                else -> DRAFT
             }
         }
     }
@@ -74,3 +95,119 @@ data class SelectB2BContextRequest(
 data class SelectB2BContextEnvelope(
     val activeContext: B2BContextDescriptor
 )
+
+@Serializable
+data class PartnerProgramDto(
+    val programId: String,
+    val ownerUserId: String,
+    val companyName: String,
+    val programName: String,
+    val cnpj: String? = null,
+    val primaryColor: String = B2BOnboardingValidator.DEFAULT_PRIMARY_COLOR,
+    val logoUrl: String? = null,
+    val approvalStatus: String = PartnerApprovalStatus.DRAFT.name,
+    val reviewNote: String? = null,
+    val inviteCode: String? = null,
+    val invitePaused: Boolean = false,
+    val seatLimit: Int = 10,
+    val activeParticipants: Int = 0,
+    val canPromote: Boolean = false
+) {
+    val parsedStatus: PartnerApprovalStatus
+        get() = PartnerApprovalStatus.fromWire(approvalStatus)
+}
+
+@Serializable
+data class UpsertPartnerProgramRequest(
+    val companyName: String,
+    val programName: String,
+    val cnpj: String? = null,
+    val primaryColor: String = B2BOnboardingValidator.DEFAULT_PRIMARY_COLOR,
+    val logoUrl: String? = null
+)
+
+@Serializable
+data class PartnerInvitePreviewDto(
+    val programId: String,
+    val companyName: String,
+    val programName: String,
+    val primaryColor: String = B2BOnboardingValidator.DEFAULT_PRIMARY_COLOR,
+    val logoUrl: String? = null,
+    val inviteCode: String,
+    val invitePaused: Boolean = false,
+    val hasAvailableSeats: Boolean = true
+)
+
+object B2BOnboardingValidator {
+    const val DEFAULT_PRIMARY_COLOR = "#1A6B5C"
+    const val REFERENCE_SUBTITLE =
+        "Um espaço com a sua marca, dentro do Braga Saúde. Personalize nome, cor e logo sobre os recursos da base comum."
+
+    val PRESET_COLORS = listOf(
+        "#1A6B5C",
+        "#0F4C81",
+        "#2563EB",
+        "#7C3AED",
+        "#B45309",
+        "#BE123C"
+    )
+
+    private val HEX_COLOR_REGEX = Regex("^#[0-9A-Fa-f]{6}$")
+    private val INVITE_CODE_REGEX = Regex("^[A-Za-z0-9_-]{3,32}$")
+
+    fun isValidHexColor(raw: String?): Boolean {
+        if (raw.isNullOrBlank()) return false
+        return HEX_COLOR_REGEX.matches(raw.trim())
+    }
+
+    fun normalizeHexColorOrDefault(raw: String?): String {
+        val candidate = raw?.trim()?.uppercase().orEmpty()
+        return if (HEX_COLOR_REGEX.matches(candidate)) candidate else DEFAULT_PRIMARY_COLOR
+    }
+
+    fun extractCnpjDigits(raw: String?): String {
+        return raw.orEmpty().filter { it.isDigit() }
+    }
+
+    fun isValidCnpj(raw: String?): Boolean {
+        val digits = extractCnpjDigits(raw)
+        return digits.length == 14 && digits.toSet().size > 1
+    }
+
+    fun formatCnpjOrNull(raw: String?): String? {
+        val digits = extractCnpjDigits(raw)
+        if (digits.length != 14 || digits.toSet().size <= 1) return null
+        return "${digits.substring(0, 2)}.${digits.substring(2, 5)}.${digits.substring(5, 8)}/" +
+            "${digits.substring(8, 12)}-${digits.substring(12, 14)}"
+    }
+
+    fun isValidInviteCode(raw: String?): Boolean {
+        val clean = raw?.trim().orEmpty()
+        return INVITE_CODE_REGEX.matches(clean)
+    }
+
+    fun canSaveDraft(
+        companyName: String,
+        programName: String,
+        primaryColor: String,
+        cnpj: String? = null,
+        logoUrl: String? = null
+    ): Boolean {
+        val companyOk = companyName.trim().length in 2..160
+        val programOk = programName.trim().length in 2..120
+        val colorOk = isValidHexColor(primaryColor)
+        val cnpjOk = cnpj.isNullOrBlank() || isValidCnpj(cnpj)
+        val logoOk = logoUrl.isNullOrBlank() || (logoUrl.trim().startsWith("https://") && logoUrl.trim().length <= 512)
+        return companyOk && programOk && colorOk && cnpjOk && logoOk
+    }
+
+    fun canSubmitForReview(
+        companyName: String,
+        programName: String,
+        cnpj: String?,
+        primaryColor: String,
+        logoUrl: String? = null
+    ): Boolean {
+        return canSaveDraft(companyName, programName, primaryColor, cnpj, logoUrl) && isValidCnpj(cnpj)
+    }
+}

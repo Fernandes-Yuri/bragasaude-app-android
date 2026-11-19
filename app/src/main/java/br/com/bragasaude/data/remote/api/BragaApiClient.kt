@@ -2516,4 +2516,111 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    // ---- Frente B2B (B2B-06 / B2B-07): Onboarding Empresarial & Previa de Convite ----
+
+    private fun parsePartnerProgramJson(obj: JSONObject?): br.com.bragasaude.domain.b2b.PartnerProgramDto? {
+        val p = obj ?: return null
+        val programId = p.optString("programId", "").takeIf { it.isNotBlank() } ?: return null
+        return br.com.bragasaude.domain.b2b.PartnerProgramDto(
+            programId = programId,
+            ownerUserId = p.optString("ownerUserId", ""),
+            companyName = p.optString("companyName", ""),
+            programName = p.optString("programName", ""),
+            cnpj = p.optString("cnpj", "").takeIf { it.isNotBlank() && it != "null" },
+            primaryColor = p.optString(
+                "primaryColor",
+                br.com.bragasaude.domain.b2b.B2BOnboardingValidator.DEFAULT_PRIMARY_COLOR
+            ),
+            logoUrl = p.optString("logoUrl", "").takeIf { it.isNotBlank() && it != "null" },
+            approvalStatus = p.optString("approvalStatus", "DRAFT"),
+            reviewNote = p.optString("reviewNote", "").takeIf { it.isNotBlank() && it != "null" },
+            inviteCode = p.optString("inviteCode", "").takeIf { it.isNotBlank() && it != "null" },
+            invitePaused = p.optBoolean("invitePaused", false),
+            seatLimit = p.optInt("seatLimit", 10),
+            activeParticipants = p.optInt("activeParticipants", 0),
+            canPromote = p.optBoolean("canPromote", false)
+        )
+    }
+
+    suspend fun getMyPartnerProgram(): br.com.bragasaude.domain.b2b.PartnerProgramDto? =
+        withContext(Dispatchers.IO) {
+            try {
+                val res = getJson("$baseUrl/api/b2b/program/me") ?: return@withContext null
+                parsePartnerProgramJson(res.optJSONObject("program"))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Falha ao consultar programa B2B: ${e.message}")
+                null
+            }
+        }
+
+    suspend fun saveMyPartnerProgram(
+        request: br.com.bragasaude.domain.b2b.UpsertPartnerProgramRequest
+    ): br.com.bragasaude.domain.b2b.PartnerProgramDto? = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("companyName", request.companyName.trim())
+                put("programName", request.programName.trim())
+                put("primaryColor", request.primaryColor.trim())
+                if (!request.cnpj.isNullOrBlank()) put("cnpj", request.cnpj.trim())
+                if (!request.logoUrl.isNullOrBlank()) put("logoUrl", request.logoUrl.trim())
+            }
+            val res = postJson("$baseUrl/api/b2b/program/me", payload) ?: return@withContext null
+            parsePartnerProgramJson(res.optJSONObject("program"))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao salvar programa B2B: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun submitMyPartnerProgram(): br.com.bragasaude.domain.b2b.PartnerProgramDto? =
+        withContext(Dispatchers.IO) {
+            try {
+                val res = postJson("$baseUrl/api/b2b/program/me/submit", JSONObject())
+                    ?: return@withContext null
+                parsePartnerProgramJson(res.optJSONObject("program"))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Falha ao enviar programa B2B para análise: ${e.message}")
+                null
+            }
+        }
+
+    suspend fun lookupPartnerInvitePreview(
+        rawCode: String
+    ): br.com.bragasaude.domain.b2b.PartnerInvitePreviewDto? = withContext(Dispatchers.IO) {
+        try {
+            val code = rawCode.trim().uppercase()
+            if (!br.com.bragasaude.domain.b2b.B2BOnboardingValidator.isValidInviteCode(code)) {
+                return@withContext null
+            }
+            val res = getJson("$baseUrl/api/b2b/invite/$code") ?: return@withContext null
+            val inv = res.optJSONObject("invite") ?: return@withContext null
+            val programId = inv.optString("programId", "").takeIf { it.isNotBlank() }
+                ?: return@withContext null
+            br.com.bragasaude.domain.b2b.PartnerInvitePreviewDto(
+                programId = programId,
+                companyName = inv.optString("companyName", ""),
+                programName = inv.optString("programName", ""),
+                primaryColor = inv.optString(
+                    "primaryColor",
+                    br.com.bragasaude.domain.b2b.B2BOnboardingValidator.DEFAULT_PRIMARY_COLOR
+                ),
+                logoUrl = inv.optString("logoUrl", "").takeIf { it.isNotBlank() && it != "null" },
+                inviteCode = inv.optString("inviteCode", code),
+                invitePaused = inv.optBoolean("invitePaused", false),
+                hasAvailableSeats = inv.optBoolean("hasAvailableSeats", true)
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao buscar convite B2B: ${e.message}")
+            null
+        }
+    }
+
 }

@@ -83,6 +83,7 @@ fun ProfileDetailScreen(
     val scope = rememberCoroutineScope()
     var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
     var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
+    var showPartnerProgramSheet by rememberSaveable { mutableStateOf(false) }
     var showAvatarDialog by remember { mutableStateOf(false) }
     var showGooglePhotoConfirm by remember { mutableStateOf(false) }
     val communityNickname by profileViewModel.communityNickname.collectAsState()
@@ -327,6 +328,23 @@ fun ProfileDetailScreen(
                     Text("Fechar")
                 }
             }
+        )
+    }
+
+    val b2bPrefs = remember {
+        context.getSharedPreferences("braga_prefs", android.content.Context.MODE_PRIVATE)
+    }
+    LaunchedEffect(Unit) {
+        if (b2bPrefs.getBoolean("pending_b2b_company_onboarding", false)) {
+            b2bPrefs.edit().putBoolean("pending_b2b_company_onboarding", false).apply()
+            showPartnerProgramSheet = true
+        }
+    }
+
+    if (showPartnerProgramSheet) {
+        br.com.bragasaude.ui.b2b.PartnerProgramOnboardingSheet(
+            apiClient = profileViewModel.partnerApiClient(),
+            onDismiss = { showPartnerProgramSheet = false }
         )
     }
 
@@ -827,6 +845,13 @@ fun ProfileDetailScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column {
+                        SettingsItem(
+                            title = "Programa para minha empresa",
+                            subtitle = "Personalizar nome, cor, logo e acompanhar aprovação.",
+                            icon = Icons.Default.Star,
+                            onClick = { showPartnerProgramSheet = true }
+                        )
+                        HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
                         SettingsItem(
                             title = "Sair da Conta",
                             subtitle = "Encerrar sessão no dispositivo atual.",

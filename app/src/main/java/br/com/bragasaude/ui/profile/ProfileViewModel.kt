@@ -538,4 +538,6 @@ class ProfileViewModel @Inject constructor(
     // Alias retrocompatível
     fun resetProfile(onComplete: () -> Unit) = deleteProfile(onComplete)
 
+    fun partnerApiClient(): BragaApiClient = apiClient
+
 }
