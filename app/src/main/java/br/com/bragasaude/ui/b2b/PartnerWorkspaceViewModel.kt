@@ -19,6 +19,8 @@ import br.com.bragasaude.domain.b2b.UpdateExperienceRequest
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -60,9 +62,26 @@ class PartnerWorkspaceViewModel @Inject constructor(
     private val _participants = MutableStateFlow<List<PartnerParticipantItemDto>>(emptyList())
     val participants: StateFlow<List<PartnerParticipantItemDto>> = _participants.asStateFlow()
 
+    private val _walletQuery = MutableStateFlow("")
+    val walletQuery: StateFlow<String> = _walletQuery.asStateFlow()
+
+    private val _walletCategoryFilter = MutableStateFlow<String?>(null)
+    val walletCategoryFilter: StateFlow<String?> = _walletCategoryFilter.asStateFlow()
+
+    private val _walletAttentionOnly = MutableStateFlow(false)
+    val walletAttentionOnly: StateFlow<Boolean> = _walletAttentionOnly.asStateFlow()
+
+    private val _isFilteringParticipants = MutableStateFlow(false)
+    val isFilteringParticipants: StateFlow<Boolean> = _isFilteringParticipants.asStateFlow()
+
+    private var walletFilterJob: Job? = null
+
     private val _nextCursor = MutableStateFlow<String?>(null)
     private val _hasMore = MutableStateFlow(false)
     val hasMore: StateFlow<Boolean> = _hasMore.asStateFlow()
+
+    private val _selectedParticipantItem = MutableStateFlow<PartnerParticipantItemDto?>(null)
+    val selectedParticipantItem: StateFlow<PartnerParticipantItemDto?> = _selectedParticipantItem.asStateFlow()
 
     private val _selectedSummary = MutableStateFlow<ParticipantRoutineSummaryDto?>(null)
     val selectedSummary: StateFlow<ParticipantRoutineSummaryDto?> = _selectedSummary.asStateFlow()
@@ -97,6 +116,52 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     fun clearSelectedSummary() {
         _selectedSummary.value = null
+        _selectedParticipantItem.value = null
+    }
+
+    fun updateWalletQuery(query: String) {
+        val clipped = query.take(80)
+        if (_walletQuery.value == clipped) return
+        _walletQuery.value = clipped
+        scheduleWalletReload(debounceMs = 280L)
+    }
+
+    fun selectWalletCategoryFilter(category: String?) {
+        val normalized = category?.trim()?.takeIf { it.isNotBlank() }
+        val next = if (_walletCategoryFilter.value == normalized) null else normalized
+        _walletCategoryFilter.value = next
+        scheduleWalletReload(debounceMs = 0L)
+    }
+
+    fun toggleWalletAttentionOnly() {
+        _walletAttentionOnly.value = !_walletAttentionOnly.value
+        scheduleWalletReload(debounceMs = 0L)
+    }
+
+    fun clearWalletFilters() {
+        if (_walletQuery.value.isEmpty() && _walletCategoryFilter.value == null && !_walletAttentionOnly.value) {
+            return
+        }
+        _walletQuery.value = ""
+        _walletCategoryFilter.value = null
+        _walletAttentionOnly.value = false
+        scheduleWalletReload(debounceMs = 0L)
+    }
+
+    private fun scheduleWalletReload(debounceMs: Long) {
+        walletFilterJob?.cancel()
+        walletFilterJob = viewModelScope.launch {
+            if (debounceMs > 0L) delay(debounceMs)
+            _isFilteringParticipants.value = true
+            val page = fetchParticipantsPage(cursor = null)
+            if (page != null) {
+                page.program?.let { _programInfo.value = it }
+                _participants.value = page.participants
+                _nextCursor.value = page.nextCursor
+                _hasMore.value = page.hasMore
+            }
+            _isFilteringParticipants.value = false
+        }
     }
 
     fun refreshWorkspace() {
@@ -125,7 +190,12 @@ class PartnerWorkspaceViewModel @Inject constructor(
         val uid = auth.currentUser?.uid ?: return
         viewModelScope.launch {
             _isLoading.value = true
+            walletFilterJob?.cancel()
+            _walletQuery.value = ""
+            _walletCategoryFilter.value = null
+            _walletAttentionOnly.value = false
             _selectedSummary.value = null
+            _selectedParticipantItem.value = null
             val selected = b2bContextRepository.selectContext(uid, target)
             if (selected == null) {
                 _statusMessage.value = "Não foi possível alternar de contexto agora."
@@ -136,6 +206,14 @@ class PartnerWorkspaceViewModel @Inject constructor(
         }
     }
 
+    private suspend fun fetchParticipantsPage(cursor: String?) = apiClient.getMyPartnerParticipants(
+        cursor = cursor,
+        limit = 20,
+        query = _walletQuery.value,
+        category = _walletCategoryFilter.value,
+        attentionOnly = _walletAttentionOnly.value
+    )
+
     private suspend fun reloadModeData() {
         val active = activeContextStore.activeContext.value
         if (active.parsedMode == AppContextMode.PARTNER_OWNER) {
@@ -144,7 +222,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
                 _templates.value = apiClient.getProgramTemplates()
             }
             if (active.approvalStatus == "APPROVED" || _programInfo.value?.approvalStatus == "APPROVED") {
-                val page = apiClient.getMyPartnerParticipants(cursor = null, limit = 20)
+                val page = fetchParticipantsPage(cursor = null)
                 if (page != null) {
                     page.program?.let { _programInfo.value = it }
                     _participants.value = page.participants
@@ -167,7 +245,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
         val cursor = _nextCursor.value ?: return
         viewModelScope.launch {
             _isLoadingMore.value = true
-            val page = apiClient.getMyPartnerParticipants(cursor = cursor, limit = 20)
+            val page = fetchParticipantsPage(cursor = cursor)
             if (page != null) {
                 _participants.value = (_participants.value + page.participants)
                     .distinctBy { it.patientUserId }
@@ -181,6 +259,9 @@ class PartnerWorkspaceViewModel @Inject constructor(
     fun openParticipantSummary(patientId: String, days: Int = _selectedPeriodDays.value) {
         val clamped = days.coerceIn(1, 90)
         _selectedPeriodDays.value = clamped
+        _participants.value.firstOrNull { it.patientUserId == patientId }?.let { matched ->
+            _selectedParticipantItem.value = matched
+        }
         viewModelScope.launch {
             _isLoadingSummary.value = true
             val summary = apiClient.getPartnerParticipantSummary(patientId, clamped)
@@ -207,6 +288,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
                 }
                 if (_selectedSummary.value?.patientUserId == cleanId) {
                     _selectedSummary.value = null
+                    _selectedParticipantItem.value = null
                 }
                 _statusMessage.value = "Vínculo encerrado. A vaga foi liberada na sua franquia."
             } else {

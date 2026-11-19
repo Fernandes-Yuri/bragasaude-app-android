@@ -388,6 +388,12 @@ data class PartnerParticipantItemDto(
     val patientUserId: String,
     val displayName: String,
     val sharedCategories: List<String> = emptyList(),
+    val effectiveCategories: List<String> = emptyList(),
+    val missingProgramCategories: List<String> = emptyList(),
+    val familySupportActive: Boolean = false,
+    val familySupportSummary: String? = null,
+    val pendingAppointmentsCount: Int = 0,
+    val unreadDirectMessagesCount: Int = 0,
     val consentedAt: String? = null
 )
 
@@ -478,10 +484,19 @@ data class SharedVitalEntryDto(
 )
 
 @Serializable
+data class SharedBiometryEntryDto(
+    val measuredAt: String,
+    val weightKg: Double,
+    val heightM: Double? = null,
+    val imc: Double? = null
+)
+
+@Serializable
 data class SharedAuthorizedRecordsSectionDto(
     val source: String,
     val zeroFileEgressNotice: String,
-    val records: List<SharedVitalEntryDto> = emptyList()
+    val records: List<SharedVitalEntryDto> = emptyList(),
+    val biometries: List<SharedBiometryEntryDto> = emptyList()
 )
 
 @Serializable
@@ -493,6 +508,8 @@ data class ParticipantRoutineSummaryDto(
     val participantName: String,
     val periodDays: Int,
     val sharedCategories: List<String> = emptyList(),
+    val familySupportActive: Boolean = false,
+    val familySupportSummary: String? = null,
     val stepsSection: SharedStepsSectionDto? = null,
     val hydrationSection: SharedHydrationSectionDto? = null,
     val medicationsSection: SharedMedicationsSectionDto? = null,
