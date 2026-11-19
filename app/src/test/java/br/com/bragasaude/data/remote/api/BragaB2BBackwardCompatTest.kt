@@ -261,6 +261,123 @@ class BragaB2BBackwardCompatTest {
             val uploadFail = api.uploadPartnerLogo("bad.svg", "image/svg+xml", "<svg/>".toByteArray())
             assertTrue(!uploadFail.isSuccess)
             assertEquals("SVG não é permitido.", uploadFail.errorDetail)
+            assertEquals("/api/b2b/program/me/logo", server.takeRequest().path)
+
+            // B2B-09B: submit Auto-KYB Verde, bloqueio 422 Vermelho, upload e remocao de comprovante
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "kybDecision": "GREEN",
+                      "flags": [],
+                      "requiresManualProof": false,
+                      "program": {
+                        "programId": "11111111-1111-1111-1111-111111111111",
+                        "ownerUserId": "owner-a",
+                        "companyName": "Clinica Horizonte Ltda",
+                        "programName": "Cuidado Cardio",
+                        "cnpj": "12.345.678/0001-95",
+                        "primaryColor": "#0F4C81",
+                        "approvalStatus": "APPROVED",
+                        "inviteCode": "CARD-4F9A",
+                        "responsibleCpfMasked": "***.982.247-**",
+                        "autoKybStatus": "GREEN"
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val submitOk = api.submitMyPartnerProgramKyb(
+                termsAccepted = true,
+                termsVersion = "B2B-V1-2026",
+                responsibleCpf = "529.982.247-25"
+            )
+            assertTrue(submitOk.isSuccess)
+            assertEquals("GREEN", submitOk.kybDecision)
+            assertEquals("APPROVED", submitOk.program?.approvalStatus)
+            assertEquals("***.982.247-**", submitOk.program?.responsibleCpfMasked)
+            val submitReq = server.takeRequest()
+            assertEquals("/api/b2b/program/me/submit", submitReq.path)
+            assertTrue(submitReq.body.readUtf8().contains("B2B-V1-2026"))
+
+            server.enqueue(
+                MockResponse().setResponseCode(422).setBody(
+                    """
+                    {
+                      "detail": "Cadastro bloqueado: CNPJ BAIXADA na Receita Federal.",
+                      "kybDecision": "RED",
+                      "flags": ["CNPJ_INACTIVE:BAIXADA"]
+                    }
+                    """.trimIndent()
+                )
+            )
+            val submitRed = api.submitMyPartnerProgramKyb()
+            assertTrue(!submitRed.isSuccess)
+            assertEquals("RED", submitRed.kybDecision)
+            assertEquals(listOf("CNPJ_INACTIVE:BAIXADA"), submitRed.flags)
+            assertEquals("/api/b2b/program/me/submit", server.takeRequest().path)
+
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "proofId": "proof-1",
+                      "program": {
+                        "programId": "11111111-1111-1111-1111-111111111111",
+                        "ownerUserId": "owner-a",
+                        "companyName": "Clinica Horizonte Ltda",
+                        "programName": "Cuidado Cardio",
+                        "approvalStatus": "PENDING_REVIEW",
+                        "proofDocuments": [
+                          {
+                            "id": "proof-1",
+                            "docType": "CARTAO_CNPJ_CCMEI",
+                            "fileName": "comprovante.pdf",
+                            "contentType": "application/pdf",
+                            "sizeBytes": 1024,
+                            "uploadedAt": "2026-11-19T18:00:00Z"
+                          }
+                        ]
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val proofUp = api.uploadPartnerProof(
+                docType = "CARTAO_CNPJ_CCMEI",
+                fileName = "comprovante.pdf",
+                mimeType = "application/pdf",
+                bytes = "%PDF-1.4\n...".toByteArray()
+            )
+            assertTrue(proofUp.isSuccess)
+            assertEquals("proof-1", proofUp.proofId)
+            assertEquals(1, proofUp.program?.proofDocuments?.size)
+            val proofUpReq = server.takeRequest()
+            assertEquals("/api/b2b/program/me/proofs", proofUpReq.path)
+            assertTrue(proofUpReq.body.readUtf8().contains("CARTAO_CNPJ_CCMEI"))
+
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "program": {
+                        "programId": "11111111-1111-1111-1111-111111111111",
+                        "ownerUserId": "owner-a",
+                        "companyName": "Clinica Horizonte Ltda",
+                        "programName": "Cuidado Cardio",
+                        "approvalStatus": "PENDING_REVIEW",
+                        "proofDocuments": []
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val proofDel = api.deletePartnerProof("proof-1")
+            assertTrue(proofDel.isSuccess)
+            assertEquals(0, proofDel.program?.proofDocuments?.size)
+            val proofDelReq = server.takeRequest()
+            assertEquals("/api/b2b/program/me/proofs/proof-1", proofDelReq.path)
+            assertEquals("DELETE", proofDelReq.method)
         }
     }
 }

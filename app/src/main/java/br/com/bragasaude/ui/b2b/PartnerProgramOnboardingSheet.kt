@@ -17,6 +17,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -27,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,6 +56,7 @@ fun PartnerProgramOnboardingSheet(
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
     var isUploadingLogo by remember { mutableStateOf(false) }
+    var isUploadingProof by remember { mutableStateOf(false) }
     var existingProgram by remember { mutableStateOf<PartnerProgramDto?>(null) }
 
     var companyName by rememberSaveable { mutableStateOf("") }
@@ -63,15 +68,107 @@ fun PartnerProgramOnboardingSheet(
     var logoUrl by rememberSaveable { mutableStateOf("") }
     var showManualLogoUrl by rememberSaveable { mutableStateOf(false) }
 
+    var templateKey by rememberSaveable { mutableStateOf("CLINICA_GERAL") }
+    var responsibleName by rememberSaveable { mutableStateOf("") }
+    var responsibleCpf by rememberSaveable { mutableStateOf("") }
+    var responsibleRole by rememberSaveable { mutableStateOf("SOCIO_TITULAR") }
+    var responsiblePhone by rememberSaveable { mutableStateOf("") }
+    var city by rememberSaveable { mutableStateOf("") }
+    var stateUf by rememberSaveable { mutableStateOf("") }
+    var councilType by rememberSaveable { mutableStateOf("") }
+    var councilNumber by rememberSaveable { mutableStateOf("") }
+    var councilUf by rememberSaveable { mutableStateOf("") }
+    var termsAccepted by rememberSaveable { mutableStateOf(false) }
+
+    var selectedProofDocType by rememberSaveable { mutableStateOf("CARTAO_CNPJ_CCMEI") }
+    var kybDecisionBanner by rememberSaveable { mutableStateOf<String?>(null) }
+    var kybFlagsBanner by remember { mutableStateOf<List<String>>(emptyList()) }
+    var kybErrorDetail by remember { mutableStateOf<String?>(null) }
+
+    fun syncFromLoadedProgram(prog: PartnerProgramDto) {
+        existingProgram = prog
+        companyName = prog.companyName
+        programName = prog.programName
+        cnpj = prog.cnpj.orEmpty()
+        primaryColor = B2BOnboardingValidator.normalizeHexColorOrDefault(prog.primaryColor)
+        logoUrl = prog.logoUrl.orEmpty()
+        templateKey = prog.templateKey.ifBlank { "CLINICA_GERAL" }
+        responsibleName = prog.responsibleName.orEmpty()
+        responsibleRole = prog.responsibleRole.orEmpty().ifBlank { "SOCIO_TITULAR" }
+        responsiblePhone = prog.responsiblePhone.orEmpty()
+        city = prog.city.orEmpty()
+        stateUf = prog.state.orEmpty()
+        councilType = prog.councilType.orEmpty()
+        councilNumber = prog.councilNumber.orEmpty()
+        councilUf = prog.councilUf.orEmpty()
+        if (!prog.termsAcceptedAt.isNullOrBlank()) {
+            termsAccepted = true
+        }
+        kybDecisionBanner = prog.autoKybStatus
+        kybFlagsBanner = prog.autoKybFlags
+    }
+
+    fun buildUpsertRequest(): UpsertPartnerProgramRequest {
+        val cleanCouncilType = councilType.trim().uppercase().takeIf { it.isNotBlank() }
+        val cleanCouncilNum = councilNumber.trim().takeIf { it.isNotBlank() }
+        val cleanCouncilUf = councilUf.trim().uppercase().takeIf { it.isNotBlank() }
+        return UpsertPartnerProgramRequest(
+            companyName = companyName,
+            programName = programName,
+            cnpj = B2BOnboardingValidator.formatCnpjOrNull(cnpj),
+            primaryColor = B2BOnboardingValidator.normalizeHexColorOrDefault(primaryColor),
+            logoUrl = logoUrl.trim().takeIf { it.isNotBlank() },
+            templateKey = templateKey,
+            responsibleName = responsibleName.trim().takeIf { it.isNotBlank() },
+            responsibleCpf = B2BOnboardingValidator.formatCpfOrNull(responsibleCpf),
+            responsibleRole = responsibleRole.trim().takeIf { it.isNotBlank() },
+            responsiblePhone = responsiblePhone.trim().takeIf { it.isNotBlank() },
+            councilType = cleanCouncilType,
+            councilNumber = cleanCouncilNum,
+            councilUf = cleanCouncilUf,
+            city = city.trim().takeIf { it.isNotBlank() },
+            state = stateUf.trim().uppercase().takeIf { it.isNotBlank() },
+            termsAccepted = if (termsAccepted) true else null,
+            termsVersion = if (termsAccepted) B2BOnboardingValidator.TERMS_VERSION_CURRENT else null
+        )
+    }
+
+    suspend fun ensureProgramDraftExists(): PartnerProgramDto? {
+        existingProgram?.let { return it }
+        if (!B2BOnboardingValidator.canSaveDraft(
+                companyName = companyName,
+                programName = programName,
+                primaryColor = primaryColor,
+                cnpj = cnpj.takeIf { it.isNotBlank() },
+                logoUrl = null
+            )
+        ) {
+            Toast.makeText(
+                context,
+                "Informe primeiro o nome da empresa e do programa.",
+                Toast.LENGTH_LONG
+            ).show()
+            return null
+        }
+        val createdRes = apiClient.saveMyPartnerProgramDetailed(
+            buildUpsertRequest().copy(logoUrl = null)
+        )
+        if (!createdRes.isSuccess) {
+            Toast.makeText(
+                context,
+                createdRes.errorDetail ?: "Salve o rascunho antes de anexar arquivos.",
+                Toast.LENGTH_LONG
+            ).show()
+            return null
+        }
+        createdRes.program?.let { existingProgram = it }
+        return createdRes.program
+    }
+
     LaunchedEffect(Unit) {
         val loaded = apiClient.getMyPartnerProgram()
         if (loaded != null) {
-            existingProgram = loaded
-            companyName = loaded.companyName
-            programName = loaded.programName
-            cnpj = loaded.cnpj.orEmpty()
-            primaryColor = B2BOnboardingValidator.normalizeHexColorOrDefault(loaded.primaryColor)
-            logoUrl = loaded.logoUrl.orEmpty()
+            syncFromLoadedProgram(loaded)
         }
         isLoading = false
     }
@@ -80,46 +177,11 @@ fun PartnerProgramOnboardingSheet(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         val picked = uri ?: return@rememberLauncherForActivityResult
-        if (isUploadingLogo || isSaving) return@rememberLauncherForActivityResult
+        if (isUploadingLogo || isUploadingProof || isSaving) return@rememberLauncherForActivityResult
         isUploadingLogo = true
         scope.launch {
             try {
-                if (existingProgram == null) {
-                    val draftReady = B2BOnboardingValidator.canSaveDraft(
-                        companyName = companyName,
-                        programName = programName,
-                        primaryColor = primaryColor,
-                        cnpj = cnpj.takeIf { it.isNotBlank() },
-                        logoUrl = null
-                    )
-                    if (!draftReady) {
-                        Toast.makeText(
-                            context,
-                            "Informe primeiro o nome da empresa e do programa para enviar a logo.",
-                            Toast.LENGTH_LONG
-                        ).show()
-                        return@launch
-                    }
-                    val created = apiClient.saveMyPartnerProgram(
-                        UpsertPartnerProgramRequest(
-                            companyName = companyName,
-                            programName = programName,
-                            cnpj = B2BOnboardingValidator.formatCnpjOrNull(cnpj),
-                            primaryColor = B2BOnboardingValidator.normalizeHexColorOrDefault(primaryColor),
-                            logoUrl = null
-                        )
-                    )
-                    if (created == null) {
-                        Toast.makeText(
-                            context,
-                            "Salve o rascunho antes de enviar a logo.",
-                            Toast.LENGTH_LONG
-                        ).show()
-                        return@launch
-                    }
-                    existingProgram = created
-                }
-
+                if (ensureProgramDraftExists() == null) return@launch
                 val prepared = B2BLogoMediaHelper.prepareFromUri(context, picked)
                 val uploaded = apiClient.uploadPartnerLogo(
                     fileName = prepared.fileName,
@@ -128,7 +190,7 @@ fun PartnerProgramOnboardingSheet(
                 )
                 if (uploaded.isSuccess) {
                     logoUrl = uploaded.logoUrl.orEmpty()
-                    uploaded.program?.let { existingProgram = it }
+                    uploaded.program?.let { syncFromLoadedProgram(it) }
                     Toast.makeText(
                         context,
                         "Logo enviada e armazenada com segurança!",
@@ -151,6 +213,51 @@ fun PartnerProgramOnboardingSheet(
                 ).show()
             } finally {
                 isUploadingLogo = false
+            }
+        }
+    }
+
+    val proofPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        val picked = uri ?: return@rememberLauncherForActivityResult
+        if (isUploadingProof || isUploadingLogo || isSaving) return@rememberLauncherForActivityResult
+        isUploadingProof = true
+        scope.launch {
+            try {
+                if (ensureProgramDraftExists() == null) return@launch
+                val prepared = B2BLogoMediaHelper.prepareProofFromUri(context, picked)
+                val uploaded = apiClient.uploadPartnerProof(
+                    docType = selectedProofDocType,
+                    fileName = prepared.fileName,
+                    mimeType = prepared.mimeType,
+                    bytes = prepared.bytes
+                )
+                if (uploaded.isSuccess && uploaded.program != null) {
+                    syncFromLoadedProgram(uploaded.program)
+                    kybErrorDetail = null
+                    Toast.makeText(
+                        context,
+                        "Comprovante privado enviado para revisão.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        context,
+                        uploaded.errorDetail ?: "Não foi possível enviar o comprovante.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Toast.makeText(
+                    context,
+                    e.message ?: "Não foi possível ler o arquivo selecionado.",
+                    Toast.LENGTH_LONG
+                ).show()
+            } finally {
+                isUploadingProof = false
             }
         }
     }
@@ -253,6 +360,127 @@ fun PartnerProgramOnboardingSheet(
                             text = "${companyName.ifBlank { "Sua empresa" }} · Tecnologia Braga Saúde",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            if (!kybErrorDetail.isNullOrBlank()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Validação cadastral recusada",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            text = kybErrorDetail.orEmpty(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+
+            if (status == PartnerApprovalStatus.SUSPENDED) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.75f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Programa suspenso temporariamente",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            text = existingProgram?.reviewNote?.takeIf { it.isNotBlank() }
+                                ?: "Os convites estão bloqueados até regularização pela equipe Braga.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+
+            if (status == PartnerApprovalStatus.APPROVED && kybDecisionBanner == "GREEN") {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFDCFCE7)
+                    ),
+                    border = BorderStroke(1.dp, Color(0xFF16A34A).copy(alpha = 0.45f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Aprovação automática concluída",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF166534)
+                        )
+                        Text(
+                            text = "CNPJ e responsável confirmados automaticamente na Receita Federal. Código de convite e placa de recepção liberados!",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF14532D)
+                        )
+                    }
+                }
+            }
+
+            if (kybFlagsBanner.isNotEmpty() &&
+                (status == PartnerApprovalStatus.PENDING_REVIEW || status == PartnerApprovalStatus.CHANGES_REQUESTED)
+            ) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFFEF3C7)
+                    ),
+                    border = BorderStroke(1.dp, Color(0xFFD97706).copy(alpha = 0.5f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Em análise pela equipe Braga",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF92400E)
+                        )
+                        kybFlagsBanner.forEach { flag ->
+                            Text(
+                                text = "• ${B2BOnboardingValidator.formatKybFlagPtBr(flag)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF78350F)
+                            )
+                        }
+                        Text(
+                            text = "Dica: anexe até 2 comprovantes privados abaixo (Cartão CNPJ/CCMEI, CRM/CRN ou carta de autorização) para acelerar a revisão.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF92400E)
                         )
                     }
                 }
@@ -420,10 +648,35 @@ fun PartnerProgramOnboardingSheet(
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             } else {
+                Text(
+                    text = "1. Perfil do programa",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(B2BOnboardingValidator.TEMPLATE_OPTIONS) { option ->
+                        FilterChip(
+                            selected = templateKey.equals(option.key, ignoreCase = true),
+                            onClick = { templateKey = option.key },
+                            label = { Text(option.labelPtBr) }
+                        )
+                    }
+                }
+
+                Text(
+                    text = "2. Identificação da empresa",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+
                 OutlinedTextField(
                     value = companyName,
                     onValueChange = { if (it.length <= 160) companyName = it },
-                    label = { Text("Nome da empresa ou clínica") },
+                    label = { Text("Razão social ou nome da empresa *") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp)
@@ -432,20 +685,216 @@ fun PartnerProgramOnboardingSheet(
                 OutlinedTextField(
                     value = programName,
                     onValueChange = { if (it.length <= 120) programName = it },
-                    label = { Text("Nome do programa (ex.: Cuidado Cardio)") },
+                    label = { Text("Nome do programa (ex.: Cuidado Cardio) *") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp)
                 )
 
+                val cnpjDigits = B2BOnboardingValidator.extractCnpjDigits(cnpj)
+                val cnpjLooksValid = B2BOnboardingValidator.isValidCnpj(cnpj)
                 OutlinedTextField(
                     value = cnpj,
                     onValueChange = { if (it.length <= 18) cnpj = it },
-                    label = { Text("CNPJ (14 dígitos — obrigatório para aprovação)") },
+                    label = { Text("CNPJ (14 dígitos — obrigatório, não aceita apenas CPF) *") },
                     singleLine = true,
+                    isError = cnpj.isNotBlank() && !cnpjLooksValid,
+                    supportingText = {
+                        when {
+                            cnpj.isBlank() -> Text("Validado automaticamente na Receita Federal.")
+                            cnpjDigits.length == 11 && !cnpjLooksValid -> Text("Informe um CNPJ válido (14 dígitos). CPFs são apenas para o responsável abaixo.")
+                            cnpjLooksValid -> Text("CNPJ válido para verificação oficial.")
+                            else -> Text("Confira os 14 dígitos e os dígitos verificadores do CNPJ.")
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = city,
+                        onValueChange = { if (it.length <= 96) city = it },
+                        label = { Text("Cidade *") },
+                        singleLine = true,
+                        modifier = Modifier.weight(0.68f),
+                        shape = RoundedCornerShape(14.dp)
+                    )
+                    val cleanUf = stateUf.trim().uppercase()
+                    OutlinedTextField(
+                        value = stateUf,
+                        onValueChange = { raw ->
+                            val clean = raw.filter { it.isLetter() }.uppercase().take(2)
+                            stateUf = clean
+                        },
+                        label = { Text("UF *") },
+                        singleLine = true,
+                        isError = cleanUf.isNotBlank() && cleanUf !in B2BOnboardingValidator.BR_UFS,
+                        modifier = Modifier.weight(0.32f),
+                        shape = RoundedCornerShape(14.dp),
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters)
+                    )
+                }
+
+                Text(
+                    text = "3. Responsável pelo programa",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+
+                OutlinedTextField(
+                    value = responsibleName,
+                    onValueChange = { if (it.length <= 160) responsibleName = it },
+                    label = { Text("Nome completo do responsável *") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                )
+
+                val cpfLooksValid = B2BOnboardingValidator.isValidCpf(responsibleCpf)
+                val savedMaskedCpf = existingProgram?.responsibleCpfMasked
+                OutlinedTextField(
+                    value = responsibleCpf,
+                    onValueChange = { raw ->
+                        if (raw.length <= 14) responsibleCpf = raw
+                    },
+                    label = { Text("CPF do responsável (somente conferência LGPD) *") },
+                    singleLine = true,
+                    isError = responsibleCpf.isNotBlank() && !cpfLooksValid,
+                    supportingText = {
+                        when {
+                            responsibleCpf.isNotBlank() && !cpfLooksValid ->
+                                Text("Informe um CPF com 11 dígitos válidos.")
+                            responsibleCpf.isBlank() && !savedMaskedCpf.isNullOrBlank() ->
+                                Text("CPF conferido salvo: $savedMaskedCpf (preencha só se quiser alterar).")
+                            else ->
+                                Text("Usado em memória apenas para conferir QSA/MEI na Receita Federal; nunca exibido a pacientes.")
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+
+                Text(
+                    text = "Vínculo / Cargo na empresa *",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(B2BOnboardingValidator.RESPONSIBLE_ROLE_OPTIONS) { roleOpt ->
+                        FilterChip(
+                            selected = responsibleRole.equals(roleOpt.key, ignoreCase = true),
+                            onClick = { responsibleRole = roleOpt.key },
+                            label = { Text(roleOpt.labelPtBr) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = responsiblePhone,
+                    onValueChange = { if (it.length <= 20) responsiblePhone = it },
+                    label = { Text("Telefone comercial / WhatsApp (com DDD) *") },
+                    singleLine = true,
+                    isError = responsiblePhone.isNotBlank() &&
+                        !B2BOnboardingValidator.isValidResponsiblePhone(responsiblePhone),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
+                )
+
+                val isAssistencial = B2BOnboardingValidator.isAssistencialTemplate(templateKey)
+                val councilLocked = status == PartnerApprovalStatus.APPROVED &&
+                    !existingProgram?.councilType.isNullOrBlank()
+                if (isAssistencial || councilType.isNotBlank() || councilNumber.isNotBlank()) {
+                    Text(
+                        text = if (isAssistencial) {
+                            "4. Registro no Conselho Profissional (recomendado para aprovação imediata)"
+                        } else {
+                            "4. Registro no Conselho Profissional (opcional)"
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = councilType.isBlank(),
+                                enabled = !councilLocked,
+                                onClick = {
+                                    councilType = ""
+                                    councilNumber = ""
+                                    councilUf = ""
+                                },
+                                label = { Text("Sem conselho") }
+                            )
+                        }
+                        items(B2BOnboardingValidator.COUNCIL_TYPE_OPTIONS) { ct ->
+                            FilterChip(
+                                selected = councilType.equals(ct, ignoreCase = true),
+                                enabled = !councilLocked,
+                                onClick = { councilType = ct },
+                                label = { Text(ct) }
+                            )
+                        }
+                    }
+                    if (councilType.isNotBlank()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = councilNumber,
+                                onValueChange = { if (it.length <= 24) councilNumber = it },
+                                enabled = !councilLocked,
+                                label = { Text("Número $councilType") },
+                                singleLine = true,
+                                modifier = Modifier.weight(0.68f),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            OutlinedTextField(
+                                value = councilUf,
+                                onValueChange = { raw ->
+                                    councilUf = raw.filter { it.isLetter() }.uppercase().take(2)
+                                },
+                                enabled = !councilLocked,
+                                label = { Text("UF") },
+                                singleLine = true,
+                                modifier = Modifier.weight(0.32f),
+                                shape = RoundedCornerShape(14.dp),
+                                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters)
+                            )
+                        }
+                    }
+                    if (councilLocked) {
+                        Text(
+                            text = "Registro profissional bloqueado após aprovação (contate o suporte para alterações).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else if (isAssistencial && councilType.isBlank()) {
+                        Text(
+                            text = "Sem conselho informado neste perfil assistencial, a solicitação entrará em revisão manual (bandeira amarela).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Text(
+                    text = "5. Identidade visual",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
                 )
 
                 Text(
@@ -594,12 +1043,150 @@ fun PartnerProgramOnboardingSheet(
                     }
                 }
 
-                Text(
-                    text = "Confirmar o e-mail não aprova a empresa. Os convites e a divulgação são liberados somente após análise da equipe Braga.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                val currentProofs = existingProgram?.proofDocuments.orEmpty()
+                if (status != PartnerApprovalStatus.APPROVED) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = "6. Comprovantes privados (opcional · até 2 PDF/imagem de 5 MB)",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Armazenados em cofre privado criptografado somente durante a análise e expurgados automaticamente após aprovação ou recusa.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
 
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(B2BOnboardingValidator.PROOF_DOC_TYPE_OPTIONS) { docOpt ->
+                                    FilterChip(
+                                        selected = selectedProofDocType == docOpt.key,
+                                        onClick = { selectedProofDocType = docOpt.key },
+                                        label = { Text(docOpt.labelPtBr) }
+                                    )
+                                }
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    proofPickerLauncher.launch(
+                                        arrayOf("application/pdf", "image/png", "image/jpeg", "image/webp")
+                                    )
+                                },
+                                enabled = currentProofs.size < 2 && !isUploadingProof && !isUploadingLogo && !isSaving,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                if (isUploadingProof) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Enviando comprovante seguro...")
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.UploadFile,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        if (currentProofs.size >= 2) "Limite de 2 comprovantes atingido"
+                                        else "Anexar comprovante (PDF ou imagem)"
+                                    )
+                                }
+                            }
+
+                            currentProofs.forEach { doc ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(MaterialTheme.colorScheme.surface)
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = doc.fileName,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "${doc.docType} · ${(doc.sizeBytes / 1024L).coerceAtLeast(1L)} KB",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            if (isSaving || isUploadingProof) return@IconButton
+                                            isSaving = true
+                                            scope.launch {
+                                                val res = apiClient.deletePartnerProof(doc.id)
+                                                isSaving = false
+                                                res.program?.let { syncFromLoadedProgram(it) }
+                                                Toast.makeText(
+                                                    context,
+                                                    if (res.isSuccess) "Comprovante removido."
+                                                    else (res.errorDetail ?: "Erro ao remover comprovante."),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        },
+                                        enabled = !isSaving && !isUploadingProof
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Remover comprovante",
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { termsAccepted = !termsAccepted }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Checkbox(
+                            checked = termsAccepted,
+                            onCheckedChange = { termsAccepted = it }
+                        )
+                        Text(
+                            text = "Declaro responsabilidade pelos dados acima e aceito os Termos B2B (${B2BOnboardingValidator.TERMS_VERSION_CURRENT}), o DPA LGPD e a Declaração Não-SaMD (bem-estar e acompanhamento sem diagnóstico clínico).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 10.dp)
+                        )
+                    }
+                }
+
+                val hasSavedCpf = !existingProgram?.responsibleCpfMasked.isNullOrBlank()
                 val canSave = B2BOnboardingValidator.canSaveDraft(
                     companyName = companyName,
                     programName = programName,
@@ -607,11 +1194,22 @@ fun PartnerProgramOnboardingSheet(
                     cnpj = cnpj.takeIf { it.isNotBlank() },
                     logoUrl = logoUrl.takeIf { it.isNotBlank() }
                 )
-                val canSubmit = B2BOnboardingValidator.canSubmitForReview(
+                val canSubmit = B2BOnboardingValidator.canSubmitKybForReview(
                     companyName = companyName,
                     programName = programName,
                     cnpj = cnpj,
                     primaryColor = primaryColor,
+                    responsibleName = responsibleName,
+                    responsibleCpf = responsibleCpf,
+                    cpfAlreadySaved = hasSavedCpf,
+                    responsibleRole = responsibleRole,
+                    responsiblePhone = responsiblePhone,
+                    city = city,
+                    state = stateUf,
+                    termsAccepted = termsAccepted,
+                    councilType = councilType.takeIf { it.isNotBlank() },
+                    councilNumber = councilNumber.takeIf { it.isNotBlank() },
+                    councilUf = councilUf.takeIf { it.isNotBlank() },
                     logoUrl = logoUrl.takeIf { it.isNotBlank() }
                 )
 
@@ -621,36 +1219,30 @@ fun PartnerProgramOnboardingSheet(
                 ) {
                     OutlinedButton(
                         onClick = {
-                            if (!canSave || isSaving || isUploadingLogo) return@OutlinedButton
+                            if (!canSave || isSaving || isUploadingLogo || isUploadingProof) return@OutlinedButton
                             isSaving = true
+                            kybErrorDetail = null
                             scope.launch {
-                                val saved = apiClient.saveMyPartnerProgram(
-                                    UpsertPartnerProgramRequest(
-                                        companyName = companyName,
-                                        programName = programName,
-                                        cnpj = B2BOnboardingValidator.formatCnpjOrNull(cnpj),
-                                        primaryColor = B2BOnboardingValidator.normalizeHexColorOrDefault(primaryColor),
-                                        logoUrl = logoUrl.trim().takeIf { it.isNotBlank() }
-                                    )
-                                )
+                                val savedRes = apiClient.saveMyPartnerProgramDetailed(buildUpsertRequest())
                                 isSaving = false
-                                if (saved != null) {
-                                    existingProgram = saved
+                                if (savedRes.isSuccess && savedRes.program != null) {
+                                    syncFromLoadedProgram(savedRes.program)
                                     Toast.makeText(
                                         context,
                                         "Preparação salva com sucesso.",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 } else {
+                                    kybErrorDetail = savedRes.errorDetail
                                     Toast.makeText(
                                         context,
-                                        "Não foi possível salvar agora. Verifique os dados e tente novamente.",
+                                        savedRes.errorDetail ?: "Não foi possível salvar agora.",
                                         Toast.LENGTH_LONG
                                     ).show()
                                 }
                             }
                         },
-                        enabled = canSave && !isSaving && !isUploadingLogo,
+                        enabled = canSave && !isSaving && !isUploadingLogo && !isUploadingProof,
                         modifier = Modifier.weight(1f).height(52.dp),
                         shape = RoundedCornerShape(14.dp)
                     ) {
@@ -659,39 +1251,52 @@ fun PartnerProgramOnboardingSheet(
 
                     Button(
                         onClick = {
-                            if (!canSubmit || isSaving || isUploadingLogo) return@Button
+                            if (!canSubmit || isSaving || isUploadingLogo || isUploadingProof) return@Button
                             isSaving = true
+                            kybErrorDetail = null
                             scope.launch {
-                                val saved = apiClient.saveMyPartnerProgram(
-                                    UpsertPartnerProgramRequest(
-                                        companyName = companyName,
-                                        programName = programName,
-                                        cnpj = B2BOnboardingValidator.formatCnpjOrNull(cnpj),
-                                        primaryColor = B2BOnboardingValidator.normalizeHexColorOrDefault(primaryColor),
-                                        logoUrl = logoUrl.trim().takeIf { it.isNotBlank() }
-                                    )
-                                )
-                                val submitted = if (saved != null) {
-                                    apiClient.submitMyPartnerProgram()
-                                } else null
-                                isSaving = false
-                                if (submitted != null) {
-                                    existingProgram = submitted
+                                val savedRes = apiClient.saveMyPartnerProgramDetailed(buildUpsertRequest())
+                                if (!savedRes.isSuccess || savedRes.program == null) {
+                                    isSaving = false
+                                    kybErrorDetail = savedRes.errorDetail
                                     Toast.makeText(
                                         context,
-                                        "Solicitação enviada para análise da equipe Braga!",
+                                        savedRes.errorDetail ?: "Verifique os dados informados.",
                                         Toast.LENGTH_LONG
                                     ).show()
+                                    return@launch
+                                }
+                                syncFromLoadedProgram(savedRes.program)
+                                val submitRes = apiClient.submitMyPartnerProgramKyb(
+                                    termsAccepted = termsAccepted,
+                                    termsVersion = B2BOnboardingValidator.TERMS_VERSION_CURRENT,
+                                    responsibleCpf = B2BOnboardingValidator.formatCpfOrNull(responsibleCpf)
+                                )
+                                isSaving = false
+                                if (submitRes.isSuccess && submitRes.program != null) {
+                                    syncFromLoadedProgram(submitRes.program)
+                                    kybDecisionBanner = submitRes.kybDecision
+                                    kybFlagsBanner = submitRes.flags
+                                    responsibleCpf = ""
+                                    val msg = if (submitRes.kybDecision == "GREEN") {
+                                        "Programa aprovado automaticamente!"
+                                    } else {
+                                        "Solicitação enviada para revisão da equipe Braga."
+                                    }
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                                 } else {
+                                    kybErrorDetail = submitRes.errorDetail
+                                    kybDecisionBanner = submitRes.kybDecision
+                                    kybFlagsBanner = submitRes.flags
                                     Toast.makeText(
                                         context,
-                                        "Verifique o CNPJ e os dados obrigatórios antes de enviar.",
+                                        submitRes.errorDetail ?: "Verifique os dados antes de enviar.",
                                         Toast.LENGTH_LONG
                                     ).show()
                                 }
                             }
                         },
-                        enabled = canSubmit && !isSaving && !isUploadingLogo && status != PartnerApprovalStatus.APPROVED,
+                        enabled = canSubmit && !isSaving && !isUploadingLogo && !isUploadingProof && status != PartnerApprovalStatus.APPROVED,
                         modifier = Modifier.weight(1f).height(52.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -700,8 +1305,8 @@ fun PartnerProgramOnboardingSheet(
                         )
                     ) {
                         Text(
-                            if (status == PartnerApprovalStatus.PENDING_REVIEW) "Reenviar análise"
-                            else "Enviar para aprovação",
+                            if (status == PartnerApprovalStatus.PENDING_REVIEW) "Revalidar dados"
+                            else "Validar e enviar",
                             fontWeight = FontWeight.Bold
                         )
                     }

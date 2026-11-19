@@ -247,4 +247,80 @@ class B2BContextStoreTest {
         }
         assertTrue(darkPixels in 1000..65000)
     }
+
+    @Test
+    fun `B2B-09B valida CNPJ mod-11, CPF mod-11, campos KYB e status SUSPENDED`() {
+        assertTrue(B2BOnboardingValidator.isValidCnpj("12.345.678/0001-95"))
+        assertTrue(B2BOnboardingValidator.isValidCnpj("11222333000181"))
+        assertFalse(B2BOnboardingValidator.isValidCnpj("12.345.678/0001-00"))
+        assertFalse(B2BOnboardingValidator.isValidCnpj("529.982.247-25"))
+
+        assertTrue(B2BOnboardingValidator.isValidCpf("529.982.247-25"))
+        assertEquals("529.982.247-25", B2BOnboardingValidator.formatCpfOrNull("52998224725"))
+        assertFalse(B2BOnboardingValidator.isValidCpf("529.982.247-00"))
+        assertFalse(B2BOnboardingValidator.isValidCpf("11111111111"))
+
+        assertEquals("Programa suspenso", PartnerApprovalStatus.fromWire("SUSPENDED").labelPtBr)
+        assertTrue(
+            B2BOnboardingValidator.formatKybFlagPtBr("OWNER_NOT_IN_QSA").contains("QSA")
+        )
+        assertEquals(7, B2BOnboardingValidator.TEMPLATE_OPTIONS.size)
+        assertTrue(B2BOnboardingValidator.isAssistencialTemplate("CLINICA_GERAL"))
+        assertTrue(B2BOnboardingValidator.isAssistencialTemplate("FISIO_REABILITACAO"))
+        assertFalse(B2BOnboardingValidator.isAssistencialTemplate("SAUDE_CORPORATIVA"))
+
+        assertTrue(
+            B2BOnboardingValidator.canSubmitKybForReview(
+                companyName = "Clinica Cardio Prime Ltda",
+                programName = "Cuidado Cardio",
+                cnpj = "12.345.678/0001-95",
+                primaryColor = "#1A6B5C",
+                responsibleName = "Joao Carlos Silva",
+                responsibleCpf = "52998224725",
+                cpfAlreadySaved = false,
+                responsibleRole = "SOCIO_TITULAR",
+                responsiblePhone = "(11) 99876-5432",
+                city = "Sao Paulo",
+                state = "SP",
+                termsAccepted = true
+            )
+        )
+        // Sem aceitar termos deve bloquear envio
+        assertFalse(
+            B2BOnboardingValidator.canSubmitKybForReview(
+                companyName = "Clinica Cardio Prime Ltda",
+                programName = "Cuidado Cardio",
+                cnpj = "12.345.678/0001-95",
+                primaryColor = "#1A6B5C",
+                responsibleName = "Joao Carlos Silva",
+                responsibleCpf = "52998224725",
+                cpfAlreadySaved = false,
+                responsibleRole = "SOCIO_TITULAR",
+                responsiblePhone = "(11) 99876-5432",
+                city = "Sao Paulo",
+                state = "SP",
+                termsAccepted = false
+            )
+        )
+        // Reenvio sem redigitar CPF quando cpfAlreadySaved = true continua valido
+        assertTrue(
+            B2BOnboardingValidator.canSubmitKybForReview(
+                companyName = "Clinica Cardio Prime Ltda",
+                programName = "Cuidado Cardio",
+                cnpj = "12.345.678/0001-95",
+                primaryColor = "#1A6B5C",
+                responsibleName = "Joao Carlos Silva",
+                responsibleCpf = null,
+                cpfAlreadySaved = true,
+                responsibleRole = "RESPONSAVEL_TECNICO",
+                responsiblePhone = "11998765432",
+                city = "Campinas",
+                state = "SP",
+                termsAccepted = true,
+                councilType = "CRM",
+                councilNumber = "123456",
+                councilUf = "SP"
+            )
+        )
+    }
 }
