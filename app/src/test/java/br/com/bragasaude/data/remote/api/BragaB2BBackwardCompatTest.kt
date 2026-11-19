@@ -935,4 +935,129 @@ class BragaB2BBackwardCompatTest {
             assertEquals("/api/b2b/enrollments/prog-1/appointments/appt-1/cancel", server.takeRequest().path)
         }
     }
+
+    @Test
+    fun programDirectChatEnrollmentAndOwnerRoutesHandleCursorOffHoursAndReadReceipts() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = BragaApiClient(
+                mockk(relaxed = true),
+                server.url("/").toString().trimEnd('/'),
+                stubAuthService(),
+                OkHttpClient(),
+                FamilyE2eeManager()
+            )
+
+            // 1. Participante carrega chat direto e verifica assistantChatEnabled=false
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "programId": "prog-1",
+                      "programName": "Cuidado Cardio",
+                      "companyName": "Clinica Cardio",
+                      "assistantChatEnabled": false,
+                      "directChatPolicy": {
+                        "serviceHoursLabel": "Seg a Sex, 08h às 18h",
+                        "responseSlaLabel": "Resposta em até 1 dia útil",
+                        "allowOffHoursQueue": true
+                      },
+                      "isOffHoursNow": true,
+                      "thread": {
+                        "programId": "prog-1",
+                        "patientUserId": "patient-1",
+                        "handlingMode": "AI_ACTIVE",
+                        "updatedAt": "2026-11-19T20:00:00Z"
+                      },
+                      "messages": [
+                        {
+                          "messageId": "msg-1",
+                          "programId": "prog-1",
+                          "patientUserId": "patient-1",
+                          "senderUserId": "owner-1",
+                          "senderRole": "PARTNER",
+                          "body": "Olá! Como podemos ajudar hoje?",
+                          "createdAt": "2026-11-19T19:50:00Z"
+                        }
+                      ],
+                      "nextCursor": null,
+                      "hasMore": false
+                    }
+                    """.trimIndent()
+                )
+            )
+            val page = api.getEnrollmentDirectMessages("prog-1", limit = 30)
+            assertNotNull(page)
+            assertTrue(!page!!.assistantChatEnabled)
+            assertTrue(page.isOffHoursNow)
+            assertEquals(1, page.messages.size)
+            assertEquals("/api/b2b/enrollments/prog-1/messages?limit=30", server.takeRequest().path)
+
+            // 2. Participante envia mensagem (201) + marca lido
+            server.enqueue(
+                MockResponse().setResponseCode(201).setBody(
+                    """
+                    {
+                      "sentOffHours": true,
+                      "message": {
+                        "messageId": "msg-2",
+                        "programId": "prog-1",
+                        "patientUserId": "patient-1",
+                        "senderUserId": "patient-1",
+                        "senderRole": "PATIENT",
+                        "body": "Gostaria de confirmar meu horário.",
+                        "createdAt": "2026-11-19T20:01:00Z"
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val sent = api.sendEnrollmentDirectMessage("prog-1", "Gostaria de confirmar meu horário.")
+            assertTrue(sent.isSuccess)
+            assertTrue(sent.sentOffHours)
+            assertEquals("/api/b2b/enrollments/prog-1/messages", server.takeRequest().path)
+
+            server.enqueue(MockResponse().setBody("""{"programId":"prog-1","markedReadCount":1}"""))
+            assertEquals(1, api.markEnrollmentDirectMessagesRead("prog-1"))
+            assertEquals("/api/b2b/enrollments/prog-1/messages/read", server.takeRequest().path)
+
+            // 3. Dono lista, responde (201) e marca leitura + rejeita 415 de anexo
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "programId": "prog-1",
+                      "programName": "Cuidado Cardio",
+                      "companyName": "Clinica Cardio",
+                      "directChatPolicy": {
+                        "serviceHoursLabel": "Seg a Sex, 08h às 18h",
+                        "responseSlaLabel": "Resposta em até 1 dia útil",
+                        "allowOffHoursQueue": true
+                      },
+                      "messages": [],
+                      "nextCursor": null,
+                      "hasMore": false
+                    }
+                    """.trimIndent()
+                )
+            )
+            val ownerPage = api.getOwnerDirectMessages("patient-1", cursor = "2026-11-19T20:00:00Z|m1", limit = 20)
+            assertNotNull(ownerPage)
+            assertTrue(server.takeRequest().path!!.startsWith("/api/b2b/program/me/participants/patient-1/messages?limit=20&cursor="))
+
+            server.enqueue(MockResponse().setBody("""{"programId":"prog-1","patientUserId":"patient-1","markedReadCount":2}"""))
+            assertEquals(2, api.markOwnerDirectMessagesRead("patient-1"))
+            assertEquals("/api/b2b/program/me/participants/patient-1/messages/read", server.takeRequest().path)
+
+            server.enqueue(
+                MockResponse().setResponseCode(415).setBody(
+                    """{"detail":"Anexos e arquivos não são permitidos no chat direto."}"""
+                )
+            )
+            val blocked = api.sendOwnerDirectMessage("patient-1", "data:image/png;base64,AAA")
+            assertTrue(!blocked.isSuccess)
+            assertEquals("Anexos e arquivos não são permitidos no chat direto.", blocked.errorDetail)
+            assertEquals("/api/b2b/program/me/participants/patient-1/messages", server.takeRequest().path)
+        }
+    }
 }

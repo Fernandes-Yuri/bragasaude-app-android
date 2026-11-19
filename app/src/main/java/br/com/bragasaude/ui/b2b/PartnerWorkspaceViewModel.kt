@@ -10,6 +10,7 @@ import br.com.bragasaude.domain.b2b.AppContextMode
 import br.com.bragasaude.domain.b2b.B2BContextDescriptor
 import br.com.bragasaude.domain.b2b.B2BOnboardingValidator
 import br.com.bragasaude.domain.b2b.CreateProgramReminderRequest
+import br.com.bragasaude.domain.b2b.DirectChatThreadPageDto
 import br.com.bragasaude.domain.b2b.EnrollmentAppointmentsFeedDto
 import br.com.bragasaude.domain.b2b.EnrollmentRemindersFeedDto
 import br.com.bragasaude.domain.b2b.ParticipantRoutineSummaryDto
@@ -132,6 +133,23 @@ class PartnerWorkspaceViewModel @Inject constructor(
     private val _updatingAppointmentId = MutableStateFlow<String?>(null)
     val updatingAppointmentId: StateFlow<String?> = _updatingAppointmentId.asStateFlow()
 
+    private val _activeDirectChatPage = MutableStateFlow<DirectChatThreadPageDto?>(null)
+    val activeDirectChatPage: StateFlow<DirectChatThreadPageDto?> = _activeDirectChatPage.asStateFlow()
+
+    private val _directChatIsOwnerView = MutableStateFlow(false)
+    val directChatIsOwnerView: StateFlow<Boolean> = _directChatIsOwnerView.asStateFlow()
+
+    private val _directChatCounterpartTitle = MutableStateFlow("")
+    val directChatCounterpartTitle: StateFlow<String> = _directChatCounterpartTitle.asStateFlow()
+
+    private val _directChatTargetPatientId = MutableStateFlow<String?>(null)
+
+    private val _isLoadingDirectChat = MutableStateFlow(false)
+    val isLoadingDirectChat: StateFlow<Boolean> = _isLoadingDirectChat.asStateFlow()
+
+    private val _isSendingDirectMessage = MutableStateFlow(false)
+    val isSendingDirectMessage: StateFlow<Boolean> = _isSendingDirectMessage.asStateFlow()
+
     private val _isGeneratingPdf = MutableStateFlow(false)
     val isGeneratingPdf: StateFlow<Boolean> = _isGeneratingPdf.asStateFlow()
 
@@ -233,6 +251,8 @@ class PartnerWorkspaceViewModel @Inject constructor(
             _walletAttentionOnly.value = false
             _selectedSummary.value = null
             _selectedParticipantItem.value = null
+            _activeDirectChatPage.value = null
+            _directChatTargetPatientId.value = null
             val selected = b2bContextRepository.selectContext(uid, target)
             if (selected == null) {
                 _statusMessage.value = "Não foi possível alternar de contexto agora."
@@ -686,6 +706,114 @@ class PartnerWorkspaceViewModel @Inject constructor(
                 _statusMessage.value = "Resumo em PDF pronto para revisão."
             } else {
                 _statusMessage.value = "Não foi possível gerar o resumo em PDF agora."
+            }
+        }
+    }
+
+    fun closeDirectChat() {
+        _activeDirectChatPage.value = null
+        _directChatTargetPatientId.value = null
+        _isLoadingDirectChat.value = false
+    }
+
+    fun openEnrollmentDirectChat(programId: String, programName: String) {
+        if (_isLoadingDirectChat.value) return
+        viewModelScope.launch {
+            _isLoadingDirectChat.value = true
+            _directChatIsOwnerView.value = false
+            _directChatTargetPatientId.value = null
+            _directChatCounterpartTitle.value = programName.ifBlank { "Programa Parceiro" }
+            val page = apiClient.getEnrollmentDirectMessages(programId, limit = 30)
+            _isLoadingDirectChat.value = false
+            if (page != null) {
+                _activeDirectChatPage.value = page
+                val marked = apiClient.markEnrollmentDirectMessagesRead(programId)
+                if (marked > 0) {
+                    _activeDirectChatPage.value = _activeDirectChatPage.value
+                }
+            } else {
+                _statusMessage.value = "Não foi possível abrir o chat direto agora."
+            }
+        }
+    }
+
+    fun openOwnerDirectChat(patientId: String, patientName: String) {
+        if (_isLoadingDirectChat.value) return
+        viewModelScope.launch {
+            _isLoadingDirectChat.value = true
+            _directChatIsOwnerView.value = true
+            _directChatTargetPatientId.value = patientId
+            _directChatCounterpartTitle.value = patientName.ifBlank { "Participante" }
+            val page = apiClient.getOwnerDirectMessages(patientId, limit = 30)
+            _isLoadingDirectChat.value = false
+            if (page != null) {
+                _activeDirectChatPage.value = page
+                apiClient.markOwnerDirectMessagesRead(patientId)
+                _participants.value = _participants.value.map { item ->
+                    if (item.patientUserId == patientId) item.copy(unreadDirectMessagesCount = 0) else item
+                }
+            } else {
+                _statusMessage.value = "Não foi possível abrir a conversa com este participante."
+            }
+        }
+    }
+
+    fun loadMoreDirectMessages() {
+        val current = _activeDirectChatPage.value ?: return
+        val cursor = current.nextCursor ?: return
+        if (!current.hasMore || _isLoadingDirectChat.value) return
+        viewModelScope.launch {
+            _isLoadingDirectChat.value = true
+            val older = if (_directChatIsOwnerView.value) {
+                val pid = _directChatTargetPatientId.value
+                if (pid != null) apiClient.getOwnerDirectMessages(pid, cursor = cursor, limit = 30) else null
+            } else {
+                apiClient.getEnrollmentDirectMessages(current.programId, cursor = cursor, limit = 30)
+            }
+            _isLoadingDirectChat.value = false
+            if (older != null) {
+                val merged = (current.messages + older.messages).distinctBy { it.messageId }
+                _activeDirectChatPage.value = current.copy(
+                    messages = merged,
+                    nextCursor = older.nextCursor,
+                    hasMore = older.hasMore
+                )
+            }
+        }
+    }
+
+    fun sendDirectMessage(body: String) {
+        val current = _activeDirectChatPage.value ?: return
+        if (_isSendingDirectMessage.value) return
+        val validationErr = B2BOnboardingValidator.findDirectMessageValidationError(body)
+        if (validationErr != null) {
+            _statusMessage.value = validationErr
+            return
+        }
+        viewModelScope.launch {
+            _isSendingDirectMessage.value = true
+            val res = if (_directChatIsOwnerView.value) {
+                val patientId = _directChatTargetPatientId.value
+                if (patientId != null) {
+                    apiClient.sendOwnerDirectMessage(patientId, body)
+                } else {
+                    br.com.bragasaude.domain.b2b.SendDirectMessageResult(errorDetail = "Participante inválido.")
+                }
+            } else {
+                apiClient.sendEnrollmentDirectMessage(current.programId, body)
+            }
+            _isSendingDirectMessage.value = false
+            val sent = res.message
+            if (sent != null) {
+                _activeDirectChatPage.value = current.copy(
+                    messages = listOf(sent) + current.messages
+                )
+                if (res.sentOffHours) {
+                    _statusMessage.value = "Enviada fora do horário — aguardando retorno."
+                }
+            } else {
+                _statusMessage.value = res.errorDetail
+                    ?: "Não foi possível enviar a mensagem agora."
             }
         }
     }

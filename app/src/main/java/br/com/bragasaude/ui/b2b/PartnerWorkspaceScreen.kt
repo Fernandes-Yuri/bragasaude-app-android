@@ -71,6 +71,11 @@ fun PartnerWorkspaceScreen(
     val enrollmentAppointmentsFeed by viewModel.enrollmentAppointmentsFeed.collectAsState()
     val isSubmittingAppointment by viewModel.isSubmittingAppointment.collectAsState()
     val updatingAppointmentId by viewModel.updatingAppointmentId.collectAsState()
+    val activeDirectChatPage by viewModel.activeDirectChatPage.collectAsState()
+    val directChatIsOwnerView by viewModel.directChatIsOwnerView.collectAsState()
+    val directChatCounterpartTitle by viewModel.directChatCounterpartTitle.collectAsState()
+    val isLoadingDirectChat by viewModel.isLoadingDirectChat.collectAsState()
+    val isSendingDirectMessage by viewModel.isSendingDirectMessage.collectAsState()
     val isGeneratingPdf by viewModel.isGeneratingPdf.collectAsState()
     val generatedPdf by viewModel.generatedPdf.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
@@ -260,6 +265,23 @@ fun PartnerWorkspaceScreen(
         )
     }
 
+    activeDirectChatPage?.let { chatPage ->
+        PartnerDirectChatBottomSheet(
+            page = chatPage,
+            isOwnerView = directChatIsOwnerView,
+            counterpartTitle = directChatCounterpartTitle,
+            isLoadingMore = isLoadingDirectChat,
+            isSending = isSendingDirectMessage,
+            brandPrimary = brandPrimary,
+            brandOnPrimary = brandOnPrimary,
+            brandAccent = brandAccentText,
+            softSurface = brandSoftSurface,
+            onLoadOlder = { viewModel.loadMoreDirectMessages() },
+            onSendMessage = { msgBody -> viewModel.sendDirectMessage(msgBody) },
+            onDismiss = { viewModel.closeDirectChat() }
+        )
+    }
+
     selectedSummary?.let { summary ->
         ParticipantDetailBottomSheet(
             summary = summary,
@@ -298,6 +320,10 @@ fun PartnerWorkspaceScreen(
                         Toast.LENGTH_LONG
                     ).show()
                 }
+            },
+            onOpenDirectChat = { pid, pname ->
+                viewModel.clearSelectedSummary()
+                viewModel.openOwnerDirectChat(pid, pname)
             },
             onRequestRemove = {
                 participantToRemove = summary.patientUserId to summary.participantName
@@ -908,6 +934,14 @@ fun PartnerWorkspaceScreen(
                                     onCancelAppointment = { apptId ->
                                         activeContext.programId?.let { pid ->
                                             viewModel.cancelEnrollmentAppointment(pid, apptId)
+                                        }
+                                    },
+                                    onOpenDirectChatSheet = {
+                                        activeContext.programId?.let { pid ->
+                                            viewModel.openEnrollmentDirectChat(
+                                                programId = pid,
+                                                programName = activeContext.programName ?: "Programa Parceiro"
+                                            )
                                         }
                                     },
                                     onGeneratePdf = { days, categories ->

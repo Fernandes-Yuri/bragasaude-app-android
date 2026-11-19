@@ -324,6 +324,7 @@ fun ParticipantDetailBottomSheet(
     onActionFeedback: (String) -> Unit,
     onOpenSendReminder: (String, String) -> Unit,
     onOpenManageAppointments: (String, String) -> Unit = { _, _ -> },
+    onOpenDirectChat: (String, String) -> Unit = { _, _ -> },
     onRequestRemove: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -623,9 +624,9 @@ fun ParticipantDetailBottomSheet(
                         },
                         subtitle = if (features.directPartnerChatEnabled) {
                             if (unreadMsgs > 0) {
-                                "$unreadMsgs mensagem(ns) pendente(s) no canal com ${summary.participantName} (B2B-20)."
+                                "$unreadMsgs mensagem(ns) aguardando leitura no canal direto."
                             } else {
-                                "Canal direto com o programa ativo (conversa em B2B-20)."
+                                "Canal assíncrono direto com ${summary.participantName}."
                             }
                         } else {
                             "Chat direto desativado nas configurações do programa."
@@ -633,13 +634,13 @@ fun ParticipantDetailBottomSheet(
                         enabled = features.directPartnerChatEnabled,
                         brandAccent = brandAccent,
                         onClick = {
-                            onActionFeedback(
-                                if (features.directPartnerChatEnabled) {
-                                    "O chat assíncrono com ${summary.participantName} será habilitado na etapa B2B-20."
-                                } else {
+                            if (features.directPartnerChatEnabled) {
+                                onOpenDirectChat(summary.patientUserId, summary.participantName)
+                            } else {
+                                onActionFeedback(
                                     "Ative o Chat Direto na aba Estúdio para conversar com participantes."
-                                }
-                            )
+                                )
+                            }
                         }
                     )
 

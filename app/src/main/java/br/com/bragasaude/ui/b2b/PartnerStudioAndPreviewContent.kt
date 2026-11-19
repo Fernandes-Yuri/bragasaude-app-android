@@ -967,7 +967,8 @@ fun ParticipantExperienceContent(
     appointmentsFeed: EnrollmentAppointmentsFeedDto? = null,
     updatingAppointmentId: String? = null,
     onOpenRequestAppointmentSheet: () -> Unit = {},
-    onCancelAppointment: (String) -> Unit = {}
+    onCancelAppointment: (String) -> Unit = {},
+    onOpenDirectChatSheet: () -> Unit = {}
 ) {
     val missingConsent = remember(experienceConfig, sharedCategories) {
         B2BOnboardingValidator.computeMissingConsentCategories(experienceConfig, sharedCategories)
@@ -1143,8 +1144,14 @@ fun ParticipantExperienceContent(
                 title = "Falar com $programName",
                 body = "$badge${experienceConfig.directChatPolicy.serviceHoursLabel} · ${experienceConfig.directChatPolicy.responseSlaLabel}.",
                 accent = brandAccent,
-                actionLabel = if (experienceConfig.features.aiReceptionistEnabled && isPreview) "Simular recepcionista" else null,
-                onAction = onOpenAiPreview
+                actionLabel = when {
+                    isPreview && experienceConfig.features.aiReceptionistEnabled -> "Simular recepcionista"
+                    !isPreview -> "Abrir chat direto"
+                    else -> null
+                },
+                onAction = {
+                    if (isPreview) onOpenAiPreview() else onOpenDirectChatSheet()
+                }
             )
         }
 
