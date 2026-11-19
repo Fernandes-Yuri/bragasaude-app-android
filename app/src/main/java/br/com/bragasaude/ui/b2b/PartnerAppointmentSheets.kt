@@ -24,6 +24,7 @@ import br.com.bragasaude.domain.b2b.B2BOnboardingValidator
 import br.com.bragasaude.domain.b2b.EnrollmentAppointmentsFeedDto
 import br.com.bragasaude.domain.b2b.ProgramAppointmentDto
 import br.com.bragasaude.domain.b2b.ProgramAppointmentStatus
+import br.com.bragasaude.ui.components.BragaBottomSheet
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
