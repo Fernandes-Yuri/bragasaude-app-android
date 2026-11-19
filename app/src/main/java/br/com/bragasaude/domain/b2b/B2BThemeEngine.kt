@@ -27,6 +27,10 @@ object B2BThemeEngine {
     const val PDF_NON_PEP_NOTICE =
         "Resumo de rotina para a consulta. Dados selecionados pelo paciente; não constitui laudo, diagnóstico nem prontuário oficial."
     const val PDF_SHARE_ACTION_LABEL = "Revisar e compartilhar PDF"
+    const val DIRECT_CHAT_NON_URGENCY_NOTICE =
+        "Canal assíncrono de rotina. Não utilize para emergências — em caso de urgência, procure atendimento imediato (SAMU 192)."
+    const val DIRECT_CHAT_ZERO_ATTACHMENT_HINT =
+        "Apenas mensagens de texto (envio de anexos, imagens ou PDFs não permitido neste canal)."
     const val WCAG_AA_NORMAL_TEXT_RATIO = 4.5
 
     private const val WHITE_HEX = "#FFFFFF"

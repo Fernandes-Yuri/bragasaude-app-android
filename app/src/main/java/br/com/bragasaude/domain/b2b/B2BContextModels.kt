@@ -675,6 +675,68 @@ data class AppointmentMutationResult(
         get() = appointment != null
 }
 
+enum class DirectMessageSenderRole(val wireKey: String, val labelPtBr: String) {
+    PARTNER("PARTNER", "Equipe do programa"),
+    PATIENT("PATIENT", "Participante"),
+    AI_RECEPTIONIST("AI_RECEPTIONIST", "Recepcionista IA");
+
+    companion object {
+        fun fromWire(raw: String?): DirectMessageSenderRole {
+            val upper = raw?.trim()?.uppercase().orEmpty()
+            return entries.firstOrNull { it.wireKey == upper } ?: PARTNER
+        }
+    }
+}
+
+@Serializable
+data class DirectThreadSummaryDto(
+    val programId: String,
+    val patientUserId: String,
+    val handlingMode: String = "AI_ACTIVE",
+    val takenOverBy: String? = null,
+    val handoffNote: String? = null,
+    val updatedAt: String = ""
+)
+
+@Serializable
+data class DirectChatMessageDto(
+    val messageId: String,
+    val programId: String,
+    val patientUserId: String,
+    val senderUserId: String,
+    val senderRole: String,
+    val body: String,
+    val createdAt: String = "",
+    val readAt: String? = null
+) {
+    val parsedRole: DirectMessageSenderRole
+        get() = DirectMessageSenderRole.fromWire(senderRole)
+}
+
+@Serializable
+data class DirectChatThreadPageDto(
+    val programId: String,
+    val programName: String = "",
+    val companyName: String = "",
+    val assistantChatEnabled: Boolean = true,
+    val directChatPolicy: DirectChatPolicyDto = DirectChatPolicyDto(),
+    val isOffHoursNow: Boolean = false,
+    val thread: DirectThreadSummaryDto? = null,
+    val messages: List<DirectChatMessageDto> = emptyList(),
+    val nextCursor: String? = null,
+    val hasMore: Boolean = false
+)
+
+@Serializable
+data class SendDirectMessageResult(
+    val message: DirectChatMessageDto? = null,
+    val sentOffHours: Boolean = false,
+    val errorDetail: String? = null
+) {
+    val isSuccess: Boolean
+        get() = message != null
+}
+
 object B2BOnboardingValidator {
     const val DEFAULT_PRIMARY_COLOR = "#1A6B5C"
     const val REFERENCE_SUBTITLE =
@@ -1056,6 +1118,23 @@ object B2BOnboardingValidator {
         val cleanNote = patientNote?.trim().orEmpty()
         if (cleanNote.length > 400) {
             return "A observação deve ter no máximo 400 caracteres."
+        }
+        return null
+    }
+
+    const val MAX_DIRECT_MESSAGE_CHARS = 1000
+
+    fun findDirectMessageValidationError(rawBody: String): String? {
+        val clean = rawBody.trim()
+        if (clean.isEmpty()) {
+            return "Digite uma mensagem antes de enviar."
+        }
+        if (clean.length > MAX_DIRECT_MESSAGE_CHARS) {
+            return "A mensagem deve ter no máximo 1000 caracteres."
+        }
+        val lower = clean.lowercase()
+        if (lower.contains("data:image/") || lower.contains("data:application/") || lower.contains("data:text/html")) {
+            return "Envio de imagens ou anexos não é permitido neste canal."
         }
         return null
     }

@@ -483,4 +483,14 @@ class B2BContextStoreTest {
         assertEquals(ProgramAppointmentStatus.RESCHEDULE_REQUESTED, ProgramAppointmentStatus.fromWire("reschedule_requested"))
         assertEquals(AppointmentModality.REMOTE, AppointmentModality.fromWire("remote"))
     }
+
+    @Test
+    fun b2b20DirectChatValidationBlocksMediaAndPreservesNonUrgencyNotice() {
+        assertTrue(B2BThemeEngine.DIRECT_CHAT_NON_URGENCY_NOTICE.contains("SAMU 192"))
+        assertNotNull(B2BOnboardingValidator.findDirectMessageValidationError("   "))
+        assertNotNull(B2BOnboardingValidator.findDirectMessageValidationError("x".repeat(1001)))
+        assertNotNull(B2BOnboardingValidator.findDirectMessageValidationError("Veja data:image/jpeg;base64,ABC"))
+        assertNull(B2BOnboardingValidator.findDirectMessageValidationError("Posso tirar uma dúvida de horário?"))
+        assertEquals(DirectMessageSenderRole.AI_RECEPTIONIST, DirectMessageSenderRole.fromWire("ai_receptionist"))
+    }
 }

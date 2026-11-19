@@ -2659,15 +2659,10 @@ class BragaApiClient @Inject constructor(
             } else {
                 defaults.features
             },
-            directChatPolicy = if (dObj != null) {
-                br.com.bragasaude.domain.b2b.DirectChatPolicyDto(
-                    serviceHoursLabel = optNullableText(dObj, "serviceHoursLabel") ?: defaults.directChatPolicy.serviceHoursLabel,
-                    responseSlaLabel = optNullableText(dObj, "responseSlaLabel") ?: defaults.directChatPolicy.responseSlaLabel,
-                    allowOffHoursQueue = dObj.optBoolean("allowOffHoursQueue", defaults.directChatPolicy.allowOffHoursQueue)
-                )
-            } else {
+            directChatPolicy = parseDirectChatPolicyJson(
+                dObj,
                 defaults.directChatPolicy
-            },
+            ),
             aiReceptionistPolicy = if (aiObj != null) {
                 br.com.bragasaude.domain.b2b.AiReceptionistPolicyDto(
                     personaName = optNullableText(aiObj, "personaName") ?: defaults.aiReceptionistPolicy.personaName,
@@ -2686,6 +2681,18 @@ class BragaApiClient @Inject constructor(
                 apObj,
                 defaults.appointmentsPolicy
             )
+        )
+    }
+
+    private fun parseDirectChatPolicyJson(
+        dObj: JSONObject?,
+        fallback: br.com.bragasaude.domain.b2b.DirectChatPolicyDto = br.com.bragasaude.domain.b2b.DirectChatPolicyDto()
+    ): br.com.bragasaude.domain.b2b.DirectChatPolicyDto {
+        if (dObj == null) return fallback
+        return br.com.bragasaude.domain.b2b.DirectChatPolicyDto(
+            serviceHoursLabel = optNullableText(dObj, "serviceHoursLabel") ?: fallback.serviceHoursLabel,
+            responseSlaLabel = optNullableText(dObj, "responseSlaLabel") ?: fallback.responseSlaLabel,
+            allowOffHoursQueue = dObj.optBoolean("allowOffHoursQueue", fallback.allowOffHoursQueue)
         )
     }
 
@@ -4027,6 +4034,201 @@ class BragaApiClient @Inject constructor(
             br.com.bragasaude.domain.b2b.AppointmentMutationResult(
                 errorDetail = "Erro de conexão ao cancelar agendamento."
             )
+        }
+    }
+
+    private fun parseDirectChatMessageJson(
+        m: JSONObject
+    ): br.com.bragasaude.domain.b2b.DirectChatMessageDto = br.com.bragasaude.domain.b2b.DirectChatMessageDto(
+        messageId = m.optString("messageId", ""),
+        programId = m.optString("programId", ""),
+        patientUserId = m.optString("patientUserId", ""),
+        senderUserId = m.optString("senderUserId", ""),
+        senderRole = m.optString("senderRole", "PARTNER"),
+        body = m.optString("body", ""),
+        createdAt = m.optString("createdAt", ""),
+        readAt = optNullableText(m, "readAt")
+    )
+
+    private fun parseDirectChatPageJson(
+        res: JSONObject,
+        fallbackProgramId: String = ""
+    ): br.com.bragasaude.domain.b2b.DirectChatThreadPageDto {
+        val threadObj = res.optJSONObject("thread")
+        val thread = threadObj?.let { t ->
+            br.com.bragasaude.domain.b2b.DirectThreadSummaryDto(
+                programId = t.optString("programId", fallbackProgramId),
+                patientUserId = t.optString("patientUserId", ""),
+                handlingMode = t.optString("handlingMode", "AI_ACTIVE"),
+                takenOverBy = optNullableText(t, "takenOverBy"),
+                handoffNote = optNullableText(t, "handoffNote"),
+                updatedAt = t.optString("updatedAt", "")
+            )
+        }
+        val arr = res.optJSONArray("messages") ?: JSONArray()
+        val msgs = (0 until arr.length()).mapNotNull { i ->
+            arr.optJSONObject(i)?.let(::parseDirectChatMessageJson)
+        }
+        return br.com.bragasaude.domain.b2b.DirectChatThreadPageDto(
+            programId = res.optString("programId", fallbackProgramId),
+            programName = res.optString("programName", ""),
+            companyName = res.optString("companyName", ""),
+            assistantChatEnabled = res.optBoolean("assistantChatEnabled", true),
+            directChatPolicy = parseDirectChatPolicyJson(res.optJSONObject("directChatPolicy")),
+            isOffHoursNow = res.optBoolean("isOffHoursNow", false),
+            thread = thread,
+            messages = msgs,
+            nextCursor = optNullableText(res, "nextCursor"),
+            hasMore = res.optBoolean("hasMore", false)
+        )
+    }
+
+    private fun buildCursorQueryString(cursor: String?, limit: Int): String = buildList {
+        add("limit=${limit.coerceIn(1, 50)}")
+        cursor?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            add("cursor=${java.net.URLEncoder.encode(it, "UTF-8")}")
+        }
+    }.joinToString("&")
+
+    private fun getDirectMessagesFromUrl(
+        url: String,
+        fallbackProgramId: String = ""
+    ): br.com.bragasaude.domain.b2b.DirectChatThreadPageDto? {
+        val res = getJson(url, strict = true) ?: return null
+        return parseDirectChatPageJson(res, fallbackProgramId)
+    }
+
+    private fun postDirectMessageToUrl(
+        url: String,
+        body: String
+    ): br.com.bragasaude.domain.b2b.SendDirectMessageResult {
+        val payload = JSONObject().apply { put("body", body.trim()) }
+        val resp = postJsonDetailed(url, payload)
+        if (resp.code in 200..299 && resp.body != null) {
+            val msg = resp.body.optJSONObject("message")?.let(::parseDirectChatMessageJson)
+            return br.com.bragasaude.domain.b2b.SendDirectMessageResult(
+                message = msg,
+                sentOffHours = resp.body.optBoolean("sentOffHours", false)
+            )
+        }
+        return br.com.bragasaude.domain.b2b.SendDirectMessageResult(
+            errorDetail = resp.errorDetail ?: "Não foi possível enviar sua mensagem agora."
+        )
+    }
+
+    suspend fun getEnrollmentDirectMessages(
+        programId: String,
+        cursor: String? = null,
+        limit: Int = 30
+    ): br.com.bragasaude.domain.b2b.DirectChatThreadPageDto? = withContext(Dispatchers.IO) {
+        val cleanProg = programId.trim()
+        if (cleanProg.isEmpty()) return@withContext null
+        try {
+            val encProg = java.net.URLEncoder.encode(cleanProg, "UTF-8")
+            val qs = buildCursorQueryString(cursor, limit)
+            getDirectMessagesFromUrl("$baseUrl/api/b2b/enrollments/$encProg/messages?$qs", cleanProg)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao listar chat direto do participante B2B: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun sendEnrollmentDirectMessage(
+        programId: String,
+        body: String
+    ): br.com.bragasaude.domain.b2b.SendDirectMessageResult = withContext(Dispatchers.IO) {
+        val cleanProg = programId.trim()
+        if (cleanProg.isEmpty()) {
+            return@withContext br.com.bragasaude.domain.b2b.SendDirectMessageResult(
+                errorDetail = "Programa inválido."
+            )
+        }
+        try {
+            val encProg = java.net.URLEncoder.encode(cleanProg, "UTF-8")
+            postDirectMessageToUrl("$baseUrl/api/b2b/enrollments/$encProg/messages", body)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao enviar DM participante B2B: ${e.message}")
+            br.com.bragasaude.domain.b2b.SendDirectMessageResult(
+                errorDetail = "Erro de conexão ao enviar mensagem."
+            )
+        }
+    }
+
+    suspend fun markEnrollmentDirectMessagesRead(
+        programId: String
+    ): Int = withContext(Dispatchers.IO) {
+        val cleanProg = programId.trim()
+        if (cleanProg.isEmpty()) return@withContext 0
+        try {
+            val encProg = java.net.URLEncoder.encode(cleanProg, "UTF-8")
+            val resp = postJsonDetailed("$baseUrl/api/b2b/enrollments/$encProg/messages/read", JSONObject())
+            if (resp.code in 200..299 && resp.body != null) resp.body.optInt("markedReadCount", 0) else 0
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            0
+        }
+    }
+
+    suspend fun getOwnerDirectMessages(
+        patientId: String,
+        cursor: String? = null,
+        limit: Int = 30
+    ): br.com.bragasaude.domain.b2b.DirectChatThreadPageDto? = withContext(Dispatchers.IO) {
+        val cleanId = patientId.trim()
+        if (cleanId.isEmpty()) return@withContext null
+        try {
+            val encId = java.net.URLEncoder.encode(cleanId, "UTF-8")
+            val qs = buildCursorQueryString(cursor, limit)
+            getDirectMessagesFromUrl("$baseUrl/api/b2b/program/me/participants/$encId/messages?$qs")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao listar conversa direta do parceiro B2B: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun sendOwnerDirectMessage(
+        patientId: String,
+        body: String
+    ): br.com.bragasaude.domain.b2b.SendDirectMessageResult = withContext(Dispatchers.IO) {
+        val cleanId = patientId.trim()
+        if (cleanId.isEmpty()) {
+            return@withContext br.com.bragasaude.domain.b2b.SendDirectMessageResult(
+                errorDetail = "Participante inválido."
+            )
+        }
+        try {
+            val encId = java.net.URLEncoder.encode(cleanId, "UTF-8")
+            postDirectMessageToUrl("$baseUrl/api/b2b/program/me/participants/$encId/messages", body)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao responder participante no chat B2B: ${e.message}")
+            br.com.bragasaude.domain.b2b.SendDirectMessageResult(
+                errorDetail = "Erro de conexão ao enviar resposta."
+            )
+        }
+    }
+
+    suspend fun markOwnerDirectMessagesRead(
+        patientId: String
+    ): Int = withContext(Dispatchers.IO) {
+        val cleanId = patientId.trim()
+        if (cleanId.isEmpty()) return@withContext 0
+        try {
+            val encId = java.net.URLEncoder.encode(cleanId, "UTF-8")
+            val resp = postJsonDetailed("$baseUrl/api/b2b/program/me/participants/$encId/messages/read", JSONObject())
+            if (resp.code in 200..299 && resp.body != null) resp.body.optInt("markedReadCount", 0) else 0
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            0
         }
     }
 
