@@ -3041,4 +3041,41 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    suspend fun removePartnerParticipant(
+        patientId: String
+    ): br.com.bragasaude.domain.b2b.RemovePartnerParticipantResult = withContext(Dispatchers.IO) {
+        try {
+            val cleanId = patientId.trim()
+            if (cleanId.isEmpty()) {
+                return@withContext br.com.bragasaude.domain.b2b.RemovePartnerParticipantResult(
+                    errorDetail = "Participante inválido."
+                )
+            }
+            val encodedId = java.net.URLEncoder.encode(cleanId, "UTF-8")
+            val resp = postJsonDetailed(
+                "$baseUrl/api/b2b/program/me/participants/$encodedId/remove",
+                JSONObject()
+            )
+            if (resp.code in 200..299 && resp.body != null) {
+                val removedId = resp.body.optString("removedPatientUserId", cleanId)
+                    .takeIf { it.isNotBlank() && it != "null" } ?: cleanId
+                return@withContext br.com.bragasaude.domain.b2b.RemovePartnerParticipantResult(
+                    program = parsePartnerProgramJson(resp.body.optJSONObject("program")),
+                    removedPatientUserId = removedId
+                )
+            }
+            br.com.bragasaude.domain.b2b.RemovePartnerParticipantResult(
+                errorDetail = resp.errorDetail
+                    ?: "Não foi possível encerrar o vínculo deste participante agora."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao remover participante do programa B2B: ${e.message}")
+            br.com.bragasaude.domain.b2b.RemovePartnerParticipantResult(
+                errorDetail = "Erro de conexão ao encerrar vínculo do participante."
+            )
+        }
+    }
+
 }

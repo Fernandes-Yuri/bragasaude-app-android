@@ -212,6 +212,16 @@ data class PartnerParticipantsPageDto(
 )
 
 @Serializable
+data class RemovePartnerParticipantResult(
+    val program: PartnerProgramDto? = null,
+    val removedPatientUserId: String? = null,
+    val errorDetail: String? = null
+) {
+    val isSuccess: Boolean
+        get() = removedPatientUserId != null
+}
+
+@Serializable
 data class SharedStepsDayDto(
     val date: String,
     val steps: Int,

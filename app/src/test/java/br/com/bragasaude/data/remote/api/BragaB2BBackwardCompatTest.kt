@@ -172,6 +172,46 @@ class BragaB2BBackwardCompatTest {
             // Resposta 403/IDOR em acesso cruzado deve retornar null sem lancar excecao na UI
             server.enqueue(MockResponse().setResponseCode(403).setBody("""{"detail":"Participante sem vínculo ativo."}"""))
             assertNull(api.getPartnerParticipantSummary("patient-outro", days = 30))
+
+            // B2B-17B: remocao de participante libera vaga e propaga erro 404/403 com seguranca
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "success": true,
+                      "removedPatientUserId": "patient-1",
+                      "program": {
+                        "programId": "11111111-1111-1111-1111-111111111111",
+                        "ownerUserId": "owner-a",
+                        "companyName": "Clinica Horizonte",
+                        "programName": "Cuidado Cardio",
+                        "primaryColor": "#0F4C81",
+                        "approvalStatus": "APPROVED",
+                        "inviteCode": "CARD-4F9A",
+                        "invitePaused": false,
+                        "seatLimit": 15,
+                        "activeParticipants": 0,
+                        "canPromote": true
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val removedOk = api.removePartnerParticipant("patient-1")
+            assertTrue(removedOk.isSuccess)
+            assertEquals("patient-1", removedOk.removedPatientUserId)
+            assertEquals(0, removedOk.program?.activeParticipants)
+
+            val removeReq = server.takeRequest() // summary 403
+            val removeCall = server.takeRequest()
+            assertEquals("/api/b2b/program/me/participants/patient-1/remove", removeCall.path)
+            assertEquals("POST", removeCall.method)
+
+            server.enqueue(MockResponse().setResponseCode(404).setBody("""{"detail":"Vínculo ativo não encontrado."}"""))
+            val removedFail = api.removePartnerParticipant("patient-inexistente")
+            assertTrue(!removedFail.isSuccess)
+            assertEquals("Vínculo ativo não encontrado.", removedFail.errorDetail)
+            assertNotNull(removeReq)
         }
     }
 }

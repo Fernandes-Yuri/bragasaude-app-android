@@ -61,6 +61,9 @@ class PartnerWorkspaceViewModel @Inject constructor(
     private val _isLoadingSummary = MutableStateFlow(false)
     val isLoadingSummary: StateFlow<Boolean> = _isLoadingSummary.asStateFlow()
 
+    private val _isRemovingParticipant = MutableStateFlow(false)
+    val isRemovingParticipant: StateFlow<Boolean> = _isRemovingParticipant.asStateFlow()
+
     private val _selectedPeriodDays = MutableStateFlow(30)
     val selectedPeriodDays: StateFlow<Int> = _selectedPeriodDays.asStateFlow()
 
@@ -174,6 +177,29 @@ class PartnerWorkspaceViewModel @Inject constructor(
                 _selectedSummary.value = summary
             } else {
                 _statusMessage.value = "Não foi possível carregar os registros autorizados deste participante."
+            }
+        }
+    }
+
+    fun removeParticipant(patientId: String) {
+        val cleanId = patientId.trim()
+        if (cleanId.isEmpty() || _isRemovingParticipant.value) return
+        viewModelScope.launch {
+            _isRemovingParticipant.value = true
+            val result = apiClient.removePartnerParticipant(cleanId)
+            _isRemovingParticipant.value = false
+            if (result.isSuccess) {
+                _participants.value = _participants.value.filterNot { it.patientUserId == cleanId }
+                _programInfo.value = result.program ?: _programInfo.value?.let { current ->
+                    current.copy(activeParticipants = (current.activeParticipants - 1).coerceAtLeast(0))
+                }
+                if (_selectedSummary.value?.patientUserId == cleanId) {
+                    _selectedSummary.value = null
+                }
+                _statusMessage.value = "Vínculo encerrado. A vaga foi liberada na sua franquia."
+            } else {
+                _statusMessage.value = result.errorDetail
+                    ?: "Não foi possível encerrar o vínculo deste participante agora."
             }
         }
     }
