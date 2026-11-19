@@ -135,6 +135,8 @@ class BragaB2BBackwardCompatTest {
             assertEquals(1, page?.participants?.size)
             assertEquals("Maria Silva", page?.participants?.first()?.displayName)
             assertEquals(listOf("steps", "hydration"), page?.participants?.first()?.sharedCategories)
+            val listReq = server.takeRequest()
+            assertTrue(listReq.path.orEmpty().startsWith("/api/b2b/program/me/participants"))
 
             server.enqueue(
                 MockResponse().setBody(
@@ -168,10 +170,14 @@ class BragaB2BBackwardCompatTest {
             assertEquals(5400L, summary?.stepsSection?.averageSteps)
             assertNull(summary?.hydrationSection)
             assertNull(summary?.authorizedRecordsSection)
+            val summaryReq = server.takeRequest()
+            assertEquals("/api/b2b/program/me/participants/patient-1/summary?days=30", summaryReq.path)
 
             // Resposta 403/IDOR em acesso cruzado deve retornar null sem lancar excecao na UI
             server.enqueue(MockResponse().setResponseCode(403).setBody("""{"detail":"Participante sem vínculo ativo."}"""))
             assertNull(api.getPartnerParticipantSummary("patient-outro", days = 30))
+            val summary403Req = server.takeRequest()
+            assertEquals("/api/b2b/program/me/participants/patient-outro/summary?days=30", summary403Req.path)
 
             // B2B-17B: remocao de participante libera vaga e propaga erro 404/403 com seguranca
             server.enqueue(
@@ -202,7 +208,6 @@ class BragaB2BBackwardCompatTest {
             assertEquals("patient-1", removedOk.removedPatientUserId)
             assertEquals(0, removedOk.program?.activeParticipants)
 
-            val removeReq = server.takeRequest() // summary 403
             val removeCall = server.takeRequest()
             assertEquals("/api/b2b/program/me/participants/patient-1/remove", removeCall.path)
             assertEquals("POST", removeCall.method)
@@ -211,7 +216,8 @@ class BragaB2BBackwardCompatTest {
             val removedFail = api.removePartnerParticipant("patient-inexistente")
             assertTrue(!removedFail.isSuccess)
             assertEquals("Vínculo ativo não encontrado.", removedFail.errorDetail)
-            assertNotNull(removeReq)
+            val removeFailReq = server.takeRequest()
+            assertEquals("/api/b2b/program/me/participants/patient-inexistente/remove", removeFailReq.path)
         }
     }
 }
