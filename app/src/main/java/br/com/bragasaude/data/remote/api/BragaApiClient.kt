@@ -3074,7 +3074,8 @@ class BragaApiClient @Inject constructor(
 
     suspend fun joinPartnerProgram(
         rawCode: String,
-        sharedCategories: Collection<String>
+        sharedCategories: Collection<String>,
+        familyShareEnabled: Boolean = false
     ): br.com.bragasaude.domain.b2b.PartnerEnrollmentResult = withContext(Dispatchers.IO) {
         try {
             val code = rawCode.trim().uppercase()
@@ -3095,6 +3096,7 @@ class BragaApiClient @Inject constructor(
             val payload = JSONObject().apply {
                 put("inviteCode", code)
                 put("sharedCategories", JSONArray(normalizedCats))
+                put("familyShareEnabled", familyShareEnabled)
             }
             val resp = postJsonDetailed("$baseUrl/api/b2b/enrollments/join", payload)
             if (resp.code in 200..299 && resp.body != null) {
@@ -3121,7 +3123,8 @@ class BragaApiClient @Inject constructor(
 
     suspend fun updatePartnerConsent(
         programId: String,
-        sharedCategories: Collection<String>
+        sharedCategories: Collection<String>,
+        familyShareEnabled: Boolean? = null
     ): br.com.bragasaude.domain.b2b.PartnerEnrollmentResult = withContext(Dispatchers.IO) {
         try {
             val normalizedCats =
@@ -3135,6 +3138,8 @@ class BragaApiClient @Inject constructor(
             }
             val payload = JSONObject().apply {
                 put("sharedCategories", JSONArray(normalizedCats))
+                // Chamadas antigas preservam o opt-in existente; a UI envia true/false explícito.
+                familyShareEnabled?.let { put("familyShareEnabled", it) }
             }
             val resp = postJsonDetailed(
                 "$baseUrl/api/b2b/enrollments/${programId.trim()}/consent",
@@ -3778,6 +3783,77 @@ class BragaApiClient @Inject constructor(
             Log.w(TAG, "Falha ao confirmar leitura de lembrete: ${e.message}")
             null
         }
+    }
+
+    suspend fun getFamilyProgramOverview(
+        patientId: String
+    ): br.com.bragasaude.domain.b2b.FamilyProgramOverviewDto? = withContext(Dispatchers.IO) {
+        val cleanPatient = patientId.trim()
+        if (cleanPatient.isEmpty()) return@withContext null
+        val encoded = java.net.URLEncoder.encode(cleanPatient, "UTF-8")
+        val res = getJson("$baseUrl/api/b2b/family/patients/$encoded/program-overview", strict = true)
+            ?: return@withContext null
+        if (optNullableText(res, "patientUserId") != cleanPatient) return@withContext null
+        val programs = res.optJSONArray("programs") ?: return@withContext null
+        br.com.bragasaude.domain.b2b.FamilyProgramOverviewDto(
+            patientUserId = cleanPatient,
+            programs = (0 until programs.length()).mapNotNull { index ->
+                val program = programs.optJSONObject(index) ?: return@mapNotNull null
+                val programId = optNullableText(program, "programId") ?: return@mapNotNull null
+                if (!program.optBoolean("familyShareEnabled", false)) return@mapNotNull null
+                val remindersEnabled = program.optBoolean("remindersEnabled", false)
+                val appointmentsEnabled = program.optBoolean("appointmentsEnabled", false)
+                val reminders = program.optJSONArray("reminders") ?: JSONArray()
+                val appointments = program.optJSONArray("appointments") ?: JSONArray()
+                br.com.bragasaude.domain.b2b.FamilyProgramOverviewItemDto(
+                    programId = programId,
+                    programName = program.optString("programName", "Programa parceiro"),
+                    companyName = program.optString("companyName", ""),
+                    primaryColor = program.optString("primaryColor", "#1A6B5C"),
+                    logoUrl = optNullableText(program, "logoUrl"),
+                    templateKey = program.optString("templateKey", "CUSTOM"),
+                    consentedAt = program.optString("consentedAt", ""),
+                    familyShareEnabled = true,
+                    remindersEnabled = remindersEnabled,
+                    appointmentsEnabled = appointmentsEnabled,
+                    reminders = if (remindersEnabled) (0 until reminders.length()).mapNotNull {
+                        parseProgramReminderJson(reminders.optJSONObject(it))
+                            ?.takeIf { reminder -> reminder.programId == programId }
+                    } else emptyList(),
+                    appointments = if (appointmentsEnabled) (0 until appointments.length()).mapNotNull {
+                        appointments.optJSONObject(it)?.let(::parseProgramAppointmentJson)
+                            ?.takeIf { appointment ->
+                                appointment.programId == programId && appointment.patientUserId == cleanPatient
+                            }
+                    } else emptyList()
+                )
+            }
+        )
+    }
+
+    suspend fun acknowledgeFamilyProgramReminder(
+        patientId: String,
+        programId: String,
+        reminderId: String
+    ): br.com.bragasaude.domain.b2b.FamilyReminderAcknowledgementDto? = withContext(Dispatchers.IO) {
+        val ids = listOf(patientId, programId, reminderId).map(String::trim)
+        if (ids.any(String::isEmpty)) return@withContext null
+        val (patient, program, reminder) = ids.map { java.net.URLEncoder.encode(it, "UTF-8") }
+        val response = postJsonDetailed(
+            "$baseUrl/api/b2b/family/patients/$patient/programs/$program/reminders/$reminder/ack",
+            JSONObject()
+        )
+        val body = response.body ?: return@withContext null
+        if (response.code !in 200..299 ||
+            optNullableText(body, "patientUserId") != ids[0] ||
+            optNullableText(body, "programId") != ids[1] ||
+            optNullableText(body, "reminderId") != ids[2]
+        ) return@withContext null
+        val acknowledgedAt = optNullableText(body, "acknowledgedAt") ?: return@withContext null
+        br.com.bragasaude.domain.b2b.FamilyReminderAcknowledgementDto(
+            acknowledgedAt = acknowledgedAt,
+            acknowledgedByUid = optNullableText(body, "acknowledgedByUid")
+        )
     }
 
     suspend fun setEnrollmentMuted(

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.repository.FamilyBridgeRepository
 import br.com.bragasaude.data.remote.repository.MessageTemplate
+import br.com.bragasaude.domain.b2b.FamilyProgramOverviewItemDto
 import br.com.bragasaude.ui.util.FamilyNotificationService
 import br.com.bragasaude.ui.util.NotificationHelper
 import com.google.firebase.auth.FirebaseAuth
@@ -55,6 +56,16 @@ class CaregiverDashboardViewModel @Inject constructor(
 
     private val _upcomingConsultations = MutableStateFlow<List<ConsultationEntity>>(emptyList())
     val upcomingConsultations: StateFlow<List<ConsultationEntity>> = _upcomingConsultations.asStateFlow()
+
+    private val _partnerPrograms = MutableStateFlow<List<FamilyProgramOverviewItemDto>>(emptyList())
+    val partnerPrograms = _partnerPrograms.asStateFlow()
+    private val _partnerProgramsError = MutableStateFlow<String?>(null)
+    val partnerProgramsError = _partnerProgramsError.asStateFlow()
+    private val _acknowledgingPartnerReminder = MutableStateFlow(false)
+    val acknowledgingPartnerReminder = _acknowledgingPartnerReminder.asStateFlow()
+    private var patientSelectionVersion = 0L
+    private var programRequestVersion = 0L
+    private var programAcknowledgementJob: Job? = null
 
     internal fun observeConsultationReminders(consultation: ConsultationEntity): Flow<ConsultationReminderStatus> = flow {
         val owner = auth.currentUser?.uid
@@ -153,6 +164,12 @@ class CaregiverDashboardViewModel @Inject constructor(
         if (patientId.isBlank()) flowOf(emptyList()) else familyRepository.getRecentMessagesForPatient(patientId)
 
     private fun clearPatient() {
+        patientSelectionVersion++
+        programRequestVersion++
+        programAcknowledgementJob?.cancel()
+        _partnerPrograms.value = emptyList()
+        _partnerProgramsError.value = null
+        _acknowledgingPartnerReminder.value = false
         dashboardJob?.cancel()
         realtimeSubscriptionJob?.cancel()
         consultationsJob?.cancel()
@@ -415,6 +432,69 @@ class CaregiverDashboardViewModel @Inject constructor(
         viewModelScope.launch { syncSelectedPatient() }
     }
 
+    private fun isCurrentPatient(owner: String, patientId: String, selectionVersion: Long): Boolean =
+        auth.currentUser?.uid == owner && _dashboard.value.patientUserId == patientId &&
+            patientSelectionVersion == selectionVersion &&
+            _watchedPatients.value.any { it.patientUserId == patientId && it.status == "ACTIVE" }
+
+    private suspend fun refreshPartnerPrograms(owner: String, patientId: String, selectionVersion: Long) {
+        if (!isCurrentPatient(owner, patientId, selectionVersion)) return
+        val requestVersion = ++programRequestVersion
+        try {
+            val overview = familyRepository.getFamilyProgramOverview(patientId)
+            if (isCurrentPatient(owner, patientId, selectionVersion) && requestVersion == programRequestVersion) {
+                check(overview.patientUserId == patientId)
+                _partnerPrograms.value = overview.programs.filter { it.familyShareEnabled }
+                _partnerProgramsError.value = null
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            if (isCurrentPatient(owner, patientId, selectionVersion) && requestVersion == programRequestVersion) {
+                // Nunca conservar dados de um consentimento que pode ter sido revogado.
+                _partnerPrograms.value = emptyList()
+                _partnerProgramsError.value = "Não foi possível consultar os programas compartilhados. Atualize para tentar novamente."
+            }
+        }
+    }
+
+    fun acknowledgePartnerReminder(programId: String, reminderId: String) {
+        val owner = auth.currentUser?.uid ?: return
+        val patientId = _dashboard.value.patientUserId
+        val selectionVersion = patientSelectionVersion
+        if (!isCurrentPatient(owner, patientId, selectionVersion) || _acknowledgingPartnerReminder.value) return
+        val program = _partnerPrograms.value.firstOrNull { it.programId == programId && it.familyShareEnabled }
+            ?: return
+        if (!program.remindersEnabled || program.reminders.none {
+                it.reminderId == reminderId && it.acknowledgedAt == null
+            }) return
+        _acknowledgingPartnerReminder.value = true
+        programAcknowledgementJob = viewModelScope.launch {
+            try {
+                familyRepository.acknowledgeFamilyProgramReminder(patientId, programId, reminderId)
+                if (isCurrentPatient(owner, patientId, selectionVersion)) {
+                    refreshPartnerPrograms(owner, patientId, selectionVersion)
+                    if (isCurrentPatient(owner, patientId, selectionVersion)) {
+                        _uiEvents.emit(FamilyUiEvent.Notice("Ciência do lembrete registrada."))
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                if (isCurrentPatient(owner, patientId, selectionVersion)) {
+                    programRequestVersion++
+                    _partnerPrograms.value = emptyList()
+                    _partnerProgramsError.value = "Não foi possível confirmar o lembrete. Atualize os programas compartilhados."
+                    _uiEvents.emit(FamilyUiEvent.Error("Não foi possível confirmar o lembrete."))
+                }
+            } finally {
+                if (isCurrentPatient(owner, patientId, selectionVersion)) {
+                    _acknowledgingPartnerReminder.value = false
+                }
+            }
+        }
+    }
+
     /** A tela controla a duração do ciclo; cada download termina antes do próximo. */
     suspend fun pollPatientData() {
         while (true) {
@@ -425,20 +505,35 @@ class CaregiverDashboardViewModel @Inject constructor(
 
     private suspend fun syncSelectedPatient() {
         if (!refreshLock.tryLock()) return
+        val owner = auth.currentUser?.uid
+        val patientId = _dashboard.value.patientUserId
+        val selectionVersion = patientSelectionVersion
+        var familyAccessChecked = false
         try {
-            val owner = auth.currentUser?.uid ?: return
+            if (owner == null || patientId.isBlank()) return
             familyRepository.syncBindingsForCaregiver(owner, strict = true)
-            if (auth.currentUser?.uid != owner) return
-            val patientId = _dashboard.value.patientUserId
+            if (!isCurrentPatient(owner, patientId, selectionVersion)) return
             val bindings = familyRepository.getActiveBindingsForCaregiver(owner).first()
-            if (patientId.isBlank() || bindings.none { it.patientUserId == patientId }) return
+            if (bindings.none { it.patientUserId == patientId && it.status == "ACTIVE" }) {
+                clearPatient()
+                return
+            }
+            // Independente da permissão de sinais vitais pessoais do familiar.
+            refreshPartnerPrograms(owner, patientId, selectionVersion)
+            familyAccessChecked = true
+            if (!isCurrentPatient(owner, patientId, selectionVersion)) return
             familyRepository.syncPatientDataForCaregiver(patientId).getOrThrow()
-            if (auth.currentUser?.uid == owner && _dashboard.value.patientUserId == patientId) {
+            if (isCurrentPatient(owner, patientId, selectionVersion)) {
                 _lastCloudSync.value = System.currentTimeMillis()
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (!familyAccessChecked && owner != null && isCurrentPatient(owner, patientId, selectionVersion)) {
+                programRequestVersion++
+                _partnerPrograms.value = emptyList()
+                _partnerProgramsError.value = "Não foi possível atualizar o acesso familiar. Atualize para tentar novamente."
+            }
             android.util.Log.w("CaregiverDashboardVM", "Falha no download do familiar: ${e.message}")
         } finally {
             refreshLock.unlock()
@@ -485,5 +580,6 @@ class CaregiverDashboardViewModel @Inject constructor(
         dashboardJob?.cancel()
         consultationsJob?.cancel()
         realtimeSubscriptionJob?.cancel()
+        programAcknowledgementJob?.cancel()
     }
 }

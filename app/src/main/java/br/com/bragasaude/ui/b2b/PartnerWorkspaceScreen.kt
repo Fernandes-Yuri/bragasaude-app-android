@@ -152,6 +152,7 @@ fun PartnerWorkspaceScreen(
         PartnerConsentSheet(
             apiClient = viewModel.partnerApiClient(),
             initialInviteCode = pendingInviteCode,
+            initialProgramId = activeContext.programId,
             onDismiss = {
                 showConsentSheet = false
                 pendingInviteCode = ""

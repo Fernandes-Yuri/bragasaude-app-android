@@ -33,6 +33,7 @@ import kotlinx.coroutines.launch
 fun PartnerConsentSheet(
     apiClient: BragaApiClient,
     initialInviteCode: String = "",
+    initialProgramId: String? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -43,6 +44,7 @@ fun PartnerConsentSheet(
     var inviteCode by rememberSaveable { mutableStateOf(initialInviteCode.trim().uppercase()) }
     var invitePreview by remember { mutableStateOf<PartnerInvitePreviewDto?>(null) }
     var activeEnrollment by remember { mutableStateOf<B2BContextDescriptor?>(null) }
+    var enrollments by remember { mutableStateOf<List<B2BContextDescriptor>>(emptyList()) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     var selectedCategories by remember {
@@ -54,11 +56,13 @@ fun PartnerConsentSheet(
         )
     }
 
-    LaunchedEffect(initialInviteCode) {
+    LaunchedEffect(initialInviteCode, initialProgramId) {
         val contexts = apiClient.getB2BContexts()
-        val participant = contexts.firstOrNull {
+        enrollments = contexts.filter {
             it.parsedMode == AppContextMode.PARTNER_PARTICIPANT && !it.programId.isNullOrBlank()
         }
+        val participant = enrollments.firstOrNull { it.programId == initialProgramId }
+            ?: enrollments.firstOrNull()
         if (participant != null) {
             activeEnrollment = participant
             if (participant.sharedCategories.isNotEmpty()) {
@@ -71,6 +75,12 @@ fun PartnerConsentSheet(
             invitePreview = apiClient.lookupPartnerInvitePreview(cleanInitial)
         }
         isLoading = false
+    }
+
+    val consentProgramId = invitePreview?.programId
+        ?: activeEnrollment?.programId?.takeIf { inviteCode.isBlank() }
+    var familyShareEnabled by remember(consentProgramId) {
+        mutableStateOf(enrollments.firstOrNull { it.programId == consentProgramId }?.familyShareEnabled ?: false)
     }
 
     val effectiveProgramName =
@@ -132,6 +142,21 @@ fun PartnerConsentSheet(
                     CircularProgressIndicator(color = brandColor)
                 }
             } else {
+                if (enrollments.size > 1 && inviteCode.isBlank()) {
+                    Text("Escolha o programa para ajustar o compartilhamento")
+                    enrollments.forEach { enrollment ->
+                        FilterChip(
+                            selected = activeEnrollment?.programId == enrollment.programId,
+                            enabled = !isWorking,
+                            onClick = {
+                                activeEnrollment = enrollment
+                                selectedCategories = enrollment.sharedCategories.toSet()
+                                errorMessage = null
+                            },
+                            label = { Text(enrollment.programName ?: "Programa parceiro") }
+                        )
+                    }
+                }
                 // Entrada ou busca de código de convite
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -143,6 +168,7 @@ fun PartnerConsentSheet(
                         onValueChange = {
                             if (it.length <= 32) {
                                 inviteCode = it.uppercase()
+                                invitePreview = null
                                 errorMessage = null
                             }
                         },
@@ -323,6 +349,27 @@ fun PartnerConsentSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = familyShareEnabled,
+                        onCheckedChange = { familyShareEnabled = it },
+                        enabled = !isWorking && consentProgramId != null
+                    )
+                    Text(
+                        "Permitir que meu familiar conectado veja lembretes e agendamentos deste programa",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Text(
+                    "Opcional. O acesso depende de um vínculo familiar ativo e de o programa permitir apoio familiar. Você pode retirar esta autorização a qualquer momento. O chat com o parceiro permanece privado.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
                 errorMessage?.let { msg ->
                     Text(
                         text = msg,
@@ -346,10 +393,12 @@ fun PartnerConsentSheet(
                             isWorking = true
                             errorMessage = null
                             scope.launch {
-                                val res = apiClient.updatePartnerConsent(progId, selectedCategories)
+                                val res = apiClient.updatePartnerConsent(progId, selectedCategories, familyShareEnabled)
                                 isWorking = false
                                 if (res.isSuccess && res.activeContext != null) {
                                     activeEnrollment = res.activeContext
+                                    enrollments = enrollments.map { if (it.programId == progId) res.activeContext else it }
+                                    familyShareEnabled = res.activeContext.familyShareEnabled
                                     Toast.makeText(
                                         context,
                                         "Preferências de compartilhamento atualizadas.",
@@ -381,6 +430,8 @@ fun PartnerConsentSheet(
                                 if (res.isSuccess) {
                                     activeEnrollment = null
                                     invitePreview = null
+                                    enrollments = enrollments.filterNot { it.programId == progId }
+                                    familyShareEnabled = false
                                     Toast.makeText(
                                         context,
                                         "Compartilhamento com o programa encerrado.",
@@ -405,6 +456,7 @@ fun PartnerConsentSheet(
                 } else {
                     val canJoin = B2BOnboardingValidator.isValidInviteCode(inviteCode) &&
                         hasValidCategories &&
+                        invitePreview != null &&
                         invitePreview?.invitePaused != true &&
                         invitePreview?.hasAvailableSeats != false
 
@@ -414,10 +466,12 @@ fun PartnerConsentSheet(
                             isWorking = true
                             errorMessage = null
                             scope.launch {
-                                val res = apiClient.joinPartnerProgram(inviteCode, selectedCategories)
+                                val res = apiClient.joinPartnerProgram(inviteCode, selectedCategories, familyShareEnabled)
                                 isWorking = false
                                 if (res.isSuccess && res.activeContext != null) {
                                     activeEnrollment = res.activeContext
+                                    enrollments = enrollments.filterNot { it.programId == res.activeContext.programId } + res.activeContext
+                                    familyShareEnabled = res.activeContext.familyShareEnabled
                                     inviteCode = ""
                                     invitePreview = null
                                     Toast.makeText(
