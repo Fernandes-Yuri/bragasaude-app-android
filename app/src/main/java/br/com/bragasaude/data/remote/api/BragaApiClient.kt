@@ -1690,21 +1690,17 @@ class BragaApiClient @Inject constructor(
     // em POST /api/profile/{id}/avatar. A moderação (Gemini/Groq, fail-closed) roda
     // no gateway ANTES de gravar: reprovada = 422 com motivo; indisponível = 503.
 
-    data class AvatarUploadResult(val photoUrl: String?, val code: Int, val detail: String?)
-
-    suspend fun uploadProfileAvatar(
-        userId: String,
+    private fun postMultipartFile(
+        urlString: String,
+        fieldName: String,
         fileName: String,
         mimeType: String,
         bytes: ByteArray
-    ): AvatarUploadResult = withContext(Dispatchers.IO) {
-        if (bytes.isEmpty() || bytes.size > 5 * 1024 * 1024) {
-            return@withContext AvatarUploadResult(null, 413, "A foto excede o limite de 5 MB.")
-        }
+    ): Pair<Int, String> {
         val boundary = "Boundary-${System.currentTimeMillis()}"
         var conn: HttpURLConnection? = null
         try {
-            val url = URL("$baseUrl/api/profile/$userId/avatar")
+            val url = URL(urlString)
             conn = openConnection(url).apply {
                 requestMethod = "POST"
                 connectTimeout = CONNECT_TIMEOUT_MS
@@ -1717,7 +1713,7 @@ class BragaApiClient @Inject constructor(
             conn.outputStream.use { output ->
                 output.write("--$boundary\r\n".toByteArray())
                 output.write(
-                    "Content-Disposition: form-data; name=\"file\"; filename=\"${fileName.replace("\"", "")}\"\r\n".toByteArray()
+                    "Content-Disposition: form-data; name=\"$fieldName\"; filename=\"${fileName.replace("\"", "")}\"\r\n".toByteArray()
                 )
                 output.write("Content-Type: $mimeType\r\n\r\n".toByteArray())
                 output.write(bytes)
@@ -1726,6 +1722,31 @@ class BragaApiClient @Inject constructor(
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            return code to text
+        } finally {
+            runCatching { conn?.disconnect() }
+        }
+    }
+
+    data class AvatarUploadResult(val photoUrl: String?, val code: Int, val detail: String?)
+
+    suspend fun uploadProfileAvatar(
+        userId: String,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray
+    ): AvatarUploadResult = withContext(Dispatchers.IO) {
+        if (bytes.isEmpty() || bytes.size > 5 * 1024 * 1024) {
+            return@withContext AvatarUploadResult(null, 413, "A foto excede o limite de 5 MB.")
+        }
+        try {
+            val (code, text) = postMultipartFile(
+                urlString = "$baseUrl/api/profile/$userId/avatar",
+                fieldName = "file",
+                fileName = fileName,
+                mimeType = mimeType,
+                bytes = bytes
+            )
             val json = runCatching { JSONObject(text) }.getOrNull()
             if (code in 200..299) {
                 val photoUrl = json?.optString("photo_url")?.takeIf(String::isNotBlank)
@@ -1738,8 +1759,6 @@ class BragaApiClient @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Falha no upload do avatar: ${e.message}")
             AvatarUploadResult(null, 0, null)
-        } finally {
-            runCatching { conn?.disconnect() }
         }
     }
 
@@ -3074,6 +3093,48 @@ class BragaApiClient @Inject constructor(
             Log.w(TAG, "Falha ao remover participante do programa B2B: ${e.message}")
             br.com.bragasaude.domain.b2b.RemovePartnerParticipantResult(
                 errorDetail = "Erro de conexão ao encerrar vínculo do participante."
+            )
+        }
+    }
+
+    suspend fun uploadPartnerLogo(
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray
+    ): br.com.bragasaude.domain.b2b.UploadPartnerLogoResult = withContext(Dispatchers.IO) {
+        if (bytes.isEmpty() || bytes.size > 2 * 1024 * 1024) {
+            return@withContext br.com.bragasaude.domain.b2b.UploadPartnerLogoResult(
+                errorDetail = "A logo deve ter no máximo 2 MB."
+            )
+        }
+        try {
+            val (code, text) = postMultipartFile(
+                urlString = "$baseUrl/api/b2b/program/me/logo",
+                fieldName = "file",
+                fileName = fileName,
+                mimeType = mimeType,
+                bytes = bytes
+            )
+            val json = runCatching { JSONObject(text) }.getOrNull()
+            if (code in 200..299 && json != null) {
+                val uploadedUrl = json.optString("logoUrl", "")
+                    .takeIf { it.isNotBlank() && it != "null" }
+                return@withContext br.com.bragasaude.domain.b2b.UploadPartnerLogoResult(
+                    logoUrl = uploadedUrl,
+                    program = parsePartnerProgramJson(json.optJSONObject("program"))
+                )
+            }
+            val detail = json?.optString("detail", "")
+                ?.takeIf { it.isNotBlank() && it != "null" }
+            br.com.bragasaude.domain.b2b.UploadPartnerLogoResult(
+                errorDetail = detail ?: "Não foi possível enviar a logo agora."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha no upload da logo B2B: ${e.message}")
+            br.com.bragasaude.domain.b2b.UploadPartnerLogoResult(
+                errorDetail = "Erro de conexão ao enviar a logo do programa."
             )
         }
     }

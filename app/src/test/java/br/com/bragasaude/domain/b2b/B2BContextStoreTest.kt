@@ -2,6 +2,8 @@ package br.com.bragasaude.domain.b2b
 
 import br.com.bragasaude.data.local.b2b.B2BContextCacheEntity
 import br.com.bragasaude.data.remote.b2b.ActiveContextStore
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -224,5 +226,25 @@ class B2BContextStoreTest {
         assertNull(B2BOnboardingValidator.parseInviteCodeFromUri("javascript:alert(1)"))
         assertNull(B2BOnboardingValidator.parseInviteCodeFromUri("https://bragasaude.online/convite/a"))
         assertNull(B2BOnboardingValidator.parseInviteCodeFromUri("https://bragasaude.online/sobre"))
+    }
+
+    @Test
+    fun `buildInviteDeepLink gera link canonico e matriz QR ZXing valida`() {
+        val url = B2BOnboardingValidator.buildInviteDeepLink(" card-4f9a ")
+        assertEquals("https://bragasaude.online/convite/CARD-4F9A", url)
+        assertEquals("CARD-4F9A", B2BOnboardingValidator.parseInviteCodeFromUri(url))
+        assertNull(B2BOnboardingValidator.buildInviteDeepLink(" "))
+        assertNull(B2BOnboardingValidator.buildInviteDeepLink("a"))
+
+        val matrix = QRCodeWriter().encode(url, BarcodeFormat.QR_CODE, 256, 256)
+        assertEquals(256, matrix.width)
+        assertEquals(256, matrix.height)
+        var darkPixels = 0
+        for (x in 0 until matrix.width) {
+            for (y in 0 until matrix.height) {
+                if (matrix.get(x, y)) darkPixels++
+            }
+        }
+        assertTrue(darkPixels in 1000..65000)
     }
 }

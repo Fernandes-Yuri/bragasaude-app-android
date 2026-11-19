@@ -1,6 +1,10 @@
 package br.com.bragasaude.ui.b2b
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -27,10 +32,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.domain.b2b.B2BOnboardingValidator
+import br.com.bragasaude.domain.b2b.B2BThemeEngine
 import br.com.bragasaude.domain.b2b.PartnerApprovalStatus
 import br.com.bragasaude.domain.b2b.PartnerProgramDto
 import br.com.bragasaude.domain.b2b.UpsertPartnerProgramRequest
 import br.com.bragasaude.ui.components.BragaBottomSheet
+import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,6 +51,7 @@ fun PartnerProgramOnboardingSheet(
 
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
+    var isUploadingLogo by remember { mutableStateOf(false) }
     var existingProgram by remember { mutableStateOf<PartnerProgramDto?>(null) }
 
     var companyName by rememberSaveable { mutableStateOf("") }
@@ -53,6 +61,7 @@ fun PartnerProgramOnboardingSheet(
         mutableStateOf(B2BOnboardingValidator.DEFAULT_PRIMARY_COLOR)
     }
     var logoUrl by rememberSaveable { mutableStateOf("") }
+    var showManualLogoUrl by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         val loaded = apiClient.getMyPartnerProgram()
@@ -67,12 +76,93 @@ fun PartnerProgramOnboardingSheet(
         isLoading = false
     }
 
-    val parsedColor = remember(primaryColor) {
-        runCatching {
-            Color(android.graphics.Color.parseColor(
-                B2BOnboardingValidator.normalizeHexColorOrDefault(primaryColor)
-            ))
-        }.getOrDefault(Color(0xFF1A6B5C))
+    val logoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        val picked = uri ?: return@rememberLauncherForActivityResult
+        if (isUploadingLogo || isSaving) return@rememberLauncherForActivityResult
+        isUploadingLogo = true
+        scope.launch {
+            try {
+                if (existingProgram == null) {
+                    val draftReady = B2BOnboardingValidator.canSaveDraft(
+                        companyName = companyName,
+                        programName = programName,
+                        primaryColor = primaryColor,
+                        cnpj = cnpj.takeIf { it.isNotBlank() },
+                        logoUrl = null
+                    )
+                    if (!draftReady) {
+                        Toast.makeText(
+                            context,
+                            "Informe primeiro o nome da empresa e do programa para enviar a logo.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        return@launch
+                    }
+                    val created = apiClient.saveMyPartnerProgram(
+                        UpsertPartnerProgramRequest(
+                            companyName = companyName,
+                            programName = programName,
+                            cnpj = B2BOnboardingValidator.formatCnpjOrNull(cnpj),
+                            primaryColor = B2BOnboardingValidator.normalizeHexColorOrDefault(primaryColor),
+                            logoUrl = null
+                        )
+                    )
+                    if (created == null) {
+                        Toast.makeText(
+                            context,
+                            "Salve o rascunho antes de enviar a logo.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        return@launch
+                    }
+                    existingProgram = created
+                }
+
+                val prepared = B2BLogoMediaHelper.prepareFromUri(context, picked)
+                val uploaded = apiClient.uploadPartnerLogo(
+                    fileName = prepared.fileName,
+                    mimeType = prepared.mimeType,
+                    bytes = prepared.bytes
+                )
+                if (uploaded.isSuccess) {
+                    logoUrl = uploaded.logoUrl.orEmpty()
+                    uploaded.program?.let { existingProgram = it }
+                    Toast.makeText(
+                        context,
+                        "Logo enviada e armazenada com segurança!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        context,
+                        uploaded.errorDetail ?: "Não foi possível enviar a logo agora.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Toast.makeText(
+                    context,
+                    e.message ?: "Não foi possível preparar a imagem selecionada.",
+                    Toast.LENGTH_LONG
+                ).show()
+            } finally {
+                isUploadingLogo = false
+            }
+        }
+    }
+
+    val tokens = remember(primaryColor) {
+        B2BThemeEngine.resolveAccessiblePalette(primaryColor)
+    }
+    val parsedColor = remember(tokens.primaryHex) {
+        Color(android.graphics.Color.parseColor(tokens.primaryHex))
+    }
+    val onParsedPrimary = remember(tokens.onPrimaryHex) {
+        Color(android.graphics.Color.parseColor(tokens.onPrimaryHex))
     }
 
     val status = existingProgram?.parsedStatus ?: PartnerApprovalStatus.DRAFT
@@ -307,6 +397,17 @@ fun PartnerProgramOnboardingSheet(
                         }
                     }
                 }
+
+                prog.inviteCode?.takeIf { it.isNotBlank() }?.let { activeCode ->
+                    PartnerInviteQrCard(
+                        programName = prog.programName,
+                        companyName = prog.companyName,
+                        inviteCode = activeCode,
+                        primaryColorHex = prog.primaryColor,
+                        accentColor = parsedColor,
+                        onAccentColor = onParsedPrimary
+                    )
+                }
             }
 
             if (isLoading) {
@@ -386,14 +487,112 @@ fun PartnerProgramOnboardingSheet(
                     shape = RoundedCornerShape(14.dp)
                 )
 
-                OutlinedTextField(
-                    value = logoUrl,
-                    onValueChange = { if (it.length <= 512) logoUrl = it },
-                    label = { Text("URL da logo (opcional — https://)") },
-                    singleLine = true,
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp)
-                )
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            if (logoUrl.isNotBlank()) {
+                                AsyncImage(
+                                    model = logoUrl,
+                                    contentDescription = "Prévia da logo do programa",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(52.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surface)
+                                )
+                            } else {
+                                val fallbackInitial = (companyName.trim().firstOrNull() ?: 'B').uppercaseChar()
+                                Box(
+                                    modifier = Modifier
+                                        .size(52.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(parsedColor.copy(alpha = 0.16f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = fallbackInitial.toString(),
+                                        color = parsedColor,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 18.sp
+                                    )
+                                }
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Logo do programa",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Envie PNG, JPEG ou WebP direto da galeria (até 2 MB, sem metadados).",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                logoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            },
+                            enabled = !isUploadingLogo && !isSaving,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            if (isUploadingLogo) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("Enviando logo...")
+                            } else {
+                                Text(
+                                    text = if (logoUrl.isNotBlank()) "Trocar logo pela galeria" else "Escolher logo da galeria",
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        TextButton(
+                            onClick = { showManualLogoUrl = !showManualLogoUrl },
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        ) {
+                            Text(
+                                if (showManualLogoUrl) "Ocultar URL manual"
+                                else "Ou informar URL HTTPS manualmente (opcional)"
+                            )
+                        }
+
+                        if (showManualLogoUrl) {
+                            OutlinedTextField(
+                                value = logoUrl,
+                                onValueChange = { if (it.length <= 512) logoUrl = it },
+                                label = { Text("URL da logo (opcional — https://)") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                        }
+                    }
+                }
 
                 Text(
                     text = "Confirmar o e-mail não aprova a empresa. Os convites e a divulgação são liberados somente após análise da equipe Braga.",
@@ -422,7 +621,7 @@ fun PartnerProgramOnboardingSheet(
                 ) {
                     OutlinedButton(
                         onClick = {
-                            if (!canSave || isSaving) return@OutlinedButton
+                            if (!canSave || isSaving || isUploadingLogo) return@OutlinedButton
                             isSaving = true
                             scope.launch {
                                 val saved = apiClient.saveMyPartnerProgram(
@@ -451,7 +650,7 @@ fun PartnerProgramOnboardingSheet(
                                 }
                             }
                         },
-                        enabled = canSave && !isSaving,
+                        enabled = canSave && !isSaving && !isUploadingLogo,
                         modifier = Modifier.weight(1f).height(52.dp),
                         shape = RoundedCornerShape(14.dp)
                     ) {
@@ -460,7 +659,7 @@ fun PartnerProgramOnboardingSheet(
 
                     Button(
                         onClick = {
-                            if (!canSubmit || isSaving) return@Button
+                            if (!canSubmit || isSaving || isUploadingLogo) return@Button
                             isSaving = true
                             scope.launch {
                                 val saved = apiClient.saveMyPartnerProgram(
@@ -492,10 +691,13 @@ fun PartnerProgramOnboardingSheet(
                                 }
                             }
                         },
-                        enabled = canSubmit && !isSaving && status != PartnerApprovalStatus.APPROVED,
+                        enabled = canSubmit && !isSaving && !isUploadingLogo && status != PartnerApprovalStatus.APPROVED,
                         modifier = Modifier.weight(1f).height(52.dp),
                         shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = parsedColor)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = parsedColor,
+                            contentColor = onParsedPrimary
+                        )
                     ) {
                         Text(
                             if (status == PartnerApprovalStatus.PENDING_REVIEW) "Reenviar análise"

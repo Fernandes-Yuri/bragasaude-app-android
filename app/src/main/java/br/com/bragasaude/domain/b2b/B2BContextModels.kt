@@ -222,6 +222,16 @@ data class RemovePartnerParticipantResult(
 }
 
 @Serializable
+data class UploadPartnerLogoResult(
+    val logoUrl: String? = null,
+    val program: PartnerProgramDto? = null,
+    val errorDetail: String? = null
+) {
+    val isSuccess: Boolean
+        get() = !logoUrl.isNullOrBlank()
+}
+
+@Serializable
 data class SharedStepsDayDto(
     val date: String,
     val steps: Int,
@@ -420,5 +430,11 @@ object B2BOnboardingValidator {
         logoUrl: String? = null
     ): Boolean {
         return canSaveDraft(companyName, programName, primaryColor, cnpj, logoUrl) && isValidCnpj(cnpj)
+    }
+
+    fun buildInviteDeepLink(rawCode: String?): String? {
+        val clean = rawCode?.trim()?.uppercase() ?: return null
+        if (!isValidInviteCode(clean)) return null
+        return "https://bragasaude.online/convite/$clean"
     }
 }
