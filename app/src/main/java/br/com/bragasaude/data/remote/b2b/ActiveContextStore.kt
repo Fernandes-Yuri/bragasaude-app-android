@@ -41,8 +41,11 @@ class ActiveContextStore @Inject constructor() {
         _availableContexts.value = normalized
 
         val current = _activeContext.value
-        if (current.userId != cleanUserId || normalized.none { it.cacheKey() == current.cacheKey() }) {
+        val refreshed = normalized.firstOrNull { it.cacheKey() == current.cacheKey() }
+        if (current.userId != cleanUserId || refreshed == null) {
             _activeContext.value = B2BContextDescriptor.personal(cleanUserId)
+        } else {
+            _activeContext.value = refreshed
         }
     }
 

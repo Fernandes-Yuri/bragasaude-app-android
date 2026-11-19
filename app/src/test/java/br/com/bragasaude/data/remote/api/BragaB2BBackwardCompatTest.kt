@@ -5,6 +5,8 @@ import br.com.bragasaude.data.remote.auth.AuthService
 import br.com.bragasaude.data.remote.b2b.ActiveContextStore
 import br.com.bragasaude.data.remote.network.AuthInterceptor
 import br.com.bragasaude.domain.b2b.B2BContextDescriptor
+import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
+import br.com.bragasaude.domain.b2b.UpdateExperienceRequest
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -378,6 +380,124 @@ class BragaB2BBackwardCompatTest {
             val proofDelReq = server.takeRequest()
             assertEquals("/api/b2b/program/me/proofs/proof-1", proofDelReq.path)
             assertEquals("DELETE", proofDelReq.method)
+
+            // B2B-16: templates No-Code, PUT experience e parsing de experienceConfig em contexts
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "templates": [
+                        {
+                          "templateKey": "NUTRICAO_BEM_ESTAR",
+                          "title": "Nutricao e Bem-Estar",
+                          "subtitle": "Habitos e hidratacao",
+                          "sampleSafeReminder": "Lembrete de agua",
+                          "defaultConfig": {
+                            "schemaVersion": 1,
+                            "templateKey": "NUTRICAO_BEM_ESTAR",
+                            "welcomeHeadline": "Habitos diarios",
+                            "welcomeMessage": "Acompanhe sua rotina.",
+                            "enabledMetrics": ["steps", "hydration"],
+                            "features": {
+                              "assistantChatEnabled": true,
+                              "directPartnerChatEnabled": true,
+                              "aiReceptionistEnabled": true,
+                              "familyLinkEnabled": false,
+                              "partnerRemindersEnabled": true,
+                              "appointmentsEnabled": false,
+                              "preConsultationPdfEnabled": true
+                            }
+                          }
+                        }
+                      ]
+                    }
+                    """.trimIndent()
+                )
+            )
+            val templates = api.getProgramTemplates()
+            assertEquals(1, templates.size)
+            assertEquals("NUTRICAO_BEM_ESTAR", templates[0].templateKey)
+            assertTrue(templates[0].defaultConfig.features.aiReceptionistEnabled)
+            assertEquals("/api/b2b/templates", server.takeRequest().path)
+
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "program": {
+                        "programId": "11111111-1111-1111-1111-111111111111",
+                        "ownerUserId": "owner-a",
+                        "companyName": "Clinica Horizonte Ltda",
+                        "programName": "Cuidado Cardio",
+                        "approvalStatus": "APPROVED",
+                        "templateKey": "NUTRICAO_BEM_ESTAR",
+                        "experienceConfig": {
+                          "schemaVersion": 1,
+                          "templateKey": "NUTRICAO_BEM_ESTAR",
+                          "welcomeHeadline": "Rotina Personalizada",
+                          "welcomeMessage": "Bem-vindo ao nosso programa.",
+                          "enabledMetrics": ["steps", "hydration"],
+                          "features": {
+                            "directPartnerChatEnabled": true,
+                            "aiReceptionistEnabled": true
+                          }
+                        }
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val customCfg = ProgramExperienceConfigDto.defaultForTemplate("NUTRICAO_BEM_ESTAR").copy(
+                welcomeHeadline = "Rotina Personalizada",
+                welcomeMessage = "Bem-vindo ao nosso programa."
+            )
+            val expRes = api.updateProgramExperience(
+                UpdateExperienceRequest(
+                    templateKey = "NUTRICAO_BEM_ESTAR",
+                    applyTemplateDefaults = false,
+                    experienceConfig = customCfg
+                )
+            )
+            assertTrue(expRes.isSuccess)
+            assertEquals("Rotina Personalizada", expRes.program?.experienceConfig?.welcomeHeadline)
+            val expReq = server.takeRequest()
+            assertEquals("/api/b2b/program/me/experience", expReq.path)
+            assertEquals("PUT", expReq.method)
+
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "defaultMode": "PERSONAL",
+                      "contexts": [
+                        {
+                          "mode": "PARTNER_PARTICIPANT",
+                          "userId": "patient-1",
+                          "programId": "11111111-1111-1111-1111-111111111111",
+                          "programName": "Cuidado Cardio",
+                          "companyName": "Clinica Horizonte",
+                          "templateKey": "NUTRICAO_BEM_ESTAR",
+                          "familyShareEnabled": true,
+                          "sharedCategories": ["steps"],
+                          "experienceConfig": {
+                            "templateKey": "NUTRICAO_BEM_ESTAR",
+                            "welcomeHeadline": "Rotina Personalizada",
+                            "welcomeMessage": "Bem-vindo ao nosso programa.",
+                            "enabledMetrics": ["steps", "hydration"],
+                            "features": { "partnerRemindersEnabled": true, "appointmentsEnabled": false }
+                          }
+                        }
+                      ]
+                    }
+                    """.trimIndent()
+                )
+            )
+            val parsedCtxs = api.getB2BContexts()
+            assertEquals(1, parsedCtxs.size)
+            assertTrue(parsedCtxs[0].familyShareEnabled)
+            assertEquals("Rotina Personalizada", parsedCtxs[0].experienceConfig?.welcomeHeadline)
+            assertTrue(!parsedCtxs[0].resolvedExperienceConfig().features.appointmentsEnabled)
+            assertEquals("/api/b2b/contexts", server.takeRequest().path)
         }
     }
 }

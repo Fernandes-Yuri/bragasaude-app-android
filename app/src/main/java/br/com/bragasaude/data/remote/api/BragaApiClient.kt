@@ -1338,12 +1338,12 @@ class BragaApiClient @Inject constructor(
         return ApiResponse(body, code, detail)
     }
 
-    private fun postJsonDetailed(urlString: String, json: JSONObject): ApiResponse {
+    private fun sendJsonDetailed(method: String, urlString: String, json: JSONObject): ApiResponse {
         var conn: HttpURLConnection? = null
         return try {
             val url = URL(urlString)
             conn = openConnection(url).apply {
-                requestMethod = "POST"
+                requestMethod = method
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
                 doOutput = true
@@ -1360,6 +1360,12 @@ class BragaApiClient @Inject constructor(
             try { conn?.disconnect() } catch (_: Exception) {}
         }
     }
+
+    private fun postJsonDetailed(urlString: String, json: JSONObject): ApiResponse =
+        sendJsonDetailed("POST", urlString, json)
+
+    private fun putJsonDetailed(urlString: String, json: JSONObject): ApiResponse =
+        sendJsonDetailed("PUT", urlString, json)
 
     private fun deleteJsonDetailed(urlString: String): ApiResponse {
         var conn: HttpURLConnection? = null
@@ -2580,6 +2586,133 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    private fun parseExperienceConfigJson(
+        obj: JSONObject?,
+        fallbackTemplate: String? = null
+    ): br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto? {
+        val e = obj ?: return null
+        val tplKey = optNullableText(e, "templateKey")
+            ?: optNullableText(e, "template_key")
+            ?: fallbackTemplate?.trim()?.takeIf { it.isNotEmpty() }
+            ?: "CLINICA_GERAL"
+        val defaults = br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto.defaultForTemplate(tplKey)
+        val fObj = e.optJSONObject("features")
+        val dObj = e.optJSONObject("directChatPolicy") ?: e.optJSONObject("direct_chat_policy")
+        val aiObj = e.optJSONObject("aiReceptionistPolicy") ?: e.optJSONObject("ai_receptionist_policy")
+        val apObj = e.optJSONObject("appointmentsPolicy") ?: e.optJSONObject("appointments_policy")
+        val metrics = parseStringList(e.optJSONArray("enabledMetrics") ?: e.optJSONArray("enabled_metrics"))
+
+        return br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto(
+            schemaVersion = e.optInt("schemaVersion", 1),
+            templateKey = tplKey,
+            welcomeHeadline = optNullableText(e, "welcomeHeadline")
+                ?: optNullableText(e, "welcome_headline")
+                ?: defaults.welcomeHeadline,
+            welcomeMessage = optNullableText(e, "welcomeMessage")
+                ?: optNullableText(e, "welcome_message")
+                ?: defaults.welcomeMessage,
+            enabledMetrics = if (metrics.isNotEmpty()) metrics else defaults.enabledMetrics,
+            features = if (fObj != null) {
+                br.com.bragasaude.domain.b2b.ProgramFeaturesDto(
+                    assistantChatEnabled = fObj.optBoolean("assistantChatEnabled", defaults.features.assistantChatEnabled),
+                    directPartnerChatEnabled = fObj.optBoolean("directPartnerChatEnabled", defaults.features.directPartnerChatEnabled),
+                    aiReceptionistEnabled = fObj.optBoolean("aiReceptionistEnabled", defaults.features.aiReceptionistEnabled),
+                    familyLinkEnabled = fObj.optBoolean("familyLinkEnabled", defaults.features.familyLinkEnabled),
+                    partnerRemindersEnabled = fObj.optBoolean("partnerRemindersEnabled", defaults.features.partnerRemindersEnabled),
+                    appointmentsEnabled = fObj.optBoolean("appointmentsEnabled", defaults.features.appointmentsEnabled),
+                    preConsultationPdfEnabled = fObj.optBoolean("preConsultationPdfEnabled", defaults.features.preConsultationPdfEnabled)
+                )
+            } else {
+                defaults.features
+            },
+            directChatPolicy = if (dObj != null) {
+                br.com.bragasaude.domain.b2b.DirectChatPolicyDto(
+                    serviceHoursLabel = optNullableText(dObj, "serviceHoursLabel") ?: defaults.directChatPolicy.serviceHoursLabel,
+                    responseSlaLabel = optNullableText(dObj, "responseSlaLabel") ?: defaults.directChatPolicy.responseSlaLabel,
+                    allowOffHoursQueue = dObj.optBoolean("allowOffHoursQueue", defaults.directChatPolicy.allowOffHoursQueue)
+                )
+            } else {
+                defaults.directChatPolicy
+            },
+            aiReceptionistPolicy = if (aiObj != null) {
+                br.com.bragasaude.domain.b2b.AiReceptionistPolicyDto(
+                    personaName = optNullableText(aiObj, "personaName") ?: defaults.aiReceptionistPolicy.personaName,
+                    activationMode = optNullableText(aiObj, "activationMode") ?: defaults.aiReceptionistPolicy.activationMode,
+                    greetingMessage = optNullableText(aiObj, "greetingMessage") ?: defaults.aiReceptionistPolicy.greetingMessage,
+                    partnerFaqKnowledge = aiObj.optString("partnerFaqKnowledge", ""),
+                    autoEscalateToHumanOnUnknown = aiObj.optBoolean(
+                        "autoEscalateToHumanOnUnknown",
+                        defaults.aiReceptionistPolicy.autoEscalateToHumanOnUnknown
+                    )
+                )
+            } else {
+                defaults.aiReceptionistPolicy
+            },
+            appointmentsPolicy = if (apObj != null) {
+                val mods = parseStringList(apObj.optJSONArray("allowedModalities"))
+                br.com.bragasaude.domain.b2b.AppointmentsPolicyDto(
+                    allowedModalities = if (mods.isNotEmpty()) mods else defaults.appointmentsPolicy.allowedModalities,
+                    bookingMode = optNullableText(apObj, "bookingMode") ?: defaults.appointmentsPolicy.bookingMode,
+                    availabilitiesSummary = optNullableText(apObj, "availabilitiesSummary") ?: defaults.appointmentsPolicy.availabilitiesSummary,
+                    externalBookingUrl = optNullableText(apObj, "externalBookingUrl")
+                )
+            } else {
+                defaults.appointmentsPolicy
+            }
+        )
+    }
+
+    private fun serializeExperienceConfigJson(
+        cfg: br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
+    ): JSONObject = JSONObject().apply {
+        put("schemaVersion", cfg.schemaVersion)
+        put("templateKey", cfg.templateKey)
+        put("welcomeHeadline", cfg.welcomeHeadline)
+        put("welcomeMessage", cfg.welcomeMessage)
+        put("enabledMetrics", JSONArray(cfg.enabledMetrics))
+        put(
+            "features",
+            JSONObject().apply {
+                put("assistantChatEnabled", cfg.features.assistantChatEnabled)
+                put("directPartnerChatEnabled", cfg.features.directPartnerChatEnabled)
+                put("aiReceptionistEnabled", cfg.features.aiReceptionistEnabled)
+                put("familyLinkEnabled", cfg.features.familyLinkEnabled)
+                put("partnerRemindersEnabled", cfg.features.partnerRemindersEnabled)
+                put("appointmentsEnabled", cfg.features.appointmentsEnabled)
+                put("preConsultationPdfEnabled", cfg.features.preConsultationPdfEnabled)
+            }
+        )
+        put(
+            "directChatPolicy",
+            JSONObject().apply {
+                put("serviceHoursLabel", cfg.directChatPolicy.serviceHoursLabel)
+                put("responseSlaLabel", cfg.directChatPolicy.responseSlaLabel)
+                put("allowOffHoursQueue", cfg.directChatPolicy.allowOffHoursQueue)
+            }
+        )
+        put(
+            "aiReceptionistPolicy",
+            JSONObject().apply {
+                put("personaName", cfg.aiReceptionistPolicy.personaName)
+                put("activationMode", cfg.aiReceptionistPolicy.activationMode)
+                put("greetingMessage", cfg.aiReceptionistPolicy.greetingMessage)
+                put("partnerFaqKnowledge", cfg.aiReceptionistPolicy.partnerFaqKnowledge)
+                put("autoEscalateToHumanOnUnknown", cfg.aiReceptionistPolicy.autoEscalateToHumanOnUnknown)
+            }
+        )
+        put(
+            "appointmentsPolicy",
+            JSONObject().apply {
+                put("allowedModalities", JSONArray(cfg.appointmentsPolicy.allowedModalities))
+                put("bookingMode", cfg.appointmentsPolicy.bookingMode)
+                put("availabilitiesSummary", cfg.appointmentsPolicy.availabilitiesSummary)
+                if (!cfg.appointmentsPolicy.externalBookingUrl.isNullOrBlank()) {
+                    put("externalBookingUrl", cfg.appointmentsPolicy.externalBookingUrl.trim())
+                }
+            }
+        )
+    }
+
     private fun parsePartnerProgramJson(obj: JSONObject?): br.com.bragasaude.domain.b2b.PartnerProgramDto? {
         val p = obj ?: return null
         val programId = p.optString("programId", "").takeIf { it.isNotBlank() } ?: return null
@@ -2597,6 +2730,10 @@ class BragaApiClient @Inject constructor(
                 )
             }
         } ?: emptyList()
+
+        val resolvedTemplateKey = optNullableText(p, "templateKey") ?: "CLINICA_GERAL"
+        val resolvedExperience = parseExperienceConfigJson(p.optJSONObject("experienceConfig"), resolvedTemplateKey)
+            ?: br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto.defaultForTemplate(resolvedTemplateKey)
 
         return br.com.bragasaude.domain.b2b.PartnerProgramDto(
             programId = programId,
@@ -2616,7 +2753,8 @@ class BragaApiClient @Inject constructor(
             seatLimit = p.optInt("seatLimit", 10),
             activeParticipants = p.optInt("activeParticipants", 0),
             canPromote = p.optBoolean("canPromote", false),
-            templateKey = optNullableText(p, "templateKey") ?: "CLINICA_GERAL",
+            templateKey = resolvedTemplateKey,
+            experienceConfig = resolvedExperience,
             responsibleName = optNullableText(p, "responsibleName"),
             responsibleCpfMasked = optNullableText(p, "responsibleCpfMasked"),
             responsibleRole = optNullableText(p, "responsibleRole"),
@@ -2782,17 +2920,82 @@ class BragaApiClient @Inject constructor(
                 if (item.isNotBlank()) categories.add(item)
             }
         }
+        val tplKey = optNullableText(c, "templateKey")
         return br.com.bragasaude.domain.b2b.B2BContextDescriptor(
             mode = c.optString("mode", "PERSONAL"),
             userId = c.optString("userId", ""),
-            programId = c.optString("programId", "").takeIf { it.isNotBlank() && it != "null" },
-            programName = c.optString("programName", "").takeIf { it.isNotBlank() && it != "null" },
-            companyName = c.optString("companyName", "").takeIf { it.isNotBlank() && it != "null" },
-            primaryColor = c.optString("primaryColor", "").takeIf { it.isNotBlank() && it != "null" },
-            logoUrl = c.optString("logoUrl", "").takeIf { it.isNotBlank() && it != "null" },
-            approvalStatus = c.optString("approvalStatus", "").takeIf { it.isNotBlank() && it != "null" },
-            sharedCategories = categories
+            programId = optNullableText(c, "programId"),
+            programName = optNullableText(c, "programName"),
+            companyName = optNullableText(c, "companyName"),
+            primaryColor = optNullableText(c, "primaryColor"),
+            logoUrl = optNullableText(c, "logoUrl"),
+            approvalStatus = optNullableText(c, "approvalStatus"),
+            sharedCategories = categories,
+            templateKey = tplKey,
+            experienceConfig = parseExperienceConfigJson(c.optJSONObject("experienceConfig"), tplKey),
+            familyShareEnabled = c.optBoolean("familyShareEnabled", false)
         )
+    }
+
+    suspend fun getProgramTemplates(): List<br.com.bragasaude.domain.b2b.TemplateCatalogItemDto> =
+        withContext(Dispatchers.IO) {
+            try {
+                val res = getJson("$baseUrl/api/b2b/templates") ?: return@withContext emptyList()
+                val arr = res.optJSONArray("templates") ?: return@withContext emptyList()
+                (0 until arr.length()).mapNotNull { idx ->
+                    val item = arr.optJSONObject(idx) ?: return@mapNotNull null
+                    val tk = optNullableText(item, "templateKey") ?: return@mapNotNull null
+                    val title = optNullableText(item, "title") ?: tk
+                    val subtitle = optNullableText(item, "subtitle").orEmpty()
+                    val sample = optNullableText(item, "sampleSafeReminder").orEmpty()
+                    val cfg = parseExperienceConfigJson(item.optJSONObject("defaultConfig"), tk)
+                        ?: br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto.defaultForTemplate(tk)
+                    br.com.bragasaude.domain.b2b.TemplateCatalogItemDto(
+                        templateKey = tk,
+                        title = title,
+                        subtitle = subtitle,
+                        sampleSafeReminder = sample,
+                        defaultConfig = cfg
+                    )
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Falha ao listar templates B2B: ${e.message}")
+                emptyList()
+            }
+        }
+
+    suspend fun updateProgramExperience(
+        request: br.com.bragasaude.domain.b2b.UpdateExperienceRequest
+    ): br.com.bragasaude.domain.b2b.SavePartnerProgramResult = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                if (!request.templateKey.isNullOrBlank()) {
+                    put("templateKey", request.templateKey.trim())
+                }
+                put("applyTemplateDefaults", request.applyTemplateDefaults)
+                request.experienceConfig?.let {
+                    put("experienceConfig", serializeExperienceConfigJson(it))
+                }
+            }
+            val resp = putJsonDetailed("$baseUrl/api/b2b/program/me/experience", payload)
+            if (resp.code in 200..299 && resp.body != null) {
+                return@withContext br.com.bragasaude.domain.b2b.SavePartnerProgramResult(
+                    program = parsePartnerProgramJson(resp.body.optJSONObject("program"))
+                )
+            }
+            br.com.bragasaude.domain.b2b.SavePartnerProgramResult(
+                errorDetail = resp.errorDetail ?: "Não foi possível aplicar as mudanças do Estúdio."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao atualizar experiencia B2B: ${e.message}")
+            br.com.bragasaude.domain.b2b.SavePartnerProgramResult(
+                errorDetail = "Erro de conexão ao salvar o Estúdio do programa."
+            )
+        }
     }
 
     suspend fun getB2BContexts(): List<br.com.bragasaude.domain.b2b.B2BContextDescriptor> =

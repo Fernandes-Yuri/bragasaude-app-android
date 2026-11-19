@@ -13,6 +13,9 @@ import br.com.bragasaude.domain.b2b.PartnerParticipantItemDto
 import br.com.bragasaude.domain.b2b.PartnerPreConsultationPdfGenerator
 import br.com.bragasaude.domain.b2b.PartnerPreConsultationPdfInput
 import br.com.bragasaude.domain.b2b.PartnerProgramDto
+import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
+import br.com.bragasaude.domain.b2b.TemplateCatalogItemDto
+import br.com.bragasaude.domain.b2b.UpdateExperienceRequest
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +50,12 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     private val _programInfo = MutableStateFlow<PartnerProgramDto?>(null)
     val programInfo: StateFlow<PartnerProgramDto?> = _programInfo.asStateFlow()
+
+    private val _templates = MutableStateFlow<List<TemplateCatalogItemDto>>(emptyList())
+    val templates: StateFlow<List<TemplateCatalogItemDto>> = _templates.asStateFlow()
+
+    private val _isSavingExperience = MutableStateFlow(false)
+    val isSavingExperience: StateFlow<Boolean> = _isSavingExperience.asStateFlow()
 
     private val _participants = MutableStateFlow<List<PartnerParticipantItemDto>>(emptyList())
     val participants: StateFlow<List<PartnerParticipantItemDto>> = _participants.asStateFlow()
@@ -131,6 +140,9 @@ class PartnerWorkspaceViewModel @Inject constructor(
         val active = activeContextStore.activeContext.value
         if (active.parsedMode == AppContextMode.PARTNER_OWNER) {
             _programInfo.value = apiClient.getMyPartnerProgram()
+            if (_templates.value.isEmpty()) {
+                _templates.value = apiClient.getProgramTemplates()
+            }
             if (active.approvalStatus == "APPROVED" || _programInfo.value?.approvalStatus == "APPROVED") {
                 val page = apiClient.getMyPartnerParticipants(cursor = null, limit = 20)
                 if (page != null) {
@@ -200,6 +212,54 @@ class PartnerWorkspaceViewModel @Inject constructor(
             } else {
                 _statusMessage.value = result.errorDetail
                     ?: "Não foi possível encerrar o vínculo deste participante agora."
+            }
+        }
+    }
+
+    fun saveExperienceConfig(
+        templateKey: String,
+        applyTemplateDefaults: Boolean,
+        experienceConfig: ProgramExperienceConfigDto?
+    ) {
+        if (_isSavingExperience.value) return
+        val uid = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            _isSavingExperience.value = true
+            val res = apiClient.updateProgramExperience(
+                UpdateExperienceRequest(
+                    templateKey = templateKey,
+                    applyTemplateDefaults = applyTemplateDefaults,
+                    experienceConfig = experienceConfig
+                )
+            )
+            _isSavingExperience.value = false
+            if (res.isSuccess && res.program != null) {
+                val prev = _programInfo.value
+                _programInfo.value = if (prev != null) {
+                    res.program.copy(
+                        responsibleName = res.program.responsibleName ?: prev.responsibleName,
+                        responsibleCpfMasked = res.program.responsibleCpfMasked ?: prev.responsibleCpfMasked,
+                        responsibleRole = res.program.responsibleRole ?: prev.responsibleRole,
+                        responsiblePhone = res.program.responsiblePhone ?: prev.responsiblePhone,
+                        councilType = res.program.councilType ?: prev.councilType,
+                        councilNumber = res.program.councilNumber ?: prev.councilNumber,
+                        councilUf = res.program.councilUf ?: prev.councilUf,
+                        city = res.program.city ?: prev.city,
+                        state = res.program.state ?: prev.state,
+                        termsAcceptedAt = res.program.termsAcceptedAt ?: prev.termsAcceptedAt,
+                        termsVersion = res.program.termsVersion ?: prev.termsVersion,
+                        autoKybStatus = res.program.autoKybStatus ?: prev.autoKybStatus,
+                        autoKybFlags = res.program.autoKybFlags.ifEmpty { prev.autoKybFlags },
+                        proofDocuments = res.program.proofDocuments.ifEmpty { prev.proofDocuments }
+                    )
+                } else {
+                    res.program
+                }
+                b2bContextRepository.syncContexts(uid)
+                _statusMessage.value = "Estúdio atualizado! A prévia e os participantes já refletem as mudanças."
+            } else {
+                _statusMessage.value = res.errorDetail
+                    ?: "Não foi possível aplicar as alterações no programa."
             }
         }
     }
