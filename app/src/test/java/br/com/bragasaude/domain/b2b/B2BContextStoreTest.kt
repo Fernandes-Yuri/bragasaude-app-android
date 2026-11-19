@@ -156,4 +156,24 @@ class B2BContextStoreTest {
         assertEquals("Em análise", PartnerApprovalStatus.fromWire("PENDING_REVIEW").labelPtBr)
         assertEquals("Empresa aprovada", PartnerApprovalStatus.fromWire("APPROVED").labelPtBr)
     }
+
+    @Test
+    fun `SharedCategoryOption e B2BOnboardingValidator normalizam consentimento granular`() {
+        assertEquals(
+            "Escolha quais registros compartilhar com Programa Horizonte.",
+            B2BOnboardingValidator.buildConsentHeading("Programa Horizonte")
+        )
+        assertEquals(
+            "Escolha quais registros compartilhar com o programa parceiro.",
+            B2BOnboardingValidator.buildConsentHeading("  ")
+        )
+
+        val normalized = B2BOnboardingValidator.normalizeSharedCategories(
+            listOf(" STEPS ", "hydration", "invalid_cat", "steps", "authorized_records")
+        )
+        assertEquals(listOf("steps", "hydration", "authorized_records"), normalized)
+        assertTrue(B2BOnboardingValidator.isValidConsentSelection(normalized))
+        assertFalse(B2BOnboardingValidator.isValidConsentSelection(listOf("invalid_only")))
+        assertFalse(B2BOnboardingValidator.isValidConsentSelection(emptyList()))
+    }
 }
