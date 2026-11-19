@@ -8,13 +8,16 @@ import br.com.bragasaude.data.remote.b2b.ActiveContextStore
 import br.com.bragasaude.data.remote.b2b.B2BContextRepository
 import br.com.bragasaude.domain.b2b.AppContextMode
 import br.com.bragasaude.domain.b2b.B2BContextDescriptor
+import br.com.bragasaude.domain.b2b.B2BOnboardingValidator
 import br.com.bragasaude.domain.b2b.CreateProgramReminderRequest
+import br.com.bragasaude.domain.b2b.EnrollmentAppointmentsFeedDto
 import br.com.bragasaude.domain.b2b.EnrollmentRemindersFeedDto
 import br.com.bragasaude.domain.b2b.ParticipantRoutineSummaryDto
 import br.com.bragasaude.domain.b2b.PartnerParticipantItemDto
 import br.com.bragasaude.domain.b2b.PartnerPreConsultationPdfGenerator
 import br.com.bragasaude.domain.b2b.PartnerPreConsultationPdfInput
 import br.com.bragasaude.domain.b2b.PartnerProgramDto
+import br.com.bragasaude.domain.b2b.ProgramAppointmentDto
 import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
 import br.com.bragasaude.domain.b2b.ProgramReminderDto
 import br.com.bragasaude.domain.b2b.ReportProgramAbuseRequest
@@ -116,6 +119,18 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     private val _isReportingProgram = MutableStateFlow(false)
     val isReportingProgram: StateFlow<Boolean> = _isReportingProgram.asStateFlow()
+
+    private val _ownerAppointments = MutableStateFlow<List<ProgramAppointmentDto>>(emptyList())
+    val ownerAppointments: StateFlow<List<ProgramAppointmentDto>> = _ownerAppointments.asStateFlow()
+
+    private val _enrollmentAppointmentsFeed = MutableStateFlow<EnrollmentAppointmentsFeedDto?>(null)
+    val enrollmentAppointmentsFeed: StateFlow<EnrollmentAppointmentsFeedDto?> = _enrollmentAppointmentsFeed.asStateFlow()
+
+    private val _isSubmittingAppointment = MutableStateFlow(false)
+    val isSubmittingAppointment: StateFlow<Boolean> = _isSubmittingAppointment.asStateFlow()
+
+    private val _updatingAppointmentId = MutableStateFlow<String?>(null)
+    val updatingAppointmentId: StateFlow<String?> = _updatingAppointmentId.asStateFlow()
 
     private val _isGeneratingPdf = MutableStateFlow(false)
     val isGeneratingPdf: StateFlow<Boolean> = _isGeneratingPdf.asStateFlow()
@@ -240,6 +255,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
         val active = activeContextStore.activeContext.value
         if (active.parsedMode == AppContextMode.PARTNER_OWNER) {
             _enrollmentRemindersFeed.value = null
+            _enrollmentAppointmentsFeed.value = null
             _programInfo.value = apiClient.getMyPartnerProgram()
             if (_templates.value.isEmpty()) {
                 _templates.value = apiClient.getProgramTemplates()
@@ -252,31 +268,46 @@ class PartnerWorkspaceViewModel @Inject constructor(
                     _nextCursor.value = page.nextCursor
                     _hasMore.value = page.hasMore
                 }
-                val remindersEnabled = (_programInfo.value?.experienceConfig
-                    ?: active.resolvedExperienceConfig()).features.partnerRemindersEnabled
-                _ownerReminders.value = if (remindersEnabled) {
+                val resolvedCfg = _programInfo.value?.experienceConfig ?: active.resolvedExperienceConfig()
+                _ownerReminders.value = if (resolvedCfg.features.partnerRemindersEnabled) {
                     apiClient.getMyPartnerSentReminders(limit = 20)
+                } else {
+                    emptyList()
+                }
+                _ownerAppointments.value = if (resolvedCfg.features.appointmentsEnabled) {
+                    apiClient.getOwnerProgramAppointments(limit = 50)?.appointments.orEmpty()
                 } else {
                     emptyList()
                 }
             } else {
                 _participants.value = emptyList()
                 _ownerReminders.value = emptyList()
+                _ownerAppointments.value = emptyList()
                 _hasMore.value = false
             }
         } else {
             _participants.value = emptyList()
             _ownerReminders.value = emptyList()
+            _ownerAppointments.value = emptyList()
             _nextCursor.value = null
             _hasMore.value = false
             val pid = active.programId?.takeIf { it.isNotBlank() }
+            val cfg = active.resolvedExperienceConfig()
             if (active.parsedMode == AppContextMode.PARTNER_PARTICIPANT &&
                 pid != null &&
-                active.resolvedExperienceConfig().features.partnerRemindersEnabled
+                cfg.features.partnerRemindersEnabled
             ) {
                 _enrollmentRemindersFeed.value = apiClient.getEnrollmentReminders(pid, limit = 20)
             } else {
                 _enrollmentRemindersFeed.value = null
+            }
+            if (active.parsedMode == AppContextMode.PARTNER_PARTICIPANT &&
+                pid != null &&
+                cfg.features.appointmentsEnabled
+            ) {
+                _enrollmentAppointmentsFeed.value = apiClient.getEnrollmentAppointments(pid)
+            } else {
+                _enrollmentAppointmentsFeed.value = null
             }
         }
     }
@@ -389,6 +420,118 @@ class PartnerWorkspaceViewModel @Inject constructor(
             } else {
                 _statusMessage.value = result.errorDetail
                     ?: "Não foi possível registrar sua denúncia agora."
+            }
+        }
+    }
+
+    fun requestEnrollmentAppointment(
+        programId: String,
+        modality: String,
+        requestedSlotText: String,
+        patientNote: String?,
+        onSuccess: () -> Unit
+    ) {
+        if (_isSubmittingAppointment.value) return
+        val validationErr = B2BOnboardingValidator.findAppointmentRequestError(requestedSlotText, patientNote)
+        if (validationErr != null) {
+            _statusMessage.value = validationErr
+            return
+        }
+        viewModelScope.launch {
+            _isSubmittingAppointment.value = true
+            val result = apiClient.requestEnrollmentAppointment(
+                programId = programId,
+                modality = modality,
+                requestedSlotText = requestedSlotText,
+                patientNote = patientNote
+            )
+            _isSubmittingAppointment.value = false
+            val created = result.appointment
+            if (created != null) {
+                val currentFeed = _enrollmentAppointmentsFeed.value
+                if (currentFeed != null) {
+                    val updatedList = listOf(created) + currentFeed.appointments
+                    _enrollmentAppointmentsFeed.value = currentFeed.copy(
+                        appointments = updatedList,
+                        pendingCount = updatedList.count { it.status == "PENDING" }
+                    )
+                } else {
+                    _enrollmentAppointmentsFeed.value = apiClient.getEnrollmentAppointments(programId)
+                }
+                _statusMessage.value = "Solicitação de horário enviada ao programa."
+                onSuccess()
+            } else {
+                _statusMessage.value = result.errorDetail
+                    ?: "Não foi possível enviar sua solicitação de horário."
+            }
+        }
+    }
+
+    fun cancelEnrollmentAppointment(programId: String, appointmentId: String) {
+        if (_updatingAppointmentId.value != null) return
+        viewModelScope.launch {
+            _updatingAppointmentId.value = appointmentId
+            val result = apiClient.cancelEnrollmentAppointment(programId, appointmentId)
+            _updatingAppointmentId.value = null
+            val updated = result.appointment
+            if (updated != null) {
+                _enrollmentAppointmentsFeed.value = _enrollmentAppointmentsFeed.value?.let { feed ->
+                    val nextList = feed.appointments.map { item ->
+                        if (item.appointmentId == appointmentId) updated else item
+                    }
+                    feed.copy(
+                        appointments = nextList,
+                        pendingCount = nextList.count { it.status == "PENDING" }
+                    )
+                }
+                _statusMessage.value = "Agendamento cancelado."
+            } else {
+                _statusMessage.value = result.errorDetail
+                    ?: "Não foi possível cancelar este agendamento."
+            }
+        }
+    }
+
+    fun updateOwnerAppointment(
+        appointmentId: String,
+        status: String,
+        scheduledAtIso: String?,
+        partnerNote: String?,
+        allowOverlap: Boolean,
+        onSuccess: () -> Unit
+    ) {
+        if (_updatingAppointmentId.value != null) return
+        viewModelScope.launch {
+            _updatingAppointmentId.value = appointmentId
+            val result = apiClient.updateOwnerAppointment(
+                appointmentId = appointmentId,
+                status = status,
+                scheduledAtIso = scheduledAtIso,
+                partnerNote = partnerNote,
+                allowOverlap = allowOverlap
+            )
+            _updatingAppointmentId.value = null
+            val updated = result.appointment
+            if (updated != null) {
+                val refreshed = _ownerAppointments.value.map { item ->
+                    if (item.appointmentId == appointmentId) updated.copy(patientName = item.patientName ?: updated.patientName) else item
+                }
+                _ownerAppointments.value = refreshed
+                val pendingForPatient = refreshed.count {
+                    it.patientUserId == updated.patientUserId && it.status == "PENDING"
+                }
+                _participants.value = _participants.value.map { p ->
+                    if (p.patientUserId == updated.patientUserId) {
+                        p.copy(pendingAppointmentsCount = pendingForPatient)
+                    } else {
+                        p
+                    }
+                }
+                _statusMessage.value = "Agendamento atualizado para ${updated.parsedStatus.labelPtBr.lowercase()}."
+                onSuccess()
+            } else {
+                _statusMessage.value = result.errorDetail
+                    ?: "Não foi possível atualizar este agendamento."
             }
         }
     }

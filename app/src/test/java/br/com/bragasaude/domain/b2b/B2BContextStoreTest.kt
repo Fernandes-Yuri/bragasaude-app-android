@@ -472,4 +472,15 @@ class B2BContextStoreTest {
         assertFalse(defaultProg.aiPaused)
         assertTrue(defaultProg.copy(aiPaused = true).aiPaused)
     }
+
+    @Test
+    fun b2b19AppointmentsCapAndSlotValidationBehaveConsistently() {
+        assertTrue(B2BOnboardingValidator.canRequestAppointment(0))
+        assertTrue(B2BOnboardingValidator.canRequestAppointment(2))
+        assertFalse(B2BOnboardingValidator.canRequestAppointment(3))
+        assertNotNull(B2BOnboardingValidator.findAppointmentRequestError("A", null))
+        assertNull(B2BOnboardingValidator.findAppointmentRequestError("Terça 14h", "Teleatendimento"))
+        assertEquals(ProgramAppointmentStatus.RESCHEDULE_REQUESTED, ProgramAppointmentStatus.fromWire("reschedule_requested"))
+        assertEquals(AppointmentModality.REMOTE, AppointmentModality.fromWire("remote"))
+    }
 }

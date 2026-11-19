@@ -601,6 +601,80 @@ val ABUSE_REPORT_REASONS: List<Pair<String, String>> = listOf(
     "OUTRO" to "Outro motivo"
 )
 
+enum class ProgramAppointmentStatus(val wireKey: String, val labelPtBr: String) {
+    PENDING("PENDING", "Aguardando confirmação"),
+    CONFIRMED("CONFIRMED", "Confirmado"),
+    RESCHEDULE_REQUESTED("RESCHEDULE_REQUESTED", "Reagendamento sugerido"),
+    CANCELLED("CANCELLED", "Cancelado"),
+    COMPLETED("COMPLETED", "Concluído");
+
+    companion object {
+        fun fromWire(raw: String?): ProgramAppointmentStatus {
+            val upper = raw?.trim()?.uppercase().orEmpty()
+            return entries.firstOrNull { it.wireKey == upper } ?: PENDING
+        }
+    }
+}
+
+enum class AppointmentModality(val wireKey: String, val labelPtBr: String) {
+    IN_PERSON("IN_PERSON", "Presencial"),
+    REMOTE("REMOTE", "Remoto");
+
+    companion object {
+        fun fromWire(raw: String?): AppointmentModality {
+            val upper = raw?.trim()?.uppercase().orEmpty()
+            return entries.firstOrNull { it.wireKey == upper } ?: IN_PERSON
+        }
+    }
+}
+
+@Serializable
+data class ProgramAppointmentDto(
+    val appointmentId: String,
+    val programId: String,
+    val patientUserId: String,
+    val patientName: String? = null,
+    val modality: String,
+    val requestedSlotText: String,
+    val scheduledAt: String? = null,
+    val patientNote: String? = null,
+    val partnerNote: String? = null,
+    val status: String = "PENDING",
+    val createdAt: String = "",
+    val updatedAt: String = ""
+) {
+    val parsedStatus: ProgramAppointmentStatus
+        get() = ProgramAppointmentStatus.fromWire(status)
+    val parsedModality: AppointmentModality
+        get() = AppointmentModality.fromWire(modality)
+}
+
+@Serializable
+data class OwnerAppointmentsFeedDto(
+    val programId: String,
+    val programName: String = "",
+    val appointmentsPolicy: AppointmentsPolicyDto = AppointmentsPolicyDto(),
+    val appointments: List<ProgramAppointmentDto> = emptyList()
+)
+
+@Serializable
+data class EnrollmentAppointmentsFeedDto(
+    val programId: String,
+    val programName: String = "",
+    val appointmentsPolicy: AppointmentsPolicyDto = AppointmentsPolicyDto(),
+    val pendingCount: Int = 0,
+    val appointments: List<ProgramAppointmentDto> = emptyList()
+)
+
+@Serializable
+data class AppointmentMutationResult(
+    val appointment: ProgramAppointmentDto? = null,
+    val errorDetail: String? = null
+) {
+    val isSuccess: Boolean
+        get() = appointment != null
+}
+
 object B2BOnboardingValidator {
     const val DEFAULT_PRIMARY_COLOR = "#1A6B5C"
     const val REFERENCE_SUBTITLE =
@@ -965,6 +1039,23 @@ object B2BOnboardingValidator {
         val tokens = normalized.split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
         if (tokens.any { it in unsafeReminderWords } || unsafeDoseUnitRegex.containsMatchIn(normalized)) {
             return "Orientação de medicação ou posologia não é permitida neste canal (diretriz Não-SaMD)."
+        }
+        return null
+    }
+
+    const val MAX_PENDING_APPOINTMENTS_PER_PROGRAM = 3
+
+    fun canRequestAppointment(pendingCount: Int): Boolean =
+        pendingCount < MAX_PENDING_APPOINTMENTS_PER_PROGRAM
+
+    fun findAppointmentRequestError(slotText: String, patientNote: String?): String? {
+        val cleanSlot = slotText.trim()
+        if (cleanSlot.length !in 2..160) {
+            return "Informe a janela de horário desejada (entre 2 e 160 caracteres)."
+        }
+        val cleanNote = patientNote?.trim().orEmpty()
+        if (cleanNote.length > 400) {
+            return "A observação deve ter no máximo 400 caracteres."
         }
         return null
     }

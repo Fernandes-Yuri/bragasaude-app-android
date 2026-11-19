@@ -792,4 +792,147 @@ class BragaB2BBackwardCompatTest {
             assertTrue(req.body.readUtf8().contains("SPAM_OU_ASSEDIO"))
         }
     }
+
+    @Test
+    fun programAppointmentsListRequestConfirmOverlapConflictAndCancelWorkEndToEnd() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = BragaApiClient(
+                mockk(relaxed = true),
+                server.url("/").toString().trimEnd('/'),
+                stubAuthService(),
+                OkHttpClient(),
+                FamilyE2eeManager()
+            )
+
+            // 1. Participante lista e solicita horario (201)
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "programId": "prog-1",
+                      "programName": "Cuidado Cardio",
+                      "appointmentsPolicy": {
+                        "allowedModalities": ["IN_PERSON","REMOTE"],
+                        "bookingMode": "REQUEST_CONFIRMATION",
+                        "availabilitiesSummary": "Seg a Sex 09h-17h"
+                      },
+                      "pendingCount": 0,
+                      "appointments": []
+                    }
+                    """.trimIndent()
+                )
+            )
+            val emptyFeed = api.getEnrollmentAppointments("prog-1")
+            assertNotNull(emptyFeed)
+            assertEquals("REQUEST_CONFIRMATION", emptyFeed!!.appointmentsPolicy.bookingMode)
+            assertEquals("/api/b2b/enrollments/prog-1/appointments", server.takeRequest().path)
+
+            server.enqueue(
+                MockResponse().setResponseCode(201).setBody(
+                    """
+                    {
+                      "appointment": {
+                        "appointmentId": "appt-1",
+                        "programId": "prog-1",
+                        "patientUserId": "patient-1",
+                        "modality": "REMOTE",
+                        "requestedSlotText": "Quinta 14h",
+                        "status": "PENDING",
+                        "createdAt": "2026-11-19T19:00:00Z",
+                        "updatedAt": "2026-11-19T19:00:00Z"
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val created = api.requestEnrollmentAppointment(
+                programId = "prog-1",
+                modality = "REMOTE",
+                requestedSlotText = "Quinta 14h",
+                patientNote = "Videochamada"
+            )
+            assertTrue(created.isSuccess)
+            assertEquals("PENDING", created.appointment!!.status)
+            assertEquals("/api/b2b/enrollments/prog-1/appointments", server.takeRequest().path)
+
+            // 2. Dono lista agenda e trata colisao 409 ao tentar confirmar no mesmo slot
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "programId": "prog-1",
+                      "programName": "Cuidado Cardio",
+                      "appointmentsPolicy": {
+                        "allowedModalities": ["IN_PERSON","REMOTE"],
+                        "bookingMode": "REQUEST_CONFIRMATION",
+                        "availabilitiesSummary": "Seg a Sex 09h-17h"
+                      },
+                      "appointments": [
+                        {
+                          "appointmentId": "appt-1",
+                          "programId": "prog-1",
+                          "patientUserId": "patient-1",
+                          "patientName": "Maria",
+                          "modality": "REMOTE",
+                          "requestedSlotText": "Quinta 14h",
+                          "status": "PENDING",
+                          "createdAt": "2026-11-19T19:00:00Z",
+                          "updatedAt": "2026-11-19T19:00:00Z"
+                        }
+                      ]
+                    }
+                    """.trimIndent()
+                )
+            )
+            val ownerFeed = api.getOwnerProgramAppointments(limit = 50)
+            assertNotNull(ownerFeed)
+            assertEquals(1, ownerFeed!!.appointments.size)
+            assertEquals("/api/b2b/program/me/appointments?limit=50", server.takeRequest().path)
+
+            server.enqueue(
+                MockResponse().setResponseCode(409).setBody(
+                    """{"detail":"Já existe outro agendamento confirmado na janela de 30 minutos para este programa."}"""
+                )
+            )
+            val conflict = api.updateOwnerAppointment(
+                appointmentId = "appt-1",
+                status = "CONFIRMED",
+                scheduledAtIso = "2026-11-21T17:00:00Z",
+                allowOverlap = false
+            )
+            assertTrue(!conflict.isSuccess)
+            assertEquals(
+                "Já existe outro agendamento confirmado na janela de 30 minutos para este programa.",
+                conflict.errorDetail
+            )
+            val patchReq = server.takeRequest()
+            assertEquals("PATCH", patchReq.method)
+            assertEquals("/api/b2b/program/me/appointments/appt-1", patchReq.path)
+
+            // 3. Participante cancela agendamento pendente
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "appointment": {
+                        "appointmentId": "appt-1",
+                        "programId": "prog-1",
+                        "patientUserId": "patient-1",
+                        "modality": "REMOTE",
+                        "requestedSlotText": "Quinta 14h",
+                        "status": "CANCELLED",
+                        "createdAt": "2026-11-19T19:00:00Z",
+                        "updatedAt": "2026-11-19T19:10:00Z"
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val cancelled = api.cancelEnrollmentAppointment("prog-1", "appt-1", "Imprevisto")
+            assertTrue(cancelled.isSuccess)
+            assertEquals("CANCELLED", cancelled.appointment!!.status)
+            assertEquals("/api/b2b/enrollments/prog-1/appointments/appt-1/cancel", server.takeRequest().path)
+        }
+    }
 }

@@ -323,6 +323,7 @@ fun ParticipantDetailBottomSheet(
     onChangeDays: (Int) -> Unit,
     onActionFeedback: (String) -> Unit,
     onOpenSendReminder: (String, String) -> Unit,
+    onOpenManageAppointments: (String, String) -> Unit = { _, _ -> },
     onRequestRemove: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -593,9 +594,9 @@ fun ParticipantDetailBottomSheet(
                         },
                         subtitle = if (features.appointmentsEnabled) {
                             if (pendingAppt > 0) {
-                                "$pendingAppt solicitação(ões) aguardando confirmação (gestão em B2B-19)."
+                                "$pendingAppt solicitação(ões) aguardando confirmação. Toque para decidir."
                             } else {
-                                "Agenda do programa ativa (solicitação e confirmação em B2B-19)."
+                                "Agenda do programa ativa. Toque para conferir os pedidos deste participante."
                             }
                         } else {
                             "Agendamento desativado nas configurações do programa."
@@ -603,13 +604,13 @@ fun ParticipantDetailBottomSheet(
                         enabled = features.appointmentsEnabled,
                         brandAccent = brandAccent,
                         onClick = {
-                            onActionFeedback(
-                                if (features.appointmentsEnabled) {
-                                    "A fila de solicitações de agendamento de ${summary.participantName} será aberta aqui na etapa B2B-19."
-                                } else {
+                            if (features.appointmentsEnabled) {
+                                onOpenManageAppointments(summary.patientUserId, summary.participantName)
+                            } else {
+                                onActionFeedback(
                                     "Ative Agendamento no Estúdio para receber solicitações de horários."
-                                }
-                            )
+                                )
+                            }
                         }
                     )
 
