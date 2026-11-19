@@ -993,4 +993,7 @@ class AuthViewModel @Inject constructor(
         _hasAcceptedConsent.value = null
         _userRole.value = null
     }
+
+    suspend fun lookupPartnerInvitePreview(code: String) =
+        apiClient.lookupPartnerInvitePreview(code)
 }

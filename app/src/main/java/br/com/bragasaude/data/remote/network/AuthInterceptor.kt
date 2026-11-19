@@ -27,7 +27,7 @@ class AuthInterceptor @Inject constructor(
 
         // Rotas públicas que não precisam de token
         val path = originalRequest.url.encodedPath
-        if (path.contains("/api/app/latest") || path.contains("/public/")) {
+        if (path.contains("/api/app/latest") || path.contains("/public/") || path.contains("/api/b2b/invite/")) {
             return chain.proceed(originalRequest)
         }
 

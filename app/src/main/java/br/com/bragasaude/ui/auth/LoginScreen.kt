@@ -67,6 +67,16 @@ fun LoginScreen(
 
     var emailMode by rememberSaveable { mutableStateOf("login") } // "login", "signup" ou "forgot"
     var forgotStep by rememberSaveable { mutableStateOf(1) } // 1: e-mail, 2: código OTP, 3: nova senha
+    var signupPurpose by rememberSaveable { mutableStateOf("personal") } // "personal" ou "company" (B2B-06)
+    var showInviteDialog by rememberSaveable { mutableStateOf(false) }
+    var inviteCodeDraft by rememberSaveable { mutableStateOf("") }
+    var isLookingUpInvite by remember { mutableStateOf(false) }
+    var recognizedInvite by remember {
+        mutableStateOf<br.com.bragasaude.domain.b2b.PartnerInvitePreviewDto?>(null)
+    }
+    val prefs = remember {
+        context.getSharedPreferences("braga_prefs", android.content.Context.MODE_PRIVATE)
+    }
     // Testes devem injetar uma identidade descartável pelo harness autenticado.
     // Nunca selecionar automaticamente uma conta compartilhada em instalação nova.
     var email by rememberSaveable { mutableStateOf("") }
@@ -193,39 +203,107 @@ fun LoginScreen(
                 .imePadding()
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(if (isKeyboardVisible) 12.dp else 32.dp)
+            verticalArrangement = Arrangement.spacedBy(if (isKeyboardVisible) 10.dp else 16.dp)
         ) {
             item {
-                Spacer(Modifier.height(if (isKeyboardVisible) 0.dp else 40.dp))
-                // Logo Branding - Escudo com Ritmo Cardíaco
-                br.com.bragasaude.ui.components.ShieldEcgIcon(
-                    sizeDp = if (isKeyboardVisible) 48.dp else 120.dp
-                )
-            }
-
-            item {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = stringResource(R.string.app_name_new),
-                        style = if (isKeyboardVisible) MaterialTheme.typography.titleLarge else MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    )
-                    if (!isKeyboardVisible) {
-                        Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(if (isKeyboardVisible) 0.dp else 8.dp))
+                val invite = recognizedInvite
+                if (invite != null) {
+                    val partnerColor = remember(invite.primaryColor) {
+                        runCatching {
+                            Color(android.graphics.Color.parseColor(invite.primaryColor))
+                        }.getOrDefault(Color(0xFF1A6B5C))
+                    }
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = partnerColor.copy(alpha = 0.10f)),
+                        border = BorderStroke(1.dp, partnerColor.copy(alpha = 0.45f))
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = invite.programName,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = partnerColor
+                                )
+                                TextButton(
+                                    onClick = { recognizedInvite = null },
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                                ) {
+                                    Text("Trocar", style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                            Text(
+                                text = "${invite.companyName} · Convite ${invite.inviteCode}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "Entre ou crie sua conta para participar deste programa.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                } else {
+                    // B2B-06: Destaque reduzido da marca na entrada (priorizando o formulario)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        br.com.bragasaude.ui.components.ShieldEcgIcon(sizeDp = 36.dp)
+                        Spacer(Modifier.width(10.dp))
                         Text(
-                            text = stringResource(R.string.slogan),
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.Gray
+                            text = stringResource(R.string.app_name_new),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
 
             item {
-                Spacer(Modifier.height(16.dp))
+                if (!isKeyboardVisible) {
+                    val isCompanyMode = signupPurpose == "company"
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = if (isCompanyMode) "Sua empresa. A sua marca." else "Seu cuidado começa aqui.",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = if (isCompanyMode) {
+                                br.com.bragasaude.domain.b2b.B2BOnboardingValidator.REFERENCE_SUBTITLE
+                            } else {
+                                "Acesse sua conta ou comece seu cadastro."
+                            },
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            item {
+                Spacer(Modifier.height(4.dp))
 
                 if (emailMode == "forgot") {
                     Column(
@@ -528,6 +606,95 @@ fun LoginScreen(
                                 }
                             }
                         } else {
+                            if (emailMode == "signup" && recognizedInvite == null) {
+                                Text(
+                                    text = "Como você quer usar o aplicativo?",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    val isPersonal = signupPurpose == "personal"
+                                    val isCompany = signupPurpose == "company"
+                                    OutlinedCard(
+                                        onClick = {
+                                            signupPurpose = "personal"
+                                            prefs.edit().putBoolean("pending_b2b_company_onboarding", false).apply()
+                                        },
+                                        modifier = Modifier.weight(1f).testTag("purpose_personal_button"),
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = BorderStroke(
+                                            width = if (isPersonal) 2.dp else 1.dp,
+                                            color = if (isPersonal) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.outlineVariant
+                                        ),
+                                        colors = CardDefaults.outlinedCardColors(
+                                            containerColor = if (isPersonal) {
+                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                                            } else Color.Transparent
+                                        )
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text(
+                                                text = "Para mim",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = "Cuidar da minha saúde",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    OutlinedCard(
+                                        onClick = {
+                                            signupPurpose = "company"
+                                            prefs.edit().putBoolean("pending_b2b_company_onboarding", true).apply()
+                                        },
+                                        modifier = Modifier.weight(1f).testTag("purpose_company_button"),
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = BorderStroke(
+                                            width = if (isCompany) 2.dp else 1.dp,
+                                            color = if (isCompany) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.outlineVariant
+                                        ),
+                                        colors = CardDefaults.outlinedCardColors(
+                                            containerColor = if (isCompany) {
+                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                                            } else Color.Transparent
+                                        )
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text(
+                                                text = "Para minha empresa",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = "Criar um programa",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                                if (signupPurpose == "company") {
+                                    Text(
+                                        text = "Criar acesso -> Preparar programa -> Aprovação da equipe Braga",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+
                             OutlinedTextField(
                                 value = email,
                                 onValueChange = { email = it },
@@ -684,6 +851,9 @@ fun LoginScreen(
                             TextButton(
                                 onClick = {
                                     emailMode = if (emailMode == "login") "signup" else "login"
+                                    if (emailMode == "login") {
+                                        signupPurpose = "personal"
+                                    }
                                     viewModel.clearAuthState()
                                     signupOtpCode = ""
                                 }
@@ -691,6 +861,53 @@ fun LoginScreen(
                                 Text(
                                     if (emailMode == "login") "Cadastre-se" else "Entrar",
                                     fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+
+                        if (emailMode == "login" && recognizedInvite == null) {
+                            OutlinedCard(
+                                onClick = {
+                                    emailMode = "signup"
+                                    signupPurpose = "company"
+                                    prefs.edit().putBoolean("pending_b2b_company_onboarding", true).apply()
+                                    viewModel.clearAuthState()
+                                },
+                                modifier = Modifier.fillMaxWidth().testTag("company_shortcut_button"),
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Text(
+                                        text = "Um programa com a sua marca",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Consultórios, convênios e outras empresas",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            TextButton(
+                                onClick = {
+                                    inviteCodeDraft = ""
+                                    showInviteDialog = true
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.CenterHorizontally)
+                                    .testTag("invite_shortcut_button")
+                            ) {
+                                Text(
+                                    text = "Recebi um convite ou código",
+                                    fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -738,8 +955,76 @@ fun LoginScreen(
                             Text("Privacidade", style = MaterialTheme.typography.labelSmall)
                         }
                     }
+                    if (recognizedInvite != null || signupPurpose == "company") {
+                        Text(
+                            text = "Tecnologia Braga Saúde",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
+        }
+
+        if (showInviteDialog) {
+            BragaAlertDialog(
+                onDismissRequest = { if (!isLookingUpInvite) showInviteDialog = false },
+                title = {
+                    Text("Encontre seu programa", fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "Informe o código que recebeu. Você verá a marca do parceiro antes de entrar ou criar sua conta.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = inviteCodeDraft,
+                            onValueChange = { if (it.length <= 32) inviteCodeDraft = it.uppercase() },
+                            label = { Text("Código do programa") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("invite_code_input"),
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val code = inviteCodeDraft.trim()
+                            if (code.isEmpty() || isLookingUpInvite) return@Button
+                            isLookingUpInvite = true
+                            scope.launch {
+                                val preview = viewModel.lookupPartnerInvitePreview(code)
+                                isLookingUpInvite = false
+                                if (preview != null) {
+                                    recognizedInvite = preview
+                                    prefs.edit().putString("pending_b2b_invite_code", preview.inviteCode).apply()
+                                    showInviteDialog = false
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        "Programa não encontrado ou ainda não disponível para adesão.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                        },
+                        enabled = br.com.bragasaude.domain.b2b.B2BOnboardingValidator.isValidInviteCode(inviteCodeDraft) && !isLookingUpInvite
+                    ) {
+                        Text("Encontrar programa", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showInviteDialog = false },
+                        enabled = !isLookingUpInvite
+                    ) {
+                        Text("Voltar")
+                    }
+                }
+            )
         }
 
         // Diálogo de Conta Google Já Existente (Bifurcação de segurança)

@@ -114,4 +114,46 @@ class B2BContextStoreTest {
         assertEquals(AppContextMode.PARTNER_PARTICIPANT, roundTrip.parsedMode)
         assertTrue(json.encodeToString(roundTrip).contains("PARTNER_PARTICIPANT"))
     }
+
+    @Test
+    fun `B2BOnboardingValidator valida cor hexadecimal, CNPJ e criterios de submissao`() {
+        assertTrue(B2BOnboardingValidator.isValidHexColor("#1A6B5C"))
+        assertTrue(B2BOnboardingValidator.isValidHexColor("#0f4c81"))
+        assertFalse(B2BOnboardingValidator.isValidHexColor("1A6B5C"))
+        assertFalse(B2BOnboardingValidator.isValidHexColor("#GGGGGG"))
+
+        assertEquals(
+            "12.345.678/0001-95",
+            B2BOnboardingValidator.formatCnpjOrNull("12345678000195")
+        )
+        assertNull(B2BOnboardingValidator.formatCnpjOrNull("11111111111111"))
+
+        // Rascunho permite CNPJ vazio, mas envio para analise exige CNPJ valido
+        assertTrue(
+            B2BOnboardingValidator.canSaveDraft(
+                companyName = "Clinica Horizonte",
+                programName = "Horizonte Cuidado",
+                primaryColor = "#1A6B5C",
+                cnpj = null
+            )
+        )
+        assertFalse(
+            B2BOnboardingValidator.canSubmitForReview(
+                companyName = "Clinica Horizonte",
+                programName = "Horizonte Cuidado",
+                cnpj = null,
+                primaryColor = "#1A6B5C"
+            )
+        )
+        assertTrue(
+            B2BOnboardingValidator.canSubmitForReview(
+                companyName = "Clinica Horizonte",
+                programName = "Horizonte Cuidado",
+                cnpj = "12.345.678/0001-95",
+                primaryColor = "#1A6B5C"
+            )
+        )
+        assertEquals("Em análise", PartnerApprovalStatus.fromWire("PENDING_REVIEW").labelPtBr)
+        assertEquals("Empresa aprovada", PartnerApprovalStatus.fromWire("APPROVED").labelPtBr)
+    }
 }
