@@ -35,8 +35,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.bragasaude.domain.b2b.B2BOnboardingValidator
 import br.com.bragasaude.domain.b2b.B2BThemeEngine
+import br.com.bragasaude.domain.b2b.EnrollmentRemindersFeedDto
 import br.com.bragasaude.domain.b2b.PartnerApprovalStatus
 import br.com.bragasaude.domain.b2b.PartnerProgramDto
+import br.com.bragasaude.domain.b2b.PartnerReminderType
 import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
 import br.com.bragasaude.domain.b2b.SharedCategoryOption
 import br.com.bragasaude.domain.b2b.TemplateCatalogItemDto
@@ -949,6 +951,11 @@ fun ParticipantExperienceContent(
     isGeneratingPdf: Boolean,
     generatedPdf: File?,
     isPreview: Boolean = false,
+    remindersFeed: EnrollmentRemindersFeedDto? = null,
+    acknowledgingReminderId: String? = null,
+    isUpdatingMute: Boolean = false,
+    onAcknowledgeReminder: (String) -> Unit = {},
+    onToggleMute: (Boolean) -> Unit = {},
     onOpenConsentSheet: () -> Unit,
     onGeneratePdf: (Int, Set<String>) -> Unit,
     onPreviewPdf: (File) -> Unit,
@@ -1069,12 +1076,27 @@ fun ParticipantExperienceContent(
         }
 
         if (experienceConfig.features.partnerRemindersEnabled) {
-            ProgramModuleHighlightCard(
-                icon = Icons.Default.NotificationsActive,
-                title = "Lembretes e orientações de $programName",
-                body = "Avisos de rotina emitidos por $companyName, sempre separados dos seus alarmes pessoais de medicação.",
-                accent = brandAccent
-            )
+            if (isPreview) {
+                ProgramModuleHighlightCard(
+                    icon = Icons.Default.NotificationsActive,
+                    title = "Lembretes e orientações de $programName",
+                    body = "Avisos de rotina emitidos por $companyName, sempre separados dos seus alarmes pessoais de medicação.",
+                    accent = brandAccent
+                )
+            } else {
+                ProgramRemindersParticipantCard(
+                    programName = programName,
+                    companyName = companyName,
+                    feed = remindersFeed,
+                    acknowledgingReminderId = acknowledgingReminderId,
+                    isUpdatingMute = isUpdatingMute,
+                    brandPrimary = brandPrimary,
+                    brandOnPrimary = brandOnPrimary,
+                    brandAccent = brandAccent,
+                    onAcknowledgeReminder = onAcknowledgeReminder,
+                    onToggleMute = onToggleMute
+                )
+            }
         }
 
         if (experienceConfig.features.appointmentsEnabled) {
@@ -1299,6 +1321,155 @@ fun ParticipantExperienceContent(
                                 )
                             ) {
                                 Text("Compartilhar", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProgramRemindersParticipantCard(
+    programName: String,
+    companyName: String,
+    feed: EnrollmentRemindersFeedDto?,
+    acknowledgingReminderId: String?,
+    isUpdatingMute: Boolean,
+    brandPrimary: Color,
+    brandOnPrimary: Color,
+    brandAccent: Color,
+    onAcknowledgeReminder: (String) -> Unit,
+    onToggleMute: (Boolean) -> Unit
+) {
+    val isMuted = feed?.muted == true
+    val reminders = feed?.reminders.orEmpty()
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.2.dp, brandPrimary.copy(alpha = 0.35f))
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.NotificationsActive,
+                        contentDescription = null,
+                        tint = brandAccent
+                    )
+                    Column {
+                        Text(
+                            text = "Avisos e Lembretes · $programName",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = brandAccent
+                        )
+                        Text(
+                            text = "$companyName · Separados dos alarmes pessoais de medicação",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                FilterChip(
+                    selected = !isMuted,
+                    onClick = { if (!isUpdatingMute) onToggleMute(!isMuted) },
+                    label = { Text(if (isMuted) "Silenciado" else "Alertas ON") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = brandPrimary,
+                        selectedLabelColor = brandOnPrimary
+                    )
+                )
+            }
+
+            if (reminders.isEmpty()) {
+                Text(
+                    text = "Nenhum lembrete de rotina recebido deste programa até o momento.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                reminders.forEach { rem ->
+                    val typeLabel = PartnerReminderType.fromWire(rem.reminderType).labelPtBr
+                    val isAcking = acknowledgingReminderId == rem.reminderId
+                    val isAcked = !rem.acknowledgedAt.isNullOrBlank()
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "$typeLabel · $programName",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = brandAccent
+                                )
+                                Text(
+                                    text = rem.createdAt.take(10),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Text(
+                                text = rem.title,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = rem.body,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            if (isAcked) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = brandAccent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Leitura confirmada",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = brandAccent
+                                    )
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { onAcknowledgeReminder(rem.reminderId) },
+                                    enabled = !isAcking,
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text(
+                                        text = if (isAcking) "Confirmando..." else "Confirmar leitura",
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
                             }
                         }
                     }

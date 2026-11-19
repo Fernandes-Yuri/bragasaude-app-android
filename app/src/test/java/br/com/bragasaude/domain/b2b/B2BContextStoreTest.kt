@@ -9,6 +9,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -445,5 +446,14 @@ class B2BContextStoreTest {
         assertTrue(enrichedSummary.familySupportActive)
         assertEquals(1, enrichedSummary.authorizedRecordsSection?.biometries?.size)
         assertEquals(64.5, enrichedSummary.authorizedRecordsSection?.biometries?.first()?.weightKg ?: 0.0, 0.01)
+    }
+
+    @Test
+    fun b2b18NonSaMDPosologyGuardrailBlocksDoseAndAllowsHydration() {
+        assertNotNull(B2BOnboardingValidator.findUnsafeReminderPosologyHint("Tomar 1 comprimido de losartana 50 mg"))
+        assertNotNull(B2BOnboardingValidator.findUnsafeReminderPosologyHint("Aumentar dósagem da cápsula (25mcg)"))
+        assertNull(B2BOnboardingValidator.findUnsafeReminderPosologyHint("Beba 300 ml de água antes da caminhada de 20 min"))
+        assertEquals(PartnerReminderType.PRE_CONSULT, PartnerReminderType.fromWire("pre_consult"))
+        assertEquals(PartnerReminderType.ROUTINE, PartnerReminderType.fromWire("unknown"))
     }
 }

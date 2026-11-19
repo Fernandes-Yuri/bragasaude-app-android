@@ -5,6 +5,7 @@ import br.com.bragasaude.data.remote.auth.AuthService
 import br.com.bragasaude.data.remote.b2b.ActiveContextStore
 import br.com.bragasaude.data.remote.network.AuthInterceptor
 import br.com.bragasaude.domain.b2b.B2BContextDescriptor
+import br.com.bragasaude.domain.b2b.CreateProgramReminderRequest
 import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
 import br.com.bragasaude.domain.b2b.UpdateExperienceRequest
 import io.mockk.every
@@ -618,6 +619,116 @@ class BragaB2BBackwardCompatTest {
             assertEquals(71.4, summary.authorizedRecordsSection!!.biometries[0].weightKg, 0.01)
             assertEquals(25.3, summary.authorizedRecordsSection!!.biometries[0].imc!!, 0.01)
             assertEquals("/api/b2b/program/me/participants/patient-1/summary?days=14", server.takeRequest().path)
+        }
+    }
+
+    @Test
+    fun partnerRemindersSendListAckAndMuteParseAndPropagateNonSaMDErrors() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = BragaApiClient(
+                mockk(relaxed = true),
+                server.url("/").toString().trimEnd('/'),
+                stubAuthService(),
+                OkHttpClient(),
+                FamilyE2eeManager()
+            )
+
+            // Envio com sucesso (201)
+            server.enqueue(
+                MockResponse().setResponseCode(201).setBody(
+                    """
+                    {
+                      "recipientCount": 4,
+                      "reminder": {
+                        "reminderId": "rem-1",
+                        "programId": "prog-1",
+                        "targetPatientId": null,
+                        "targetPatientName": null,
+                        "targetCategory": "hydration",
+                        "reminderType": "HYDRATION",
+                        "title": "Hidratacao da tarde",
+                        "body": "Beba 300 ml de agua agora.",
+                        "createdAt": "2026-11-19T18:00:00Z",
+                        "acknowledgedCount": 0
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val sent = api.sendPartnerReminder(
+                CreateProgramReminderRequest(
+                    targetPatientId = null,
+                    targetCategory = "hydration",
+                    reminderType = "HYDRATION",
+                    title = "Hidratacao da tarde",
+                    body = "Beba 300 ml de agua agora."
+                )
+            )
+            assertTrue(sent.isSuccess)
+            assertEquals(4, sent.recipientCount)
+            assertEquals("rem-1", sent.reminder?.reminderId)
+            val sendReq = server.takeRequest()
+            assertEquals("/api/b2b/program/me/reminders", sendReq.path)
+            assertEquals("POST", sendReq.method)
+
+            // Erro 422 posologia propagado ao usuário
+            server.enqueue(
+                MockResponse().setResponseCode(422).setBody(
+                    """{"detail":"Orientação de medicação não é permitida neste canal."}"""
+                )
+            )
+            val blocked = api.sendPartnerReminder(
+                CreateProgramReminderRequest(
+                    targetPatientId = "patient-1",
+                    reminderType = "ROUTINE",
+                    title = "Remedio",
+                    body = "Tomar 50 mg"
+                )
+            )
+            assertTrue(!blocked.isSuccess)
+            assertEquals("Orientação de medicação não é permitida neste canal.", blocked.errorDetail)
+            server.takeRequest()
+
+            // Participante lista, confirma leitura (ack) e silencia (mute)
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "programId": "prog-1",
+                      "programName": "Cuidado Cardio",
+                      "primaryColor": "#1A6B5C",
+                      "muted": false,
+                      "reminders": [
+                        {
+                          "reminderId": "rem-1",
+                          "programId": "prog-1",
+                          "reminderType": "HYDRATION",
+                          "title": "Hidratacao da tarde",
+                          "body": "Beba 300 ml de agua agora.",
+                          "createdAt": "2026-11-19T18:00:00Z",
+                          "acknowledgedCount": 0
+                        }
+                      ]
+                    }
+                    """.trimIndent()
+                )
+            )
+            val feed = api.getEnrollmentReminders("prog-1", limit = 20)
+            assertNotNull(feed)
+            assertEquals(1, feed!!.reminders.size)
+            assertTrue(!feed.muted)
+            assertEquals("/api/b2b/enrollments/prog-1/reminders?limit=20", server.takeRequest().path)
+
+            server.enqueue(MockResponse().setBody("""{"reminderId":"rem-1","acknowledgedAt":"2026-11-19T18:05:00Z"}"""))
+            val ack = api.acknowledgeEnrollmentReminder("prog-1", "rem-1")
+            assertEquals("2026-11-19T18:05:00Z", ack)
+            assertEquals("/api/b2b/enrollments/prog-1/reminders/rem-1/ack", server.takeRequest().path)
+
+            server.enqueue(MockResponse().setBody("""{"programId":"prog-1","muted":true}"""))
+            val mutedRes = api.setEnrollmentMuted("prog-1", muted = true)
+            assertEquals(true, mutedRes)
+            assertEquals("/api/b2b/enrollments/prog-1/mute", server.takeRequest().path)
         }
     }
 }
