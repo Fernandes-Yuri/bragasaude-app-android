@@ -135,6 +135,8 @@ class BragaB2BBackwardCompatTest {
             assertEquals(1, page?.participants?.size)
             assertEquals("Maria Silva", page?.participants?.first()?.displayName)
             assertEquals(listOf("steps", "hydration"), page?.participants?.first()?.sharedCategories)
+            val listReq = server.takeRequest()
+            assertTrue(listReq.path.orEmpty().startsWith("/api/b2b/program/me/participants"))
 
             server.enqueue(
                 MockResponse().setBody(
@@ -168,10 +170,54 @@ class BragaB2BBackwardCompatTest {
             assertEquals(5400L, summary?.stepsSection?.averageSteps)
             assertNull(summary?.hydrationSection)
             assertNull(summary?.authorizedRecordsSection)
+            val summaryReq = server.takeRequest()
+            assertEquals("/api/b2b/program/me/participants/patient-1/summary?days=30", summaryReq.path)
 
             // Resposta 403/IDOR em acesso cruzado deve retornar null sem lancar excecao na UI
             server.enqueue(MockResponse().setResponseCode(403).setBody("""{"detail":"Participante sem vínculo ativo."}"""))
             assertNull(api.getPartnerParticipantSummary("patient-outro", days = 30))
+            val summary403Req = server.takeRequest()
+            assertEquals("/api/b2b/program/me/participants/patient-outro/summary?days=30", summary403Req.path)
+
+            // B2B-17B: remocao de participante libera vaga e propaga erro 404/403 com seguranca
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "success": true,
+                      "removedPatientUserId": "patient-1",
+                      "program": {
+                        "programId": "11111111-1111-1111-1111-111111111111",
+                        "ownerUserId": "owner-a",
+                        "companyName": "Clinica Horizonte",
+                        "programName": "Cuidado Cardio",
+                        "primaryColor": "#0F4C81",
+                        "approvalStatus": "APPROVED",
+                        "inviteCode": "CARD-4F9A",
+                        "invitePaused": false,
+                        "seatLimit": 15,
+                        "activeParticipants": 0,
+                        "canPromote": true
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val removedOk = api.removePartnerParticipant("patient-1")
+            assertTrue(removedOk.isSuccess)
+            assertEquals("patient-1", removedOk.removedPatientUserId)
+            assertEquals(0, removedOk.program?.activeParticipants)
+
+            val removeCall = server.takeRequest()
+            assertEquals("/api/b2b/program/me/participants/patient-1/remove", removeCall.path)
+            assertEquals("POST", removeCall.method)
+
+            server.enqueue(MockResponse().setResponseCode(404).setBody("""{"detail":"Vínculo ativo não encontrado."}"""))
+            val removedFail = api.removePartnerParticipant("patient-inexistente")
+            assertTrue(!removedFail.isSuccess)
+            assertEquals("Vínculo ativo não encontrado.", removedFail.errorDetail)
+            val removeFailReq = server.takeRequest()
+            assertEquals("/api/b2b/program/me/participants/patient-inexistente/remove", removeFailReq.path)
         }
     }
 }

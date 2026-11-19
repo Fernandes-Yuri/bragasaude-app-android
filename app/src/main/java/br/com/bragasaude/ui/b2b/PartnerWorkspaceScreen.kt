@@ -38,6 +38,7 @@ import br.com.bragasaude.domain.b2b.AppContextMode
 import br.com.bragasaude.domain.b2b.B2BThemeEngine
 import br.com.bragasaude.domain.b2b.ParticipantRoutineSummaryDto
 import br.com.bragasaude.domain.b2b.SharedCategoryOption
+import br.com.bragasaude.ui.components.BragaAlertDialog
 import coil3.compose.AsyncImage
 import java.io.File
 
@@ -58,6 +59,7 @@ fun PartnerWorkspaceScreen(
     val hasMore by viewModel.hasMore.collectAsState()
     val selectedSummary by viewModel.selectedSummary.collectAsState()
     val isLoadingSummary by viewModel.isLoadingSummary.collectAsState()
+    val isRemovingParticipant by viewModel.isRemovingParticipant.collectAsState()
     val selectedPeriodDays by viewModel.selectedPeriodDays.collectAsState()
     val isGeneratingPdf by viewModel.isGeneratingPdf.collectAsState()
     val generatedPdf by viewModel.generatedPdf.collectAsState()
@@ -66,6 +68,7 @@ fun PartnerWorkspaceScreen(
     var showOnboardingSheet by rememberSaveable { mutableStateOf(false) }
     var showConsentSheet by rememberSaveable { mutableStateOf(false) }
     var pendingInviteCode by rememberSaveable { mutableStateOf(initialInviteCode.trim().uppercase()) }
+    var participantToRemove by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.refreshWorkspace()
@@ -123,6 +126,41 @@ fun PartnerWorkspaceScreen(
                 showConsentSheet = false
                 pendingInviteCode = ""
                 viewModel.refreshWorkspace()
+            }
+        )
+    }
+
+    participantToRemove?.let { (targetId, targetName) ->
+        BragaAlertDialog(
+            onDismissRequest = { if (!isRemovingParticipant) participantToRemove = null },
+            title = { Text("Encerrar vínculo deste participante?") },
+            text = {
+                Text(
+                    "O acesso de $targetName a este programa será encerrado e a vaga voltará a ficar disponível na sua franquia. A conta pessoal e os registros no app do paciente não serão apagados."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.removeParticipant(targetId)
+                        participantToRemove = null
+                    },
+                    enabled = !isRemovingParticipant,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text("Encerrar vínculo")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { participantToRemove = null },
+                    enabled = !isRemovingParticipant
+                ) {
+                    Text("Cancelar")
+                }
             }
         )
     }
@@ -388,11 +426,16 @@ fun PartnerWorkspaceScreen(
                             summary = selectedSummary!!,
                             selectedDays = selectedPeriodDays,
                             isLoading = isLoadingSummary,
+                            isRemoving = isRemovingParticipant,
                             brandAccent = brandAccentText,
                             brandPrimary = brandPrimary,
                             brandOnPrimary = brandOnPrimary,
                             onChangeDays = { newDays ->
                                 viewModel.openParticipantSummary(selectedSummary!!.patientUserId, newDays)
+                            },
+                            onRequestRemove = {
+                                val current = selectedSummary!!
+                                participantToRemove = current.patientUserId to current.participantName
                             },
                             onClose = { viewModel.clearSelectedSummary() }
                         )
@@ -520,10 +563,12 @@ private fun OwnerParticipantSummaryCard(
     summary: ParticipantRoutineSummaryDto,
     selectedDays: Int,
     isLoading: Boolean,
+    isRemoving: Boolean,
     brandAccent: Color,
     brandPrimary: Color,
     brandOnPrimary: Color,
     onChangeDays: (Int) -> Unit,
+    onRequestRemove: () -> Unit,
     onClose: () -> Unit
 ) {
     Card(
@@ -621,6 +666,24 @@ private fun OwnerParticipantSummaryCard(
                     body = "$lines\n${recs.zeroFileEgressNotice}"
                 )
             } ?: SummarySectionLocked("Registros de sinais não compartilhados por este participante.")
+
+            HorizontalDivider()
+
+            OutlinedButton(
+                onClick = onRequestRemove,
+                enabled = !isRemoving,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+            ) {
+                Text(
+                    text = if (isRemoving) "Encerrando vínculo..." else "Encerrar vínculo deste participante",
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
     }
 }
