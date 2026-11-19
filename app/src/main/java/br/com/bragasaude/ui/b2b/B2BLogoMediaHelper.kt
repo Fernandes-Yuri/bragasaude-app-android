@@ -26,17 +26,24 @@ object B2BLogoMediaHelper {
     private const val MAX_INPUT_READ_BYTES = 15 * 1024 * 1024
     private const val MAX_TARGET_UPLOAD_BYTES = 2 * 1024 * 1024
     private const val MAX_PNG_PREFER_BYTES = 1_800_000
+    private const val MAX_PROOF_UPLOAD_BYTES = 5 * 1024 * 1024
     private val ALLOWED_MIME_TYPES = setOf("image/png", "image/jpeg", "image/webp")
 
     suspend fun prepareFromUri(context: Context, uri: Uri): PreparedLogoMedia =
         withContext(Dispatchers.IO) {
-            val rawBytes = readUriBounded(context, uri)
+            val rawBytes = readUriBounded(context, uri, MAX_INPUT_READ_BYTES)
             prepareFromBytes(rawBytes)
         }
 
-    private fun readUriBounded(context: Context, uri: Uri): ByteArray {
+    suspend fun prepareProofFromUri(context: Context, uri: Uri): PreparedLogoMedia =
+        withContext(Dispatchers.IO) {
+            val rawBytes = readUriBounded(context, uri, MAX_INPUT_READ_BYTES)
+            prepareProofFromBytes(rawBytes)
+        }
+
+    private fun readUriBounded(context: Context, uri: Uri, maxBytes: Int): ByteArray {
         val stream = context.contentResolver.openInputStream(uri)
-            ?: error("Não foi possível abrir a imagem selecionada.")
+            ?: error("Não foi possível abrir o arquivo selecionado.")
         return stream.use { input ->
             val out = ByteArrayOutputStream()
             val buf = ByteArray(16 * 1024)
@@ -45,18 +52,55 @@ object B2BLogoMediaHelper {
                 val read = input.read(buf)
                 if (read <= 0) break
                 total += read
-                if (total > MAX_INPUT_READ_BYTES) {
-                    error("Escolha uma imagem menor que 15 MB.")
+                if (total > maxBytes) {
+                    error("Escolha um arquivo menor que ${maxBytes / (1024 * 1024)} MB.")
                 }
                 out.write(buf, 0, read)
             }
             val result = out.toByteArray()
-            if (result.isEmpty()) error("Arquivo de imagem vazio.")
+            if (result.isEmpty()) error("Arquivo vazio.")
             result
         }
     }
 
-    internal fun prepareFromBytes(rawBytes: ByteArray): PreparedLogoMedia {
+    internal fun prepareProofFromBytes(rawBytes: ByteArray): PreparedLogoMedia {
+        if (rawBytes.size >= 5 &&
+            rawBytes[0] == '%'.code.toByte() &&
+            rawBytes[1] == 'P'.code.toByte() &&
+            rawBytes[2] == 'D'.code.toByte() &&
+            rawBytes[3] == 'F'.code.toByte() &&
+            rawBytes[4] == '-'.code.toByte()
+        ) {
+            require(rawBytes.size <= MAX_PROOF_UPLOAD_BYTES) {
+                "O PDF selecionado excede o limite de 5 MB."
+            }
+            return PreparedLogoMedia("comprovante.pdf", "application/pdf", rawBytes)
+        }
+        return prepareImageBytes(
+            rawBytes = rawBytes,
+            maxDimension = 1600,
+            maxUploadBytes = MAX_PROOF_UPLOAD_BYTES,
+            preferPngBytes = 3_500_000,
+            baseName = "comprovante"
+        )
+    }
+
+    internal fun prepareFromBytes(rawBytes: ByteArray): PreparedLogoMedia =
+        prepareImageBytes(
+            rawBytes = rawBytes,
+            maxDimension = 512,
+            maxUploadBytes = MAX_TARGET_UPLOAD_BYTES,
+            preferPngBytes = MAX_PNG_PREFER_BYTES,
+            baseName = "logo"
+        )
+
+    private fun prepareImageBytes(
+        rawBytes: ByteArray,
+        maxDimension: Int,
+        maxUploadBytes: Int,
+        preferPngBytes: Int,
+        baseName: String
+    ): PreparedLogoMedia {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, bounds)
         require(
@@ -65,11 +109,12 @@ object B2BLogoMediaHelper {
                 bounds.outWidth.toLong() * bounds.outHeight.toLong() <= 100_000_000L &&
                 bounds.outMimeType in ALLOWED_MIME_TYPES
         ) {
-            "Formato não suportado. Selecione uma imagem PNG, JPEG ou WebP."
+            "Formato não suportado. Envie PNG, JPEG, WebP ou PDF (até 5 MB)."
         }
 
         var sample = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 1024) {
+        val sampleLimit = maxDimension * 2
+        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > sampleLimit) {
             sample *= 2
         }
         val decoded = BitmapFactory.decodeByteArray(
@@ -82,8 +127,8 @@ object B2BLogoMediaHelper {
         val oriented = applyExifOrientation(decoded, rawBytes)
         try {
             val maxDim = maxOf(oriented.width, oriented.height)
-            val scaled = if (maxDim > 512) {
-                val ratio = 512f / maxDim.toFloat()
+            val scaled = if (maxDim > maxDimension) {
+                val ratio = maxDimension.toFloat() / maxDim.toFloat()
                 Bitmap.createScaledBitmap(
                     oriented,
                     (oriented.width * ratio).toInt().coerceAtLeast(1),
@@ -97,17 +142,17 @@ object B2BLogoMediaHelper {
                 val pngOut = ByteArrayOutputStream()
                 scaled.compress(Bitmap.CompressFormat.PNG, 100, pngOut)
                 val pngBytes = pngOut.toByteArray()
-                if (pngBytes.size <= MAX_PNG_PREFER_BYTES) {
-                    return PreparedLogoMedia("logo.png", "image/png", pngBytes)
+                if (pngBytes.size <= preferPngBytes && pngBytes.size <= maxUploadBytes) {
+                    return PreparedLogoMedia("$baseName.png", "image/png", pngBytes)
                 }
 
                 val jpegOut = ByteArrayOutputStream()
                 scaled.compress(Bitmap.CompressFormat.JPEG, 90, jpegOut)
                 val jpegBytes = jpegOut.toByteArray()
-                require(jpegBytes.size <= MAX_TARGET_UPLOAD_BYTES) {
-                    "A imagem excede o limite de 2 MB mesmo após compressão."
+                require(jpegBytes.size <= maxUploadBytes) {
+                    "A imagem excede o limite de ${maxUploadBytes / (1024 * 1024)} MB mesmo após compressão."
                 }
-                return PreparedLogoMedia("logo.jpg", "image/jpeg", jpegBytes)
+                return PreparedLogoMedia("$baseName.jpg", "image/jpeg", jpegBytes)
             } finally {
                 if (scaled !== oriented) scaled.recycle()
             }

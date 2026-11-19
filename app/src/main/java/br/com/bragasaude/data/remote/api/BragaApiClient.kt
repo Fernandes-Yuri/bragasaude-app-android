@@ -1325,6 +1325,19 @@ class BragaApiClient @Inject constructor(
             } finally { connection?.disconnect() }
         }
 
+    private fun readApiResponse(conn: HttpURLConnection): ApiResponse {
+        val code = conn.responseCode
+        val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+        val body = if (stream != null) {
+            BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
+                val text = reader.readText()
+                if (text.isNotEmpty()) runCatching { JSONObject(text) }.getOrNull() else null
+            }
+        } else null
+        val detail = body?.optString("detail", "")?.takeIf { it.isNotBlank() && it != "null" }
+        return ApiResponse(body, code, detail)
+    }
+
     private fun postJsonDetailed(urlString: String, json: JSONObject): ApiResponse {
         var conn: HttpURLConnection? = null
         return try {
@@ -1340,16 +1353,27 @@ class BragaApiClient @Inject constructor(
                 attachIdentity(urlString)
             }
             OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(json.toString()) }
-            val code = conn.responseCode
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val body = if (stream != null) {
-                BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
-                    val text = reader.readText()
-                    if (text.isNotEmpty()) JSONObject(text) else null
-                }
-            } else null
-            val detail = body?.optString("detail", null)
-            ApiResponse(body, code, detail)
+            readApiResponse(conn)
+        } catch (e: Exception) {
+            ApiResponse(null, 0, e.message)
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) {}
+        }
+    }
+
+    private fun deleteJsonDetailed(urlString: String): ApiResponse {
+        var conn: HttpURLConnection? = null
+        return try {
+            val url = URL(urlString)
+            conn = openConnection(url).apply {
+                requestMethod = "DELETE"
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                setRequestProperty("Accept", "application/json")
+                instanceFollowRedirects = false
+                attachIdentity(urlString)
+            }
+            readApiResponse(conn)
         } catch (e: Exception) {
             ApiResponse(null, 0, e.message)
         } finally {
@@ -1695,7 +1719,8 @@ class BragaApiClient @Inject constructor(
         fieldName: String,
         fileName: String,
         mimeType: String,
-        bytes: ByteArray
+        bytes: ByteArray,
+        extraFields: Map<String, String> = emptyMap()
     ): Pair<Int, String> {
         val boundary = "Boundary-${System.currentTimeMillis()}"
         var conn: HttpURLConnection? = null
@@ -1711,6 +1736,14 @@ class BragaApiClient @Inject constructor(
                 attachIdentity(url.toString())
             }
             conn.outputStream.use { output ->
+                extraFields.forEach { (key, value) ->
+                    output.write("--$boundary\r\n".toByteArray())
+                    output.write(
+                        "Content-Disposition: form-data; name=\"${key.replace("\"", "")}\"\r\n\r\n".toByteArray()
+                    )
+                    output.write(value.toByteArray(Charsets.UTF_8))
+                    output.write("\r\n".toByteArray())
+                }
                 output.write("--$boundary\r\n".toByteArray())
                 output.write(
                     "Content-Disposition: form-data; name=\"$fieldName\"; filename=\"${fileName.replace("\"", "")}\"\r\n".toByteArray()
@@ -2537,27 +2570,67 @@ class BragaApiClient @Inject constructor(
 
     // ---- Frente B2B (B2B-06 / B2B-07): Onboarding Empresarial & Previa de Convite ----
 
+    private fun optNullableText(obj: JSONObject, key: String): String? =
+        obj.optString(key, "").takeIf { it.isNotBlank() && it != "null" }
+
+    private fun parseStringList(arr: JSONArray?): List<String> {
+        if (arr == null) return emptyList()
+        return (0 until arr.length()).mapNotNull { idx ->
+            arr.optString(idx, "").takeIf { it.isNotBlank() && it != "null" }
+        }
+    }
+
     private fun parsePartnerProgramJson(obj: JSONObject?): br.com.bragasaude.domain.b2b.PartnerProgramDto? {
         val p = obj ?: return null
         val programId = p.optString("programId", "").takeIf { it.isNotBlank() } ?: return null
+        val proofs = p.optJSONArray("proofDocuments")?.let { arr ->
+            (0 until arr.length()).mapNotNull { idx ->
+                val item = arr.optJSONObject(idx) ?: return@mapNotNull null
+                val pid = item.optString("id", "").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                br.com.bragasaude.domain.b2b.ProofDocumentSummaryDto(
+                    id = pid,
+                    docType = item.optString("docType", "CARTAO_CNPJ_CCMEI"),
+                    fileName = item.optString("fileName", "comprovante"),
+                    contentType = item.optString("contentType", "application/pdf"),
+                    sizeBytes = item.optLong("sizeBytes", 0L),
+                    uploadedAt = item.optString("uploadedAt", "")
+                )
+            }
+        } ?: emptyList()
+
         return br.com.bragasaude.domain.b2b.PartnerProgramDto(
             programId = programId,
             ownerUserId = p.optString("ownerUserId", ""),
             companyName = p.optString("companyName", ""),
             programName = p.optString("programName", ""),
-            cnpj = p.optString("cnpj", "").takeIf { it.isNotBlank() && it != "null" },
+            cnpj = optNullableText(p, "cnpj"),
             primaryColor = p.optString(
                 "primaryColor",
                 br.com.bragasaude.domain.b2b.B2BOnboardingValidator.DEFAULT_PRIMARY_COLOR
             ),
-            logoUrl = p.optString("logoUrl", "").takeIf { it.isNotBlank() && it != "null" },
+            logoUrl = optNullableText(p, "logoUrl"),
             approvalStatus = p.optString("approvalStatus", "DRAFT"),
-            reviewNote = p.optString("reviewNote", "").takeIf { it.isNotBlank() && it != "null" },
-            inviteCode = p.optString("inviteCode", "").takeIf { it.isNotBlank() && it != "null" },
+            reviewNote = optNullableText(p, "reviewNote"),
+            inviteCode = optNullableText(p, "inviteCode"),
             invitePaused = p.optBoolean("invitePaused", false),
             seatLimit = p.optInt("seatLimit", 10),
             activeParticipants = p.optInt("activeParticipants", 0),
-            canPromote = p.optBoolean("canPromote", false)
+            canPromote = p.optBoolean("canPromote", false),
+            templateKey = optNullableText(p, "templateKey") ?: "CLINICA_GERAL",
+            responsibleName = optNullableText(p, "responsibleName"),
+            responsibleCpfMasked = optNullableText(p, "responsibleCpfMasked"),
+            responsibleRole = optNullableText(p, "responsibleRole"),
+            responsiblePhone = optNullableText(p, "responsiblePhone"),
+            councilType = optNullableText(p, "councilType"),
+            councilNumber = optNullableText(p, "councilNumber"),
+            councilUf = optNullableText(p, "councilUf"),
+            city = optNullableText(p, "city"),
+            state = optNullableText(p, "state"),
+            termsAcceptedAt = optNullableText(p, "termsAcceptedAt"),
+            termsVersion = optNullableText(p, "termsVersion"),
+            autoKybStatus = optNullableText(p, "autoKybStatus"),
+            autoKybFlags = parseStringList(p.optJSONArray("autoKybFlags")),
+            proofDocuments = proofs
         )
     }
 
@@ -2574,9 +2647,9 @@ class BragaApiClient @Inject constructor(
             }
         }
 
-    suspend fun saveMyPartnerProgram(
+    suspend fun saveMyPartnerProgramDetailed(
         request: br.com.bragasaude.domain.b2b.UpsertPartnerProgramRequest
-    ): br.com.bragasaude.domain.b2b.PartnerProgramDto? = withContext(Dispatchers.IO) {
+    ): br.com.bragasaude.domain.b2b.SavePartnerProgramResult = withContext(Dispatchers.IO) {
         try {
             val payload = JSONObject().apply {
                 put("companyName", request.companyName.trim())
@@ -2584,30 +2657,83 @@ class BragaApiClient @Inject constructor(
                 put("primaryColor", request.primaryColor.trim())
                 if (!request.cnpj.isNullOrBlank()) put("cnpj", request.cnpj.trim())
                 if (!request.logoUrl.isNullOrBlank()) put("logoUrl", request.logoUrl.trim())
+                if (!request.templateKey.isNullOrBlank()) put("templateKey", request.templateKey.trim())
+                if (!request.responsibleName.isNullOrBlank()) put("responsibleName", request.responsibleName.trim())
+                if (!request.responsibleCpf.isNullOrBlank()) put("responsibleCpf", request.responsibleCpf.trim())
+                if (!request.responsibleRole.isNullOrBlank()) put("responsibleRole", request.responsibleRole.trim())
+                if (!request.responsiblePhone.isNullOrBlank()) put("responsiblePhone", request.responsiblePhone.trim())
+                if (!request.councilType.isNullOrBlank()) put("councilType", request.councilType.trim())
+                if (!request.councilNumber.isNullOrBlank()) put("councilNumber", request.councilNumber.trim())
+                if (!request.councilUf.isNullOrBlank()) put("councilUf", request.councilUf.trim())
+                if (!request.city.isNullOrBlank()) put("city", request.city.trim())
+                if (!request.state.isNullOrBlank()) put("state", request.state.trim())
+                if (request.termsAccepted != null) put("termsAccepted", request.termsAccepted)
+                if (!request.termsVersion.isNullOrBlank()) put("termsVersion", request.termsVersion.trim())
             }
-            val res = postJson("$baseUrl/api/b2b/program/me", payload) ?: return@withContext null
-            parsePartnerProgramJson(res.optJSONObject("program"))
+            val resp = postJsonDetailed("$baseUrl/api/b2b/program/me", payload)
+            if (resp.code in 200..299 && resp.body != null) {
+                return@withContext br.com.bragasaude.domain.b2b.SavePartnerProgramResult(
+                    program = parsePartnerProgramJson(resp.body.optJSONObject("program"))
+                )
+            }
+            br.com.bragasaude.domain.b2b.SavePartnerProgramResult(
+                errorDetail = resp.errorDetail
+                    ?: "Não foi possível salvar agora. Verifique os dados informados."
+            )
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao salvar programa B2B: ${e.message}")
-            null
+            br.com.bragasaude.domain.b2b.SavePartnerProgramResult(
+                errorDetail = "Erro de conexão ao salvar preparação do programa."
+            )
+        }
+    }
+
+    suspend fun saveMyPartnerProgram(
+        request: br.com.bragasaude.domain.b2b.UpsertPartnerProgramRequest
+    ): br.com.bragasaude.domain.b2b.PartnerProgramDto? =
+        saveMyPartnerProgramDetailed(request).program
+
+    suspend fun submitMyPartnerProgramKyb(
+        termsAccepted: Boolean? = null,
+        termsVersion: String? = null,
+        responsibleCpf: String? = null
+    ): br.com.bragasaude.domain.b2b.SubmitPartnerProgramResult = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                if (termsAccepted != null) put("termsAccepted", termsAccepted)
+                if (!termsVersion.isNullOrBlank()) put("termsVersion", termsVersion.trim())
+                if (!responsibleCpf.isNullOrBlank()) put("responsibleCpf", responsibleCpf.trim())
+            }
+            val resp = postJsonDetailed("$baseUrl/api/b2b/program/me/submit", payload)
+            val body = resp.body
+            if (resp.code in 200..299 && body != null) {
+                return@withContext br.com.bragasaude.domain.b2b.SubmitPartnerProgramResult(
+                    program = parsePartnerProgramJson(body.optJSONObject("program")),
+                    kybDecision = optNullableText(body, "kybDecision"),
+                    flags = parseStringList(body.optJSONArray("flags")),
+                    requiresManualProof = body.optBoolean("requiresManualProof", false)
+                )
+            }
+            br.com.bragasaude.domain.b2b.SubmitPartnerProgramResult(
+                kybDecision = body?.let { optNullableText(it, "kybDecision") },
+                flags = parseStringList(body?.optJSONArray("flags")),
+                errorDetail = resp.errorDetail
+                    ?: "Verifique o CNPJ e os dados obrigatórios antes de enviar."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao enviar programa B2B para análise: ${e.message}")
+            br.com.bragasaude.domain.b2b.SubmitPartnerProgramResult(
+                errorDetail = "Erro de conexão ao enviar programa para validação."
+            )
         }
     }
 
     suspend fun submitMyPartnerProgram(): br.com.bragasaude.domain.b2b.PartnerProgramDto? =
-        withContext(Dispatchers.IO) {
-            try {
-                val res = postJson("$baseUrl/api/b2b/program/me/submit", JSONObject())
-                    ?: return@withContext null
-                parsePartnerProgramJson(res.optJSONObject("program"))
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Falha ao enviar programa B2B para análise: ${e.message}")
-                null
-            }
-        }
+        submitMyPartnerProgramKyb().program
 
     suspend fun lookupPartnerInvitePreview(
         rawCode: String
@@ -3135,6 +3261,77 @@ class BragaApiClient @Inject constructor(
             Log.w(TAG, "Falha no upload da logo B2B: ${e.message}")
             br.com.bragasaude.domain.b2b.UploadPartnerLogoResult(
                 errorDetail = "Erro de conexão ao enviar a logo do programa."
+            )
+        }
+    }
+
+    suspend fun uploadPartnerProof(
+        docType: String,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray
+    ): br.com.bragasaude.domain.b2b.UploadPartnerProofResult = withContext(Dispatchers.IO) {
+        if (bytes.isEmpty() || bytes.size > 5 * 1024 * 1024) {
+            return@withContext br.com.bragasaude.domain.b2b.UploadPartnerProofResult(
+                errorDetail = "O comprovante deve ter entre 1 byte e 5 MB."
+            )
+        }
+        try {
+            val (code, text) = postMultipartFile(
+                urlString = "$baseUrl/api/b2b/program/me/proofs",
+                fieldName = "file",
+                fileName = fileName,
+                mimeType = mimeType,
+                bytes = bytes,
+                extraFields = mapOf("docType" to docType.trim().uppercase())
+            )
+            val json = runCatching { JSONObject(text) }.getOrNull()
+            if (code in 200..299 && json != null) {
+                return@withContext br.com.bragasaude.domain.b2b.UploadPartnerProofResult(
+                    proofId = optNullableText(json, "proofId"),
+                    program = parsePartnerProgramJson(json.optJSONObject("program"))
+                )
+            }
+            val detail = json?.let { optNullableText(it, "detail") }
+            br.com.bragasaude.domain.b2b.UploadPartnerProofResult(
+                errorDetail = detail ?: "Não foi possível enviar o comprovante agora."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha no upload do comprovante KYB: ${e.message}")
+            br.com.bragasaude.domain.b2b.UploadPartnerProofResult(
+                errorDetail = "Erro de conexão ao enviar o comprovante privado."
+            )
+        }
+    }
+
+    suspend fun deletePartnerProof(
+        proofId: String
+    ): br.com.bragasaude.domain.b2b.SavePartnerProgramResult = withContext(Dispatchers.IO) {
+        val cleanId = proofId.trim()
+        if (cleanId.isEmpty()) {
+            return@withContext br.com.bragasaude.domain.b2b.SavePartnerProgramResult(
+                errorDetail = "Comprovante inválido."
+            )
+        }
+        try {
+            val encoded = java.net.URLEncoder.encode(cleanId, "UTF-8")
+            val resp = deleteJsonDetailed("$baseUrl/api/b2b/program/me/proofs/$encoded")
+            if (resp.code in 200..299 && resp.body != null) {
+                return@withContext br.com.bragasaude.domain.b2b.SavePartnerProgramResult(
+                    program = parsePartnerProgramJson(resp.body.optJSONObject("program"))
+                )
+            }
+            br.com.bragasaude.domain.b2b.SavePartnerProgramResult(
+                errorDetail = resp.errorDetail ?: "Não foi possível remover o comprovante agora."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao remover comprovante KYB: ${e.message}")
+            br.com.bragasaude.domain.b2b.SavePartnerProgramResult(
+                errorDetail = "Erro de conexão ao remover o comprovante."
             )
         }
     }

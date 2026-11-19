@@ -29,6 +29,7 @@ enum class PartnerApprovalStatus(val labelPtBr: String) {
     PENDING_REVIEW("Em análise"),
     CHANGES_REQUESTED("Ajustes solicitados"),
     APPROVED("Empresa aprovada"),
+    SUSPENDED("Programa suspenso"),
     REJECTED("Cadastro recusado");
 
     companion object {
@@ -37,6 +38,7 @@ enum class PartnerApprovalStatus(val labelPtBr: String) {
                 "PENDING_REVIEW" -> PENDING_REVIEW
                 "CHANGES_REQUESTED" -> CHANGES_REQUESTED
                 "APPROVED" -> APPROVED
+                "SUSPENDED" -> SUSPENDED
                 "REJECTED" -> REJECTED
                 else -> DRAFT
             }
@@ -97,6 +99,16 @@ data class SelectB2BContextEnvelope(
 )
 
 @Serializable
+data class ProofDocumentSummaryDto(
+    val id: String,
+    val docType: String,
+    val fileName: String,
+    val contentType: String = "application/pdf",
+    val sizeBytes: Long = 0,
+    val uploadedAt: String = ""
+)
+
+@Serializable
 data class PartnerProgramDto(
     val programId: String,
     val ownerUserId: String,
@@ -111,7 +123,22 @@ data class PartnerProgramDto(
     val invitePaused: Boolean = false,
     val seatLimit: Int = 10,
     val activeParticipants: Int = 0,
-    val canPromote: Boolean = false
+    val canPromote: Boolean = false,
+    val templateKey: String = "CLINICA_GERAL",
+    val responsibleName: String? = null,
+    val responsibleCpfMasked: String? = null,
+    val responsibleRole: String? = null,
+    val responsiblePhone: String? = null,
+    val councilType: String? = null,
+    val councilNumber: String? = null,
+    val councilUf: String? = null,
+    val city: String? = null,
+    val state: String? = null,
+    val termsAcceptedAt: String? = null,
+    val termsVersion: String? = null,
+    val autoKybStatus: String? = null,
+    val autoKybFlags: List<String> = emptyList(),
+    val proofDocuments: List<ProofDocumentSummaryDto> = emptyList()
 ) {
     val parsedStatus: PartnerApprovalStatus
         get() = PartnerApprovalStatus.fromWire(approvalStatus)
@@ -123,8 +150,51 @@ data class UpsertPartnerProgramRequest(
     val programName: String,
     val cnpj: String? = null,
     val primaryColor: String = B2BOnboardingValidator.DEFAULT_PRIMARY_COLOR,
-    val logoUrl: String? = null
+    val logoUrl: String? = null,
+    val templateKey: String? = null,
+    val responsibleName: String? = null,
+    val responsibleCpf: String? = null,
+    val responsibleRole: String? = null,
+    val responsiblePhone: String? = null,
+    val councilType: String? = null,
+    val councilNumber: String? = null,
+    val councilUf: String? = null,
+    val city: String? = null,
+    val state: String? = null,
+    val termsAccepted: Boolean? = null,
+    val termsVersion: String? = null
 )
+
+@Serializable
+data class SavePartnerProgramResult(
+    val program: PartnerProgramDto? = null,
+    val errorDetail: String? = null
+) {
+    val isSuccess: Boolean
+        get() = program != null
+}
+
+@Serializable
+data class SubmitPartnerProgramResult(
+    val program: PartnerProgramDto? = null,
+    val kybDecision: String? = null,
+    val flags: List<String> = emptyList(),
+    val requiresManualProof: Boolean = false,
+    val errorDetail: String? = null
+) {
+    val isSuccess: Boolean
+        get() = program != null
+}
+
+@Serializable
+data class UploadPartnerProofResult(
+    val proofId: String? = null,
+    val program: PartnerProgramDto? = null,
+    val errorDetail: String? = null
+) {
+    val isSuccess: Boolean
+        get() = proofId != null && program != null
+}
 
 @Serializable
 data class PartnerInvitePreviewDto(
@@ -338,8 +408,55 @@ object B2BOnboardingValidator {
         "#BE123C"
     )
 
+    const val TERMS_VERSION_CURRENT = "B2B-V1-2026"
+
+    data class CatalogOption(val key: String, val labelPtBr: String)
+
+    val TEMPLATE_OPTIONS = listOf(
+        CatalogOption("CLINICA_GERAL", "Clínica Geral / Consultório"),
+        CatalogOption("NUTRICAO_BEM_ESTAR", "Nutrição e Bem-Estar"),
+        CatalogOption("FISIO_REABILITACAO", "Fisioterapia e Reabilitação"),
+        CatalogOption("CUIDADO_SENIOR_HOMECARE", "Cuidado Sênior e Home Care"),
+        CatalogOption("FARMACIA_ADESAO", "Farmácia e Adesão"),
+        CatalogOption("SAUDE_CORPORATIVA", "Saúde Corporativa / RH"),
+        CatalogOption("CUSTOM", "Personalizado (Empresa/Instituição)")
+    )
+
+    val RESPONSIBLE_ROLE_OPTIONS = listOf(
+        CatalogOption("SOCIO_TITULAR", "Sócio / Titular / MEI"),
+        CatalogOption("RESPONSAVEL_TECNICO", "Responsável Técnico"),
+        CatalogOption("GERENTE_ADMIN", "Gerente Administrativo")
+    )
+
+    val COUNCIL_TYPE_OPTIONS = listOf("CRM", "CRN", "CREFITO", "COREN", "CRF", "CRP", "CRO")
+
+    val PROOF_DOC_TYPE_OPTIONS = listOf(
+        CatalogOption("CARTAO_CNPJ_CCMEI", "Cartão CNPJ ou CCMEI"),
+        CatalogOption("CRM_CARTEIRA", "Carteira do Conselho (CRM/CRN/etc.)"),
+        CatalogOption("CARTA_AUTORIZACAO", "Carta de Autorização da Diretoria"),
+        CatalogOption("DOC_RESPONSAVEL", "Documento do Responsável Legal")
+    )
+
+    val BR_UFS = listOf(
+        "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
+        "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"
+    )
+
     private val HEX_COLOR_REGEX = Regex("^#[0-9A-Fa-f]{6}$")
     private val INVITE_CODE_REGEX = Regex("^[A-Za-z0-9_-]{3,32}$")
+
+    fun isAssistencialTemplate(templateKey: String?): Boolean {
+        return when (templateKey?.trim()?.uppercase()) {
+            "CLINICA_GERAL",
+            "NUTRICAO_BEM_ESTAR",
+            "FISIO_REABILITACAO",
+            "CUIDADO_SENIOR_HOMECARE",
+            "FARMACIA_ADESAO",
+            null,
+            "" -> true
+            else -> false
+        }
+    }
 
     fun isValidHexColor(raw: String?): Boolean {
         if (raw.isNullOrBlank()) return false
@@ -357,14 +474,56 @@ object B2BOnboardingValidator {
 
     fun isValidCnpj(raw: String?): Boolean {
         val digits = extractCnpjDigits(raw)
-        return digits.length == 14 && digits.toSet().size > 1
+        if (digits.length != 14 || digits.toSet().size <= 1) return false
+        val nums = digits.map { it - '0' }
+        val w1 = intArrayOf(5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2)
+        val sum1 = (0 until 12).sumOf { nums[it] * w1[it] }
+        val mod1 = sum1 % 11
+        val dv1 = if (mod1 < 2) 0 else 11 - mod1
+        if (nums[12] != dv1) return false
+
+        val w2 = intArrayOf(6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2)
+        val sum2 = (0 until 13).sumOf { nums[it] * w2[it] }
+        val mod2 = sum2 % 11
+        val dv2 = if (mod2 < 2) 0 else 11 - mod2
+        return nums[13] == dv2
     }
 
     fun formatCnpjOrNull(raw: String?): String? {
         val digits = extractCnpjDigits(raw)
-        if (digits.length != 14 || digits.toSet().size <= 1) return null
+        if (!isValidCnpj(digits)) return null
         return "${digits.substring(0, 2)}.${digits.substring(2, 5)}.${digits.substring(5, 8)}/" +
             "${digits.substring(8, 12)}-${digits.substring(12, 14)}"
+    }
+
+    fun extractCpfDigits(raw: String?): String {
+        return raw.orEmpty().filter { it.isDigit() }
+    }
+
+    fun isValidCpf(raw: String?): Boolean {
+        val digits = extractCpfDigits(raw)
+        if (digits.length != 11 || digits.toSet().size <= 1) return false
+        val nums = digits.map { it - '0' }
+        val sum1 = (0 until 9).sumOf { nums[it] * (10 - it) }
+        val dv1 = ((sum1 * 10) % 11).let { if (it == 10) 0 else it }
+        if (nums[9] != dv1) return false
+
+        val sum2 = (0 until 10).sumOf { nums[it] * (11 - it) }
+        val dv2 = ((sum2 * 10) % 11).let { if (it == 10) 0 else it }
+        return nums[10] == dv2
+    }
+
+    fun formatCpfOrNull(raw: String?): String? {
+        val digits = extractCpfDigits(raw)
+        if (!isValidCpf(digits)) return null
+        return "${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6, 9)}-${digits.substring(9, 11)}"
+    }
+
+    fun isValidResponsiblePhone(raw: String?): Boolean {
+        val digits = extractCnpjDigits(raw).let {
+            if (it.length in 12..13 && it.startsWith("55")) it.substring(2) else it
+        }
+        return digits.length in 10..11 && digits.toSet().size > 1
     }
 
     fun isValidInviteCode(raw: String?): Boolean {
@@ -430,6 +589,65 @@ object B2BOnboardingValidator {
         logoUrl: String? = null
     ): Boolean {
         return canSaveDraft(companyName, programName, primaryColor, cnpj, logoUrl) && isValidCnpj(cnpj)
+    }
+
+    fun canSubmitKybForReview(
+        companyName: String,
+        programName: String,
+        cnpj: String?,
+        primaryColor: String,
+        responsibleName: String?,
+        responsibleCpf: String?,
+        cpfAlreadySaved: Boolean,
+        responsibleRole: String?,
+        responsiblePhone: String?,
+        city: String?,
+        state: String?,
+        termsAccepted: Boolean,
+        councilType: String? = null,
+        councilNumber: String? = null,
+        councilUf: String? = null,
+        logoUrl: String? = null
+    ): Boolean {
+        if (!canSubmitForReview(companyName, programName, cnpj, primaryColor, logoUrl)) {
+            return false
+        }
+        val respNameOk = responsibleName.orEmpty().trim().length in 3..160
+        val cpfOk = if (responsibleCpf.isNullOrBlank()) cpfAlreadySaved else isValidCpf(responsibleCpf)
+        val roleOk = RESPONSIBLE_ROLE_OPTIONS.any { it.key == responsibleRole?.trim()?.uppercase() }
+        val phoneOk = isValidResponsiblePhone(responsiblePhone)
+        val cityOk = city.orEmpty().trim().length in 2..96
+        val ufOk = state.orEmpty().trim().uppercase() in BR_UFS
+        val councilProvided = listOf(councilType, councilNumber, councilUf).any { !it.isNullOrBlank() }
+        val councilOk = !councilProvided || (
+            councilType.orEmpty().trim().uppercase() in COUNCIL_TYPE_OPTIONS &&
+                councilNumber.orEmpty().trim().length in 3..24 &&
+                councilUf.orEmpty().trim().uppercase() in BR_UFS
+            )
+        return respNameOk && cpfOk && roleOk && phoneOk && cityOk && ufOk && councilOk && termsAccepted
+    }
+
+    fun formatKybFlagPtBr(flag: String): String {
+        val upper = flag.trim().uppercase()
+        return when {
+            upper == "RECENT_CNPJ" ->
+                "CNPJ aberto há menos de 30 dias — nossa equipe confirmará o início de operação."
+            upper.startsWith("PROTECTED_BRAND_TERM") ->
+                "O nome contém termo hospitalar ou institucional protegido e requer conferência de vínculo."
+            upper == "OWNER_NOT_IN_QSA" ->
+                "Responsável não localizado automaticamente no QSA da Receita Federal (envie carta de autorização ou documento)."
+            upper == "MEI_UNVERIFIED_CPF" ->
+                "MEI sem dígitos verificáveis de CPF na base pública — anexe o CCMEI/Cartão CNPJ abaixo para agilizar."
+            upper == "CNAE_INCOMPATIBLE" ->
+                "CNAE diferente dos códigos padrão deste perfil — revisão humana confirmará a atuação."
+            upper == "COUNCIL_NOT_INFORMED" ->
+                "Perfil assistencial sem registro profissional (CRM/CRN/etc.) informado."
+            upper == "API_UNAVAILABLE" ->
+                "Consulta automática da Receita Federal indisponível no momento — solicitação encaminhada para revisão."
+            upper == "AUTO_APPROVE_DISABLED" ->
+                "Aprovação manual obrigatória habilitada no ambiente."
+            else -> "Pendência cadastral em conferência ($upper)."
+        }
     }
 
     fun buildInviteDeepLink(rawCode: String?): String? {
