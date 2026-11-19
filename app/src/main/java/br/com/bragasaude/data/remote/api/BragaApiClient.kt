@@ -3582,4 +3582,170 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    private fun parseProgramReminderJson(
+        obj: JSONObject?
+    ): br.com.bragasaude.domain.b2b.ProgramReminderDto? {
+        if (obj == null) return null
+        val reminderId = optNullableText(obj, "reminderId") ?: return null
+        val programId = optNullableText(obj, "programId") ?: ""
+        return br.com.bragasaude.domain.b2b.ProgramReminderDto(
+            reminderId = reminderId,
+            programId = programId,
+            targetPatientId = optNullableText(obj, "targetPatientId"),
+            targetPatientName = optNullableText(obj, "targetPatientName"),
+            targetCategory = optNullableText(obj, "targetCategory"),
+            reminderType = optNullableText(obj, "reminderType") ?: "ROUTINE",
+            title = obj.optString("title", ""),
+            body = obj.optString("body", ""),
+            createdAt = obj.optString("createdAt", ""),
+            acknowledgedCount = obj.optInt("acknowledgedCount", 0),
+            acknowledgedAt = optNullableText(obj, "acknowledgedAt"),
+            acknowledgedByUid = optNullableText(obj, "acknowledgedByUid")
+        )
+    }
+
+    suspend fun sendPartnerReminder(
+        request: br.com.bragasaude.domain.b2b.CreateProgramReminderRequest
+    ): br.com.bragasaude.domain.b2b.CreateProgramReminderResult = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                request.targetPatientId?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    put("targetPatientId", it)
+                }
+                request.targetCategory?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    put("targetCategory", it)
+                }
+                put("reminderType", request.reminderType.trim().ifEmpty { "ROUTINE" })
+                put("title", request.title.trim())
+                put("body", request.body.trim())
+            }
+            val resp = postJsonDetailed("$baseUrl/api/b2b/program/me/reminders", payload)
+            if (resp.code in 200..299 && resp.body != null) {
+                return@withContext br.com.bragasaude.domain.b2b.CreateProgramReminderResult(
+                    reminder = parseProgramReminderJson(resp.body.optJSONObject("reminder")),
+                    recipientCount = resp.body.optInt("recipientCount", 0)
+                )
+            }
+            br.com.bragasaude.domain.b2b.CreateProgramReminderResult(
+                errorDetail = resp.errorDetail ?: "Não foi possível enviar o lembrete agora."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao enviar lembrete do parceiro: ${e.message}")
+            br.com.bragasaude.domain.b2b.CreateProgramReminderResult(
+                errorDetail = "Erro de conexão ao enviar o lembrete."
+            )
+        }
+    }
+
+    suspend fun getMyPartnerSentReminders(
+        limit: Int = 20,
+        patientId: String? = null
+    ): List<br.com.bragasaude.domain.b2b.ProgramReminderDto> = withContext(Dispatchers.IO) {
+        try {
+            val clamped = limit.coerceIn(1, 50)
+            val patientQuery = patientId?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                "&patientId=${java.net.URLEncoder.encode(it, "UTF-8")}"
+            }.orEmpty()
+            val res = getJson("$baseUrl/api/b2b/program/me/reminders?limit=$clamped$patientQuery")
+                ?: return@withContext emptyList()
+            val arr = res.optJSONArray("reminders") ?: return@withContext emptyList()
+            buildList {
+                for (i in 0 until arr.length()) {
+                    parseProgramReminderJson(arr.optJSONObject(i))?.let { add(it) }
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao listar lembretes emitidos pelo parceiro: ${e.message}")
+            emptyList()
+        }
+    }
+
+    suspend fun getEnrollmentReminders(
+        programId: String,
+        limit: Int = 20
+    ): br.com.bragasaude.domain.b2b.EnrollmentRemindersFeedDto? = withContext(Dispatchers.IO) {
+        val cleanId = programId.trim()
+        if (cleanId.isEmpty()) return@withContext null
+        try {
+            val encoded = java.net.URLEncoder.encode(cleanId, "UTF-8")
+            val clamped = limit.coerceIn(1, 50)
+            val res = getJson("$baseUrl/api/b2b/enrollments/$encoded/reminders?limit=$clamped")
+                ?: return@withContext null
+            val arr = res.optJSONArray("reminders")
+            val list = buildList {
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        parseProgramReminderJson(arr.optJSONObject(i))?.let { add(it) }
+                    }
+                }
+            }
+            br.com.bragasaude.domain.b2b.EnrollmentRemindersFeedDto(
+                programId = optNullableText(res, "programId") ?: cleanId,
+                programName = res.optString("programName", ""),
+                primaryColor = res.optString("primaryColor", "#1A6B5C"),
+                muted = res.optBoolean("muted", false),
+                reminders = list
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao consultar lembretes do programa: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun acknowledgeEnrollmentReminder(
+        programId: String,
+        reminderId: String
+    ): String? = withContext(Dispatchers.IO) {
+        val cleanProg = programId.trim()
+        val cleanRem = reminderId.trim()
+        if (cleanProg.isEmpty() || cleanRem.isEmpty()) return@withContext null
+        try {
+            val encProg = java.net.URLEncoder.encode(cleanProg, "UTF-8")
+            val encRem = java.net.URLEncoder.encode(cleanRem, "UTF-8")
+            val resp = postJsonDetailed(
+                "$baseUrl/api/b2b/enrollments/$encProg/reminders/$encRem/ack",
+                JSONObject()
+            )
+            if (resp.code in 200..299 && resp.body != null) {
+                return@withContext optNullableText(resp.body, "acknowledgedAt") ?: "acknowledged"
+            }
+            null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao confirmar leitura de lembrete: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun setEnrollmentMuted(
+        programId: String,
+        muted: Boolean
+    ): Boolean? = withContext(Dispatchers.IO) {
+        val cleanProg = programId.trim()
+        if (cleanProg.isEmpty()) return@withContext null
+        try {
+            val encProg = java.net.URLEncoder.encode(cleanProg, "UTF-8")
+            val resp = postJsonDetailed(
+                "$baseUrl/api/b2b/enrollments/$encProg/mute",
+                JSONObject().put("muted", muted)
+            )
+            if (resp.code in 200..299 && resp.body != null) {
+                return@withContext resp.body.optBoolean("muted", muted)
+            }
+            null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao silenciar/reativar avisos do programa: ${e.message}")
+            null
+        }
+    }
+
 }

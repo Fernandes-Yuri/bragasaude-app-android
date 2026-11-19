@@ -60,6 +60,11 @@ fun PartnerWorkspaceScreen(
     val isLoadingSummary by viewModel.isLoadingSummary.collectAsState()
     val isRemovingParticipant by viewModel.isRemovingParticipant.collectAsState()
     val selectedPeriodDays by viewModel.selectedPeriodDays.collectAsState()
+    val ownerReminders by viewModel.ownerReminders.collectAsState()
+    val isSendingReminder by viewModel.isSendingReminder.collectAsState()
+    val enrollmentRemindersFeed by viewModel.enrollmentRemindersFeed.collectAsState()
+    val acknowledgingReminderId by viewModel.acknowledgingReminderId.collectAsState()
+    val isUpdatingMute by viewModel.isUpdatingMute.collectAsState()
     val isGeneratingPdf by viewModel.isGeneratingPdf.collectAsState()
     val generatedPdf by viewModel.generatedPdf.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
@@ -71,6 +76,7 @@ fun PartnerWorkspaceScreen(
     var selectedOwnerTab by rememberSaveable { mutableStateOf(PartnerOwnerTab.WALLET) }
     var pendingInviteCode by rememberSaveable { mutableStateOf(initialInviteCode.trim().uppercase()) }
     var participantToRemove by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var reminderComposerTarget by remember { mutableStateOf<Pair<String?, String>?>(null) }
 
     val savedExperience = remember(programInfo, activeContext) {
         programInfo?.experienceConfig ?: activeContext.resolvedExperienceConfig()
@@ -199,10 +205,37 @@ fun PartnerWorkspaceScreen(
             onActionFeedback = { feedback ->
                 Toast.makeText(context, feedback, Toast.LENGTH_LONG).show()
             },
+            onOpenSendReminder = { pid, pname ->
+                viewModel.clearSelectedSummary()
+                reminderComposerTarget = pid to pname
+            },
             onRequestRemove = {
                 participantToRemove = summary.patientUserId to summary.participantName
             },
             onDismiss = { viewModel.clearSelectedSummary() }
+        )
+    }
+
+    reminderComposerTarget?.let { (targetId, targetName) ->
+        PartnerSendReminderBottomSheet(
+            targetPatientId = targetId,
+            targetPatientName = targetName,
+            enabledProgramMetrics = savedExperience.enabledMetrics,
+            isSending = isSendingReminder,
+            brandPrimary = brandPrimary,
+            brandOnPrimary = brandOnPrimary,
+            brandAccent = brandAccentText,
+            onSend = { category, rType, remTitle, remBody ->
+                viewModel.sendPartnerReminder(
+                    targetPatientId = targetId,
+                    targetCategory = category,
+                    reminderType = rType,
+                    title = remTitle,
+                    body = remBody,
+                    onSuccess = { reminderComposerTarget = null }
+                )
+            },
+            onDismiss = { if (!isSendingReminder) reminderComposerTarget = null }
         )
     }
 
@@ -594,6 +627,23 @@ fun PartnerWorkspaceScreen(
                                 }
                             }
 
+                            if (programInfo?.parsedStatus == PartnerApprovalStatus.APPROVED &&
+                                savedExperience.features.partnerRemindersEnabled
+                            ) {
+                                item {
+                                    OwnerSentRemindersCard(
+                                        reminders = ownerReminders,
+                                        brandPrimary = brandPrimary,
+                                        brandOnPrimary = brandOnPrimary,
+                                        brandAccent = brandAccentText,
+                                        softBorder = BorderStroke(1.dp, brandSoftBorder),
+                                        onOpenBatchComposer = {
+                                            reminderComposerTarget = null to "Lote da carteira"
+                                        }
+                                    )
+                                }
+                            }
+
                             item {
                                 Text(
                                     text = "Participantes vinculados (${participants.size})",
@@ -700,6 +750,19 @@ fun PartnerWorkspaceScreen(
                                     isGeneratingPdf = isGeneratingPdf,
                                     generatedPdf = generatedPdf,
                                     isPreview = false,
+                                    remindersFeed = enrollmentRemindersFeed,
+                                    acknowledgingReminderId = acknowledgingReminderId,
+                                    isUpdatingMute = isUpdatingMute,
+                                    onAcknowledgeReminder = { remId ->
+                                        activeContext.programId?.let { pid ->
+                                            viewModel.acknowledgeEnrollmentReminder(pid, remId)
+                                        }
+                                    },
+                                    onToggleMute = { muted ->
+                                        activeContext.programId?.let { pid ->
+                                            viewModel.toggleEnrollmentMuted(pid, muted)
+                                        }
+                                    },
                                     onOpenConsentSheet = { showConsentSheet = true },
                                     onGeneratePdf = { days, categories ->
                                         viewModel.generatePreConsultationPdf(days, categories)

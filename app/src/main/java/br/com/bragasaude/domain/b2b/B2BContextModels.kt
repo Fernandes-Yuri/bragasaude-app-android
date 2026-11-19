@@ -516,6 +516,65 @@ data class ParticipantRoutineSummaryDto(
     val authorizedRecordsSection: SharedAuthorizedRecordsSectionDto? = null
 )
 
+@Serializable
+enum class PartnerReminderType(val wireValue: String, val labelPtBr: String) {
+    ROUTINE("ROUTINE", "Rotina geral"),
+    HYDRATION("HYDRATION", "Hidratação"),
+    ACTIVITY("ACTIVITY", "Atividade física"),
+    PRE_CONSULT("PRE_CONSULT", "Pré-consulta");
+
+    companion object {
+        fun fromWire(raw: String?): PartnerReminderType {
+            val clean = raw?.trim()?.uppercase()
+            return entries.firstOrNull { it.wireValue == clean } ?: ROUTINE
+        }
+    }
+}
+
+@Serializable
+data class ProgramReminderDto(
+    val reminderId: String,
+    val programId: String,
+    val targetPatientId: String? = null,
+    val targetPatientName: String? = null,
+    val targetCategory: String? = null,
+    val reminderType: String = "ROUTINE",
+    val title: String,
+    val body: String,
+    val createdAt: String,
+    val acknowledgedCount: Int = 0,
+    val acknowledgedAt: String? = null,
+    val acknowledgedByUid: String? = null
+)
+
+@Serializable
+data class EnrollmentRemindersFeedDto(
+    val programId: String,
+    val programName: String = "",
+    val primaryColor: String = "#1A6B5C",
+    val muted: Boolean = false,
+    val reminders: List<ProgramReminderDto> = emptyList()
+)
+
+@Serializable
+data class CreateProgramReminderRequest(
+    val targetPatientId: String? = null,
+    val targetCategory: String? = null,
+    val reminderType: String = "ROUTINE",
+    val title: String,
+    val body: String
+)
+
+@Serializable
+data class CreateProgramReminderResult(
+    val reminder: ProgramReminderDto? = null,
+    val recipientCount: Int = 0,
+    val errorDetail: String? = null
+) {
+    val isSuccess: Boolean
+        get() = reminder != null
+}
+
 object B2BOnboardingValidator {
     const val DEFAULT_PRIMARY_COLOR = "#1A6B5C"
     const val REFERENCE_SUBTITLE =
@@ -843,5 +902,44 @@ object B2BOnboardingValidator {
         val clean = rawCode?.trim()?.uppercase() ?: return null
         if (!isValidInviteCode(clean)) return null
         return "https://bragasaude.online/convite/$clean"
+    }
+
+    private val unsafeReminderWords = setOf(
+        "comprimido", "comprimidos", "capsula", "capsulas", "posologia",
+        "dosagem", "dose", "doses", "prescreva", "prescrever", "prescricao",
+        "medicamento", "medicamentos", "remedio", "remedios", "miligrama",
+        "miligramas", "gota", "gotas", "antibiotico", "analgesico",
+        "antiinflamatorio", "losartana", "metformina", "insulina", "omeprazol",
+        "dipirona", "paracetamol", "amoxicilina", "ibuprofeno", "atenolol"
+    )
+
+    private val unsafeDoseUnitRegex = Regex("\\b\\d+(?:[.,]\\d+)?\\s*(?:mg|mcg)\\b")
+
+    private fun foldAsciiPtBr(raw: String): String = buildString(raw.length) {
+        for (ch in raw) {
+            append(
+                when (ch.lowercaseChar()) {
+                    'á', 'à', 'ã', 'â', 'ä' -> 'a'
+                    'é', 'è', 'ê', 'ë' -> 'e'
+                    'í', 'ì', 'î', 'ï' -> 'i'
+                    'ó', 'ò', 'õ', 'ô', 'ö' -> 'o'
+                    'ú', 'ù', 'û', 'ü' -> 'u'
+                    'ç' -> 'c'
+                    else -> ch.lowercaseChar()
+                }
+            )
+        }
+    }
+
+    fun findUnsafeReminderPosologyHint(rawText: String): String? {
+        val normalized = foldAsciiPtBr(rawText)
+        if (normalized.contains("anti inflamatorio") || normalized.contains("anti-inflamatorio")) {
+            return "Orientação de medicação ou posologia não é permitida neste canal (diretriz Não-SaMD)."
+        }
+        val tokens = normalized.split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
+        if (tokens.any { it in unsafeReminderWords } || unsafeDoseUnitRegex.containsMatchIn(normalized)) {
+            return "Orientação de medicação ou posologia não é permitida neste canal (diretriz Não-SaMD)."
+        }
+        return null
     }
 }

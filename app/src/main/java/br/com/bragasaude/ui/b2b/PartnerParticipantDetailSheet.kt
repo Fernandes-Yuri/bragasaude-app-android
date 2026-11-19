@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -58,10 +59,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import br.com.bragasaude.domain.b2b.B2BOnboardingValidator
 import br.com.bragasaude.domain.b2b.B2BThemeEngine
 import br.com.bragasaude.domain.b2b.ParticipantRoutineSummaryDto
 import br.com.bragasaude.domain.b2b.PartnerParticipantItemDto
+import br.com.bragasaude.domain.b2b.PartnerReminderType
 import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
+import br.com.bragasaude.domain.b2b.ProgramReminderDto
 import br.com.bragasaude.domain.b2b.SharedCategoryOption
 import br.com.bragasaude.ui.components.BragaBottomSheet
 import java.util.Locale
@@ -318,6 +322,7 @@ fun ParticipantDetailBottomSheet(
     softSurface: Color,
     onChangeDays: (Int) -> Unit,
     onActionFeedback: (String) -> Unit,
+    onOpenSendReminder: (String, String) -> Unit,
     onRequestRemove: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -562,20 +567,20 @@ fun ParticipantDetailBottomSheet(
                         icon = Icons.Default.NotificationsActive,
                         title = "Enviar lembrete de rotina",
                         subtitle = if (features.partnerRemindersEnabled) {
-                            "Módulo ativo neste programa (B2B-18 em seguida para envio imediato)."
+                            "Toque para enviar orientação de rotina ou hidratação por Push."
                         } else {
                             "Módulo desligado nas configurações do programa."
                         },
                         enabled = features.partnerRemindersEnabled,
                         brandAccent = brandAccent,
                         onClick = {
-                            onActionFeedback(
-                                if (features.partnerRemindersEnabled) {
-                                    "O envio de lembretes individuais para ${summary.participantName} será liberado na etapa B2B-18."
-                                } else {
+                            if (features.partnerRemindersEnabled) {
+                                onOpenSendReminder(summary.patientUserId, summary.participantName)
+                            } else {
+                                onActionFeedback(
                                     "Ative Lembretes de Rotina na aba Estúdio antes de disparar orientações."
-                                }
-                            )
+                                )
+                            }
                         }
                     )
 
@@ -761,4 +766,294 @@ private fun shortCategoryFilterLabel(opt: SharedCategoryOption): String = when (
     SharedCategoryOption.HYDRATION -> "Hidratação"
     SharedCategoryOption.MEDICATIONS -> "Medicações"
     SharedCategoryOption.AUTHORIZED_RECORDS -> "Sinais & Peso"
+}
+
+@Composable
+fun OwnerSentRemindersCard(
+    reminders: List<ProgramReminderDto>,
+    brandPrimary: Color,
+    brandOnPrimary: Color,
+    brandAccent: Color,
+    softBorder: BorderStroke,
+    onOpenBatchComposer: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = softBorder
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.NotificationsActive,
+                        contentDescription = null,
+                        tint = brandAccent
+                    )
+                    Column {
+                        Text(
+                            text = "Lembretes e orientações de rotina",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = brandAccent
+                        )
+                        Text(
+                            text = "Canal Não-SaMD separado dos alarmes pessoais de medicação.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Button(
+                onClick = onOpenBatchComposer,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = brandPrimary,
+                    contentColor = brandOnPrimary
+                )
+            ) {
+                Text("Enviar lembrete em lote para a carteira", fontWeight = FontWeight.SemiBold)
+            }
+
+            if (reminders.isNotEmpty()) {
+                HorizontalDivider()
+                Text(
+                    text = "Últimos envios (${reminders.size})",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                reminders.take(4).forEach { rem ->
+                    val typeLabel = PartnerReminderType.fromWire(rem.reminderType).labelPtBr
+                    val targetLabel = rem.targetPatientName ?: "Lote de participantes"
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = "${rem.title} · $typeLabel",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = rem.body,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "$targetLabel · ${rem.acknowledgedCount} leitura(s) confirmada(s)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PartnerSendReminderBottomSheet(
+    targetPatientId: String?,
+    targetPatientName: String,
+    enabledProgramMetrics: List<String>,
+    isSending: Boolean,
+    brandPrimary: Color,
+    brandOnPrimary: Color,
+    brandAccent: Color,
+    onSend: (targetCategory: String?, reminderType: String, title: String, body: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedType by rememberSaveable(targetPatientId) {
+        mutableStateOf(PartnerReminderType.ROUTINE)
+    }
+    var selectedCategory by rememberSaveable(targetPatientId) {
+        mutableStateOf<String?>(null)
+    }
+    var title by rememberSaveable(targetPatientId) { mutableStateOf("") }
+    var body by rememberSaveable(targetPatientId) { mutableStateOf("") }
+
+    val posologyHint = B2BOnboardingValidator.findUnsafeReminderPosologyHint("$title $body")
+    val categoryOptions = if (enabledProgramMetrics.isEmpty()) {
+        SharedCategoryOption.entries
+    } else {
+        SharedCategoryOption.entries.filter { it.wireKey in enabledProgramMetrics }
+    }
+    val canSubmit = !isSending &&
+        title.trim().isNotEmpty() &&
+        body.trim().isNotEmpty() &&
+        posologyHint == null
+
+    BragaBottomSheet(onDismissRequest = { if (!isSending) onDismiss() }) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (targetPatientId == null) {
+                            "Novo lembrete em lote"
+                        } else {
+                            "Lembrete para $targetPatientName"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Limites: até 3/paciente/dia ou 20 lotes/dia. Nunca altera medicações.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(
+                    onClick = onDismiss,
+                    enabled = !isSending
+                ) {
+                    Text("Fechar", color = brandAccent)
+                }
+            }
+
+            Text(
+                text = "Tipo de orientação",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(PartnerReminderType.entries) { opt ->
+                    FilterChip(
+                        selected = selectedType == opt,
+                        onClick = { selectedType = opt },
+                        label = { Text(opt.labelPtBr) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = brandPrimary,
+                            selectedLabelColor = brandOnPrimary
+                        )
+                    )
+                }
+            }
+
+            if (targetPatientId == null && categoryOptions.isNotEmpty()) {
+                Text(
+                    text = "Filtrar destinatários que autorizaram:",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        FilterChip(
+                            selected = selectedCategory == null,
+                            onClick = { selectedCategory = null },
+                            label = { Text("Todos ativos") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = brandPrimary,
+                                selectedLabelColor = brandOnPrimary
+                            )
+                        )
+                    }
+                    items(categoryOptions, key = { it.wireKey }) { opt ->
+                        FilterChip(
+                            selected = selectedCategory == opt.wireKey,
+                            onClick = {
+                                selectedCategory = if (selectedCategory == opt.wireKey) null else opt.wireKey
+                            },
+                            label = { Text(shortCategoryFilterLabel(opt)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = brandPrimary,
+                                selectedLabelColor = brandOnPrimary
+                            )
+                        )
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = title,
+                onValueChange = { if (it.length <= 140) title = it },
+                label = { Text("Título curto (máx. 140 caracteres)") },
+                placeholder = { Text("Ex.: Meta de hidratação da tarde") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = body,
+                onValueChange = { if (it.length <= 500) body = it },
+                label = { Text("Mensagem de rotina (máx. 500 caracteres)") },
+                placeholder = { Text("Ex.: Beba 300 ml de água e registre seus passos antes do retorno.") },
+                minLines = 3,
+                maxLines = 5,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            if (posologyHint != null) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.errorContainer
+                ) {
+                    Text(
+                        text = posologyHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
+            }
+
+            Button(
+                onClick = {
+                    onSend(
+                        selectedCategory,
+                        selectedType.wireValue,
+                        title.trim(),
+                        body.trim()
+                    )
+                },
+                enabled = canSubmit,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = brandPrimary,
+                    contentColor = brandOnPrimary
+                )
+            ) {
+                Text(
+                    text = if (isSending) "Enviando orientação..." else "Disparar lembrete agora",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(Modifier.height(14.dp))
+        }
+    }
 }

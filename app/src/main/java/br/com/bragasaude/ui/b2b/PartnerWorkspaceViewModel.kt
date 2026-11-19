@@ -8,12 +8,15 @@ import br.com.bragasaude.data.remote.b2b.ActiveContextStore
 import br.com.bragasaude.data.remote.b2b.B2BContextRepository
 import br.com.bragasaude.domain.b2b.AppContextMode
 import br.com.bragasaude.domain.b2b.B2BContextDescriptor
+import br.com.bragasaude.domain.b2b.CreateProgramReminderRequest
+import br.com.bragasaude.domain.b2b.EnrollmentRemindersFeedDto
 import br.com.bragasaude.domain.b2b.ParticipantRoutineSummaryDto
 import br.com.bragasaude.domain.b2b.PartnerParticipantItemDto
 import br.com.bragasaude.domain.b2b.PartnerPreConsultationPdfGenerator
 import br.com.bragasaude.domain.b2b.PartnerPreConsultationPdfInput
 import br.com.bragasaude.domain.b2b.PartnerProgramDto
 import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
+import br.com.bragasaude.domain.b2b.ProgramReminderDto
 import br.com.bragasaude.domain.b2b.TemplateCatalogItemDto
 import br.com.bragasaude.domain.b2b.UpdateExperienceRequest
 import com.google.firebase.auth.FirebaseAuth
@@ -94,6 +97,21 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     private val _selectedPeriodDays = MutableStateFlow(30)
     val selectedPeriodDays: StateFlow<Int> = _selectedPeriodDays.asStateFlow()
+
+    private val _ownerReminders = MutableStateFlow<List<ProgramReminderDto>>(emptyList())
+    val ownerReminders: StateFlow<List<ProgramReminderDto>> = _ownerReminders.asStateFlow()
+
+    private val _isSendingReminder = MutableStateFlow(false)
+    val isSendingReminder: StateFlow<Boolean> = _isSendingReminder.asStateFlow()
+
+    private val _enrollmentRemindersFeed = MutableStateFlow<EnrollmentRemindersFeedDto?>(null)
+    val enrollmentRemindersFeed: StateFlow<EnrollmentRemindersFeedDto?> = _enrollmentRemindersFeed.asStateFlow()
+
+    private val _acknowledgingReminderId = MutableStateFlow<String?>(null)
+    val acknowledgingReminderId: StateFlow<String?> = _acknowledgingReminderId.asStateFlow()
+
+    private val _isUpdatingMute = MutableStateFlow(false)
+    val isUpdatingMute: StateFlow<Boolean> = _isUpdatingMute.asStateFlow()
 
     private val _isGeneratingPdf = MutableStateFlow(false)
     val isGeneratingPdf: StateFlow<Boolean> = _isGeneratingPdf.asStateFlow()
@@ -217,6 +235,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
     private suspend fun reloadModeData() {
         val active = activeContextStore.activeContext.value
         if (active.parsedMode == AppContextMode.PARTNER_OWNER) {
+            _enrollmentRemindersFeed.value = null
             _programInfo.value = apiClient.getMyPartnerProgram()
             if (_templates.value.isEmpty()) {
                 _templates.value = apiClient.getProgramTemplates()
@@ -229,14 +248,108 @@ class PartnerWorkspaceViewModel @Inject constructor(
                     _nextCursor.value = page.nextCursor
                     _hasMore.value = page.hasMore
                 }
+                val remindersEnabled = (_programInfo.value?.experienceConfig
+                    ?: active.resolvedExperienceConfig()).features.partnerRemindersEnabled
+                _ownerReminders.value = if (remindersEnabled) {
+                    apiClient.getMyPartnerSentReminders(limit = 20)
+                } else {
+                    emptyList()
+                }
             } else {
                 _participants.value = emptyList()
+                _ownerReminders.value = emptyList()
                 _hasMore.value = false
             }
         } else {
             _participants.value = emptyList()
+            _ownerReminders.value = emptyList()
             _nextCursor.value = null
             _hasMore.value = false
+            val pid = active.programId?.takeIf { it.isNotBlank() }
+            if (active.parsedMode == AppContextMode.PARTNER_PARTICIPANT &&
+                pid != null &&
+                active.resolvedExperienceConfig().features.partnerRemindersEnabled
+            ) {
+                _enrollmentRemindersFeed.value = apiClient.getEnrollmentReminders(pid, limit = 20)
+            } else {
+                _enrollmentRemindersFeed.value = null
+            }
+        }
+    }
+
+    fun sendPartnerReminder(
+        targetPatientId: String?,
+        targetCategory: String?,
+        reminderType: String,
+        title: String,
+        body: String,
+        onSuccess: () -> Unit
+    ) {
+        if (_isSendingReminder.value) return
+        viewModelScope.launch {
+            _isSendingReminder.value = true
+            val result = apiClient.sendPartnerReminder(
+                CreateProgramReminderRequest(
+                    targetPatientId = targetPatientId,
+                    targetCategory = targetCategory,
+                    reminderType = reminderType,
+                    title = title,
+                    body = body
+                )
+            )
+            _isSendingReminder.value = false
+            if (result.isSuccess && result.reminder != null) {
+                _ownerReminders.value = listOf(result.reminder) + _ownerReminders.value
+                _statusMessage.value = if (targetPatientId.isNullOrBlank()) {
+                    "Lembrete enviado em lote para ${result.recipientCount} participante(s)."
+                } else {
+                    "Lembrete enviado para o participante."
+                }
+                onSuccess()
+            } else {
+                _statusMessage.value = result.errorDetail
+                    ?: "Não foi possível enviar o lembrete agora."
+            }
+        }
+    }
+
+    fun acknowledgeEnrollmentReminder(programId: String, reminderId: String) {
+        if (_acknowledgingReminderId.value != null) return
+        viewModelScope.launch {
+            _acknowledgingReminderId.value = reminderId
+            val ackAt = apiClient.acknowledgeEnrollmentReminder(programId, reminderId)
+            _acknowledgingReminderId.value = null
+            if (ackAt != null) {
+                _enrollmentRemindersFeed.value = _enrollmentRemindersFeed.value?.let { feed ->
+                    feed.copy(
+                        reminders = feed.reminders.map { rem ->
+                            if (rem.reminderId == reminderId) rem.copy(acknowledgedAt = ackAt) else rem
+                        }
+                    )
+                }
+                _statusMessage.value = "Leitura confirmada neste lembrete."
+            } else {
+                _statusMessage.value = "Não foi possível confirmar leitura agora."
+            }
+        }
+    }
+
+    fun toggleEnrollmentMuted(programId: String, muted: Boolean) {
+        if (_isUpdatingMute.value) return
+        viewModelScope.launch {
+            _isUpdatingMute.value = true
+            val updated = apiClient.setEnrollmentMuted(programId, muted)
+            _isUpdatingMute.value = false
+            if (updated != null) {
+                _enrollmentRemindersFeed.value = _enrollmentRemindersFeed.value?.copy(muted = updated)
+                _statusMessage.value = if (updated) {
+                    "Alertas push deste programa foram silenciados."
+                } else {
+                    "Alertas push deste programa foram reativados."
+                }
+            } else {
+                _statusMessage.value = "Não foi possível atualizar as notificações deste programa."
+            }
         }
     }
 
