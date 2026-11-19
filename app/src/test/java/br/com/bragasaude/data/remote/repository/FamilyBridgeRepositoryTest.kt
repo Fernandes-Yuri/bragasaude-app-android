@@ -8,6 +8,8 @@ import br.com.bragasaude.data.local.SocialFeedDao
 import br.com.bragasaude.data.local.VitalSignDao
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.sync.SyncScheduler
+import br.com.bragasaude.domain.b2b.FamilyProgramOverviewDto
+import br.com.bragasaude.domain.b2b.FamilyReminderAcknowledgementDto
 import com.google.firebase.auth.FirebaseAuth
 import io.mockk.*
 import kotlinx.coroutines.runBlocking
@@ -67,6 +69,39 @@ class FamilyBridgeRepositoryTest {
             syncScheduler = syncScheduler,
             appContext = appContext
         )
+    }
+
+    @Test
+    fun `family programs require active local binding before any request`() = runBlocking {
+        coEvery { familyDao.existsActiveLink("patient-1", "caregiver-1") } returns null
+        assertTrue(runCatching { repository.getFamilyProgramOverview("patient-1") }.isFailure)
+        assertTrue(runCatching {
+            repository.acknowledgeFamilyProgramReminder("patient-1", "program-1", "reminder-1")
+        }.isFailure)
+        coVerify(exactly = 0) { apiClient.getFamilyProgramOverview(any()) }
+        coVerify(exactly = 0) { apiClient.acknowledgeFamilyProgramReminder(any(), any(), any()) }
+    }
+
+    @Test
+    fun `family overview response is discarded if binding was revoked during request`() = runBlocking {
+        val active = pendingBinding().copy(status = "ACTIVE", caregiverUserId = "caregiver-1")
+        coEvery { familyDao.existsActiveLink("patient-1", "caregiver-1") } returnsMany listOf(active, null)
+        coEvery { apiClient.getFamilyProgramOverview("patient-1") } returns FamilyProgramOverviewDto("patient-1")
+        assertTrue(runCatching { repository.getFamilyProgramOverview("patient-1") }.isFailure)
+        coVerify(exactly = 1) { apiClient.getFamilyProgramOverview("patient-1") }
+    }
+
+    @Test
+    fun `family acknowledgement response is discarded after account switch`() = runBlocking {
+        val active = pendingBinding().copy(status = "ACTIVE", caregiverUserId = "caregiver-1")
+        coEvery { familyDao.existsActiveLink("patient-1", any()) } returns active
+        coEvery { apiClient.acknowledgeFamilyProgramReminder("patient-1", "program-1", "reminder-1") } coAnswers {
+            every { auth.currentUser?.uid } returns "caregiver-2"
+            FamilyReminderAcknowledgementDto("2026-11-19T12:00:00Z", "caregiver-1")
+        }
+        assertTrue(runCatching {
+            repository.acknowledgeFamilyProgramReminder("patient-1", "program-1", "reminder-1")
+        }.isFailure)
     }
 
     @Test

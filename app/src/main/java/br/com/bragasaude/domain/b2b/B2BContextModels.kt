@@ -367,12 +367,43 @@ enum class SharedCategoryOption(
 @Serializable
 data class JoinPartnerProgramRequest(
     val inviteCode: String,
-    val sharedCategories: List<String>
+    val sharedCategories: List<String>,
+    val familyShareEnabled: Boolean = false
 )
 
 @Serializable
 data class UpdatePartnerConsentRequest(
-    val sharedCategories: List<String>
+    val sharedCategories: List<String>,
+    val familyShareEnabled: Boolean? = null
+)
+
+/** Visão autorizada pelo servidor, mantida apenas em memória pelo cuidador. */
+@Serializable
+data class FamilyProgramOverviewDto(
+    val patientUserId: String,
+    val programs: List<FamilyProgramOverviewItemDto> = emptyList()
+)
+
+@Serializable
+data class FamilyProgramOverviewItemDto(
+    val programId: String,
+    val programName: String,
+    val companyName: String = "",
+    val primaryColor: String = "#1A6B5C",
+    val logoUrl: String? = null,
+    val templateKey: String = "CUSTOM",
+    val consentedAt: String = "",
+    val familyShareEnabled: Boolean = false,
+    val remindersEnabled: Boolean = false,
+    val appointmentsEnabled: Boolean = false,
+    val reminders: List<ProgramReminderDto> = emptyList(),
+    val appointments: List<ProgramAppointmentDto> = emptyList()
+)
+
+@Serializable
+data class FamilyReminderAcknowledgementDto(
+    val acknowledgedAt: String,
+    val acknowledgedByUid: String? = null
 )
 
 @Serializable

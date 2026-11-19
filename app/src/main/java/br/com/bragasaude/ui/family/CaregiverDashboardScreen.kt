@@ -100,6 +100,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.data.local.ConsultationEntity
 import br.com.bragasaude.data.local.FamilyBindingEntity
+import br.com.bragasaude.domain.b2b.FamilyProgramOverviewItemDto
 import br.com.bragasaude.data.util.HealthFormatter
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -122,6 +123,9 @@ fun CaregiverDashboardScreen(
     val lastCloudSync by viewModel.lastCloudSync.collectAsState()
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val upcomingConsultations by viewModel.upcomingConsultations.collectAsState()
+    val partnerPrograms by viewModel.partnerPrograms.collectAsState()
+    val partnerProgramsError by viewModel.partnerProgramsError.collectAsState()
+    val acknowledgingPartnerReminder by viewModel.acknowledgingPartnerReminder.collectAsState()
     val messages by remember(dashboard.patientUserId) {
         viewModel.recentMessages(dashboard.patientUserId)
     }.collectAsState(initial = emptyList())
@@ -264,6 +268,22 @@ fun CaregiverDashboardScreen(
                 }
 
                 item { PatientHeaderCard(state = dashboard) }
+
+                partnerProgramsError?.let { message ->
+                    item {
+                        Column {
+                            Text(message, style = MaterialTheme.typography.bodySmall)
+                            TextButton(onClick = viewModel::refreshPatientData) { Text("Atualizar programas") }
+                        }
+                    }
+                }
+                items(partnerPrograms, key = { "partner-program-${it.programId}" }) { program ->
+                    FamilyPartnerProgramCard(
+                        program = program,
+                        acknowledging = acknowledgingPartnerReminder,
+                        onAcknowledge = { viewModel.acknowledgePartnerReminder(program.programId, it) }
+                    )
+                }
 
                 item {
                     TodayVitalsCard(
@@ -450,6 +470,66 @@ fun CaregiverDashboardScreen(
             },
             onDismiss = { showFamilyPostDialog = false }
         )
+    }
+}
+
+@Composable
+private fun FamilyPartnerProgramCard(
+    program: FamilyProgramOverviewItemDto,
+    acknowledging: Boolean,
+    onAcknowledge: (String) -> Unit
+) {
+    val brandColor = remember(program.primaryColor) {
+        val rgb = br.com.bragasaude.domain.b2b.B2BThemeEngine.parseHexRgb(program.primaryColor)
+        Color(rgb.first, rgb.second, rgb.third)
+    }
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(12.dp).background(brandColor, CircleShape))
+                Column {
+                    Text(program.programName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(program.companyName, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            Text(
+                "Programa compartilhado pelo seu familiar. Você pode consultar a agenda e confirmar ciência dos lembretes.",
+                style = MaterialTheme.typography.bodySmall
+            )
+            if (program.remindersEnabled) {
+                program.reminders.forEach { reminder ->
+                    HorizontalDivider()
+                    Text(reminder.title, fontWeight = FontWeight.SemiBold)
+                    Text(reminder.body, style = MaterialTheme.typography.bodyMedium)
+                    if (reminder.acknowledgedAt != null) {
+                        Text("Ciência registrada", style = MaterialTheme.typography.labelMedium)
+                    } else {
+                        TextButton(
+                            onClick = { onAcknowledge(reminder.reminderId) },
+                            enabled = !acknowledging
+                        ) { Text("Marcar lembrete como apoiado/ciente") }
+                    }
+                }
+            }
+            if (program.appointmentsEnabled) {
+                program.appointments.forEach { appointment ->
+                    HorizontalDivider()
+                    Text("Agendamento · ${appointment.parsedStatus.labelPtBr}", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        br.com.bragasaude.ui.b2b.formatAppointmentIsoPtBr(appointment.scheduledAt)
+                            ?: appointment.requestedSlotText,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(appointment.parsedModality.labelPtBr, style = MaterialTheme.typography.bodySmall)
+                    appointment.partnerNote?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            if (program.reminders.isEmpty() && program.appointments.isEmpty()) {
+                Text("Nenhum lembrete ou agendamento compartilhado no momento.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
     }
 }
 

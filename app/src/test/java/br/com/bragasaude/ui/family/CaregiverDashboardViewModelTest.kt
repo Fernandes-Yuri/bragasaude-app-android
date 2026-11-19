@@ -3,6 +3,10 @@ package br.com.bragasaude.ui.family
 import android.content.Context
 import br.com.bragasaude.data.local.*
 import br.com.bragasaude.data.remote.repository.FamilyBridgeRepository
+import br.com.bragasaude.domain.b2b.FamilyProgramOverviewDto
+import br.com.bragasaude.domain.b2b.FamilyProgramOverviewItemDto
+import br.com.bragasaude.domain.b2b.FamilyReminderAcknowledgementDto
+import br.com.bragasaude.domain.b2b.ProgramReminderDto
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import io.mockk.*
@@ -10,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import br.com.bragasaude.ui.util.NotificationHelper
 import kotlinx.coroutines.test.*
@@ -30,6 +35,7 @@ class CaregiverDashboardViewModelTest {
     private val dailyMetricsDao = mockk<DailyMetricsDao>(relaxed = true)
     private val auth = mockk<FirebaseAuth>(relaxed = true)
     private val firebaseUser = mockk<FirebaseUser>(relaxed = true)
+    private val authListener = slot<FirebaseAuth.AuthStateListener>()
 
     private lateinit var viewModel: CaregiverDashboardViewModel
     private val bindingsFlow = kotlinx.coroutines.flow.MutableStateFlow<List<FamilyBindingEntity>>(emptyList())
@@ -40,10 +46,14 @@ class CaregiverDashboardViewModelTest {
 
         every { auth.currentUser } returns firebaseUser
         every { firebaseUser.uid } returns "caregiver-1"
+        every { auth.addAuthStateListener(capture(authListener)) } just Runs
 
         every { familyRepository.getActiveBindingsForCaregiver("caregiver-1") } returns bindingsFlow
         every { familyRepository.getQuickMessageTemplates() } returns emptyMap()
         coEvery { familyRepository.syncPatientDataForCaregiver(any()) } returns Result.success(Unit)
+        coEvery { familyRepository.getFamilyProgramOverview(any()) } answers {
+            FamilyProgramOverviewDto(firstArg())
+        }
 
         viewModel = CaregiverDashboardViewModel(
             context = context,
@@ -58,6 +68,128 @@ class CaregiverDashboardViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    private fun binding(patientId: String = "patient-100") = FamilyBindingEntity(
+        id = "binding-$patientId", patientUserId = patientId, caregiverUserId = "caregiver-1",
+        caregiverName = "Ana", caregiverRelation = "Filha", connectionCode = "FAMILY1234", status = "ACTIVE"
+    )
+
+    private fun sharedProgram(programId: String = "program-1") = FamilyProgramOverviewItemDto(
+        programId = programId, programName = "Programa de rotina", familyShareEnabled = true,
+        remindersEnabled = true,
+        reminders = listOf(ProgramReminderDto(
+            reminderId = "reminder-1", programId = programId, title = "Lembrete de rotina",
+            body = "Confira seu registro de hoje.", createdAt = "2026-11-19T12:00:00Z"
+        ))
+    )
+
+    @Test
+    fun `shared programs load without access to personal vitals and disappear on revoked consent`() = runTest(testDispatcher) {
+        coEvery { familyRepository.getFamilyProgramOverview("patient-100") } returns
+            FamilyProgramOverviewDto("patient-100", listOf(sharedProgram()))
+        coEvery { familyRepository.syncPatientDataForCaregiver(any()) } returns
+            Result.failure(java.io.IOException("permission denied"))
+        bindingsFlow.value = listOf(binding())
+        advanceUntilIdle()
+        assertEquals(listOf("program-1"), viewModel.partnerPrograms.value.map { it.programId })
+        assertEquals(null, viewModel.lastCloudSync.value)
+
+        coEvery { familyRepository.getFamilyProgramOverview("patient-100") } returns FamilyProgramOverviewDto("patient-100")
+        viewModel.refreshPatientData()
+        advanceUntilIdle()
+        assertEquals(emptyList<FamilyProgramOverviewItemDto>(), viewModel.partnerPrograms.value)
+    }
+
+    @Test
+    fun `failed overview clears previously authorized data`() = runTest(testDispatcher) {
+        coEvery { familyRepository.getFamilyProgramOverview("patient-100") } returns
+            FamilyProgramOverviewDto("patient-100", listOf(sharedProgram()))
+        bindingsFlow.value = listOf(binding())
+        advanceUntilIdle()
+        assertEquals(1, viewModel.partnerPrograms.value.size)
+        coEvery { familyRepository.getFamilyProgramOverview("patient-100") } throws java.io.IOException("403")
+        viewModel.refreshPatientData()
+        advanceUntilIdle()
+        assertEquals(0, viewModel.partnerPrograms.value.size)
+        org.junit.Assert.assertNotNull(viewModel.partnerProgramsError.value)
+    }
+
+    @Test
+    fun `caregiver acknowledgement is scoped to selected patient and reloads server receipt`() = runTest(testDispatcher) {
+        val program = sharedProgram()
+        coEvery { familyRepository.getFamilyProgramOverview("patient-100") } returns
+            FamilyProgramOverviewDto("patient-100", listOf(program))
+        bindingsFlow.value = listOf(binding())
+        advanceUntilIdle()
+        viewModel.acknowledgePartnerReminder("another-program", "reminder-1")
+        coVerify(exactly = 0) { familyRepository.acknowledgeFamilyProgramReminder(any(), any(), any()) }
+
+        coEvery { familyRepository.acknowledgeFamilyProgramReminder("patient-100", "program-1", "reminder-1") } returns
+            FamilyReminderAcknowledgementDto("2026-11-19T12:05:00Z", "caregiver-1")
+        coEvery { familyRepository.getFamilyProgramOverview("patient-100") } returns FamilyProgramOverviewDto(
+            "patient-100", listOf(program.copy(reminders = listOf(program.reminders.single().copy(
+                acknowledgedAt = "2026-11-19T12:05:00Z", acknowledgedByUid = "caregiver-1"
+            ))))
+        )
+        viewModel.acknowledgePartnerReminder("program-1", "reminder-1")
+        viewModel.acknowledgePartnerReminder("program-1", "reminder-1")
+        advanceUntilIdle()
+        coVerify(exactly = 1) { familyRepository.acknowledgeFamilyProgramReminder("patient-100", "program-1", "reminder-1") }
+        assertEquals("caregiver-1", viewModel.partnerPrograms.value.single().reminders.single().acknowledgedByUid)
+        assertEquals(false, viewModel.acknowledgingPartnerReminder.value)
+    }
+
+    @Test
+    fun `failed acknowledgement never displays success and clears inaccessible program`() = runTest(testDispatcher) {
+        coEvery { familyRepository.getFamilyProgramOverview("patient-100") } returns
+            FamilyProgramOverviewDto("patient-100", listOf(sharedProgram()))
+        bindingsFlow.value = listOf(binding())
+        advanceUntilIdle()
+        coEvery { familyRepository.acknowledgeFamilyProgramReminder(any(), any(), any()) } throws java.io.IOException("403")
+        val events = mutableListOf<FamilyUiEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiEvents.collect { events.add(it) } }
+        viewModel.acknowledgePartnerReminder("program-1", "reminder-1")
+        advanceUntilIdle()
+        assertEquals(0, viewModel.partnerPrograms.value.size)
+        assertEquals(false, viewModel.acknowledgingPartnerReminder.value)
+        org.junit.Assert.assertTrue(events.single() is FamilyUiEvent.Error)
+    }
+
+    @Test
+    fun `late response from previous selection cannot repopulate dashboard even after selecting same patient again`() = runTest(testDispatcher) {
+        val delayed = kotlinx.coroutines.CompletableDeferred<FamilyProgramOverviewDto>()
+        coEvery { familyRepository.getFamilyProgramOverview("patient-100") } coAnswers {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { delayed.await() }
+        }
+        bindingsFlow.value = listOf(binding(), binding("patient-200"))
+        runCurrent()
+        viewModel.selectPatient(binding("patient-200"))
+        runCurrent()
+        viewModel.selectPatient(binding())
+        runCurrent()
+        delayed.complete(FamilyProgramOverviewDto("patient-100", listOf(sharedProgram())))
+        advanceUntilIdle()
+        assertEquals(0, viewModel.partnerPrograms.value.size)
+    }
+
+    @Test
+    fun `logout and removal of active family binding erase shared programs`() = runTest(testDispatcher) {
+        coEvery { familyRepository.getFamilyProgramOverview("patient-100") } returns
+            FamilyProgramOverviewDto("patient-100", listOf(sharedProgram()))
+        bindingsFlow.value = listOf(binding())
+        advanceUntilIdle()
+        assertEquals(1, viewModel.partnerPrograms.value.size)
+        bindingsFlow.value = emptyList()
+        advanceUntilIdle()
+        assertEquals(0, viewModel.partnerPrograms.value.size)
+        bindingsFlow.value = listOf(binding())
+        advanceUntilIdle()
+        assertEquals(1, viewModel.partnerPrograms.value.size)
+        every { auth.currentUser } returns null
+        authListener.captured.onAuthStateChanged(auth)
+        assertEquals(0, viewModel.partnerPrograms.value.size)
+        assertEquals("", viewModel.dashboard.value.patientUserId)
     }
 
     @Test

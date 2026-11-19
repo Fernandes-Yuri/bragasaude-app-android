@@ -93,6 +93,40 @@ class FamilyBridgeRepository @Inject constructor(
     )
     private val clinicalSyncLock = Mutex()
 
+    private suspend fun requireFamilyProgramAccess(patientId: String): String {
+        val owner = auth.currentUser?.uid
+        check(!owner.isNullOrBlank() && owner != br.com.bragasaude.util.BragaConstants.GUEST_UID) {
+            "Entre na sua conta para consultar os programas compartilhados."
+        }
+        check(patientId.isNotBlank() && familyDao.existsActiveLink(patientId, owner) != null) {
+            "Vínculo familiar indisponível. Atualize sua família."
+        }
+        check(auth.currentUser?.uid == owner) { "Sua conta mudou. Atualize sua família." }
+        return owner
+    }
+
+    suspend fun getFamilyProgramOverview(
+        patientId: String
+    ): br.com.bragasaude.domain.b2b.FamilyProgramOverviewDto {
+        val owner = requireFamilyProgramAccess(patientId)
+        val overview = apiClient.getFamilyProgramOverview(patientId)
+            ?: throw java.io.IOException("Programas compartilhados indisponíveis.")
+        check(requireFamilyProgramAccess(patientId) == owner) { "Sua conta mudou. Atualize sua família." }
+        return overview
+    }
+
+    suspend fun acknowledgeFamilyProgramReminder(
+        patientId: String,
+        programId: String,
+        reminderId: String
+    ): br.com.bragasaude.domain.b2b.FamilyReminderAcknowledgementDto {
+        val owner = requireFamilyProgramAccess(patientId)
+        val receipt = apiClient.acknowledgeFamilyProgramReminder(patientId, programId, reminderId)
+            ?: throw java.io.IOException("Não foi possível confirmar o lembrete. Atualize os programas compartilhados.")
+        check(requireFamilyProgramAccess(patientId) == owner) { "Sua conta mudou. Atualize sua família." }
+        return receipt
+    }
+
     suspend fun syncVitalChanges(patientId: String) = clinicalSyncLock.withLock {
         val owner = auth.currentUser?.uid ?: error("Sessão encerrada")
         var cursor = vitalSignDao.getCursor(owner, patientId) ?: 0L

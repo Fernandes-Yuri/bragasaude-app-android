@@ -28,6 +28,125 @@ import org.junit.Test
  */
 class BragaB2BBackwardCompatTest {
 
+    @Test
+    fun `family consent is explicit on join and optional updates preserve legacy callers`(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'),
+                stubAuthService(), OkHttpClient(), FamilyE2eeManager())
+            val context = """{"activeContext":{"mode":"PARTNER_PARTICIPANT","userId":"patient-1","programId":"prog-1","familyShareEnabled":true}}"""
+            server.enqueue(MockResponse().setBody(context))
+            assertTrue(api.joinPartnerProgram("CARD-4F9A", listOf("steps")).isSuccess)
+            val defaultJoin = server.takeRequest()
+            assertEquals("/api/b2b/enrollments/join", defaultJoin.path)
+            assertEquals(false, org.json.JSONObject(defaultJoin.body.readUtf8()).getBoolean("familyShareEnabled"))
+
+            server.enqueue(MockResponse().setBody(context))
+            assertTrue(api.joinPartnerProgram("CARD-4F9A", listOf("steps"), true).activeContext!!.familyShareEnabled)
+            assertEquals(true, org.json.JSONObject(server.takeRequest().body.readUtf8()).getBoolean("familyShareEnabled"))
+
+            server.enqueue(MockResponse().setBody(context))
+            api.updatePartnerConsent("prog-1", listOf("steps"))
+            val legacyUpdate = server.takeRequest()
+            assertEquals("/api/b2b/enrollments/prog-1/consent", legacyUpdate.path)
+            assertEquals(false, org.json.JSONObject(legacyUpdate.body.readUtf8()).has("familyShareEnabled"))
+
+            for (enabled in listOf(true, false)) {
+                server.enqueue(MockResponse().setBody(context.replace(":true", ":$enabled")))
+                assertEquals(enabled, api.updatePartnerConsent("prog-1", listOf("steps"), enabled).activeContext!!.familyShareEnabled)
+                val body = org.json.JSONObject(server.takeRequest().body.readUtf8())
+                assertEquals(enabled, body.getBoolean("familyShareEnabled"))
+                assertEquals("steps", body.getJSONArray("sharedCategories").getString(0))
+            }
+            server.enqueue(MockResponse().setBody(context.replace(",\"familyShareEnabled\":true", "")))
+            assertEquals(false, api.updatePartnerConsent("prog-1", listOf("steps")).activeContext!!.familyShareEnabled)
+            server.takeRequest()
+        }
+    }
+
+    @Test
+    fun `family overview parses branded programs and fails closed for missing opt-in or disabled modules`(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'),
+                stubAuthService(), OkHttpClient(), FamilyE2eeManager())
+            server.enqueue(MockResponse().setBody("""
+                {"patientUserId":"patient-1","programCount":3,"futureField":"ignored","programs":[
+                  {"programId":"prog-1","programName":"Clínica A","companyName":"Parceiro A",
+                   "primaryColor":"#123456","familyShareEnabled":true,"remindersEnabled":true,"appointmentsEnabled":true,
+                   "reminders":[
+                     {"reminderId":"rem-1","programId":"prog-1","title":"Rotina","body":"Confira a rotina.",
+                      "acknowledgedAt":"2026-11-19T12:00:00Z","acknowledgedByUid":"caregiver-1"},
+                     {"reminderId":"another-reminder","programId":"prog-2","title":"Outro programa"}],
+                   "appointments":[
+                     {"appointmentId":"app-1","programId":"prog-1","patientUserId":"patient-1","status":"CONFIRMED",
+                      "scheduledAt":"2026-11-20T12:00:00Z"},
+                     {"appointmentId":"another-patient","programId":"prog-1","patientUserId":"patient-2"}]},
+                  {"programId":"prog-2","programName":"Clínica B","familyShareEnabled":true,
+                   "remindersEnabled":false,"appointmentsEnabled":false,
+                   "reminders":[{"reminderId":"hidden","programId":"prog-2"}],
+                   "appointments":[{"appointmentId":"hidden","programId":"prog-2","patientUserId":"patient-1"}]},
+                  {"programId":"prog-3","programName":"Sem opt-in"}
+                ]}
+            """.trimIndent()))
+            val overview = api.getFamilyProgramOverview("patient-1")!!
+            assertEquals("/api/b2b/family/patients/patient-1/program-overview", server.takeRequest().path)
+            assertEquals("patient-1", overview.patientUserId)
+            assertEquals(2, overview.programs.size)
+            val first = overview.programs.first()
+            assertEquals("Clínica A", first.programName)
+            assertEquals("#123456", first.primaryColor)
+            assertEquals("caregiver-1", first.reminders.single().acknowledgedByUid)
+            assertEquals("app-1", first.appointments.single().appointmentId)
+            assertTrue(overview.programs.last().reminders.isEmpty())
+            assertTrue(overview.programs.last().appointments.isEmpty())
+
+            server.enqueue(MockResponse().setBody("""{"patientUserId":"patient-2","programs":[]}"""))
+            assertNull(api.getFamilyProgramOverview("patient-1"))
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody("""{"patientUserId":"patient-1"}"""))
+            assertNull(api.getFamilyProgramOverview("patient-1"))
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody("""{"patientUserId":"patient-1","programs":[]}"""))
+            assertTrue(api.getFamilyProgramOverview("patient-1")!!.programs.isEmpty())
+            server.takeRequest()
+            server.enqueue(MockResponse().setResponseCode(403).setBody("""{"detail":"Vínculo revogado"}"""))
+            val forbidden = runCatching { api.getFamilyProgramOverview("patient-1") }
+            assertTrue(forbidden.isFailure || forbidden.getOrNull() == null)
+            server.takeRequest()
+        }
+    }
+
+    @Test
+    fun `caregiver acknowledgement uses family route and validates matching server receipt`(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'),
+                stubAuthService(), OkHttpClient(), FamilyE2eeManager())
+            val receipt = """{"patientUserId":"patient-1","programId":"prog-1","reminderId":"rem-1","acknowledgedAt":"2026-11-19T12:05:00Z","acknowledgedByUid":"caregiver-1"}"""
+            server.enqueue(MockResponse().setBody(receipt))
+            val ack = api.acknowledgeFamilyProgramReminder("patient-1", "prog-1", "rem-1")!!
+            assertEquals("caregiver-1", ack.acknowledgedByUid)
+            assertEquals("2026-11-19T12:05:00Z", ack.acknowledgedAt)
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertEquals("/api/b2b/family/patients/patient-1/programs/prog-1/reminders/rem-1/ack", request.path)
+            assertEquals("{}", request.body.readUtf8())
+
+            server.enqueue(MockResponse().setResponseCode(403).setBody("""{"detail":"Compartilhamento revogado"}"""))
+            assertNull(api.acknowledgeFamilyProgramReminder("patient-1", "prog-1", "rem-1"))
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody(receipt.replace("patient-1", "patient-2")))
+            assertNull(api.acknowledgeFamilyProgramReminder("patient-1", "prog-1", "rem-1"))
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody("{}"))
+            assertNull(api.acknowledgeFamilyProgramReminder("patient-1", "prog-1", "rem-1"))
+            server.takeRequest()
+            assertNull(api.acknowledgeFamilyProgramReminder("", "prog-1", "rem-1"))
+            assertEquals(4, server.requestCount)
+        }
+    }
+
     private fun stubAuthService(): AuthService {
         val auth = mockk<AuthService>()
         every { auth.cachedTokenNow() } returns "jwt-rs256-token"
