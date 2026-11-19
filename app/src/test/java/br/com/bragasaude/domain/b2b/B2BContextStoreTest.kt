@@ -397,4 +397,53 @@ class B2BContextStoreTest {
         )
         assertTrue(samdBlocked.contains("Não posso orientar doses"))
     }
+
+    @Test
+    fun b2b17WalletItemAndBiometrySummarySerializeAndDefaultSafely() {
+        val legacyItem = json.decodeFromString<PartnerParticipantItemDto>(
+            """
+            {
+              "patientUserId": "p-legacy",
+              "displayName": "Carlos",
+              "sharedCategories": ["steps"]
+            }
+            """.trimIndent()
+        )
+        assertEquals("p-legacy", legacyItem.patientUserId)
+        assertEquals(emptyList<String>(), legacyItem.effectiveCategories)
+        assertEquals(0, legacyItem.pendingAppointmentsCount)
+        assertFalse(legacyItem.familySupportActive)
+
+        val enrichedSummary = json.decodeFromString<ParticipantRoutineSummaryDto>(
+            """
+            {
+              "programId": "prog-1",
+              "programName": "Clinica Cardio",
+              "companyName": "Clinica Ltda",
+              "patientUserId": "p-1",
+              "participantName": "Maria",
+              "periodDays": 30,
+              "sharedCategories": ["authorized_records"],
+              "familySupportActive": true,
+              "familySupportSummary": "Rede ativa",
+              "authorizedRecordsSection": {
+                "source": "Braga",
+                "zeroFileEgressNotice": "Zero",
+                "records": [],
+                "biometries": [
+                  {
+                    "measuredAt": "2026-11-18T10:00:00Z",
+                    "weightKg": 64.5,
+                    "heightM": 1.65,
+                    "imc": 23.7
+                  }
+                ]
+              }
+            }
+            """.trimIndent()
+        )
+        assertTrue(enrichedSummary.familySupportActive)
+        assertEquals(1, enrichedSummary.authorizedRecordsSection?.biometries?.size)
+        assertEquals(64.5, enrichedSummary.authorizedRecordsSection?.biometries?.first()?.weightKg ?: 0.0, 0.01)
+    }
 }

@@ -3,13 +3,11 @@ package br.com.bragasaude.ui.b2b
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -31,10 +29,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.domain.b2b.AppContextMode
 import br.com.bragasaude.domain.b2b.B2BThemeEngine
-import br.com.bragasaude.domain.b2b.ParticipantRoutineSummaryDto
 import br.com.bragasaude.domain.b2b.PartnerApprovalStatus
-import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
-import br.com.bragasaude.domain.b2b.SharedCategoryOption
 import br.com.bragasaude.ui.components.BragaAlertDialog
 import br.com.bragasaude.ui.components.BragaBottomSheet
 import coil3.compose.AsyncImage
@@ -55,7 +50,12 @@ fun PartnerWorkspaceScreen(
     val templates by viewModel.templates.collectAsState()
     val isSavingExperience by viewModel.isSavingExperience.collectAsState()
     val participants by viewModel.participants.collectAsState()
+    val walletQuery by viewModel.walletQuery.collectAsState()
+    val walletCategoryFilter by viewModel.walletCategoryFilter.collectAsState()
+    val walletAttentionOnly by viewModel.walletAttentionOnly.collectAsState()
+    val isFilteringParticipants by viewModel.isFilteringParticipants.collectAsState()
     val hasMore by viewModel.hasMore.collectAsState()
+    val selectedParticipantItem by viewModel.selectedParticipantItem.collectAsState()
     val selectedSummary by viewModel.selectedSummary.collectAsState()
     val isLoadingSummary by viewModel.isLoadingSummary.collectAsState()
     val isRemovingParticipant by viewModel.isRemovingParticipant.collectAsState()
@@ -177,6 +177,32 @@ fun PartnerWorkspaceScreen(
             brandPrimary = brandPrimary,
             brandOnPrimary = brandOnPrimary,
             onDismiss = { showAiSimulatorSheet = false }
+        )
+    }
+
+    selectedSummary?.let { summary ->
+        ParticipantDetailBottomSheet(
+            summary = summary,
+            participantItem = selectedParticipantItem
+                ?: participants.firstOrNull { it.patientUserId == summary.patientUserId },
+            experienceConfig = savedExperience,
+            selectedDays = selectedPeriodDays,
+            isLoading = isLoadingSummary,
+            isRemoving = isRemovingParticipant,
+            brandPrimary = brandPrimary,
+            brandOnPrimary = brandOnPrimary,
+            brandAccent = brandAccentText,
+            softSurface = brandSoftSurface,
+            onChangeDays = { newDays ->
+                viewModel.openParticipantSummary(summary.patientUserId, newDays)
+            },
+            onActionFeedback = { feedback ->
+                Toast.makeText(context, feedback, Toast.LENGTH_LONG).show()
+            },
+            onRequestRemove = {
+                participantToRemove = summary.patientUserId to summary.participantName
+            },
+            onDismiss = { viewModel.clearSelectedSummary() }
         )
     }
 
@@ -568,28 +594,6 @@ fun PartnerWorkspaceScreen(
                                 }
                             }
 
-                            if (selectedSummary != null) {
-                                item {
-                                    OwnerParticipantSummaryCard(
-                                        summary = selectedSummary!!,
-                                        selectedDays = selectedPeriodDays,
-                                        isLoading = isLoadingSummary,
-                                        isRemoving = isRemovingParticipant,
-                                        brandAccent = brandAccentText,
-                                        brandPrimary = brandPrimary,
-                                        brandOnPrimary = brandOnPrimary,
-                                        onChangeDays = { newDays ->
-                                            viewModel.openParticipantSummary(selectedSummary!!.patientUserId, newDays)
-                                        },
-                                        onRequestRemove = {
-                                            val current = selectedSummary!!
-                                            participantToRemove = current.patientUserId to current.participantName
-                                        },
-                                        onClose = { viewModel.clearSelectedSummary() }
-                                    )
-                                }
-                            }
-
                             item {
                                 Text(
                                     text = "Participantes vinculados (${participants.size})",
@@ -597,6 +601,27 @@ fun PartnerWorkspaceScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                             }
+
+                            item {
+                                PartnerWalletFiltersSection(
+                                    query = walletQuery,
+                                    selectedCategory = walletCategoryFilter,
+                                    attentionOnly = walletAttentionOnly,
+                                    enabledProgramMetrics = savedExperience.enabledMetrics,
+                                    isFiltering = isFilteringParticipants,
+                                    brandPrimary = brandPrimary,
+                                    brandOnPrimary = brandOnPrimary,
+                                    brandAccent = brandAccentText,
+                                    onQueryChange = viewModel::updateWalletQuery,
+                                    onSelectCategory = viewModel::selectWalletCategoryFilter,
+                                    onToggleAttentionOnly = viewModel::toggleWalletAttentionOnly,
+                                    onClearFilters = viewModel::clearWalletFilters
+                                )
+                            }
+
+                            val hasActiveWalletFilter = walletQuery.isNotBlank() ||
+                                walletCategoryFilter != null ||
+                                walletAttentionOnly
 
                             if (participants.isEmpty()) {
                                 item {
@@ -607,64 +632,37 @@ fun PartnerWorkspaceScreen(
                                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                                         )
                                     ) {
-                                        Text(
-                                            text = "Nenhum participante ativo vinculado até o momento. Compartilhe o código de convite após a aprovação para receber autorizações de rotina.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(16.dp)
-                                        )
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                text = if (hasActiveWalletFilter) {
+                                                    "Nenhum participante encontrado para os filtros aplicados."
+                                                } else {
+                                                    "Nenhum participante ativo vinculado até o momento. Compartilhe o código de convite após a aprovação para receber autorizações de rotina."
+                                                },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            if (hasActiveWalletFilter) {
+                                                TextButton(onClick = viewModel::clearWalletFilters) {
+                                                    Text("Limpar filtros", color = brandAccentText)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             } else {
                                 items(participants, key = { it.patientUserId }) { item ->
-                                    Card(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { viewModel.openParticipantSummary(item.patientUserId) },
-                                        shape = RoundedCornerShape(14.dp),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(14.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(40.dp)
-                                                    .clip(CircleShape)
-                                                    .background(brandPrimary),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = (item.displayName.firstOrNull() ?: 'P').uppercaseChar().toString(),
-                                                    color = brandOnPrimary,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = item.displayName,
-                                                    style = MaterialTheme.typography.titleSmall,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                val categoryLabels = item.sharedCategories.mapNotNull {
-                                                    SharedCategoryOption.fromWire(it)?.titlePtBr
-                                                }
-                                                Text(
-                                                    text = if (categoryLabels.isEmpty()) {
-                                                        "Nenhuma categoria compartilhada"
-                                                    } else {
-                                                        "Autorizados: ${categoryLabels.joinToString(", ")}"
-                                                    },
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
-                                    }
+                                    WalletParticipantCard(
+                                        item = item,
+                                        brandPrimary = brandPrimary,
+                                        brandOnPrimary = brandOnPrimary,
+                                        brandAccent = brandAccentText,
+                                        softSurface = brandSoftSurface,
+                                        onClick = { viewModel.openParticipantSummary(item.patientUserId) }
+                                    )
                                 }
 
                                 if (hasMore) {
@@ -725,160 +723,4 @@ fun PartnerWorkspaceScreen(
             }
         }
     }
-}
-
-@Composable
-private fun OwnerParticipantSummaryCard(
-    summary: ParticipantRoutineSummaryDto,
-    selectedDays: Int,
-    isLoading: Boolean,
-    isRemoving: Boolean,
-    brandAccent: Color,
-    brandPrimary: Color,
-    brandOnPrimary: Color,
-    onChangeDays: (Int) -> Unit,
-    onRequestRemove: () -> Unit,
-    onClose: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.5.dp, brandAccent.copy(alpha = 0.5f))
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = B2BThemeEngine.PARTNER_AREA_TITLE,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = brandAccent
-                    )
-                    Text(
-                        text = summary.participantName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Período: últimos ${summary.periodDays} dias",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                TextButton(onClick = onClose) { Text("Fechar") }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(7, 14, 30).forEach { days ->
-                    FilterChip(
-                        selected = selectedDays == days,
-                        onClick = { if (!isLoading) onChangeDays(days) },
-                        label = { Text("${days}d") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = brandPrimary,
-                            selectedLabelColor = brandOnPrimary
-                        )
-                    )
-                }
-            }
-
-            if (isLoading) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-
-            summary.stepsSection?.let { steps ->
-                SummarySectionBlock(
-                    title = "Passos (${steps.source})",
-                    body = "Média de ${steps.averageSteps} passos/dia em ${steps.daysRecorded} dia(s) com registro."
-                )
-            } ?: SummarySectionLocked("Passos não compartilhados por este participante.")
-
-            summary.hydrationSection?.let { hyd ->
-                SummarySectionBlock(
-                    title = "Hidratação (${hyd.source})",
-                    body = "Média diária de ${hyd.averageMl} ml em ${hyd.daysRecorded} dia(s)."
-                )
-            } ?: SummarySectionLocked("Hidratação não compartilhada por este participante.")
-
-            summary.medicationsSection?.let { meds ->
-                val listText = meds.items.take(5).joinToString("\n") { m ->
-                    "• ${m.name} (${m.schedule.ifBlank { "sem horário fixo" }})"
-                }
-                SummarySectionBlock(
-                    title = "Adesão a lembretes (${meds.source})",
-                    body = "${meds.userConfirmationsInPeriod} confirmações no período. ${meds.note}" +
-                        if (listText.isNotBlank()) "\n$listText" else ""
-                )
-            } ?: SummarySectionLocked("Lembretes de medicamentos não compartilhados.")
-
-            summary.authorizedRecordsSection?.let { recs ->
-                val lines = recs.records.take(6).joinToString("\n") { r ->
-                    val parts = buildList {
-                        if (r.systolicPressure != null || r.diastolicPressure != null) {
-                            add("PA ${r.systolicPressure ?: "--"}/${r.diastolicPressure ?: "--"} mmHg")
-                        }
-                        r.glucoseLevel?.let { add("Glicose $it mg/dL") }
-                        r.heartRate?.let { add("FC $it bpm") }
-                        r.oxygenSaturation?.let { add("SpO2 ${"%.0f".format(it)}%") }
-                    }.joinToString(" • ")
-                    "• ${r.measuredAt.take(10)} (${r.origin}): $parts"
-                }.ifBlank { "Sem medições autorizadas registradas no período." }
-                SummarySectionBlock(
-                    title = "${B2BThemeEngine.PARTNER_RECORDS_TITLE} (${recs.source})",
-                    body = "$lines\n${recs.zeroFileEgressNotice}"
-                )
-            } ?: SummarySectionLocked("Registros de sinais não compartilhados por este participante.")
-
-            HorizontalDivider()
-
-            OutlinedButton(
-                onClick = onRequestRemove,
-                enabled = !isRemoving,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
-            ) {
-                Text(
-                    text = if (isRemoving) "Encerrando vínculo..." else "Encerrar vínculo deste participante",
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SummarySectionBlock(title: String, body: String) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(text = title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-            Text(text = body, style = MaterialTheme.typography.bodySmall)
-        }
-    }
-}
-
-@Composable
-private fun SummarySectionLocked(message: String) {
-    Text(
-        text = message,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
 }

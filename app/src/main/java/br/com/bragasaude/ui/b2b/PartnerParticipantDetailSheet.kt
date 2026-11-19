@@ -1,0 +1,764 @@
+package br.com.bragasaude.ui.b2b
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import br.com.bragasaude.domain.b2b.B2BThemeEngine
+import br.com.bragasaude.domain.b2b.ParticipantRoutineSummaryDto
+import br.com.bragasaude.domain.b2b.PartnerParticipantItemDto
+import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
+import br.com.bragasaude.domain.b2b.SharedCategoryOption
+import br.com.bragasaude.ui.components.BragaBottomSheet
+import java.util.Locale
+
+private enum class ParticipantDetailSubTab(val title: String) {
+    METRICS("Métricas"),
+    QUICK_ACTIONS("Ações rápidas")
+}
+
+@Composable
+fun PartnerWalletFiltersSection(
+    query: String,
+    selectedCategory: String?,
+    attentionOnly: Boolean,
+    enabledProgramMetrics: List<String>,
+    isFiltering: Boolean,
+    brandPrimary: Color,
+    brandOnPrimary: Color,
+    brandAccent: Color,
+    onQueryChange: (String) -> Unit,
+    onSelectCategory: (String?) -> Unit,
+    onToggleAttentionOnly: () -> Unit,
+    onClearFilters: () -> Unit
+) {
+    val categoryOptions = if (enabledProgramMetrics.isEmpty()) {
+        SharedCategoryOption.entries
+    } else {
+        SharedCategoryOption.entries.filter { it.wireKey in enabledProgramMetrics }
+    }
+    val hasActiveFilter = query.isNotBlank() || selectedCategory != null || attentionOnly
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+            placeholder = { Text("Buscar participante por nome...") },
+            leadingIcon = {
+                Icon(imageVector = Icons.Default.Search, contentDescription = "Buscar participante")
+            },
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { onQueryChange("") }) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Limpar busca")
+                    }
+                }
+            }
+        )
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(vertical = 2.dp)
+        ) {
+            item {
+                FilterChip(
+                    selected = attentionOnly,
+                    onClick = onToggleAttentionOnly,
+                    label = { Text("Com atenção") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = brandPrimary,
+                        selectedLabelColor = brandOnPrimary
+                    )
+                )
+            }
+            item {
+                FilterChip(
+                    selected = selectedCategory == null,
+                    onClick = { onSelectCategory(null) },
+                    label = { Text("Todos") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = brandPrimary,
+                        selectedLabelColor = brandOnPrimary
+                    )
+                )
+            }
+            items(categoryOptions, key = { it.wireKey }) { opt ->
+                FilterChip(
+                    selected = selectedCategory == opt.wireKey,
+                    onClick = { onSelectCategory(opt.wireKey) },
+                    label = { Text(shortCategoryFilterLabel(opt)) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = brandPrimary,
+                        selectedLabelColor = brandOnPrimary
+                    )
+                )
+            }
+        }
+
+        if (hasActiveFilter) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Filtros ativos na carteira",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(onClick = onClearFilters) {
+                    Text("Limpar filtros", color = brandAccent)
+                }
+            }
+        }
+
+        if (isFiltering) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = brandAccent)
+        }
+    }
+}
+
+@Composable
+fun WalletParticipantCard(
+    item: PartnerParticipantItemDto,
+    brandPrimary: Color,
+    brandOnPrimary: Color,
+    brandAccent: Color,
+    softSurface: Color,
+    onClick: () -> Unit
+) {
+    val activeCats = item.effectiveCategories.ifEmpty { item.sharedCategories }
+    val activeLabels = activeCats.mapNotNull { SharedCategoryOption.fromWire(it)?.titlePtBr }
+    val missingLabels = item.missingProgramCategories.mapNotNull { SharedCategoryOption.fromWire(it)?.titlePtBr }
+
+    val badges = buildList {
+        if (item.pendingAppointmentsCount > 0) {
+            add("${item.pendingAppointmentsCount} agend. pendente(s)" to true)
+        }
+        if (item.unreadDirectMessagesCount > 0) {
+            add("${item.unreadDirectMessagesCount} msg não lida(s)" to true)
+        }
+        if (item.familySupportActive) {
+            add((item.familySupportSummary?.takeIf { it.isNotBlank() } ?: "Rede familiar ativa") to false)
+        }
+        if (missingLabels.isNotEmpty()) {
+            add("${missingLabels.size} módulo(s) não compartilhado(s)" to false)
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(brandPrimary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = (item.displayName.firstOrNull() ?: 'P').uppercaseChar().toString(),
+                        color = brandOnPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.displayName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (activeLabels.isEmpty()) {
+                            "Nenhum módulo compartilhado no momento"
+                        } else {
+                            "Liberados: ${activeLabels.joinToString(", ")}"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    item.consentedAt?.take(10)?.takeIf { it.length == 10 }?.let { datePrefix ->
+                        Text(
+                            text = "Vínculo ativo desde $datePrefix",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Abrir detalhes do participante",
+                    tint = brandAccent,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            if (badges.isNotEmpty()) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(badges) { (label, highlight) ->
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (highlight) {
+                                brandPrimary.copy(alpha = 0.14f)
+                            } else {
+                                softSurface
+                            },
+                            border = BorderStroke(
+                                1.dp,
+                                if (highlight) brandPrimary.copy(alpha = 0.35f)
+                                else MaterialTheme.colorScheme.outlineVariant
+                            )
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (highlight) FontWeight.Bold else FontWeight.Medium,
+                                color = if (highlight) brandAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ParticipantDetailBottomSheet(
+    summary: ParticipantRoutineSummaryDto,
+    participantItem: PartnerParticipantItemDto?,
+    experienceConfig: ProgramExperienceConfigDto,
+    selectedDays: Int,
+    isLoading: Boolean,
+    isRemoving: Boolean,
+    brandPrimary: Color,
+    brandOnPrimary: Color,
+    brandAccent: Color,
+    softSurface: Color,
+    onChangeDays: (Int) -> Unit,
+    onActionFeedback: (String) -> Unit,
+    onRequestRemove: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedSubTab by rememberSaveable(summary.patientUserId) {
+        mutableStateOf(ParticipantDetailSubTab.METRICS)
+    }
+    val enabledMetrics = experienceConfig.enabledMetrics.ifEmpty {
+        SharedCategoryOption.entries.map { it.wireKey }
+    }
+
+    BragaBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(brandPrimary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = (summary.participantName.firstOrNull() ?: 'P').uppercaseChar().toString(),
+                            color = brandOnPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = summary.participantName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${summary.programName.ifBlank { B2BThemeEngine.PARTNER_AREA_TITLE }} · Últimos ${summary.periodDays}d",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Fechar", color = brandAccent)
+                }
+            }
+
+            if (summary.familySupportActive) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = softSurface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VerifiedUser,
+                            contentDescription = null,
+                            tint = brandAccent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = summary.familySupportSummary?.takeIf { it.isNotBlank() }
+                                ?: "Rede familiar ativa neste programa (mensagens familiares permanecem privadas).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+
+            TabRow(
+                selectedTabIndex = ParticipantDetailSubTab.entries.indexOf(selectedSubTab),
+                containerColor = Color.Transparent,
+                contentColor = brandAccent
+            ) {
+                ParticipantDetailSubTab.entries.forEach { tab ->
+                    Tab(
+                        selected = selectedSubTab == tab,
+                        onClick = { selectedSubTab = tab },
+                        text = {
+                            Text(
+                                text = tab.title,
+                                fontWeight = if (selectedSubTab == tab) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
+                    )
+                }
+            }
+
+            when (selectedSubTab) {
+                ParticipantDetailSubTab.METRICS -> {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(7, 14, 30).forEach { days ->
+                            FilterChip(
+                                selected = selectedDays == days,
+                                onClick = { if (!isLoading) onChangeDays(days) },
+                                label = { Text("${days}d") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = brandPrimary,
+                                    selectedLabelColor = brandOnPrimary
+                                )
+                            )
+                        }
+                    }
+
+                    if (isLoading) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = brandAccent)
+                    }
+
+                    MetricSlotSection(
+                        metricKey = SharedCategoryOption.STEPS.wireKey,
+                        enabledMetrics = enabledMetrics,
+                        sharedCategories = summary.sharedCategories,
+                        disabledNote = "Passos desativados na configuração deste programa.",
+                        unsharedNote = "Passos não compartilhados por este participante."
+                    ) {
+                        val steps = summary.stepsSection ?: return@MetricSlotSection
+                        val recent = steps.days.take(5).joinToString("\n") { d ->
+                            "• ${d.date}: ${d.steps} passos (${d.activeMinutes} min ativos)"
+                        }
+                        SummaryMetricCard(
+                            title = "Passos (${steps.source})",
+                            body = "Média de ${steps.averageSteps} passos/dia em ${steps.daysRecorded} dia(s)." +
+                                if (recent.isNotBlank()) "\n$recent" else ""
+                        )
+                    }
+
+                    MetricSlotSection(
+                        metricKey = SharedCategoryOption.HYDRATION.wireKey,
+                        enabledMetrics = enabledMetrics,
+                        sharedCategories = summary.sharedCategories,
+                        disabledNote = "Hidratação desativada na configuração deste programa.",
+                        unsharedNote = "Hidratação não compartilhada por este participante."
+                    ) {
+                        val hyd = summary.hydrationSection ?: return@MetricSlotSection
+                        val recent = hyd.days.take(5).joinToString("\n") { d ->
+                            "• ${d.date}: ${d.totalMl} ml"
+                        }
+                        SummaryMetricCard(
+                            title = "Hidratação (${hyd.source})",
+                            body = "Média diária de ${hyd.averageMl} ml em ${hyd.daysRecorded} dia(s)." +
+                                if (recent.isNotBlank()) "\n$recent" else ""
+                        )
+                    }
+
+                    MetricSlotSection(
+                        metricKey = SharedCategoryOption.MEDICATIONS.wireKey,
+                        enabledMetrics = enabledMetrics,
+                        sharedCategories = summary.sharedCategories,
+                        disabledNote = "Lembretes de medicamentos desativados neste programa.",
+                        unsharedNote = "Lembretes de medicamentos não compartilhados pelo participante."
+                    ) {
+                        val meds = summary.medicationsSection ?: return@MetricSlotSection
+                        val listText = meds.items.take(5).joinToString("\n") { m ->
+                            "• ${m.name} (${m.schedule.ifBlank { "sem horário fixo" }})"
+                        }
+                        SummaryMetricCard(
+                            title = "Adesão a lembretes (${meds.source})",
+                            body = "${meds.userConfirmationsInPeriod} confirmação(ões) no período. ${meds.note}" +
+                                if (listText.isNotBlank()) "\n$listText" else ""
+                        )
+                    }
+
+                    MetricSlotSection(
+                        metricKey = SharedCategoryOption.AUTHORIZED_RECORDS.wireKey,
+                        enabledMetrics = enabledMetrics,
+                        sharedCategories = summary.sharedCategories,
+                        disabledNote = "Registros de sinais e biometria desativados neste programa.",
+                        unsharedNote = "Registros de sinais e biometria não compartilhados pelo participante."
+                    ) {
+                        val recs = summary.authorizedRecordsSection ?: return@MetricSlotSection
+                        val vitalLines = recs.records.take(6).map { r ->
+                            val parts = buildList {
+                                if (r.systolicPressure != null || r.diastolicPressure != null) {
+                                    add("PA ${r.systolicPressure ?: "--"}/${r.diastolicPressure ?: "--"} mmHg")
+                                }
+                                r.glucoseLevel?.let { add("Glicose $it mg/dL") }
+                                r.heartRate?.let { add("FC $it bpm") }
+                                r.oxygenSaturation?.let {
+                                    add("SpO2 ${String.format(Locale.US, "%.0f", it)}%")
+                                }
+                            }.joinToString(" · ")
+                            "• ${r.measuredAt.take(10)} (${r.origin}): $parts"
+                        }
+                        val bioLines = recs.biometries.take(6).map { b ->
+                            val parts = buildList {
+                                add("Peso ${String.format(Locale.US, "%.1f", b.weightKg)} kg")
+                                b.heightM?.let { add("Altura ${String.format(Locale.US, "%.2f", it)} m") }
+                                b.imc?.let { add("IMC ${String.format(Locale.US, "%.1f", it)}") }
+                            }.joinToString(" · ")
+                            "• ${b.measuredAt.take(10)} (Biometria): $parts"
+                        }
+                        val combined = buildList {
+                            if (bioLines.isNotEmpty()) {
+                                add("Composição & Peso:")
+                                addAll(bioLines)
+                            }
+                            if (vitalLines.isNotEmpty()) {
+                                add("Sinais Vitais:")
+                                addAll(vitalLines)
+                            }
+                            if (bioLines.isEmpty() && vitalLines.isEmpty()) {
+                                add("Sem medições ou biometrias autorizadas registradas no período.")
+                            }
+                            add(recs.zeroFileEgressNotice)
+                        }.joinToString("\n")
+
+                        SummaryMetricCard(
+                            title = "${B2BThemeEngine.PARTNER_RECORDS_TITLE} (${recs.source})",
+                            body = combined
+                        )
+                    }
+                }
+
+                ParticipantDetailSubTab.QUICK_ACTIONS -> {
+                    val features = experienceConfig.features
+                    val pendingAppt = participantItem?.pendingAppointmentsCount ?: 0
+                    val unreadMsgs = participantItem?.unreadDirectMessagesCount ?: 0
+
+                    ParticipantQuickActionCard(
+                        icon = Icons.Default.NotificationsActive,
+                        title = "Enviar lembrete de rotina",
+                        subtitle = if (features.partnerRemindersEnabled) {
+                            "Módulo ativo neste programa (B2B-18 em seguida para envio imediato)."
+                        } else {
+                            "Módulo desligado nas configurações do programa."
+                        },
+                        enabled = features.partnerRemindersEnabled,
+                        brandAccent = brandAccent,
+                        onClick = {
+                            onActionFeedback(
+                                if (features.partnerRemindersEnabled) {
+                                    "O envio de lembretes individuais para ${summary.participantName} será liberado na etapa B2B-18."
+                                } else {
+                                    "Ative Lembretes de Rotina na aba Estúdio antes de disparar orientações."
+                                }
+                            )
+                        }
+                    )
+
+                    ParticipantQuickActionCard(
+                        icon = Icons.Default.CalendarMonth,
+                        title = if (pendingAppt > 0) {
+                            "Ver agendamentos ($pendingAppt pendente(s))"
+                        } else {
+                            "Ver agendamentos"
+                        },
+                        subtitle = if (features.appointmentsEnabled) {
+                            if (pendingAppt > 0) {
+                                "$pendingAppt solicitação(ões) aguardando confirmação (gestão em B2B-19)."
+                            } else {
+                                "Agenda do programa ativa (solicitação e confirmação em B2B-19)."
+                            }
+                        } else {
+                            "Agendamento desativado nas configurações do programa."
+                        },
+                        enabled = features.appointmentsEnabled,
+                        brandAccent = brandAccent,
+                        onClick = {
+                            onActionFeedback(
+                                if (features.appointmentsEnabled) {
+                                    "A fila de solicitações de agendamento de ${summary.participantName} será aberta aqui na etapa B2B-19."
+                                } else {
+                                    "Ative Agendamento no Estúdio para receber solicitações de horários."
+                                }
+                            )
+                        }
+                    )
+
+                    ParticipantQuickActionCard(
+                        icon = Icons.Default.SupportAgent,
+                        title = if (unreadMsgs > 0) {
+                            "Abrir chat direto ($unreadMsgs não lida(s))"
+                        } else {
+                            "Abrir chat direto"
+                        },
+                        subtitle = if (features.directPartnerChatEnabled) {
+                            if (unreadMsgs > 0) {
+                                "$unreadMsgs mensagem(ns) pendente(s) no canal com ${summary.participantName} (B2B-20)."
+                            } else {
+                                "Canal direto com o programa ativo (conversa em B2B-20)."
+                            }
+                        } else {
+                            "Chat direto desativado nas configurações do programa."
+                        },
+                        enabled = features.directPartnerChatEnabled,
+                        brandAccent = brandAccent,
+                        onClick = {
+                            onActionFeedback(
+                                if (features.directPartnerChatEnabled) {
+                                    "O chat assíncrono com ${summary.participantName} será habilitado na etapa B2B-20."
+                                } else {
+                                    "Ative o Chat Direto na aba Estúdio para conversar com participantes."
+                                }
+                            )
+                        }
+                    )
+
+                    HorizontalDivider()
+
+                    OutlinedButton(
+                        onClick = onRequestRemove,
+                        enabled = !isRemoving,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                    ) {
+                        Text(
+                            text = if (isRemoving) "Encerrando vínculo..." else "Encerrar vínculo deste participante",
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+        }
+    }
+}
+
+@Composable
+private fun MetricSlotSection(
+    metricKey: String,
+    enabledMetrics: List<String>,
+    sharedCategories: List<String>,
+    disabledNote: String,
+    unsharedNote: String,
+    content: @Composable () -> Unit
+) {
+    when {
+        metricKey !in enabledMetrics -> {
+            MutedMetricNote(disabledNote)
+        }
+        metricKey !in sharedCategories -> {
+            MutedMetricNote(unsharedNote)
+        }
+        else -> content()
+    }
+}
+
+@Composable
+private fun SummaryMetricCard(title: String, body: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(text = title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text(text = body, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun MutedMetricNote(message: String) {
+    Text(
+        text = message,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun ParticipantQuickActionCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    enabled: Boolean,
+    brandAccent: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = if (enabled) {
+            MaterialTheme.colorScheme.surface
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        },
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (enabled) brandAccent else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+private fun shortCategoryFilterLabel(opt: SharedCategoryOption): String = when (opt) {
+    SharedCategoryOption.STEPS -> "Passos"
+    SharedCategoryOption.HYDRATION -> "Hidratação"
+    SharedCategoryOption.MEDICATIONS -> "Medicações"
+    SharedCategoryOption.AUTHORIZED_RECORDS -> "Sinais & Peso"
+}

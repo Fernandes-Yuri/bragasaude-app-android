@@ -3187,36 +3187,60 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    private fun parseNonEmptyStringArray(arr: org.json.JSONArray?): List<String> {
+        if (arr == null) return emptyList()
+        val out = mutableListOf<String>()
+        for (i in 0 until arr.length()) {
+            val raw = arr.optString(i, "").trim()
+            if (raw.isNotBlank() && raw != "null") out.add(raw)
+        }
+        return out
+    }
+
     suspend fun getMyPartnerParticipants(
         cursor: String? = null,
-        limit: Int = 20
+        limit: Int = 20,
+        query: String? = null,
+        category: String? = null,
+        attentionOnly: Boolean = false
     ): br.com.bragasaude.domain.b2b.PartnerParticipantsPageDto? = withContext(Dispatchers.IO) {
         try {
             val clampedLimit = limit.coerceIn(1, 50)
-            val cursorQuery = cursor?.takeIf { it.isNotBlank() }?.let {
-                "&cursor=${java.net.URLEncoder.encode(it, "UTF-8")}"
-            }.orEmpty()
-            val res = getJson("$baseUrl/api/b2b/program/me/participants?limit=$clampedLimit$cursorQuery")
+            val params = buildString {
+                append("limit=").append(clampedLimit)
+                cursor?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    append("&cursor=").append(java.net.URLEncoder.encode(it, "UTF-8"))
+                }
+                query?.trim()?.take(80)?.takeIf { it.isNotBlank() }?.let {
+                    append("&q=").append(java.net.URLEncoder.encode(it, "UTF-8"))
+                }
+                category?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    append("&category=").append(java.net.URLEncoder.encode(it, "UTF-8"))
+                }
+                if (attentionOnly) {
+                    append("&attentionOnly=true")
+                }
+            }
+            val res = getJson("$baseUrl/api/b2b/program/me/participants?$params")
                 ?: return@withContext null
             val arr = res.optJSONArray("participants")
             val participants = mutableListOf<br.com.bragasaude.domain.b2b.PartnerParticipantItemDto>()
             if (arr != null) {
                 for (i in 0 until arr.length()) {
                     val item = arr.optJSONObject(i) ?: continue
-                    val cats = mutableListOf<String>()
-                    val catArr = item.optJSONArray("sharedCategories")
-                    if (catArr != null) {
-                        for (c in 0 until catArr.length()) {
-                            val raw = catArr.optString(c, "").trim()
-                            if (raw.isNotBlank()) cats.add(raw)
-                        }
-                    }
                     val uid = item.optString("patientUserId", "").takeIf { it.isNotBlank() } ?: continue
                     participants.add(
                         br.com.bragasaude.domain.b2b.PartnerParticipantItemDto(
                             patientUserId = uid,
                             displayName = item.optString("displayName", "Participante"),
-                            sharedCategories = cats,
+                            sharedCategories = parseNonEmptyStringArray(item.optJSONArray("sharedCategories")),
+                            effectiveCategories = parseNonEmptyStringArray(item.optJSONArray("effectiveCategories")),
+                            missingProgramCategories = parseNonEmptyStringArray(item.optJSONArray("missingProgramCategories")),
+                            familySupportActive = item.optBoolean("familySupportActive", false),
+                            familySupportSummary = item.optString("familySupportSummary", "")
+                                .takeIf { it.isNotBlank() && it != "null" },
+                            pendingAppointmentsCount = item.optInt("pendingAppointmentsCount", 0),
+                            unreadDirectMessagesCount = item.optInt("unreadDirectMessagesCount", 0),
                             consentedAt = item.optString("consentedAt", "")
                                 .takeIf { it.isNotBlank() && it != "null" }
                         )
@@ -3358,13 +3382,29 @@ class BragaApiClient @Inject constructor(
                         )
                     }
                 }
+                val bioArr = obj.optJSONArray("biometries")
+                val bioList = mutableListOf<br.com.bragasaude.domain.b2b.SharedBiometryEntryDto>()
+                if (bioArr != null) {
+                    for (i in 0 until bioArr.length()) {
+                        val b = bioArr.optJSONObject(i) ?: continue
+                        bioList.add(
+                            br.com.bragasaude.domain.b2b.SharedBiometryEntryDto(
+                                measuredAt = b.optString("measuredAt", ""),
+                                weightKg = b.optDouble("weightKg", 0.0),
+                                heightM = if (b.isNull("heightM")) null else b.optDouble("heightM"),
+                                imc = if (b.isNull("imc")) null else b.optDouble("imc")
+                            )
+                        )
+                    }
+                }
                 br.com.bragasaude.domain.b2b.SharedAuthorizedRecordsSectionDto(
                     source = obj.optString("source", "Braga Saúde • Registros autorizados"),
                     zeroFileEgressNotice = obj.optString(
                         "zeroFileEgressNotice",
                         "Arquivos e exames do organizador pessoal permanecem privados neste fluxo (Zero File Egress)."
                     ),
-                    records = recList
+                    records = recList,
+                    biometries = bioList
                 )
             }
 
@@ -3376,6 +3416,9 @@ class BragaApiClient @Inject constructor(
                 participantName = s.optString("participantName", "Participante"),
                 periodDays = s.optInt("periodDays", clampedDays),
                 sharedCategories = sharedCategories,
+                familySupportActive = s.optBoolean("familySupportActive", false),
+                familySupportSummary = s.optString("familySupportSummary", "")
+                    .takeIf { it.isNotBlank() && it != "null" },
                 stepsSection = stepsSection,
                 hydrationSection = hydrationSection,
                 medicationsSection = medicationsSection,

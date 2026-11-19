@@ -500,4 +500,124 @@ class BragaB2BBackwardCompatTest {
             assertEquals("/api/b2b/contexts", server.takeRequest().path)
         }
     }
+
+    @Test
+    fun partnerParticipantsFilterCompositeCursorAndBiometriesParseCorrectly() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "participants": [
+                        {
+                          "patientUserId": "patient-1",
+                          "displayName": "Ana Silva",
+                          "sharedCategories": ["steps", "authorized_records"],
+                          "effectiveCategories": ["steps", "authorized_records"],
+                          "missingProgramCategories": ["hydration"],
+                          "familySupportActive": true,
+                          "familySupportSummary": "Apoio familiar ativo neste programa",
+                          "pendingAppointmentsCount": 2,
+                          "unreadDirectMessagesCount": 1,
+                          "consentedAt": "2026-11-19T12:00:00Z"
+                        }
+                      ],
+                      "nextCursor": "2026-11-19T12:00:00Z|patient-1",
+                      "hasMore": true
+                    }
+                    """.trimIndent()
+                )
+            )
+            val api = BragaApiClient(
+                mockk(relaxed = true),
+                server.url("/").toString().trimEnd('/'),
+                stubAuthService(),
+                OkHttpClient(),
+                FamilyE2eeManager()
+            )
+
+            val page = api.getMyPartnerParticipants(
+                cursor = "2026-11-19T12:00:00Z|patient-0",
+                limit = 20,
+                query = "Ana Silva",
+                category = "authorized_records",
+                attentionOnly = true
+            )
+            assertNotNull(page)
+            assertEquals(1, page!!.participants.size)
+            val p = page.participants[0]
+            assertEquals(listOf("steps", "authorized_records"), p.effectiveCategories)
+            assertEquals(listOf("hydration"), p.missingProgramCategories)
+            assertTrue(p.familySupportActive)
+            assertEquals("Apoio familiar ativo neste programa", p.familySupportSummary)
+            assertEquals(2, p.pendingAppointmentsCount)
+            assertEquals(1, p.unreadDirectMessagesCount)
+            assertEquals("2026-11-19T12:00:00Z|patient-1", page.nextCursor)
+            assertTrue(page.hasMore)
+
+            val listReqPath = server.takeRequest().path!!
+            assertTrue(listReqPath.contains("/api/b2b/program/me/participants?"))
+            assertTrue(listReqPath.contains("q=Ana+Silva") || listReqPath.contains("q=Ana%20Silva"))
+            assertTrue(listReqPath.contains("category=authorized_records"))
+            assertTrue(listReqPath.contains("attentionOnly=true"))
+            assertTrue(listReqPath.contains("cursor="))
+
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "summary": {
+                        "programId": "prog-1",
+                        "programName": "Cuidado Cardio",
+                        "companyName": "Clinica Horizonte",
+                        "patientUserId": "patient-1",
+                        "participantName": "Ana Silva",
+                        "periodDays": 14,
+                        "sharedCategories": ["authorized_records"],
+                        "familySupportActive": true,
+                        "familySupportSummary": "Apoio familiar ativo",
+                        "stepsSection": null,
+                        "hydrationSection": null,
+                        "medicationsSection": null,
+                        "authorizedRecordsSection": {
+                          "source": "Braga Saúde • Registros autorizados",
+                          "zeroFileEgressNotice": "Zero File Egress",
+                          "records": [
+                            {
+                              "measuredAt": "2026-11-19T10:00:00Z",
+                              "origin": "Braga Saúde",
+                              "systolicPressure": 120,
+                              "diastolicPressure": 80,
+                              "heartRate": 72
+                            }
+                          ],
+                          "biometries": [
+                            {
+                              "measuredAt": "2026-11-18T09:00:00Z",
+                              "weightKg": 71.4,
+                              "heightM": 1.68,
+                              "imc": 25.3
+                            }
+                          ]
+                        }
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+
+            val summary = api.getPartnerParticipantSummary("patient-1", days = 14)
+            assertNotNull(summary)
+            assertEquals(14, summary!!.periodDays)
+            assertTrue(summary.familySupportActive)
+            assertNull(summary.stepsSection)
+            assertNotNull(summary.authorizedRecordsSection)
+            assertEquals(1, summary.authorizedRecordsSection!!.records.size)
+            assertEquals(1, summary.authorizedRecordsSection!!.biometries.size)
+            assertEquals(71.4, summary.authorizedRecordsSection!!.biometries[0].weightKg, 0.01)
+            assertEquals(25.3, summary.authorizedRecordsSection!!.biometries[0].imc!!, 0.01)
+            assertEquals("/api/b2b/program/me/participants/patient-1/summary?days=14", server.takeRequest().path)
+        }
+    }
 }
