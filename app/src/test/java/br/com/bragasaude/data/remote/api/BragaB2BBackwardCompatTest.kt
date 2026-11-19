@@ -504,6 +504,7 @@ class BragaB2BBackwardCompatTest {
     @Test
     fun partnerParticipantsFilterCompositeCursorAndBiometriesParseCorrectly() = runBlocking {
         MockWebServer().use { server ->
+            server.start()
             server.enqueue(
                 MockResponse().setBody(
                     """
@@ -528,8 +529,13 @@ class BragaB2BBackwardCompatTest {
                     """.trimIndent()
                 )
             )
-            server.start()
-            val api = createApiClient(server)
+            val api = BragaApiClient(
+                mockk(relaxed = true),
+                server.url("/").toString().trimEnd('/'),
+                stubAuthService(),
+                OkHttpClient(),
+                FamilyE2eeManager()
+            )
 
             val page = api.getMyPartnerParticipants(
                 cursor = "2026-11-19T12:00:00Z|patient-0",
