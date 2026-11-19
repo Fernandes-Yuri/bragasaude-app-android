@@ -2623,4 +2623,195 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    // ---- Frente B2B (B2B-10 / B2B-11): Vínculo por Código, Consentimento Granular & Franquia ----
+
+    private fun parseContextDescriptorJson(
+        obj: JSONObject?
+    ): br.com.bragasaude.domain.b2b.B2BContextDescriptor? {
+        val c = obj ?: return null
+        val categoriesArr = c.optJSONArray("sharedCategories")
+        val categories = mutableListOf<String>()
+        if (categoriesArr != null) {
+            for (i in 0 until categoriesArr.length()) {
+                val item = categoriesArr.optString(i, "").trim()
+                if (item.isNotBlank()) categories.add(item)
+            }
+        }
+        return br.com.bragasaude.domain.b2b.B2BContextDescriptor(
+            mode = c.optString("mode", "PERSONAL"),
+            userId = c.optString("userId", ""),
+            programId = c.optString("programId", "").takeIf { it.isNotBlank() && it != "null" },
+            programName = c.optString("programName", "").takeIf { it.isNotBlank() && it != "null" },
+            companyName = c.optString("companyName", "").takeIf { it.isNotBlank() && it != "null" },
+            primaryColor = c.optString("primaryColor", "").takeIf { it.isNotBlank() && it != "null" },
+            logoUrl = c.optString("logoUrl", "").takeIf { it.isNotBlank() && it != "null" },
+            approvalStatus = c.optString("approvalStatus", "").takeIf { it.isNotBlank() && it != "null" },
+            sharedCategories = categories
+        )
+    }
+
+    suspend fun getB2BContexts(): List<br.com.bragasaude.domain.b2b.B2BContextDescriptor> =
+        withContext(Dispatchers.IO) {
+            try {
+                val res = getJson("$baseUrl/api/b2b/contexts") ?: return@withContext emptyList()
+                val arr = res.optJSONArray("contexts") ?: return@withContext emptyList()
+                val list = mutableListOf<br.com.bragasaude.domain.b2b.B2BContextDescriptor>()
+                for (i in 0 until arr.length()) {
+                    parseContextDescriptorJson(arr.optJSONObject(i))?.let { list.add(it) }
+                }
+                list
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Falha ao listar contextos B2B: ${e.message}")
+                emptyList()
+            }
+        }
+
+    suspend fun joinPartnerProgram(
+        rawCode: String,
+        sharedCategories: Collection<String>
+    ): br.com.bragasaude.domain.b2b.PartnerEnrollmentResult = withContext(Dispatchers.IO) {
+        try {
+            val code = rawCode.trim().uppercase()
+            val normalizedCats =
+                br.com.bragasaude.domain.b2b.B2BOnboardingValidator.normalizeSharedCategories(
+                    sharedCategories
+                )
+            if (!br.com.bragasaude.domain.b2b.B2BOnboardingValidator.isValidInviteCode(code)) {
+                return@withContext br.com.bragasaude.domain.b2b.PartnerEnrollmentResult(
+                    errorDetail = "Código do programa inválido."
+                )
+            }
+            if (normalizedCats.isEmpty()) {
+                return@withContext br.com.bragasaude.domain.b2b.PartnerEnrollmentResult(
+                    errorDetail = "Selecione ao menos uma categoria de registros para compartilhar."
+                )
+            }
+            val payload = JSONObject().apply {
+                put("inviteCode", code)
+                put("sharedCategories", JSONArray(normalizedCats))
+            }
+            val resp = postJsonDetailed("$baseUrl/api/b2b/enrollments/join", payload)
+            if (resp.code in 200..299 && resp.body != null) {
+                val ctx = parseContextDescriptorJson(resp.body.optJSONObject("activeContext"))
+                if (ctx != null) {
+                    return@withContext br.com.bragasaude.domain.b2b.PartnerEnrollmentResult(
+                        activeContext = ctx
+                    )
+                }
+            }
+            br.com.bragasaude.domain.b2b.PartnerEnrollmentResult(
+                errorDetail = resp.errorDetail
+                    ?: "Não foi possível aderir ao programa agora. Verifique o código e tente novamente."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao aderir ao programa B2B: ${e.message}")
+            br.com.bragasaude.domain.b2b.PartnerEnrollmentResult(
+                errorDetail = "Erro de conexão ao aderir ao programa."
+            )
+        }
+    }
+
+    suspend fun updatePartnerConsent(
+        programId: String,
+        sharedCategories: Collection<String>
+    ): br.com.bragasaude.domain.b2b.PartnerEnrollmentResult = withContext(Dispatchers.IO) {
+        try {
+            val normalizedCats =
+                br.com.bragasaude.domain.b2b.B2BOnboardingValidator.normalizeSharedCategories(
+                    sharedCategories
+                )
+            if (normalizedCats.isEmpty()) {
+                return@withContext br.com.bragasaude.domain.b2b.PartnerEnrollmentResult(
+                    errorDetail = "Selecione ao menos uma categoria de registros para manter o compartilhamento."
+                )
+            }
+            val payload = JSONObject().apply {
+                put("sharedCategories", JSONArray(normalizedCats))
+            }
+            val resp = postJsonDetailed(
+                "$baseUrl/api/b2b/enrollments/${programId.trim()}/consent",
+                payload
+            )
+            if (resp.code in 200..299 && resp.body != null) {
+                val ctx = parseContextDescriptorJson(resp.body.optJSONObject("activeContext"))
+                if (ctx != null) {
+                    return@withContext br.com.bragasaude.domain.b2b.PartnerEnrollmentResult(
+                        activeContext = ctx
+                    )
+                }
+            }
+            br.com.bragasaude.domain.b2b.PartnerEnrollmentResult(
+                errorDetail = resp.errorDetail ?: "Não foi possível atualizar suas preferências."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao atualizar consentimento B2B: ${e.message}")
+            br.com.bragasaude.domain.b2b.PartnerEnrollmentResult(
+                errorDetail = "Erro de conexão ao atualizar preferências."
+            )
+        }
+    }
+
+    suspend fun leavePartnerProgram(
+        programId: String
+    ): br.com.bragasaude.domain.b2b.PartnerEnrollmentResult = withContext(Dispatchers.IO) {
+        try {
+            val resp = postJsonDetailed(
+                "$baseUrl/api/b2b/enrollments/${programId.trim()}/leave",
+                JSONObject()
+            )
+            if (resp.code in 200..299 && resp.body != null) {
+                val ctx = parseContextDescriptorJson(resp.body.optJSONObject("activeContext"))
+                return@withContext br.com.bragasaude.domain.b2b.PartnerEnrollmentResult(
+                    activeContext = ctx ?: br.com.bragasaude.domain.b2b.B2BContextDescriptor.personal()
+                )
+            }
+            br.com.bragasaude.domain.b2b.PartnerEnrollmentResult(
+                errorDetail = resp.errorDetail ?: "Não foi possível encerrar a participação agora."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao sair do programa B2B: ${e.message}")
+            br.com.bragasaude.domain.b2b.PartnerEnrollmentResult(
+                errorDetail = "Erro de conexão ao encerrar participação."
+            )
+        }
+    }
+
+    suspend fun setPartnerInvitePaused(
+        paused: Boolean
+    ): br.com.bragasaude.domain.b2b.PartnerProgramDto? = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply { put("paused", paused) }
+            val res = postJson("$baseUrl/api/b2b/program/me/invite-policy", payload)
+                ?: return@withContext null
+            parsePartnerProgramJson(res.optJSONObject("program"))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao atualizar política de convite B2B: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun regeneratePartnerInviteCode(): br.com.bragasaude.domain.b2b.PartnerProgramDto? =
+        withContext(Dispatchers.IO) {
+            try {
+                val res = postJson("$baseUrl/api/b2b/program/me/invite-code/regenerate", JSONObject())
+                    ?: return@withContext null
+                parsePartnerProgramJson(res.optJSONObject("program"))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Falha ao regenerar código de convite B2B: ${e.message}")
+                null
+            }
+        }
+
 }

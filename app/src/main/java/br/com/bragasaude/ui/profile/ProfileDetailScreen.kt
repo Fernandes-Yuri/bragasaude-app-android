@@ -84,6 +84,8 @@ fun ProfileDetailScreen(
     var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
     var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
     var showPartnerProgramSheet by rememberSaveable { mutableStateOf(false) }
+    var showPartnerConsentSheet by rememberSaveable { mutableStateOf(false) }
+    var pendingPartnerInviteCode by rememberSaveable { mutableStateOf("") }
     var showAvatarDialog by remember { mutableStateOf(false) }
     var showGooglePhotoConfirm by remember { mutableStateOf(false) }
     val communityNickname by profileViewModel.communityNickname.collectAsState()
@@ -339,12 +341,29 @@ fun ProfileDetailScreen(
             b2bPrefs.edit().putBoolean("pending_b2b_company_onboarding", false).apply()
             showPartnerProgramSheet = true
         }
+        val savedInvite = b2bPrefs.getString("pending_b2b_invite_code", "").orEmpty().trim()
+        if (savedInvite.isNotBlank()) {
+            b2bPrefs.edit().remove("pending_b2b_invite_code").apply()
+            pendingPartnerInviteCode = savedInvite
+            showPartnerConsentSheet = true
+        }
     }
 
     if (showPartnerProgramSheet) {
         br.com.bragasaude.ui.b2b.PartnerProgramOnboardingSheet(
             apiClient = profileViewModel.partnerApiClient(),
             onDismiss = { showPartnerProgramSheet = false }
+        )
+    }
+
+    if (showPartnerConsentSheet) {
+        br.com.bragasaude.ui.b2b.PartnerConsentSheet(
+            apiClient = profileViewModel.partnerApiClient(),
+            initialInviteCode = pendingPartnerInviteCode,
+            onDismiss = {
+                showPartnerConsentSheet = false
+                pendingPartnerInviteCode = ""
+            }
         )
     }
 
@@ -845,6 +864,13 @@ fun ProfileDetailScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column {
+                        SettingsItem(
+                            title = "Participar de programa por código",
+                            subtitle = "Vincular a programa parceiro e escolher registros compartilhados.",
+                            icon = Icons.Default.Favorite,
+                            onClick = { showPartnerConsentSheet = true }
+                        )
+                        HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
                         SettingsItem(
                             title = "Programa para minha empresa",
                             subtitle = "Personalizar nome, cor, logo e acompanhar aprovação.",

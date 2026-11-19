@@ -191,6 +191,124 @@ fun PartnerProgramOnboardingSheet(
                 }
             }
 
+            if (status == PartnerApprovalStatus.APPROVED && existingProgram != null) {
+                val prog = existingProgram!!
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                    ),
+                    border = BorderStroke(1.dp, parsedColor.copy(alpha = 0.35f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Código de convite do programa",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = prog.inviteCode ?: "Aguardando código",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = parsedColor
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = parsedColor.copy(alpha = 0.14f)
+                            ) {
+                                Text(
+                                    text = "${prog.activeParticipants} / ${prog.seatLimit} vagas",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = parsedColor,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = if (prog.invitePaused) {
+                                "Novas adesões estão pausadas. Participantes já vinculados continuam ativos."
+                            } else {
+                                "Convites ativos dentro do limite da franquia contratada."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    if (isSaving) return@OutlinedButton
+                                    isSaving = true
+                                    scope.launch {
+                                        val updated = apiClient.setPartnerInvitePaused(!prog.invitePaused)
+                                        isSaving = false
+                                        if (updated != null) {
+                                            existingProgram = updated
+                                            val msg = if (updated.invitePaused) {
+                                                "Novas adesões pausadas."
+                                            } else {
+                                                "Novas adesões retomadas."
+                                            }
+                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                enabled = !isSaving,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = if (prog.invitePaused) "Retomar convites" else "Pausar convites",
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    if (isSaving) return@OutlinedButton
+                                    isSaving = true
+                                    scope.launch {
+                                        val updated = apiClient.regeneratePartnerInviteCode()
+                                        isSaving = false
+                                        if (updated != null) {
+                                            existingProgram = updated
+                                            Toast.makeText(
+                                                context,
+                                                "Novo código de convite gerado.",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                                },
+                                enabled = !isSaving,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("Novo código", fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            }
+
             if (isLoading) {
                 Box(
                     modifier = Modifier

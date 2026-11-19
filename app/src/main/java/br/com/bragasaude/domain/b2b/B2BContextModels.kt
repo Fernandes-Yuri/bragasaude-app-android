@@ -138,10 +138,80 @@ data class PartnerInvitePreviewDto(
     val hasAvailableSeats: Boolean = true
 )
 
+@Serializable
+enum class SharedCategoryOption(
+    val wireKey: String,
+    val titlePtBr: String,
+    val descriptionPtBr: String
+) {
+    STEPS(
+        wireKey = "steps",
+        titlePtBr = "Passos e atividade física",
+        descriptionPtBr = "Contagem diária de passos e ritmo de caminhada."
+    ),
+    HYDRATION(
+        wireKey = "hydration",
+        titlePtBr = "Hidratação diária",
+        descriptionPtBr = "Registros de água e acompanhamento da meta de hidratação."
+    ),
+    MEDICATIONS(
+        wireKey = "medications",
+        titlePtBr = "Adesão a medicamentos",
+        descriptionPtBr = "Confirmações de rotina e horários registrados no app."
+    ),
+    AUTHORIZED_RECORDS(
+        wireKey = "authorized_records",
+        titlePtBr = "Registros autorizados de rotina",
+        descriptionPtBr = "Leituras de bem-estar que você escolher disponibilizar ao programa."
+    );
+
+    companion object {
+        val ALL_WIRE_KEYS: Set<String> = entries.map { it.wireKey }.toSet()
+
+        fun fromWire(raw: String?): SharedCategoryOption? {
+            val clean = raw?.trim()?.lowercase() ?: return null
+            return entries.firstOrNull { it.wireKey == clean }
+        }
+    }
+}
+
+@Serializable
+data class JoinPartnerProgramRequest(
+    val inviteCode: String,
+    val sharedCategories: List<String>
+)
+
+@Serializable
+data class UpdatePartnerConsentRequest(
+    val sharedCategories: List<String>
+)
+
+@Serializable
+data class PartnerEnrollmentResult(
+    val activeContext: B2BContextDescriptor? = null,
+    val errorDetail: String? = null
+) {
+    val isSuccess: Boolean
+        get() = activeContext != null
+}
+
 object B2BOnboardingValidator {
     const val DEFAULT_PRIMARY_COLOR = "#1A6B5C"
     const val REFERENCE_SUBTITLE =
         "Um espaço com a sua marca, dentro do Braga Saúde. Personalize nome, cor e logo sobre os recursos da base comum."
+
+    fun buildConsentHeading(programName: String?): String {
+        val target = programName?.trim()?.takeIf { it.isNotBlank() } ?: "o programa parceiro"
+        return "Escolha quais registros compartilhar com $target."
+    }
+
+    fun normalizeSharedCategories(raw: Collection<String>): List<String> {
+        return raw.mapNotNull { SharedCategoryOption.fromWire(it)?.wireKey }.distinct()
+    }
+
+    fun isValidConsentSelection(raw: Collection<String>): Boolean {
+        return normalizeSharedCategories(raw).isNotEmpty()
+    }
 
     val PRESET_COLORS = listOf(
         "#1A6B5C",
