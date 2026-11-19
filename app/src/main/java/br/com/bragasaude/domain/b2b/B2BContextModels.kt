@@ -195,6 +195,102 @@ data class PartnerEnrollmentResult(
         get() = activeContext != null
 }
 
+@Serializable
+data class PartnerParticipantItemDto(
+    val patientUserId: String,
+    val displayName: String,
+    val sharedCategories: List<String> = emptyList(),
+    val consentedAt: String? = null
+)
+
+@Serializable
+data class PartnerParticipantsPageDto(
+    val program: PartnerProgramDto? = null,
+    val participants: List<PartnerParticipantItemDto> = emptyList(),
+    val nextCursor: String? = null,
+    val hasMore: Boolean = false
+)
+
+@Serializable
+data class SharedStepsDayDto(
+    val date: String,
+    val steps: Int,
+    val activeMinutes: Int,
+    val distanceMeters: Double
+)
+
+@Serializable
+data class SharedStepsSectionDto(
+    val source: String,
+    val averageSteps: Long,
+    val daysRecorded: Int,
+    val days: List<SharedStepsDayDto> = emptyList()
+)
+
+@Serializable
+data class SharedHydrationDayDto(
+    val date: String,
+    val totalMl: Long
+)
+
+@Serializable
+data class SharedHydrationSectionDto(
+    val source: String,
+    val averageMl: Long,
+    val daysRecorded: Int,
+    val days: List<SharedHydrationDayDto> = emptyList()
+)
+
+@Serializable
+data class SharedMedicationItemDto(
+    val name: String,
+    val dosageMg: Double? = null,
+    val schedule: String = ""
+)
+
+@Serializable
+data class SharedMedicationsSectionDto(
+    val source: String,
+    val reminderCount: Int,
+    val userConfirmationsInPeriod: Long,
+    val note: String,
+    val items: List<SharedMedicationItemDto> = emptyList()
+)
+
+@Serializable
+data class SharedVitalEntryDto(
+    val measuredAt: String,
+    val origin: String,
+    val systolicPressure: Int? = null,
+    val diastolicPressure: Int? = null,
+    val heartRate: Int? = null,
+    val glucoseLevel: Int? = null,
+    val glucoseType: String? = null,
+    val oxygenSaturation: Double? = null
+)
+
+@Serializable
+data class SharedAuthorizedRecordsSectionDto(
+    val source: String,
+    val zeroFileEgressNotice: String,
+    val records: List<SharedVitalEntryDto> = emptyList()
+)
+
+@Serializable
+data class ParticipantRoutineSummaryDto(
+    val programId: String,
+    val programName: String,
+    val companyName: String,
+    val patientUserId: String,
+    val participantName: String,
+    val periodDays: Int,
+    val sharedCategories: List<String> = emptyList(),
+    val stepsSection: SharedStepsSectionDto? = null,
+    val hydrationSection: SharedHydrationSectionDto? = null,
+    val medicationsSection: SharedMedicationsSectionDto? = null,
+    val authorizedRecordsSection: SharedAuthorizedRecordsSectionDto? = null
+)
+
 object B2BOnboardingValidator {
     const val DEFAULT_PRIMARY_COLOR = "#1A6B5C"
     const val REFERENCE_SUBTITLE =
@@ -254,6 +350,41 @@ object B2BOnboardingValidator {
     fun isValidInviteCode(raw: String?): Boolean {
         val clean = raw?.trim().orEmpty()
         return INVITE_CODE_REGEX.matches(clean)
+    }
+
+    fun parseInviteCodeFromUri(rawUri: String?): String? {
+        val uriText = rawUri?.trim().orEmpty()
+        if (uriText.isEmpty()) return null
+        val lower = uriText.lowercase()
+        if (!lower.startsWith("https://") && !lower.startsWith("http://")) return null
+
+        val withoutFragment = uriText.substringBefore('#')
+        val pathPart = withoutFragment.substringBefore('?')
+        val queryPart = withoutFragment.substringAfter('?', "")
+
+        if (queryPart.isNotEmpty()) {
+            queryPart.split('&').forEach { pair ->
+                val key = pair.substringBefore('=').trim().lowercase()
+                val value = pair.substringAfter('=', "").trim().uppercase()
+                if ((key == "code" || key == "codigo" || key == "invite") && isValidInviteCode(value)) {
+                    return value
+                }
+            }
+        }
+
+        val marker = "/convite/"
+        val idx = pathPart.lowercase().indexOf(marker)
+        if (idx >= 0) {
+            val candidate = pathPart
+                .substring(idx + marker.length)
+                .substringBefore('/')
+                .trim()
+                .uppercase()
+            if (isValidInviteCode(candidate)) {
+                return candidate
+            }
+        }
+        return null
     }
 
     fun canSaveDraft(

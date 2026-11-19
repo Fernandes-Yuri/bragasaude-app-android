@@ -176,4 +176,53 @@ class B2BContextStoreTest {
         assertFalse(B2BOnboardingValidator.isValidConsentSelection(listOf("invalid_only")))
         assertFalse(B2BOnboardingValidator.isValidConsentSelection(emptyList()))
     }
+
+    @Test
+    fun `B2BThemeEngine garante contraste minimo WCAG AA 4_5 para cores claras e escuras`() {
+        val sampleColors = listOf(
+            "#1A6B5C", // esmeralda escuro
+            "#FACC15", // amarelo claro (exige texto escuro)
+            "#FFFFFF", // branco puro
+            "#000000", // preto puro
+            "#0F4C81", // azul profundo
+            "invalida" // fallback seguro para cor padrao
+        )
+
+        sampleColors.forEach { hex ->
+            val tokens = B2BThemeEngine.resolveAccessiblePalette(hex)
+            assertTrue(
+                "Contraste insuficiente onPrimary/primary para $hex: ${tokens.onPrimaryContrastRatio}",
+                tokens.onPrimaryContrastRatio >= B2BThemeEngine.WCAG_AA_NORMAL_TEXT_RATIO
+            )
+            assertTrue(
+                B2BThemeEngine.contrastRatio(tokens.accentOnLightHex, "#FFFFFF") >= B2BThemeEngine.WCAG_AA_NORMAL_TEXT_RATIO
+            )
+            assertTrue(
+                B2BThemeEngine.contrastRatio(tokens.accentOnDarkHex, "#0F1A16") >= B2BThemeEngine.WCAG_AA_NORMAL_TEXT_RATIO
+            )
+        }
+
+        // Fundo amarelo claro deve selecionar texto escuro (#0F172A) e fundo escuro deve selecionar branco
+        assertEquals("#0F172A", B2BThemeEngine.resolveAccessiblePalette("#FACC15").onPrimaryHex)
+        assertEquals("#FFFFFF", B2BThemeEngine.resolveAccessiblePalette("#1A6B5C").onPrimaryHex)
+    }
+
+    @Test
+    fun `parseInviteCodeFromUri extrai codigo valido de deep link ou query string`() {
+        assertEquals(
+            "CARD-4F9A",
+            B2BOnboardingValidator.parseInviteCodeFromUri("https://bragasaude.online/convite/card-4f9a")
+        )
+        assertEquals(
+            "VIDA-9K2M",
+            B2BOnboardingValidator.parseInviteCodeFromUri("https://bragasaude.online/convite?code=vida-9k2m&utm=qr")
+        )
+        assertEquals(
+            "HOSP_2026",
+            B2BOnboardingValidator.parseInviteCodeFromUri("https://bragasaude.online/convite/hosp_2026?src=wa#top")
+        )
+        assertNull(B2BOnboardingValidator.parseInviteCodeFromUri("javascript:alert(1)"))
+        assertNull(B2BOnboardingValidator.parseInviteCodeFromUri("https://bragasaude.online/convite/a"))
+        assertNull(B2BOnboardingValidator.parseInviteCodeFromUri("https://bragasaude.online/sobre"))
+    }
 }

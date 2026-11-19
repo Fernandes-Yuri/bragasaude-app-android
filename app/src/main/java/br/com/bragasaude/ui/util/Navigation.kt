@@ -46,4 +46,7 @@ import kotlinx.serialization.Serializable
     @Serializable data object BarcodeScanner : Screen
     @Serializable data object CareWall : Screen
     @Serializable data object DoctorMode : Screen
+
+    // Frente B2B — B2B-12
+    @Serializable data class PartnerWorkspace(val inviteCode: String = "") : Screen
 }

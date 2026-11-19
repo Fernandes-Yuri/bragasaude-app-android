@@ -155,6 +155,14 @@ object DatabaseModule {
 
     @Provides
     @Singleton
+    fun providePartnerPreConsultationPdfGenerator(
+        @ApplicationContext context: Context
+    ): br.com.bragasaude.domain.b2b.PartnerPreConsultationPdfGenerator {
+        return br.com.bragasaude.domain.b2b.PartnerPreConsultationPdfGenerator(context)
+    }
+
+    @Provides
+    @Singleton
     fun provideWorkManager(@ApplicationContext context: Context): WorkManager {
         return WorkManager.getInstance(context)
     }

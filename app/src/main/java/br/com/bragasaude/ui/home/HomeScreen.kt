@@ -78,6 +78,13 @@ fun getGreetingPrefix(calendar: java.util.Calendar = java.util.Calendar.getInsta
     }
 }
 
+@dagger.hilt.EntryPoint
+@dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
+internal interface HomeB2BEntryPoint {
+    fun activeContextStore(): br.com.bragasaude.data.remote.b2b.ActiveContextStore
+    fun b2bContextRepository(): br.com.bragasaude.data.remote.b2b.B2BContextRepository
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -120,6 +127,34 @@ fun HomeScreen(
     val useGooglePhoto = br.com.bragasaude.util.AppPreferences.isUseGooglePhotoEnabled(context)
     val avatarPhotoUrl = resolveHomeAvatarPhoto(avatarProfile?.customPhotoUri,
         com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.photoUrl?.toString(), useGooglePhoto)
+
+    val b2bEntryPoint = remember(context) {
+        runCatching {
+            dagger.hilt.android.EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                HomeB2BEntryPoint::class.java
+            )
+        }.getOrNull()
+    }
+    val activeB2BContext by (b2bEntryPoint?.activeContextStore()?.activeContext
+        ?: remember {
+            kotlinx.coroutines.flow.MutableStateFlow(
+                br.com.bragasaude.domain.b2b.B2BContextDescriptor.personal()
+            )
+        }).collectAsState()
+    val availableB2BContexts by (b2bEntryPoint?.activeContextStore()?.availableContexts
+        ?: remember {
+            kotlinx.coroutines.flow.MutableStateFlow(
+                listOf(br.com.bragasaude.domain.b2b.B2BContextDescriptor.personal())
+            )
+        }).collectAsState()
+
+    LaunchedEffect(profile?.id, b2bEntryPoint) {
+        val uid = profile?.id?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        val repo = b2bEntryPoint?.b2bContextRepository() ?: return@LaunchedEffect
+        repo.hydrateFromCache(uid)
+        repo.syncContexts(uid)
+    }
 
     Scaffold(
         topBar = {
@@ -186,6 +221,62 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item { Spacer(Modifier.height(4.dp)) }
+
+                val partnerContexts = availableB2BContexts.filter { it.isPartnerContext }
+                if (activeB2BContext.isPartnerContext || partnerContexts.isNotEmpty()) {
+                    item {
+                        val previewCtx = if (activeB2BContext.isPartnerContext) {
+                            activeB2BContext
+                        } else {
+                            partnerContexts.first()
+                        }
+                        val tokens = br.com.bragasaude.domain.b2b.B2BThemeEngine
+                            .resolveAccessiblePalette(previewCtx.primaryColor)
+                        val bannerBg = Color(android.graphics.Color.parseColor(tokens.primaryHex))
+                        val bannerFg = Color(android.graphics.Color.parseColor(tokens.onPrimaryHex))
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onNavigateToScreen(br.com.bragasaude.ui.util.Screen.PartnerWorkspace())
+                                },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = bannerBg)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = previewCtx.programName ?: "Programa Parceiro",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = bannerFg,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "${previewCtx.companyName ?: "Parceiro"} · Abrir espaço do programa e PDF",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = bannerFg.copy(alpha = 0.88f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Text(
+                                    text = "Abrir",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = bannerFg
+                                )
+                            }
+                        }
+                    }
+                }
 
 
                 // 1. Atalhos Rápidos de Navegação — topo visível

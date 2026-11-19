@@ -2814,4 +2814,231 @@ class BragaApiClient @Inject constructor(
             }
         }
 
+    // ---- Frente B2B (B2B-12): Selecao de Contexto & Rotina Compartilhada ----
+
+    suspend fun selectB2BContext(
+        mode: br.com.bragasaude.domain.b2b.AppContextMode,
+        programId: String? = null
+    ): br.com.bragasaude.domain.b2b.B2BContextDescriptor? = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("mode", mode.name)
+                if (!programId.isNullOrBlank()) put("programId", programId.trim())
+            }
+            val resp = postJsonDetailed("$baseUrl/api/b2b/contexts/select", payload)
+            if (resp.code in 200..299 && resp.body != null) {
+                parseContextDescriptorJson(resp.body.optJSONObject("activeContext"))
+            } else {
+                null
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao selecionar contexto B2B: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun getMyPartnerParticipants(
+        cursor: String? = null,
+        limit: Int = 20
+    ): br.com.bragasaude.domain.b2b.PartnerParticipantsPageDto? = withContext(Dispatchers.IO) {
+        try {
+            val clampedLimit = limit.coerceIn(1, 50)
+            val cursorQuery = cursor?.takeIf { it.isNotBlank() }?.let {
+                "&cursor=${java.net.URLEncoder.encode(it, "UTF-8")}"
+            }.orEmpty()
+            val res = getJson("$baseUrl/api/b2b/program/me/participants?limit=$clampedLimit$cursorQuery")
+                ?: return@withContext null
+            val arr = res.optJSONArray("participants")
+            val participants = mutableListOf<br.com.bragasaude.domain.b2b.PartnerParticipantItemDto>()
+            if (arr != null) {
+                for (i in 0 until arr.length()) {
+                    val item = arr.optJSONObject(i) ?: continue
+                    val cats = mutableListOf<String>()
+                    val catArr = item.optJSONArray("sharedCategories")
+                    if (catArr != null) {
+                        for (c in 0 until catArr.length()) {
+                            val raw = catArr.optString(c, "").trim()
+                            if (raw.isNotBlank()) cats.add(raw)
+                        }
+                    }
+                    val uid = item.optString("patientUserId", "").takeIf { it.isNotBlank() } ?: continue
+                    participants.add(
+                        br.com.bragasaude.domain.b2b.PartnerParticipantItemDto(
+                            patientUserId = uid,
+                            displayName = item.optString("displayName", "Participante"),
+                            sharedCategories = cats,
+                            consentedAt = item.optString("consentedAt", "")
+                                .takeIf { it.isNotBlank() && it != "null" }
+                        )
+                    )
+                }
+            }
+            br.com.bragasaude.domain.b2b.PartnerParticipantsPageDto(
+                program = parsePartnerProgramJson(res.optJSONObject("program")),
+                participants = participants,
+                nextCursor = res.optString("nextCursor", "")
+                    .takeIf { it.isNotBlank() && it != "null" },
+                hasMore = res.optBoolean("hasMore", false)
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao listar participantes do programa B2B: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun getPartnerParticipantSummary(
+        patientId: String,
+        days: Int = 30
+    ): br.com.bragasaude.domain.b2b.ParticipantRoutineSummaryDto? = withContext(Dispatchers.IO) {
+        try {
+            val cleanId = patientId.trim()
+            if (cleanId.isEmpty()) return@withContext null
+            val encodedId = java.net.URLEncoder.encode(cleanId, "UTF-8")
+            val clampedDays = days.coerceIn(1, 90)
+            val res = getJson("$baseUrl/api/b2b/program/me/participants/$encodedId/summary?days=$clampedDays")
+                ?: return@withContext null
+            val s = res.optJSONObject("summary") ?: return@withContext null
+
+            val catsArr = s.optJSONArray("sharedCategories")
+            val sharedCategories = mutableListOf<String>()
+            if (catsArr != null) {
+                for (i in 0 until catsArr.length()) {
+                    val v = catsArr.optString(i, "").trim()
+                    if (v.isNotBlank()) sharedCategories.add(v)
+                }
+            }
+
+            val stepsObj = s.optJSONObject("stepsSection")
+            val stepsSection = stepsObj?.let { obj ->
+                val dayArr = obj.optJSONArray("days")
+                val daysList = mutableListOf<br.com.bragasaude.domain.b2b.SharedStepsDayDto>()
+                if (dayArr != null) {
+                    for (i in 0 until dayArr.length()) {
+                        val d = dayArr.optJSONObject(i) ?: continue
+                        daysList.add(
+                            br.com.bragasaude.domain.b2b.SharedStepsDayDto(
+                                date = d.optString("date", ""),
+                                steps = d.optInt("steps", 0),
+                                activeMinutes = d.optInt("activeMinutes", 0),
+                                distanceMeters = d.optDouble("distanceMeters", 0.0)
+                            )
+                        )
+                    }
+                }
+                br.com.bragasaude.domain.b2b.SharedStepsSectionDto(
+                    source = obj.optString("source", "Braga Saúde • Passos"),
+                    averageSteps = obj.optLong("averageSteps", 0L),
+                    daysRecorded = obj.optInt("daysRecorded", daysList.size),
+                    days = daysList
+                )
+            }
+
+            val hydObj = s.optJSONObject("hydrationSection")
+            val hydrationSection = hydObj?.let { obj ->
+                val dayArr = obj.optJSONArray("days")
+                val daysList = mutableListOf<br.com.bragasaude.domain.b2b.SharedHydrationDayDto>()
+                if (dayArr != null) {
+                    for (i in 0 until dayArr.length()) {
+                        val d = dayArr.optJSONObject(i) ?: continue
+                        daysList.add(
+                            br.com.bragasaude.domain.b2b.SharedHydrationDayDto(
+                                date = d.optString("date", ""),
+                                totalMl = d.optLong("totalMl", 0L)
+                            )
+                        )
+                    }
+                }
+                br.com.bragasaude.domain.b2b.SharedHydrationSectionDto(
+                    source = obj.optString("source", "Braga Saúde • Autoinformado"),
+                    averageMl = obj.optLong("averageMl", 0L),
+                    daysRecorded = obj.optInt("daysRecorded", daysList.size),
+                    days = daysList
+                )
+            }
+
+            val medObj = s.optJSONObject("medicationsSection")
+            val medicationsSection = medObj?.let { obj ->
+                val itemArr = obj.optJSONArray("items")
+                val medList = mutableListOf<br.com.bragasaude.domain.b2b.SharedMedicationItemDto>()
+                if (itemArr != null) {
+                    for (i in 0 until itemArr.length()) {
+                        val m = itemArr.optJSONObject(i) ?: continue
+                        medList.add(
+                            br.com.bragasaude.domain.b2b.SharedMedicationItemDto(
+                                name = m.optString("name", ""),
+                                dosageMg = if (m.isNull("dosageMg")) null else m.optDouble("dosageMg"),
+                                schedule = m.optString("schedule", "")
+                            )
+                        )
+                    }
+                }
+                br.com.bragasaude.domain.b2b.SharedMedicationsSectionDto(
+                    source = obj.optString("source", "Braga Saúde • Lembretes"),
+                    reminderCount = obj.optInt("reminderCount", medList.size),
+                    userConfirmationsInPeriod = obj.optLong("userConfirmationsInPeriod", 0L),
+                    note = obj.optString(
+                        "note",
+                        "Confirmações de rotina registradas pelo usuário (não comprova tomada)."
+                    ),
+                    items = medList
+                )
+            }
+
+            val recObj = s.optJSONObject("authorizedRecordsSection")
+            val authorizedRecordsSection = recObj?.let { obj ->
+                val recArr = obj.optJSONArray("records")
+                val recList = mutableListOf<br.com.bragasaude.domain.b2b.SharedVitalEntryDto>()
+                if (recArr != null) {
+                    for (i in 0 until recArr.length()) {
+                        val r = recArr.optJSONObject(i) ?: continue
+                        recList.add(
+                            br.com.bragasaude.domain.b2b.SharedVitalEntryDto(
+                                measuredAt = r.optString("measuredAt", ""),
+                                origin = r.optString("origin", "Braga Saúde (autoinformado)"),
+                                systolicPressure = if (r.isNull("systolicPressure")) null else r.optInt("systolicPressure"),
+                                diastolicPressure = if (r.isNull("diastolicPressure")) null else r.optInt("diastolicPressure"),
+                                heartRate = if (r.isNull("heartRate")) null else r.optInt("heartRate"),
+                                glucoseLevel = if (r.isNull("glucoseLevel")) null else r.optInt("glucoseLevel"),
+                                glucoseType = r.optString("glucoseType", "")
+                                    .takeIf { it.isNotBlank() && it != "null" },
+                                oxygenSaturation = if (r.isNull("oxygenSaturation")) null else r.optDouble("oxygenSaturation")
+                            )
+                        )
+                    }
+                }
+                br.com.bragasaude.domain.b2b.SharedAuthorizedRecordsSectionDto(
+                    source = obj.optString("source", "Braga Saúde • Registros autorizados"),
+                    zeroFileEgressNotice = obj.optString(
+                        "zeroFileEgressNotice",
+                        "Arquivos e exames do organizador pessoal permanecem privados neste fluxo (Zero File Egress)."
+                    ),
+                    records = recList
+                )
+            }
+
+            br.com.bragasaude.domain.b2b.ParticipantRoutineSummaryDto(
+                programId = s.optString("programId", ""),
+                programName = s.optString("programName", ""),
+                companyName = s.optString("companyName", ""),
+                patientUserId = s.optString("patientUserId", cleanId),
+                participantName = s.optString("participantName", "Participante"),
+                periodDays = s.optInt("periodDays", clampedDays),
+                sharedCategories = sharedCategories,
+                stepsSection = stepsSection,
+                hydrationSection = hydrationSection,
+                medicationsSection = medicationsSection,
+                authorizedRecordsSection = authorizedRecordsSection
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao consultar resumo do participante B2B: ${e.message}")
+            null
+        }
+    }
+
 }

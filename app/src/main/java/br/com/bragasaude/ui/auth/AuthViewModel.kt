@@ -866,6 +866,14 @@ class AuthViewModel @Inject constructor(
                 }
             }
 
+            // Apagar cache isolado de contextos B2B (B2B-04 / B2B-12) no logout.
+            runCatching {
+                dagger.hilt.android.EntryPointAccessors.fromApplication(
+                    appContext,
+                    AuthB2BEntryPoint::class.java
+                ).b2bContextRepository().clearOnSignOut()
+            }
+
             // (issue #18 + #23) Organizador: limpar sessões do usuário isolado por
             // files/organizer/{userId}/ e apagar relatórios clínicos em cache.
             try {
@@ -978,6 +986,12 @@ class AuthViewModel @Inject constructor(
             } catch (e: Exception) {
                 android.util.Log.w("AuthViewModel", "Erro ao limpar prefs no deleteAccount: ${e.message}")
             }
+            runCatching {
+                dagger.hilt.android.EntryPointAccessors.fromApplication(
+                    appContext,
+                    AuthB2BEntryPoint::class.java
+                ).b2bContextRepository().clearOnSignOut()
+            }
         }
 
         // 3. FIREBASE AUTH (inválida sessão)
@@ -996,4 +1010,10 @@ class AuthViewModel @Inject constructor(
 
     suspend fun lookupPartnerInvitePreview(code: String) =
         apiClient.lookupPartnerInvitePreview(code)
+
+    @dagger.hilt.EntryPoint
+    @dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
+    internal interface AuthB2BEntryPoint {
+        fun b2bContextRepository(): br.com.bragasaude.data.remote.b2b.B2BContextRepository
+    }
 }

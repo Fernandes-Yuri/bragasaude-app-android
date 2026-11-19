@@ -77,6 +77,23 @@ fun LoginScreen(
     val prefs = remember {
         context.getSharedPreferences("braga_prefs", android.content.Context.MODE_PRIVATE)
     }
+    val pendingDeepLinkInvite by br.com.bragasaude.ui.navigation.PartnerInviteNavigation.pendingInviteCode.collectAsState()
+    LaunchedEffect(pendingDeepLinkInvite) {
+        val code = pendingDeepLinkInvite
+            ?: prefs.getString("pending_b2b_invite_code", "").orEmpty().trim()
+        if (br.com.bragasaude.domain.b2b.B2BOnboardingValidator.isValidInviteCode(code) &&
+            recognizedInvite?.inviteCode?.equals(code, ignoreCase = true) != true
+        ) {
+            val preview = viewModel.lookupPartnerInvitePreview(code)
+            if (preview != null) {
+                recognizedInvite = preview
+                prefs.edit().putString("pending_b2b_invite_code", preview.inviteCode).apply()
+            }
+            if (pendingDeepLinkInvite != null) {
+                br.com.bragasaude.ui.navigation.PartnerInviteNavigation.consumePending()
+            }
+        }
+    }
     // Testes devem injetar uma identidade descartável pelo harness autenticado.
     // Nunca selecionar automaticamente uma conta compartilhada em instalação nova.
     var email by rememberSaveable { mutableStateOf("") }

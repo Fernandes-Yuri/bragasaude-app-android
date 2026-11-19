@@ -73,6 +73,7 @@ fun ProfileDetailScreen(
     onAddCaregiving: () -> Unit = {},
     onNavigateToWearables: () -> Unit = {},
     onSmokingSupport: () -> Unit = {},
+    onOpenPartnerWorkspace: () -> Unit = {},
     profileViewModel: ProfileViewModel = hiltViewModel(),
     authViewModel: AuthViewModel = hiltViewModel()
 ) {
@@ -864,6 +865,13 @@ fun ProfileDetailScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column {
+                        SettingsItem(
+                            title = "Espaço do programa parceiro",
+                            subtitle = "Visualizar marca, rotina compartilhada e gerar PDF de pré-consulta.",
+                            icon = Icons.Default.ThumbUp,
+                            onClick = onOpenPartnerWorkspace
+                        )
+                        HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
                         SettingsItem(
                             title = "Participar de programa por código",
                             subtitle = "Vincular a programa parceiro e escolher registros compartilhados.",
