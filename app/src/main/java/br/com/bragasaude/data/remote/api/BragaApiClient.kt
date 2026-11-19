@@ -2750,6 +2750,7 @@ class BragaApiClient @Inject constructor(
             reviewNote = optNullableText(p, "reviewNote"),
             inviteCode = optNullableText(p, "inviteCode"),
             invitePaused = p.optBoolean("invitePaused", false),
+            aiPaused = p.optBoolean("aiPaused", false),
             seatLimit = p.optInt("seatLimit", 10),
             activeParticipants = p.optInt("activeParticipants", 0),
             canPromote = p.optBoolean("canPromote", false),
@@ -3745,6 +3746,45 @@ class BragaApiClient @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Falha ao silenciar/reativar avisos do programa: ${e.message}")
             null
+        }
+    }
+
+    suspend fun reportPartnerProgramAbuse(
+        programId: String,
+        request: br.com.bragasaude.domain.b2b.ReportProgramAbuseRequest
+    ): br.com.bragasaude.domain.b2b.ReportProgramAbuseResult = withContext(Dispatchers.IO) {
+        val cleanProg = programId.trim()
+        val cleanReason = request.reason.trim()
+        if (cleanProg.isEmpty() || cleanReason.isEmpty()) {
+            return@withContext br.com.bragasaude.domain.b2b.ReportProgramAbuseResult(
+                errorDetail = "Informe o motivo antes de enviar a denúncia."
+            )
+        }
+        try {
+            val encProg = java.net.URLEncoder.encode(cleanProg, "UTF-8")
+            val payload = JSONObject().apply {
+                put("reason", cleanReason)
+                request.details?.trim()?.takeIf { it.isNotEmpty() }?.let { put("details", it) }
+                put("muteAlso", request.muteAlso)
+            }
+            val resp = postJsonDetailed("$baseUrl/api/b2b/enrollments/$encProg/report", payload)
+            if (resp.code in 200..299 && resp.body != null) {
+                return@withContext br.com.bragasaude.domain.b2b.ReportProgramAbuseResult(
+                    reportId = optNullableText(resp.body, "reportId"),
+                    programId = optNullableText(resp.body, "programId") ?: cleanProg,
+                    muted = resp.body.optBoolean("muted", false)
+                )
+            }
+            br.com.bragasaude.domain.b2b.ReportProgramAbuseResult(
+                errorDetail = resp.errorDetail ?: "Não foi possível registrar a denúncia agora."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao enviar denúncia de programa B2B: ${e.message}")
+            br.com.bragasaude.domain.b2b.ReportProgramAbuseResult(
+                errorDetail = "Erro de conexão ao registrar a denúncia."
+            )
         }
     }
 

@@ -65,6 +65,7 @@ fun PartnerWorkspaceScreen(
     val enrollmentRemindersFeed by viewModel.enrollmentRemindersFeed.collectAsState()
     val acknowledgingReminderId by viewModel.acknowledgingReminderId.collectAsState()
     val isUpdatingMute by viewModel.isUpdatingMute.collectAsState()
+    val isReportingProgram by viewModel.isReportingProgram.collectAsState()
     val isGeneratingPdf by viewModel.isGeneratingPdf.collectAsState()
     val generatedPdf by viewModel.generatedPdf.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
@@ -73,6 +74,7 @@ fun PartnerWorkspaceScreen(
     var showConsentSheet by rememberSaveable { mutableStateOf(false) }
     var showReceptionQrSheet by rememberSaveable { mutableStateOf(false) }
     var showAiSimulatorSheet by rememberSaveable { mutableStateOf(false) }
+    var showReportProgramSheet by rememberSaveable { mutableStateOf(false) }
     var selectedOwnerTab by rememberSaveable { mutableStateOf(PartnerOwnerTab.WALLET) }
     var pendingInviteCode by rememberSaveable { mutableStateOf(initialInviteCode.trim().uppercase()) }
     var participantToRemove by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -184,6 +186,28 @@ fun PartnerWorkspaceScreen(
             brandOnPrimary = brandOnPrimary,
             onDismiss = { showAiSimulatorSheet = false }
         )
+    }
+
+    if (showReportProgramSheet) {
+        val targetProgramId = activeContext.programId
+        if (targetProgramId != null) {
+            ReportProgramBottomSheet(
+                programName = activeContext.programName ?: "este programa",
+                isSubmitting = isReportingProgram,
+                brandPrimary = brandPrimary,
+                brandOnPrimary = brandOnPrimary,
+                onSubmit = { reason, details, muteAlso ->
+                    viewModel.reportProgramAbuse(
+                        programId = targetProgramId,
+                        reason = reason,
+                        details = details,
+                        muteAlso = muteAlso,
+                        onSuccess = { showReportProgramSheet = false }
+                    )
+                },
+                onDismiss = { if (!isReportingProgram) showReportProgramSheet = false }
+            )
+        }
     }
 
     selectedSummary?.let { summary ->
@@ -534,6 +558,35 @@ fun PartnerWorkspaceScreen(
                             // ABA CARTEIRA — VISAO DO RESPONSAVEL DO PROGRAMA
                             // =========================================================================
                             programInfo?.let { prog ->
+                                if (prog.aiPaused) {
+                                    item {
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.errorContainer
+                                            )
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(14.dp),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Recepcionista IA pausada pela moderação Braga",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                                )
+                                                Text(
+                                                    text = prog.reviewNote?.takeIf { it.isNotBlank() }
+                                                        ?: "As respostas automáticas da Recepcionista IA estão suspensas para conferência de conteúdo. O atendimento humano direto e o painel do programa seguem funcionando.",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                                 item {
                                     FirstAccessActivationChecklistCard(
                                         programInfo = prog,
@@ -764,6 +817,7 @@ fun PartnerWorkspaceScreen(
                                         }
                                     },
                                     onOpenConsentSheet = { showConsentSheet = true },
+                                    onOpenReportSheet = { showReportProgramSheet = true },
                                     onGeneratePdf = { days, categories ->
                                         viewModel.generatePreConsultationPdf(days, categories)
                                     },

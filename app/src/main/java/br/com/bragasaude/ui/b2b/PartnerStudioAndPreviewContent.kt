@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import br.com.bragasaude.domain.b2b.ABUSE_REPORT_REASONS
 import br.com.bragasaude.domain.b2b.B2BOnboardingValidator
 import br.com.bragasaude.domain.b2b.B2BThemeEngine
 import br.com.bragasaude.domain.b2b.EnrollmentRemindersFeedDto
@@ -960,7 +961,8 @@ fun ParticipantExperienceContent(
     onGeneratePdf: (Int, Set<String>) -> Unit,
     onPreviewPdf: (File) -> Unit,
     onSharePdf: (File) -> Unit,
-    onOpenAiPreview: () -> Unit = {}
+    onOpenAiPreview: () -> Unit = {},
+    onOpenReportSheet: () -> Unit = {}
 ) {
     val missingConsent = remember(experienceConfig, sharedCategories) {
         B2BOnboardingValidator.computeMissingConsentCategories(experienceConfig, sharedCategories)
@@ -1327,6 +1329,16 @@ fun ParticipantExperienceContent(
                 }
             }
         }
+
+        if (!isPreview) {
+            OutlinedButton(
+                onClick = onOpenReportSheet,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Silenciar ou reportar programa")
+            }
+        }
     }
 }
 
@@ -1651,6 +1663,129 @@ fun AiReceptionistSimulatorSheet(
                     )
                 ) {
                     Text("Enviar teste", fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ReportProgramBottomSheet(
+    programName: String,
+    isSubmitting: Boolean,
+    brandPrimary: Color,
+    brandOnPrimary: Color,
+    onSubmit: (reason: String, details: String?, muteAlso: Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedReason by rememberSaveable {
+        mutableStateOf(ABUSE_REPORT_REASONS.first().first)
+    }
+    var details by rememberSaveable { mutableStateOf("") }
+    var muteAlso by rememberSaveable { mutableStateOf(true) }
+
+    BragaBottomSheet(onDismissRequest = { if (!isSubmitting) onDismiss() }) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Reportar programa parceiro",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Se $programName enviou orientações medicamentosas indevidas, spam ou conteúdo inadequado, nossa moderação analisará a denúncia.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            ABUSE_REPORT_REASONS.forEach { (reasonKey, reasonLabel) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(enabled = !isSubmitting) { selectedReason = reasonKey }
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    RadioButton(
+                        selected = selectedReason == reasonKey,
+                        onClick = { if (!isSubmitting) selectedReason = reasonKey }
+                    )
+                    Text(
+                        text = reasonLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = details,
+                onValueChange = { if (it.length <= 500) details = it },
+                label = { Text("Detalhes opcionais (máx. 500 caracteres)") },
+                enabled = !isSubmitting,
+                minLines = 2,
+                maxLines = 4,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Silenciar avisos deste programa agora",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = muteAlso,
+                    onCheckedChange = { if (!isSubmitting) muteAlso = it }
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    enabled = !isSubmitting,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Cancelar")
+                }
+                Button(
+                    onClick = {
+                        onSubmit(
+                            selectedReason,
+                            details.trim().takeIf { it.isNotEmpty() },
+                            muteAlso
+                        )
+                    },
+                    enabled = !isSubmitting,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = brandPrimary,
+                        contentColor = brandOnPrimary
+                    )
+                ) {
+                    Text(
+                        text = if (isSubmitting) "Enviando..." else "Enviar denúncia",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
             Spacer(Modifier.height(12.dp))
