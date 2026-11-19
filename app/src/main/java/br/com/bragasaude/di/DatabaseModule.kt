@@ -5,6 +5,8 @@ import androidx.room.Room
 import androidx.work.WorkManager
 import br.com.bragasaude.BuildConfig
 import br.com.bragasaude.data.local.*
+import br.com.bragasaude.data.local.b2b.B2BContextDao
+import br.com.bragasaude.data.local.b2b.B2BContextDatabase
 import br.com.bragasaude.data.local.security.DatabaseKeyManager
 import dagger.Module
 import dagger.Provides
@@ -155,5 +157,32 @@ object DatabaseModule {
     @Singleton
     fun provideWorkManager(@ApplicationContext context: Context): WorkManager {
         return WorkManager.getInstance(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideB2BContextDatabase(
+        @ApplicationContext context: Context,
+        keyManager: DatabaseKeyManager
+    ): B2BContextDatabase {
+        try {
+            System.loadLibrary("sqlcipher")
+        } catch (e: Throwable) {
+            android.util.Log.e("DatabaseModule", "libsqlcipher load error: ${e.message}")
+        }
+        val passphrase = keyManager.getOrCreatePassphrase()
+        val factory = SupportOpenHelperFactory(passphrase)
+        return Room.databaseBuilder(
+            context,
+            B2BContextDatabase::class.java,
+            B2BContextDatabase.DATABASE_NAME
+        )
+            .openHelperFactory(factory)
+            .build()
+    }
+
+    @Provides
+    fun provideB2BContextDao(database: B2BContextDatabase): B2BContextDao {
+        return database.b2bContextDao()
     }
 }
