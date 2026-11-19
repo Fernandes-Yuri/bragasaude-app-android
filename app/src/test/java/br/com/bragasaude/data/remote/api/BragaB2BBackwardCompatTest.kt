@@ -29,7 +29,7 @@ import org.junit.Test
 class BragaB2BBackwardCompatTest {
 
     @Test
-    fun `family consent is explicit on join and optional updates preserve legacy callers`() = runBlocking {
+    fun `family consent is explicit on join and optional updates preserve legacy callers`(): Unit = runBlocking {
         MockWebServer().use { server ->
             server.start()
             val api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'),
@@ -65,7 +65,7 @@ class BragaB2BBackwardCompatTest {
     }
 
     @Test
-    fun `family overview parses branded programs and fails closed for missing opt-in or disabled modules`() = runBlocking {
+    fun `family overview parses branded programs and fails closed for missing opt-in or disabled modules`(): Unit = runBlocking {
         MockWebServer().use { server ->
             server.start()
             val api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'),
@@ -118,7 +118,7 @@ class BragaB2BBackwardCompatTest {
     }
 
     @Test
-    fun `caregiver acknowledgement uses family route and validates matching server receipt`() = runBlocking {
+    fun `caregiver acknowledgement uses family route and validates matching server receipt`(): Unit = runBlocking {
         MockWebServer().use { server ->
             server.start()
             val api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'),
