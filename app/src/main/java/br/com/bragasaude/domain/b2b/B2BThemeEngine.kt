@@ -31,6 +31,8 @@ object B2BThemeEngine {
         "Canal assíncrono de rotina. Não utilize para emergências — em caso de urgência, procure atendimento imediato (SAMU 192)."
     const val DIRECT_CHAT_ZERO_ATTACHMENT_HINT =
         "Apenas mensagens de texto (envio de anexos, imagens ou PDFs não permitido neste canal)."
+    const val LOCAL_CHAT_DEVICE_ONLY_NOTICE =
+        "Estas mensagens ficam salvas apenas neste aparelho (não mantemos histórico permanente nos servidores)."
     const val WCAG_AA_NORMAL_TEXT_RATIO = 4.5
 
     private const val WHITE_HEX = "#FFFFFF"

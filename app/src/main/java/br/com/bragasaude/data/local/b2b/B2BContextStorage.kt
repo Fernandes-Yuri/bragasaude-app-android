@@ -12,7 +12,9 @@ import androidx.room.Transaction
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import br.com.bragasaude.domain.b2b.B2BContextDescriptor
+import br.com.bragasaude.domain.b2b.DirectChatMessageDto
 import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
+import java.time.Instant
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -103,6 +105,74 @@ data class B2BContextCacheEntity(
     }
 }
 
+/**
+ * Persistencia local isolada de mensagens diretas B2B no SQLCipher (`braga_b2b_context_db`),
+ * permitindo manter historico >7 dias no aparelho apos o expurgo do buffer de relay do RDS (CHAT-01)
+ * e identificar `programId` / `programName` / marca por thread no backup (CHAT-02).
+ */
+@Entity(
+    tableName = "b2b_direct_messages_local",
+    primaryKeys = ["ownerUserId", "programId", "patientUserId", "messageId"],
+    indices = [Index(value = ["ownerUserId", "programId", "patientUserId", "createdAtMillis"])]
+)
+data class B2BDirectMessageEntity(
+    val ownerUserId: String,
+    val programId: String,
+    val programName: String = "",
+    val primaryColor: String? = null,
+    val patientUserId: String,
+    val patientName: String? = null,
+    val messageId: String,
+    val senderUserId: String,
+    val senderRole: String,
+    val body: String,
+    val createdAt: String,
+    val createdAtMillis: Long,
+    val readAt: String? = null,
+    val isClosedProgram: Boolean = false
+) {
+    fun toDto(): DirectChatMessageDto = DirectChatMessageDto(
+        messageId = messageId,
+        programId = programId,
+        patientUserId = patientUserId,
+        senderUserId = senderUserId,
+        senderRole = senderRole,
+        body = body,
+        createdAt = createdAt,
+        readAt = readAt
+    )
+
+    companion object {
+        fun parseIsoMillisOrNow(raw: String): Long =
+            runCatching { Instant.parse(raw.trim()).toEpochMilli() }
+                .getOrElse { System.currentTimeMillis() }
+
+        fun fromDto(
+            ownerUserId: String,
+            dto: DirectChatMessageDto,
+            programName: String,
+            primaryColor: String?,
+            patientName: String? = null,
+            isClosedProgram: Boolean = false
+        ): B2BDirectMessageEntity = B2BDirectMessageEntity(
+            ownerUserId = ownerUserId,
+            programId = dto.programId,
+            programName = programName,
+            primaryColor = primaryColor,
+            patientUserId = dto.patientUserId,
+            patientName = patientName,
+            messageId = dto.messageId,
+            senderUserId = dto.senderUserId,
+            senderRole = dto.senderRole,
+            body = dto.body,
+            createdAt = dto.createdAt,
+            createdAtMillis = parseIsoMillisOrNow(dto.createdAt),
+            readAt = dto.readAt,
+            isClosedProgram = isClosedProgram
+        )
+    }
+}
+
 @Dao
 interface B2BContextDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -133,11 +203,35 @@ interface B2BContextDao {
 
     @Query("DELETE FROM b2b_context_cache")
     suspend fun clearAll()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertDirectMessages(items: List<B2BDirectMessageEntity>)
+
+    @Query(
+        "SELECT * FROM b2b_direct_messages_local " +
+            "WHERE ownerUserId = :ownerUserId AND programId = :programId AND patientUserId = :patientUserId " +
+            "ORDER BY createdAtMillis DESC, messageId DESC"
+    )
+    suspend fun getDirectMessagesForThread(
+        ownerUserId: String,
+        programId: String,
+        patientUserId: String
+    ): List<B2BDirectMessageEntity>
+
+    @Query(
+        "SELECT * FROM b2b_direct_messages_local " +
+            "WHERE ownerUserId = :ownerUserId " +
+            "ORDER BY programId ASC, patientUserId ASC, createdAtMillis ASC, messageId ASC"
+    )
+    suspend fun getAllDirectMessagesForUser(ownerUserId: String): List<B2BDirectMessageEntity>
+
+    @Query("DELETE FROM b2b_direct_messages_local")
+    suspend fun clearAllDirectMessages()
 }
 
 @Database(
-    entities = [B2BContextCacheEntity::class],
-    version = 2,
+    entities = [B2BContextCacheEntity::class, B2BDirectMessageEntity::class],
+    version = 3,
     exportSchema = false
 )
 abstract class B2BContextDatabase : RoomDatabase() {
@@ -155,6 +249,37 @@ abstract class B2BContextDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE b2b_context_cache ADD COLUMN templateKey TEXT")
                 db.execSQL("ALTER TABLE b2b_context_cache ADD COLUMN experienceConfigJson TEXT")
                 db.execSQL("ALTER TABLE b2b_context_cache ADD COLUMN familyShareEnabled INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * Migracao aditiva v2 -> v3 (CHAT-01 / CHAT-02): adiciona historico local de mensagens diretas
+         * B2B isolado para retencao >7 dias no aparelho e backup/restauracao multi-clinica.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `b2b_direct_messages_local` (" +
+                        "`ownerUserId` TEXT NOT NULL, " +
+                        "`programId` TEXT NOT NULL, " +
+                        "`programName` TEXT NOT NULL, " +
+                        "`primaryColor` TEXT, " +
+                        "`patientUserId` TEXT NOT NULL, " +
+                        "`patientName` TEXT, " +
+                        "`messageId` TEXT NOT NULL, " +
+                        "`senderUserId` TEXT NOT NULL, " +
+                        "`senderRole` TEXT NOT NULL, " +
+                        "`body` TEXT NOT NULL, " +
+                        "`createdAt` TEXT NOT NULL, " +
+                        "`createdAtMillis` INTEGER NOT NULL, " +
+                        "`readAt` TEXT, " +
+                        "`isClosedProgram` INTEGER NOT NULL DEFAULT 0, " +
+                        "PRIMARY KEY(`ownerUserId`, `programId`, `patientUserId`, `messageId`))"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_b2b_direct_messages_local_ownerUserId_programId_patientUserId_createdAtMillis` " +
+                        "ON `b2b_direct_messages_local` (`ownerUserId`, `programId`, `patientUserId`, `createdAtMillis`)"
+                )
             }
         }
     }

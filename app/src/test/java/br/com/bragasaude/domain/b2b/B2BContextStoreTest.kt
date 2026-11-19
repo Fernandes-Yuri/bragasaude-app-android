@@ -507,4 +507,38 @@ class B2BContextStoreTest {
         assertTrue(page.aiReceptionistEnabled)
         assertTrue(page.aiPaused)
     }
+
+    @Test
+    fun chat01DeviceOnlyNoticeAndB2bDirectMergePreserveOver7DaysHistory() {
+        assertTrue(B2BThemeEngine.LOCAL_CHAT_DEVICE_ONLY_NOTICE.contains("neste aparelho"))
+        assertEquals(2, br.com.bragasaude.data.local.b2b.B2BContextDatabase.MIGRATION_2_3.startVersion)
+        assertEquals(3, br.com.bragasaude.data.local.b2b.B2BContextDatabase.MIGRATION_2_3.endVersion)
+
+        val local8d = DirectChatMessageDto(
+            messageId = "msg-old",
+            programId = "prog-1",
+            patientUserId = "p1",
+            senderUserId = "owner-1",
+            senderRole = "PARTNER",
+            body = "Orientacao de 8 dias atras",
+            createdAt = "2026-11-11T09:00:00Z"
+        )
+        val freshUnread = DirectChatMessageDto(
+            messageId = "msg-new",
+            programId = "prog-1",
+            patientUserId = "p1",
+            senderUserId = "owner-1",
+            senderRole = "PARTNER",
+            body = "Confirmacao recente",
+            createdAt = "2026-11-19T12:00:00Z"
+        )
+        val freshRead = freshUnread.copy(readAt = "2026-11-19T12:05:00Z")
+
+        val merged = br.com.bragasaude.data.remote.b2b.B2BContextRepository.mergeDirectMessages(
+            serverMessages = listOf(freshRead),
+            cachedMessages = listOf(freshUnread, local8d)
+        )
+        assertEquals(listOf("msg-new", "msg-old"), merged.map { it.messageId })
+        assertEquals("2026-11-19T12:05:00Z", merged.first().readAt)
+    }
 }

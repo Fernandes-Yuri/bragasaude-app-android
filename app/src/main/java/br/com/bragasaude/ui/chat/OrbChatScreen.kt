@@ -420,6 +420,18 @@ fun OrbChatContent(
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFFF1F5F9)
+            ) {
+                Text(
+                    text = br.com.bragasaude.domain.b2b.B2BThemeEngine.LOCAL_CHAT_DEVICE_ONLY_NOTICE,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF475569),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
             if (state.showHistory) {
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     item {

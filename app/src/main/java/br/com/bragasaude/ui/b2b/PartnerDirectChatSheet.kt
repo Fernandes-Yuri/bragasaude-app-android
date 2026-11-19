@@ -104,6 +104,19 @@ fun PartnerDirectChatBottomSheet(
                 )
             }
 
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+            ) {
+                Text(
+                    text = B2BThemeEngine.LOCAL_CHAT_DEVICE_ONLY_NOTICE,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                )
+            }
+
             val currentMode = page.thread?.parsedHandlingMode ?: ThreadHandlingMode.AI_ACTIVE
             if (page.aiReceptionistEnabled) {
                 if (page.aiPaused) {

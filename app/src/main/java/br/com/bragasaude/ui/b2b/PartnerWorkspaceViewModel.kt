@@ -726,16 +726,33 @@ class PartnerWorkspaceViewModel @Inject constructor(
             _directChatIsOwnerView.value = false
             _directChatTargetPatientId.value = null
             _directChatCounterpartTitle.value = programName.ifBlank { "Programa Parceiro" }
+            val uid = auth.currentUser?.uid.orEmpty()
             val page = apiClient.getEnrollmentDirectMessages(programId, limit = 30)
             _isLoadingDirectChat.value = false
             if (page != null) {
-                _activeDirectChatPage.value = page
+                val mergedPage = b2bContextRepository.cacheAndMergeDirectChatPage(
+                    userId = uid,
+                    page = page,
+                    targetPatientId = uid,
+                    primaryColor = activeContext.value.primaryColor
+                )
+                _activeDirectChatPage.value = mergedPage
                 val marked = apiClient.markEnrollmentDirectMessagesRead(programId)
                 if (marked > 0) {
                     _activeDirectChatPage.value = _activeDirectChatPage.value
                 }
             } else {
-                _statusMessage.value = "Não foi possível abrir o chat direto agora."
+                val offline = b2bContextRepository.loadOfflineDirectChatPage(
+                    userId = uid,
+                    programId = programId,
+                    programName = programName,
+                    patientUserId = uid
+                )
+                if (offline != null) {
+                    _activeDirectChatPage.value = offline
+                } else {
+                    _statusMessage.value = "Não foi possível abrir o chat direto agora."
+                }
             }
         }
     }
@@ -747,16 +764,39 @@ class PartnerWorkspaceViewModel @Inject constructor(
             _directChatIsOwnerView.value = true
             _directChatTargetPatientId.value = patientId
             _directChatCounterpartTitle.value = patientName.ifBlank { "Participante" }
+            val uid = auth.currentUser?.uid.orEmpty()
+            val progId = _programInfo.value?.programId ?: activeContext.value.programId.orEmpty()
+            val progColor = _programInfo.value?.primaryColor ?: activeContext.value.primaryColor
+            val progName = _programInfo.value?.programName ?: activeContext.value.programName.orEmpty()
             val page = apiClient.getOwnerDirectMessages(patientId, limit = 30)
             _isLoadingDirectChat.value = false
             if (page != null) {
-                _activeDirectChatPage.value = page
+                val mergedPage = b2bContextRepository.cacheAndMergeDirectChatPage(
+                    userId = uid,
+                    page = page,
+                    targetPatientId = patientId,
+                    primaryColor = progColor,
+                    patientName = patientName
+                )
+                _activeDirectChatPage.value = mergedPage
                 apiClient.markOwnerDirectMessagesRead(patientId)
                 _participants.value = _participants.value.map { item ->
                     if (item.patientUserId == patientId) item.copy(unreadDirectMessagesCount = 0) else item
                 }
             } else {
-                _statusMessage.value = "Não foi possível abrir a conversa com este participante."
+                val offline = if (progId.isNotBlank()) {
+                    b2bContextRepository.loadOfflineDirectChatPage(
+                        userId = uid,
+                        programId = progId,
+                        programName = progName,
+                        patientUserId = patientId
+                    )
+                } else null
+                if (offline != null) {
+                    _activeDirectChatPage.value = offline
+                } else {
+                    _statusMessage.value = "Não foi possível abrir a conversa com este participante."
+                }
             }
         }
     }
@@ -775,7 +815,15 @@ class PartnerWorkspaceViewModel @Inject constructor(
             }
             _isLoadingDirectChat.value = false
             if (older != null) {
-                val merged = (current.messages + older.messages).distinctBy { it.messageId }
+                val uid = auth.currentUser?.uid.orEmpty()
+                b2bContextRepository.cacheDirectMessages(
+                    userId = uid,
+                    messages = older.messages,
+                    programName = current.programName,
+                    primaryColor = activeContext.value.primaryColor,
+                    patientName = _directChatCounterpartTitle.value.takeIf { _directChatIsOwnerView.value }
+                )
+                val merged = B2BContextRepository.mergeDirectMessages(current.messages, older.messages)
                 _activeDirectChatPage.value = current.copy(
                     messages = merged,
                     nextCursor = older.nextCursor,
@@ -812,9 +860,17 @@ class PartnerWorkspaceViewModel @Inject constructor(
                     res.aiReply?.let { add(it) }
                     add(sent)
                 }
+                val uid = auth.currentUser?.uid.orEmpty()
+                b2bContextRepository.cacheDirectMessages(
+                    userId = uid,
+                    messages = appended,
+                    programName = current.programName,
+                    primaryColor = activeContext.value.primaryColor,
+                    patientName = _directChatCounterpartTitle.value.takeIf { _directChatIsOwnerView.value }
+                )
                 _activeDirectChatPage.value = current.copy(
                     thread = res.thread ?: current.thread,
-                    messages = appended + current.messages
+                    messages = B2BContextRepository.mergeDirectMessages(appended, current.messages)
                 )
                 if (res.sentOffHours) {
                     _statusMessage.value = "Enviada fora do horário — aguardando retorno."

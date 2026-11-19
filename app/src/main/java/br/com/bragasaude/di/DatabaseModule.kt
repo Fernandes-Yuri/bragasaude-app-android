@@ -186,7 +186,10 @@ object DatabaseModule {
             B2BContextDatabase.DATABASE_NAME
         )
             .openHelperFactory(factory)
-            .addMigrations(B2BContextDatabase.MIGRATION_1_2)
+            .addMigrations(
+                B2BContextDatabase.MIGRATION_1_2,
+                B2BContextDatabase.MIGRATION_2_3
+            )
             .build()
     }
 

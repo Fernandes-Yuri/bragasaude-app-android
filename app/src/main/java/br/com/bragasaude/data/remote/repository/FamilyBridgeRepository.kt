@@ -665,8 +665,8 @@ class FamilyBridgeRepository @Inject constructor(
             when {
                 // D47: tombstone propagado pelo outro aparelho — remover a cópia local
                 msg.deletedAt != null -> familyDao.insertMessage(msg.copy(messageText = "", senderName = "", pendingSync = false))
-                // D47: expirada no servidor — nunca reintroduzir; purgar cópia local se houver
-                msg.expiresAt in 1..now -> familyDao.deleteMessage(msg.id)
+                // CHAT-01: relay expirado no servidor não reintroduz item novo, mas nunca apaga cópia já salva no aparelho
+                msg.expiresAt in 1..now -> Unit
                 else -> {
                     val decodedMsg = decodeMessageForLocalStorage(userId, patientUserId, msg)
                     val local = familyDao.getMessageById(decodedMsg.id)
@@ -696,9 +696,8 @@ class FamilyBridgeRepository @Inject constructor(
                 }
             }
         }
-        // D47: higiene local a cada ciclo de sincronização
-        familyDao.purgeExpiredMessages(now)
-                familyDao.purgeReceipts(now)
+        // CHAT-01: mensagens entregues ao aparelho permanecem salvas localmente após 24h.
+        familyDao.purgeReceipts(now)
         messagesFingerprint(remote)
     }.onFailure {
         // Sair da tela ou trocar de conta deve interromper a consulta, sem alerta.
@@ -712,12 +711,11 @@ class FamilyBridgeRepository @Inject constructor(
     suspend fun receiveRealtimeMessage(msg: FamilyMessageEntity) {
         val currentUid = auth.currentUser?.uid ?: return
         val now = System.currentTimeMillis()
-        if (msg.expiresAt in 1..now) {
-            familyDao.deleteMessage(msg.id)
-            return
-        }
         if (msg.deletedAt != null) {
             familyDao.insertMessage(msg.copy(messageText = "", senderName = "", pendingSync = false))
+            return
+        }
+        if (msg.expiresAt in 1..now) {
             return
         }
 
@@ -868,12 +866,11 @@ class FamilyBridgeRepository @Inject constructor(
         val userId = requireConversationAccess(patientUserId)
         val eligible = messageIds.distinct().take(100).mapNotNull { familyDao.getMessageById(it) }
             .filter { it.patientUserId == patientUserId && it.senderUserId != userId &&
-                !it.isRead && !it.awaitingDecryption && !it.pendingSync && it.deletedAt == null &&
-                it.expiresAt > System.currentTimeMillis() }
+                !it.isRead && !it.awaitingDecryption && !it.pendingSync && it.deletedAt == null }
         if (eligible.isEmpty()) return
         familyDao.markSeen(userId, eligible)
         val remainingUnread = runCatching { familyDao.getUnreadMessagesForPatient(patientUserId).firstOrNull() }.getOrNull()
-            ?.any { it.senderUserId != userId && !it.awaitingDecryption && it.deletedAt == null && it.expiresAt > System.currentTimeMillis() } ?: false
+            ?.any { it.senderUserId != userId && !it.awaitingDecryption && it.deletedAt == null } ?: false
         if (!remainingUnread) {
             notificationDao?.reconcileChatConversationReadLocal(userId, patientUserId, System.currentTimeMillis())
         }
@@ -931,7 +928,6 @@ class FamilyBridgeRepository @Inject constructor(
         while (true) {
             val now = System.currentTimeMillis()
             if (now / 30_000 != lastPurge / 30_000) {
-                familyDao.purgeExpiredMessages(now)
                 familyDao.purgeReceipts(now)
                 lastPurge = now
             }
@@ -941,10 +937,10 @@ class FamilyBridgeRepository @Inject constructor(
     }.shareIn(scope, SharingStarted.WhileSubscribed(), replay = 1)
 
     private fun liveMessages(source: Flow<List<FamilyMessageEntity>>): Flow<List<FamilyMessageEntity>> =
-        source.combine(purgeTicker) { messages, now ->
+        source.combine(purgeTicker) { messages, _ ->
             val currentUid = auth.currentUser?.uid
             messages
-                .filter { it.deletedAt == null && it.expiresAt > now }
+                .filter { it.deletedAt == null }
                 .map { msg ->
                     decodeMessageForLocalStorage(
                         currentUserId = currentUid ?: msg.patientUserId,
