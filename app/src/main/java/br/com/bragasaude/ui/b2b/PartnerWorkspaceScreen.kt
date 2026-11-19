@@ -30,6 +30,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.domain.b2b.AppContextMode
 import br.com.bragasaude.domain.b2b.B2BThemeEngine
 import br.com.bragasaude.domain.b2b.PartnerApprovalStatus
+import br.com.bragasaude.domain.b2b.ProgramAppointmentDto
 import br.com.bragasaude.ui.components.BragaAlertDialog
 import br.com.bragasaude.ui.components.BragaBottomSheet
 import coil3.compose.AsyncImage
@@ -66,6 +67,10 @@ fun PartnerWorkspaceScreen(
     val acknowledgingReminderId by viewModel.acknowledgingReminderId.collectAsState()
     val isUpdatingMute by viewModel.isUpdatingMute.collectAsState()
     val isReportingProgram by viewModel.isReportingProgram.collectAsState()
+    val ownerAppointments by viewModel.ownerAppointments.collectAsState()
+    val enrollmentAppointmentsFeed by viewModel.enrollmentAppointmentsFeed.collectAsState()
+    val isSubmittingAppointment by viewModel.isSubmittingAppointment.collectAsState()
+    val updatingAppointmentId by viewModel.updatingAppointmentId.collectAsState()
     val isGeneratingPdf by viewModel.isGeneratingPdf.collectAsState()
     val generatedPdf by viewModel.generatedPdf.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
@@ -75,10 +80,12 @@ fun PartnerWorkspaceScreen(
     var showReceptionQrSheet by rememberSaveable { mutableStateOf(false) }
     var showAiSimulatorSheet by rememberSaveable { mutableStateOf(false) }
     var showReportProgramSheet by rememberSaveable { mutableStateOf(false) }
+    var showRequestAppointmentSheet by rememberSaveable { mutableStateOf(false) }
     var selectedOwnerTab by rememberSaveable { mutableStateOf(PartnerOwnerTab.WALLET) }
     var pendingInviteCode by rememberSaveable { mutableStateOf(initialInviteCode.trim().uppercase()) }
     var participantToRemove by remember { mutableStateOf<Pair<String, String>?>(null) }
     var reminderComposerTarget by remember { mutableStateOf<Pair<String?, String>?>(null) }
+    var selectedAppointmentToManage by remember { mutableStateOf<ProgramAppointmentDto?>(null) }
 
     val savedExperience = remember(programInfo, activeContext) {
         programInfo?.experienceConfig ?: activeContext.resolvedExperienceConfig()
@@ -210,6 +217,49 @@ fun PartnerWorkspaceScreen(
         }
     }
 
+    if (showRequestAppointmentSheet) {
+        val targetProgramId = activeContext.programId
+        if (targetProgramId != null) {
+            RequestAppointmentBottomSheet(
+                programName = activeContext.programName ?: "este programa",
+                policy = enrollmentAppointmentsFeed?.appointmentsPolicy ?: savedExperience.appointmentsPolicy,
+                isSubmitting = isSubmittingAppointment,
+                brandPrimary = brandPrimary,
+                brandOnPrimary = brandOnPrimary,
+                onSubmit = { modality, requestedSlotText, patientNote ->
+                    viewModel.requestEnrollmentAppointment(
+                        programId = targetProgramId,
+                        modality = modality,
+                        requestedSlotText = requestedSlotText,
+                        patientNote = patientNote,
+                        onSuccess = { showRequestAppointmentSheet = false }
+                    )
+                },
+                onDismiss = { if (!isSubmittingAppointment) showRequestAppointmentSheet = false }
+            )
+        }
+    }
+
+    selectedAppointmentToManage?.let { appt ->
+        OwnerAppointmentDecisionBottomSheet(
+            appointment = appt,
+            isUpdating = updatingAppointmentId == appt.appointmentId,
+            brandPrimary = brandPrimary,
+            brandOnPrimary = brandOnPrimary,
+            onConfirmDecision = { targetStatus, scheduledAtIso, partnerNote, allowOverlap ->
+                viewModel.updateOwnerAppointment(
+                    appointmentId = appt.appointmentId,
+                    status = targetStatus,
+                    scheduledAtIso = scheduledAtIso,
+                    partnerNote = partnerNote,
+                    allowOverlap = allowOverlap,
+                    onSuccess = { selectedAppointmentToManage = null }
+                )
+            },
+            onDismiss = { if (updatingAppointmentId == null) selectedAppointmentToManage = null }
+        )
+    }
+
     selectedSummary?.let { summary ->
         ParticipantDetailBottomSheet(
             summary = summary,
@@ -232,6 +282,22 @@ fun PartnerWorkspaceScreen(
             onOpenSendReminder = { pid, pname ->
                 viewModel.clearSelectedSummary()
                 reminderComposerTarget = pid to pname
+            },
+            onOpenManageAppointments = { pid, pname ->
+                val targetAppt = ownerAppointments.firstOrNull {
+                    it.patientUserId == pid &&
+                        it.status !in setOf("CANCELLED", "COMPLETED")
+                } ?: ownerAppointments.firstOrNull { it.patientUserId == pid }
+                if (targetAppt != null && targetAppt.status !in setOf("CANCELLED", "COMPLETED")) {
+                    viewModel.clearSelectedSummary()
+                    selectedAppointmentToManage = targetAppt
+                } else {
+                    Toast.makeText(
+                        context,
+                        "$pname não tem solicitações abertas no momento.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             },
             onRequestRemove = {
                 participantToRemove = summary.patientUserId to summary.participantName
@@ -697,6 +763,24 @@ fun PartnerWorkspaceScreen(
                                 }
                             }
 
+                            if (programInfo?.parsedStatus == PartnerApprovalStatus.APPROVED &&
+                                savedExperience.features.appointmentsEnabled
+                            ) {
+                                item {
+                                    OwnerAppointmentsWalletCard(
+                                        appointments = ownerAppointments,
+                                        policy = savedExperience.appointmentsPolicy,
+                                        updatingAppointmentId = updatingAppointmentId,
+                                        brandPrimary = brandPrimary,
+                                        brandAccent = brandAccentText,
+                                        softBorder = BorderStroke(1.dp, brandSoftBorder),
+                                        onManageAppointment = { appt ->
+                                            selectedAppointmentToManage = appt
+                                        }
+                                    )
+                                }
+                            }
+
                             item {
                                 Text(
                                     text = "Participantes vinculados (${participants.size})",
@@ -818,6 +902,14 @@ fun PartnerWorkspaceScreen(
                                     },
                                     onOpenConsentSheet = { showConsentSheet = true },
                                     onOpenReportSheet = { showReportProgramSheet = true },
+                                    appointmentsFeed = enrollmentAppointmentsFeed,
+                                    updatingAppointmentId = updatingAppointmentId,
+                                    onOpenRequestAppointmentSheet = { showRequestAppointmentSheet = true },
+                                    onCancelAppointment = { apptId ->
+                                        activeContext.programId?.let { pid ->
+                                            viewModel.cancelEnrollmentAppointment(pid, apptId)
+                                        }
+                                    },
                                     onGeneratePdf = { days, categories ->
                                         viewModel.generatePreConsultationPdf(days, categories)
                                     },

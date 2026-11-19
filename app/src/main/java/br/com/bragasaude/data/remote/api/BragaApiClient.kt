@@ -2242,6 +2242,40 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    private fun patchJsonDetailed(urlString: String, json: JSONObject): ApiResponse {
+        val token = authService.getTokenBlocking()
+            ?: return ApiResponse(null, 401, "Sessão expirada. Entre novamente.")
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val body = json.toString().toRequestBody(mediaType)
+        val requestBuilder = Request.Builder()
+            .url(urlString)
+            .patch(body)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .header("Accept", "application/json")
+            .header("X-Braga-Vitals-Contract", VITALS_CONTRACT_VERSION.toString())
+        if (!URL(urlString).path.startsWith("/api/auth/")) {
+            requestBuilder.header("Authorization", "Bearer $token")
+        }
+        return try {
+            httpClient.newBuilder()
+                .followRedirects(false)
+                .followSslRedirects(false)
+                .build()
+                .newCall(requestBuilder.build())
+                .execute()
+                .use { response ->
+                    val code = response.code
+                    val text = response.body?.string().orEmpty()
+                    val parsed = if (text.isNotBlank()) runCatching { JSONObject(text) }.getOrNull() else null
+                    val detail = parsed?.optString("detail", "")
+                        ?.takeIf { it.isNotBlank() && it != "null" }
+                    ApiResponse(parsed, code, detail)
+                }
+        } catch (e: Exception) {
+            ApiResponse(null, 0, e.message)
+        }
+    }
+
     private fun deleteJson(urlString: String): JSONObject? {
         val ok = deleteRequest(urlString)
         return if (ok) JSONObject().put("status", "success") else null
@@ -2648,17 +2682,24 @@ class BragaApiClient @Inject constructor(
             } else {
                 defaults.aiReceptionistPolicy
             },
-            appointmentsPolicy = if (apObj != null) {
-                val mods = parseStringList(apObj.optJSONArray("allowedModalities"))
-                br.com.bragasaude.domain.b2b.AppointmentsPolicyDto(
-                    allowedModalities = if (mods.isNotEmpty()) mods else defaults.appointmentsPolicy.allowedModalities,
-                    bookingMode = optNullableText(apObj, "bookingMode") ?: defaults.appointmentsPolicy.bookingMode,
-                    availabilitiesSummary = optNullableText(apObj, "availabilitiesSummary") ?: defaults.appointmentsPolicy.availabilitiesSummary,
-                    externalBookingUrl = optNullableText(apObj, "externalBookingUrl")
-                )
-            } else {
+            appointmentsPolicy = parseAppointmentsPolicyJson(
+                apObj,
                 defaults.appointmentsPolicy
-            }
+            )
+        )
+    }
+
+    private fun parseAppointmentsPolicyJson(
+        apObj: JSONObject?,
+        fallback: br.com.bragasaude.domain.b2b.AppointmentsPolicyDto = br.com.bragasaude.domain.b2b.AppointmentsPolicyDto()
+    ): br.com.bragasaude.domain.b2b.AppointmentsPolicyDto {
+        if (apObj == null) return fallback
+        val mods = parseStringList(apObj.optJSONArray("allowedModalities"))
+        return br.com.bragasaude.domain.b2b.AppointmentsPolicyDto(
+            allowedModalities = if (mods.isNotEmpty()) mods else fallback.allowedModalities,
+            bookingMode = optNullableText(apObj, "bookingMode") ?: fallback.bookingMode,
+            availabilitiesSummary = optNullableText(apObj, "availabilitiesSummary") ?: fallback.availabilitiesSummary,
+            externalBookingUrl = optNullableText(apObj, "externalBookingUrl")
         )
     }
 
@@ -3784,6 +3825,207 @@ class BragaApiClient @Inject constructor(
             Log.w(TAG, "Falha ao enviar denúncia de programa B2B: ${e.message}")
             br.com.bragasaude.domain.b2b.ReportProgramAbuseResult(
                 errorDetail = "Erro de conexão ao registrar a denúncia."
+            )
+        }
+    }
+
+    private fun parseProgramAppointmentJson(
+        a: JSONObject
+    ): br.com.bragasaude.domain.b2b.ProgramAppointmentDto = br.com.bragasaude.domain.b2b.ProgramAppointmentDto(
+        appointmentId = a.optString("appointmentId", ""),
+        programId = a.optString("programId", ""),
+        patientUserId = a.optString("patientUserId", ""),
+        patientName = optNullableText(a, "patientName"),
+        modality = a.optString("modality", "IN_PERSON"),
+        requestedSlotText = a.optString("requestedSlotText", ""),
+        scheduledAt = optNullableText(a, "scheduledAt"),
+        patientNote = optNullableText(a, "patientNote"),
+        partnerNote = optNullableText(a, "partnerNote"),
+        status = a.optString("status", "PENDING"),
+        createdAt = a.optString("createdAt", ""),
+        updatedAt = a.optString("updatedAt", "")
+    )
+
+    suspend fun getOwnerProgramAppointments(
+        status: String? = null,
+        patientId: String? = null,
+        limit: Int = 50
+    ): br.com.bragasaude.domain.b2b.OwnerAppointmentsFeedDto? = withContext(Dispatchers.IO) {
+        try {
+            val params = buildList {
+                add("limit=${limit.coerceIn(1, 50)}")
+                status?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    add("status=${java.net.URLEncoder.encode(it, "UTF-8")}")
+                }
+                patientId?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    add("patientId=${java.net.URLEncoder.encode(it, "UTF-8")}")
+                }
+            }.joinToString("&")
+            val res = getJson("$baseUrl/api/b2b/program/me/appointments?$params", strict = true)
+                ?: return@withContext null
+            val arr = res.optJSONArray("appointments") ?: JSONArray()
+            val list = (0 until arr.length()).mapNotNull { i ->
+                arr.optJSONObject(i)?.let(::parseProgramAppointmentJson)
+            }
+            br.com.bragasaude.domain.b2b.OwnerAppointmentsFeedDto(
+                programId = res.optString("programId", ""),
+                programName = res.optString("programName", ""),
+                appointmentsPolicy = parseAppointmentsPolicyJson(res.optJSONObject("appointmentsPolicy")),
+                appointments = list
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao listar agendamentos do programa: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun updateOwnerAppointment(
+        appointmentId: String,
+        status: String,
+        scheduledAtIso: String? = null,
+        partnerNote: String? = null,
+        allowOverlap: Boolean = false
+    ): br.com.bragasaude.domain.b2b.AppointmentMutationResult = withContext(Dispatchers.IO) {
+        val cleanId = appointmentId.trim()
+        if (cleanId.isEmpty()) {
+            return@withContext br.com.bragasaude.domain.b2b.AppointmentMutationResult(
+                errorDetail = "Agendamento inválido."
+            )
+        }
+        try {
+            val encId = java.net.URLEncoder.encode(cleanId, "UTF-8")
+            val payload = JSONObject().apply {
+                put("status", status.trim().uppercase())
+                scheduledAtIso?.trim()?.takeIf { it.isNotEmpty() }?.let { put("scheduledAt", it) }
+                partnerNote?.trim()?.takeIf { it.isNotEmpty() }?.let { put("partnerNote", it) }
+                put("allowOverlap", allowOverlap)
+            }
+            val resp = patchJsonDetailed("$baseUrl/api/b2b/program/me/appointments/$encId", payload)
+            if (resp.code in 200..299 && resp.body != null) {
+                val appt = resp.body.optJSONObject("appointment")?.let(::parseProgramAppointmentJson)
+                return@withContext br.com.bragasaude.domain.b2b.AppointmentMutationResult(
+                    appointment = appt
+                )
+            }
+            br.com.bragasaude.domain.b2b.AppointmentMutationResult(
+                errorDetail = resp.errorDetail ?: "Não foi possível atualizar este agendamento agora."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao atualizar agendamento B2B: ${e.message}")
+            br.com.bragasaude.domain.b2b.AppointmentMutationResult(
+                errorDetail = "Erro de conexão ao atualizar agendamento."
+            )
+        }
+    }
+
+    suspend fun getEnrollmentAppointments(
+        programId: String
+    ): br.com.bragasaude.domain.b2b.EnrollmentAppointmentsFeedDto? = withContext(Dispatchers.IO) {
+        val cleanProg = programId.trim()
+        if (cleanProg.isEmpty()) return@withContext null
+        try {
+            val encProg = java.net.URLEncoder.encode(cleanProg, "UTF-8")
+            val res = getJson("$baseUrl/api/b2b/enrollments/$encProg/appointments", strict = true)
+                ?: return@withContext null
+            val arr = res.optJSONArray("appointments") ?: JSONArray()
+            val list = (0 until arr.length()).mapNotNull { i ->
+                arr.optJSONObject(i)?.let(::parseProgramAppointmentJson)
+            }
+            br.com.bragasaude.domain.b2b.EnrollmentAppointmentsFeedDto(
+                programId = res.optString("programId", cleanProg),
+                programName = res.optString("programName", ""),
+                appointmentsPolicy = parseAppointmentsPolicyJson(res.optJSONObject("appointmentsPolicy")),
+                pendingCount = res.optInt("pendingCount", list.count { it.status == "PENDING" }),
+                appointments = list
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao listar agendamentos do participante B2B: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun requestEnrollmentAppointment(
+        programId: String,
+        modality: String,
+        requestedSlotText: String,
+        patientNote: String? = null
+    ): br.com.bragasaude.domain.b2b.AppointmentMutationResult = withContext(Dispatchers.IO) {
+        val cleanProg = programId.trim()
+        if (cleanProg.isEmpty()) {
+            return@withContext br.com.bragasaude.domain.b2b.AppointmentMutationResult(
+                errorDetail = "Programa inválido."
+            )
+        }
+        try {
+            val encProg = java.net.URLEncoder.encode(cleanProg, "UTF-8")
+            val payload = JSONObject().apply {
+                put("modality", modality.trim().uppercase())
+                put("requestedSlotText", requestedSlotText.trim())
+                patientNote?.trim()?.takeIf { it.isNotEmpty() }?.let { put("patientNote", it) }
+            }
+            val resp = postJsonDetailed("$baseUrl/api/b2b/enrollments/$encProg/appointments", payload)
+            if (resp.code in 200..299 && resp.body != null) {
+                val appt = resp.body.optJSONObject("appointment")?.let(::parseProgramAppointmentJson)
+                return@withContext br.com.bragasaude.domain.b2b.AppointmentMutationResult(
+                    appointment = appt
+                )
+            }
+            br.com.bragasaude.domain.b2b.AppointmentMutationResult(
+                errorDetail = resp.errorDetail ?: "Não foi possível solicitar este horário agora."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao solicitar horário B2B: ${e.message}")
+            br.com.bragasaude.domain.b2b.AppointmentMutationResult(
+                errorDetail = "Erro de conexão ao solicitar horário."
+            )
+        }
+    }
+
+    suspend fun cancelEnrollmentAppointment(
+        programId: String,
+        appointmentId: String,
+        reason: String? = null
+    ): br.com.bragasaude.domain.b2b.AppointmentMutationResult = withContext(Dispatchers.IO) {
+        val cleanProg = programId.trim()
+        val cleanAppt = appointmentId.trim()
+        if (cleanProg.isEmpty() || cleanAppt.isEmpty()) {
+            return@withContext br.com.bragasaude.domain.b2b.AppointmentMutationResult(
+                errorDetail = "Agendamento inválido."
+            )
+        }
+        try {
+            val encProg = java.net.URLEncoder.encode(cleanProg, "UTF-8")
+            val encAppt = java.net.URLEncoder.encode(cleanAppt, "UTF-8")
+            val payload = JSONObject().apply {
+                reason?.trim()?.takeIf { it.isNotEmpty() }?.let { put("reason", it) }
+            }
+            val resp = postJsonDetailed(
+                "$baseUrl/api/b2b/enrollments/$encProg/appointments/$encAppt/cancel",
+                payload
+            )
+            if (resp.code in 200..299 && resp.body != null) {
+                val appt = resp.body.optJSONObject("appointment")?.let(::parseProgramAppointmentJson)
+                return@withContext br.com.bragasaude.domain.b2b.AppointmentMutationResult(
+                    appointment = appt
+                )
+            }
+            br.com.bragasaude.domain.b2b.AppointmentMutationResult(
+                errorDetail = resp.errorDetail ?: "Não foi possível cancelar este agendamento agora."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao cancelar agendamento B2B: ${e.message}")
+            br.com.bragasaude.domain.b2b.AppointmentMutationResult(
+                errorDetail = "Erro de conexão ao cancelar agendamento."
             )
         }
     }

@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import br.com.bragasaude.domain.b2b.ABUSE_REPORT_REASONS
 import br.com.bragasaude.domain.b2b.B2BOnboardingValidator
 import br.com.bragasaude.domain.b2b.B2BThemeEngine
+import br.com.bragasaude.domain.b2b.EnrollmentAppointmentsFeedDto
 import br.com.bragasaude.domain.b2b.EnrollmentRemindersFeedDto
 import br.com.bragasaude.domain.b2b.PartnerApprovalStatus
 import br.com.bragasaude.domain.b2b.PartnerProgramDto
@@ -962,7 +963,11 @@ fun ParticipantExperienceContent(
     onPreviewPdf: (File) -> Unit,
     onSharePdf: (File) -> Unit,
     onOpenAiPreview: () -> Unit = {},
-    onOpenReportSheet: () -> Unit = {}
+    onOpenReportSheet: () -> Unit = {},
+    appointmentsFeed: EnrollmentAppointmentsFeedDto? = null,
+    updatingAppointmentId: String? = null,
+    onOpenRequestAppointmentSheet: () -> Unit = {},
+    onCancelAppointment: (String) -> Unit = {}
 ) {
     val missingConsent = remember(experienceConfig, sharedCategories) {
         B2BOnboardingValidator.computeMissingConsentCategories(experienceConfig, sharedCategories)
@@ -1102,15 +1107,29 @@ fun ParticipantExperienceContent(
         }
 
         if (experienceConfig.features.appointmentsEnabled) {
-            val modalitiesPt = experienceConfig.appointmentsPolicy.allowedModalities.joinToString(" e ") {
-                if (it == "REMOTE") "Remoto" else "Presencial"
+            if (isPreview) {
+                val modalitiesPt = experienceConfig.appointmentsPolicy.allowedModalities.joinToString(" e ") {
+                    if (it == "REMOTE") "Remoto" else "Presencial"
+                }
+                ProgramModuleHighlightCard(
+                    icon = Icons.Default.CalendarMonth,
+                    title = "Agendamento com $programName ($modalitiesPt)",
+                    body = "Disponibilidade informada: ${experienceConfig.appointmentsPolicy.availabilitiesSummary}.",
+                    accent = brandAccent
+                )
+            } else {
+                ProgramAppointmentsParticipantCard(
+                    programName = programName,
+                    policy = experienceConfig.appointmentsPolicy,
+                    feed = appointmentsFeed,
+                    updatingAppointmentId = updatingAppointmentId,
+                    brandPrimary = brandPrimary,
+                    brandOnPrimary = brandOnPrimary,
+                    brandAccent = brandAccent,
+                    onOpenRequestSheet = onOpenRequestAppointmentSheet,
+                    onCancelAppointment = onCancelAppointment
+                )
             }
-            ProgramModuleHighlightCard(
-                icon = Icons.Default.CalendarMonth,
-                title = "Agendamento com $programName ($modalitiesPt)",
-                body = "Disponibilidade informada: ${experienceConfig.appointmentsPolicy.availabilitiesSummary}.",
-                accent = brandAccent
-            )
         }
 
         if (experienceConfig.features.directPartnerChatEnabled) {
