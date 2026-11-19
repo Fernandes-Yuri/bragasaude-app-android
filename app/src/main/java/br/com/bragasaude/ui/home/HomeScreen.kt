@@ -129,18 +129,31 @@ fun HomeScreen(
         com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.photoUrl?.toString(), useGooglePhoto)
 
     val b2bEntryPoint = remember(context) {
-        dagger.hilt.android.EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            HomeB2BEntryPoint::class.java
-        )
+        runCatching {
+            dagger.hilt.android.EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                HomeB2BEntryPoint::class.java
+            )
+        }.getOrNull()
     }
-    val activeB2BContext by b2bEntryPoint.activeContextStore().activeContext.collectAsState()
-    val availableB2BContexts by b2bEntryPoint.activeContextStore().availableContexts.collectAsState()
+    val activeB2BContext by (b2bEntryPoint?.activeContextStore()?.activeContext
+        ?: remember {
+            kotlinx.coroutines.flow.MutableStateFlow(
+                br.com.bragasaude.domain.b2b.B2BContextDescriptor.personal()
+            )
+        }).collectAsState()
+    val availableB2BContexts by (b2bEntryPoint?.activeContextStore()?.availableContexts
+        ?: remember {
+            kotlinx.coroutines.flow.MutableStateFlow(
+                listOf(br.com.bragasaude.domain.b2b.B2BContextDescriptor.personal())
+            )
+        }).collectAsState()
 
-    LaunchedEffect(profile?.userId) {
-        val uid = profile?.userId ?: return@LaunchedEffect
-        b2bEntryPoint.b2bContextRepository().hydrateFromCache(uid)
-        b2bEntryPoint.b2bContextRepository().syncContexts(uid)
+    LaunchedEffect(profile?.id, b2bEntryPoint) {
+        val uid = profile?.id?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        val repo = b2bEntryPoint?.b2bContextRepository() ?: return@LaunchedEffect
+        repo.hydrateFromCache(uid)
+        repo.syncContexts(uid)
     }
 
     Scaffold(

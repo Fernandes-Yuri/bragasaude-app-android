@@ -499,7 +499,7 @@ fun PartnerWorkspaceScreen(
                         brandOnPrimary = brandOnPrimary,
                         brandAccent = brandAccentText,
                         softSurface = brandSoftSurface,
-                        softBorder = brandSoftBorder,
+                        softBorder = BorderStroke(1.dp, brandSoftBorder),
                         isGeneratingPdf = isGeneratingPdf,
                         generatedPdf = generatedPdf,
                         onOpenConsentSheet = { showConsentSheet = true },
