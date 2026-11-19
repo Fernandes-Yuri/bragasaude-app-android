@@ -1,6 +1,5 @@
 package br.com.bragasaude.ui.b2b
 
-import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -16,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VerifiedUser
@@ -32,13 +32,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.domain.b2b.AppContextMode
 import br.com.bragasaude.domain.b2b.B2BThemeEngine
 import br.com.bragasaude.domain.b2b.ParticipantRoutineSummaryDto
+import br.com.bragasaude.domain.b2b.PartnerApprovalStatus
 import br.com.bragasaude.domain.b2b.SharedCategoryOption
 import br.com.bragasaude.ui.components.BragaAlertDialog
+import br.com.bragasaude.ui.components.BragaBottomSheet
 import coil3.compose.AsyncImage
 import java.io.File
 
@@ -67,6 +68,7 @@ fun PartnerWorkspaceScreen(
 
     var showOnboardingSheet by rememberSaveable { mutableStateOf(false) }
     var showConsentSheet by rememberSaveable { mutableStateOf(false) }
+    var showReceptionQrSheet by rememberSaveable { mutableStateOf(false) }
     var pendingInviteCode by rememberSaveable { mutableStateOf(initialInviteCode.trim().uppercase()) }
     var participantToRemove by remember { mutableStateOf<Pair<String, String>?>(null) }
 
@@ -128,6 +130,37 @@ fun PartnerWorkspaceScreen(
                 viewModel.refreshWorkspace()
             }
         )
+    }
+
+    if (showReceptionQrSheet) {
+        val prog = programInfo
+        val activeCode = prog?.inviteCode?.takeIf { it.isNotBlank() }
+        if (prog != null && activeCode != null) {
+            BragaBottomSheet(onDismissRequest = { showReceptionQrSheet = false }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    PartnerInviteQrCard(
+                        programName = prog.programName,
+                        companyName = prog.companyName,
+                        inviteCode = activeCode,
+                        primaryColorHex = prog.primaryColor,
+                        accentColor = brandPrimary,
+                        onAccentColor = brandOnPrimary
+                    )
+                    TextButton(
+                        onClick = { showReceptionQrSheet = false },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text("Fechar")
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
+            }
+        }
     }
 
     participantToRemove?.let { (targetId, targetName) ->
@@ -409,6 +442,23 @@ fun PartnerWorkspaceScreen(
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
+                            if (programInfo?.parsedStatus == PartnerApprovalStatus.APPROVED &&
+                                !programInfo?.inviteCode.isNullOrBlank()
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showReceptionQrSheet = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.QrCode2,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("QR Code e Placa PDF da Recepção")
+                                }
+                            }
                             OutlinedButton(
                                 onClick = { showOnboardingSheet = true },
                                 modifier = Modifier.fillMaxWidth(),
@@ -549,8 +599,17 @@ fun PartnerWorkspaceScreen(
                         onGeneratePdf = { days, categories ->
                             viewModel.generatePreConsultationPdf(days, categories)
                         },
-                        onPreviewPdf = { file -> openPdfForReview(context, file) },
-                        onSharePdf = { file -> sharePdfExternally(context, file, activeContext.programName) }
+                        onPreviewPdf = { file ->
+                            openPartnerPdfFile(context, file, B2BThemeEngine.PDF_PRECONSULTATION_TITLE)
+                        },
+                        onSharePdf = { file ->
+                            val label = activeContext.programName?.takeIf { it.isNotBlank() } ?: "o programa"
+                            sharePartnerPdfFile(
+                                context = context,
+                                file = file,
+                                subject = "${B2BThemeEngine.PDF_PRECONSULTATION_TITLE} — $label"
+                            )
+                        }
                     )
                 }
             }
@@ -925,49 +984,5 @@ private fun ParticipantShareAndPdfSection(
                 }
             }
         }
-    }
-}
-
-private fun openPdfForReview(context: android.content.Context, file: File) {
-    runCatching {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/pdf")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, B2BThemeEngine.PDF_PRECONSULTATION_TITLE))
-    }.onFailure {
-        Toast.makeText(
-            context,
-            "Instale ou selecione um leitor de PDF para revisar o documento.",
-            Toast.LENGTH_LONG
-        ).show()
-    }
-}
-
-private fun sharePdfExternally(
-    context: android.content.Context,
-    file: File,
-    programName: String?
-) {
-    runCatching {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        val label = programName?.takeIf { it.isNotBlank() } ?: "o programa"
-        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "application/pdf"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(
-                Intent.EXTRA_SUBJECT,
-                "${B2BThemeEngine.PDF_PRECONSULTATION_TITLE} — $label"
-            )
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(shareIntent, B2BThemeEngine.PDF_SHARE_ACTION_LABEL))
-    }.onFailure {
-        Toast.makeText(
-            context,
-            "Não foi possível abrir o seletor de compartilhamento agora.",
-            Toast.LENGTH_LONG
-        ).show()
     }
 }

@@ -43,4 +43,29 @@ class AvatarAuthInterceptorTest {
             }
         }
     }
+
+    @Test fun autenticaLogoB2bDoGatewaySemVazarParaOrigemExterna() {
+        MockWebServer().use { gateway ->
+            MockWebServer().use { external ->
+                gateway.start(); external.start()
+                gateway.enqueue(MockResponse().setResponseCode(200))
+                external.enqueue(MockResponse().setResponseCode(200))
+                val client = OkHttpClient.Builder().addInterceptor(AvatarAuthInterceptor(gateway.url("/")) {
+                    "sessao-b2b"
+                }).build()
+
+                client.newCall(
+                    Request.Builder()
+                        .url(gateway.url("/api/files/b2b-logos/11111111-1111-1111-1111-111111111111/logo-1.png"))
+                        .build()
+                ).execute().close()
+                assertEquals("Bearer sessao-b2b", gateway.takeRequest().getHeader("Authorization"))
+
+                client.newCall(
+                    Request.Builder().url(external.url("/api/files/b2b-logos/1111/logo.png")).build()
+                ).execute().close()
+                assertNull(external.takeRequest().getHeader("Authorization"))
+            }
+        }
+    }
 }

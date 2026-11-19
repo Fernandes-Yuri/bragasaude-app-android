@@ -218,6 +218,49 @@ class BragaB2BBackwardCompatTest {
             assertEquals("Vínculo ativo não encontrado.", removedFail.errorDetail)
             val removeFailReq = server.takeRequest()
             assertEquals("/api/b2b/program/me/participants/patient-inexistente/remove", removeFailReq.path)
+
+            // B2B-16B: upload multipart da logo B2B para bucket S3/R2 e tratamento de formato invalido
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "logoUrl": "https://api.bragasaude.online/api/files/b2b-logos/11111111-1111-1111-1111-111111111111/logo-abc.png",
+                      "program": {
+                        "programId": "11111111-1111-1111-1111-111111111111",
+                        "ownerUserId": "owner-a",
+                        "companyName": "Clinica Horizonte",
+                        "programName": "Cuidado Cardio",
+                        "primaryColor": "#0F4C81",
+                        "logoUrl": "https://api.bragasaude.online/api/files/b2b-logos/11111111-1111-1111-1111-111111111111/logo-abc.png",
+                        "approvalStatus": "APPROVED",
+                        "inviteCode": "CARD-4F9A",
+                        "invitePaused": false,
+                        "seatLimit": 15,
+                        "activeParticipants": 0,
+                        "canPromote": true
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val uploadOk = api.uploadPartnerLogo("logo.png", "image/png", byteArrayOf(1, 2, 3, 4))
+            assertTrue(uploadOk.isSuccess)
+            assertEquals(
+                "https://api.bragasaude.online/api/files/b2b-logos/11111111-1111-1111-1111-111111111111/logo-abc.png",
+                uploadOk.logoUrl
+            )
+            assertEquals(uploadOk.logoUrl, uploadOk.program?.logoUrl)
+            val uploadReq = server.takeRequest()
+            assertEquals("/api/b2b/program/me/logo", uploadReq.path)
+            assertEquals("POST", uploadReq.method)
+            assertTrue(uploadReq.getHeader("Content-Type").orEmpty().startsWith("multipart/form-data"))
+
+            server.enqueue(
+                MockResponse().setResponseCode(415).setBody("""{"detail":"SVG não é permitido."}""")
+            )
+            val uploadFail = api.uploadPartnerLogo("bad.svg", "image/svg+xml", "<svg/>".toByteArray())
+            assertTrue(!uploadFail.isSuccess)
+            assertEquals("SVG não é permitido.", uploadFail.errorDetail)
         }
     }
 }

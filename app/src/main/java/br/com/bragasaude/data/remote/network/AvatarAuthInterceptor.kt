@@ -4,7 +4,7 @@ import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.Response
 
-/** Autentica apenas fotos protegidas na origem do gateway; imagens externas não recebem credenciais. */
+/** Autentica apenas mídias protegidas na origem do gateway; imagens externas não recebem credenciais. */
 class AvatarAuthInterceptor(
     private val gateway: HttpUrl,
     private val tokenProvider: (Boolean) -> String?
@@ -12,9 +12,9 @@ class AvatarAuthInterceptor(
     override fun intercept(chain: Interceptor.Chain): Response {
         val original = chain.request()
         val url = original.url
-        val isAvatar = url.scheme == gateway.scheme && url.host == gateway.host && url.port == gateway.port
-            && url.encodedPath.startsWith("/api/files/avatars/")
-        if (!isAvatar) return chain.proceed(original)
+        val isProtectedMedia = url.scheme == gateway.scheme && url.host == gateway.host && url.port == gateway.port
+            && (url.encodedPath.startsWith("/api/files/avatars/") || url.encodedPath.startsWith("/api/files/b2b-logos/"))
+        if (!isProtectedMedia) return chain.proceed(original)
         val token = tokenProvider(false)
         val request = if (token.isNullOrBlank()) original else original.newBuilder()
             .header("Authorization", "Bearer $token").build()
