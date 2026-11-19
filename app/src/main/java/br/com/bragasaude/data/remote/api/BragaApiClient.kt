@@ -2663,23 +2663,30 @@ class BragaApiClient @Inject constructor(
                 dObj,
                 defaults.directChatPolicy
             ),
-            aiReceptionistPolicy = if (aiObj != null) {
-                br.com.bragasaude.domain.b2b.AiReceptionistPolicyDto(
-                    personaName = optNullableText(aiObj, "personaName") ?: defaults.aiReceptionistPolicy.personaName,
-                    activationMode = optNullableText(aiObj, "activationMode") ?: defaults.aiReceptionistPolicy.activationMode,
-                    greetingMessage = optNullableText(aiObj, "greetingMessage") ?: defaults.aiReceptionistPolicy.greetingMessage,
-                    partnerFaqKnowledge = aiObj.optString("partnerFaqKnowledge", ""),
-                    autoEscalateToHumanOnUnknown = aiObj.optBoolean(
-                        "autoEscalateToHumanOnUnknown",
-                        defaults.aiReceptionistPolicy.autoEscalateToHumanOnUnknown
-                    )
-                )
-            } else {
+            aiReceptionistPolicy = parseAiReceptionistPolicyJson(
+                aiObj,
                 defaults.aiReceptionistPolicy
-            },
+            ),
             appointmentsPolicy = parseAppointmentsPolicyJson(
                 apObj,
                 defaults.appointmentsPolicy
+            )
+        )
+    }
+
+    private fun parseAiReceptionistPolicyJson(
+        aiObj: JSONObject?,
+        fallback: br.com.bragasaude.domain.b2b.AiReceptionistPolicyDto = br.com.bragasaude.domain.b2b.AiReceptionistPolicyDto()
+    ): br.com.bragasaude.domain.b2b.AiReceptionistPolicyDto {
+        if (aiObj == null) return fallback
+        return br.com.bragasaude.domain.b2b.AiReceptionistPolicyDto(
+            personaName = optNullableText(aiObj, "personaName") ?: fallback.personaName,
+            activationMode = optNullableText(aiObj, "activationMode") ?: fallback.activationMode,
+            greetingMessage = optNullableText(aiObj, "greetingMessage") ?: fallback.greetingMessage,
+            partnerFaqKnowledge = aiObj.optString("partnerFaqKnowledge", ""),
+            autoEscalateToHumanOnUnknown = aiObj.optBoolean(
+                "autoEscalateToHumanOnUnknown",
+                fallback.autoEscalateToHumanOnUnknown
             )
         )
     }
@@ -4050,21 +4057,25 @@ class BragaApiClient @Inject constructor(
         readAt = optNullableText(m, "readAt")
     )
 
+    private fun parseDirectThreadSummaryJson(
+        t: JSONObject?,
+        fallbackProgramId: String = ""
+    ): br.com.bragasaude.domain.b2b.DirectThreadSummaryDto? = t?.let {
+        br.com.bragasaude.domain.b2b.DirectThreadSummaryDto(
+            programId = it.optString("programId", fallbackProgramId),
+            patientUserId = it.optString("patientUserId", ""),
+            handlingMode = it.optString("handlingMode", "AI_ACTIVE"),
+            takenOverBy = optNullableText(it, "takenOverBy"),
+            handoffNote = optNullableText(it, "handoffNote"),
+            updatedAt = it.optString("updatedAt", "")
+        )
+    }
+
     private fun parseDirectChatPageJson(
         res: JSONObject,
         fallbackProgramId: String = ""
     ): br.com.bragasaude.domain.b2b.DirectChatThreadPageDto {
-        val threadObj = res.optJSONObject("thread")
-        val thread = threadObj?.let { t ->
-            br.com.bragasaude.domain.b2b.DirectThreadSummaryDto(
-                programId = t.optString("programId", fallbackProgramId),
-                patientUserId = t.optString("patientUserId", ""),
-                handlingMode = t.optString("handlingMode", "AI_ACTIVE"),
-                takenOverBy = optNullableText(t, "takenOverBy"),
-                handoffNote = optNullableText(t, "handoffNote"),
-                updatedAt = t.optString("updatedAt", "")
-            )
-        }
+        val thread = parseDirectThreadSummaryJson(res.optJSONObject("thread"), fallbackProgramId)
         val arr = res.optJSONArray("messages") ?: JSONArray()
         val msgs = (0 until arr.length()).mapNotNull { i ->
             arr.optJSONObject(i)?.let(::parseDirectChatMessageJson)
@@ -4074,7 +4085,10 @@ class BragaApiClient @Inject constructor(
             programName = res.optString("programName", ""),
             companyName = res.optString("companyName", ""),
             assistantChatEnabled = res.optBoolean("assistantChatEnabled", true),
+            aiReceptionistEnabled = res.optBoolean("aiReceptionistEnabled", false),
+            aiPaused = res.optBoolean("aiPaused", false),
             directChatPolicy = parseDirectChatPolicyJson(res.optJSONObject("directChatPolicy")),
+            aiReceptionistPolicy = parseAiReceptionistPolicyJson(res.optJSONObject("aiReceptionistPolicy")),
             isOffHoursNow = res.optBoolean("isOffHoursNow", false),
             thread = thread,
             messages = msgs,
@@ -4106,9 +4120,14 @@ class BragaApiClient @Inject constructor(
         val resp = postJsonDetailed(url, payload)
         if (resp.code in 200..299 && resp.body != null) {
             val msg = resp.body.optJSONObject("message")?.let(::parseDirectChatMessageJson)
+            val aiMsg = resp.body.optJSONObject("aiReply")?.let(::parseDirectChatMessageJson)
+            val updatedThread = parseDirectThreadSummaryJson(resp.body.optJSONObject("thread"))
             return br.com.bragasaude.domain.b2b.SendDirectMessageResult(
                 message = msg,
-                sentOffHours = resp.body.optBoolean("sentOffHours", false)
+                sentOffHours = resp.body.optBoolean("sentOffHours", false),
+                aiReply = aiMsg,
+                aiFallbackReason = optNullableText(resp.body, "aiFallbackReason"),
+                thread = updatedThread
             )
         }
         return br.com.bragasaude.domain.b2b.SendDirectMessageResult(
@@ -4229,6 +4248,74 @@ class BragaApiClient @Inject constructor(
             throw e
         } catch (_: Exception) {
             0
+        }
+    }
+
+    suspend fun handoffOwnerDirectChat(
+        patientId: String,
+        mode: String,
+        note: String? = null
+    ): br.com.bragasaude.domain.b2b.ThreadHandoffResult = withContext(Dispatchers.IO) {
+        val cleanId = patientId.trim()
+        if (cleanId.isEmpty()) {
+            return@withContext br.com.bragasaude.domain.b2b.ThreadHandoffResult(
+                errorDetail = "Participante inválido."
+            )
+        }
+        try {
+            val encId = java.net.URLEncoder.encode(cleanId, "UTF-8")
+            val payload = JSONObject().apply {
+                put("mode", mode.trim().uppercase())
+                note?.trim()?.takeIf { it.isNotEmpty() }?.let { put("note", it) }
+            }
+            val resp = postJsonDetailed("$baseUrl/api/b2b/program/me/participants/$encId/chat-handoff", payload)
+            if (resp.code in 200..299 && resp.body != null) {
+                return@withContext br.com.bragasaude.domain.b2b.ThreadHandoffResult(
+                    thread = parseDirectThreadSummaryJson(resp.body.optJSONObject("thread"))
+                )
+            }
+            br.com.bragasaude.domain.b2b.ThreadHandoffResult(
+                errorDetail = resp.errorDetail ?: "Não foi possível alterar o controlador da conversa."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            br.com.bragasaude.domain.b2b.ThreadHandoffResult(
+                errorDetail = "Erro de conexão ao atualizar atendimento."
+            )
+        }
+    }
+
+    suspend fun requestHumanInDirectChat(
+        programId: String,
+        note: String? = null
+    ): br.com.bragasaude.domain.b2b.ThreadHandoffResult = withContext(Dispatchers.IO) {
+        val cleanProg = programId.trim()
+        if (cleanProg.isEmpty()) {
+            return@withContext br.com.bragasaude.domain.b2b.ThreadHandoffResult(
+                errorDetail = "Programa inválido."
+            )
+        }
+        try {
+            val encProg = java.net.URLEncoder.encode(cleanProg, "UTF-8")
+            val payload = JSONObject().apply {
+                note?.trim()?.takeIf { it.isNotEmpty() }?.let { put("note", it) }
+            }
+            val resp = postJsonDetailed("$baseUrl/api/b2b/enrollments/$encProg/messages/request-human", payload)
+            if (resp.code in 200..299 && resp.body != null) {
+                return@withContext br.com.bragasaude.domain.b2b.ThreadHandoffResult(
+                    thread = parseDirectThreadSummaryJson(resp.body.optJSONObject("thread"), cleanProg)
+                )
+            }
+            br.com.bragasaude.domain.b2b.ThreadHandoffResult(
+                errorDetail = resp.errorDetail ?: "Não foi possível solicitar atendimento humano agora."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            br.com.bragasaude.domain.b2b.ThreadHandoffResult(
+                errorDetail = "Erro de conexão ao solicitar atendimento humano."
+            )
         }
     }
 

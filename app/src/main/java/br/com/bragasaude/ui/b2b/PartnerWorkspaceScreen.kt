@@ -76,6 +76,7 @@ fun PartnerWorkspaceScreen(
     val directChatCounterpartTitle by viewModel.directChatCounterpartTitle.collectAsState()
     val isLoadingDirectChat by viewModel.isLoadingDirectChat.collectAsState()
     val isSendingDirectMessage by viewModel.isSendingDirectMessage.collectAsState()
+    val isUpdatingHandoff by viewModel.isUpdatingHandoff.collectAsState()
     val isGeneratingPdf by viewModel.isGeneratingPdf.collectAsState()
     val generatedPdf by viewModel.generatedPdf.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
@@ -272,12 +273,15 @@ fun PartnerWorkspaceScreen(
             counterpartTitle = directChatCounterpartTitle,
             isLoadingMore = isLoadingDirectChat,
             isSending = isSendingDirectMessage,
+            isUpdatingHandoff = isUpdatingHandoff,
             brandPrimary = brandPrimary,
             brandOnPrimary = brandOnPrimary,
             brandAccent = brandAccentText,
             softSurface = brandSoftSurface,
             onLoadOlder = { viewModel.loadMoreDirectMessages() },
             onSendMessage = { msgBody -> viewModel.sendDirectMessage(msgBody) },
+            onHandoffModeChange = { nextMode -> viewModel.handoffDirectChat(nextMode) },
+            onRequestHuman = { viewModel.requestHumanHandoff() },
             onDismiss = { viewModel.closeDirectChat() }
         )
     }

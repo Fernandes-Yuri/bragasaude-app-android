@@ -150,6 +150,9 @@ class PartnerWorkspaceViewModel @Inject constructor(
     private val _isSendingDirectMessage = MutableStateFlow(false)
     val isSendingDirectMessage: StateFlow<Boolean> = _isSendingDirectMessage.asStateFlow()
 
+    private val _isUpdatingHandoff = MutableStateFlow(false)
+    val isUpdatingHandoff: StateFlow<Boolean> = _isUpdatingHandoff.asStateFlow()
+
     private val _isGeneratingPdf = MutableStateFlow(false)
     val isGeneratingPdf: StateFlow<Boolean> = _isGeneratingPdf.asStateFlow()
 
@@ -805,8 +808,13 @@ class PartnerWorkspaceViewModel @Inject constructor(
             _isSendingDirectMessage.value = false
             val sent = res.message
             if (sent != null) {
+                val appended = buildList {
+                    res.aiReply?.let { add(it) }
+                    add(sent)
+                }
                 _activeDirectChatPage.value = current.copy(
-                    messages = listOf(sent) + current.messages
+                    thread = res.thread ?: current.thread,
+                    messages = appended + current.messages
                 )
                 if (res.sentOffHours) {
                     _statusMessage.value = "Enviada fora do horário — aguardando retorno."
@@ -814,6 +822,47 @@ class PartnerWorkspaceViewModel @Inject constructor(
             } else {
                 _statusMessage.value = res.errorDetail
                     ?: "Não foi possível enviar a mensagem agora."
+            }
+        }
+    }
+
+    fun handoffDirectChat(mode: String, note: String? = null) {
+        val current = _activeDirectChatPage.value ?: return
+        val patientId = _directChatTargetPatientId.value ?: return
+        if (!_directChatIsOwnerView.value || _isUpdatingHandoff.value) return
+        viewModelScope.launch {
+            _isUpdatingHandoff.value = true
+            val res = apiClient.handoffOwnerDirectChat(patientId, mode, note)
+            _isUpdatingHandoff.value = false
+            val updated = res.thread
+            if (updated != null) {
+                _activeDirectChatPage.value = current.copy(thread = updated)
+                _statusMessage.value = if (mode == "HUMAN_ACTIVE") {
+                    "Você assumiu este chat direto."
+                } else {
+                    "Conversa devolvida para a Recepcionista IA."
+                }
+            } else {
+                _statusMessage.value = res.errorDetail
+                    ?: "Não foi possível atualizar o controle desta conversa."
+            }
+        }
+    }
+
+    fun requestHumanHandoff(note: String? = null) {
+        val current = _activeDirectChatPage.value ?: return
+        if (_directChatIsOwnerView.value || _isUpdatingHandoff.value) return
+        viewModelScope.launch {
+            _isUpdatingHandoff.value = true
+            val res = apiClient.requestHumanInDirectChat(current.programId, note)
+            _isUpdatingHandoff.value = false
+            val updated = res.thread
+            if (updated != null) {
+                _activeDirectChatPage.value = current.copy(thread = updated)
+                _statusMessage.value = "Equipe notificada: seu pedido de atendimento humano foi registrado."
+            } else {
+                _statusMessage.value = res.errorDetail
+                    ?: "Não foi possível encaminhar para atendente humano agora."
             }
         }
     }

@@ -688,6 +688,19 @@ enum class DirectMessageSenderRole(val wireKey: String, val labelPtBr: String) {
     }
 }
 
+enum class ThreadHandlingMode(val wireKey: String, val labelPtBr: String) {
+    AI_ACTIVE("AI_ACTIVE", "Recepcionista IA ativa"),
+    HUMAN_ACTIVE("HUMAN_ACTIVE", "Atendimento humano ativo"),
+    WAITING_HUMAN("WAITING_HUMAN", "Aguardando atendente humano");
+
+    companion object {
+        fun fromWire(raw: String?): ThreadHandlingMode {
+            val upper = raw?.trim()?.uppercase().orEmpty()
+            return entries.firstOrNull { it.wireKey == upper } ?: AI_ACTIVE
+        }
+    }
+}
+
 @Serializable
 data class DirectThreadSummaryDto(
     val programId: String,
@@ -696,7 +709,10 @@ data class DirectThreadSummaryDto(
     val takenOverBy: String? = null,
     val handoffNote: String? = null,
     val updatedAt: String = ""
-)
+) {
+    val parsedHandlingMode: ThreadHandlingMode
+        get() = ThreadHandlingMode.fromWire(handlingMode)
+}
 
 @Serializable
 data class DirectChatMessageDto(
@@ -719,7 +735,10 @@ data class DirectChatThreadPageDto(
     val programName: String = "",
     val companyName: String = "",
     val assistantChatEnabled: Boolean = true,
+    val aiReceptionistEnabled: Boolean = false,
+    val aiPaused: Boolean = false,
     val directChatPolicy: DirectChatPolicyDto = DirectChatPolicyDto(),
+    val aiReceptionistPolicy: AiReceptionistPolicyDto = AiReceptionistPolicyDto(),
     val isOffHoursNow: Boolean = false,
     val thread: DirectThreadSummaryDto? = null,
     val messages: List<DirectChatMessageDto> = emptyList(),
@@ -731,10 +750,22 @@ data class DirectChatThreadPageDto(
 data class SendDirectMessageResult(
     val message: DirectChatMessageDto? = null,
     val sentOffHours: Boolean = false,
+    val aiReply: DirectChatMessageDto? = null,
+    val aiFallbackReason: String? = null,
+    val thread: DirectThreadSummaryDto? = null,
     val errorDetail: String? = null
 ) {
     val isSuccess: Boolean
         get() = message != null
+}
+
+@Serializable
+data class ThreadHandoffResult(
+    val thread: DirectThreadSummaryDto? = null,
+    val errorDetail: String? = null
+) {
+    val isSuccess: Boolean
+        get() = thread != null
 }
 
 object B2BOnboardingValidator {

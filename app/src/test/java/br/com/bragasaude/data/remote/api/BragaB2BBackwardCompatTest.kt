@@ -1060,4 +1060,100 @@ class BragaB2BBackwardCompatTest {
             assertEquals("/api/b2b/program/me/participants/patient-1/messages", server.takeRequest().path)
         }
     }
+
+    @Test
+    fun aiReceptionistReplyHandoffAndRequestHumanRoundTripCleanly() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = BragaApiClient(
+                mockk(relaxed = true),
+                server.url("/").toString().trimEnd('/'),
+                stubAuthService(),
+                OkHttpClient(),
+                FamilyE2eeManager()
+            )
+
+            // 1. Mensagem do paciente retorna aiReply e thread AI_ACTIVE + metadata aiReceptionistEnabled
+            server.enqueue(
+                MockResponse().setResponseCode(201).setBody(
+                    """
+                    {
+                      "sentOffHours": false,
+                      "message": {
+                        "messageId": "msg-p1",
+                        "programId": "prog-1",
+                        "patientUserId": "patient-1",
+                        "senderUserId": "patient-1",
+                        "senderRole": "PATIENT",
+                        "body": "Qual horário de atendimento?",
+                        "createdAt": "2026-11-19T20:10:00Z"
+                      },
+                      "aiReply": {
+                        "messageId": "msg-ai1",
+                        "programId": "prog-1",
+                        "patientUserId": "patient-1",
+                        "senderUserId": "owner-1",
+                        "senderRole": "AI_RECEPTIONIST",
+                        "body": "Atendemos de segunda a sexta, das 08h às 18h.",
+                        "createdAt": "2026-11-19T20:10:01Z"
+                      },
+                      "thread": {
+                        "programId": "prog-1",
+                        "patientUserId": "patient-1",
+                        "handlingMode": "AI_ACTIVE",
+                        "updatedAt": "2026-11-19T20:10:01Z"
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val sentWithAi = api.sendEnrollmentDirectMessage("prog-1", "Qual horário de atendimento?")
+            assertTrue(sentWithAi.isSuccess)
+            assertNotNull(sentWithAi.aiReply)
+            assertEquals("AI_RECEPTIONIST", sentWithAi.aiReply!!.senderRole)
+            assertEquals("AI_ACTIVE", sentWithAi.thread!!.handlingMode)
+            assertEquals("/api/b2b/enrollments/prog-1/messages", server.takeRequest().path)
+
+            // 2. Participante solicita atendente humano (WAITING_HUMAN)
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "thread": {
+                        "programId": "prog-1",
+                        "patientUserId": "patient-1",
+                        "handlingMode": "WAITING_HUMAN",
+                        "updatedAt": "2026-11-19T20:11:00Z"
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val reqHuman = api.requestHumanInDirectChat("prog-1", "Falar com recepção")
+            assertTrue(reqHuman.isSuccess)
+            assertEquals("WAITING_HUMAN", reqHuman.thread!!.handlingMode)
+            assertEquals("/api/b2b/enrollments/prog-1/messages/request-human", server.takeRequest().path)
+
+            // 3. Empresario assume conversa (HUMAN_ACTIVE) e depois devolve (AI_ACTIVE)
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "thread": {
+                        "programId": "prog-1",
+                        "patientUserId": "patient-1",
+                        "handlingMode": "HUMAN_ACTIVE",
+                        "takenOverBy": "owner-1",
+                        "updatedAt": "2026-11-19T20:12:00Z"
+                      }
+                    }
+                    """.trimIndent()
+                )
+            )
+            val takeOver = api.handoffOwnerDirectChat("patient-1", "HUMAN_ACTIVE", "Assumindo retorno")
+            assertTrue(takeOver.isSuccess)
+            assertEquals("HUMAN_ACTIVE", takeOver.thread!!.handlingMode)
+            assertEquals("/api/b2b/program/me/participants/patient-1/chat-handoff", server.takeRequest().path)
+        }
+    }
 }

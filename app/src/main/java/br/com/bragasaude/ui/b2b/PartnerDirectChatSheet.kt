@@ -19,6 +19,7 @@ import br.com.bragasaude.domain.b2b.B2BOnboardingValidator
 import br.com.bragasaude.domain.b2b.B2BThemeEngine
 import br.com.bragasaude.domain.b2b.DirectChatThreadPageDto
 import br.com.bragasaude.domain.b2b.DirectMessageSenderRole
+import br.com.bragasaude.domain.b2b.ThreadHandlingMode
 import br.com.bragasaude.ui.components.BragaBottomSheet
 import java.time.Instant
 import java.time.ZoneId
@@ -40,12 +41,15 @@ fun PartnerDirectChatBottomSheet(
     counterpartTitle: String,
     isLoadingMore: Boolean,
     isSending: Boolean,
+    isUpdatingHandoff: Boolean = false,
     brandPrimary: Color,
     brandOnPrimary: Color,
     brandAccent: Color,
     softSurface: Color,
     onLoadOlder: () -> Unit,
     onSendMessage: (String) -> Unit,
+    onHandoffModeChange: (String) -> Unit = {},
+    onRequestHuman: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     var draft by rememberSaveable(page.programId, page.thread?.patientUserId) {
@@ -98,6 +102,117 @@ fun PartnerDirectChatBottomSheet(
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.padding(10.dp)
                 )
+            }
+
+            val currentMode = page.thread?.parsedHandlingMode ?: ThreadHandlingMode.AI_ACTIVE
+            if (page.aiReceptionistEnabled) {
+                if (page.aiPaused) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
+                    ) {
+                        Text(
+                            text = "Recepcionista IA pausada pela moderação Braga. O canal humano segue normalmente.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                } else if (isOwnerView) {
+                    val isHuman = currentMode == ThreadHandlingMode.HUMAN_ACTIVE
+                    val isWaiting = currentMode == ThreadHandlingMode.WAITING_HUMAN
+                    val nextMode = if (isHuman) "AI_ACTIVE" else "HUMAN_ACTIVE"
+                    val modeHeadline = when (currentMode) {
+                        ThreadHandlingMode.HUMAN_ACTIVE -> "Você assumiu este chat"
+                        ThreadHandlingMode.WAITING_HUMAN -> "Participante pediu atendente humano"
+                        ThreadHandlingMode.AI_ACTIVE -> "Recepcionista IA ativa (${page.aiReceptionistPolicy.personaName})"
+                    }
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isWaiting) brandPrimary.copy(alpha = 0.14f) else softSurface,
+                        border = BorderStroke(1.dp, brandAccent.copy(alpha = 0.3f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = modeHeadline,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = brandAccent
+                                )
+                                page.thread?.handoffNote?.takeIf { it.isNotBlank() }?.let { note ->
+                                    Text(
+                                        text = note,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            OutlinedButton(
+                                onClick = { onHandoffModeChange(nextMode) },
+                                enabled = !isUpdatingHandoff,
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    text = if (isUpdatingHandoff) {
+                                        "..."
+                                    } else if (isHuman) {
+                                        "Devolver para IA"
+                                    } else {
+                                        "Assumir atendimento"
+                                    }
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    when (currentMode) {
+                        ThreadHandlingMode.AI_ACTIVE -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Atendimento inicial: Assistente Virtual · ${page.aiReceptionistPolicy.personaName}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = brandAccent,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedButton(
+                                    onClick = onRequestHuman,
+                                    enabled = !isUpdatingHandoff,
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text(if (isUpdatingHandoff) "Enviando..." else "Pedir atendimento humano")
+                                }
+                            }
+                        }
+                        ThreadHandlingMode.WAITING_HUMAN -> {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                color = brandPrimary.copy(alpha = 0.12f)
+                            ) {
+                                Text(
+                                    text = "Solicitação de atendimento humano enviada. A equipe responderá nesta conversa.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = brandAccent,
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+                        }
+                        ThreadHandlingMode.HUMAN_ACTIVE -> Unit
+                    }
+                }
             }
 
             if (!isOwnerView && page.isOffHoursNow) {
@@ -161,7 +276,7 @@ fun PartnerDirectChatBottomSheet(
                         val senderLabel = when (role) {
                             DirectMessageSenderRole.PARTNER -> page.programName.ifBlank { role.labelPtBr }
                             DirectMessageSenderRole.PATIENT -> if (isOwnerView) counterpartTitle else "Você"
-                            DirectMessageSenderRole.AI_RECEPTIONIST -> role.labelPtBr
+                            DirectMessageSenderRole.AI_RECEPTIONIST -> "Assistente Virtual · ${page.aiReceptionistPolicy.personaName}"
                         }
                         Column(
                             modifier = Modifier.fillMaxWidth(),
