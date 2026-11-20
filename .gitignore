@@ -37,3 +37,6 @@ __pycache__/
 AGENTS.md
 AGENTS.MD
 /ARQUITETURA_HIBRIDA_BRAGA_SAUDE.md
+
+# Credencial efêmera entregue em runtime aos APKs de homologação
+braga-test-login*.json

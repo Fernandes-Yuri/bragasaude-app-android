@@ -36,6 +36,7 @@ android {
 
         buildConfigField("String", "BASE_URL", "\"https://api.bragasaude.online\"")
         buildConfigField("Boolean", "ENABLE_FAMILY_WEBSOCKET", "false")
+        buildConfigField("String", "TEST_AUTO_LOGIN_ACCOUNT", "\"\"")
 
         ndk {
             // Distribuição para celulares ARM; suporte experimental a PrimeOS removido.
@@ -82,7 +83,11 @@ android {
         debug {
             isDebuggable = true
             buildConfigField("Boolean", "ENABLE_FAMILY_WEBSOCKET", "true")
-            val testLabAccount = project.findProperty("testAccount") as? String ?: "testebraga1@proton.me"
+            val testLabAccount = project.findProperty("testAccount") as? String ?: ""
+            require(testLabAccount in setOf("", "testebraga1@proton.me", "testebraga2@proton.me", "testeb2b@teste.com")) {
+                "testAccount deve ser uma das contas de homologação autorizadas."
+            }
+            buildConfigField("String", "TEST_AUTO_LOGIN_ACCOUNT", "\"$testLabAccount\"")
             // APK interno: mantém o applicationId/Firebase da produção e pode
             // atualizar a instalação release, mas continua com BuildConfig.DEBUG=true.
             if (hasKeystore) {

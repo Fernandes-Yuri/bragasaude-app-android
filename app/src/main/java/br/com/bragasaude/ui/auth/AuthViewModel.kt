@@ -153,6 +153,20 @@ class AuthViewModel @Inject constructor(
             checkProfile(initialUser.uid)
         } else {
             _sessionStatus.value = AppSessionStatus.NotAuthenticated
+            if (br.com.bragasaude.BuildConfig.DEBUG && br.com.bragasaude.BuildConfig.TEST_AUTO_LOGIN_ACCOUNT.isNotEmpty()) {
+                viewModelScope.launch {
+                    _authState.value = AuthState.Loading
+                    try {
+                        br.com.bragasaude.testing.TestAccountBootstrap.signIn(appContext, auth)
+                        _authState.value = AuthState.Idle
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // Nunca propagar token, JSON ou erro bruto do provedor para UI/logcat.
+                        _authState.value = AuthState.Error("Não foi possível entrar automaticamente. Prepare novamente o acesso de teste.")
+                    }
+                }
+            }
         }
     }
 
@@ -242,17 +256,8 @@ class AuthViewModel @Inject constructor(
         profileOwner = userId
         _profileError.value = null
         profileJob = viewModelScope.launch {
-            val isFirebaseTestLab = try {
-                android.provider.Settings.System.getString(
-                    appContext.contentResolver,
-                    "firebase.test.lab"
-                ) == "true"
-            } catch (_: Exception) {
-                false
-            }
-            if (isFirebaseTestLab) {
-                repository.seedTestLabProfile(userId)
-            }
+            // Test Lab usa o mesmo perfil remoto do app. Não fabricar PATIENT local:
+            // isso poderia ocultar BUSINESS_ONLY e enviar dados sintéticos para a conta real.
             var remote: ProfileLookup? = null
             val renderLock = Mutex()
             suspend fun render(update: ProfileLookup? = null) = renderLock.withLock {
@@ -1080,6 +1085,10 @@ class AuthViewModel @Inject constructor(
      *      as mutations remotas (perdemos a sessão).
      */
     suspend fun deleteAccount() {
+        if (br.com.bragasaude.BuildConfig.DEBUG && br.com.bragasaude.BuildConfig.TEST_AUTO_LOGIN_ACCOUNT.isNotEmpty()) {
+            _sessionNotice.value = "A exclusão da conta está desativada neste APK de teste."
+            return
+        }
         val user = auth.currentUser ?: return
         val userId = user.uid
         movementManager.flush()
