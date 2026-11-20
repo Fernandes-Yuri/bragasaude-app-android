@@ -40,6 +40,8 @@ import br.com.bragasaude.domain.b2b.EnrollmentAppointmentsFeedDto
 import br.com.bragasaude.domain.b2b.EnrollmentRemindersFeedDto
 import br.com.bragasaude.domain.b2b.PartnerApprovalStatus
 import br.com.bragasaude.domain.b2b.PartnerProgramDto
+import br.com.bragasaude.domain.b2b.PartnerInvitePreviewDto
+import br.com.bragasaude.ui.auth.PartnerLoginPreview
 import br.com.bragasaude.domain.b2b.PartnerReminderType
 import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
 import br.com.bragasaude.domain.b2b.SharedCategoryOption
@@ -56,6 +58,7 @@ enum class PartnerOwnerTab(val title: String) {
 }
 
 private enum class PreviewSurfaceMode(val label: String) {
+    LOGIN("Entrada"),
     HOME("Início do Cliente"),
     INVITE_CARD("Cartão de Entrada"),
     PDF("Resumo PDF")
@@ -766,7 +769,7 @@ fun PartnerPreviewTabContent(
     softBorder: BorderStroke,
     onOpenSimulator: () -> Unit
 ) {
-    var surfaceMode by rememberSaveable { mutableStateOf(PreviewSurfaceMode.HOME) }
+    var surfaceMode by rememberSaveable { mutableStateOf(PreviewSurfaceMode.LOGIN) }
     var simulateDarkTheme by rememberSaveable { mutableStateOf(false) }
 
     val tokens = remember(primaryColorHex) {
@@ -842,91 +845,105 @@ fun PartnerPreviewTabContent(
                 colors = CardDefaults.cardColors(containerColor = previewSurface),
                 border = BorderStroke(1.5.dp, brandPrimary.copy(alpha = 0.45f))
             ) {
-                Box(modifier = Modifier.padding(16.dp)) {
-                    when (surfaceMode) {
-                        PreviewSurfaceMode.HOME -> {
-                            ParticipantExperienceContent(
-                                programName = programName.ifBlank { "Seu Programa" },
-                                companyName = companyName.ifBlank { "Sua Empresa" },
-                                logoUrl = logoUrl,
-                                experienceConfig = draftConfig,
-                                sharedCategories = draftConfig.enabledMetrics,
-                                coParticipatedCount = 2,
-                                brandPrimary = brandPrimary,
-                                brandOnPrimary = brandOnPrimary,
-                                brandAccent = previewAccent,
-                                softSurface = previewCardBg,
-                                softBorder = softBorder,
-                                isGeneratingPdf = false,
-                                generatedPdf = null,
-                                isPreview = true,
-                                onOpenConsentSheet = {},
-                                onGeneratePdf = { _, _ -> },
-                                onPreviewPdf = {},
-                                onSharePdf = {},
-                                onOpenAiPreview = onOpenSimulator
-                            )
-                        }
-                        PreviewSurfaceMode.INVITE_CARD -> {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = brandPrimary)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(18.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Text(
-                                        text = "CONVITE DO PROGRAMA",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = brandOnPrimary.copy(alpha = 0.8f),
-                                        fontWeight = FontWeight.Bold
+                val previewScheme = if (simulateDarkTheme) {
+                    darkColorScheme(background = previewSurface, surface = Color(0xFF182822))
+                } else lightColorScheme(background = previewSurface, surface = Color.White)
+                MaterialTheme(colorScheme = previewScheme) {
+                    PartnerBrandTheme(primaryColorHex) {
+                        Box(modifier = Modifier.padding(16.dp)) {
+                            when (surfaceMode) {
+                                PreviewSurfaceMode.LOGIN -> PartnerLoginPreview(
+                                    PartnerInvitePreviewDto(
+                                        programId = "studio-preview", companyName = companyName.ifBlank { "Sua Empresa" },
+                                        programName = programName.ifBlank { "Seu Programa" }, logoUrl = logoUrl,
+                                        primaryColor = primaryColorHex ?: "#00695C", inviteCode = "PREVIEW"
                                     )
-                                    Text(
-                                        text = programName.ifBlank { "Seu Programa" },
-                                        style = MaterialTheme.typography.titleLarge,
-                                        color = brandOnPrimary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = draftConfig.welcomeHeadline,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = brandOnPrimary
-                                    )
-                                    Text(
-                                        text = "${companyName.ifBlank { "Sua Empresa" }} · Você decide passo a passo o que compartilhar.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = brandOnPrimary.copy(alpha = 0.9f)
+                                )
+                                PreviewSurfaceMode.HOME -> {
+                                    ParticipantExperienceContent(
+                                        programName = programName.ifBlank { "Seu Programa" },
+                                        companyName = companyName.ifBlank { "Sua Empresa" },
+                                        logoUrl = logoUrl,
+                                        experienceConfig = draftConfig,
+                                        sharedCategories = draftConfig.enabledMetrics,
+                                        coParticipatedCount = 2,
+                                        brandPrimary = brandPrimary,
+                                        brandOnPrimary = brandOnPrimary,
+                                        brandAccent = previewAccent,
+                                        softSurface = previewCardBg,
+                                        softBorder = softBorder,
+                                        isGeneratingPdf = false,
+                                        generatedPdf = null,
+                                        isPreview = true,
+                                        onOpenConsentSheet = {},
+                                        onGeneratePdf = { _, _ -> },
+                                        onPreviewPdf = {},
+                                        onSharePdf = {},
+                                        onOpenAiPreview = onOpenSimulator
                                     )
                                 }
-                            }
-                        }
-                        PreviewSurfaceMode.PDF -> {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Text(
-                                        text = if (draftConfig.features.preConsultationPdfEnabled) B2BThemeEngine.PDF_PRECONSULTATION_TITLE
-                                        else "Exportação PDF desativada neste programa",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = previewAccent
-                                    )
-                                    Text(
-                                        text = if (draftConfig.features.preConsultationPdfEnabled) {
-                                            "Cabeçalho com a marca ${programName.ifBlank { "do programa" }} e métricas: ${draftConfig.enabledMetrics.mapNotNull { SharedCategoryOption.fromWire(it)?.titlePtBr }.joinToString(", ")}. Documentos pessoais nunca são anexados."
-                                        } else {
-                                            "Habilite o switch 'Resumo pré-consulta em PDF' no Estúdio para liberar este card."
-                                        },
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
+                                PreviewSurfaceMode.INVITE_CARD -> {
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = CardDefaults.cardColors(containerColor = brandPrimary)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(18.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Text(
+                                                text = "CONVITE DO PROGRAMA",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = brandOnPrimary.copy(alpha = 0.8f),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = programName.ifBlank { "Seu Programa" },
+                                                style = MaterialTheme.typography.titleLarge,
+                                                color = brandOnPrimary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = draftConfig.welcomeHeadline,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = brandOnPrimary
+                                            )
+                                            Text(
+                                                text = "${companyName.ifBlank { "Sua Empresa" }} · Você decide passo a passo o que compartilhar.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = brandOnPrimary.copy(alpha = 0.9f)
+                                            )
+                                        }
+                                    }
+                                }
+                                PreviewSurfaceMode.PDF -> {
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                text = if (draftConfig.features.preConsultationPdfEnabled) B2BThemeEngine.PDF_PRECONSULTATION_TITLE
+                                                else "Exportação PDF desativada neste programa",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = previewAccent
+                                            )
+                                            Text(
+                                                text = if (draftConfig.features.preConsultationPdfEnabled) {
+                                                    "Cabeçalho com a marca ${programName.ifBlank { "do programa" }} e métricas: ${draftConfig.enabledMetrics.mapNotNull { SharedCategoryOption.fromWire(it)?.titlePtBr }.joinToString(", ")}. Documentos pessoais nunca são anexados."
+                                                } else {
+                                                    "Habilite o switch 'Resumo pré-consulta em PDF' no Estúdio para liberar este card."
+                                                },
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1004,7 +1021,7 @@ fun ParticipantExperienceContent(
                         AsyncImage(
                             model = logoUrl,
                             contentDescription = programName,
-                            contentScale = ContentScale.Crop,
+                            contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(RoundedCornerShape(10.dp))
@@ -1035,7 +1052,7 @@ fun ParticipantExperienceContent(
                             text = if (coParticipatedCount > 1) {
                                 "$companyName · Ativo ($coParticipatedCount programas vinculados)"
                             } else {
-                                "$companyName · Tecnologia Braga Saúde"
+                                companyName
                             },
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.SemiBold
@@ -1365,6 +1382,7 @@ fun ParticipantExperienceContent(
                 Text("Silenciar ou reportar programa")
             }
         }
+        if (isPreview) PartnerTechnologyCredit()
     }
 }
 

@@ -348,6 +348,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Publicar revisão visual B2B e login
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: revisao-visual-b2b-login
+          path: app/build/outputs/b2b-brand-review/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Publicar revisão visual de relatórios
         if: always()
         uses: actions/upload-artifact@v4
