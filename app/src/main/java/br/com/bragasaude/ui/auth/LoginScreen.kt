@@ -236,7 +236,6 @@ fun LoginScreen(
                             prefs.edit().remove("pending_b2b_invite_code").apply()
                             br.com.bragasaude.ui.navigation.PartnerInviteNavigation.consumePending()
                             inviteCodeDraft = ""
-                            showInviteDialog = true
                         }
                     )
                 }

@@ -19,7 +19,6 @@ import androidx.test.core.app.ApplicationProvider
 import br.com.bragasaude.domain.b2b.PartnerInvitePreviewDto
 import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
 import br.com.bragasaude.ui.auth.AuthViewModel
-import br.com.bragasaude.ui.components.BragaModalHost
 import br.com.bragasaude.ui.auth.LoginScreen
 import br.com.bragasaude.ui.navigation.PartnerInviteNavigation
 import br.com.bragasaude.ui.theme.BragasaudeTheme
@@ -62,7 +61,7 @@ class PartnerBrandAppearanceTest {
             val density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, fontScale)) {
                 BragasaudeTheme(forceThemeMode = if (dark) "DARK" else "LIGHT") {
-                    BragaModalHost { LoginScreen(viewModel = auth, onLoginSuccess = {}) }
+                    LoginScreen(viewModel = auth, onLoginSuccess = {})
                 }
             }
         }
@@ -105,11 +104,14 @@ class PartnerBrandAppearanceTest {
         assertFalse(prefs.getBoolean("pending_b2b_company_onboarding", false))
         screenshot("04-login-parceiro")
         compose.onNodeWithText("Trocar programa").performClick()
-        compose.onNodeWithText("Encontre seu programa").assertIsDisplayed()
         assertFalse(prefs.contains("pending_b2b_invite_code"))
-        compose.onNodeWithText("Voltar", substring = false).performClick()
         compose.onNodeWithText("Horizonte").assertDoesNotExist()
         compose.onNodeWithText("Acesse sua conta").assertIsDisplayed()
+        compose.onNodeWithTag("login_content").performScrollToNode(hasTestTag("invite_shortcut_button"))
+        compose.onNodeWithTag("invite_shortcut_button").performClick()
+        compose.onNodeWithText("Encontre seu programa").assertIsDisplayed()
+        compose.onNodeWithText("Voltar", substring = false).performClick()
+        compose.onNodeWithText("Encontre seu programa").assertDoesNotExist()
     }
 
     @Test fun darkLoginAndLargeTypeRemainScrollableThroughLegalAndCredit() {
