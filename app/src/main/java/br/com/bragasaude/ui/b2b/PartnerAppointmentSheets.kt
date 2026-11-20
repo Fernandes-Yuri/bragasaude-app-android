@@ -1,8 +1,9 @@
 package br.com.bragasaude.ui.b2b
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -114,7 +115,7 @@ fun OwnerAppointmentsWalletCard(
                         color = brandPrimary.copy(alpha = 0.14f)
                     ) {
                         Text(
-                            text = "$pendingCount pendente(s)",
+                            text = B2BTextFormatters.countLabel(pendingCount, "pendente", "pendentes"),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = brandAccent,
@@ -482,7 +483,7 @@ fun RequestAppointmentBottomSheet(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun OwnerAppointmentDecisionBottomSheet(
     appointment: ProgramAppointmentDto,
@@ -534,11 +535,10 @@ fun OwnerAppointmentDecisionBottomSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 validTargets.forEach { stWire ->
                     val label = ProgramAppointmentStatus.fromWire(stWire).labelPtBr
@@ -556,11 +556,10 @@ fun OwnerAppointmentDecisionBottomSheet(
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold
                 )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf(1, 2, 3, 5, 7, 14).forEach { offset ->
                         val chipDate = LocalDate.now().plusDays(offset.toLong())
@@ -571,11 +570,10 @@ fun OwnerAppointmentDecisionBottomSheet(
                         )
                     }
                 }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf(8 to 0, 9 to 0, 10 to 30, 14 to 0, 15 to 30, 17 to 0, 18 to 0).forEach { (h, m) ->
                         val lbl = String.format(Locale.US, "%02d:%02d", h, m)

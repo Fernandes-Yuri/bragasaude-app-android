@@ -6,7 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,12 +22,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -75,6 +79,7 @@ private enum class ParticipantDetailSubTab(val title: String) {
     QUICK_ACTIONS("Ações rápidas")
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PartnerWalletFiltersSection(
     query: String,
@@ -96,6 +101,22 @@ fun PartnerWalletFiltersSection(
         SharedCategoryOption.entries.filter { it.wireKey in enabledProgramMetrics }
     }
     val hasActiveFilter = query.isNotBlank() || selectedCategory != null || attentionOnly
+    // Resumo legível do estado real dos filtros (nunca um texto genérico).
+    val activeCategoryLabel = selectedCategory?.let { wireKey ->
+        (categoryOptions.firstOrNull { it.wireKey == wireKey }
+            ?: SharedCategoryOption.entries.firstOrNull { it.wireKey == wireKey })
+            ?.let { shortCategoryFilterLabel(it) }
+    }
+    val activeFilterParts = buildList {
+        if (query.isNotBlank()) add("Busca: \"${query.trim()}\"")
+        if (attentionOnly) add("Com atenção")
+        activeCategoryLabel?.let { add("Categoria: $it") }
+    }
+    val activeFilterSummary = if (activeFilterParts.isEmpty()) {
+        "Nenhum filtro ativo"
+    } else {
+        activeFilterParts.joinToString(" · ")
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -120,33 +141,54 @@ fun PartnerWalletFiltersSection(
             }
         )
 
-        LazyRow(
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(vertical = 2.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item {
-                FilterChip(
-                    selected = attentionOnly,
-                    onClick = onToggleAttentionOnly,
-                    label = { Text("Com atenção") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = brandPrimary,
-                        selectedLabelColor = brandOnPrimary
+            FilterChip(
+                selected = attentionOnly,
+                onClick = onToggleAttentionOnly,
+                label = { Text("Com atenção") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (attentionOnly) Icons.Default.Check else Icons.Default.Warning,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = if (attentionOnly) {
+                            MaterialTheme.colorScheme.onError
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        }
                     )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.error,
+                    selectedLabelColor = MaterialTheme.colorScheme.onError
                 )
-            }
-            item {
-                FilterChip(
-                    selected = selectedCategory == null,
-                    onClick = { onSelectCategory(null) },
-                    label = { Text("Todos") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = brandPrimary,
-                        selectedLabelColor = brandOnPrimary
+            )
+            FilterChip(
+                selected = selectedCategory == null,
+                onClick = { onSelectCategory(null) },
+                label = { Text("Todos") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (selectedCategory == null) {
+                            Icons.Default.Check
+                        } else {
+                            Icons.AutoMirrored.Filled.List
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = if (selectedCategory == null) brandOnPrimary else brandAccent
                     )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = brandPrimary,
+                    selectedLabelColor = brandOnPrimary
                 )
-            }
-            items(categoryOptions, key = { it.wireKey }) { opt ->
+            )
+            categoryOptions.forEach { opt ->
                 FilterChip(
                     selected = selectedCategory == opt.wireKey,
                     onClick = { onSelectCategory(opt.wireKey) },
@@ -159,19 +201,33 @@ fun PartnerWalletFiltersSection(
             }
         }
 
-        if (hasActiveFilter) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Filtros ativos na carteira",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                TextButton(onClick = onClearFilters) {
-                    Text("Limpar filtros", color = brandAccent)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Filtros ativos na carteira",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = activeFilterSummary,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (hasActiveFilter) brandAccent else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (hasActiveFilter) {
+                    TextButton(onClick = onClearFilters) {
+                        Text("Limpar filtros", color = brandAccent)
+                    }
                 }
             }
         }
@@ -205,8 +261,10 @@ fun WalletParticipantCard(
             Text(item.activityDatesLast7Days?.let { "${it.size}/7 dias ativos" } ?: "Atividade indisponível",
                 style = MaterialTheme.typography.bodyMedium, color = brandAccent)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Lembretes: ${item.pendingRemindersCount?.toString() ?: "—"} pendentes",
-                    style = MaterialTheme.typography.labelSmall)
+                Text(
+                    "Lembretes: ${item.pendingRemindersCount?.let { B2BTextFormatters.countLabel(it, "pendente", "pendentes") } ?: "—"}",
+                    style = MaterialTheme.typography.labelSmall
+                )
                 Text("Agenda: ${item.upcomingAppointmentsCount?.toString() ?: "—"} em 7 dias",
                     style = MaterialTheme.typography.labelSmall)
             }
@@ -289,7 +347,7 @@ fun ParticipantDetailBottomSheet(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "${summary.programName.ifBlank { B2BThemeEngine.PARTNER_AREA_TITLE }} · Últimos ${summary.periodDays}d",
+                            text = "${summary.programName.ifBlank { B2BThemeEngine.PARTNER_AREA_TITLE }} · Últimos ${B2BTextFormatters.days(summary.periodDays)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -356,7 +414,7 @@ fun ParticipantDetailBottomSheet(
                             FilterChip(
                                 selected = selectedDays == days,
                                 onClick = { if (!isLoading) onChangeDays(days) },
-                                label = { Text("${days}d") },
+                                label = { Text(B2BTextFormatters.days(days)) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = brandPrimary,
                                     selectedLabelColor = brandOnPrimary
@@ -378,11 +436,11 @@ fun ParticipantDetailBottomSheet(
                     ) {
                         val steps = summary.stepsSection ?: return@MetricSlotSection
                         val recent = steps.days.take(5).joinToString("\n") { d ->
-                            "• ${d.date}: ${d.steps} passos (${d.activeMinutes} min ativos)"
+                            "• ${B2BTextFormatters.formatIsoDate(d.date)}: ${d.steps} passos (${d.activeMinutes} min ativos)"
                         }
                         SummaryMetricCard(
                             title = "Passos (${steps.source})",
-                            body = "Média de ${steps.averageSteps} passos/dia em ${steps.daysRecorded} dia(s)." +
+                            body = "Média de ${steps.averageSteps} passos por dia em ${B2BTextFormatters.days(steps.daysRecorded)}." +
                                 if (recent.isNotBlank()) "\n$recent" else ""
                         )
                     }
@@ -396,11 +454,11 @@ fun ParticipantDetailBottomSheet(
                     ) {
                         val hyd = summary.hydrationSection ?: return@MetricSlotSection
                         val recent = hyd.days.take(5).joinToString("\n") { d ->
-                            "• ${d.date}: ${d.totalMl} ml"
+                            "• ${B2BTextFormatters.formatIsoDate(d.date)}: ${d.totalMl} ml"
                         }
                         SummaryMetricCard(
                             title = "Hidratação (${hyd.source})",
-                            body = "Média diária de ${hyd.averageMl} ml em ${hyd.daysRecorded} dia(s)." +
+                            body = "Média diária de ${hyd.averageMl} ml em ${B2BTextFormatters.days(hyd.daysRecorded)}." +
                                 if (recent.isNotBlank()) "\n$recent" else ""
                         )
                     }
@@ -418,7 +476,7 @@ fun ParticipantDetailBottomSheet(
                         }
                         SummaryMetricCard(
                             title = "Adesão a lembretes (${meds.source})",
-                            body = "${meds.userConfirmationsInPeriod} confirmação(ões) no período. ${meds.note}" +
+                            body = "${B2BTextFormatters.countLabel(meds.userConfirmationsInPeriod, "confirmação", "confirmações")} no período. ${meds.note}" +
                                 if (listText.isNotBlank()) "\n$listText" else ""
                         )
                     }
@@ -442,7 +500,7 @@ fun ParticipantDetailBottomSheet(
                                     add("SpO2 ${String.format(Locale.US, "%.0f", it)}%")
                                 }
                             }.joinToString(" · ")
-                            "• ${r.measuredAt.take(10)} (${r.origin}): $parts"
+                            "• ${B2BTextFormatters.formatIsoDate(r.measuredAt)} (${r.origin}): $parts"
                         }
                         val bioLines = recs.biometries.take(6).map { b ->
                             val parts = buildList {
@@ -450,7 +508,7 @@ fun ParticipantDetailBottomSheet(
                                 b.heightM?.let { add("Altura ${String.format(Locale.US, "%.2f", it)} m") }
                                 b.imc?.let { add("IMC ${String.format(Locale.US, "%.1f", it)}") }
                             }.joinToString(" · ")
-                            "• ${b.measuredAt.take(10)} (Biometria): $parts"
+                            "• ${B2BTextFormatters.formatIsoDate(b.measuredAt)} (Biometria): $parts"
                         }
                         val combined = buildList {
                             if (bioLines.isNotEmpty()) {
@@ -503,13 +561,13 @@ fun ParticipantDetailBottomSheet(
                     ParticipantQuickActionCard(
                         icon = Icons.Default.CalendarMonth,
                         title = if (pendingAppt > 0) {
-                            "Ver agendamentos ($pendingAppt pendente(s))"
+                            "Ver agendamentos (${B2BTextFormatters.countLabel(pendingAppt, "pendente", "pendentes")})"
                         } else {
                             "Ver agendamentos"
                         },
                         subtitle = if (features.appointmentsEnabled) {
                             if (pendingAppt > 0) {
-                                "$pendingAppt solicitação(ões) aguardando confirmação. Toque para decidir."
+                                "${B2BTextFormatters.countLabel(pendingAppt, "solicitação", "solicitações")} aguardando confirmação. Toque para decidir."
                             } else {
                                 "Agenda do programa ativa. Toque para conferir os pedidos deste participante."
                             }
@@ -532,13 +590,13 @@ fun ParticipantDetailBottomSheet(
                     ParticipantQuickActionCard(
                         icon = Icons.Default.SupportAgent,
                         title = if (unreadMsgs > 0) {
-                            "Abrir chat direto ($unreadMsgs não lida(s))"
+                            "Abrir chat direto (${B2BTextFormatters.countLabel(unreadMsgs, "não lida", "não lidas")})"
                         } else {
                             "Abrir chat direto"
                         },
                         subtitle = if (features.directPartnerChatEnabled) {
                             if (unreadMsgs > 0) {
-                                "$unreadMsgs mensagem(ns) aguardando leitura no canal direto."
+                                "${B2BTextFormatters.countLabel(unreadMsgs, "mensagem", "mensagens")} aguardando leitura no canal direto."
                             } else {
                                 "Canal assíncrono direto com ${summary.participantName}."
                             }
@@ -726,7 +784,7 @@ fun OwnerSentRemindersCard(
                             color = brandAccent
                         )
                         Text(
-                            text = "Canal Não-SaMD separado dos alarmes pessoais de medicação.",
+                            text = "Canal educativo separado dos alarmes pessoais de medicação (sem diagnóstico nem prescrição).",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -777,7 +835,7 @@ fun OwnerSentRemindersCard(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "$targetLabel · ${rem.acknowledgedCount} leitura(s) confirmada(s)",
+                                text = "$targetLabel · ${B2BTextFormatters.countLabel(rem.acknowledgedCount, "leitura confirmada", "leituras confirmadas")}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

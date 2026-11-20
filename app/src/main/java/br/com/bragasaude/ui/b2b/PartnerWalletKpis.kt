@@ -9,6 +9,12 @@ import androidx.compose.ui.unit.dp
 import br.com.bragasaude.domain.b2b.PartnerWalletKpisDto
 import java.util.Locale
 
+private data class WalletKpiCard(
+    val label: String,
+    val value: String?,
+    val caption: String? = null
+)
+
 @Composable
 fun PartnerWalletKpis(kpis: PartnerWalletKpisDto?) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -18,26 +24,39 @@ fun PartnerWalletKpis(kpis: PartnerWalletKpisDto?) {
         val periodDays = kpis?.periodDays ?: 7
         val periodLabel = if (periodDays == 1) "último dia" else "últimos $periodDays dias"
         Text("Atividade no programa · $periodLabel", style = MaterialTheme.typography.labelSmall)
+        val retentionRate = kpis?.retentionRate
         val entries = listOf(
-            "Ativos" to kpis?.activeUsers?.toString(),
-            "Inativos" to kpis?.inactiveUsers?.toString(),
-            "Retenção" to kpis?.retentionRate?.let { String.format(Locale.forLanguageTag("pt-BR"), "%.1f%%", it) },
-            "Lembretes lidos" to kpis?.remindersRead?.toString(),
-            "Agendamentos confirmados" to kpis?.appointmentsConfirmed?.toString()
+            WalletKpiCard("Ativos", kpis?.activeUsers?.toString()),
+            WalletKpiCard("Inativos", kpis?.inactiveUsers?.toString()),
+            WalletKpiCard(
+                label = "Retenção",
+                value = retentionRate?.let { String.format(Locale.forLanguageTag("pt-BR"), "%.1f%%", it) },
+                // Semana sem base comparativa: o traço fica autoexplicativo dentro do card,
+                // sem linha solta abaixo da grade.
+                caption = if (kpis != null && retentionRate == null) "sem base na semana anterior" else null
+            ),
+            WalletKpiCard("Lembretes lidos", kpis?.remindersRead?.toString()),
+            WalletKpiCard("Agendamentos confirmados", kpis?.appointmentsConfirmed?.toString())
         )
         entries.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { (label, value) ->
+                row.forEach { entry ->
                     Card(Modifier.weight(1f)) {
                         Column(Modifier.padding(12.dp)) {
-                            Text(value ?: "—", style = MaterialTheme.typography.headlineSmall)
-                            Text(label, style = MaterialTheme.typography.labelSmall)
+                            Text(entry.value ?: "—", style = MaterialTheme.typography.headlineSmall)
+                            Text(entry.label, style = MaterialTheme.typography.labelSmall)
+                            entry.caption?.let { caption ->
+                                Text(
+                                    caption,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
             }
         }
         if (kpis == null) Text("Indicadores indisponíveis. Atualize para tentar novamente.", style = MaterialTheme.typography.labelSmall)
-        else if (kpis.retentionRate == null) Text("Retenção: sem atividade na semana anterior.", style = MaterialTheme.typography.labelSmall)
     }
 }

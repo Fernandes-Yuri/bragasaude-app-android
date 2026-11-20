@@ -502,7 +502,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
             if (result.isSuccess && result.reminder != null) {
                 _ownerReminders.value = listOf(result.reminder) + _ownerReminders.value
                 _statusMessage.value = if (targetPatientId.isNullOrBlank()) {
-                    "Lembrete enviado em lote para ${result.recipientCount} participante(s)."
+                    "Lembrete enviado em lote para ${B2BTextFormatters.countLabel(result.recipientCount, "participante", "participantes")}."
                 } else {
                     "Lembrete enviado para o participante."
                 }
