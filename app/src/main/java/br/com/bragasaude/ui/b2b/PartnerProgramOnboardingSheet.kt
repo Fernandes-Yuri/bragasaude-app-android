@@ -306,18 +306,7 @@ fun PartnerProgramOnboardingSheet(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = parsedColor.copy(alpha = 0.14f)
-                ) {
-                    Text(
-                        text = status.labelPtBr,
-                        color = parsedColor,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
+                PartnerStatusChip(status = status)
             }
 
             Text(
@@ -693,7 +682,8 @@ fun PartnerProgramOnboardingSheet(
                 OutlinedTextField(
                     value = programName,
                     onValueChange = { if (it.length <= 120) programName = it },
-                    label = { Text("Nome do programa (ex.: Cuidado Cardio) *") },
+                    label = { Text("Nome do programa *") },
+                    supportingText = { Text("Ex.: Cuidado Cardio") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp)
@@ -770,7 +760,7 @@ fun PartnerProgramOnboardingSheet(
                     onValueChange = { raw ->
                         if (raw.length <= 14) responsibleCpf = raw
                     },
-                    label = { Text("CPF do responsável (somente conferência LGPD) *") },
+                    label = { Text("CPF do responsável *") },
                     singleLine = true,
                     isError = responsibleCpf.isNotBlank() && !cpfLooksValid,
                     supportingText = {
@@ -780,7 +770,7 @@ fun PartnerProgramOnboardingSheet(
                             responsibleCpf.isBlank() && !savedMaskedCpf.isNullOrBlank() ->
                                 Text("CPF conferido salvo: $savedMaskedCpf (preencha só se quiser alterar).")
                             else ->
-                                Text("Usado em memória apenas para conferir QSA/MEI na Receita Federal; nunca exibido a pacientes.")
+                                Text("Somente conferência LGPD (QSA/MEI na Receita Federal); nunca exibido a pacientes.")
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -806,13 +796,23 @@ fun PartnerProgramOnboardingSheet(
                     }
                 }
 
+                val phoneLooksValid =
+                    B2BOnboardingValidator.isValidResponsiblePhone(responsiblePhone)
                 OutlinedTextField(
                     value = responsiblePhone,
                     onValueChange = { if (it.length <= 20) responsiblePhone = it },
-                    label = { Text("Telefone comercial / WhatsApp (com DDD) *") },
+                    label = { Text("Telefone comercial / WhatsApp *") },
+                    supportingText = {
+                        Text(
+                            if (responsiblePhone.isNotBlank() && !phoneLooksValid) {
+                                "Informe DDD + número válido."
+                            } else {
+                                "Com DDD; usado apenas para contato do programa."
+                            }
+                        )
+                    },
                     singleLine = true,
-                    isError = responsiblePhone.isNotBlank() &&
-                        !B2BOnboardingValidator.isValidResponsiblePhone(responsiblePhone),
+                    isError = responsiblePhone.isNotBlank() && !phoneLooksValid,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
@@ -938,7 +938,8 @@ fun PartnerProgramOnboardingSheet(
                 OutlinedTextField(
                     value = primaryColor,
                     onValueChange = { if (it.length <= 7) primaryColor = it },
-                    label = { Text("Código hexadecimal (#RRGGBB)") },
+                    label = { Text("Código hexadecimal") },
+                    supportingText = { Text("#RRGGBB · ex.: #1A6B5C") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp)
@@ -1042,7 +1043,8 @@ fun PartnerProgramOnboardingSheet(
                             OutlinedTextField(
                                 value = logoUrl,
                                 onValueChange = { if (it.length <= 512) logoUrl = it },
-                                label = { Text("URL da logo (opcional — https://)") },
+                                label = { Text("URL da logo") },
+                                supportingText = { Text("Opcional · apenas links https://") },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(14.dp)
