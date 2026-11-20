@@ -671,11 +671,22 @@ private fun PartnerBusinessContent(
                 .padding(innerPadding)
         ) {
             if (isLoading) {
-                Box(
+                Column(
                     modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    CircularProgressIndicator(color = brandAccentText)
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(48.dp),
+                        color = brandAccentText,
+                        strokeWidth = 4.dp
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "Carregando indicadores do programa...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             } else {
                 when (selectedTab) {
