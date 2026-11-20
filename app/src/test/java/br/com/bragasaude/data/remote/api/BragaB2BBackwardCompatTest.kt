@@ -1275,4 +1275,58 @@ class BragaB2BBackwardCompatTest {
             assertEquals("/api/b2b/program/me/participants/patient-1/chat-handoff", server.takeRequest().path)
         }
     }
+
+    @Test
+    fun `b2b22 legacy context descriptor without experienceConfig and 409 disabled module fail closed safely`(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = BragaApiClient(
+                mockk(relaxed = true),
+                server.url("/").toString().trimEnd('/'),
+                stubAuthService(),
+                OkHttpClient(),
+                FamilyE2eeManager()
+            )
+
+            // Contexto legado pre-Fase D (sem templateKey, experienceConfig nem familyShareEnabled)
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "contexts": [
+                        { "mode": "PERSONAL", "userId": "u-1" },
+                        {
+                          "mode": "PARTNER_PARTICIPANT",
+                          "userId": "u-1",
+                          "programId": "prog-legacy",
+                          "programName": "Clinica Legada",
+                          "companyName": "Clinica L",
+                          "primaryColor": "#1A6B5C",
+                          "approvalStatus": "APPROVED",
+                          "sharedCategories": ["steps"]
+                        }
+                      ]
+                    }
+                    """.trimIndent()
+                )
+            )
+            val contexts = api.getB2BContexts()
+            assertEquals(2, contexts.size)
+            val legacyPartner = contexts[1]
+            assertEquals(false, legacyPartner.familyShareEnabled)
+            assertEquals("CLINICA_GERAL", legacyPartner.resolvedExperienceConfig().templateKey)
+            server.takeRequest()
+
+            // Backend retornando 409/403 quando modulo desligado no experienceConfig ou programa suspenso
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(409)
+                    .setBody("""{"detail":"Módulo desabilitado pela clínica no programa."}""")
+            )
+            val blockedAppt = api.requestEnrollmentAppointment("prog-legacy", "REMOTE", "Segunda 10h")
+            assertTrue(!blockedAppt.isSuccess)
+            assertEquals("Módulo desabilitado pela clínica no programa.", blockedAppt.errorDetail)
+            server.takeRequest()
+        }
+    }
 }
