@@ -5,7 +5,6 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,7 +62,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,7 +78,6 @@ import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
 import br.com.bragasaude.ui.auth.AuthViewModel
 import br.com.bragasaude.ui.components.BragaAlertDialog
 import br.com.bragasaude.ui.components.BragaBottomSheet
-import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 
 enum class BusinessSessionTab(
@@ -102,6 +99,19 @@ enum class BusinessSessionTab(
 fun PartnerBusinessScaffold(
     authViewModel: AuthViewModel,
     partnerViewModel: PartnerWorkspaceViewModel = hiltViewModel()
+) {
+    val program by partnerViewModel.programInfo.collectAsState()
+    val active by partnerViewModel.activeContext.collectAsState()
+    PartnerBrandTheme(program?.primaryColor ?: active.primaryColor) {
+        PartnerBusinessContent(authViewModel, partnerViewModel)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PartnerBusinessContent(
+    authViewModel: AuthViewModel,
+    partnerViewModel: PartnerWorkspaceViewModel
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -178,30 +188,12 @@ fun PartnerBusinessScaffold(
         selectedTab = BusinessSessionTab.WALLET
     }
 
-    val effectiveHex = programInfo?.primaryColor ?: activeContext.primaryColor
-    val tokens = remember(effectiveHex) {
-        B2BThemeEngine.resolveAccessiblePalette(effectiveHex)
-    }
-    val brandPrimary = remember(tokens.primaryHex) {
-        Color(android.graphics.Color.parseColor(tokens.primaryHex))
-    }
-    val brandOnPrimary = remember(tokens.onPrimaryHex) {
-        Color(android.graphics.Color.parseColor(tokens.onPrimaryHex))
-    }
-    val brandSoftSurface = remember(tokens.softSurfaceHex) {
-        Color(android.graphics.Color.parseColor(tokens.softSurfaceHex))
-    }
-    val brandSoftBorder = remember(tokens.softBorderHex) {
-        Color(android.graphics.Color.parseColor(tokens.softBorderHex))
-    }
-    val isDark = isSystemInDarkTheme()
-    val brandAccentText = remember(tokens, isDark) {
-        Color(
-            android.graphics.Color.parseColor(
-                if (isDark) tokens.accentOnDarkHex else tokens.accentOnLightHex
-            )
-        )
-    }
+    val brand = partnerBrandColors()
+    val brandPrimary = brand.primary
+    val brandOnPrimary = brand.onPrimary
+    val brandSoftSurface = brand.softSurface
+    val brandSoftBorder = brand.softBorder
+    val brandAccentText = brand.accent
     val softBorderStroke = remember(brandSoftBorder) { BorderStroke(1.dp, brandSoftBorder) }
 
     if (showOnboardingSheet) {
@@ -580,7 +572,7 @@ fun PartnerBusinessScaffold(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp))
-                    .background(brandPrimary)
+                    .background(MaterialTheme.colorScheme.surface)
                     .padding(horizontal = 16.dp, vertical = 14.dp)
             ) {
                 Row(
@@ -588,55 +580,17 @@ fun PartnerBusinessScaffold(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    val logoUrl = programInfo?.logoUrl ?: activeContext.logoUrl
-                    if (!logoUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = logoUrl,
-                            contentDescription = programInfo?.programName ?: "Logo da empresa",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(10.dp))
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        PartnerIdentityLockup(
+                            companyName = programInfo?.companyName ?: activeContext.companyName ?: "Sua empresa",
+                            programName = programInfo?.programName ?: activeContext.programName ?: "Seu programa",
+                            logoUrl = programInfo?.logoUrl ?: activeContext.logoUrl,
+                            modifier = Modifier.fillMaxWidth()
                         )
-                    } else {
-                        val initial = (
-                            programInfo?.companyName?.trim()?.firstOrNull()
-                                ?: activeContext.companyName?.trim()?.firstOrNull()
-                                ?: 'E'
-                            ).uppercaseChar()
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(brandOnPrimary.copy(alpha = 0.20f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = initial.toString(),
-                                color = brandOnPrimary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 17.sp
-                            )
-                        }
-                    }
-
-                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = programInfo?.programName ?: activeContext.programName ?: "Sessão Clínica",
-                            color = brandOnPrimary,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        val companyLabel = programInfo?.companyName ?: activeContext.companyName ?: "Espaço empresarial"
-                        val statusLabel = programInfo?.parsedStatus?.labelPtBr ?: "Configuração inicial"
-                        Text(
-                            text = "$companyLabel · $statusLabel",
-                            color = brandOnPrimary.copy(alpha = 0.88f),
+                            text = programInfo?.parsedStatus?.labelPtBr ?: "Configuração inicial",
                             style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -649,7 +603,7 @@ fun PartnerBusinessScaffold(
                         ) {
                             Text(
                                 text = "Espaço Pessoal",
-                                color = brandOnPrimary,
+                                color = brandAccentText,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -660,7 +614,7 @@ fun PartnerBusinessScaffold(
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Atualizar",
-                            tint = brandOnPrimary
+                            tint = brandAccentText
                         )
                     }
                 }
@@ -693,26 +647,14 @@ fun PartnerBusinessScaffold(
                             },
                             alwaysShowLabel = true,
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = brandOnPrimary,
+                                selectedIconColor = brandAccentText,
                                 selectedTextColor = brandAccentText,
-                                indicatorColor = brandPrimary
+                                indicatorColor = brandSoftSurface
                             )
                         )
                     }
                 }
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = B2BThemeEngine.PARTNER_ATTRIBUTION,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                    )
-                }
+                PartnerTechnologyCredit(Modifier.background(MaterialTheme.colorScheme.surface))
             }
         }
     ) { innerPadding ->
