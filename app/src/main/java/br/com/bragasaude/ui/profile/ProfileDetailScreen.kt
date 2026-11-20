@@ -49,8 +49,10 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.Diversity3
+import br.com.bragasaude.domain.b2b.AppAccountMode
 import br.com.bragasaude.ui.components.BragaActionCard
 
 import androidx.activity.ComponentActivity
@@ -82,6 +84,7 @@ fun ProfileDetailScreen(
     val customPhotoUri by profileViewModel.customPhotoUri.collectAsState()
     val userFeedbacks by profileViewModel.userFeedbacks.collectAsState()
     val sessionStatus by authViewModel.sessionStatus.collectAsState()
+    val accountMode by authViewModel.accountMode.collectAsState()
     val scope = rememberCoroutineScope()
     var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
     var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
@@ -873,6 +876,15 @@ fun ProfileDetailScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column {
+                        if (accountMode == AppAccountMode.DUAL.name) {
+                            SettingsItem(
+                                title = "Entrar na Sessão Clínica",
+                                subtitle = "Alternar para gestão da sua empresa, carteira, atendimento e estúdio.",
+                                icon = Icons.Default.VerifiedUser,
+                                onClick = { authViewModel.enterBusinessSession() }
+                            )
+                            HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
+                        }
                         SettingsItem(
                             title = "Espaço do programa parceiro",
                             subtitle = "Visualizar marca, rotina compartilhada e gerar PDF de pré-consulta.",

@@ -222,10 +222,18 @@ fun HomeScreen(
             ) {
                 item { Spacer(Modifier.height(4.dp)) }
 
-                val partnerContexts = availableB2BContexts.filter { it.isPartnerContext }
-                if (activeB2BContext.isPartnerContext || partnerContexts.isNotEmpty()) {
+                val partnerContexts = availableB2BContexts.filter {
+                    it.isPartnerContext &&
+                        it.parsedMode == br.com.bragasaude.domain.b2b.AppContextMode.PARTNER_PARTICIPANT
+                }
+                if ((activeB2BContext.isPartnerContext &&
+                        activeB2BContext.parsedMode == br.com.bragasaude.domain.b2b.AppContextMode.PARTNER_PARTICIPANT) ||
+                    partnerContexts.isNotEmpty()
+                ) {
                     item {
-                        val previewCtx = if (activeB2BContext.isPartnerContext) {
+                        val previewCtx = if (activeB2BContext.isPartnerContext &&
+                            activeB2BContext.parsedMode == br.com.bragasaude.domain.b2b.AppContextMode.PARTNER_PARTICIPANT
+                        ) {
                             activeB2BContext
                         } else {
                             partnerContexts.first()

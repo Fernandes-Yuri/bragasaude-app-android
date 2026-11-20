@@ -1329,4 +1329,99 @@ class BragaB2BBackwardCompatTest {
             server.takeRequest()
         }
     }
+
+    @Test
+    fun `b2b30 contexts envelope, updateAccountMode and profile accountMode remain backward compatible`(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = BragaApiClient(
+                mockk(relaxed = true),
+                server.url("/").toString().trimEnd('/'),
+                stubAuthService(),
+                OkHttpClient(),
+                FamilyE2eeManager()
+            )
+
+            // 1) Envelope com accountMode e defaultMode para conta empresarial
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "contexts": [
+                        { "mode": "PERSONAL", "userId": "biz-1" },
+                        {
+                          "mode": "PARTNER_OWNER",
+                          "userId": "biz-1",
+                          "programId": "prog-biz",
+                          "programName": "Clínica Alpha",
+                          "companyName": "Alpha Ltda",
+                          "primaryColor": "#1A6B5C",
+                          "approvalStatus": "DRAFT"
+                        }
+                      ],
+                      "accountMode": "BUSINESS_ONLY",
+                      "defaultMode": "PARTNER_OWNER"
+                    }
+                    """.trimIndent()
+                )
+            )
+            val env = api.getB2BContextsEnvelope()
+            assertNotNull(env)
+            assertEquals("BUSINESS_ONLY", env!!.accountMode)
+            assertEquals("PARTNER_OWNER", env.defaultMode)
+            assertEquals(2, env.contexts.size)
+            assertEquals("/api/b2b/contexts", server.takeRequest().path)
+
+            // 2) POST /api/b2b/account-mode
+            server.enqueue(
+                MockResponse().setBody(
+                    """{"accountMode":"DUAL","defaultMode":"PERSONAL"}"""
+                )
+            )
+            val updatedMode = api.updateAccountMode(br.com.bragasaude.domain.b2b.AppAccountMode.DUAL)
+            assertTrue(updatedMode.isSuccess)
+            assertEquals("DUAL", updatedMode.accountMode)
+            assertEquals("PERSONAL", updatedMode.defaultMode)
+            val modeReq = server.takeRequest()
+            assertEquals("/api/b2b/account-mode", modeReq.path)
+            assertEquals("DUAL", org.json.JSONObject(modeReq.body.readUtf8()).getString("mode"))
+
+            // 3) GET /api/profile/{uid} legado sem campo account_mode/accountMode assume PERSONAL
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "id": "legacy-user",
+                      "basic_profile_complete": true,
+                      "self_care_complete": true,
+                      "self_care_setup_pending": false
+                    }
+                    """.trimIndent()
+                )
+            )
+            val legacyProfile = api.getProfileLookup("legacy-user")
+                as br.com.bragasaude.data.remote.model.ProfileLookup.Found
+            assertEquals("PERSONAL", legacyProfile.profile.accountMode)
+            server.takeRequest()
+
+            // 4) GET /api/profile/{uid} novo com accountMode = BUSINESS_ONLY
+            server.enqueue(
+                MockResponse().setBody(
+                    """
+                    {
+                      "id": "biz-1",
+                      "basic_profile_complete": false,
+                      "self_care_complete": false,
+                      "self_care_setup_pending": false,
+                      "accountMode": "BUSINESS_ONLY"
+                    }
+                    """.trimIndent()
+                )
+            )
+            val bizProfile = api.getProfileLookup("biz-1")
+                as br.com.bragasaude.data.remote.model.ProfileLookup.Found
+            assertEquals("BUSINESS_ONLY", bizProfile.profile.accountMode)
+            server.takeRequest()
+        }
+    }
 }

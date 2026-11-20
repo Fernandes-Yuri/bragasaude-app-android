@@ -814,6 +814,18 @@ object Migrations {
         }
     }
 
+    /**
+     * B2B-30 (Sessão Empresarial Pura): adiciona accountMode em profiles_local
+     * preservando dados e perfis existentes com DEFAULT 'PERSONAL'.
+     */
+    val MIGRATION_69_70 = object : Migration(69, 70) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE profiles_local ADD COLUMN accountMode TEXT NOT NULL DEFAULT 'PERSONAL'"
+            )
+        }
+    }
+
     val ALL = arrayOf(
         MIGRATION_19_20,
         MIGRATION_20_21,
@@ -858,6 +870,7 @@ object Migrations {
         MIGRATION_65_66,
         MIGRATION_66_67,
         MIGRATION_67_68,
-        MIGRATION_68_69
+        MIGRATION_68_69,
+        MIGRATION_69_70
     )
 }

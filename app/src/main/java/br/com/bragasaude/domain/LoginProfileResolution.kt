@@ -12,7 +12,7 @@ sealed interface LoginProfileResolution {
 /** Consent and role never substitute for a completed onboarding step. */
 fun resolveLoginProfile(local: ProfileEntity?, remote: ProfileLookup?): LoginProfileResolution {
     if (local?.consentAcceptedAt != null && ProfileOnboarding.isComplete(
-            local.userRole, local.caregiverMode, local.basicProfileComplete, local.selfCareComplete)) {
+            local.userRole, local.caregiverMode, local.basicProfileComplete, local.selfCareComplete, local.accountMode)) {
         return LoginProfileResolution.Ready(local)
     }
     return when (remote) {

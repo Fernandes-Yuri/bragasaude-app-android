@@ -54,10 +54,19 @@ class ProfileRepository @Inject constructor(
 
     suspend fun saveProfile(profile: RemoteProfile) {
         val existing = profileDao.getProfileOneShot(profile.id)
+        val preservedAccountMode = if (profile.accountMode == "PERSONAL" &&
+            existing != null &&
+            existing.accountMode != "PERSONAL"
+        ) {
+            existing.accountMode
+        } else {
+            profile.accountMode
+        }
         val entity = profile.toEntity().copy(
             pendingSync = true,
             customPhotoUri = existing?.customPhotoUri,
-            communityNickname = existing?.communityNickname
+            communityNickname = existing?.communityNickname,
+            accountMode = preservedAccountMode
         )
         // Se a entidade já existe e não mudou nada relevante, e não está com sync pendente, não reenvia
         if (existing != null && !existing.pendingSync &&
@@ -196,6 +205,10 @@ class ProfileRepository @Inject constructor(
         if (!br.com.bragasaude.domain.ProfileOnboarding.isComplete(current.userRole, current.caregiverMode, current.basicProfileComplete, current.selfCareComplete)) {
             saveProfile(current.copy(userRole = null, caregiverMode = null, basicProfileComplete = false, selfCareComplete = false, selfCareSetupPending = false).toRemote())
         }
+    }
+
+    suspend fun updateLocalAccountMode(userId: String, accountMode: String) {
+        profileDao.updateAccountMode(userId, accountMode)
     }
 
     suspend fun deleteProfileLocally(userId: String) {

@@ -606,7 +606,11 @@ fun LoginScreen(
                                     ) {
                                         TextButton(
                                             onClick = {
-                                                viewModel.signUpWithEmail(email.trim(), password)
+                                                viewModel.signUpWithEmail(
+                                                    email.trim(),
+                                                    password,
+                                                    businessAccount = signupPurpose == "company"
+                                                )
                                             }
                                         ) {
                                             Text("Reenviar código", color = MaterialTheme.colorScheme.primary)
@@ -808,7 +812,11 @@ fun LoginScreen(
                                     if (emailMode == "login") {
                                         viewModel.signInWithEmail(email.trim(), password)
                                     } else {
-                                        viewModel.signUpWithEmail(email.trim(), password)
+                                        viewModel.signUpWithEmail(
+                                            email.trim(),
+                                            password,
+                                            businessAccount = signupPurpose == "company"
+                                        )
                                     }
                                 },
                                 enabled = if (emailMode == "login") isLoginValid else isSignupValid,
@@ -842,7 +850,10 @@ fun LoginScreen(
                                 focusManager.clearFocus(force = true)
                                 keyboardController?.hide()
                                 triggerGoogleFlow(context, scope, credentialManager) { idToken ->
-                                    viewModel.signInWithGoogle(idToken)
+                                    viewModel.signInWithGoogle(
+                                        idToken = idToken,
+                                        businessAccount = emailMode == "signup" && signupPurpose == "company"
+                                    )
                                 }
                             },
                             modifier = Modifier.fillMaxWidth().height(54.dp),

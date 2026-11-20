@@ -275,6 +275,9 @@ interface ProfileDao {
     @Query("UPDATE profiles_local SET avatarIdentifier = :avatarId, customPhotoUri = :photoUri WHERE userId = :userId")
     suspend fun updateAvatar(userId: String, avatarId: String?, photoUri: String?)
 
+    @Query("UPDATE profiles_local SET accountMode = :accountMode WHERE userId = :userId")
+    suspend fun updateAccountMode(userId: String, accountMode: String)
+
     @Query("DELETE FROM profiles_local WHERE userId = :userId")
     suspend fun deleteProfile(userId: String)
 }

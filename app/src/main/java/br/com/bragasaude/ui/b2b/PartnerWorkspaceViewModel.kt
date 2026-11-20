@@ -6,6 +6,7 @@ import br.com.bragasaude.data.local.BragaDatabase
 import br.com.bragasaude.data.remote.api.BragaApiClient
 import br.com.bragasaude.data.remote.b2b.ActiveContextStore
 import br.com.bragasaude.data.remote.b2b.B2BContextRepository
+import br.com.bragasaude.domain.b2b.AppAccountMode
 import br.com.bragasaude.domain.b2b.AppContextMode
 import br.com.bragasaude.domain.b2b.B2BContextDescriptor
 import br.com.bragasaude.domain.b2b.B2BOnboardingValidator
@@ -51,6 +52,11 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     val activeContext: StateFlow<B2BContextDescriptor> = activeContextStore.activeContext
     val availableContexts: StateFlow<List<B2BContextDescriptor>> = activeContextStore.availableContexts
+    val accountMode: StateFlow<AppAccountMode> = activeContextStore.accountMode
+    val isBusinessSession: StateFlow<Boolean> = activeContextStore.isBusinessSession
+
+    private val _isUpdatingInvitePolicy = MutableStateFlow(false)
+    val isUpdatingInvitePolicy: StateFlow<Boolean> = _isUpdatingInvitePolicy.asStateFlow()
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -229,7 +235,16 @@ class PartnerWorkspaceViewModel @Inject constructor(
             b2bContextRepository.hydrateFromCache(uid)
             val contexts = b2bContextRepository.syncContexts(uid)
             val current = activeContextStore.activeContext.value
-            if (!current.isPartnerContext) {
+            val businessOnlyOrActive = activeContextStore.isBusinessSession.value ||
+                activeContextStore.accountMode.value == AppAccountMode.BUSINESS_ONLY
+            if (businessOnlyOrActive) {
+                val ownerCtx = contexts.firstOrNull {
+                    it.parsedMode == AppContextMode.PARTNER_OWNER && it.approvalStatus == "APPROVED"
+                } ?: contexts.firstOrNull { it.parsedMode == AppContextMode.PARTNER_OWNER }
+                if (ownerCtx != null && current.cacheKey() != ownerCtx.cacheKey()) {
+                    b2bContextRepository.selectContext(uid, ownerCtx)
+                }
+            } else if (!current.isPartnerContext) {
                 val firstPartner = contexts.firstOrNull {
                     it.parsedMode == AppContextMode.PARTNER_PARTICIPANT
                 } ?: contexts.firstOrNull {
@@ -241,6 +256,64 @@ class PartnerWorkspaceViewModel @Inject constructor(
             }
             reloadModeData()
             _isLoading.value = false
+        }
+    }
+
+    fun clearSensitiveBusinessMemory() {
+        walletFilterJob?.cancel()
+        _walletQuery.value = ""
+        _walletCategoryFilter.value = null
+        _walletAttentionOnly.value = false
+        _participants.value = emptyList()
+        _nextCursor.value = null
+        _hasMore.value = false
+        _selectedParticipantItem.value = null
+        _selectedSummary.value = null
+        _ownerReminders.value = emptyList()
+        _ownerAppointments.value = emptyList()
+        _activeDirectChatPage.value = null
+        _directChatTargetPatientId.value = null
+        _directChatCounterpartTitle.value = ""
+        _programInfo.value = null
+        _generatedPdf.value = null
+        _statusMessage.value = null
+    }
+
+    fun togglePartnerInvitePaused() {
+        val currentProgram = _programInfo.value ?: return
+        if (_isUpdatingInvitePolicy.value) return
+        viewModelScope.launch {
+            _isUpdatingInvitePolicy.value = true
+            val updated = apiClient.setPartnerInvitePaused(!currentProgram.invitePaused)
+            _isUpdatingInvitePolicy.value = false
+            if (updated != null) {
+                _programInfo.value = updated
+                auth.currentUser?.uid?.let { b2bContextRepository.syncContexts(it) }
+                _statusMessage.value = if (updated.invitePaused) {
+                    "Novas entradas pelo código foram pausadas."
+                } else {
+                    "Entrada de novos participantes reativada."
+                }
+            } else {
+                _statusMessage.value = "Não foi possível atualizar a entrada pelo código agora."
+            }
+        }
+    }
+
+    fun regenerateInviteCode() {
+        if (_isUpdatingInvitePolicy.value) return
+        _programInfo.value ?: return
+        viewModelScope.launch {
+            _isUpdatingInvitePolicy.value = true
+            val updated = apiClient.regeneratePartnerInviteCode()
+            _isUpdatingInvitePolicy.value = false
+            if (updated != null) {
+                _programInfo.value = updated
+                auth.currentUser?.uid?.let { b2bContextRepository.syncContexts(it) }
+                _statusMessage.value = "Novo código gerado. O código anterior deixou de funcionar."
+            } else {
+                _statusMessage.value = "Não foi possível gerar um novo código agora."
+            }
         }
     }
 
@@ -276,14 +349,18 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     private suspend fun reloadModeData() {
         val active = activeContextStore.activeContext.value
-        if (active.parsedMode == AppContextMode.PARTNER_OWNER) {
+        val isOwnerWorkspace = active.parsedMode == AppContextMode.PARTNER_OWNER ||
+            activeContextStore.isBusinessSession.value ||
+            activeContextStore.accountMode.value == AppAccountMode.BUSINESS_ONLY
+        if (isOwnerWorkspace) {
             _enrollmentRemindersFeed.value = null
             _enrollmentAppointmentsFeed.value = null
             _programInfo.value = apiClient.getMyPartnerProgram()
             if (_templates.value.isEmpty()) {
                 _templates.value = apiClient.getProgramTemplates()
             }
-            if (active.approvalStatus == "APPROVED" || _programInfo.value?.approvalStatus == "APPROVED") {
+            val program = _programInfo.value
+            if (program?.approvalStatus == "APPROVED" || active.approvalStatus == "APPROVED") {
                 val page = fetchParticipantsPage(cursor = null)
                 if (page != null) {
                     page.program?.let { _programInfo.value = it }
