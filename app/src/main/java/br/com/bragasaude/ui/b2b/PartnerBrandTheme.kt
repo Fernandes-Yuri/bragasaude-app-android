@@ -71,6 +71,12 @@ fun PartnerBrandTheme(primaryColor: String?, content: @Composable () -> Unit) {
         secondaryContainer = colors.softSurface, onSecondaryContainer = onSoft,
         tertiary = colors.accent, onTertiary = onAccent,
         tertiaryContainer = colors.softSurface, onTertiaryContainer = onSoft,
+        surfaceVariant = colors.softSurface,
+        surfaceContainerLow = lerp(base.surface, colors.primary, 0.03f),
+        surfaceContainer = base.surface,
+        surfaceContainerHigh = lerp(base.surface, colors.primary, 0.06f),
+        surfaceContainerHighest = colors.softSurface,
+        outlineVariant = colors.softBorder,
         surfaceTint = Color.Transparent
     )
     CompositionLocalProvider(LocalPartnerBrandColors provides colors) {
