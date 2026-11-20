@@ -23,21 +23,38 @@ object B2BTextFormatters {
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm", ptBr)
 
     /** "1 dia" / "2 dias". */
-    fun days(count: Int): String = if (count == 1) "1 dia" else "$count dias"
+    fun days(count: Int): String = days(count.toLong())
+
+    /** Versão Long para contadores vindos de DTOs (ex.: confirmações no período). */
+    fun days(count: Long): String = if (count == 1L) "1 dia" else "$count dias"
 
     /** Concordância simples: escolhe singular ou plural pelo número. */
-    fun plural(count: Int, singular: String, plural: String): String = when {
-        count == 1 -> singular
+    fun plural(count: Int, singular: String, plural: String): String =
+        plural(count.toLong(), singular, plural)
+
+    fun plural(count: Long, singular: String, plural: String): String = when {
+        count == 1L -> singular
         else -> plural
     }
 
     /** "1 leitura confirmada" / "3 leituras confirmadas". */
     fun countLabel(count: Int, singular: String, plural: String): String =
+        countLabel(count.toLong(), singular, plural)
+
+    fun countLabel(count: Long, singular: String, plural: String): String =
         "$count ${plural(count, singular, plural)}"
 
     /** "1 participante ativo" / "2 participantes ativos". */
     fun countLabelAgreement(
         count: Int,
+        singular: String,
+        plural: String,
+        adjectiveSingular: String,
+        adjectivePlural: String
+    ): String = countLabelAgreement(count.toLong(), singular, plural, adjectiveSingular, adjectivePlural)
+
+    fun countLabelAgreement(
+        count: Long,
         singular: String,
         plural: String,
         adjectiveSingular: String,

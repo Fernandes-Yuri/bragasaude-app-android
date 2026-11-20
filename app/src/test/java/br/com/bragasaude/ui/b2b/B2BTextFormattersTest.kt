@@ -16,6 +16,8 @@ class B2BTextFormattersTest {
             "2 participantes ativos",
             B2BTextFormatters.countLabelAgreement(2, "participante", "participantes", "ativo", "ativos")
         )
+        assertEquals("1 confirmação", B2BTextFormatters.countLabel(1L, "confirmação", "confirmações"))
+        assertEquals("3 confirmações", B2BTextFormatters.countLabel(3L, "confirmação", "confirmações"))
     }
 
     @Test
