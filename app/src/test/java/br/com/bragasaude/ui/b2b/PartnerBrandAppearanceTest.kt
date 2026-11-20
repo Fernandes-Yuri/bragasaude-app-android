@@ -19,6 +19,7 @@ import androidx.test.core.app.ApplicationProvider
 import br.com.bragasaude.domain.b2b.PartnerInvitePreviewDto
 import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
 import br.com.bragasaude.ui.auth.AuthViewModel
+import br.com.bragasaude.ui.components.BragaModalHost
 import br.com.bragasaude.ui.auth.LoginScreen
 import br.com.bragasaude.ui.navigation.PartnerInviteNavigation
 import br.com.bragasaude.ui.theme.BragasaudeTheme
@@ -61,7 +62,7 @@ class PartnerBrandAppearanceTest {
             val density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, fontScale)) {
                 BragasaudeTheme(forceThemeMode = if (dark) "DARK" else "LIGHT") {
-                    LoginScreen(viewModel = auth, onLoginSuccess = {})
+                    BragaModalHost { LoginScreen(viewModel = auth, onLoginSuccess = {}) }
                 }
             }
         }
@@ -77,7 +78,8 @@ class PartnerBrandAppearanceTest {
         compose.onNodeWithText("Senha", substring = false).performTextInput("example-password")
         compose.onNodeWithTag("login_button").performClick()
         verify { auth.signInWithEmail("person@example.test", "example-password") }
-        compose.onNodeWithTag("technology_credit").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("login_content").performScrollToNode(hasTestTag("technology_credit"))
+        compose.onNodeWithTag("technology_credit").assertIsDisplayed()
         compose.onAllNodesWithText("Tecnologia Braga Saúde").assertCountEquals(1)
         screenshot("02-login-rodape")
     }
@@ -115,8 +117,10 @@ class PartnerBrandAppearanceTest {
         compose.onNodeWithText("Acesse sua conta").assertIsDisplayed()
         screenshot("05-login-escuro-fonte-ampliada")
         compose.onNodeWithTag("login_button").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("technology_credit").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("login_content").performScrollToNode(hasTestTag("technology_credit"))
+        compose.onNodeWithTag("technology_credit").assertIsDisplayed()
         compose.onNodeWithText("Privacidade").assertIsDisplayed()
+        screenshot("08-login-escuro-rodape")
     }
 
     @Test fun studioHasBrandedEntryPreviewWithTheSameIdentity() {

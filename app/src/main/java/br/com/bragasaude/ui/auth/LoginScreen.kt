@@ -219,6 +219,7 @@ fun LoginScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
                     .consumeWindowInsets(innerPadding)
+                    .testTag("login_content")
                     .imePadding()
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -786,33 +787,21 @@ fun LoginScreen(
                             }
 
 
-                            // Alternar entre Entrar e Cadastrar
-                            Row(
+                            // Uma ação inteira pode quebrar linha sem comprimir o link em fonte ampliada.
+                            TextButton(
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
+                                onClick = {
+                                    emailMode = if (emailMode == "login") "signup" else "login"
+                                    if (emailMode == "login") signupPurpose = "personal"
+                                    viewModel.clearAuthState()
+                                    signupOtpCode = ""
+                                }
                             ) {
                                 Text(
-                                    if (emailMode == "login") "Não tem uma conta?" else "Já possui uma conta?",
+                                    if (emailMode == "login") "Não tem uma conta? Cadastre-se" else "Já possui uma conta? Entrar",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    textAlign = TextAlign.Center
                                 )
-                                TextButton(
-                                    onClick = {
-                                        emailMode = if (emailMode == "login") "signup" else "login"
-                                        if (emailMode == "login") {
-                                            signupPurpose = "personal"
-                                        }
-                                        viewModel.clearAuthState()
-                                        signupOtpCode = ""
-                                    }
-                                ) {
-                                    Text(
-                                        if (emailMode == "login") "Cadastre-se" else "Entrar",
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
                             }
 
                             if (emailMode == "login" && recognizedInvite == null) {
