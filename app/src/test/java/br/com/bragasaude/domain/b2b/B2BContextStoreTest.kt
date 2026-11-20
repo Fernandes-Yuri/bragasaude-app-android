@@ -541,4 +541,35 @@ class B2BContextStoreTest {
         assertEquals(listOf("msg-new", "msg-old"), merged.map { it.messageId })
         assertEquals("2026-11-19T12:05:00Z", merged.first().readAt)
     }
+
+    @Test
+    fun b2b22AllSevenTemplatesAndNoCodeGuardrailsEnforceIsolation() {
+        val allTemplateKeys = listOf(
+            "CLINICA_GERAL",
+            "NUTRICAO_BEM_ESTAR",
+            "ATIVIDADE_FISICA",
+            "CUIDADO_SENIOR_HOMECARE",
+            "SAUDE_CORPORATIVA",
+            "PROGRAMA_CRONICO",
+            "CUSTOM"
+        )
+        allTemplateKeys.forEach { key ->
+            val cfg = ProgramExperienceConfigDto.defaultForTemplate(key)
+            assertTrue("Template $key deve ter schema valido", cfg.schemaVersion >= 1)
+            assertTrue("Template $key precisa habilitar ao menos 1 metrica", cfg.enabledMetrics.isNotEmpty())
+            assertTrue("Titulo do template $key dentro do limite", cfg.welcomeHeadline.length <= 80)
+        }
+
+        val corporate = ProgramExperienceConfigDto.defaultForTemplate("SAUDE_CORPORATIVA")
+        assertTrue(!corporate.enabledMetrics.contains("medications"))
+        assertTrue(!corporate.enabledMetrics.contains("authorized_records"))
+        assertTrue(!corporate.features.familyLinkEnabled)
+
+        val senior = ProgramExperienceConfigDto.defaultForTemplate("CUIDADO_SENIOR_HOMECARE")
+        assertTrue(senior.features.familyLinkEnabled)
+
+        assertNotNull(B2BOnboardingValidator.findUnsafeReminderPosologyHint("Tomar 2 comprimidos de 8/8h"))
+        assertNull(B2BOnboardingValidator.findUnsafeReminderPosologyHint("Beber 300 ml de agua antes da caminhada"))
+        assertNotNull(B2BOnboardingValidator.findDirectMessageValidationError("javascript:alert(1)"))
+    }
 }

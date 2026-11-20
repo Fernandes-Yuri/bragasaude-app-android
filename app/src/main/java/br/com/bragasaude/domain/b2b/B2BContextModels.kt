@@ -1198,6 +1198,14 @@ object B2BOnboardingValidator {
         if (lower.contains("data:image/") || lower.contains("data:application/") || lower.contains("data:text/html")) {
             return "Envio de imagens ou anexos não é permitido neste canal."
         }
+        if (
+            lower.contains("javascript:") ||
+            lower.contains("vbscript:") ||
+            lower.contains("intent:") ||
+            lower.contains("file://")
+        ) {
+            return "Links ou códigos executáveis não são permitidos neste canal."
+        }
         return null
     }
 }
