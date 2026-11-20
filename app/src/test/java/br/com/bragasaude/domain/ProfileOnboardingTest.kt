@@ -1,5 +1,6 @@
 ﻿package br.com.bragasaude.domain
 
+import br.com.bragasaude.domain.b2b.AppAccountMode
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -32,5 +33,20 @@ class ProfileOnboardingTest {
         assertFalse(ProfileOnboarding.isComplete("ADMIN", null, true, true))
         assertFalse(ProfileOnboarding.isComplete("PATIENT", null, true, false))
         assertTrue(ProfileOnboarding.isComplete("PATIENT", null, true, true))
+    }
+
+    @Test fun `business only skips personal onboarding and self care requirements`() {
+        assertTrue(ProfileOnboarding.isComplete(null, null, false, false, AppAccountMode.BUSINESS_ONLY.name))
+        assertTrue(ProfileOnboarding.isComplete(null, null, false, false, "business_only"))
+        assertFalse(ProfileOnboarding.needsSelfCare(null, null, false, false, AppAccountMode.BUSINESS_ONLY.name))
+        assertFalse(ProfileOnboarding.needsSelfCare("PATIENT", null, true, false, AppAccountMode.BUSINESS_ONLY.name))
+    }
+
+    @Test fun `dual and personal preserve personal onboarding contracts`() {
+        assertFalse(ProfileOnboarding.isComplete(null, null, false, false, AppAccountMode.DUAL.name))
+        assertFalse(ProfileOnboarding.isComplete("PATIENT", null, true, false, AppAccountMode.DUAL.name))
+        assertTrue(ProfileOnboarding.isComplete("PATIENT", null, true, true, AppAccountMode.DUAL.name))
+        assertFalse(ProfileOnboarding.isComplete(null, null, false, false, AppAccountMode.PERSONAL.name))
+        assertTrue(ProfileOnboarding.isComplete("PATIENT", null, true, true, null))
     }
 }

@@ -572,4 +572,44 @@ class B2BContextStoreTest {
         assertNull(B2BOnboardingValidator.findUnsafeReminderPosologyHint("Beber 300 ml de agua antes da caminhada"))
         assertNotNull(B2BOnboardingValidator.findDirectMessageValidationError("javascript:alert(1)"))
     }
+
+    @Test
+    fun `b2b30 ActiveContextStore gerencia BUSINESS_ONLY DUAL e reset pessoal sem vazar estado`() {
+        val store = ActiveContextStore()
+        val ownerCtx = B2BContextDescriptor(
+            mode = "PARTNER_OWNER",
+            userId = "owner-1",
+            programId = "prog-1",
+            programName = "Clinica Segura",
+            companyName = "Clinica LTDA",
+            primaryColor = "#1A6B5C",
+            approvalStatus = "DRAFT"
+        )
+        store.updateFromEnvelope(
+            userId = "owner-1",
+            envelope = B2BContextsEnvelope(
+                contexts = listOf(ownerCtx),
+                accountMode = "BUSINESS_ONLY",
+                defaultMode = "PARTNER_OWNER"
+            )
+        )
+        assertEquals(AppAccountMode.BUSINESS_ONLY, store.accountMode.value)
+        assertTrue(store.isBusinessSession.value)
+        assertEquals(AppContextMode.PARTNER_OWNER, store.activeContext.value.parsedMode)
+        assertFalse(store.setBusinessSessionActive(false))
+
+        store.updateAccountMode(AppAccountMode.DUAL, enterBusinessSession = false)
+        assertEquals(AppAccountMode.DUAL, store.accountMode.value)
+        assertFalse(store.isBusinessSession.value)
+        assertEquals(AppContextMode.PERSONAL, store.activeContext.value.parsedMode)
+
+        assertTrue(store.setBusinessSessionActive(true))
+        assertTrue(store.isBusinessSession.value)
+        assertEquals(AppContextMode.PARTNER_OWNER, store.activeContext.value.parsedMode)
+
+        store.resetToPersonal("owner-1")
+        assertEquals(AppAccountMode.PERSONAL, store.accountMode.value)
+        assertFalse(store.isBusinessSession.value)
+        assertEquals(AppContextMode.PERSONAL, store.activeContext.value.parsedMode)
+    }
 }

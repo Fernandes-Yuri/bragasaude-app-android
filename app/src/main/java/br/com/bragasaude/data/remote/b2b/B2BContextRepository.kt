@@ -4,9 +4,11 @@ import br.com.bragasaude.data.local.b2b.B2BContextCacheEntity
 import br.com.bragasaude.data.local.b2b.B2BContextDao
 import br.com.bragasaude.data.local.b2b.B2BDirectMessageEntity
 import br.com.bragasaude.data.remote.api.BragaApiClient
+import br.com.bragasaude.domain.b2b.AppAccountMode
 import br.com.bragasaude.domain.b2b.B2BContextDescriptor
 import br.com.bragasaude.domain.b2b.DirectChatMessageDto
 import br.com.bragasaude.domain.b2b.DirectChatThreadPageDto
+import br.com.bragasaude.domain.b2b.UpdateAccountModeResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -43,11 +45,9 @@ class B2BContextRepository @Inject constructor(
         withContext(Dispatchers.IO) {
             val cleanUid = userId.trim()
             if (cleanUid.isEmpty()) return@withContext emptyList()
-            val remote = apiClient.getB2BContexts()
-            if (remote.isEmpty()) {
-                return@withContext activeContextStore.availableContexts.value
-            }
-            activeContextStore.updateAvailableContexts(cleanUid, remote)
+            val envelope = apiClient.getB2BContextsEnvelope()
+                ?: return@withContext activeContextStore.availableContexts.value
+            activeContextStore.updateFromEnvelope(cleanUid, envelope)
             val currentActiveKey = activeContextStore.activeContext.value.cacheKey()
             val entities = activeContextStore.availableContexts.value.map { descriptor ->
                 B2BContextCacheEntity.fromDescriptor(
@@ -60,6 +60,23 @@ class B2BContextRepository @Inject constructor(
             b2bContextDao.replaceUserContexts(cleanUid, entities)
             activeContextStore.availableContexts.value
         }
+
+    suspend fun updateAccountMode(
+        userId: String,
+        target: AppAccountMode,
+        enterBusinessSession: Boolean? = null
+    ): UpdateAccountModeResult = withContext(Dispatchers.IO) {
+        val cleanUid = userId.trim()
+        val result = apiClient.updateAccountMode(target)
+        if (result.isSuccess) {
+            val resolved = AppAccountMode.fromWire(result.accountMode)
+            activeContextStore.updateAccountMode(resolved, enterBusinessSession)
+            if (cleanUid.isNotEmpty()) {
+                syncContexts(cleanUid)
+            }
+        }
+        result
+    }
 
     suspend fun selectContext(
         userId: String,

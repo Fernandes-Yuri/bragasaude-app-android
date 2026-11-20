@@ -83,11 +83,15 @@ class AuthViewModel @Inject constructor(
     private val _caregiverMode = MutableStateFlow<String?>(null)
     val caregiverMode = _caregiverMode.asStateFlow()
 
+    private val _accountMode = MutableStateFlow(br.com.bragasaude.domain.b2b.AppAccountMode.PERSONAL.name)
+    val accountMode = _accountMode.asStateFlow()
+
     data class PendingRegistration(
         val email: String,
         val password: String,
         val phoneNumber: String,
-        val channel: String
+        val channel: String,
+        val businessAccount: Boolean = false
     )
     private var _pendingRegistration: PendingRegistration? = null
 
@@ -129,6 +133,7 @@ class AuthViewModel @Inject constructor(
             _profileError.value = null
             _userRole.value = null
             _caregiverMode.value = null
+            _accountMode.value = br.com.bragasaude.domain.b2b.AppAccountMode.PERSONAL.name
             _needsSelfCare.value = false
             _sessionStatus.value = AppSessionStatus.NotAuthenticated
             _isProfileComplete.value = null
@@ -158,6 +163,13 @@ class AuthViewModel @Inject constructor(
 
     fun retryProfile() { auth.currentUser?.uid?.let { checkProfile(it, force = true) } }
 
+    private fun resolveB2BEntryPoint(): AuthB2BEntryPoint? = runCatching {
+        dagger.hilt.android.EntryPointAccessors.fromApplication(
+            appContext,
+            AuthB2BEntryPoint::class.java
+        )
+    }.getOrNull()
+
     /** Uma restauração por sessão; falha explícita permite retry sem exibir histórico vazio. */
     private fun startSessionRestore(userId: String, retry: Boolean = false) {
         if (!retry && restoreOwner == userId && (restoreJob?.isActive == true || _initialDataReady.value)) return
@@ -167,7 +179,12 @@ class AuthViewModel @Inject constructor(
         _initialSyncError.value = null
         restoreJob = viewModelScope.launch {
             try {
-                withTimeout(45_000L) { syncManager.downloadAllUserData(userId).getOrThrow() }
+                withTimeout(45_000L) {
+                    syncManager.downloadAllUserData(userId).getOrThrow()
+                    runCatching {
+                        resolveB2BEntryPoint()?.b2bContextRepository()?.syncContexts(userId)
+                    }
+                }
                 if (auth.currentUser?.uid == userId) _initialDataReady.value = true
             } catch (e: TimeoutCancellationException) {
                 if (auth.currentUser?.uid == userId) _initialSyncError.value = "A restauração dos seus dados demorou. Tente novamente com conexão."
@@ -219,6 +236,7 @@ class AuthViewModel @Inject constructor(
             _hasAcceptedConsent.value = null
             _userRole.value = null
             _caregiverMode.value = null
+            _accountMode.value = br.com.bragasaude.domain.b2b.AppAccountMode.PERSONAL.name
             _needsSelfCare.value = false
         }
         profileOwner = userId
@@ -268,17 +286,35 @@ class AuthViewModel @Inject constructor(
                     }
                     is LoginProfileResolution.Ready -> {
                         val profile = resolution.profile
+                        val resolvedAccountMode = profile?.accountMode
+                            ?: br.com.bragasaude.domain.b2b.AppAccountMode.PERSONAL.name
                         _hasAcceptedConsent.value = profile?.consentAcceptedAt != null
                         _userRole.value = profile?.userRole
                         _caregiverMode.value = profile?.caregiverMode
+                        _accountMode.value = resolvedAccountMode
+                        runCatching {
+                            resolveB2BEntryPoint()?.activeContextStore()?.updateAccountMode(
+                                br.com.bragasaude.domain.b2b.AppAccountMode.fromWire(resolvedAccountMode)
+                            )
+                        }
                         // G2 (doc 10 §3.2): o role agora é conhecido — re-registra o token
                         // para que broadcasts por papel (ex.: alerta clínico ao CAREGIVER)
                         // cheguem neste aparelho.
                         registerFcmToken()
-                        _needsSelfCare.value = ProfileOnboarding.needsSelfCare(profile?.userRole,
-                            profile?.caregiverMode, profile?.basicProfileComplete == true, profile?.selfCareComplete == true)
-                        _isProfileComplete.value = ProfileOnboarding.isComplete(profile?.userRole,
-                            profile?.caregiverMode, profile?.basicProfileComplete == true, profile?.selfCareComplete == true)
+                        _needsSelfCare.value = ProfileOnboarding.needsSelfCare(
+                            profile?.userRole,
+                            profile?.caregiverMode,
+                            profile?.basicProfileComplete == true,
+                            profile?.selfCareComplete == true,
+                            resolvedAccountMode
+                        )
+                        _isProfileComplete.value = ProfileOnboarding.isComplete(
+                            profile?.userRole,
+                            profile?.caregiverMode,
+                            profile?.basicProfileComplete == true,
+                            profile?.selfCareComplete == true,
+                            resolvedAccountMode
+                        )
                         _profileError.value = null
                     }
                 }
@@ -306,7 +342,36 @@ class AuthViewModel @Inject constructor(
                 } catch (e: CancellationException) { throw e }
                 catch (_: Exception) { ProfileLookup.Unavailable() }
                 android.util.Log.d("AuthViewModel", "Perfil resolvido para login: ${result::class.simpleName}")
-                render(result)
+                val prefs = runCatching {
+                    appContext.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+                }.getOrNull()
+                if (prefs?.getBoolean("pending_b2b_company_onboarding", false) == true) {
+                    val found = (result as? ProfileLookup.Found)?.profile
+                    if (found == null || (!found.basicProfileComplete && found.accountMode == "PERSONAL")) {
+                        val modeRes = runCatching {
+                            apiClient.updateAccountMode(br.com.bragasaude.domain.b2b.AppAccountMode.BUSINESS_ONLY)
+                        }.getOrNull()
+                        if (modeRes?.isSuccess == true) {
+                            repository.updateLocalAccountMode(
+                                userId,
+                                br.com.bragasaude.domain.b2b.AppAccountMode.BUSINESS_ONLY.name
+                            )
+                            runCatching {
+                                resolveB2BEntryPoint()?.activeContextStore()?.updateAccountMode(
+                                    br.com.bragasaude.domain.b2b.AppAccountMode.BUSINESS_ONLY,
+                                    enterBusinessSession = true
+                                )
+                            }
+                            render(repository.refreshProfileForLogin(userId))
+                        } else {
+                            render(result)
+                        }
+                    } else {
+                        render(result)
+                    }
+                } else {
+                    render(result)
+                }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) {
                 if (auth.currentUser?.uid == userId) {
@@ -320,7 +385,8 @@ class AuthViewModel @Inject constructor(
         _hasAcceptedConsent.value = true
         val uid = auth.currentUser?.uid ?: return
         viewModelScope.launch {
-            val base = repository.getProfileOneShotLocal(uid)?.toRemote() ?: RemoteProfile(id = uid)
+            val base = repository.getProfileOneShotLocal(uid)?.toRemote()
+                ?: RemoteProfile(id = uid, accountMode = _accountMode.value)
             repository.saveProfile(base.copy(consentAcceptedAt = base.consentAcceptedAt ?: java.time.Instant.now().toString()))
         }
     }
@@ -456,7 +522,7 @@ class AuthViewModel @Inject constructor(
      * Envia e-mail de boas-vindas e sugere vincular telefone (opcional).
      * Sem OTP obrigatório para entrar.
      */
-    fun signInWithGoogle(idToken: String) {
+    fun signInWithGoogle(idToken: String, businessAccount: Boolean = false) {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
@@ -465,7 +531,32 @@ class AuthViewModel @Inject constructor(
                 val user = result.user
                 val userId = user?.uid
                 if (userId != null) {
+                    if (businessAccount) {
+                        val modeRes = runCatching {
+                            apiClient.updateAccountMode(br.com.bragasaude.domain.b2b.AppAccountMode.BUSINESS_ONLY)
+                        }.getOrNull()
+                        if (modeRes?.isSuccess == true) {
+                            appContext.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+                                .edit()
+                                .putBoolean("pending_b2b_company_onboarding", true)
+                                .apply()
+                            repository.updateLocalAccountMode(
+                                userId,
+                                br.com.bragasaude.domain.b2b.AppAccountMode.BUSINESS_ONLY.name
+                            )
+                            _accountMode.value = br.com.bragasaude.domain.b2b.AppAccountMode.BUSINESS_ONLY.name
+                            runCatching {
+                                resolveB2BEntryPoint()?.activeContextStore()?.updateAccountMode(
+                                    br.com.bragasaude.domain.b2b.AppAccountMode.BUSINESS_ONLY,
+                                    enterBusinessSession = true
+                                )
+                            }
+                        }
+                    }
                     syncAfterLogin(userId)
+                    if (businessAccount) {
+                        checkProfile(userId, force = true)
+                    }
 
                     // 1. E-mail de boas-vindas assíncrono — SOMENTE na primeira vez que a
                     // conta Google entra no app (D-AUTH2). Antes o disparo era cego: todo
@@ -488,8 +579,8 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun signUpWithGoogle(idToken: String) {
-        signInWithGoogle(idToken)
+    fun signUpWithGoogle(idToken: String, businessAccount: Boolean = false) {
+        signInWithGoogle(idToken, businessAccount = businessAccount)
     }
 
     fun clearAuthState() {
@@ -506,7 +597,12 @@ class AuthViewModel @Inject constructor(
      *
      * A autenticação por código usa exclusivamente e-mail.
      */
-    fun signUpWithEmail(email: String, password: String, phoneNumber: String = "") {
+    fun signUpWithEmail(
+        email: String,
+        password: String,
+        phoneNumber: String = "",
+        businessAccount: Boolean = false
+    ) {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
@@ -533,7 +629,13 @@ class AuthViewModel @Inject constructor(
                 }
 
                 // Salva estado pendente
-                _pendingRegistration = PendingRegistration(email, password, phoneNumber, "EMAIL")
+                _pendingRegistration = PendingRegistration(
+                    email = email,
+                    password = password,
+                    phoneNumber = phoneNumber,
+                    channel = "EMAIL",
+                    businessAccount = businessAccount
+                )
 
                 // 2. Dispara OTP obrigatório por e-mail
                 val otpRes = apiClient.sendOtp(email, purpose = "REGISTRATION", channel = "EMAIL")
@@ -567,19 +669,47 @@ class AuthViewModel @Inject constructor(
                     return@launch
                 }
 
+                if (pending.businessAccount) {
+                    appContext.getSharedPreferences("braga_prefs", Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("pending_b2b_company_onboarding", true)
+                        .apply()
+                }
+
                 // OTP válido! Cria conta oficial no Firebase Auth
                 val result = auth.createUserWithEmailAndPassword(pending.email, pending.password).await()
                 val user = result.user
                 val userId = user?.uid
 
                 if (userId != null) {
+                    val accountModeValue = if (pending.businessAccount) {
+                        br.com.bragasaude.domain.b2b.AppAccountMode.BUSINESS_ONLY.name
+                    } else {
+                        br.com.bragasaude.domain.b2b.AppAccountMode.PERSONAL.name
+                    }
+                    if (pending.businessAccount) {
+                        runCatching {
+                            apiClient.updateAccountMode(br.com.bragasaude.domain.b2b.AppAccountMode.BUSINESS_ONLY)
+                        }
+                        _accountMode.value = accountModeValue
+                        runCatching {
+                            resolveB2BEntryPoint()?.activeContextStore()?.updateAccountMode(
+                                br.com.bragasaude.domain.b2b.AppAccountMode.BUSINESS_ONLY,
+                                enterBusinessSession = true
+                            )
+                        }
+                    }
                     val profile = RemoteProfile(
                         id = userId,
                         fullName = "",
-                        phone = if (pending.phoneNumber.isNotBlank()) pending.phoneNumber else null
+                        phone = if (pending.phoneNumber.isNotBlank()) pending.phoneNumber else null,
+                        accountMode = accountModeValue
                     )
                     repository.saveProfile(profile)
                     syncAfterLogin(userId)
+                    if (pending.businessAccount) {
+                        checkProfile(userId, force = true)
+                    }
 
                     // Envia e-mail de boas-vindas
                     apiClient.sendWelcomeEmail(pending.email)
@@ -900,6 +1030,8 @@ class AuthViewModel @Inject constructor(
         _hasAcceptedConsent.value = null
         _userRole.value = null
         _caregiverMode.value = null
+        _accountMode.value = br.com.bragasaude.domain.b2b.AppAccountMode.PERSONAL.name
+        _needsSelfCare.value = false
     }
 
     /**
@@ -1010,6 +1142,53 @@ class AuthViewModel @Inject constructor(
         _isProfileComplete.value = null
         _hasAcceptedConsent.value = null
         _userRole.value = null
+        _caregiverMode.value = null
+        _accountMode.value = br.com.bragasaude.domain.b2b.AppAccountMode.PERSONAL.name
+        _needsSelfCare.value = false
+    }
+
+    suspend fun switchAccountMode(
+        target: br.com.bragasaude.domain.b2b.AppAccountMode,
+        enterBusinessSession: Boolean? = null
+    ): br.com.bragasaude.domain.b2b.UpdateAccountModeResult {
+        val uid = auth.currentUser?.uid
+            ?: return br.com.bragasaude.domain.b2b.UpdateAccountModeResult(
+                errorDetail = "Sessão expirada. Entre novamente."
+            )
+        val entry = resolveB2BEntryPoint()
+        val repoResult = entry?.b2bContextRepository()?.updateAccountMode(
+            userId = uid,
+            target = target,
+            enterBusinessSession = enterBusinessSession
+        ) ?: apiClient.updateAccountMode(target).also { res ->
+            if (res.isSuccess) {
+                val resolved = br.com.bragasaude.domain.b2b.AppAccountMode.fromWire(res.accountMode)
+                entry?.activeContextStore()?.updateAccountMode(resolved, enterBusinessSession)
+            }
+        }
+        if (repoResult.isSuccess) {
+            val resolved = br.com.bragasaude.domain.b2b.AppAccountMode.fromWire(repoResult.accountMode)
+            _accountMode.value = resolved.name
+            repository.updateLocalAccountMode(uid, resolved.name)
+            checkProfile(uid, force = true)
+        }
+        return repoResult
+    }
+
+    fun enterBusinessSession() {
+        val entry = resolveB2BEntryPoint() ?: return
+        val switched = entry.activeContextStore().setBusinessSessionActive(true)
+        if (switched) {
+            val uid = auth.currentUser?.uid ?: return
+            viewModelScope.launch {
+                entry.b2bContextRepository().syncContexts(uid)
+            }
+        }
+    }
+
+    fun exitBusinessSession() {
+        resolveB2BEntryPoint()?.activeContextStore()?.setBusinessSessionActive(false)
+        auth.currentUser?.uid?.let { checkProfile(it, force = true) }
     }
 
     suspend fun lookupPartnerInvitePreview(code: String) =
@@ -1019,6 +1198,7 @@ class AuthViewModel @Inject constructor(
     @dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
     internal interface AuthB2BEntryPoint {
         fun b2bContextRepository(): br.com.bragasaude.data.remote.b2b.B2BContextRepository
+        fun activeContextStore(): br.com.bragasaude.data.remote.b2b.ActiveContextStore
         fun chatBackupRepository(): br.com.bragasaude.data.backup.ChatBackupRepository
     }
 }

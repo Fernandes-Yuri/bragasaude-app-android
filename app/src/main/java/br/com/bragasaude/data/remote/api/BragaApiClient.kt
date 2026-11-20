@@ -198,6 +198,9 @@ class BragaApiClient @Inject constructor(
                 caregiverMode = res.nullableString("caregiver_mode"),
                 avatarIdentifier = res.nullableString("avatar_identifier"),
                 photoUrl = res.nullableString("photo_url"),
+                accountMode = res.nullableString("accountMode")
+                    ?: res.nullableString("account_mode")
+                    ?: "PERSONAL",
             ))
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -3054,23 +3057,59 @@ class BragaApiClient @Inject constructor(
         }
     }
 
-    suspend fun getB2BContexts(): List<br.com.bragasaude.domain.b2b.B2BContextDescriptor> =
+    suspend fun getB2BContextsEnvelope(): br.com.bragasaude.domain.b2b.B2BContextsEnvelope? =
         withContext(Dispatchers.IO) {
             try {
-                val res = getJson("$baseUrl/api/b2b/contexts") ?: return@withContext emptyList()
-                val arr = res.optJSONArray("contexts") ?: return@withContext emptyList()
+                val res = getJson("$baseUrl/api/b2b/contexts") ?: return@withContext null
+                val arr = res.optJSONArray("contexts") ?: return@withContext null
                 val list = mutableListOf<br.com.bragasaude.domain.b2b.B2BContextDescriptor>()
                 for (i in 0 until arr.length()) {
                     parseContextDescriptorJson(arr.optJSONObject(i))?.let { list.add(it) }
                 }
-                list
+                br.com.bragasaude.domain.b2b.B2BContextsEnvelope(
+                    accountMode = res.optString("accountMode", "PERSONAL"),
+                    defaultMode = res.optString("defaultMode", "PERSONAL"),
+                    contexts = list
+                )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Falha ao listar contextos B2B: ${e.message}")
-                emptyList()
+                null
             }
         }
+
+    suspend fun getB2BContexts(): List<br.com.bragasaude.domain.b2b.B2BContextDescriptor> =
+        getB2BContextsEnvelope()?.contexts ?: emptyList()
+
+    suspend fun updateAccountMode(
+        mode: br.com.bragasaude.domain.b2b.AppAccountMode
+    ): br.com.bragasaude.domain.b2b.UpdateAccountModeResult = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("mode", mode.name)
+            }
+            val resp = postJsonDetailed("$baseUrl/api/b2b/account-mode", payload)
+            if (resp.code in 200..299 && resp.body != null) {
+                val resolvedMode = optNullableText(resp.body, "accountMode") ?: mode.name
+                val defaultMode = optNullableText(resp.body, "defaultMode")
+                return@withContext br.com.bragasaude.domain.b2b.UpdateAccountModeResult(
+                    accountMode = resolvedMode,
+                    defaultMode = defaultMode
+                )
+            }
+            br.com.bragasaude.domain.b2b.UpdateAccountModeResult(
+                errorDetail = resp.errorDetail ?: "Não foi possível atualizar o modo da conta."
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao atualizar modo da conta B2B: ${e.message}")
+            br.com.bragasaude.domain.b2b.UpdateAccountModeResult(
+                errorDetail = "Erro de conexão ao atualizar o modo da conta."
+            )
+        }
+    }
 
     suspend fun joinPartnerProgram(
         rawCode: String,

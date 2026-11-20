@@ -79,7 +79,8 @@ fun RemoteProfile.toEntity() = ProfileEntity(
     selfCareComplete = selfCareComplete,
     selfCareSetupPending = selfCareSetupPending,
     avatarIdentifier = avatarIdentifier,
-    customPhotoUri = photoUrl
+    customPhotoUri = photoUrl,
+    accountMode = accountMode
 )
 
 fun ProfileEntity.toRemote() = RemoteProfile(
@@ -119,7 +120,8 @@ fun ProfileEntity.toRemote() = RemoteProfile(
     basicProfileComplete = basicProfileComplete,
     selfCareComplete = selfCareComplete,
     selfCareSetupPending = selfCareSetupPending,
-    avatarIdentifier = avatarIdentifier
+    avatarIdentifier = avatarIdentifier,
+    accountMode = accountMode
 )
 
 fun RemoteBiometry.toEntity() = BiometryEntity(

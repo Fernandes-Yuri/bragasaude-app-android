@@ -7,6 +7,23 @@ import kotlinx.serialization.Serializable
  * (prontos para KMP / iOS). Zero dependencia de classes Android ou Room.
  */
 @Serializable
+enum class AppAccountMode {
+    PERSONAL,
+    BUSINESS_ONLY,
+    DUAL;
+
+    companion object {
+        fun fromWire(raw: String?): AppAccountMode {
+            return when (raw?.trim()?.uppercase()) {
+                "BUSINESS_ONLY" -> BUSINESS_ONLY
+                "DUAL" -> DUAL
+                else -> PERSONAL
+            }
+        }
+    }
+}
+
+@Serializable
 enum class AppContextMode {
     PERSONAL,
     PARTNER_OWNER,
@@ -199,9 +216,20 @@ data class B2BContextDescriptor(
 
 @Serializable
 data class B2BContextsEnvelope(
+    val accountMode: String = AppAccountMode.PERSONAL.name,
     val defaultMode: String = AppContextMode.PERSONAL.name,
     val contexts: List<B2BContextDescriptor> = emptyList()
 )
+
+@Serializable
+data class UpdateAccountModeResult(
+    val accountMode: String? = null,
+    val defaultMode: String? = null,
+    val errorDetail: String? = null
+) {
+    val isSuccess: Boolean
+        get() = !accountMode.isNullOrBlank()
+}
 
 @Serializable
 data class SelectB2BContextRequest(

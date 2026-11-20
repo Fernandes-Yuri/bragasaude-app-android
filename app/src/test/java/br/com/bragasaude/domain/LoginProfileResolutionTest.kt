@@ -29,4 +29,29 @@ class LoginProfileResolutionTest {
     @Test fun transientNullIsLoadingInsteadOfIncomplete() {
         assertEquals(LoginProfileResolution.Loading, resolveLoginProfile(null, null))
     }
+
+    @Test fun businessOnlyProfileResolvesReadyWithoutPersonalBiometrics() {
+        val businessOnly = ProfileEntity(
+            userId = "biz-owner-1",
+            consentAcceptedAt = Date(),
+            basicProfileComplete = false,
+            selfCareComplete = false,
+            accountMode = "BUSINESS_ONLY"
+        )
+        assertEquals(
+            LoginProfileResolution.Ready(businessOnly),
+            resolveLoginProfile(businessOnly, ProfileLookup.Unavailable())
+        )
+    }
+
+    @Test fun dualProfileWithoutPersonalBiometricsStillRequiresPersonalCompletion() {
+        val dualIncomplete = ProfileEntity(
+            userId = "dual-owner-1",
+            consentAcceptedAt = Date(),
+            basicProfileComplete = false,
+            selfCareComplete = false,
+            accountMode = "DUAL"
+        )
+        assertTrue(resolveLoginProfile(dualIncomplete, ProfileLookup.Unavailable()) is LoginProfileResolution.Unavailable)
+    }
 }

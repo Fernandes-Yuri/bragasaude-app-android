@@ -86,7 +86,8 @@ data class ProfileEntity(
     val caregiverMode: String? = null,
     val avatarIdentifier: String? = null,
     val customPhotoUri: String? = null,
-    val communityNickname: String? = null
+    val communityNickname: String? = null,
+    val accountMode: String = "PERSONAL"
 )
 
 

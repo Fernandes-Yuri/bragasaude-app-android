@@ -163,7 +163,7 @@ class FamilyChatMigrationTest {
                 .addMigrations(*Migrations.ALL)
                 .build()
             try {
-                assertEquals(69, db.openHelper.readableDatabase.version)
+                assertEquals(70, db.openHelper.readableDatabase.version)
                 val vitals = db.vitalSignDao().getAllOneShot("mariana")
                 assertEquals(1, vitals.size)
                 assertEquals(98.2, vitals.single().oxygenSaturation!!, 0.001)

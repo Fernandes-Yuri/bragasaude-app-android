@@ -39,7 +39,7 @@ import androidx.room.TypeConverters
         NotificationItemEntity::class,
         NotificationSyncStateEntity::class
     ],
-    version = 69, // Central de notificações persistente no Room (RTL-07)
+    version = 70, // Sessao Empresarial Pura B2B-30 (accountMode em profiles_local)
     exportSchema = true
 )
 @TypeConverters(Converters::class, SmokingSupportConverters::class)

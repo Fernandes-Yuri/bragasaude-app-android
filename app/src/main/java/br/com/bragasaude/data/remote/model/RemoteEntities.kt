@@ -89,6 +89,7 @@ data class RemoteProfile(
     @SerialName("caregiver_mode") val caregiverMode: String? = null,
     @SerialName("avatar_identifier") val avatarIdentifier: String? = null,
     @SerialName("photo_url") val photoUrl: String? = null,
+    @SerialName("account_mode") val accountMode: String = "PERSONAL",
 )
 
 

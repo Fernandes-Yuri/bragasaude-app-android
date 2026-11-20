@@ -16,9 +16,11 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
 import br.com.bragasaude.MainActivity
+import br.com.bragasaude.domain.b2b.AppAccountMode
 import br.com.bragasaude.ui.auth.AppSessionStatus
 import br.com.bragasaude.ui.auth.AuthViewModel
 import br.com.bragasaude.ui.auth.LoginScreen
+import br.com.bragasaude.ui.b2b.PartnerBusinessScaffold
 import br.com.bragasaude.ui.components.RiskNotificationDialog
 import br.com.bragasaude.ui.legal.PrivacyPolicyScreen
 import br.com.bragasaude.ui.legal.TermsOfUseScreen
@@ -61,6 +63,7 @@ fun AppContent(activity: MainActivity) {
     val userRole by authViewModel.userRole.collectAsState()
     val caregiverMode by authViewModel.caregiverMode.collectAsState()
     val needsSelfCare by authViewModel.needsSelfCare.collectAsState()
+    val accountMode by authViewModel.accountMode.collectAsState()
     // DT-054: vínculo efetivo como cuidador (Room SSOT, reativo). É a fonte do
     // menu inferior e do destino inicial — não confiar apenas na string userRole,
     // que pode ter sido gravada por engano (Painel fantasma para quem é cuidado).
@@ -71,6 +74,14 @@ fun AppContent(activity: MainActivity) {
 
     val context = LocalContext.current
     val appContext = context.applicationContext
+    val activeContextStore = remember(appContext) {
+        EntryPointAccessors.fromApplication(appContext, AppUpdateEntryPoint::class.java)
+            .activeContextStore()
+    }
+    val isStoreBusinessSession by activeContextStore.isBusinessSession.collectAsState()
+    val isBusinessSessionActive =
+        accountMode == AppAccountMode.BUSINESS_ONLY.name ||
+            (accountMode == AppAccountMode.DUAL.name && isStoreBusinessSession)
 
 
     Surface(
@@ -83,8 +94,11 @@ fun AppContent(activity: MainActivity) {
                 var legalSubView by remember { mutableStateOf<String?>(null) }
                 androidx.activity.compose.BackHandler(enabled = legalSubView != null) { legalSubView = null }
 
-                LaunchedEffect(userRole, caregiverMode) {
-                    if (caregiverMode == "VIEWER_ONLY") {
+                LaunchedEffect(userRole, caregiverMode, isBusinessSessionActive, accountMode) {
+                    if (isBusinessSessionActive ||
+                        accountMode == AppAccountMode.BUSINESS_ONLY.name ||
+                        caregiverMode == "VIEWER_ONLY"
+                    ) {
                         NotificationHelper.cancelHydrationReminders(appContext)
                     } else if (userRole != null) {
                         // Trava de silêncio noturno: não dispara lembretes de hidratação
@@ -138,6 +152,17 @@ fun AppContent(activity: MainActivity) {
                                     onConsentAccepted = { authViewModel.setConsentAccepted() },
                                     isPostLogin = true
                                 )
+                                isBusinessSessionActive -> {
+                                    if (!initialDataReady) {
+                                        if (initialSyncError != null) ProfileErrorState(
+                                            error = initialSyncError,
+                                            onRetry = authViewModel::retryInitialSync,
+                                            onSignOut = { sessionScope.launch { authViewModel.signOut() } }
+                                        ) else LoadingOverlay(onExit = { sessionScope.launch { authViewModel.signOut() } })
+                                    } else {
+                                        PartnerBusinessScaffold(authViewModel = authViewModel)
+                                    }
+                                }
                                 isProfileComplete == false -> {
                                     val effectiveRole = tempRole ?: userRole
                                     when {
@@ -404,4 +429,5 @@ private fun ConsentFlow(
 @InstallIn(SingletonComponent::class)
 interface AppUpdateEntryPoint {
     fun bragaApiClient(): br.com.bragasaude.data.remote.api.BragaApiClient
+    fun activeContextStore(): br.com.bragasaude.data.remote.b2b.ActiveContextStore
 }
