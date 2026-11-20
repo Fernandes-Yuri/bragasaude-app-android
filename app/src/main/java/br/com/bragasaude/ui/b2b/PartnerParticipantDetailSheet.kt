@@ -141,6 +141,11 @@ fun PartnerWalletFiltersSection(
             }
         )
 
+        Text(
+            text = "Prioridade",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -167,6 +172,17 @@ fun PartnerWalletFiltersSection(
                     selectedLabelColor = MaterialTheme.colorScheme.onError
                 )
             )
+        }
+        Text(
+            text = "Categoria",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             FilterChip(
                 selected = selectedCategory == null,
                 onClick = { onSelectCategory(null) },
@@ -436,11 +452,12 @@ fun ParticipantDetailBottomSheet(
                     ) {
                         val steps = summary.stepsSection ?: return@MetricSlotSection
                         val recent = steps.days.take(5).joinToString("\n") { d ->
-                            "• ${B2BTextFormatters.formatIsoDate(d.date)}: ${d.steps} passos (${d.activeMinutes} min ativos)"
+                            "• ${B2BTextFormatters.formatIsoDate(d.date)}: ${d.steps} ${B2BTextFormatters.plural(d.steps, "passo", "passos")} " +
+                                "(${d.activeMinutes} ${B2BTextFormatters.plural(d.activeMinutes, "min ativo", "min ativos")})"
                         }
                         SummaryMetricCard(
                             title = "Passos (${steps.source})",
-                            body = "Média de ${steps.averageSteps} passos por dia em ${B2BTextFormatters.days(steps.daysRecorded)}." +
+                            body = "Média de ${steps.averageSteps} ${B2BTextFormatters.plural(steps.averageSteps, "passo", "passos")} por dia em ${B2BTextFormatters.days(steps.daysRecorded)}." +
                                 if (recent.isNotBlank()) "\n$recent" else ""
                         )
                     }
