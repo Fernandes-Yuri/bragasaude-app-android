@@ -474,13 +474,15 @@ class ProfileViewModel @Inject constructor(
             onAccepted()
             return
         }
-        val current = _profile.value ?: RemoteProfile(id = userId)
         val nowIso = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).format(java.util.Date())
-        val updated = current.copy(consentAcceptedAt = nowIso)
 
         viewModelScope.launch {
             _isLoading.value = true
             try {
+                val base = _profile.value
+                    ?: repository.getProfileOneShotLocal(userId)?.toRemote()
+                    ?: RemoteProfile(id = userId)
+                val updated = base.copy(consentAcceptedAt = base.consentAcceptedAt ?: nowIso)
                 repository.saveProfile(updated)
                 _profile.value = updated
             } catch (e: Exception) {
