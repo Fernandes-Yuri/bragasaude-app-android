@@ -364,11 +364,20 @@ fun OrbChatContent(
 
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(dotColor.copy(alpha = pulseAlpha))
-                            .semantics { contentDescription = connectionLabel })
-                        Spacer(Modifier.width(8.dp))
-                        Text("Braga Assistente", style = MaterialTheme.typography.titleMedium)
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(dotColor.copy(alpha = pulseAlpha))
+                                .semantics { contentDescription = connectionLabel })
+                            Spacer(Modifier.width(8.dp))
+                            Text("Braga Assistente", style = MaterialTheme.typography.titleMedium)
+                        }
+                        Text(
+                            text = "Salvo apenas neste aparelho",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF64748B),
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -420,20 +429,22 @@ fun OrbChatContent(
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                shape = RoundedCornerShape(10.dp),
-                color = Color(0xFFF1F5F9)
-            ) {
-                Text(
-                    text = br.com.bragasaude.domain.b2b.B2BThemeEngine.LOCAL_CHAT_DEVICE_ONLY_NOTICE,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF475569),
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                )
-            }
             if (state.showHistory) {
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    item(key = "historyDeviceRetentionNotice") {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFFF1F5F9)
+                        ) {
+                            Text(
+                                text = br.com.bragasaude.domain.b2b.B2BThemeEngine.LOCAL_CHAT_DEVICE_ONLY_NOTICE,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF475569),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
                     item {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -504,7 +515,17 @@ fun OrbChatContent(
                                         Text("Olá! Como posso ajudar com sua saúde hoje?", color = Color(0xFF1E293B))
                                     }
 
-                                    Spacer(Modifier.height(24.dp))
+                                    Spacer(Modifier.height(10.dp))
+
+                                    Text(
+                                        text = br.com.bragasaude.domain.b2b.B2BThemeEngine.LOCAL_CHAT_DEVICE_ONLY_NOTICE,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFF64748B),
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(horizontal = 24.dp)
+                                    )
+
+                                    Spacer(Modifier.height(16.dp))
 
                                     var suggestionTime by remember { mutableStateOf(java.time.LocalTime.now()) }
                                     LaunchedEffect(Unit) {
