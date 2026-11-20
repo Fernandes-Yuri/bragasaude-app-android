@@ -41,7 +41,6 @@ import br.com.bragasaude.domain.b2b.EnrollmentAppointmentsFeedDto
 import br.com.bragasaude.domain.b2b.EnrollmentRemindersFeedDto
 import br.com.bragasaude.domain.b2b.PartnerApprovalStatus
 import br.com.bragasaude.domain.b2b.PartnerProgramDto
-import br.com.bragasaude.domain.b2b.PartnerInvitePreviewDto
 import br.com.bragasaude.ui.auth.PartnerLoginPreview
 import br.com.bragasaude.domain.b2b.PartnerReminderType
 import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
@@ -858,13 +857,7 @@ fun PartnerPreviewTabContent(
                         PartnerBrandTheme(primaryColorHex) {
                             Box(modifier = Modifier.padding(16.dp)) {
                                 when (surfaceMode) {
-                                    PreviewSurfaceMode.LOGIN -> PartnerLoginPreview(
-                                        PartnerInvitePreviewDto(
-                                            programId = "studio-preview", companyName = companyName.ifBlank { "Sua Empresa" },
-                                            programName = programName.ifBlank { "Seu Programa" }, logoUrl = logoUrl,
-                                            primaryColor = primaryColorHex ?: "#00695C", inviteCode = "PREVIEW"
-                                        )
-                                    )
+                                    PreviewSurfaceMode.LOGIN -> PartnerLoginPreview()
                                     PreviewSurfaceMode.HOME -> {
                                         ParticipantExperienceContent(
                                             programName = programName.ifBlank { "Seu Programa" },
@@ -1353,7 +1346,7 @@ fun ParticipantExperienceContent(
 }
 
 @Composable
-private fun ProgramRemindersParticipantCard(
+internal fun ProgramRemindersParticipantCard(
     programName: String,
     companyName: String,
     feed: EnrollmentRemindersFeedDto?,

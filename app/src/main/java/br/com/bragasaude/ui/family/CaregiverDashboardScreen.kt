@@ -479,14 +479,9 @@ private fun FamilyPartnerProgramCard(
     acknowledging: Boolean,
     onAcknowledge: (String) -> Unit
 ) {
-    val brandColor = remember(program.primaryColor) {
-        val rgb = br.com.bragasaude.domain.b2b.B2BThemeEngine.parseHexRgb(program.primaryColor)
-        Color(rgb.first, rgb.second, rgb.third)
-    }
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.size(12.dp).background(brandColor, CircleShape))
                 Column {
                     Text(program.programName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(program.companyName, style = MaterialTheme.typography.bodySmall)

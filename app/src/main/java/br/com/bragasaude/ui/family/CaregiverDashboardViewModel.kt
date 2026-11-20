@@ -574,6 +574,13 @@ class CaregiverDashboardViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        _watchedPatients.value = emptyList()
+        _dashboard.value = CaregiverDashboardState()
+        _upcomingConsultations.value = emptyList()
+        _partnerPrograms.value = emptyList()
+        _partnerProgramsError.value = null
+        _acknowledgingPartnerReminder.value = false
+        _lastCloudSync.value = null
         super.onCleared()
         authListener?.let { auth.removeAuthStateListener(it) }
         bindingsJob?.cancel()

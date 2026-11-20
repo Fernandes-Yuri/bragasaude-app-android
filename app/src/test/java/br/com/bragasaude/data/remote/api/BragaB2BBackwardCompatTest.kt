@@ -38,7 +38,7 @@ class BragaB2BBackwardCompatTest {
             server.enqueue(MockResponse().setBody(context))
             assertTrue(api.joinPartnerProgram("CARD-4F9A", listOf("steps")).isSuccess)
             val defaultJoin = server.takeRequest()
-            assertEquals("/api/b2b/enrollments/join", defaultJoin.path)
+            assertEquals("/api/programs/join", defaultJoin.path)
             assertEquals(false, org.json.JSONObject(defaultJoin.body.readUtf8()).getBoolean("familyShareEnabled"))
 
             server.enqueue(MockResponse().setBody(context))
@@ -192,7 +192,7 @@ class BragaB2BBackwardCompatTest {
             assertTrue(store.selectContext("patient-1", partnerCtx))
 
             server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
-            client.newCall(Request.Builder().url(server.url("/api/b2b/contexts")).build()).execute().close()
+            client.newCall(Request.Builder().url(server.url("/api/session/contexts")).build()).execute().close()
             val partnerReq = server.takeRequest()
             assertEquals("11111111-1111-1111-1111-111111111111", partnerReq.getHeader(ActiveContextStore.HEADER_PROGRAM_ID))
             assertEquals("PARTNER_PARTICIPANT", partnerReq.getHeader(ActiveContextStore.HEADER_CONTEXT_MODE))
@@ -539,7 +539,7 @@ class BragaB2BBackwardCompatTest {
             assertEquals(1, templates.size)
             assertEquals("NUTRICAO_BEM_ESTAR", templates[0].templateKey)
             assertTrue(templates[0].defaultConfig.features.aiReceptionistEnabled)
-            assertEquals("/api/b2b/templates", server.takeRequest().path)
+            assertEquals("/api/business/registration/templates", server.takeRequest().path)
 
             server.enqueue(
                 MockResponse().setBody(
@@ -618,7 +618,7 @@ class BragaB2BBackwardCompatTest {
             assertTrue(parsedCtxs[0].familyShareEnabled)
             assertEquals("Rotina Personalizada", parsedCtxs[0].experienceConfig?.welcomeHeadline)
             assertTrue(!parsedCtxs[0].resolvedExperienceConfig().features.appointmentsEnabled)
-            assertEquals("/api/b2b/contexts", server.takeRequest().path)
+            assertEquals("/api/session/contexts", server.takeRequest().path)
         }
     }
 
@@ -886,7 +886,7 @@ class BragaB2BBackwardCompatTest {
             val prog = api.getMyPartnerProgram()
             assertNotNull(prog)
             assertEquals(true, prog!!.aiPaused)
-            assertEquals("/api/b2b/program/me", server.takeRequest().path)
+            assertEquals("/api/business/registration", server.takeRequest().path)
 
             server.enqueue(
                 MockResponse()
@@ -1370,9 +1370,9 @@ class BragaB2BBackwardCompatTest {
             assertEquals("BUSINESS_ONLY", env!!.accountMode)
             assertEquals("PARTNER_OWNER", env.defaultMode)
             assertEquals(2, env.contexts.size)
-            assertEquals("/api/b2b/contexts", server.takeRequest().path)
+            assertEquals("/api/session/contexts", server.takeRequest().path)
 
-            // 2) POST /api/b2b/account-mode
+            // 2) POST /api/session/account-mode
             server.enqueue(
                 MockResponse().setBody(
                     """{"accountMode":"DUAL","defaultMode":"PERSONAL"}"""
@@ -1383,7 +1383,7 @@ class BragaB2BBackwardCompatTest {
             assertEquals("DUAL", updatedMode.accountMode)
             assertEquals("PERSONAL", updatedMode.defaultMode)
             val modeReq = server.takeRequest()
-            assertEquals("/api/b2b/account-mode", modeReq.path)
+            assertEquals("/api/session/account-mode", modeReq.path)
             assertEquals("DUAL", org.json.JSONObject(modeReq.body.readUtf8()).getString("mode"))
 
             // 3) GET /api/profile/{uid} legado sem campo account_mode/accountMode assume PERSONAL
@@ -1424,4 +1424,29 @@ class BragaB2BBackwardCompatTest {
             server.takeRequest()
         }
     }
+    @Test
+    fun `wallet parses additive KPI fields and accepts old responses without inventing metrics`(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'),
+                stubAuthService(), OkHttpClient(), FamilyE2eeManager())
+            server.enqueue(MockResponse().setBody("""{"participants":[{"patientUserId":"u","displayName":"Ana",
+                "activityDatesLast7Days":["2026-11-20"],"pendingRemindersCount":2,"upcomingAppointmentsCount":1,
+                "consentStatus":"PARTIAL"}],"kpis":{"activeUsers":8,"inactiveUsers":2,"retentionRate":75.0,
+                "remindersRead":12,"appointmentsConfirmed":3}}"""))
+            val page = api.getMyPartnerParticipants()!!
+            assertEquals(8, page.kpis!!.activeUsers)
+            assertEquals(75.0, page.kpis!!.retentionRate!!, 0.01)
+            assertEquals(listOf("2026-11-20"), page.participants.single().activityDatesLast7Days)
+            assertEquals(2, page.participants.single().pendingRemindersCount)
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody("""{"participants":[{"patientUserId":"u","displayName":"Ana"}]}"""))
+            val old = api.getMyPartnerParticipants()!!
+            assertNull(old.kpis)
+            assertNull(old.participants.single().activityDatesLast7Days)
+            assertNull(old.participants.single().pendingRemindersCount)
+            server.takeRequest()
+        }
+    }
+
 }

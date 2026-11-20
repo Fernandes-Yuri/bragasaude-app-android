@@ -81,6 +81,7 @@ class B2BContextStoreTest {
             programId = "11111111-1111-1111-1111-111111111111",
             programName = "Programa Cardio"
         )
+        store.updateAccountMode(AppAccountMode.BUSINESS_ONLY)
         store.updateAvailableContexts("user-1", listOf(ownerCtx))
         assertTrue(store.selectContext("user-1", ownerCtx))
         assertEquals("11111111-1111-1111-1111-111111111111", store.currentHeaderProgramId())
@@ -612,4 +613,42 @@ class B2BContextStoreTest {
         assertFalse(store.isBusinessSession.value)
         assertEquals(AppContextMode.PERSONAL, store.activeContext.value.parsedMode)
     }
+    @Test
+    fun `PERSONAL rejeita proprietario mesmo vindo de cache e BUSINESS_ONLY rejeita participante`() {
+        val store = ActiveContextStore()
+        val owner = B2BContextDescriptor(mode = "PARTNER_OWNER", userId = "u", programId = "p")
+        val patient = owner.copy(mode = "PARTNER_PARTICIPANT")
+        store.updateFromEnvelope("u", B2BContextsEnvelope(contexts = listOf(owner, patient), accountMode = "PERSONAL"))
+        assertFalse(store.availableContexts.value.any { it.parsedMode == AppContextMode.PARTNER_OWNER })
+        assertFalse(store.selectContext("u", owner))
+        assertFalse(store.setBusinessSessionActive(true))
+        store.updateFromEnvelope("u", B2BContextsEnvelope(contexts = listOf(owner, patient), accountMode = "BUSINESS_ONLY"))
+        assertFalse(store.availableContexts.value.any { it.parsedMode == AppContextMode.PARTNER_PARTICIPANT })
+        assertFalse(store.selectContext("u", patient))
+        assertFalse(store.selectContext("u", B2BContextDescriptor.personal("u")))
+    }
+
+    @Test
+    fun `DUAL nao entra automaticamente e limpa memoria antes de publicar nova sessao`() {
+        val store = ActiveContextStore()
+        val owner = B2BContextDescriptor(mode = "PARTNER_OWNER", userId = "u", programId = "p")
+        val envelope = B2BContextsEnvelope(contexts = listOf(owner), accountMode = "DUAL", defaultMode = "PARTNER_OWNER")
+        store.updateFromEnvelope("u", envelope)
+        assertFalse(store.isBusinessSession.value)
+        assertFalse(store.selectContext("u", owner))
+        var resets = 0
+        val remove = store.addSessionResetListener {
+            assertEquals(resets == 1, store.isBusinessSession.value)
+            resets++
+        }
+        assertTrue(store.setBusinessSessionActive(true))
+        assertEquals(1, resets)
+        store.updateFromEnvelope("u", envelope)
+        assertEquals(1, resets)
+        assertTrue(store.setBusinessSessionActive(false))
+        assertEquals(2, resets)
+        assertNull(store.currentHeaderProgramId())
+        remove()
+    }
+
 }

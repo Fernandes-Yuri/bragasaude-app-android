@@ -28,7 +28,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import br.com.bragasaude.data.remote.repository.NotificationCategoryFilter
 import br.com.bragasaude.data.remote.repository.NotificationDisplayItem
-import br.com.bragasaude.ui.MainViewModel
 import br.com.bragasaude.ui.components.BragaFormSheet
 import br.com.bragasaude.ui.components.EmeraldHeaderBanner
 import br.com.bragasaude.ui.theme.BragaBackground
@@ -48,7 +47,7 @@ fun NotificationsScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val mainViewModel: MainViewModel = hiltViewModel(context.findActivity()!!)
+    val mainViewModel = checkNotNull(br.com.bragasaude.ui.LocalPersonalMainViewModel.current)
     val alerts by viewModel.clinicalAlerts.collectAsState()
     val readAlerts by viewModel.readAlerts.collectAsState()
     val identifiedAt by viewModel.alertIdentifiedAt.collectAsState()

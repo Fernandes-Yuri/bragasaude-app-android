@@ -25,9 +25,13 @@ class AuthInterceptor @Inject constructor(
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
 
-        // Rotas públicas que não precisam de token
+        // Rotas públicas que não precisam de token. O convite é capability URL
+        // pública nas duas formas: a canônica (/api/programs/invite/) e a
+        // legada (/api/b2b/invite/), mantida para APKs antigos.
         val path = originalRequest.url.encodedPath
-        if (path.contains("/api/app/latest") || path.contains("/public/") || path.contains("/api/b2b/invite/")) {
+        if (path.contains("/api/app/latest") || path.contains("/public/") ||
+            path.contains("/api/b2b/invite/") || path.contains("/api/programs/invite/")
+        ) {
             return chain.proceed(originalRequest)
         }
 

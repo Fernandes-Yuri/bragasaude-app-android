@@ -191,118 +191,32 @@ fun WalletParticipantCard(
     softSurface: Color,
     onClick: () -> Unit
 ) {
-    val activeCats = item.effectiveCategories.ifEmpty { item.sharedCategories }
-    val activeLabels = activeCats.mapNotNull { SharedCategoryOption.fromWire(it)?.titlePtBr }
-    val missingLabels = item.missingProgramCategories.mapNotNull { SharedCategoryOption.fromWire(it)?.titlePtBr }
-
-    val badges = buildList {
-        if (item.pendingAppointmentsCount > 0) {
-            add("${item.pendingAppointmentsCount} agend. pendente(s)" to true)
-        }
-        if (item.unreadDirectMessagesCount > 0) {
-            add("${item.unreadDirectMessagesCount} msg não lida(s)" to true)
-        }
-        if (item.familySupportActive) {
-            add((item.familySupportSummary?.takeIf { it.isNotBlank() } ?: "Rede familiar ativa") to false)
-        }
-        if (missingLabels.isNotEmpty()) {
-            add("${missingLabels.size} módulo(s) não compartilhado(s)" to false)
-        }
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
+    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(brandPrimary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = (item.displayName.firstOrNull() ?: 'P').uppercaseChar().toString(),
-                        color = brandOnPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.displayName,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = if (activeLabels.isEmpty()) {
-                            "Nenhum módulo compartilhado no momento"
-                        } else {
-                            "Liberados: ${activeLabels.joinToString(", ")}"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    item.consentedAt?.take(10)?.takeIf { it.length == 10 }?.let { datePrefix ->
-                        Text(
-                            text = "Vínculo ativo desde $datePrefix",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = "Abrir detalhes do participante",
-                    tint = brandAccent,
-                    modifier = Modifier.size(18.dp)
-                )
+        colors = CardDefaults.cardColors(containerColor = softSurface)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(item.displayName, modifier = Modifier.weight(1f), maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold)
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, "Abrir detalhes", tint = brandAccent)
             }
-
-            if (badges.isNotEmpty()) {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(badges) { (label, highlight) ->
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (highlight) {
-                                brandPrimary.copy(alpha = 0.14f)
-                            } else {
-                                softSurface
-                            },
-                            border = BorderStroke(
-                                1.dp,
-                                if (highlight) brandPrimary.copy(alpha = 0.35f)
-                                else MaterialTheme.colorScheme.outlineVariant
-                            )
-                        ) {
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = if (highlight) FontWeight.Bold else FontWeight.Medium,
-                                color = if (highlight) brandAccent else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-                }
+            Text("Atividade no programa · 7 dias", style = MaterialTheme.typography.labelSmall)
+            Text(item.activityDatesLast7Days?.let { "${it.size}/7 dias ativos" } ?: "Atividade indisponível",
+                style = MaterialTheme.typography.bodyMedium, color = brandAccent)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Lembretes: ${item.pendingRemindersCount?.toString() ?: "—"} pendentes",
+                    style = MaterialTheme.typography.labelSmall)
+                Text("Agenda: ${item.upcomingAppointmentsCount?.toString() ?: "—"} em 7 dias",
+                    style = MaterialTheme.typography.labelSmall)
             }
+            val consent = when (item.consentStatus) {
+                "COMPLETE" -> "Completo"
+                "PARTIAL" -> "Parcial"
+                "NONE" -> "Sem categorias autorizadas"
+                else -> "Indisponível"
+            }
+            Text("Consentimento: $consent", style = MaterialTheme.typography.labelSmall)
         }
     }
 }

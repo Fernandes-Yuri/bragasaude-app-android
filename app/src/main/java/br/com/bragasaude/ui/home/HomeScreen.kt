@@ -231,17 +231,8 @@ fun HomeScreen(
                     partnerContexts.isNotEmpty()
                 ) {
                     item {
-                        val previewCtx = if (activeB2BContext.isPartnerContext &&
-                            activeB2BContext.parsedMode == br.com.bragasaude.domain.b2b.AppContextMode.PARTNER_PARTICIPANT
-                        ) {
-                            activeB2BContext
-                        } else {
-                            partnerContexts.first()
-                        }
-                        val tokens = br.com.bragasaude.domain.b2b.B2BThemeEngine
-                            .resolveAccessiblePalette(previewCtx.primaryColor)
-                        val bannerBg = Color(android.graphics.Color.parseColor(tokens.primaryHex))
-                        val bannerFg = Color(android.graphics.Color.parseColor(tokens.onPrimaryHex))
+                        val bannerBg = MaterialTheme.colorScheme.surfaceContainer
+                        val bannerFg = MaterialTheme.colorScheme.onSurface
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -260,7 +251,7 @@ fun HomeScreen(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = previewCtx.programName ?: "Programa Parceiro",
+                                        text = "Meus programas",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = bannerFg,
@@ -268,7 +259,7 @@ fun HomeScreen(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = "${previewCtx.companyName ?: "Parceiro"} · Abrir espaço do programa e PDF",
+                                        text = "Lembretes e agendamentos recebidos",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = bannerFg.copy(alpha = 0.88f),
                                         maxLines = 1,

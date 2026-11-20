@@ -10,7 +10,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import br.com.bragasaude.ui.AppContent
@@ -22,7 +21,8 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    private val mainViewModel: MainViewModel by viewModels()
+    internal var sessionMainViewModel: MainViewModel? = null
+    @javax.inject.Inject lateinit var activeContextStore: br.com.bragasaude.data.remote.b2b.ActiveContextStore
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -32,10 +32,12 @@ class MainActivity : ComponentActivity() {
             results[Manifest.permission.ACTIVITY_RECOGNITION] ?: false
         } else true
         if (locationGranted && activityGranted) startTrackingService()
-        mainViewModel.notifyPermissionResult()
+        sessionMainViewModel?.notifyPermissionResult()
     }
 
     internal fun startTrackingService() {
+        if (activeContextStore.isBusinessSession.value ||
+            activeContextStore.accountMode.value == br.com.bragasaude.domain.b2b.AppAccountMode.BUSINESS_ONLY) return
         if (br.com.bragasaude.ui.util.StepTrackingService.isRunning) return
         val intent = Intent(this, StepTrackingService::class.java)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {

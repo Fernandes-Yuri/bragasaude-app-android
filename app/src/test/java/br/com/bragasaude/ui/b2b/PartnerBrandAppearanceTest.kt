@@ -86,7 +86,10 @@ class PartnerBrandAppearanceTest {
     @Test fun companyShortcutKeepsBusinessSignupAndDiscreetBranding() {
         login()
         compose.onNodeWithTag("company_shortcut_button").performScrollTo().performClick()
-        compose.onNodeWithText("Sua empresa. A sua marca.").performScrollTo().assertIsDisplayed()
+        // Entrada única e neutra: o modo empresarial aparece como escolha de uso,
+        // sem nome, logo ou cor de parceiro antes da autenticação.
+        compose.onNodeWithText("Para minha empresa").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Preparar programa", substring = true).performScrollTo().assertIsDisplayed()
         screenshot("03-cadastro-empresa")
         compose.onNodeWithText("E-mail").performScrollTo().performTextInput("owner@example.test")
         compose.onNodeWithText("Senha", substring = false).performScrollTo().performTextInput("example-password")
@@ -98,20 +101,18 @@ class PartnerBrandAppearanceTest {
     // Robolectric #8460: Dialog + TextField oscila acima de w320dp. Demais capturas usam w360dp.
     // https://github.com/robolectric/robolectric/issues/8460
     @Config(qualifiers = "w320dp-h800dp-mdpi")
-    @Test fun recognizedInviteUsesPartnerIdentityAndChangingItClearsPendingProgram() {
+    @Test fun storedInviteCodeKeepsLoginNeutralAndPreservesProgramForAfterSignIn() {
         prefs.edit().putString("pending_b2b_invite_code", invite.inviteCode)
             .putBoolean("pending_b2b_company_onboarding", true).commit()
         login()
-        compose.onNodeWithText("Horizonte").assertIsDisplayed()
-        compose.onNodeWithText("Horizonte Cuida", substring = false).assertIsDisplayed()
-        assertFalse(prefs.getBoolean("pending_b2b_company_onboarding", false))
-        screenshot("04-login-parceiro")
-        compose.onNodeWithText("Trocar programa").performClick()
-        compose.onNodeWithText("Encontre seu programa").assertIsDisplayed()
-        assertFalse(prefs.contains("pending_b2b_invite_code"))
-        compose.onNodeWithText("Voltar", substring = false).performClick()
-        compose.onNodeWithText("Horizonte").assertDoesNotExist()
+        // Login 100% neutro: nenhum nome/logo de parceiro antes da autenticação.
         compose.onNodeWithText("Acesse sua conta").assertIsDisplayed()
+        compose.onNodeWithText("Horizonte").assertDoesNotExist()
+        compose.onNodeWithText("Horizonte Cuida", substring = false).assertDoesNotExist()
+        // O convite é guardado para conferência após o login, sem forçar cadastro empresarial.
+        assertEquals(invite.inviteCode, prefs.getString("pending_b2b_invite_code", null))
+        assertFalse(prefs.getBoolean("pending_b2b_company_onboarding", false))
+        screenshot("04-login-neutro-convite-guardado")
     }
 
     @Test fun darkLoginAndLargeTypeRemainScrollableThroughLegalAndCredit() {
@@ -125,7 +126,7 @@ class PartnerBrandAppearanceTest {
         screenshot("08-login-escuro-rodape")
     }
 
-    @Test fun studioHasBrandedEntryPreviewWithTheSameIdentity() {
+    @Test fun studioEntryPreviewStaysNeutralEvenWithPartnerBrandConfigured() {
         compose.setContent {
             BragasaudeTheme(forceThemeMode = "LIGHT") {
                 PartnerBrandTheme(invite.primaryColor) {
@@ -137,8 +138,10 @@ class PartnerBrandAppearanceTest {
             }
         }
         compose.onNodeWithText("Entrada", substring = false).assertIsDisplayed()
-        compose.onNodeWithText("Horizonte").assertIsDisplayed()
-        screenshot("06-estudio-previa-entrada")
+        // A prévia de entrada é a mesma tela neutra do login real: sem marca do parceiro.
+        compose.onNodeWithText("Acesse sua conta").assertIsDisplayed()
+        compose.onNodeWithText("Horizonte").assertDoesNotExist()
+        screenshot("06-estudio-previa-entrada-neutra")
         compose.onNodeWithText("Ver prévia em modo escuro").performClick()
         screenshot("07-estudio-previa-escura")
     }

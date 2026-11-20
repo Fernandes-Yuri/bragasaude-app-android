@@ -2834,7 +2834,7 @@ class BragaApiClient @Inject constructor(
     suspend fun getMyPartnerProgram(): br.com.bragasaude.domain.b2b.PartnerProgramDto? =
         withContext(Dispatchers.IO) {
             try {
-                val res = getJson("$baseUrl/api/b2b/program/me") ?: return@withContext null
+                val res = getJson("$baseUrl/api/business/registration") ?: return@withContext null
                 parsePartnerProgramJson(res.optJSONObject("program"))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -2867,7 +2867,7 @@ class BragaApiClient @Inject constructor(
                 if (request.termsAccepted != null) put("termsAccepted", request.termsAccepted)
                 if (!request.termsVersion.isNullOrBlank()) put("termsVersion", request.termsVersion.trim())
             }
-            val resp = postJsonDetailed("$baseUrl/api/b2b/program/me", payload)
+            val resp = postJsonDetailed("$baseUrl/api/business/registration", payload)
             if (resp.code in 200..299 && resp.body != null) {
                 return@withContext br.com.bragasaude.domain.b2b.SavePartnerProgramResult(
                     program = parsePartnerProgramJson(resp.body.optJSONObject("program"))
@@ -2940,7 +2940,7 @@ class BragaApiClient @Inject constructor(
             if (!br.com.bragasaude.domain.b2b.B2BOnboardingValidator.isValidInviteCode(code)) {
                 return@withContext null
             }
-            val res = getJson("$baseUrl/api/b2b/invite/$code") ?: return@withContext null
+            val res = getJson("$baseUrl/api/programs/invite/$code") ?: return@withContext null
             val inv = res.optJSONObject("invite") ?: return@withContext null
             val programId = inv.optString("programId", "").takeIf { it.isNotBlank() }
                 ?: return@withContext null
@@ -2999,7 +2999,7 @@ class BragaApiClient @Inject constructor(
     suspend fun getProgramTemplates(): List<br.com.bragasaude.domain.b2b.TemplateCatalogItemDto> =
         withContext(Dispatchers.IO) {
             try {
-                val res = getJson("$baseUrl/api/b2b/templates") ?: return@withContext emptyList()
+                val res = getJson("$baseUrl/api/business/registration/templates") ?: return@withContext emptyList()
                 val arr = res.optJSONArray("templates") ?: return@withContext emptyList()
                 (0 until arr.length()).mapNotNull { idx ->
                     val item = arr.optJSONObject(idx) ?: return@mapNotNull null
@@ -3060,7 +3060,7 @@ class BragaApiClient @Inject constructor(
     suspend fun getB2BContextsEnvelope(): br.com.bragasaude.domain.b2b.B2BContextsEnvelope? =
         withContext(Dispatchers.IO) {
             try {
-                val res = getJson("$baseUrl/api/b2b/contexts") ?: return@withContext null
+                val res = getJson("$baseUrl/api/session/contexts") ?: return@withContext null
                 val arr = res.optJSONArray("contexts") ?: return@withContext null
                 val list = mutableListOf<br.com.bragasaude.domain.b2b.B2BContextDescriptor>()
                 for (i in 0 until arr.length()) {
@@ -3089,7 +3089,7 @@ class BragaApiClient @Inject constructor(
             val payload = JSONObject().apply {
                 put("mode", mode.name)
             }
-            val resp = postJsonDetailed("$baseUrl/api/b2b/account-mode", payload)
+            val resp = postJsonDetailed("$baseUrl/api/session/account-mode", payload)
             if (resp.code in 200..299 && resp.body != null) {
                 val resolvedMode = optNullableText(resp.body, "accountMode") ?: mode.name
                 val defaultMode = optNullableText(resp.body, "defaultMode")
@@ -3137,7 +3137,7 @@ class BragaApiClient @Inject constructor(
                 put("sharedCategories", JSONArray(normalizedCats))
                 put("familyShareEnabled", familyShareEnabled)
             }
-            val resp = postJsonDetailed("$baseUrl/api/b2b/enrollments/join", payload)
+            val resp = postJsonDetailed("$baseUrl/api/programs/join", payload)
             if (resp.code in 200..299 && resp.body != null) {
                 val ctx = parseContextDescriptorJson(resp.body.optJSONObject("activeContext"))
                 if (ctx != null) {
@@ -3273,7 +3273,7 @@ class BragaApiClient @Inject constructor(
                 put("mode", mode.name)
                 if (!programId.isNullOrBlank()) put("programId", programId.trim())
             }
-            val resp = postJsonDetailed("$baseUrl/api/b2b/contexts/select", payload)
+            val resp = postJsonDetailed("$baseUrl/api/session/context", payload)
             if (resp.code in 200..299 && resp.body != null) {
                 parseContextDescriptorJson(resp.body.optJSONObject("activeContext"))
             } else {
@@ -3341,6 +3341,10 @@ class BragaApiClient @Inject constructor(
                                 .takeIf { it.isNotBlank() && it != "null" },
                             pendingAppointmentsCount = item.optInt("pendingAppointmentsCount", 0),
                             unreadDirectMessagesCount = item.optInt("unreadDirectMessagesCount", 0),
+                            activityDatesLast7Days = item.optJSONArray("activityDatesLast7Days")?.let { parseNonEmptyStringArray(it) },
+                            pendingRemindersCount = if (item.has("pendingRemindersCount")) item.optInt("pendingRemindersCount") else null,
+                            upcomingAppointmentsCount = if (item.has("upcomingAppointmentsCount")) item.optInt("upcomingAppointmentsCount") else null,
+                            consentStatus = item.optString("consentStatus").takeIf { it.isNotBlank() && it != "null" },
                             consentedAt = item.optString("consentedAt", "")
                                 .takeIf { it.isNotBlank() && it != "null" }
                         )
@@ -3349,6 +3353,14 @@ class BragaApiClient @Inject constructor(
             }
             br.com.bragasaude.domain.b2b.PartnerParticipantsPageDto(
                 program = parsePartnerProgramJson(res.optJSONObject("program")),
+                kpis = res.optJSONObject("kpis")?.let { kpi ->
+                    br.com.bragasaude.domain.b2b.PartnerWalletKpisDto(
+                        activeUsers = kpi.optInt("activeUsers"), inactiveUsers = kpi.optInt("inactiveUsers"),
+                        retentionRate = if (kpi.isNull("retentionRate")) null else kpi.optDouble("retentionRate"),
+                        remindersRead = kpi.optInt("remindersRead"), appointmentsConfirmed = kpi.optInt("appointmentsConfirmed"),
+                        periodDays = kpi.optInt("periodDays", 7), asOf = kpi.optString("asOf").takeIf { it.isNotBlank() }
+                    )
+                },
                 participants = participants,
                 nextCursor = res.optString("nextCursor", "")
                     .takeIf { it.isNotBlank() && it != "null" },
