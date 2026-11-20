@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.bragasaude.domain.b2b.B2BOnboardingValidator
 import br.com.bragasaude.domain.b2b.B2BThemeEngine
@@ -31,7 +32,10 @@ private val directMsgTimeFormatter: DateTimeFormatter =
 
 private fun formatDirectMsgTime(iso: String): String = runCatching {
     Instant.parse(iso).atZone(ZoneId.systemDefault()).format(directMsgTimeFormatter)
-}.getOrElse { iso.take(16) }
+}.getOrElse {
+    // Fallback humano (dd/MM/yyyy às HH:mm) em vez de despejar o ISO cru na bolha.
+    B2BTextFormatters.formatIsoDateTime(iso).orEmpty()
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,19 +105,6 @@ fun PartnerDirectChatBottomSheet(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.padding(10.dp)
-                )
-            }
-
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-            ) {
-                Text(
-                    text = B2BThemeEngine.LOCAL_CHAT_DEVICE_ONLY_NOTICE,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
                 )
             }
 
@@ -311,18 +302,24 @@ fun PartnerDirectChatBottomSheet(
                                 ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
                                             text = senderLabel,
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
-                                            color = brandAccent
+                                            color = brandAccent,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
                                         )
                                         Text(
                                             text = formatDirectMsgTime(msg.createdAt),
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                     Text(
@@ -336,11 +333,28 @@ fun PartnerDirectChatBottomSheet(
                 }
             }
 
-            Text(
-                text = B2BThemeEngine.DIRECT_CHAT_ZERO_ATTACHMENT_HINT,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            // Rodapé único: "salvas apenas neste aparelho" + "apenas texto" (evita avisos empilhados).
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = B2BThemeEngine.LOCAL_CHAT_DEVICE_ONLY_NOTICE,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = B2BThemeEngine.DIRECT_CHAT_ZERO_ATTACHMENT_HINT,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
             OutlinedTextField(
                 value = draft,

@@ -273,6 +273,12 @@ fun PartnerProgramOnboardingSheet(
     }
 
     val status = existingProgram?.parsedStatus ?: PartnerApprovalStatus.DRAFT
+    val publicReviewNote = sanitizePublicReviewNote(existingProgram?.reviewNote)
+    // Só exibe "Retorno da equipe Braga" em status que geram devolutiva pública. Em SUSPENDED
+    // a nota já é mostrada no card vermelho próprio; em APPROVED/DRAFT não há retorno a exibir.
+    val showsTeamReturn = status == PartnerApprovalStatus.PENDING_REVIEW ||
+        status == PartnerApprovalStatus.CHANGES_REQUESTED ||
+        status == PartnerApprovalStatus.REJECTED
 
     BragaBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -411,7 +417,7 @@ fun PartnerProgramOnboardingSheet(
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
                         Text(
-                            text = existingProgram?.reviewNote?.takeIf { it.isNotBlank() }
+                            text = publicReviewNote
                                 ?: "Os convites estão bloqueados até regularização pela equipe Braga.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer
@@ -486,25 +492,27 @@ fun PartnerProgramOnboardingSheet(
                 }
             }
 
-            if (!existingProgram?.reviewNote.isNullOrBlank()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Text(
-                            text = "Retorno da equipe Braga",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
+            if (showsTeamReturn) {
+                publicReviewNote?.let { note ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
                         )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = existingProgram?.reviewNote.orEmpty(),
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(
+                                text = "Retorno da equipe Braga",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = note,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                     }
                 }
             }
@@ -548,7 +556,7 @@ fun PartnerProgramOnboardingSheet(
                                 color = parsedColor.copy(alpha = 0.14f)
                             ) {
                                 Text(
-                                    text = "${prog.activeParticipants} / ${prog.seatLimit} vagas",
+                                    text = "${prog.activeParticipants} / ${prog.seatLimit} ${B2BTextFormatters.plural(prog.seatLimit, "vaga", "vagas")}",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = parsedColor,
@@ -696,13 +704,13 @@ fun PartnerProgramOnboardingSheet(
                 OutlinedTextField(
                     value = cnpj,
                     onValueChange = { if (it.length <= 18) cnpj = it },
-                    label = { Text("CNPJ (14 dígitos — obrigatório, não aceita apenas CPF) *") },
+                    label = { Text("CNPJ *") },
                     singleLine = true,
                     isError = cnpj.isNotBlank() && !cnpjLooksValid,
                     supportingText = {
                         when {
-                            cnpj.isBlank() -> Text("Validado automaticamente na Receita Federal.")
-                            cnpjDigits.length == 11 && !cnpjLooksValid -> Text("Informe um CNPJ válido (14 dígitos). CPFs são apenas para o responsável abaixo.")
+                            cnpj.isBlank() -> Text("14 dígitos; CPF não é aceito. Validado na Receita Federal.")
+                            cnpjDigits.length == 11 && !cnpjLooksValid -> Text("14 dígitos; CPF não é aceito. O CPF é informado apenas no responsável abaixo.")
                             cnpjLooksValid -> Text("CNPJ válido para verificação oficial.")
                             else -> Text("Confira os 14 dígitos e os dígitos verificadores do CNPJ.")
                         }
@@ -1130,7 +1138,7 @@ fun PartnerProgramOnboardingSheet(
                                             fontWeight = FontWeight.SemiBold
                                         )
                                         Text(
-                                            text = "${doc.docType} · ${(doc.sizeBytes / 1024L).coerceAtLeast(1L)} KB",
+                                            text = "${proofDocTypeLabel(doc.docType)} · ${(doc.sizeBytes / 1024L).coerceAtLeast(1L)} KB",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -1323,3 +1331,29 @@ fun PartnerProgramOnboardingSheet(
         }
     }
 }
+
+private val INTERNAL_REVIEW_MARKERS = listOf(
+    "conta de teste",
+    "aprovação operacional de demonstração"
+)
+
+private val INTERNAL_REVIEW_TICKET = Regex("""\bB2B-\d+\b""", RegexOption.IGNORE_CASE)
+
+/**
+ * A nota de revisão pode carregar metadados internos de homologação (contas de teste,
+ * aprovações de demonstração, tickets B2B-31). Esses marcadores nunca vão para a UI
+ * do parceiro: nesses casos o card de retorno simplesmente não é exibido.
+ */
+private fun sanitizePublicReviewNote(note: String?): String? {
+    val clean = note?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val hasInternalMarker = INTERNAL_REVIEW_MARKERS.any { clean.contains(it, ignoreCase = true) } ||
+        INTERNAL_REVIEW_TICKET.containsMatchIn(clean)
+    return clean.takeUnless { hasInternalMarker }
+}
+
+/** Rótulo humano do comprovante; nunca renderiza o wire key cru do backend. */
+private fun proofDocTypeLabel(raw: String?): String =
+    B2BOnboardingValidator.PROOF_DOC_TYPE_OPTIONS
+        .firstOrNull { it.key.equals(raw?.trim(), ignoreCase = true) }
+        ?.labelPtBr
+        ?: "Comprovante anexado"

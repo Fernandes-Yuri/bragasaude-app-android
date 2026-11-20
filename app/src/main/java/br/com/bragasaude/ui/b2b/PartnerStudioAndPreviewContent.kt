@@ -6,8 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -28,6 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -112,7 +113,11 @@ fun FirstAccessActivationChecklistCard(
             ChecklistActionRow(
                 done = hasParticipants,
                 title = "3. Compartilhar convite, QR Code ou placa PDF",
-                subtitle = if (hasParticipants) "${programInfo.activeParticipants} participante(s) ativos." else "Convide participantes sem exposição de documentos.",
+                subtitle = if (hasParticipants) {
+                    "${B2BTextFormatters.countLabelAgreement(programInfo.activeParticipants, "participante", "participantes", "ativo", "ativos")}."
+                } else {
+                    "Convide participantes sem exposição de documentos."
+                },
                 brandPrimary = brandPrimary,
                 enabled = approved && !programInfo.inviteCode.isNullOrBlank(),
                 onClick = onOpenQr
@@ -161,6 +166,7 @@ private fun ChecklistActionRow(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PartnerStudioTabContent(
     programInfo: PartnerProgramDto?,
@@ -232,62 +238,86 @@ fun PartnerStudioTabContent(
         draftConfig.enabledMetrics.isNotEmpty() &&
         !isExternalWithoutValidUrl
 
+    // O seletor Estúdio/Prévia fica logo acima deste conteúdo (PartnerBusinessScaffold) e o
+    // topo do LazyColumn é recortado na borda do container ao rolar. O scrim fixo suaviza a
+    // transição sem esconder nada em repouso: o padding superior (28dp) é maior que o fade (20dp).
+    val studioBackground = MaterialTheme.colorScheme.background
+    val topScrim = Brush.verticalGradient(
+        colors = listOf(studioBackground, studioBackground.copy(alpha = 0f))
+    )
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .drawWithContent {
+                drawContent()
+                drawRect(
+                    brush = topScrim,
+                    size = Size(size.width, 20.dp.toPx())
+                )
+            },
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 28.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "1. Modelo inicial por perfil (7 templates)",
+                    text = "1. Modelo inicial por perfil (${B2BTextFormatters.countLabel(catalog.size, "template", "templates")})",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(catalog, key = { it.templateKey }) { tpl ->
-                        val selected = draftConfig.templateKey.equals(tpl.templateKey, ignoreCase = true)
-                        Card(
-                            modifier = Modifier
-                                .width(220.dp)
-                                .clickable {
-                                    if (!selected) {
-                                        if (draftConfig != ProgramExperienceConfigDto.defaultForTemplate(draftConfig.templateKey)) {
-                                            pendingTemplateConfirm = tpl
-                                        } else {
-                                            onDraftChange(tpl.defaultConfig.copy(templateKey = tpl.templateKey))
+                // Grade com wrap em 2 colunas: mantém os dois primeiros cards inteiros na
+                // tela, sem o corte no meio da palavra causado pela borda do carrossel.
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val cardWidth = (maxWidth - 14.dp) / 2f
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        catalog.forEach { tpl ->
+                            val selected = draftConfig.templateKey.equals(tpl.templateKey, ignoreCase = true)
+                            Card(
+                                modifier = Modifier
+                                    .width(cardWidth)
+                                    .clickable {
+                                        if (!selected) {
+                                            if (draftConfig != ProgramExperienceConfigDto.defaultForTemplate(draftConfig.templateKey)) {
+                                                pendingTemplateConfirm = tpl
+                                            } else {
+                                                onDraftChange(tpl.defaultConfig.copy(templateKey = tpl.templateKey))
+                                            }
                                         }
-                                    }
-                                },
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (selected) brandPrimary.copy(alpha = 0.12f)
-                                else MaterialTheme.colorScheme.surface
-                            ),
-                            border = BorderStroke(
-                                width = if (selected) 2.dp else 1.dp,
-                                color = if (selected) brandPrimary else MaterialTheme.colorScheme.outlineVariant
-                            )
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    },
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (selected) brandPrimary.copy(alpha = 0.12f)
+                                    else MaterialTheme.colorScheme.surface
+                                ),
+                                border = BorderStroke(
+                                    width = if (selected) 2.dp else 1.dp,
+                                    color = if (selected) brandPrimary else MaterialTheme.colorScheme.outlineVariant
+                                )
                             ) {
-                                Text(
-                                    text = tpl.title,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (selected) brandAccent else MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = tpl.subtitle,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = tpl.title,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (selected) brandAccent else MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = tpl.subtitle,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
                     }
@@ -325,7 +355,10 @@ fun PartnerStudioTabContent(
                         onValueChange = {
                             if (it.length <= 140) onDraftChange(draftConfig.copy(welcomeHeadline = it))
                         },
-                        label = { Text("Título de boas-vindas (até 140 caracteres)") },
+                        label = { Text("Título de boas-vindas") },
+                        supportingText = {
+                            Text("${draftConfig.welcomeHeadline.length}/140 caracteres")
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -335,7 +368,10 @@ fun PartnerStudioTabContent(
                         onValueChange = {
                             if (it.length <= 500) onDraftChange(draftConfig.copy(welcomeMessage = it))
                         },
-                        label = { Text("Mensagem aos participantes (Não-SaMD)") },
+                        label = { Text("Mensagem aos participantes") },
+                        supportingText = {
+                            Text("Conteúdo educativo, não é diagnóstico nem prescrição · ${draftConfig.welcomeMessage.length}/500")
+                        },
                         minLines = 2,
                         maxLines = 4,
                         modifier = Modifier.fillMaxWidth(),
@@ -365,8 +401,12 @@ fun PartnerStudioTabContent(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(SharedCategoryOption.entries) { opt ->
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        SharedCategoryOption.entries.forEach { opt ->
                             val active = draftConfig.enabledMetrics.contains(opt.wireKey)
                             FilterChip(
                                 selected = active,
@@ -410,7 +450,7 @@ fun PartnerStudioTabContent(
 
                     StudioFeatureSwitchRow(
                         title = "Lembretes de rotina do parceiro",
-                        subtitle = "Envio de orientações Não-SaMD e avisos com a marca do programa.",
+                        subtitle = "Envio de orientações educativas e avisos com a marca do programa.",
                         checked = draftConfig.features.partnerRemindersEnabled,
                         onCheckedChange = { checked ->
                             onDraftChange(
@@ -491,7 +531,10 @@ fun PartnerStudioTabContent(
                                     }
                                 },
                                 label = { Text("Resumo de disponibilidade") },
-                                singleLine = true,
+                                supportingText = {
+                                    Text("Janelas de atendimento em texto livre · ${draftConfig.appointmentsPolicy.availabilitiesSummary.length}/160")
+                                },
+                                minLines = 2,
                                 modifier = Modifier.fillMaxWidth()
                             )
                             OutlinedTextField(
@@ -572,7 +615,7 @@ fun PartnerStudioTabContent(
                             )
                             StudioFeatureSwitchRow(
                                 title = "Recepcionista IA no Chat Direto",
-                                subtitle = "Recebe dúvidas sobre horários/FAQ com guarda Não-SaMD.",
+                                subtitle = "Responde dúvidas de horários e FAQ, sem orientar diagnóstico nem prescrição.",
                                 checked = draftConfig.features.aiReceptionistEnabled,
                                 onCheckedChange = { checked ->
                                     onDraftChange(
@@ -586,14 +629,12 @@ fun PartnerStudioTabContent(
                                 }
                             )
                             if (draftConfig.features.aiReceptionistEnabled) {
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    items(
-                                        listOf(
-                                            "OUT_OF_HOURS_ONLY" to "Fora do expediente",
-                                            "ALWAYS_FIRST" to "Sempre no 1º contato",
-                                            "MANUAL_ONLY" to "Sob demanda"
-                                        )
-                                    ) { (mKey, mLbl) ->
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    listOf("OUT_OF_HOURS_ONLY", "ALWAYS_FIRST", "MANUAL_ONLY").forEach { mKey ->
                                         FilterChip(
                                             selected = draftConfig.aiReceptionistPolicy.activationMode == mKey,
                                             onClick = {
@@ -603,7 +644,7 @@ fun PartnerStudioTabContent(
                                                     )
                                                 )
                                             },
-                                            label = { Text(mLbl) }
+                                            label = { Text(B2BTextFormatters.activationModeLabel(mKey)) }
                                         )
                                     }
                                 }
@@ -754,6 +795,7 @@ private fun StudioFeatureSwitchRow(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PartnerPreviewTabContent(
     programName: String,
@@ -808,8 +850,12 @@ fun PartnerPreviewTabContent(
 
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(PreviewSurfaceMode.entries) { mode ->
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    PreviewSurfaceMode.entries.forEach { mode ->
                         FilterChip(
                             selected = surfaceMode == mode,
                             onClick = { surfaceMode = mode },
@@ -1015,8 +1061,17 @@ fun ParticipantExperienceContent(
             ) {
                 PartnerIdentityLockup(companyName, programName, logoUrl, Modifier.fillMaxWidth())
                 if (coParticipatedCount > 1) {
-                    Text("$coParticipatedCount programas vinculados", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        text = B2BTextFormatters.countLabelAgreement(
+                            coParticipatedCount,
+                            "programa",
+                            "programas",
+                            "vinculado",
+                            "vinculados"
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 Text(
                     text = experienceConfig.welcomeHeadline,
@@ -1442,7 +1497,7 @@ internal fun ProgramRemindersParticipantCard(
                                     color = brandAccent
                                 )
                                 Text(
-                                    text = rem.createdAt.take(10),
+                                    text = B2BTextFormatters.formatIsoDate(rem.createdAt).orEmpty(),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1533,7 +1588,7 @@ private fun ProgramModuleHighlightCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AiReceptionistSimulatorSheet(
     programName: String,
@@ -1560,7 +1615,7 @@ fun AiReceptionistSimulatorSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "SIMULADOR RECEPCIONISTA IA (SANDBOX)",
+                text = "Simulador da recepção",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
@@ -1571,19 +1626,23 @@ fun AiReceptionistSimulatorSheet(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Teste horários, FAQ e o bloqueio de segurança Não-SaMD antes de ativar para seus participantes.",
+                text = "Ambiente de teste: nada é enviado aos participantes. " +
+                    "Teste horários, FAQ e o bloqueio de segurança para conteúdo educativo " +
+                    "(sem diagnóstico nem prescrição) antes de ativar para seus participantes.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(
-                    listOf(
-                        "Qual o horário de atendimento?",
-                        "Como agendar retorno?",
-                        "Qual a dose de um remédio?"
-                    )
-                ) { prompt ->
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                listOf(
+                    "Qual o horário de atendimento?",
+                    "Como agendar retorno?",
+                    "Qual a dose de um remédio?"
+                ).forEach { prompt ->
                     AssistChip(
                         onClick = {
                             val reply = B2BOnboardingValidator.simulateAiReceptionistReply(
