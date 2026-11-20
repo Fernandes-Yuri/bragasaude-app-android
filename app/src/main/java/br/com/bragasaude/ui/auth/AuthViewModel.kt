@@ -866,12 +866,14 @@ class AuthViewModel @Inject constructor(
                 }
             }
 
-            // Apagar cache isolado de contextos B2B (B2B-04 / B2B-12) no logout.
+            // Apagar cache isolado de contextos B2B (B2B-04 / B2B-12) e prefs de backup (CHAT-02) no logout.
             runCatching {
-                dagger.hilt.android.EntryPointAccessors.fromApplication(
+                val b2bEntry = dagger.hilt.android.EntryPointAccessors.fromApplication(
                     appContext,
                     AuthB2BEntryPoint::class.java
-                ).b2bContextRepository().clearOnSignOut()
+                )
+                b2bEntry.b2bContextRepository().clearOnSignOut()
+                b2bEntry.chatBackupRepository().clearOnSignOut()
             }
 
             // (issue #18 + #23) Organizador: limpar sessões do usuário isolado por
@@ -987,10 +989,12 @@ class AuthViewModel @Inject constructor(
                 android.util.Log.w("AuthViewModel", "Erro ao limpar prefs no deleteAccount: ${e.message}")
             }
             runCatching {
-                dagger.hilt.android.EntryPointAccessors.fromApplication(
+                val b2bEntry = dagger.hilt.android.EntryPointAccessors.fromApplication(
                     appContext,
                     AuthB2BEntryPoint::class.java
-                ).b2bContextRepository().clearOnSignOut()
+                )
+                b2bEntry.b2bContextRepository().clearOnSignOut()
+                b2bEntry.chatBackupRepository().clearOnSignOut()
             }
         }
 
@@ -1015,5 +1019,6 @@ class AuthViewModel @Inject constructor(
     @dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
     internal interface AuthB2BEntryPoint {
         fun b2bContextRepository(): br.com.bragasaude.data.remote.b2b.B2BContextRepository
+        fun chatBackupRepository(): br.com.bragasaude.data.backup.ChatBackupRepository
     }
 }
