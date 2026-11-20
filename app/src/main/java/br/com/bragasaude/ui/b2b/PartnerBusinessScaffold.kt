@@ -24,7 +24,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
@@ -64,6 +66,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -92,6 +96,11 @@ enum class BusinessSessionTab(
     STUDIO("Estúdio", "Estúdio", Icons.Default.AutoAwesome),
     COMPANY("Empresa", "Empresa", Icons.Default.VerifiedUser)
 }
+
+// O Scaffold já desconta a NavigationBar e o crédito de tecnologia via innerPadding; a
+// reserva extra no fim da lista evita que o último card fique sob a barra/gesto do sistema
+// e mantém 20dp de respiro nas laterais e no topo.
+private val b2bListContentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 96.dp)
 
 /**
  * Shell exclusivo da Sessão Empresarial Pura (B2B-30), 100% isolado da Home pessoal e do ORB B2C.
@@ -594,11 +603,7 @@ private fun PartnerBusinessContent(
                             logoUrl = programInfo?.logoUrl ?: activeContext.logoUrl,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        Text(
-                            text = programInfo?.parsedStatus?.labelPtBr ?: "Configuração inicial",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        PartnerStatusChip(status = programInfo?.parsedStatus)
                     }
 
                     if (accountMode == AppAccountMode.DUAL.name) {
@@ -691,7 +696,7 @@ private fun PartnerBusinessContent(
             } else {
                 when (selectedTab) {
                     BusinessSessionTab.WALLET -> {
-                        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
+                        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = b2bListContentPadding,
                             verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             item { PartnerWalletKpis(walletKpis) }
                             if (programInfo?.parsedStatus != PartnerApprovalStatus.APPROVED) {
@@ -737,7 +742,7 @@ private fun PartnerBusinessContent(
                     BusinessSessionTab.OPERATIONS -> {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(20.dp),
+                            contentPadding = b2bListContentPadding,
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             programInfo?.takeIf { it.aiPaused }?.let {
@@ -769,9 +774,11 @@ private fun PartnerBusinessContent(
                                                 )
                                             }
                                             Text(
-                                                text = "As mensagens dos participantes ficam sem resposta automática até que a recepcionista seja retomada no Estúdio.",
+                                                text = "Mensagens sem resposta automática até retomar no Estúdio.",
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                             Button(
                                                 onClick = {
@@ -820,7 +827,7 @@ private fun PartnerBusinessContent(
                                     } else {
                                         ModuleDisabledPromptCard(
                                             title = "Agenda de retornos desligada",
-                                            body = "Ative o módulo de agendamentos no Estúdio para receber solicitações de horários dos participantes.",
+                                            body = "Ative agendamentos no Estúdio para receber pedidos de horário.",
                                             brandAccent = brandAccentText,
                                             softBorder = softBorderStroke,
                                             onOpenStudio = {
@@ -846,7 +853,7 @@ private fun PartnerBusinessContent(
                                     } else {
                                         ModuleDisabledPromptCard(
                                             title = "Lembretes do programa desligados",
-                                            body = "Ative os lembretes educativos no Estúdio para enviar comunicados e avisos em lote.",
+                                            body = "Ative lembretes no Estúdio para enviar avisos em lote.",
                                             brandAccent = brandAccentText,
                                             softBorder = softBorderStroke,
                                             onOpenStudio = {
@@ -1014,6 +1021,55 @@ private fun neutralReviewNote(status: PartnerApprovalStatus): String? =
         null
     }
 
+/**
+ * Chip compacto e único de status do programa. Usar o mesmo componente no header
+ * (presente em Carteira/Operação) e na aba Empresa evita que o mesmo estado apareça
+ * com pesos visuais diferentes. O selo de aprovado usa CheckCircle; os demais estados
+ * ficam com ícone neutro e cores de apoio da marca.
+ */
+@Composable
+internal fun PartnerStatusChip(
+    status: PartnerApprovalStatus?,
+    modifier: Modifier = Modifier
+) {
+    val brand = partnerBrandColors()
+    val label = status?.labelPtBr ?: "Configuração inicial"
+    val approved = status == PartnerApprovalStatus.APPROVED
+    val contentColor = if (approved) brand.accent else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        modifier = modifier.clearAndSetSemantics {
+            contentDescription = "Status do programa: $label"
+        },
+        shape = RoundedCornerShape(8.dp),
+        color = brand.softSurface,
+        border = BorderStroke(
+            1.dp,
+            if (approved) brand.primary.copy(alpha = 0.45f) else brand.softBorder
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = if (approved) Icons.Default.CheckCircle else Icons.Default.Info,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = contentColor
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = contentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
 @Composable
 private fun PartnerPreApprovalBannerCard(
     programInfo: PartnerProgramDto?,
@@ -1110,7 +1166,9 @@ private fun ModuleDisabledPromptCard(
             Text(
                 text = body,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
             TextButton(onClick = onOpenStudio) {
                 Text("Configurar no Estúdio", color = brandAccent)
@@ -1146,7 +1204,7 @@ private fun BusinessCareInboxTabContent(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
+        contentPadding = b2bListContentPadding,
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
@@ -1323,7 +1381,7 @@ private fun BusinessCompanyTabContent(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
+        contentPadding = b2bListContentPadding,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         programInfo?.let { prog ->
@@ -1359,10 +1417,13 @@ private fun BusinessCompanyTabContent(
                     )
                     if (programInfo != null) {
                         Text(
-                            text = "Programa: ${programInfo.programName} · Status: ${programInfo.parsedStatus.labelPtBr}",
+                            text = "Programa: ${programInfo.programName}",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Medium
                         )
+                        // Mesmo componente de status do header, para o estado não mudar
+                        // de forma entre as abas Empresa/Carteira.
+                        PartnerStatusChip(status = programInfo.parsedStatus)
                         programInfo.cnpj?.takeIf { it.isNotBlank() }?.let { cnpj ->
                             Text(
                                 text = "CNPJ: $cnpj",

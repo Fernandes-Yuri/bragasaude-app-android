@@ -13,6 +13,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.SupportAgent
@@ -106,7 +109,7 @@ fun FirstAccessActivationChecklistCard(
             ChecklistActionRow(
                 done = customized,
                 title = "2. Personalizar módulos e boas-vindas no Estúdio",
-                subtitle = "Escolha template, switches de rotina e Recepcionista IA.",
+                subtitle = "Escolha modelo, opções de rotina e Recepcionista IA.",
                 brandPrimary = brandPrimary,
                 onClick = onOpenStudio
             )
@@ -203,9 +206,9 @@ fun PartnerStudioTabContent(
     pendingTemplateConfirm?.let { tpl ->
         BragaAlertDialog(
             onDismissRequest = { pendingTemplateConfirm = null },
-            title = { Text("Aplicar padrões de ${tpl.title}?") },
+            title = { Text("Aplicar modelo de ${tpl.title}?") },
             text = {
-                Text("Isso substituirá os textos e switches atuais do rascunho pelos padrões desse perfil. Você poderá ajustar cada item antes de salvar.")
+                Text("Substitui os textos e opções do rascunho pelos padrões desse modelo. Você pode ajustar antes de salvar.")
             },
             confirmButton = {
                 Button(
@@ -218,7 +221,7 @@ fun PartnerStudioTabContent(
                         contentColor = brandOnPrimary
                     )
                 ) {
-                    Text("Aplicar template")
+                    Text("Aplicar modelo")
                 }
             },
             dismissButton = {
@@ -261,7 +264,7 @@ fun PartnerStudioTabContent(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "1. Modelo inicial por perfil (${B2BTextFormatters.countLabel(catalog.size, "template", "templates")})",
+                    text = "1. Modelo inicial por perfil (${B2BTextFormatters.countLabel(catalog.size, "modelo", "modelos")})",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
@@ -397,7 +400,7 @@ fun PartnerStudioTabContent(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "O participante sempre mantém o controle de escolher quais dessas categorias compartilhar.",
+                        text = "O participante escolhe quais destas categorias compartilhar.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -689,7 +692,7 @@ fun PartnerStudioTabContent(
                                             )
                                         }
                                     },
-                                    label = { Text("Orientações e FAQ (até 1500 chars — sem posologia)") },
+                                    label = { Text("Orientações e FAQ (máx. 1500, sem posologia)") },
                                     minLines = 2,
                                     maxLines = 4,
                                     modifier = Modifier.fillMaxWidth()
@@ -710,7 +713,7 @@ fun PartnerStudioTabContent(
 
                     StudioFeatureSwitchRow(
                         title = "Assistente educativo no programa",
-                        subtitle = "Disponibiliza apoio educativo de IA para a rotina do participante.",
+                        subtitle = "Apoio educativo de IA na rotina do participante.",
                         checked = draftConfig.features.assistantChatEnabled,
                         onCheckedChange = { checked ->
                             onDraftChange(
@@ -841,7 +844,7 @@ fun PartnerPreviewTabContent(
                 ) {
                     Icon(Icons.Default.Visibility, contentDescription = null, tint = brandAccent)
                     Text(
-                        text = "Prévia ao vivo do que seus participantes verão (usando dados demonstrativos e os toggles atuais do Estúdio).",
+                        text = "Prévia ao vivo com dados demonstrativos e os toggles atuais do Estúdio.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -868,13 +871,45 @@ fun PartnerPreviewTabContent(
                     }
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { simulateDarkTheme = !simulateDarkTheme }, modifier = Modifier.weight(1f)) {
-                            Text(if (simulateDarkTheme) "Ver prévia em modo claro" else "Ver prévia em modo escuro")
-                        }
-                        FilterChip(selected = simulateLargeText, onClick = { simulateLargeText = !simulateLargeText },
-                            label = { Text("Texto ampliado") })
+                    // UX-02.4: prévia e acessibilidade usam os mesmos FilterChips, com ícone e
+                    // estado ligado/desligado idêntico, em vez de TextButton + FilterChip.
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        FilterChip(
+                            selected = simulateDarkTheme,
+                            onClick = { simulateDarkTheme = !simulateDarkTheme },
+                            label = { Text("Modo escuro") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = if (simulateDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = brandPrimary,
+                                selectedLabelColor = brandOnPrimary
+                            )
+                        )
+                        FilterChip(
+                            selected = simulateLargeText,
+                            onClick = { simulateLargeText = !simulateLargeText },
+                            label = { Text("Texto ampliado") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.FormatSize,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = brandPrimary,
+                                selectedLabelColor = brandOnPrimary
+                            )
+                        )
                     }
                     OutlinedButton(onClick = onOpenSimulator, shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()) {
@@ -981,9 +1016,9 @@ fun PartnerPreviewTabContent(
                                                 )
                                                 Text(
                                                     text = if (draftConfig.features.preConsultationPdfEnabled) {
-                                                        "Cabeçalho com a marca ${programName.ifBlank { "do programa" }} e métricas: ${draftConfig.enabledMetrics.mapNotNull { SharedCategoryOption.fromWire(it)?.titlePtBr }.joinToString(", ")}. Documentos pessoais nunca são anexados."
+                                                        "Cabeçalho com a marca ${programName.ifBlank { "do programa" }} e métricas: ${draftConfig.enabledMetrics.mapNotNull { SharedCategoryOption.fromWire(it)?.titlePtBr }.joinToString(", ")}. Documentos pessoais nunca entram."
                                                     } else {
-                                                        "Habilite o switch 'Resumo pré-consulta em PDF' no Estúdio para liberar este card."
+                                                        "Ative 'Resumo pré-consulta em PDF' no Estúdio para liberar este card."
                                                     },
                                                     style = MaterialTheme.typography.bodySmall
                                                 )
@@ -1107,7 +1142,7 @@ fun ParticipantExperienceContent(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Disponível para autorizar se desejar: ${missingConsent.joinToString(", ") { it.titlePtBr }}.",
+                        text = "Autorize se quiser: ${missingConsent.joinToString(", ") { it.titlePtBr }}.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -1119,7 +1154,7 @@ fun ParticipantExperienceContent(
                 ProgramModuleHighlightCard(
                     icon = Icons.Default.NotificationsActive,
                     title = "Lembretes e orientações de $programName",
-                    body = "Avisos de rotina emitidos por $companyName, sempre separados dos seus alarmes pessoais de medicação.",
+                    body = "Avisos de rotina de $companyName, separados dos seus alarmes de medicação.",
                     accent = brandAccent
                 )
             } else {
@@ -1190,7 +1225,7 @@ fun ParticipantExperienceContent(
             ProgramModuleHighlightCard(
                 icon = Icons.Default.VerifiedUser,
                 title = "Apoio Familiar conectado ao programa",
-                body = "Você pode permitir que seu familiar de apoio acompanhe avisos deste programa, mantendo o chat familiar privado isolado.",
+                body = "Seu familiar de apoio pode acompanhar avisos deste programa; o chat familiar segue privado.",
                 accent = brandAccent
             )
         }
@@ -1626,9 +1661,8 @@ fun AiReceptionistSimulatorSheet(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Ambiente de teste: nada é enviado aos participantes. " +
-                    "Teste horários, FAQ e o bloqueio de segurança para conteúdo educativo " +
-                    "(sem diagnóstico nem prescrição) antes de ativar para seus participantes.",
+                text = "Ambiente de teste: nada é enviado aos participantes. Teste horários, FAQ " +
+                    "e o bloqueio de segurança para conteúdo educativo, sem diagnóstico nem prescrição.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1650,7 +1684,7 @@ fun AiReceptionistSimulatorSheet(
                                 programName = programName,
                                 question = prompt
                             )
-                            transcript = transcript + ("Participante (teste)" to prompt) +
+                            transcript = transcript + ("Participante (exemplo)" to prompt) +
                                 (config.aiReceptionistPolicy.personaName to reply)
                         },
                         label = { Text(prompt) }
@@ -1711,7 +1745,7 @@ fun AiReceptionistSimulatorSheet(
                                 programName = programName,
                                 question = q
                             )
-                            transcript = transcript + ("Participante (teste)" to q) +
+                            transcript = transcript + ("Participante (exemplo)" to q) +
                                 (config.aiReceptionistPolicy.personaName to reply)
                             question = ""
                         }
@@ -1762,7 +1796,7 @@ fun ReportProgramBottomSheet(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Se $programName enviou orientações medicamentosas indevidas, spam ou conteúdo inadequado, nossa moderação analisará a denúncia.",
+                text = "Se $programName enviou orientações medicamentosas indevidas, spam ou conteúdo inadequado, a moderação analisa a denúncia.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1792,7 +1826,8 @@ fun ReportProgramBottomSheet(
             OutlinedTextField(
                 value = details,
                 onValueChange = { if (it.length <= 500) details = it },
-                label = { Text("Detalhes opcionais (máx. 500 caracteres)") },
+                label = { Text("Detalhes opcionais") },
+                supportingText = { Text("Até 500 caracteres · ${details.length}/500") },
                 enabled = !isSubmitting,
                 minLines = 2,
                 maxLines = 4,

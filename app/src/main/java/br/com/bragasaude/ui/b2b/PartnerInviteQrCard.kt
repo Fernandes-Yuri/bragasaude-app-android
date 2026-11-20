@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Share
@@ -55,6 +56,7 @@ fun PartnerInviteQrCard(
     }
     var isGeneratingSign by remember { mutableStateOf(false) }
     var generatedSignPdf by remember(inviteCode) { mutableStateOf<File?>(null) }
+    var showPdfActionsMenu by remember { mutableStateOf(false) }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -115,94 +117,129 @@ fun PartnerInviteQrCard(
                 overflow = TextOverflow.Ellipsis
             )
 
-            Button(
-                onClick = {
-                    if (isGeneratingSign) return@Button
-                    isGeneratingSign = true
-                    scope.launch {
-                        val result = runCatching {
-                            PartnerReceptionSignPdfGenerator(context.applicationContext).generateSignPdf(
-                                programName = programName,
-                                companyName = companyName,
-                                inviteCode = inviteCode,
-                                primaryColorHex = primaryColorHex
-                            )
-                        }
-                        isGeneratingSign = false
-                        result.onSuccess { pdf ->
-                            generatedSignPdf = pdf
-                            Toast.makeText(
-                                context,
-                                "Placa PDF da recepção gerada com sucesso.",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }.onFailure {
-                            Toast.makeText(
-                                context,
-                                "Não foi possível gerar a placa PDF agora.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
-                    }
-                },
-                enabled = !isGeneratingSign,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = accentColor,
-                    contentColor = onAccentColor
-                )
-            ) {
-                if (isGeneratingSign) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = onAccentColor
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("Gerando placa PDF...")
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.PictureAsPdf,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("Gerar Placa PDF da Recepção", fontWeight = FontWeight.SemiBold)
-                }
-            }
+            val activePdf = generatedSignPdf?.takeIf { it.exists() }
 
-            generatedSignPdf?.takeIf { it.exists() }?.let { pdfFile ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = {
+                        if (isGeneratingSign) return@Button
+                        isGeneratingSign = true
+                        scope.launch {
+                            val result = runCatching {
+                                PartnerReceptionSignPdfGenerator(context.applicationContext).generateSignPdf(
+                                    programName = programName,
+                                    companyName = companyName,
+                                    inviteCode = inviteCode,
+                                    primaryColorHex = primaryColorHex
+                                )
+                            }
+                            isGeneratingSign = false
+                            result.onSuccess { pdf ->
+                                generatedSignPdf = pdf
+                                Toast.makeText(
+                                    context,
+                                    "Placa PDF da recepção gerada com sucesso.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }.onFailure {
+                                Toast.makeText(
+                                    context,
+                                    "Não foi possível gerar a placa PDF agora.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    },
+                    enabled = !isGeneratingSign,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = accentColor,
+                        contentColor = onAccentColor
+                    )
                 ) {
-                    OutlinedButton(
-                        onClick = { openPartnerPdfFile(context, pdfFile, "Placa da Recepção — $programName") },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Abrir PDF")
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            sharePartnerPdfFile(
-                                context = context,
-                                file = pdfFile,
-                                subject = "Placa PDF de Recepção — $programName",
-                                chooserTitle = "Compartilhar Placa PDF"
-                            )
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                    if (isGeneratingSign) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = onAccentColor
                         )
-                        Spacer(Modifier.width(6.dp))
-                        Text("Compartilhar")
+                        Spacer(Modifier.width(8.dp))
+                        Text("Gerando placa PDF...")
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.PictureAsPdf,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Gerar placa PDF", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                // Ações secundárias só existem depois que o arquivo foi gerado.
+                if (activePdf != null) {
+                    Box {
+                        IconButton(
+                            onClick = { showPdfActionsMenu = true },
+                            enabled = !isGeneratingSign
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "Mais ações da placa PDF",
+                                tint = accentColor
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showPdfActionsMenu,
+                            onDismissRequest = { showPdfActionsMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Abrir PDF") },
+                                onClick = {
+                                    showPdfActionsMenu = false
+                                    if (activePdf.exists()) {
+                                        openPartnerPdfFile(
+                                            context,
+                                            activePdf,
+                                            "Placa da Recepção — $programName"
+                                        )
+                                    }
+                                },
+                                enabled = activePdf.exists(),
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.PictureAsPdf,
+                                        contentDescription = null
+                                    )
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Compartilhar") },
+                                onClick = {
+                                    showPdfActionsMenu = false
+                                    if (activePdf.exists()) {
+                                        sharePartnerPdfFile(
+                                            context = context,
+                                            file = activePdf,
+                                            subject = "Placa PDF de Recepção — $programName",
+                                            chooserTitle = "Compartilhar Placa PDF"
+                                        )
+                                    }
+                                },
+                                enabled = activePdf.exists(),
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Share,
+                                        contentDescription = null
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }
