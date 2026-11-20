@@ -142,7 +142,7 @@ class PartnerBrandAppearanceTest {
         compose.onNodeWithText("Acesse sua conta").assertIsDisplayed()
         compose.onNodeWithText("Horizonte").assertDoesNotExist()
         screenshot("06-estudio-previa-entrada-neutra")
-        compose.onNodeWithText("Ver prévia em modo escuro").performClick()
+        compose.onNodeWithText("Modo escuro").performClick()
         screenshot("07-estudio-previa-escura")
     }
 

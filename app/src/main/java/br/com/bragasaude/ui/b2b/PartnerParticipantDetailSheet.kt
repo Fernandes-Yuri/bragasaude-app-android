@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -141,6 +142,11 @@ fun PartnerWalletFiltersSection(
             }
         )
 
+        Text(
+            text = "Prioridade",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -167,6 +173,17 @@ fun PartnerWalletFiltersSection(
                     selectedLabelColor = MaterialTheme.colorScheme.onError
                 )
             )
+        }
+        Text(
+            text = "Categoria",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             FilterChip(
                 selected = selectedCategory == null,
                 onClick = { onSelectCategory(null) },
@@ -436,11 +453,12 @@ fun ParticipantDetailBottomSheet(
                     ) {
                         val steps = summary.stepsSection ?: return@MetricSlotSection
                         val recent = steps.days.take(5).joinToString("\n") { d ->
-                            "• ${B2BTextFormatters.formatIsoDate(d.date)}: ${d.steps} passos (${d.activeMinutes} min ativos)"
+                            "• ${B2BTextFormatters.formatIsoDate(d.date)}: ${d.steps} ${B2BTextFormatters.plural(d.steps, "passo", "passos")} " +
+                                "(${d.activeMinutes} ${B2BTextFormatters.plural(d.activeMinutes, "min ativo", "min ativos")})"
                         }
                         SummaryMetricCard(
                             title = "Passos (${steps.source})",
-                            body = "Média de ${steps.averageSteps} passos por dia em ${B2BTextFormatters.days(steps.daysRecorded)}." +
+                            body = "Média: ${steps.averageSteps} ${B2BTextFormatters.plural(steps.averageSteps, "passo", "passos")}/dia · ${B2BTextFormatters.days(steps.daysRecorded)}." +
                                 if (recent.isNotBlank()) "\n$recent" else ""
                         )
                     }
@@ -458,7 +476,7 @@ fun ParticipantDetailBottomSheet(
                         }
                         SummaryMetricCard(
                             title = "Hidratação (${hyd.source})",
-                            body = "Média diária de ${hyd.averageMl} ml em ${B2BTextFormatters.days(hyd.daysRecorded)}." +
+                            body = "Média: ${hyd.averageMl} ml/dia · ${B2BTextFormatters.days(hyd.daysRecorded)}." +
                                 if (recent.isNotBlank()) "\n$recent" else ""
                         )
                     }
@@ -636,7 +654,7 @@ fun ParticipantDetailBottomSheet(
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
@@ -751,6 +769,7 @@ fun OwnerSentRemindersCard(
     softBorder: BorderStroke,
     onOpenBatchComposer: () -> Unit
 ) {
+    var showAllReminders by rememberSaveable { mutableStateOf(false) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -811,35 +830,48 @@ fun OwnerSentRemindersCard(
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold
                 )
-                reminders.take(4).forEach { rem ->
+                val visibleReminders = if (showAllReminders) reminders else reminders.take(3)
+                visibleReminders.forEach { rem ->
                     val typeLabel = PartnerReminderType.fromWire(rem.reminderType).labelPtBr
                     val targetLabel = rem.targetPatientName ?: "Lote de participantes"
+                    val sentDate = B2BTextFormatters.formatIsoDate(rem.createdAt).orEmpty()
+                    val ackLabel = "${rem.acknowledgedCount} " +
+                        B2BTextFormatters.plural(rem.acknowledgedCount, "leitura", "leituras")
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                     ) {
                         Column(
-                            modifier = Modifier.padding(10.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Text(
                                 text = "${rem.title} · $typeLabel",
                                 style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = rem.body,
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 2,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "$targetLabel · ${B2BTextFormatters.countLabel(rem.acknowledgedCount, "leitura confirmada", "leituras confirmadas")}",
+                                text = listOfNotNull(sentDate.ifBlank { null }, targetLabel, ackLabel)
+                                    .joinToString(" · "),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
+                    }
+                }
+                if (reminders.size > 3) {
+                    TextButton(
+                        onClick = { showAllReminders = !showAllReminders },
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            if (showAllReminders) "Mostrar menos" else "Ver todos (${reminders.size})"
+                        )
                     }
                 }
             }
@@ -973,8 +1005,9 @@ fun PartnerSendReminderBottomSheet(
             OutlinedTextField(
                 value = title,
                 onValueChange = { if (it.length <= 140) title = it },
-                label = { Text("Título curto (máx. 140 caracteres)") },
+                label = { Text("Título do lembrete") },
                 placeholder = { Text("Ex.: Meta de hidratação da tarde") },
+                supportingText = { Text("${title.length}/140 caracteres") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -982,8 +1015,9 @@ fun PartnerSendReminderBottomSheet(
             OutlinedTextField(
                 value = body,
                 onValueChange = { if (it.length <= 500) body = it },
-                label = { Text("Mensagem de rotina (máx. 500 caracteres)") },
+                label = { Text("Mensagem de rotina") },
                 placeholder = { Text("Ex.: Beba 300 ml de água e registre seus passos antes do retorno.") },
+                supportingText = { Text("${body.length}/500 caracteres") },
                 minLines = 3,
                 maxLines = 5,
                 modifier = Modifier.fillMaxWidth()

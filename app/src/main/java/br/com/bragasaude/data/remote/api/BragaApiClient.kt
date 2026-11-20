@@ -3513,7 +3513,7 @@ class BragaApiClient @Inject constructor(
                     source = obj.optString("source", "Braga Saúde • Registros autorizados"),
                     zeroFileEgressNotice = obj.optString(
                         "zeroFileEgressNotice",
-                        "Arquivos e exames do organizador pessoal permanecem privados neste fluxo (Zero File Egress)."
+                        "Arquivos e exames do organizador pessoal permanecem privados neste fluxo e não saem do aparelho."
                     ),
                     records = recList,
                     biometries = bioList

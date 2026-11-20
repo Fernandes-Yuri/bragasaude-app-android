@@ -105,7 +105,9 @@ fun OwnerAppointmentsWalletCard(
                                 policy.availabilitiesSummary
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -426,7 +428,10 @@ fun RequestAppointmentBottomSheet(
             OutlinedTextField(
                 value = slotText,
                 onValueChange = { if (it.length <= 160) slotText = it },
-                label = { Text("Dia e turno desejados (ex.: Quinta pela manhã)") },
+                label = { Text("Dia e turno desejados") },
+                supportingText = {
+                    Text("Ex.: quinta pela manhã · ${slotText.length}/160 caracteres")
+                },
                 enabled = !isSubmitting,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -436,7 +441,13 @@ fun RequestAppointmentBottomSheet(
             OutlinedTextField(
                 value = patientNote,
                 onValueChange = { if (it.length <= 400) patientNote = it },
-                label = { Text("Observação opcional (ex.: preferência por videoconferência)") },
+                label = { Text("Observação") },
+                supportingText = {
+                    Text(
+                        "Opcional · ex.: preferência por videoconferência · " +
+                            "${patientNote.length}/400 caracteres"
+                    )
+                },
                 enabled = !isSubmitting,
                 minLines = 2,
                 maxLines = 4,
@@ -612,7 +623,10 @@ fun OwnerAppointmentDecisionBottomSheet(
             OutlinedTextField(
                 value = partnerNote,
                 onValueChange = { if (it.length <= 400) partnerNote = it },
-                label = { Text("Mensagem opcional para o participante") },
+                label = { Text("Mensagem para o participante") },
+                supportingText = {
+                    Text("Opcional · ${partnerNote.length}/400 caracteres")
+                },
                 enabled = !isUpdating,
                 minLines = 2,
                 maxLines = 4,
