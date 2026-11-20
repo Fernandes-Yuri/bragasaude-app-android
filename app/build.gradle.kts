@@ -134,6 +134,11 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    // Declaração explícita: SessionViewModelScope importa LocalViewModelStoreOwner
+    // de lifecycle-viewmodel-compose. Antes vinha só transitivamente via
+    // hilt-navigation-compose; fixar a coordenada blinda o import contra mudanças
+    // no grafo transitivo.
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
 
     // Room
     implementation(libs.androidx.room.runtime)

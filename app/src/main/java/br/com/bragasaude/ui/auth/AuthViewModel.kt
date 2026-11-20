@@ -150,6 +150,20 @@ class AuthViewModel @Inject constructor(
                     store.resetToPersonal()
                 }
             }
+            // Funil único de saída de sessão (logout em Ajustes, desativação de
+            // conta, expiração/revogação do Firebase): além do reset síncrono em
+            // memória acima, zera o cache B2B cifrado e as preferências de backup
+            // do chat. É idempotente (clearOnSignOut também roda em signOut()/
+            // deleteAccount()), não bloqueia a main thread (o repositório troca
+            // para Dispatchers.IO) e não pode deixar exceção escapar — o
+            // EntryPoint pode não estar disponível em algum build/teste.
+            viewModelScope.launch {
+                runCatching {
+                    val entry = resolveB2BEntryPoint() ?: return@runCatching
+                    entry.b2bContextRepository().clearOnSignOut()
+                    entry.chatBackupRepository().clearOnSignOut()
+                }
+            }
             viewModelScope.launch {
                 notificationClient.onSessionChanged(null)
             }

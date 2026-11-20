@@ -13,7 +13,11 @@ import java.util.Locale
 fun PartnerWalletKpis(kpis: PartnerWalletKpisDto?) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Carteira global", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-        Text("Atividade no programa · últimos 7 dias", style = MaterialTheme.typography.labelSmall)
+        // Janela vem do backend (periodDays); 7 é o fallback histórico para quando
+        // os KPIs ainda não carregaram, preservando o texto anterior.
+        val periodDays = kpis?.periodDays ?: 7
+        val periodLabel = if (periodDays == 1) "último dia" else "últimos $periodDays dias"
+        Text("Atividade no programa · $periodLabel", style = MaterialTheme.typography.labelSmall)
         val entries = listOf(
             "Ativos" to kpis?.activeUsers?.toString(),
             "Inativos" to kpis?.inactiveUsers?.toString(),
