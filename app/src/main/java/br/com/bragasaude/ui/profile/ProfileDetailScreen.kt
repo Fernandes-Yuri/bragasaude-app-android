@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Height
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
@@ -86,6 +87,7 @@ fun ProfileDetailScreen(
     var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
     var showPartnerProgramSheet by rememberSaveable { mutableStateOf(false) }
     var showPartnerConsentSheet by rememberSaveable { mutableStateOf(false) }
+    var showChatBackupSheet by rememberSaveable { mutableStateOf(false) }
     var pendingPartnerInviteCode by rememberSaveable { mutableStateOf("") }
     var showAvatarDialog by remember { mutableStateOf(false) }
     var showGooglePhotoConfirm by remember { mutableStateOf(false) }
@@ -365,6 +367,12 @@ fun ProfileDetailScreen(
                 showPartnerConsentSheet = false
                 pendingPartnerInviteCode = ""
             }
+        )
+    }
+
+    if (showChatBackupSheet) {
+        ChatBackupBottomSheet(
+            onDismiss = { showChatBackupSheet = false }
         )
     }
 
@@ -884,6 +892,13 @@ fun ProfileDetailScreen(
                             subtitle = "Personalizar nome, cor, logo e acompanhar aprovação.",
                             icon = Icons.Default.Star,
                             onClick = { showPartnerProgramSheet = true }
+                        )
+                        HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
+                        SettingsItem(
+                            title = "Backup de Conversas",
+                            subtitle = "Exportar e restaurar conversas cifradas no Google Drive ou arquivo.",
+                            icon = Icons.Default.Lock,
+                            onClick = { showChatBackupSheet = true }
                         )
                         HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
                         SettingsItem(

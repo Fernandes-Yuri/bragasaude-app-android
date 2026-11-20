@@ -194,6 +194,8 @@ dependencies {
 
     // Movement & GPS
     implementation("com.google.android.gms:play-services-location:21.3.0")
+    // CHAT-02: AuthorizationClient para escopo restrito drive.appdata (Google Drive pessoal)
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
 
     // QR Code Generation
     implementation("com.google.zxing:core:3.5.3")
