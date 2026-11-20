@@ -36,6 +36,8 @@ fun PartnerWorkspaceScreen(
     val isReportingProgram by viewModel.isReportingProgram.collectAsState()
     val isSubmittingAppointment by viewModel.isSubmittingAppointment.collectAsState()
     val updatingAppointmentId by viewModel.updatingAppointmentId.collectAsState()
+    val isGeneratingPdf by viewModel.isGeneratingPdf.collectAsState()
+    val generatedPdf by viewModel.generatedPdf.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     val savedExperience = activeContext.resolvedExperienceConfig()
     val brandPrimary = MaterialTheme.colorScheme.primary
@@ -150,6 +152,20 @@ fun PartnerWorkspaceScreen(
                         brandOnPrimary = brandOnPrimary, brandAccent = brandAccentText,
                         onOpenRequestSheet = { showRequestAppointmentSheet = true },
                         onCancelAppointment = { id -> activeContext.programId?.let { viewModel.cancelEnrollmentAppointment(it, id) } }
+                    )
+                }
+                if (savedExperience.features.preConsultationPdfEnabled) item {
+                    PartnerPersonalPdfCard(
+                        experienceConfig = savedExperience,
+                        sharedCategories = activeContext.sharedCategories,
+                        isGenerating = isGeneratingPdf,
+                        generatedPdf = generatedPdf,
+                        brandPrimary = brandPrimary,
+                        brandOnPrimary = brandOnPrimary,
+                        brandAccent = brandAccentText,
+                        onGenerate = { days, categories ->
+                            viewModel.generatePreConsultationPdf(days, categories)
+                        }
                     )
                 }
                 item { OutlinedButton(onClick = { showConsentSheet = true }, modifier = Modifier.fillMaxWidth()) { Text("Meu consentimento") } }

@@ -720,6 +720,57 @@ private fun PartnerBusinessContent(
                             contentPadding = PaddingValues(20.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
+                            programInfo?.takeIf { it.aiPaused }?.let {
+                                item {
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = CardDefaults.cardColors(containerColor = brandSoftSurface),
+                                        border = softBorderStroke
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.SupportAgent,
+                                                    contentDescription = null,
+                                                    tint = brandAccentText
+                                                )
+                                                Text(
+                                                    text = "Recepcionista IA pausada",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = brandAccentText
+                                                )
+                                            }
+                                            Text(
+                                                text = "As mensagens dos participantes ficam sem resposta automática até que a recepcionista seja retomada no Estúdio.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Button(
+                                                onClick = {
+                                                    studioShowPreview = false
+                                                    selectedTab = BusinessSessionTab.STUDIO
+                                                },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(12.dp),
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = brandPrimary,
+                                                    contentColor = brandOnPrimary
+                                                )
+                                            ) {
+                                                Text("Abrir Estúdio", fontWeight = FontWeight.SemiBold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             if (programInfo == null || programInfo?.parsedStatus != PartnerApprovalStatus.APPROVED) {
                                 item {
                                     PartnerPreApprovalBannerCard(
@@ -893,6 +944,10 @@ private fun PartnerBusinessContent(
                             softSurface = brandSoftSurface,
                             softBorder = softBorderStroke,
                             onOpenOnboarding = { showOnboardingSheet = true },
+                            onOpenStudio = {
+                                studioShowPreview = false
+                                selectedTab = BusinessSessionTab.STUDIO
+                            },
                             onOpenQr = { showReceptionQrSheet = true },
                             onToggleInvitePaused = { partnerViewModel.togglePartnerInvitePaused() },
                             onRegenerateInvite = { partnerViewModel.regenerateInviteCode() },
@@ -1197,6 +1252,7 @@ private fun BusinessCompanyTabContent(
     softSurface: Color,
     softBorder: BorderStroke,
     onOpenOnboarding: () -> Unit,
+    onOpenStudio: () -> Unit,
     onOpenQr: () -> Unit,
     onToggleInvitePaused: () -> Unit,
     onRegenerateInvite: () -> Unit,
@@ -1211,6 +1267,20 @@ private fun BusinessCompanyTabContent(
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        programInfo?.let { prog ->
+            item {
+                FirstAccessActivationChecklistCard(
+                    programInfo = prog,
+                    brandPrimary = brandPrimary,
+                    brandAccent = brandAccent,
+                    softSurface = softSurface,
+                    softBorder = softBorder,
+                    onOpenOnboarding = onOpenOnboarding,
+                    onOpenStudio = onOpenStudio,
+                    onOpenQr = onOpenQr
+                )
+            }
+        }
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
