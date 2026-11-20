@@ -166,6 +166,36 @@ def b64u_decode(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
+def resolve_service_account_path() -> str:
+    existing = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH", "").strip()
+    if existing:
+        return existing
+    candidates = (
+        "/run/braga-saude/gateway.env",
+        "/etc/braga-saude/gateway.env",
+        "/home/ec2-user/braga-gateway/.env",
+        "/home/ec2-user/braga-gateway/app/.env",
+    )
+    resolved = ""
+    for path in candidates:
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                for raw_line in handle:
+                    line = raw_line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, val = line.split("=", 1)
+                    if key.strip() == "FIREBASE_SERVICE_ACCOUNT_PATH":
+                        cleaned = val.strip().strip('"').strip("'")
+                        if cleaned:
+                            resolved = cleaned
+        except OSError:
+            continue
+    return resolved
+
+
 def main() -> int:
     account = sys.argv[1].strip().lower()
     client_pub_b64 = sys.argv[2].strip()
@@ -175,7 +205,7 @@ def main() -> int:
     if os.environ.get("FIREBASE_AUTH_EMULATOR_HOST"):
         print("Emulador Firebase ativo.", file=sys.stderr)
         return 2
-    sa_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH", "").strip()
+    sa_path = resolve_service_account_path()
     if not sa_path:
         print("FIREBASE_SERVICE_ACCOUNT_PATH ausente no runtime.", file=sys.stderr)
         return 2
@@ -253,23 +283,11 @@ def build_ssm_command(account: str, client_pub_b64: str) -> str:
 umask 077
 task_dir=$(mktemp -d /tmp/braga-testlab.XXXXXX)
 trap 'rm -rf "$task_dir"' EXIT
-for env_file in /etc/braga-saude/gateway.env /run/braga-saude/gateway.env /home/ec2-user/braga-gateway/.env /home/ec2-user/braga-gateway/app/.env; do
-  if [ -r "$env_file" ]; then
-    set -a
-    # shellcheck disable=SC1090
-    . "$env_file"
-    set +a
-  fi
-done
 printf '%s' '{script_b64}' | base64 -d > "$task_dir/mint.py"
 chown -R ec2-user:ec2-user "$task_dir"
 chmod 0700 "$task_dir"
 chmod 0600 "$task_dir/mint.py"
-if [ -n "${{FIREBASE_SERVICE_ACCOUNT_PATH:-}}" ]; then
-  runuser -u ec2-user -- env FIREBASE_SERVICE_ACCOUNT_PATH="$FIREBASE_SERVICE_ACCOUNT_PATH" /home/ec2-user/braga-gateway/venv/bin/python "$task_dir/mint.py" '{account}' '{client_pub_b64}'
-else
-  runuser -u ec2-user -- /home/ec2-user/braga-gateway/venv/bin/python "$task_dir/mint.py" '{account}' '{client_pub_b64}'
-fi
+runuser -u ec2-user -- /home/ec2-user/braga-gateway/venv/bin/python "$task_dir/mint.py" '{account}' '{client_pub_b64}'
 """
 
 
