@@ -2,6 +2,10 @@ package br.com.bragasaude.data.local
 
 import android.app.Application
 import androidx.room.Room
+import br.com.bragasaude.data.local.b2b.B2BContextDatabase
+import br.com.bragasaude.data.local.b2b.B2BDirectMessageEntity
+import br.com.bragasaude.domain.b2b.DirectChatMessageDto
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -190,6 +194,121 @@ class FamilyChatMigrationTest {
             }
         } finally {
             context.deleteDatabase(name)
+        }
+    }
+
+    @Test fun chat01RetainsMessagesOver48hAfterWorkerPurgeAndKeepsOver20OrbChatsAndB2bMigration2To3() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        val now = System.currentTimeMillis()
+        val db = Room.inMemoryDatabaseBuilder(context, BragaDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val oldMsg = FamilyMessageEntity(
+                id = "msg-48h",
+                patientUserId = "patient-1",
+                senderUserId = "caregiver-1",
+                senderName = "Filha",
+                messageText = "Bom dia, papai",
+                iconType = "LOVE",
+                sentAt = now - 48 * 3_600_000L,
+                expiresAt = now - 24 * 3_600_000L,
+                isRead = false
+            )
+            val syncedTombstone = FamilyMessageEntity(
+                id = "msg-tombstone",
+                patientUserId = "patient-1",
+                senderUserId = "patient-1",
+                senderName = "",
+                messageText = "",
+                iconType = "LOVE",
+                sentAt = now - 72 * 3_600_000L,
+                expiresAt = now - 48 * 3_600_000L,
+                deletedAt = now - 70 * 3_600_000L,
+                pendingSync = false
+            )
+            db.familyDao().insertMessages(listOf(oldMsg, syncedTombstone))
+
+            // Simula passagem do FamilyRetentionWorker / SyncWorker apos 24h
+            db.familyDao().purgeExpiredMessages(now)
+
+            val recent = db.familyDao().getRecentMessagesForPatient("patient-1", 50).first()
+            assertEquals(listOf("msg-48h"), recent.map { it.id })
+            val unread = db.familyDao().getUnreadMessagesForPatient("patient-1").first()
+            assertEquals(listOf("msg-48h"), unread.map { it.id })
+            assertNull(db.familyDao().getMessageById("msg-tombstone"))
+
+            // OrbChatStore preserva mais de 20 conversas locais sem truncamento
+            val orbStore = OrbChatStore(db)
+            for (i in 1..25) {
+                orbStore.save(
+                    OrbConversation(
+                        id = "conv-$i",
+                        userId = "patient-1",
+                        title = "Conversa $i",
+                        updatedAt = now + i * 1000L,
+                        messagesJson = "[]"
+                    )
+                )
+            }
+            assertEquals(25, orbStore.observe("patient-1").first().size)
+            assertEquals(25, orbStore.getAllForUser("patient-1").size)
+        } finally {
+            db.close()
+        }
+
+        // Verifica migracao 2->3 no B2BContextDatabase preservando cache v2 e mensagens B2B locais
+        val b2bName = "b2b-chat01-mig.db"
+        context.deleteDatabase(b2bName)
+        try {
+            context.openOrCreateDatabase(b2bName, 0, null).use { v2 ->
+                v2.execSQL(
+                    "CREATE TABLE `b2b_context_cache` (" +
+                        "`ownerUserId` TEXT NOT NULL, `contextKey` TEXT NOT NULL, `mode` TEXT NOT NULL, " +
+                        "`programId` TEXT, `programName` TEXT, `companyName` TEXT, `primaryColor` TEXT, `logoUrl` TEXT, " +
+                        "`approvalStatus` TEXT, `sharedCategoriesJson` TEXT NOT NULL, `isActive` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, `templateKey` TEXT, `experienceConfigJson` TEXT, " +
+                        "`familyShareEnabled` INTEGER NOT NULL, PRIMARY KEY(`ownerUserId`, `contextKey`))"
+                )
+                v2.execSQL(
+                    "CREATE INDEX `index_b2b_context_cache_ownerUserId_isActive` ON `b2b_context_cache` (`ownerUserId`, `isActive`)"
+                )
+                v2.version = 2
+            }
+            val b2bDb = Room.databaseBuilder(context, B2BContextDatabase::class.java, b2bName)
+                .allowMainThreadQueries()
+                .addMigrations(B2BContextDatabase.MIGRATION_1_2, B2BContextDatabase.MIGRATION_2_3)
+                .build()
+            try {
+                assertEquals(3, b2bDb.openHelper.readableDatabase.version)
+                val dto = DirectChatMessageDto(
+                    messageId = "dm-8d",
+                    programId = "prog-1",
+                    patientUserId = "patient-1",
+                    senderUserId = "owner-1",
+                    senderRole = "PARTNER",
+                    body = "Mensagem B2B com 8 dias mantida no celular",
+                    createdAt = "2026-11-11T10:00:00Z"
+                )
+                b2bDb.b2bContextDao().upsertDirectMessages(
+                    listOf(
+                        B2BDirectMessageEntity.fromDto(
+                            ownerUserId = "patient-1",
+                            dto = dto,
+                            programName = "Cardio Mais",
+                            primaryColor = "#1A6B5C"
+                        )
+                    )
+                )
+                val loaded = b2bDb.b2bContextDao().getDirectMessagesForThread("patient-1", "prog-1", "patient-1")
+                assertEquals(1, loaded.size)
+                assertEquals("Cardio Mais", loaded.single().programName)
+                assertEquals("Mensagem B2B com 8 dias mantida no celular", loaded.single().toDto().body)
+            } finally {
+                b2bDb.close()
+            }
+        } finally {
+            context.deleteDatabase(b2bName)
         }
     }
 

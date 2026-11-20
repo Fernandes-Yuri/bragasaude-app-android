@@ -18,10 +18,11 @@ class FamilyRetentionInstrumentedTest {
         FamilyMessageEntity(id=id, patientUserId="d47-synthetic", senderName="Familiar de teste",
             messageText=text, iconType="LOVE", expiresAt=expiry)
 
-    @Test fun exportRejectsExpiredAndDeletedMessages() {
-        val invalid = listOf(message("expired", "EXPIRED_SHOULD_NOT_EXPORT", 1L),
-            message("deleted", "DELETED_SHOULD_NOT_EXPORT").copy(deletedAt=1L))
-        assertNull(FamilyConversationPdfExporter.generateConversationPdf(context,invalid))
+    @Test fun exportRejectsDeletedMessagesAndKeepsOldLocalMessages() {
+        val deletedOnly = listOf(message("deleted", "DELETED_SHOULD_NOT_EXPORT").copy(deletedAt=1L))
+        assertNull(FamilyConversationPdfExporter.generateConversationPdf(context, deletedOnly))
+        val oldDelivered = listOf(message("old-local", "OLD_MESSAGE_KEPT_ON_DEVICE", 1L))
+        assertNotNull(FamilyConversationPdfExporter.generateConversationPdf(context, oldDelivered))
     }
 
     @Test fun longConversationExportsAndRendersEveryPage() {

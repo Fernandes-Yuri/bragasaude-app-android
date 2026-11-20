@@ -751,17 +751,21 @@ interface FamilyDao {
     @Query("SELECT * FROM family_bindings_local WHERE patientUserId = :patientUserId AND caregiverUserId = :caregiverUserId AND status = 'ACTIVE' LIMIT 1")
     suspend fun existsActiveLink(patientUserId: String, caregiverUserId: String): FamilyBindingEntity?
 
-    /** Mensagens nao lidas do paciente (D47: apenas vigentes e nao apagadas). */
-    @Query("SELECT * FROM family_messages_local WHERE patientUserId = :patientUserId AND isRead = 0 AND deletedAt IS NULL AND expiresAt > :now ORDER BY sentAt DESC")
-    fun getUnreadMessagesForPatient(patientUserId: String, now: Long = System.currentTimeMillis()): Flow<List<FamilyMessageEntity>>
+    /** Mensagens nao lidas do paciente (CHAT-01: retidas localmente ate exclusao explicita). */
+    @Query("SELECT * FROM family_messages_local WHERE patientUserId = :patientUserId AND isRead = 0 AND deletedAt IS NULL ORDER BY sentAt DESC")
+    fun getUnreadMessagesForPatient(patientUserId: String): Flow<List<FamilyMessageEntity>>
 
-    /** Mensagens recentes do paciente (D47: apenas vigentes e nao apagadas). */
-    @Query("SELECT * FROM family_messages_local WHERE patientUserId = :patientUserId AND deletedAt IS NULL AND expiresAt > :now ORDER BY sentAt DESC LIMIT :limit")
-    fun getRecentMessagesForPatient(patientUserId: String, limit: Int, now: Long = System.currentTimeMillis()): Flow<List<FamilyMessageEntity>>
+    /** Mensagens recentes do paciente (CHAT-01: historico >24h preservado localmente). */
+    @Query("SELECT * FROM family_messages_local WHERE patientUserId = :patientUserId AND deletedAt IS NULL ORDER BY sentAt DESC LIMIT :limit")
+    fun getRecentMessagesForPatient(patientUserId: String, limit: Int): Flow<List<FamilyMessageEntity>>
 
-    /** Todas as mensagens familiares vigentes para construcao do inbox multi-conversas. */
-    @Query("SELECT * FROM family_messages_local WHERE deletedAt IS NULL AND expiresAt > :now ORDER BY sentAt DESC")
-    fun getAllActiveMessages(now: Long = System.currentTimeMillis()): Flow<List<FamilyMessageEntity>>
+    /** Todas as mensagens familiares locais para construcao do inbox multi-conversas. */
+    @Query("SELECT * FROM family_messages_local WHERE deletedAt IS NULL ORDER BY sentAt DESC")
+    fun getAllActiveMessages(): Flow<List<FamilyMessageEntity>>
+
+    /** Snapshot unico de todas as mensagens familiares nao excluidas (export/backup). */
+    @Query("SELECT * FROM family_messages_local WHERE deletedAt IS NULL ORDER BY sentAt ASC")
+    suspend fun getAllActiveMessagesOneShot(): List<FamilyMessageEntity>
 
     /** Ativar um vinculo pendente. */
     @Query("UPDATE family_bindings_local SET status = 'ACTIVE' WHERE id = :bindingId")
@@ -860,11 +864,11 @@ interface FamilyDao {
     @Query("UPDATE family_messages_local SET pendingSync = 0 WHERE id = :id AND deletedAt IS NOT NULL AND deletionAttempts >= :maxAttempts")
     suspend fun abandonDeletion(id: String, maxAttempts: Int)
 
-    /** Purga local D47: remove definitivamente tudo o que completou 24h (com ou sem tombstone). */
+    /** CHAT-01: limpa apenas recibos efemeros e tombstones ja sincronizados/abandonados; nunca apaga mensagens legiveis >24h. */
     @Query("DELETE FROM family_read_receipts WHERE expiresAt <= :now")
     suspend fun purgeReceipts(now: Long = System.currentTimeMillis())
 
-    @Query("DELETE FROM family_messages_local WHERE expiresAt > 0 AND expiresAt <= :now")
+    @Query("DELETE FROM family_messages_local WHERE deletedAt IS NOT NULL AND pendingSync = 0 AND expiresAt > 0 AND expiresAt <= :now")
     suspend fun purgeExpiredMessages(now: Long = System.currentTimeMillis())
 
     /** Vínculos familiares pendentes de sincronização com a nuvem. */

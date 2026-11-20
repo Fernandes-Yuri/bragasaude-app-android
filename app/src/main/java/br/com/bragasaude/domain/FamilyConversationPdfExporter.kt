@@ -37,17 +37,15 @@ object FamilyConversationPdfExporter {
     private const val BOTTOM_LIMIT = 780f
 
     private val RETENTION_NOTICE =
-        "As mensagens da família ficam disponíveis por 24 horas no aplicativo e depois " +
-        "são apagadas automaticamente. Este documento é um registro pessoal exportado " +
-        "pelo usuário dentro dessa janela."
+        "${br.com.bragasaude.domain.b2b.B2BThemeEngine.LOCAL_CHAT_DEVICE_ONLY_NOTICE} " +
+        "Este documento é um registro pessoal exportado pelo usuário a partir da cópia local do aparelho."
 
     fun generateConversationPdf(
         context: Context,
         messages: List<FamilyMessageEntity>,
         familyLabel: String? = null
     ): Uri? {
-        val now = System.currentTimeMillis()
-        val active = messages.filter { it.deletedAt == null && it.expiresAt > now }
+        val active = messages.filter { it.deletedAt == null }
         if (active.isEmpty()) return null
         cleanupTemporaryExports(context)
 
@@ -174,7 +172,8 @@ object FamilyConversationPdfExporter {
         doc.finishPage(page)
 
         val dir = File(context.cacheDir, "family_exports").apply { mkdirs() }
-        val pdfFile = File(dir, "${active.minOf { it.expiresAt }}_${java.util.UUID.randomUUID()}.pdf")
+        val tempExpiryMs = System.currentTimeMillis() + 3_600_000L
+        val pdfFile = File(dir, "${tempExpiryMs}_${java.util.UUID.randomUUID()}.pdf")
         try {
             FileOutputStream(pdfFile).use { out -> doc.writeTo(out) }
         } catch (error: Exception) {
@@ -199,7 +198,7 @@ object FamilyConversationPdfExporter {
             putExtra(
                 Intent.EXTRA_TEXT,
                 "Conversa da família exportada do Braga Saúde. " +
-                    "No aplicativo, as mensagens ficam disponíveis por 24 horas."
+                    br.com.bragasaude.domain.b2b.B2BThemeEngine.LOCAL_CHAT_DEVICE_ONLY_NOTICE
             )
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }

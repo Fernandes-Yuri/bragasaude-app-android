@@ -3,6 +3,7 @@ package br.com.bragasaude.data.remote.repository
 import br.com.bragasaude.data.local.DailyMetricsDao
 import br.com.bragasaude.data.local.FamilyBindingEntity
 import br.com.bragasaude.data.local.FamilyDao
+import br.com.bragasaude.data.local.FamilyMessageEntity
 import br.com.bragasaude.data.local.ProfileDao
 import br.com.bragasaude.data.local.SocialFeedDao
 import br.com.bragasaude.data.local.VitalSignDao
@@ -12,6 +13,7 @@ import br.com.bragasaude.domain.b2b.FamilyProgramOverviewDto
 import br.com.bragasaude.domain.b2b.FamilyReminderAcknowledgementDto
 import com.google.firebase.auth.FirebaseAuth
 import io.mockk.*
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
@@ -752,6 +754,33 @@ class FamilyBridgeRepositoryTest {
         coVerify(exactly = 0) { familyDao.deleteAllConsultationsForUser("patient-fred") }
         coVerify(exactly = 0) { vitalSignDao.deleteByUserId("patient-fred") }
         coVerify(atLeast = 1) { apiClient.getConsultations("patient-fred") }
+    }
+
+    @Test
+    fun `chat01 syncFamilyMessages does not delete existing local copy when server relay expired and keeps over-24h messages readable`() = runBlocking {
+        every { auth.currentUser?.uid } returns "patient-1"
+        val now = System.currentTimeMillis()
+        val oldExpiredRelay = FamilyMessageEntity(
+            id = "msg-48h",
+            remoteId = "msg-48h",
+            patientUserId = "patient-1",
+            senderUserId = "caregiver-1",
+            senderName = "Filha",
+            messageText = "Mensagem recebida ha 48h",
+            iconType = "LOVE",
+            sentAt = now - 48 * 3_600_000L,
+            expiresAt = now - 24 * 3_600_000L,
+            isRead = false
+        )
+        coEvery { apiClient.getFamilyMessages("patient-1") } returns listOf(oldExpiredRelay)
+        every { familyDao.getRecentMessagesForPatient("patient-1", 10) } returns kotlinx.coroutines.flow.flowOf(listOf(oldExpiredRelay))
+
+        repository.syncFamilyMessages("patient-1").getOrThrow()
+
+        coVerify(exactly = 0) { familyDao.deleteMessage("msg-48h") }
+        coVerify(exactly = 0) { familyDao.purgeExpiredMessages(any()) }
+        val emitted = repository.getRecentMessagesForPatient("patient-1", 10).first()
+        assertEquals(listOf("msg-48h"), emitted.map { it.id })
     }
 
 }

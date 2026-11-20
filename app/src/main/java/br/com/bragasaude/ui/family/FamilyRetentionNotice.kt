@@ -66,7 +66,7 @@ fun FamilyRetentionNotice(modifier: Modifier = Modifier, compact: Boolean = fals
                     Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Mensagens expiram em 24h",
+                        text = "Salvo apenas neste aparelho",
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
@@ -109,7 +109,7 @@ private fun RetentionDetails(showGroupDetails: Boolean) {
                 Spacer(Modifier.height(8.dp))
             }
             Text(
-                text = "As mensagens ficam disponíveis por 24 horas",
+                text = "Salvo apenas neste aparelho",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp,
@@ -117,8 +117,9 @@ private fun RetentionDetails(showGroupDetails: Boolean) {
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                text = "Cada mensagem expira 24 horas após o envio, sem virar o dia à meia-noite. " +
-                    "Para guardar, toque em Exportar. Para apagar uma mensagem sua, toque e segure nela.",
+                text = "${br.com.bragasaude.domain.b2b.B2BThemeEngine.LOCAL_CHAT_DEVICE_ONLY_NOTICE} " +
+                    "O servidor faz apenas repasse temporário de até 24 horas. " +
+                    "Para levar para outro celular, use Exportar ou Backup. Para apagar uma mensagem sua, toque e segure nela.",
                 style = MaterialTheme.typography.bodySmall,
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
