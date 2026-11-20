@@ -45,6 +45,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -80,13 +82,15 @@ import br.com.bragasaude.ui.components.BragaBottomSheet
 
 enum class BusinessSessionTab(
     val label: String,
+    val shortLabel: String,
     val icon: ImageVector
 ) {
-    WALLET("Carteira", Icons.Default.Person),
-    OPERATIONS("Operação", Icons.Default.CalendarMonth),
-    CARE("Atendimento", Icons.Default.SupportAgent),
-    STUDIO("Estúdio", Icons.Default.AutoAwesome),
-    COMPANY("Empresa", Icons.Default.VerifiedUser)
+    WALLET("Carteira", "Carteira", Icons.Default.Person),
+    OPERATIONS("Operação", "Operação", Icons.Default.CalendarMonth),
+    // "Atendimento" + contador não cabe na barra; o rótulo curto evita ellipsis.
+    CARE("Atendimento", "Atender", Icons.Default.SupportAgent),
+    STUDIO("Estúdio", "Estúdio", Icons.Default.AutoAwesome),
+    COMPANY("Empresa", "Empresa", Icons.Default.VerifiedUser)
 }
 
 /**
@@ -159,6 +163,10 @@ private fun PartnerBusinessContent(
     var reminderComposerTarget by remember { mutableStateOf<Pair<String?, String>?>(null) }
     var selectedAppointmentToManage by remember { mutableStateOf<ProgramAppointmentDto?>(null) }
 
+    // Status do workspace aparece acima da barra de navegação (Scaffold posiciona o host
+    // acima do bottomBar); Toasts continuam restritos às ações pontuais.
+    val snackbarHostState = remember { SnackbarHostState() }
+
     val savedExperience = remember(programInfo, activeContext) {
         programInfo?.experienceConfig ?: activeContext.resolvedExperienceConfig()
     }
@@ -177,7 +185,7 @@ private fun PartnerBusinessContent(
 
     LaunchedEffect(statusMessage) {
         statusMessage?.let { msg ->
-            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            snackbarHostState.showSnackbar(msg)
             partnerViewModel.consumeStatusMessage()
         }
     }
@@ -565,6 +573,7 @@ private fun PartnerBusinessContent(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             Column(
                 modifier = Modifier
@@ -638,7 +647,7 @@ private fun PartnerBusinessContent(
                                     else -> ""
                                 }
                                 Text(
-                                    text = "${tab.label}$badgeSuffix",
+                                    text = "${tab.shortLabel}$badgeSuffix",
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -967,6 +976,33 @@ private fun PartnerBusinessContent(
     }
 }
 
+/**
+ * Notas de revisão podem carregar metadados internos de homologação (contas de
+ * teste, aprovações de demonstração). Esses marcadores nunca vão para a UI do parceiro.
+ */
+private fun sanitizeReviewNote(note: String?): String? {
+    val clean = note?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val internalMarkers = listOf(
+        "conta de teste",
+        "aprovação operacional de demonstração",
+        "b2b-31"
+    )
+    return clean.takeUnless { text ->
+        internalMarkers.any { marker -> text.contains(marker, ignoreCase = true) }
+    }
+}
+
+/**
+ * Retorno neutro apenas quando o cadastro está em análise e não há observação
+ * pública utilizável; nos demais status o rótulo e os textos do card já bastam.
+ */
+private fun neutralReviewNote(status: PartnerApprovalStatus): String? =
+    if (status == PartnerApprovalStatus.PENDING_REVIEW) {
+        "Cadastro em análise pela equipe Braga."
+    } else {
+        null
+    }
+
 @Composable
 private fun PartnerPreApprovalBannerCard(
     programInfo: PartnerProgramDto?,
@@ -987,7 +1023,7 @@ private fun PartnerPreApprovalBannerCard(
         PartnerApprovalStatus.REJECTED -> "Cadastro recusado na análise"
         PartnerApprovalStatus.APPROVED -> "Empresa aprovada"
     }
-    val description = programInfo?.reviewNote?.takeIf { it.isNotBlank() } ?: when (status) {
+    val description = sanitizeReviewNote(programInfo?.reviewNote) ?: when (status) {
         null -> "Informe razão social, nome do programa, dados do responsável e documentos comprobatórios para habilitar o código de convite aos pacientes."
         PartnerApprovalStatus.DRAFT -> "Conclua o preenchimento cadastral, envie os comprovantes e submeta para validação."
         PartnerApprovalStatus.PENDING_REVIEW -> "Enquanto a análise é concluída, você já pode preparar o Estúdio, os textos da Recepcionista IA e a prévia do paciente."
@@ -1125,7 +1161,7 @@ private fun BusinessCareInboxTabContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "Atendimento automático: ${experienceConfig.aiReceptionistPolicy.personaName} (${experienceConfig.aiReceptionistPolicy.activationMode})",
+                        text = "Atendimento automático: ${experienceConfig.aiReceptionistPolicy.personaName} (${B2BTextFormatters.activationModeLabel(experienceConfig.aiReceptionistPolicy.activationMode)})",
                         style = MaterialTheme.typography.labelMedium,
                         color = brandAccent
                     )
@@ -1200,11 +1236,23 @@ private fun BusinessCareInboxTabContent(
                             )
                             val subtitle = when {
                                 item.unreadDirectMessagesCount > 0 ->
-                                    "${item.unreadDirectMessagesCount} mensagem(ns) aguardando leitura"
+                                    B2BTextFormatters.countLabel(
+                                        item.unreadDirectMessagesCount,
+                                        "mensagem aguardando leitura",
+                                        "mensagens aguardando leitura"
+                                    )
                                 item.pendingAppointmentsCount > 0 ->
-                                    "${item.pendingAppointmentsCount} solicitação(ões) de horário em aberto"
+                                    B2BTextFormatters.countLabel(
+                                        item.pendingAppointmentsCount,
+                                        "solicitação de horário em aberto",
+                                        "solicitações de horário em aberto"
+                                    )
                                 else ->
-                                    "${item.effectiveCategories.size} categoria(s) autorizada(s)"
+                                    B2BTextFormatters.countLabel(
+                                        item.effectiveCategories.size,
+                                        "categoria autorizada",
+                                        "categorias autorizadas"
+                                    )
                             }
                             Text(
                                 text = subtitle,
@@ -1316,7 +1364,9 @@ private fun BusinessCompanyTabContent(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        programInfo.reviewNote?.takeIf { it.isNotBlank() }?.let { note ->
+                        val reviewNote = sanitizeReviewNote(programInfo.reviewNote)
+                            ?: neutralReviewNote(programInfo.parsedStatus)
+                        reviewNote?.let { note ->
                             Text(
                                 text = "Observação: $note",
                                 style = MaterialTheme.typography.bodySmall,

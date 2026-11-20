@@ -187,7 +187,10 @@ private fun AppSessionContent(activity: MainActivity, authViewModel: AuthViewMod
                                             error = initialSyncError,
                                             onRetry = authViewModel::retryInitialSync,
                                             onSignOut = { authViewModel.performSignOut() }
-                                        ) else LoadingOverlay(onExit = { authViewModel.performSignOut() })
+                                        ) else LoadingOverlay(
+                                            message = "Acessando sua área empresarial...",
+                                            onExit = { authViewModel.performSignOut() }
+                                        )
                                     } else {
                                         PartnerBusinessScaffold(authViewModel = authViewModel)
                                     }
@@ -388,7 +391,10 @@ private fun AppSessionContent(activity: MainActivity, authViewModel: AuthViewMod
 // ==================== Helpers locais ====================
 
 @Composable
-fun LoadingOverlay(onExit: (() -> Unit)? = null) {
+fun LoadingOverlay(
+    onExit: (() -> Unit)? = null,
+    message: String = "Acessando seu espaço de saúde..."
+) {
     // D-AUTH1: antes o botão "Sair e tentar entrar novamente" aparecia no instante
     // em que o perfil era carregado de forma rotineira, dando a falsa impressão de
     // que o login tinha falhado. Agora a tela mostra uma mensagem acolhedora e só
@@ -403,10 +409,14 @@ fun LoadingOverlay(onExit: (() -> Unit)? = null) {
     }
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(strokeWidth = 3.dp)
+            CircularProgressIndicator(
+                modifier = Modifier.size(48.dp),
+                color = MaterialTheme.colorScheme.primary,
+                strokeWidth = 4.dp
+            )
             Spacer(Modifier.height(16.dp))
             Text(
-                "Acessando seu espaço de saúde...",
+                message,
                 style = MaterialTheme.typography.bodyLarge
             )
             if (showExit && onExit != null) {
