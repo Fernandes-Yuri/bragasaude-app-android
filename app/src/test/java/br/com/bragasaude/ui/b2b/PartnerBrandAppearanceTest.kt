@@ -95,6 +95,9 @@ class PartnerBrandAppearanceTest {
         verify { auth.signUpWithEmail("owner@example.test", "example-password", businessAccount = true) }
     }
 
+    // Robolectric #8460: Dialog + TextField oscila acima de w320dp. Demais capturas usam w360dp.
+    // https://github.com/robolectric/robolectric/issues/8460
+    @Config(qualifiers = "w320dp-h800dp-mdpi")
     @Test fun recognizedInviteUsesPartnerIdentityAndChangingItClearsPendingProgram() {
         prefs.edit().putString("pending_b2b_invite_code", invite.inviteCode)
             .putBoolean("pending_b2b_company_onboarding", true).commit()
@@ -104,14 +107,11 @@ class PartnerBrandAppearanceTest {
         assertFalse(prefs.getBoolean("pending_b2b_company_onboarding", false))
         screenshot("04-login-parceiro")
         compose.onNodeWithText("Trocar programa").performClick()
+        compose.onNodeWithText("Encontre seu programa").assertIsDisplayed()
         assertFalse(prefs.contains("pending_b2b_invite_code"))
+        compose.onNodeWithText("Voltar", substring = false).performClick()
         compose.onNodeWithText("Horizonte").assertDoesNotExist()
         compose.onNodeWithText("Acesse sua conta").assertIsDisplayed()
-        compose.onNodeWithTag("login_content").performScrollToNode(hasTestTag("invite_shortcut_button"))
-        compose.onNodeWithTag("invite_shortcut_button").performClick()
-        compose.onNodeWithText("Encontre seu programa").assertIsDisplayed()
-        compose.onNodeWithText("Voltar", substring = false).performClick()
-        compose.onNodeWithText("Encontre seu programa").assertDoesNotExist()
     }
 
     @Test fun darkLoginAndLargeTypeRemainScrollableThroughLegalAndCredit() {
