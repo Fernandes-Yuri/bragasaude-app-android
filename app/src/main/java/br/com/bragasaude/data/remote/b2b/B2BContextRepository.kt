@@ -30,13 +30,15 @@ class B2BContextRepository @Inject constructor(
     suspend fun hydrateFromCache(userId: String) = withContext(Dispatchers.IO) {
         val cleanUid = userId.trim()
         if (cleanUid.isEmpty()) return@withContext
+        val generation = activeContextStore.sessionGeneration.value
         val cached = b2bContextDao.getContextsForUser(cleanUid)
         if (cached.isNotEmpty()) {
             val descriptors = cached.map { it.toDescriptor(json) }
-            activeContextStore.updateAvailableContexts(cleanUid, descriptors)
-            val activeEntity = cached.firstOrNull { it.isActive }
-            if (activeEntity != null) {
-                activeContextStore.selectContext(cleanUid, activeEntity.toDescriptor(json))
+            withContext(Dispatchers.Main.immediate) publishCache@ {
+                if (generation != activeContextStore.sessionGeneration.value) return@publishCache
+                activeContextStore.updateAvailableContexts(cleanUid, descriptors)
+                val activeEntity = cached.firstOrNull { it.isActive }
+                if (activeEntity != null) activeContextStore.selectContext(cleanUid, activeEntity.toDescriptor(json))
             }
         }
     }
@@ -45,9 +47,14 @@ class B2BContextRepository @Inject constructor(
         withContext(Dispatchers.IO) {
             val cleanUid = userId.trim()
             if (cleanUid.isEmpty()) return@withContext emptyList()
+            val generation = activeContextStore.sessionGeneration.value
             val envelope = apiClient.getB2BContextsEnvelope()
                 ?: return@withContext activeContextStore.availableContexts.value
-            activeContextStore.updateFromEnvelope(cleanUid, envelope)
+            val applied = withContext(Dispatchers.Main.immediate) {
+                if (generation != activeContextStore.sessionGeneration.value) false
+                else { activeContextStore.updateFromEnvelope(cleanUid, envelope); true }
+            }
+            if (!applied) return@withContext emptyList()
             val currentActiveKey = activeContextStore.activeContext.value.cacheKey()
             val entities = activeContextStore.availableContexts.value.map { descriptor ->
                 B2BContextCacheEntity.fromDescriptor(
@@ -70,7 +77,7 @@ class B2BContextRepository @Inject constructor(
         val result = apiClient.updateAccountMode(target)
         if (result.isSuccess) {
             val resolved = AppAccountMode.fromWire(result.accountMode)
-            activeContextStore.updateAccountMode(resolved, enterBusinessSession)
+            withContext(Dispatchers.Main.immediate) { activeContextStore.updateAccountMode(resolved, enterBusinessSession) }
             if (cleanUid.isNotEmpty()) {
                 syncContexts(cleanUid)
             }
@@ -84,6 +91,7 @@ class B2BContextRepository @Inject constructor(
     ): B2BContextDescriptor? = withContext(Dispatchers.IO) {
         val cleanUid = userId.trim()
         if (cleanUid.isEmpty()) return@withContext null
+        val generation = activeContextStore.sessionGeneration.value
         val authoritative = apiClient.selectB2BContext(target.parsedMode, target.programId)
             ?: return@withContext null
         val syncedList = buildList {
@@ -92,8 +100,12 @@ class B2BContextRepository @Inject constructor(
             })
             if (authoritative.isPartnerContext) add(authoritative)
         }
-        activeContextStore.updateAvailableContexts(cleanUid, syncedList)
-        activeContextStore.selectContext(cleanUid, authoritative)
+        val accepted = withContext(Dispatchers.Main.immediate) selectAuthoritative@ {
+            if (generation != activeContextStore.sessionGeneration.value) return@selectAuthoritative false
+            activeContextStore.updateAvailableContexts(cleanUid, syncedList)
+            activeContextStore.selectContext(cleanUid, authoritative)
+        }
+        if (!accepted) return@withContext null
 
         b2bContextDao.clearActiveFlags(cleanUid)
         b2bContextDao.markActive(cleanUid, authoritative.cacheKey())
@@ -187,7 +199,7 @@ class B2BContextRepository @Inject constructor(
         }
 
     suspend fun clearOnSignOut() = withContext(Dispatchers.IO) {
-        activeContextStore.resetToPersonal()
+        withContext(Dispatchers.Main.immediate) { activeContextStore.resetToPersonal() }
         b2bContextDao.clearAll()
         b2bContextDao.clearAllDirectMessages()
     }

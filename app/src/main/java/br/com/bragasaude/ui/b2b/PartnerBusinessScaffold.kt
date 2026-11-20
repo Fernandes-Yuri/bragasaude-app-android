@@ -54,7 +54,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -78,7 +77,6 @@ import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
 import br.com.bragasaude.ui.auth.AuthViewModel
 import br.com.bragasaude.ui.components.BragaAlertDialog
 import br.com.bragasaude.ui.components.BragaBottomSheet
-import kotlinx.coroutines.launch
 
 enum class BusinessSessionTab(
     val label: String,
@@ -114,7 +112,6 @@ private fun PartnerBusinessContent(
     partnerViewModel: PartnerWorkspaceViewModel
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     val accountMode by authViewModel.accountMode.collectAsState()
     val activeContext by partnerViewModel.activeContext.collectAsState()
@@ -125,6 +122,7 @@ private fun PartnerBusinessContent(
     val isSavingExperience by partnerViewModel.isSavingExperience.collectAsState()
     val isUpdatingInvitePolicy by partnerViewModel.isUpdatingInvitePolicy.collectAsState()
     val participants by partnerViewModel.participants.collectAsState()
+    val walletKpis by partnerViewModel.walletKpis.collectAsState()
     val walletQuery by partnerViewModel.walletQuery.collectAsState()
     val walletCategoryFilter by partnerViewModel.walletCategoryFilter.collectAsState()
     val walletAttentionOnly by partnerViewModel.walletAttentionOnly.collectAsState()
@@ -409,7 +407,7 @@ private fun PartnerBusinessContent(
                     onClick = {
                         if (isSwitchingMode) return@Button
                         isSwitchingMode = true
-                        scope.launch {
+                        authViewModel.launchSessionAction {
                             val result = authViewModel.switchAccountMode(
                                 target = AppAccountMode.DUAL,
                                 enterBusinessSession = false
@@ -466,7 +464,7 @@ private fun PartnerBusinessContent(
                     onClick = {
                         if (isSwitchingMode) return@Button
                         isSwitchingMode = true
-                        scope.launch {
+                        authViewModel.launchSessionAction {
                             val result = authViewModel.switchAccountMode(
                                 target = AppAccountMode.BUSINESS_ONLY,
                                 enterBusinessSession = true
@@ -544,7 +542,7 @@ private fun PartnerBusinessContent(
                     onClick = {
                         showDeleteDialog = false
                         partnerViewModel.clearSensitiveBusinessMemory()
-                        scope.launch { authViewModel.deleteAccount() }
+                        authViewModel.launchSessionAction { authViewModel.deleteAccount() }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
@@ -673,224 +671,49 @@ private fun PartnerBusinessContent(
             } else {
                 when (selectedTab) {
                     BusinessSessionTab.WALLET -> {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(20.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            programInfo?.let { prog ->
-                                if (prog.aiPaused) {
-                                    item {
-                                        Card(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(16.dp),
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = MaterialTheme.colorScheme.errorContainer
-                                            )
-                                        ) {
-                                            Column(
-                                                modifier = Modifier.padding(14.dp),
-                                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                Text(
-                                                    text = "Recepcionista IA pausada pela moderação Braga",
-                                                    style = MaterialTheme.typography.titleSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                                )
-                                                Text(
-                                                    text = prog.reviewNote?.takeIf { it.isNotBlank() }
-                                                        ?: "As respostas automáticas estão suspensas para conferência. O chat direto e a gestão da carteira seguem disponíveis.",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                item {
-                                    FirstAccessActivationChecklistCard(
-                                        programInfo = prog,
-                                        brandPrimary = brandPrimary,
-                                        brandAccent = brandAccentText,
-                                        softSurface = brandSoftSurface,
-                                        softBorder = softBorderStroke,
-                                        onOpenOnboarding = { showOnboardingSheet = true },
-                                        onOpenStudio = {
-                                            studioShowPreview = false
-                                            selectedTab = BusinessSessionTab.STUDIO
-                                        },
-                                        onOpenQr = { showReceptionQrSheet = true }
-                                    )
-                                }
-                            }
-
-                            if (programInfo == null || programInfo?.parsedStatus != PartnerApprovalStatus.APPROVED) {
+                        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            item { PartnerWalletKpis(walletKpis) }
+                            if (programInfo?.parsedStatus != PartnerApprovalStatus.APPROVED) {
                                 item {
                                     PartnerPreApprovalBannerCard(
-                                        programInfo = programInfo,
-                                        brandPrimary = brandPrimary,
-                                        brandOnPrimary = brandOnPrimary,
-                                        brandAccent = brandAccentText,
-                                        softSurface = brandSoftSurface,
-                                        softBorder = softBorderStroke,
+                                        programInfo = programInfo, brandPrimary = brandPrimary,
+                                        brandOnPrimary = brandOnPrimary, brandAccent = brandAccentText,
+                                        softSurface = brandSoftSurface, softBorder = softBorderStroke,
                                         onOpenOnboarding = { showOnboardingSheet = true }
                                     )
                                 }
                             } else {
                                 item {
-                                    val prog = programInfo!!
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(16.dp),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                        border = softBorderStroke
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(
-                                                        text = "Carteira de participantes",
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = brandAccentText
-                                                    )
-                                                    Text(
-                                                        text = B2BThemeEngine.PARTNER_RECORDS_TITLE,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
-                                                Surface(
-                                                    shape = RoundedCornerShape(10.dp),
-                                                    color = brandPrimary.copy(alpha = 0.14f)
-                                                ) {
-                                                    Text(
-                                                        text = "${prog.activeParticipants} / ${prog.seatLimit} vagas",
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = brandAccentText,
-                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                                    )
-                                                }
-                                            }
-                                            prog.inviteCode?.takeIf { it.isNotBlank() }?.let { code ->
-                                                Text(
-                                                    text = "Código ativo para convite: $code",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    fontWeight = FontWeight.SemiBold
-                                                )
-                                                OutlinedButton(
-                                                    onClick = { showReceptionQrSheet = true },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    shape = RoundedCornerShape(12.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.QrCode2,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                    Spacer(Modifier.width(8.dp))
-                                                    Text("QR Code e Placa PDF da Recepção")
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                item {
-                                    Text(
-                                        text = "Participantes vinculados (${participants.size})",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                item {
                                     PartnerWalletFiltersSection(
-                                        query = walletQuery,
-                                        selectedCategory = walletCategoryFilter,
-                                        attentionOnly = walletAttentionOnly,
-                                        enabledProgramMetrics = savedExperience.enabledMetrics,
-                                        isFiltering = isFilteringParticipants,
-                                        brandPrimary = brandPrimary,
-                                        brandOnPrimary = brandOnPrimary,
-                                        brandAccent = brandAccentText,
+                                        query = walletQuery, selectedCategory = walletCategoryFilter,
+                                        attentionOnly = walletAttentionOnly, enabledProgramMetrics = savedExperience.enabledMetrics,
+                                        isFiltering = isFilteringParticipants, brandPrimary = brandPrimary,
+                                        brandOnPrimary = brandOnPrimary, brandAccent = brandAccentText,
                                         onQueryChange = partnerViewModel::updateWalletQuery,
                                         onSelectCategory = partnerViewModel::selectWalletCategoryFilter,
                                         onToggleAttentionOnly = partnerViewModel::toggleWalletAttentionOnly,
                                         onClearFilters = partnerViewModel::clearWalletFilters
                                     )
                                 }
-
-                                val hasActiveWalletFilter = walletQuery.isNotBlank() ||
-                                    walletCategoryFilter != null ||
-                                    walletAttentionOnly
-
-                                if (participants.isEmpty()) {
-                                    item {
-                                        Card(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(14.dp),
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                                            )
-                                        ) {
-                                            Column(
-                                                modifier = Modifier.padding(16.dp),
-                                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                Text(
-                                                    text = if (hasActiveWalletFilter) {
-                                                        "Nenhum participante encontrado para os filtros aplicados."
-                                                    } else {
-                                                        "Nenhum participante ativo vinculado ainda. Compartilhe o código ou o QR da recepção."
-                                                    },
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                                if (hasActiveWalletFilter) {
-                                                    TextButton(onClick = partnerViewModel::clearWalletFilters) {
-                                                        Text("Limpar filtros", color = brandAccentText)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    items(participants, key = { it.patientUserId }) { item ->
-                                        WalletParticipantCard(
-                                            item = item,
-                                            brandPrimary = brandPrimary,
-                                            brandOnPrimary = brandOnPrimary,
-                                            brandAccent = brandAccentText,
-                                            softSurface = brandSoftSurface,
-                                            onClick = { partnerViewModel.openParticipantSummary(item.patientUserId) }
-                                        )
-                                    }
-                                    if (hasMore) {
-                                        item {
-                                            OutlinedButton(
-                                                onClick = { partnerViewModel.loadMoreParticipants() },
-                                                enabled = !isLoadingMore,
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Text(if (isLoadingMore) "Carregando..." else "Carregar mais participantes")
-                                            }
-                                        }
+                                if (participants.isEmpty()) item {
+                                    Text("Nenhum participante encontrado.", style = MaterialTheme.typography.bodyMedium)
+                                }
+                                items(participants, key = { it.patientUserId }) { item ->
+                                    WalletParticipantCard(item = item, brandPrimary = brandPrimary,
+                                        brandOnPrimary = brandOnPrimary, brandAccent = brandAccentText,
+                                        softSurface = brandSoftSurface,
+                                        onClick = { partnerViewModel.openParticipantSummary(item.patientUserId) })
+                                }
+                                if (hasMore) item {
+                                    OutlinedButton(onClick = partnerViewModel::loadMoreParticipants,
+                                        enabled = !isLoadingMore, modifier = Modifier.fillMaxWidth()) {
+                                        Text(if (isLoadingMore) "Carregando..." else "Carregar mais")
                                     }
                                 }
                             }
                         }
                     }
-
                     BusinessSessionTab.OPERATIONS -> {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),

@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import br.com.bragasaude.ui.auth.AuthViewModel
-import kotlinx.coroutines.launch
 
 import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.CalendarToday
@@ -78,17 +77,15 @@ fun ProfileDetailScreen(
     onSmokingSupport: () -> Unit = {},
     onOpenPartnerWorkspace: () -> Unit = {},
     profileViewModel: ProfileViewModel = hiltViewModel(),
-    authViewModel: AuthViewModel = hiltViewModel()
+    authViewModel: AuthViewModel = br.com.bragasaude.ui.LocalSessionAuth.current
 ) {
     val profile by profileViewModel.profile.collectAsState()
     val customPhotoUri by profileViewModel.customPhotoUri.collectAsState()
     val userFeedbacks by profileViewModel.userFeedbacks.collectAsState()
     val sessionStatus by authViewModel.sessionStatus.collectAsState()
     val accountMode by authViewModel.accountMode.collectAsState()
-    val scope = rememberCoroutineScope()
     var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
     var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
-    var showPartnerProgramSheet by rememberSaveable { mutableStateOf(false) }
     var showPartnerConsentSheet by rememberSaveable { mutableStateOf(false) }
     var showChatBackupSheet by rememberSaveable { mutableStateOf(false) }
     var pendingPartnerInviteCode by rememberSaveable { mutableStateOf("") }
@@ -343,23 +340,12 @@ fun ProfileDetailScreen(
         context.getSharedPreferences("braga_prefs", android.content.Context.MODE_PRIVATE)
     }
     LaunchedEffect(Unit) {
-        if (b2bPrefs.getBoolean("pending_b2b_company_onboarding", false)) {
-            b2bPrefs.edit().putBoolean("pending_b2b_company_onboarding", false).apply()
-            showPartnerProgramSheet = true
-        }
         val savedInvite = b2bPrefs.getString("pending_b2b_invite_code", "").orEmpty().trim()
         if (savedInvite.isNotBlank()) {
             b2bPrefs.edit().remove("pending_b2b_invite_code").apply()
             pendingPartnerInviteCode = savedInvite
             showPartnerConsentSheet = true
         }
-    }
-
-    if (showPartnerProgramSheet) {
-        br.com.bragasaude.ui.b2b.PartnerProgramOnboardingSheet(
-            apiClient = profileViewModel.partnerApiClient(),
-            onDismiss = { showPartnerProgramSheet = false }
-        )
     }
 
     if (showPartnerConsentSheet) {
@@ -424,7 +410,7 @@ fun ProfileDetailScreen(
                     onClick = {
                         showDeleteDialog = false
                         profileViewModel.deleteProfile {
-                            scope.launch { authViewModel.deleteAccount() }
+                            authViewModel.launchSessionAction { authViewModel.deleteAccount() }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -887,7 +873,7 @@ fun ProfileDetailScreen(
                         }
                         SettingsItem(
                             title = "Espaço do programa parceiro",
-                            subtitle = "Visualizar marca, rotina compartilhada e gerar PDF de pré-consulta.",
+                            subtitle = "Consultar seus lembretes, agendamentos e consentimento.",
                             icon = Icons.Default.ThumbUp,
                             onClick = onOpenPartnerWorkspace
                         )
@@ -897,13 +883,6 @@ fun ProfileDetailScreen(
                             subtitle = "Vincular a programa parceiro e escolher registros compartilhados.",
                             icon = Icons.Default.Favorite,
                             onClick = { showPartnerConsentSheet = true }
-                        )
-                        HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
-                        SettingsItem(
-                            title = "Programa para minha empresa",
-                            subtitle = "Personalizar nome, cor, logo e acompanhar aprovação.",
-                            icon = Icons.Default.Star,
-                            onClick = { showPartnerProgramSheet = true }
                         )
                         HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
                         SettingsItem(

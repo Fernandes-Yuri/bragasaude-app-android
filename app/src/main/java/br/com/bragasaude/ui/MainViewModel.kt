@@ -78,4 +78,10 @@ class MainViewModel @Inject constructor(
     fun dismissRisk() {
         _activeRisk.value = null
     }
+    override fun onCleared() {
+        _activeRisk.value = null
+        shownRisks.clear()
+        super.onCleared()
+    }
+
 }

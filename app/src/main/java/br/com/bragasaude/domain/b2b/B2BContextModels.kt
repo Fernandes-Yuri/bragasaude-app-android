@@ -454,12 +454,28 @@ data class PartnerParticipantItemDto(
     val familySupportSummary: String? = null,
     val pendingAppointmentsCount: Int = 0,
     val unreadDirectMessagesCount: Int = 0,
-    val consentedAt: String? = null
+    val consentedAt: String? = null,
+    val activityDatesLast7Days: List<String>? = null,
+    val pendingRemindersCount: Int? = null,
+    val upcomingAppointmentsCount: Int? = null,
+    val consentStatus: String? = null
+)
+
+@Serializable
+data class PartnerWalletKpisDto(
+    val activeUsers: Int = 0,
+    val inactiveUsers: Int = 0,
+    val retentionRate: Double? = null,
+    val remindersRead: Int = 0,
+    val appointmentsConfirmed: Int = 0,
+    val periodDays: Int = 7,
+    val asOf: String? = null
 )
 
 @Serializable
 data class PartnerParticipantsPageDto(
     val program: PartnerProgramDto? = null,
+    val kpis: PartnerWalletKpisDto? = null,
     val participants: List<PartnerParticipantItemDto> = emptyList(),
     val nextCursor: String? = null,
     val hasMore: Boolean = false

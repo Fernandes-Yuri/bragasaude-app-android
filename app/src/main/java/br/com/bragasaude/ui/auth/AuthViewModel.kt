@@ -138,6 +138,18 @@ class AuthViewModel @Inject constructor(
             _sessionStatus.value = AppSessionStatus.NotAuthenticated
             _isProfileComplete.value = null
             _hasAcceptedConsent.value = null
+            // Isolamento de sessão: qualquer saída (logout em Ajustes, expiração
+            // do token ou revogação do Firebase) precisa zerar o contexto B2B em
+            // memória. Sem isso, um DUAL reentrando a mesma conta herdaria a
+            // sessão empresarial anterior sem alternância explícita.
+            runCatching {
+                val store = resolveB2BEntryPoint()?.activeContextStore()
+                if (store != null && (store.accountMode.value != br.com.bragasaude.domain.b2b.AppAccountMode.PERSONAL ||
+                        store.isBusinessSession.value || store.activeContext.value.isPartnerContext)
+                ) {
+                    store.resetToPersonal()
+                }
+            }
             viewModelScope.launch {
                 notificationClient.onSessionChanged(null)
             }
@@ -1174,6 +1186,10 @@ class AuthViewModel @Inject constructor(
         }
         return repoResult
     }
+
+    /** Account transitions must finish even when their old screen is disposed. */
+    fun launchSessionAction(action: suspend kotlinx.coroutines.CoroutineScope.() -> Unit) =
+        viewModelScope.launch(block = action)
 
     fun enterBusinessSession() {
         val entry = resolveB2BEntryPoint() ?: return

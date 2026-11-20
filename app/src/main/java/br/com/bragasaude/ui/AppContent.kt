@@ -49,8 +49,22 @@ import kotlinx.coroutines.launch
 @Composable
 fun AppContent(activity: MainActivity) {
     val authViewModel: AuthViewModel = hiltViewModel()
-    val mainViewModel: MainViewModel = hiltViewModel()
-    val sessionScope = rememberCoroutineScope()
+    val context = LocalContext.current.applicationContext
+    val store = remember(context) {
+        EntryPointAccessors.fromApplication(context, AppUpdateEntryPoint::class.java).activeContextStore()
+    }
+    val generation by store.sessionGeneration.collectAsState()
+    key(generation) {
+        SessionViewModelScope(store) {
+            CompositionLocalProvider(LocalSessionAuth provides authViewModel) {
+                AppSessionContent(activity, authViewModel)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppSessionContent(activity: MainActivity, authViewModel: AuthViewModel) {
 
     val sessionStatus by authViewModel.sessionStatus.collectAsState()
     val isProfileComplete by authViewModel.isProfileComplete.collectAsState()
@@ -59,17 +73,10 @@ fun AppContent(activity: MainActivity) {
     val initialSyncError by authViewModel.initialSyncError.collectAsState()
     val sessionNotice by authViewModel.sessionNotice.collectAsState()
     val hasAcceptedConsent by authViewModel.hasAcceptedConsent.collectAsState()
-    val activeRisk by mainViewModel.activeRisk.collectAsState()
     val userRole by authViewModel.userRole.collectAsState()
     val caregiverMode by authViewModel.caregiverMode.collectAsState()
     val needsSelfCare by authViewModel.needsSelfCare.collectAsState()
     val accountMode by authViewModel.accountMode.collectAsState()
-    // DT-054: vínculo efetivo como cuidador (Room SSOT, reativo). É a fonte do
-    // menu inferior e do destino inicial — não confiar apenas na string userRole,
-    // que pode ter sido gravada por engano (Painel fantasma para quem é cuidado).
-    val caregiverDashboardViewModel: CaregiverDashboardViewModel = hiltViewModel()
-    val watchedPatients by caregiverDashboardViewModel.watchedPatients.collectAsState()
-    val hasActiveCaregiverBinding = watchedPatients.isNotEmpty()
     var tempRole by rememberSaveable { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
@@ -79,10 +86,29 @@ fun AppContent(activity: MainActivity) {
             .activeContextStore()
     }
     val isStoreBusinessSession by activeContextStore.isBusinessSession.collectAsState()
+    val storeAccountMode by activeContextStore.accountMode.collectAsState()
     val isBusinessSessionActive =
-        accountMode == AppAccountMode.BUSINESS_ONLY.name ||
-            (accountMode == AppAccountMode.DUAL.name && isStoreBusinessSession)
+        storeAccountMode == AppAccountMode.BUSINESS_ONLY ||
+            (storeAccountMode == AppAccountMode.DUAL && isStoreBusinessSession)
 
+
+    val personalSession = sessionStatus is AppSessionStatus.Authenticated && initialDataReady &&
+        isProfileComplete == true && hasAcceptedConsent == true && !isBusinessSessionActive
+    val mainViewModel = if (personalSession) hiltViewModel<MainViewModel>() else null
+    val activeRisk = mainViewModel?.activeRisk?.collectAsState()?.value
+    val caregiverViewModel = if (personalSession) hiltViewModel<CaregiverDashboardViewModel>() else null
+    val hasActiveCaregiverBinding = caregiverViewModel?.watchedPatients?.collectAsState()?.value?.isNotEmpty() == true
+    DisposableEffect(mainViewModel) {
+        activity.sessionMainViewModel = mainViewModel
+        onDispose {
+            // Só limpa a referência se ainda for esta instância: na troca de
+            // sessão a composição nova pode registrar o ViewModel antes do
+            // descarte da antiga — não podemos apagar a referência nova.
+            if (activity.sessionMainViewModel === mainViewModel) {
+                activity.sessionMainViewModel = null
+            }
+        }
+    }
 
     Surface(
         modifier = Modifier
@@ -100,6 +126,9 @@ fun AppContent(activity: MainActivity) {
                         caregiverMode == "VIEWER_ONLY"
                     ) {
                         NotificationHelper.cancelHydrationReminders(appContext)
+                        if (isBusinessSessionActive) appContext.stopService(
+                            android.content.Intent(appContext, br.com.bragasaude.ui.util.StepTrackingService::class.java)
+                        )
                     } else if (userRole != null) {
                         // Trava de silêncio noturno: não dispara lembretes de hidratação
                         // entre 20h00 e 08h00 (doc 10, item #7).
@@ -142,10 +171,10 @@ fun AppContent(activity: MainActivity) {
                                 profileError != null -> ProfileErrorState(
                                     error = profileError,
                                     onRetry = authViewModel::retryProfile,
-                                    onSignOut = { sessionScope.launch { authViewModel.signOut() } }
+                                    onSignOut = { authViewModel.performSignOut() }
                                 )
                                 hasAcceptedConsent == null || isProfileComplete == null ->
-                                    LoadingOverlay(onExit = { sessionScope.launch { authViewModel.signOut() } })
+                                    LoadingOverlay(onExit = { authViewModel.performSignOut() })
                                 hasAcceptedConsent == false -> ConsentFlow(
                                     legalSubView = legalSubView,
                                     onSetLegalSubView = { legalSubView = it },
@@ -157,8 +186,8 @@ fun AppContent(activity: MainActivity) {
                                         if (initialSyncError != null) ProfileErrorState(
                                             error = initialSyncError,
                                             onRetry = authViewModel::retryInitialSync,
-                                            onSignOut = { sessionScope.launch { authViewModel.signOut() } }
-                                        ) else LoadingOverlay(onExit = { sessionScope.launch { authViewModel.signOut() } })
+                                            onSignOut = { authViewModel.performSignOut() }
+                                        ) else LoadingOverlay(onExit = { authViewModel.performSignOut() })
                                     } else {
                                         PartnerBusinessScaffold(authViewModel = authViewModel)
                                     }
@@ -167,7 +196,7 @@ fun AppContent(activity: MainActivity) {
                                     val effectiveRole = tempRole ?: userRole
                                     when {
                                         effectiveRole.isNullOrEmpty() -> RoleSelectionScreen(
-                                            onBack = { sessionScope.launch { authViewModel.signOut() } },
+                                            onBack = { authViewModel.performSignOut() },
                                             onRoleSelected = { role ->
                                                 tempRole = role
                                                 authViewModel.setUserRole(role)
@@ -213,13 +242,13 @@ fun AppContent(activity: MainActivity) {
                                     if (initialSyncError != null) ProfileErrorState(
                                         error = initialSyncError,
                                         onRetry = authViewModel::retryInitialSync,
-                                        onSignOut = { sessionScope.launch { authViewModel.signOut() } }
-                                    ) else LoadingOverlay(onExit = { sessionScope.launch { authViewModel.signOut() } })
+                                        onSignOut = { authViewModel.performSignOut() }
+                                    ) else LoadingOverlay(onExit = { authViewModel.performSignOut() })
                                 }
                                 isProfileComplete == true -> {
                                     // Permissões e serviço de rastreamento
                                     LaunchedEffect(Unit) {
-                                        mainViewModel.permissionRequestSignal.collect {
+                                        mainViewModel?.permissionRequestSignal?.collect {
                                             val permissions = mutableListOf(
                                                 Manifest.permission.ACCESS_FINE_LOCATION,
                                                 Manifest.permission.ACCESS_COARSE_LOCATION
@@ -247,7 +276,7 @@ fun AppContent(activity: MainActivity) {
                                         // G4 (doc 10 §3.4): coleta o sinal de "ativar notificações" e
                                         // pede POST_NOTIFICATIONS (antes este sinal não tinha
                                         // consumidor e o aviso pedia permissão de localização).
-                                        mainViewModel.notificationPromptSignal.collect {
+                                        mainViewModel?.notificationPromptSignal?.collect {
                                             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                                                 val hasNotif = ContextCompat.checkSelfPermission(
                                                     activity, Manifest.permission.POST_NOTIFICATIONS
@@ -301,13 +330,15 @@ fun AppContent(activity: MainActivity) {
                                     } else initialScreen
 
                                     val navController = rememberNavController()
-                                    MainScaffold(
-                                        navController = navController,
-                                        startDestination = startDestination,
-                                        userRole = userRole,
-                                        caregiverMode = caregiverMode,
-                                        hasActiveCaregiverBinding = hasActiveCaregiverBinding
-                                    )
+                                    CompositionLocalProvider(LocalPersonalMainViewModel provides mainViewModel) {
+                                        MainScaffold(
+                                            navController = navController,
+                                            startDestination = startDestination,
+                                            userRole = userRole,
+                                            caregiverMode = caregiverMode,
+                                            hasActiveCaregiverBinding = hasActiveCaregiverBinding
+                                        )
+                                    }
                                 }
                                 else -> LoadingOverlay()
                             }
@@ -326,7 +357,7 @@ fun AppContent(activity: MainActivity) {
                                     isPostLogin = false
                                 )
                             } else {
-                                LoginScreen(onLoginSuccess = {})
+                                LoginScreen(viewModel = authViewModel, onLoginSuccess = {})
                             }
                         }
                     }
@@ -347,7 +378,7 @@ fun AppContent(activity: MainActivity) {
                     RiskNotificationDialog(
                         type = risk.type,
                         message = risk.message,
-                        onDismiss = { mainViewModel.dismissRisk() }
+                        onDismiss = { mainViewModel?.dismissRisk() }
                     )
                 }
         }

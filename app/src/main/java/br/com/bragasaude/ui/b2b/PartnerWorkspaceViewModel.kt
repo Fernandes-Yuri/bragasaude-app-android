@@ -29,6 +29,11 @@ import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ensureActive
+import br.com.bragasaude.domain.b2b.PartnerWalletKpisDto
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,6 +54,13 @@ class PartnerWorkspaceViewModel @Inject constructor(
     private val b2bContextRepository: B2BContextRepository,
     private val partnerPdfGenerator: PartnerPreConsultationPdfGenerator
 ) : ViewModel() {
+
+    private var workspaceJob = SupervisorJob(viewModelScope.coroutineContext[Job])
+    private val workspaceScope get() = CoroutineScope(viewModelScope.coroutineContext + workspaceJob)
+    private val removeResetListener = activeContextStore.addSessionResetListener(::clearSensitiveBusinessMemory)
+
+    private val _walletKpis = MutableStateFlow<PartnerWalletKpisDto?>(null)
+    val walletKpis = _walletKpis.asStateFlow()
 
     val activeContext: StateFlow<B2BContextDescriptor> = activeContextStore.activeContext
     val availableContexts: StateFlow<List<B2BContextDescriptor>> = activeContextStore.availableContexts
@@ -214,15 +226,24 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     private fun scheduleWalletReload(debounceMs: Long) {
         walletFilterJob?.cancel()
-        walletFilterJob = viewModelScope.launch {
+        walletFilterJob = workspaceScope.launch {
             if (debounceMs > 0L) delay(debounceMs)
             _isFilteringParticipants.value = true
             val page = fetchParticipantsPage(cursor = null)
             if (page != null) {
                 page.program?.let { _programInfo.value = it }
+                _walletKpis.value = page.kpis
                 _participants.value = page.participants
                 _nextCursor.value = page.nextCursor
                 _hasMore.value = page.hasMore
+            } else {
+                _walletKpis.value = null
+                _participants.value = emptyList()
+                _selectedSummary.value = null
+                _selectedParticipantItem.value = null
+                _nextCursor.value = null
+                _hasMore.value = false
+                _statusMessage.value = "Não foi possível consultar a carteira."
             }
             _isFilteringParticipants.value = false
         }
@@ -230,10 +251,12 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     fun refreshWorkspace() {
         val uid = auth.currentUser?.uid ?: return
-        viewModelScope.launch {
+        clearSensitiveBusinessMemory()
+        workspaceScope.launch {
             _isLoading.value = true
             b2bContextRepository.hydrateFromCache(uid)
             val contexts = b2bContextRepository.syncContexts(uid)
+            coroutineContext.ensureActive()
             val current = activeContextStore.activeContext.value
             val businessOnlyOrActive = activeContextStore.isBusinessSession.value ||
                 activeContextStore.accountMode.value == AppAccountMode.BUSINESS_ONLY
@@ -247,9 +270,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
             } else if (!current.isPartnerContext) {
                 val firstPartner = contexts.firstOrNull {
                     it.parsedMode == AppContextMode.PARTNER_PARTICIPANT
-                } ?: contexts.firstOrNull {
-                    it.parsedMode == AppContextMode.PARTNER_OWNER && it.approvalStatus == "APPROVED"
-                } ?: contexts.firstOrNull { it.isPartnerContext }
+                }
                 if (firstPartner != null) {
                     b2bContextRepository.selectContext(uid, firstPartner)
                 }
@@ -260,29 +281,62 @@ class PartnerWorkspaceViewModel @Inject constructor(
     }
 
     fun clearSensitiveBusinessMemory() {
+        workspaceJob.cancel()
+        workspaceJob = SupervisorJob(viewModelScope.coroutineContext[Job])
         walletFilterJob?.cancel()
+        walletFilterJob = null
+        _walletKpis.value = null
+        _isUpdatingInvitePolicy.value = false
+        _isLoading.value = false
+        _isLoadingMore.value = false
+        _programInfo.value = null
+        _templates.value = emptyList()
+        _isSavingExperience.value = false
+        _participants.value = emptyList()
         _walletQuery.value = ""
         _walletCategoryFilter.value = null
         _walletAttentionOnly.value = false
-        _participants.value = emptyList()
+        _isFilteringParticipants.value = false
         _nextCursor.value = null
         _hasMore.value = false
         _selectedParticipantItem.value = null
         _selectedSummary.value = null
+        _isLoadingSummary.value = false
+        _isRemovingParticipant.value = false
+        _selectedPeriodDays.value = 30
         _ownerReminders.value = emptyList()
+        _isSendingReminder.value = false
+        _enrollmentRemindersFeed.value = null
+        _acknowledgingReminderId.value = null
+        _isUpdatingMute.value = false
+        _isReportingProgram.value = false
         _ownerAppointments.value = emptyList()
+        _enrollmentAppointmentsFeed.value = null
+        _isSubmittingAppointment.value = false
+        _updatingAppointmentId.value = null
         _activeDirectChatPage.value = null
-        _directChatTargetPatientId.value = null
+        _directChatIsOwnerView.value = false
         _directChatCounterpartTitle.value = ""
-        _programInfo.value = null
+        _directChatTargetPatientId.value = null
+        _isLoadingDirectChat.value = false
+        _isSendingDirectMessage.value = false
+        _isUpdatingHandoff.value = false
+        _isGeneratingPdf.value = false
         _generatedPdf.value = null
         _statusMessage.value = null
+    }
+
+    override fun onCleared() {
+        removeResetListener()
+        clearSensitiveBusinessMemory()
+        workspaceJob.cancel()
+        super.onCleared()
     }
 
     fun togglePartnerInvitePaused() {
         val currentProgram = _programInfo.value ?: return
         if (_isUpdatingInvitePolicy.value) return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isUpdatingInvitePolicy.value = true
             val updated = apiClient.setPartnerInvitePaused(!currentProgram.invitePaused)
             _isUpdatingInvitePolicy.value = false
@@ -303,7 +357,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
     fun regenerateInviteCode() {
         if (_isUpdatingInvitePolicy.value) return
         _programInfo.value ?: return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isUpdatingInvitePolicy.value = true
             val updated = apiClient.regeneratePartnerInviteCode()
             _isUpdatingInvitePolicy.value = false
@@ -319,7 +373,9 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     fun selectContext(target: B2BContextDescriptor) {
         val uid = auth.currentUser?.uid ?: return
-        viewModelScope.launch {
+        if (target.parsedMode == AppContextMode.PARTNER_OWNER && !activeContextStore.isBusinessSession.value) return
+        clearSensitiveBusinessMemory()
+        workspaceScope.launch {
             _isLoading.value = true
             walletFilterJob?.cancel()
             _walletQuery.value = ""
@@ -349,9 +405,8 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     private suspend fun reloadModeData() {
         val active = activeContextStore.activeContext.value
-        val isOwnerWorkspace = active.parsedMode == AppContextMode.PARTNER_OWNER ||
-            activeContextStore.isBusinessSession.value ||
-            activeContextStore.accountMode.value == AppAccountMode.BUSINESS_ONLY
+        val isOwnerWorkspace = activeContextStore.accountMode.value != AppAccountMode.PERSONAL &&
+            activeContextStore.isBusinessSession.value
         if (isOwnerWorkspace) {
             _enrollmentRemindersFeed.value = null
             _enrollmentAppointmentsFeed.value = null
@@ -364,9 +419,17 @@ class PartnerWorkspaceViewModel @Inject constructor(
                 val page = fetchParticipantsPage(cursor = null)
                 if (page != null) {
                     page.program?.let { _programInfo.value = it }
+                    _walletKpis.value = page.kpis
                     _participants.value = page.participants
                     _nextCursor.value = page.nextCursor
                     _hasMore.value = page.hasMore
+                } else {
+                    _walletKpis.value = null
+                    _participants.value = emptyList()
+                    _selectedSummary.value = null
+                    _selectedParticipantItem.value = null
+                    _nextCursor.value = null
+                    _hasMore.value = false
                 }
                 val resolvedCfg = _programInfo.value?.experienceConfig ?: active.resolvedExperienceConfig()
                 _ownerReminders.value = if (resolvedCfg.features.partnerRemindersEnabled) {
@@ -383,12 +446,15 @@ class PartnerWorkspaceViewModel @Inject constructor(
                 _participants.value = emptyList()
                 _ownerReminders.value = emptyList()
                 _ownerAppointments.value = emptyList()
+                _walletKpis.value = null
+                _nextCursor.value = null
                 _hasMore.value = false
             }
         } else {
             _participants.value = emptyList()
             _ownerReminders.value = emptyList()
             _ownerAppointments.value = emptyList()
+            _walletKpis.value = null
             _nextCursor.value = null
             _hasMore.value = false
             val pid = active.programId?.takeIf { it.isNotBlank() }
@@ -421,7 +487,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
         onSuccess: () -> Unit
     ) {
         if (_isSendingReminder.value) return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isSendingReminder.value = true
             val result = apiClient.sendPartnerReminder(
                 CreateProgramReminderRequest(
@@ -450,7 +516,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     fun acknowledgeEnrollmentReminder(programId: String, reminderId: String) {
         if (_acknowledgingReminderId.value != null) return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _acknowledgingReminderId.value = reminderId
             val ackAt = apiClient.acknowledgeEnrollmentReminder(programId, reminderId)
             _acknowledgingReminderId.value = null
@@ -471,7 +537,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     fun toggleEnrollmentMuted(programId: String, muted: Boolean) {
         if (_isUpdatingMute.value) return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isUpdatingMute.value = true
             val updated = apiClient.setEnrollmentMuted(programId, muted)
             _isUpdatingMute.value = false
@@ -496,7 +562,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
         onSuccess: () -> Unit
     ) {
         if (_isReportingProgram.value) return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isReportingProgram.value = true
             val result = apiClient.reportPartnerProgramAbuse(
                 programId = programId,
@@ -537,7 +603,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
             _statusMessage.value = validationErr
             return
         }
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isSubmittingAppointment.value = true
             val result = apiClient.requestEnrollmentAppointment(
                 programId = programId,
@@ -569,7 +635,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     fun cancelEnrollmentAppointment(programId: String, appointmentId: String) {
         if (_updatingAppointmentId.value != null) return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _updatingAppointmentId.value = appointmentId
             val result = apiClient.cancelEnrollmentAppointment(programId, appointmentId)
             _updatingAppointmentId.value = null
@@ -601,7 +667,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
         onSuccess: () -> Unit
     ) {
         if (_updatingAppointmentId.value != null) return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _updatingAppointmentId.value = appointmentId
             val result = apiClient.updateOwnerAppointment(
                 appointmentId = appointmentId,
@@ -639,10 +705,11 @@ class PartnerWorkspaceViewModel @Inject constructor(
     fun loadMoreParticipants() {
         if (_isLoadingMore.value || !_hasMore.value) return
         val cursor = _nextCursor.value ?: return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isLoadingMore.value = true
             val page = fetchParticipantsPage(cursor = cursor)
             if (page != null) {
+                _walletKpis.value = page.kpis
                 _participants.value = (_participants.value + page.participants)
                     .distinctBy { it.patientUserId }
                 _nextCursor.value = page.nextCursor
@@ -658,7 +725,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
         _participants.value.firstOrNull { it.patientUserId == patientId }?.let { matched ->
             _selectedParticipantItem.value = matched
         }
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isLoadingSummary.value = true
             val summary = apiClient.getPartnerParticipantSummary(patientId, clamped)
             _isLoadingSummary.value = false
@@ -673,7 +740,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
     fun removeParticipant(patientId: String) {
         val cleanId = patientId.trim()
         if (cleanId.isEmpty() || _isRemovingParticipant.value) return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isRemovingParticipant.value = true
             val result = apiClient.removePartnerParticipant(cleanId)
             _isRemovingParticipant.value = false
@@ -701,7 +768,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
     ) {
         if (_isSavingExperience.value) return
         val uid = auth.currentUser?.uid ?: return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isSavingExperience.value = true
             val res = apiClient.updateProgramExperience(
                 UpdateExperienceRequest(
@@ -750,7 +817,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
             _statusMessage.value = "Selecione ao menos uma categoria de rotina antes de gerar o PDF."
             return
         }
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isGeneratingPdf.value = true
             val file = withContext(Dispatchers.IO) {
                 val clamped = periodDays.coerceIn(1, 90)
@@ -798,7 +865,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     fun openEnrollmentDirectChat(programId: String, programName: String) {
         if (_isLoadingDirectChat.value) return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isLoadingDirectChat.value = true
             _directChatIsOwnerView.value = false
             _directChatTargetPatientId.value = null
@@ -836,7 +903,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     fun openOwnerDirectChat(patientId: String, patientName: String) {
         if (_isLoadingDirectChat.value) return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isLoadingDirectChat.value = true
             _directChatIsOwnerView.value = true
             _directChatTargetPatientId.value = patientId
@@ -882,7 +949,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
         val current = _activeDirectChatPage.value ?: return
         val cursor = current.nextCursor ?: return
         if (!current.hasMore || _isLoadingDirectChat.value) return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isLoadingDirectChat.value = true
             val older = if (_directChatIsOwnerView.value) {
                 val pid = _directChatTargetPatientId.value
@@ -918,7 +985,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
             _statusMessage.value = validationErr
             return
         }
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isSendingDirectMessage.value = true
             val res = if (_directChatIsOwnerView.value) {
                 val patientId = _directChatTargetPatientId.value
@@ -963,7 +1030,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
         val current = _activeDirectChatPage.value ?: return
         val patientId = _directChatTargetPatientId.value ?: return
         if (!_directChatIsOwnerView.value || _isUpdatingHandoff.value) return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isUpdatingHandoff.value = true
             val res = apiClient.handoffOwnerDirectChat(patientId, mode, note)
             _isUpdatingHandoff.value = false
@@ -985,7 +1052,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
     fun requestHumanHandoff(note: String? = null) {
         val current = _activeDirectChatPage.value ?: return
         if (_directChatIsOwnerView.value || _isUpdatingHandoff.value) return
-        viewModelScope.launch {
+        workspaceScope.launch {
             _isUpdatingHandoff.value = true
             val res = apiClient.requestHumanInDirectChat(current.programId, note)
             _isUpdatingHandoff.value = false

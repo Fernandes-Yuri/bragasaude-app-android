@@ -37,9 +37,8 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.bragasaude.BuildConfig
-import br.com.bragasaude.ui.b2b.PartnerBrandTheme
+import br.com.bragasaude.ui.theme.BragasaudeTheme
 import br.com.bragasaude.ui.b2b.PartnerTechnologyCredit
-import br.com.bragasaude.ui.b2b.partnerButtonColors
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.delay
@@ -69,10 +68,7 @@ fun LoginScreen(
     var signupPurpose by rememberSaveable { mutableStateOf("personal") } // "personal" ou "company" (B2B-06)
     var showInviteDialog by rememberSaveable { mutableStateOf(false) }
     var inviteCodeDraft by rememberSaveable { mutableStateOf("") }
-    var isLookingUpInvite by remember { mutableStateOf(false) }
-    var recognizedInvite by remember {
-        mutableStateOf<br.com.bragasaude.domain.b2b.PartnerInvitePreviewDto?>(null)
-    }
+    var hasPendingInvite by rememberSaveable { mutableStateOf(false) }
     val prefs = remember {
         context.getSharedPreferences("braga_prefs", android.content.Context.MODE_PRIVATE)
     }
@@ -80,19 +76,12 @@ fun LoginScreen(
     LaunchedEffect(pendingDeepLinkInvite) {
         val code = pendingDeepLinkInvite
             ?: prefs.getString("pending_b2b_invite_code", "").orEmpty().trim()
-        if (br.com.bragasaude.domain.b2b.B2BOnboardingValidator.isValidInviteCode(code) &&
-            recognizedInvite?.inviteCode?.equals(code, ignoreCase = true) != true
-        ) {
-            val preview = viewModel.lookupPartnerInvitePreview(code)
-            if (preview != null) {
-                recognizedInvite = preview
-                signupPurpose = "personal"
-                prefs.edit().putBoolean("pending_b2b_company_onboarding", false).apply()
-                prefs.edit().putString("pending_b2b_invite_code", preview.inviteCode).apply()
-            }
-            if (pendingDeepLinkInvite != null) {
-                br.com.bragasaude.ui.navigation.PartnerInviteNavigation.consumePending()
-            }
+        if (br.com.bragasaude.domain.b2b.B2BOnboardingValidator.isValidInviteCode(code)) {
+            hasPendingInvite = true
+            signupPurpose = "personal"
+            prefs.edit().putBoolean("pending_b2b_company_onboarding", false)
+                .putString("pending_b2b_invite_code", code).apply()
+            br.com.bragasaude.ui.navigation.PartnerInviteNavigation.consumePending()
         }
     }
     // Testes devem injetar uma identidade descartável pelo harness autenticado.
@@ -206,7 +195,7 @@ fun LoginScreen(
         }
     }
 
-    PartnerBrandTheme(recognizedInvite?.primaryColor ?: "#00695C") {
+    BragasaudeTheme() {
         Scaffold(
             modifier = Modifier
                 .fillMaxSize()
@@ -227,17 +216,8 @@ fun LoginScreen(
             ) {
                 item {
                     LoginIdentity(
-                        invite = recognizedInvite,
-                        companySignup = emailMode == "signup" && signupPurpose == "company",
                         showIntroduction = !isKeyboardVisible && emailMode != "forgot" &&
-                            authState !is AuthViewModel.AuthState.OtpSent,
-                        onChangeInvite = {
-                            recognizedInvite = null
-                            prefs.edit().remove("pending_b2b_invite_code").apply()
-                            br.com.bragasaude.ui.navigation.PartnerInviteNavigation.consumePending()
-                            inviteCodeDraft = ""
-                            showInviteDialog = true
-                        }
+                            authState !is AuthViewModel.AuthState.OtpSent
                     )
                 }
 
@@ -284,7 +264,7 @@ fun LoginScreen(
                                         enabled = email.isNotBlank() && !isSending,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
                                         shape = RoundedCornerShape(14.dp),
-                                        colors = partnerButtonColors()
+                                        colors = ButtonDefaults.buttonColors()
                                     ) {
                                         if (isSending) {
                                             CircularProgressIndicator(
@@ -324,7 +304,7 @@ fun LoginScreen(
                                         enabled = otpCode.length == 6 && !isVerifying,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
                                         shape = RoundedCornerShape(14.dp),
-                                        colors = partnerButtonColors()
+                                        colors = ButtonDefaults.buttonColors()
                                     ) {
                                         if (isVerifying) {
                                             CircularProgressIndicator(
@@ -402,7 +382,7 @@ fun LoginScreen(
                                         enabled = isPasswordValid && !isResetting,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
                                         shape = RoundedCornerShape(14.dp),
-                                        colors = partnerButtonColors()
+                                        colors = ButtonDefaults.buttonColors()
                                     ) {
                                         if (isResetting) {
                                             CircularProgressIndicator(
@@ -517,7 +497,7 @@ fun LoginScreen(
                                             enabled = signupOtpCode.length == 6,
                                             modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
                                             shape = RoundedCornerShape(14.dp),
-                                            colors = partnerButtonColors()
+                                            colors = ButtonDefaults.buttonColors()
                                         ) {
                                             Text("Confirmar e Ativar Conta", fontWeight = FontWeight.Bold)
                                         }
@@ -531,7 +511,7 @@ fun LoginScreen(
                                                     viewModel.signUpWithEmail(
                                                         email.trim(),
                                                         password,
-                                                        businessAccount = recognizedInvite == null && signupPurpose == "company"
+                                                        businessAccount = !hasPendingInvite && signupPurpose == "company"
                                                     )
                                                 }
                                             ) {
@@ -549,7 +529,7 @@ fun LoginScreen(
                                     }
                                 }
                             } else {
-                                if (emailMode == "signup" && recognizedInvite == null) {
+                                if (emailMode == "signup" && !hasPendingInvite) {
                                     Text(
                                         text = "Como você quer usar o aplicativo?",
                                         style = MaterialTheme.typography.labelLarge,
@@ -737,14 +717,14 @@ fun LoginScreen(
                                             viewModel.signUpWithEmail(
                                                 email.trim(),
                                                 password,
-                                                businessAccount = recognizedInvite == null && signupPurpose == "company"
+                                                businessAccount = !hasPendingInvite && signupPurpose == "company"
                                             )
                                         }
                                     },
                                     enabled = if (emailMode == "login") isLoginValid else isSignupValid,
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp).testTag("login_button"),
                                     shape = RoundedCornerShape(16.dp),
-                                    colors = partnerButtonColors()
+                                    colors = ButtonDefaults.buttonColors()
                                 ) {
                                     Text(
                                         if (emailMode == "login") "Entrar" else "Receber código",
@@ -774,7 +754,7 @@ fun LoginScreen(
                                     triggerGoogleFlow(context, scope, credentialManager) { idToken ->
                                         viewModel.signInWithGoogle(
                                             idToken = idToken,
-                                            businessAccount = recognizedInvite == null && emailMode == "signup" && signupPurpose == "company"
+                                            businessAccount = !hasPendingInvite && emailMode == "signup" && signupPurpose == "company"
                                         )
                                     }
                                 },
@@ -804,7 +784,7 @@ fun LoginScreen(
                                 )
                             }
 
-                            if (emailMode == "login" && recognizedInvite == null) {
+                            if (emailMode == "login" && !hasPendingInvite) {
                                 OutlinedCard(
                                     onClick = {
                                         emailMode = "signup"
@@ -900,14 +880,14 @@ fun LoginScreen(
 
             if (showInviteDialog) {
                 BragaAlertDialog(
-                    onDismissRequest = { if (!isLookingUpInvite) showInviteDialog = false },
+                    onDismissRequest = { showInviteDialog = false },
                     title = {
                         Text("Encontre seu programa", fontWeight = FontWeight.Bold)
                     },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text(
-                                text = "Informe o código que recebeu. Você verá a marca do parceiro antes de entrar ou criar sua conta.",
+                                text = "Guarde o código recebido. Após entrar, você poderá conferir o programa e autorizar sua participação.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -925,35 +905,22 @@ fun LoginScreen(
                         Button(
                             onClick = {
                                 val code = inviteCodeDraft.trim()
-                                if (code.isEmpty() || isLookingUpInvite) return@Button
-                                isLookingUpInvite = true
-                                scope.launch {
-                                    val preview = viewModel.lookupPartnerInvitePreview(code)
-                                    isLookingUpInvite = false
-                                    if (preview != null) {
-                                        recognizedInvite = preview
-                                        signupPurpose = "personal"
-                                        prefs.edit().putBoolean("pending_b2b_company_onboarding", false).apply()
-                                        prefs.edit().putString("pending_b2b_invite_code", preview.inviteCode).apply()
-                                        showInviteDialog = false
-                                    } else {
-                                        Toast.makeText(
-                                            context,
-                                            "Programa não encontrado ou ainda não disponível para adesão.",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                    }
-                                }
+                                if (!br.com.bragasaude.domain.b2b.B2BOnboardingValidator.isValidInviteCode(code)) return@Button
+                                hasPendingInvite = true
+                                signupPurpose = "personal"
+                                prefs.edit().putBoolean("pending_b2b_company_onboarding", false)
+                                    .putString("pending_b2b_invite_code", code).apply()
+                                showInviteDialog = false
                             },
-                            enabled = br.com.bragasaude.domain.b2b.B2BOnboardingValidator.isValidInviteCode(inviteCodeDraft) && !isLookingUpInvite
+                            enabled = br.com.bragasaude.domain.b2b.B2BOnboardingValidator.isValidInviteCode(inviteCodeDraft)
                         ) {
-                            Text("Encontrar programa", fontWeight = FontWeight.Bold)
+                            Text("Guardar código", fontWeight = FontWeight.Bold)
                         }
                     },
                     dismissButton = {
                         TextButton(
                             onClick = { showInviteDialog = false },
-                            enabled = !isLookingUpInvite
+                            enabled = true
                         ) {
                             Text("Voltar")
                         }
@@ -981,7 +948,7 @@ fun LoginScreen(
                                     viewModel.signInWithGoogle(idToken)
                                 }
                             },
-                            colors = partnerButtonColors()
+                            colors = ButtonDefaults.buttonColors()
                         ) {
                             Text("Entrar com o Google", fontWeight = FontWeight.Bold)
                         }

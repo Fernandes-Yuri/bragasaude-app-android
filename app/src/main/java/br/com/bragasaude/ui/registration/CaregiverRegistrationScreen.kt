@@ -38,7 +38,7 @@ private val RELATION_OPTIONS = listOf("Filho", "Filha", "Neto", "Neta", "Esposo"
 fun CaregiverRegistrationScreen(
     onBack: () -> Unit,
     onRegistrationComplete: () -> Unit,
-    authViewModel: AuthViewModel = hiltViewModel(),
+    authViewModel: AuthViewModel = br.com.bragasaude.ui.LocalSessionAuth.current,
     caregiverViewModel: CaregiverDashboardViewModel = hiltViewModel(),
     profileViewModel: ProfileViewModel = hiltViewModel()
 ) {
