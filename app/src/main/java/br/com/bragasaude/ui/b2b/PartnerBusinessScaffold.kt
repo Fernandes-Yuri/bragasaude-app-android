@@ -47,8 +47,10 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -143,6 +145,7 @@ private fun PartnerBusinessContent(
     val hasMore by partnerViewModel.hasMore.collectAsState()
     val selectedParticipantItem by partnerViewModel.selectedParticipantItem.collectAsState()
     val selectedSummary by partnerViewModel.selectedSummary.collectAsState()
+    val detailError by partnerViewModel.detailError.collectAsState()
     val isLoadingSummary by partnerViewModel.isLoadingSummary.collectAsState()
     val isRemovingParticipant by partnerViewModel.isRemovingParticipant.collectAsState()
     val selectedPeriodDays by partnerViewModel.selectedPeriodDays.collectAsState()
@@ -175,6 +178,21 @@ private fun PartnerBusinessContent(
     // Status do workspace aparece acima da barra de navegação (Scaffold posiciona o host
     // acima do bottomBar); Toasts continuam restritos às ações pontuais.
     val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(detailError) {
+        val message = detailError ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = message,
+            actionLabel = "Tentar novamente",
+            withDismissAction = true,
+            duration = SnackbarDuration.Long
+        )
+        if (result == SnackbarResult.ActionPerformed) {
+            partnerViewModel.retrySelectedSummary()
+        } else {
+            partnerViewModel.clearDetailError()
+        }
+    }
 
     val savedExperience = remember(programInfo, activeContext) {
         programInfo?.experienceConfig ?: activeContext.resolvedExperienceConfig()
@@ -1648,7 +1666,7 @@ private fun BusinessCompanyTabContent(
                                 tint = MaterialTheme.colorScheme.error
                             )
                             Text(
-                                text = "Excluir Perfil e Conta",
+                                text = "Excluir perfil e conta",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.error
                             )

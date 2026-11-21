@@ -88,7 +88,7 @@ fun PartnerDirectChatBottomSheet(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "${page.directChatPolicy.serviceHoursLabel} · ${page.directChatPolicy.responseSlaLabel}",
+                        text = "Atendimento: ${page.directChatPolicy.serviceHoursLabel} · ${page.directChatPolicy.responseSlaLabel}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -1149,7 +1149,7 @@ object B2BOnboardingValidator {
         }
         if (cleanQuestion.contains("agend") || cleanQuestion.contains("consulta") || cleanQuestion.contains("marcar")) {
             return if (config.features.appointmentsEnabled) {
-                "Os horários disponíveis de $brand são: ${config.appointmentsPolicy.availabilitiesSummary} (${config.appointmentsPolicy.allowedModalities.joinToString(" / ") { if (it == "REMOTE") "Remoto" else "Presencial" }})."
+                "Horários de agendamento de $brand: ${config.appointmentsPolicy.availabilitiesSummary} (${config.appointmentsPolicy.allowedModalities.joinToString(" / ") { if (it == "REMOTE") "Remoto" else "Presencial" }})."
             } else {
                 "O agendamento pelo app está desativado neste programa no momento."
             }

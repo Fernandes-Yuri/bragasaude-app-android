@@ -71,6 +71,9 @@ class BragaApiClient @Inject constructor(
         val DEFAULT_BASE_URL = br.com.bragasaude.BuildConfig.BASE_URL
         private const val CONNECT_TIMEOUT_MS = 5000
         private const val READ_TIMEOUT_MS = 10000
+
+        /** Teto de pontos da sparkline de atividade; acima disso usamos os dias mais recentes. */
+        private const val MAX_DAILY_ACTIVE_SERIES_POINTS = 31
     }
 
     val baseUrl: String get() = _baseUrl
@@ -3358,16 +3361,34 @@ class BragaApiClient @Inject constructor(
             br.com.bragasaude.domain.b2b.PartnerParticipantsPageDto(
                 program = parsePartnerProgramJson(res.optJSONObject("program")),
                 kpis = res.optJSONObject("kpis")?.let { kpi ->
+                    // Séries de 7, 14, 30 (ou qualquer tamanho >= 2) são aceitas. Acima de 31
+                    // pontos guardamos os dias mais recentes, sem descartar a série inteira.
+                    val dailySeries = kpi.optJSONArray("dailyActiveUsers")?.let { array ->
+                        val counts = (0 until array.length()).map { array.optInt(it, -1) }
+                        if (counts.size < 2 || counts.any { it < 0 }) {
+                            null
+                        } else {
+                            if (counts.size > MAX_DAILY_ACTIVE_SERIES_POINTS) {
+                                Log.w(TAG, "Série diária de atividade limitada a $MAX_DAILY_ACTIVE_SERIES_POINTS dias")
+                            }
+                            counts.takeLast(MAX_DAILY_ACTIVE_SERIES_POINTS)
+                        }
+                    }
+                    val declaredPeriodDays = if (kpi.has("periodDays") && !kpi.isNull("periodDays")) {
+                        kpi.optInt("periodDays", 0)
+                    } else 0
                     br.com.bragasaude.domain.b2b.PartnerWalletKpisDto(
                         activeUsers = kpi.optInt("activeUsers"), inactiveUsers = kpi.optInt("inactiveUsers"),
                         retentionRate = if (kpi.isNull("retentionRate")) null else kpi.optDouble("retentionRate"),
                         remindersRead = kpi.optInt("remindersRead"), appointmentsConfirmed = kpi.optInt("appointmentsConfirmed"),
-                        dailyActiveUsers = kpi.optJSONArray("dailyActiveUsers")?.let { array ->
-                            (0 until array.length()).map { array.optInt(it, -1) }
-                                .takeIf { it.size == 7 && it.all { count -> count >= 0 } }
-                        },
-                        appointmentsDelta = if (kpi.isNull("appointmentsDelta")) null else kpi.getInt("appointmentsDelta"),
-                        periodDays = kpi.optInt("periodDays", 7), asOf = kpi.optString("asOf").takeIf { it.isNotBlank() }
+                        dailyActiveUsers = dailySeries,
+                        // Ausência/JSON null continua null: a UI mostra "Sem base..." em vez de inventar 0.
+                        appointmentsDelta = if (kpi.has("appointmentsDelta") && !kpi.isNull("appointmentsDelta")) {
+                            kpi.optInt("appointmentsDelta")
+                        } else null,
+                        // Sem periodDays explícito, o tamanho da série é o período real (7/14/30...).
+                        periodDays = declaredPeriodDays.takeIf { it > 0 } ?: dailySeries?.size ?: 7,
+                        asOf = kpi.optString("asOf").takeIf { it.isNotBlank() }
                     )
                 },
                 participants = participants,

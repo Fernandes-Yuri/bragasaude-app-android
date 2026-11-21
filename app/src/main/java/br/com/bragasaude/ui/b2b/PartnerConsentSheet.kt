@@ -8,9 +8,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,7 +35,7 @@ import br.com.bragasaude.domain.b2b.SharedCategoryOption
 import br.com.bragasaude.ui.components.BragaBottomSheet
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PartnerConsentSheet(
     apiClient: BragaApiClient,
@@ -66,17 +72,44 @@ fun PartnerConsentSheet(
         isLoading = false
     }
 
-    val consentProgramId = invitePreview?.programId
-        ?: activeEnrollment?.programId?.takeIf { inviteCode.isBlank() }
-    var selectedCategories by remember(consentProgramId) {
-        mutableStateOf(enrollments.firstOrNull { it.programId == consentProgramId }?.sharedCategories.orEmpty().toSet())
+    // Programa alvo do consentimento: a prévia validada manda; sem código
+    // informado, vale o vínculo ativo. Digitar/colar no campo de código não
+    // troca o programa resolvido (a troca só acontece após validar a prévia).
+    val resolvedProgramId = invitePreview?.programId ?: activeEnrollment?.programId
+    // Código digitado/colado ainda sem prévia validada: o texto não pode trocar
+    // o alvo do salvamento nem zerar a seleção atual.
+    val pendingInviteEdit = inviteCode.isNotBlank() && invitePreview == null
+
+    // A seleção sobrevive a recomposições, mudanças de configuração e morte de
+    // processo. Ela só é recarregada quando o programa resolvido realmente muda
+    // (abaixo), nunca porque o usuário digitou/colou no campo de convite.
+    var selectedCategoryKeys by rememberSaveable(
+        stateSaver = listSaver<List<String>, String>(
+            save = { it },
+            restore = { it }
+        )
+    ) { mutableStateOf(emptyList<String>()) }
+    val selectedCategories = selectedCategoryKeys.toSet()
+    var confirmedDetails by rememberSaveable { mutableStateOf(false) }
+    var familyShareEnabled by rememberSaveable { mutableStateOf(false) }
+    var seededProgramId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(resolvedProgramId, isLoading, enrollments) {
+        if (isLoading) return@LaunchedEffect
+        val programId = resolvedProgramId ?: return@LaunchedEffect
+        if (seededProgramId == programId) return@LaunchedEffect
+        // Programa ainda sem vínculo (adesão nova): preserva o que o usuário
+        // já marcou em vez de zerar categorias e checkbox.
+        val enrollment = enrollments.firstOrNull { it.programId == programId }
+            ?: activeEnrollment?.takeIf { it.programId == programId }
+            ?: return@LaunchedEffect
+        selectedCategoryKeys = enrollment.sharedCategories
+        familyShareEnabled = enrollment.familyShareEnabled
+        seededProgramId = programId
     }
-    var confirmedDetails by remember(consentProgramId, selectedCategories) { mutableStateOf(false) }
+
     val clinicalSelection = SharedCategoryOption.entries.filter {
         it.wireKey in selectedCategories && it in setOf(SharedCategoryOption.MEDICATIONS, SharedCategoryOption.AUTHORIZED_RECORDS)
-    }
-    var familyShareEnabled by remember(consentProgramId) {
-        mutableStateOf(enrollments.firstOrNull { it.programId == consentProgramId }?.familyShareEnabled ?: false)
     }
 
     val effectiveProgramName =
@@ -140,16 +173,35 @@ fun PartnerConsentSheet(
             } else {
                 if (enrollments.size > 1 && inviteCode.isBlank()) {
                     Text("Escolha o programa para ajustar o compartilhamento")
-                    enrollments.forEach { enrollment ->
-                        FilterChip(
-                            selected = activeEnrollment?.programId == enrollment.programId,
-                            enabled = !isWorking,
-                            onClick = {
-                                activeEnrollment = enrollment
-                                errorMessage = null
-                            },
-                            label = { Text(enrollment.programName ?: "Programa parceiro") }
-                        )
+                    // FlowRow evita que nomes longos de programa sejam cortados
+                    // na borda do bottom sheet em telas estreitas.
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        enrollments.forEach { enrollment ->
+                            val selectedProgram = activeEnrollment?.programId == enrollment.programId
+                            FilterChip(
+                                selected = selectedProgram,
+                                enabled = !isWorking,
+                                onClick = {
+                                    if (activeEnrollment?.programId != enrollment.programId) {
+                                        // Autorização de detalhes clínicos é específica
+                                        // do programa: não transportar o check entre vínculos.
+                                        confirmedDetails = false
+                                    }
+                                    activeEnrollment = enrollment
+                                    errorMessage = null
+                                },
+                                leadingIcon = if (selectedProgram) {
+                                    { Icon(Icons.Default.Check, contentDescription = null) }
+                                } else {
+                                    null
+                                },
+                                label = { Text(enrollment.programName ?: "Programa parceiro") }
+                            )
+                        }
                     }
                 }
                 // Entrada ou busca de código de convite
@@ -186,6 +238,11 @@ fun PartnerConsentSheet(
                                 val found = apiClient.lookupPartnerInvitePreview(code)
                                 isWorking = false
                                 if (found != null) {
+                                    // Troca real de programa (prévia validada): a
+                                    // autorização clínica é específica do vínculo.
+                                    if (found.programId != activeEnrollment?.programId) {
+                                        confirmedDetails = false
+                                    }
                                     invitePreview = found
                                 } else {
                                     invitePreview = null
@@ -282,8 +339,11 @@ fun PartnerConsentSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .toggleable(value = isChecked, enabled = !isWorking, role = Role.Checkbox) { checked ->
-                                selectedCategories = if (checked) selectedCategories + option.wireKey
-                                    else selectedCategories - option.wireKey
+                                selectedCategoryKeys = if (checked) {
+                                    (selectedCategoryKeys + option.wireKey).distinct()
+                                } else {
+                                    selectedCategoryKeys - option.wireKey
+                                }
                                 errorMessage = null
                             },
                         shape = RoundedCornerShape(14.dp),
@@ -334,14 +394,21 @@ fun PartnerConsentSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
+                val familyShareToggleEnabled = !isWorking && resolvedProgramId != null
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .toggleable(
+                            value = familyShareEnabled,
+                            enabled = familyShareToggleEnabled,
+                            role = Role.Checkbox
+                        ) { familyShareEnabled = it },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Checkbox(
                         checked = familyShareEnabled,
-                        onCheckedChange = { familyShareEnabled = it },
-                        enabled = !isWorking && consentProgramId != null
+                        onCheckedChange = null,
+                        enabled = familyShareToggleEnabled
                     )
                     Text(
                         "Permitir que meu familiar conectado veja lembretes e agendamentos deste programa",
@@ -377,15 +444,37 @@ fun PartnerConsentSheet(
                 val hasValidCategories =
                     B2BOnboardingValidator.isValidConsentSelection(selectedCategories) &&
                         (clinicalSelection.isEmpty() || confirmedDetails)
+                // Motivo explícito quando o botão principal fica desabilitado — o
+                // usuário nunca deve ficar sem saber o que falta (P2).
+                val blockedReason = when {
+                    !B2BOnboardingValidator.isValidConsentSelection(selectedCategories) ->
+                        "Selecione ao menos uma categoria de registros para continuar."
+                    clinicalSelection.isNotEmpty() && !confirmedDetails ->
+                        "Autorize a consulta aos detalhes clínicos para continuar."
+                    else -> null
+                }
                 val currentActive = activeEnrollment
-                val isUpdatingSameProgram = currentActive != null &&
-                    (inviteCode.isBlank() || invitePreview?.programId == currentActive.programId)
+                val isUpdatingSameProgram = currentActive?.programId != null &&
+                    resolvedProgramId == currentActive?.programId
 
                 if (isUpdatingSameProgram && currentActive?.programId != null) {
                     val progId = currentActive.programId
+                    val saveBlockedReason = if (pendingInviteEdit) {
+                        "Valide o código digitado ou limpe o campo para salvar as preferências deste programa."
+                    } else {
+                        blockedReason
+                    }
+                    saveBlockedReason?.let { reason ->
+                        Text(
+                            text = reason,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+                        )
+                    }
                     Button(
                         onClick = {
-                            if (!hasValidCategories || isWorking) return@Button
+                            if (!hasValidCategories || isWorking || pendingInviteEdit) return@Button
                             isWorking = true
                             errorMessage = null
                             scope.launch {
@@ -405,7 +494,7 @@ fun PartnerConsentSheet(
                                 }
                             }
                         },
-                        enabled = hasValidCategories && !isWorking,
+                        enabled = hasValidCategories && !isWorking && !pendingInviteEdit,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 52.dp),
@@ -428,6 +517,7 @@ fun PartnerConsentSheet(
                                     invitePreview = null
                                     enrollments = enrollments.filterNot { it.programId == progId }
                                     familyShareEnabled = false
+                                    confirmedDetails = false
                                     Toast.makeText(
                                         context,
                                         "Compartilhamento com o programa encerrado.",
@@ -455,6 +545,20 @@ fun PartnerConsentSheet(
                         invitePreview != null &&
                         invitePreview?.invitePaused != true &&
                         invitePreview?.hasAvailableSeats != false
+                    val joinBlockedReason = blockedReason ?: when {
+                        invitePreview == null -> "Valide o código do programa para confirmar a participação."
+                        invitePreview?.invitePaused == true -> "As novas adesões estão pausadas neste programa."
+                        invitePreview?.hasAvailableSeats == false -> "O programa está sem vagas disponíveis no momento."
+                        else -> null
+                    }
+                    joinBlockedReason?.let { reason ->
+                        Text(
+                            text = reason,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+                        )
+                    }
 
                     Button(
                         onClick = {
@@ -468,6 +572,9 @@ fun PartnerConsentSheet(
                                     activeEnrollment = res.activeContext
                                     enrollments = enrollments.filterNot { it.programId == res.activeContext.programId } + res.activeContext
                                     familyShareEnabled = res.activeContext.familyShareEnabled
+                                    // O estado atual já reflete o que foi enviado; evita
+                                    // recarregar do vínculo e zerar a seleção recém-salva.
+                                    seededProgramId = res.activeContext.programId
                                     inviteCode = ""
                                     invitePreview = null
                                     Toast.makeText(

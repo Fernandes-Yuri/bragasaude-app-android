@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,6 +56,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import br.com.bragasaude.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -220,6 +221,11 @@ fun PartnerWalletFiltersSection(
                 FilterChip(
                     selected = selectedCategory == opt.wireKey,
                     onClick = { onSelectCategory(opt.wireKey) },
+                    leadingIcon = if (selectedCategory == opt.wireKey) {
+                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                    } else {
+                        null
+                    },
                     label = { Text(shortCategoryFilterLabel(opt)) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = brandPrimary,
@@ -404,6 +410,27 @@ fun ParticipantDetailBottomSheet(
                         Icon(Icons.Default.VerifiedUser, contentDescription = "Sobre o acesso do gestor")
                     }
                 }
+            }
+
+            // P2: quando o participante não autorizou detalhes clínicos, o gestor
+            // precisa saber o próximo passo em vez de encarar um beco sem saída.
+            val clinicalCategoriesInScope = listOf(
+                SharedCategoryOption.MEDICATIONS.wireKey,
+                SharedCategoryOption.AUTHORIZED_RECORDS.wireKey
+            ).filter { it in enabledMetrics && it in summary.sharedCategories }
+            val missingClinicalDetails =
+                clinicalCategoriesInScope.any { it !in summary.availableDetails }
+            if (missingClinicalDetails) {
+                val features = experienceConfig.features
+                val clinicalGuidance = buildString {
+                    append("O participante ainda não autorizou detalhes clínicos. Peça para ele reabrir o app e confirmar o compartilhamento.")
+                    if (features.directPartnerChatEnabled) {
+                        append(" Se preferir, use o chat direto nas Ações rápidas para orientá-lo.")
+                    } else if (features.partnerRemindersEnabled) {
+                        append(" Você também pode enviar um lembrete de rotina pelas Ações rápidas.")
+                    }
+                }
+                ClinicalDetailsGuidance(message = clinicalGuidance, accent = brandAccent)
             }
 
             TabRow(
@@ -740,6 +767,35 @@ private fun SummaryMetricCard(title: String, body: String) {
 }
 
 @Composable
+private fun ClinicalDetailsGuidance(message: String, accent: Color) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {},
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                imageVector = Icons.Default.VerifiedUser,
+                contentDescription = null,
+                tint = accent
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
 private fun MutedMetricNote(message: String) {
     Text(
         text = message,
@@ -904,9 +960,28 @@ fun OwnerSentRemindersCard(
                                 overflow = TextOverflow.Ellipsis
                             )
                             val total = rem.recipientCount ?: if (rem.targetPatientId != null) 1 else null
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                if (total != null && total > 0 && rem.acknowledgedCount in 0..total) {
-                                    PartnerRing(rem.acknowledgedCount, total)
+                            val showRing = total != null && total > 0 && rem.acknowledgedCount in 0..total
+                            val ringPercent = if (showRing && total != null) {
+                                (rem.acknowledgedCount * 100.0 / total).toInt()
+                            } else {
+                                0
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = if (showRing) {
+                                    // O anel é desenho puro: expõe a proporção em texto
+                                    // para leitores de tela em vez de depender só da cor.
+                                    Modifier.clearAndSetSemantics {
+                                        contentDescription =
+                                            "Leituras confirmadas: ${rem.acknowledgedCount} de ${total} (${ringPercent}%)."
+                                    }
+                                } else {
+                                    Modifier
+                                }
+                            ) {
+                                if (showRing) {
+                                    PartnerRing(rem.acknowledgedCount, total ?: 0)
                                     Text("${rem.acknowledgedCount} de $total com leitura confirmada")
                                 } else Text(ackLabel)
                             }
@@ -928,7 +1003,7 @@ fun OwnerSentRemindersCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PartnerSendReminderBottomSheet(
     targetPatientId: String?,
@@ -1004,11 +1079,20 @@ fun PartnerSendReminderBottomSheet(
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold
             )
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(PartnerReminderType.entries) { opt ->
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                PartnerReminderType.entries.forEach { opt ->
                     FilterChip(
                         selected = selectedType == opt,
                         onClick = { selectedType = opt },
+                        leadingIcon = if (selectedType == opt) {
+                            { Icon(Icons.Default.Check, contentDescription = null) }
+                        } else {
+                            null
+                        },
                         label = { Text(opt.labelPtBr) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = brandPrimary,
@@ -1024,23 +1108,35 @@ fun PartnerSendReminderBottomSheet(
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold
                 )
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        FilterChip(
-                            selected = selectedCategory == null,
-                            onClick = { selectedCategory = null },
-                            label = { Text("Todos ativos") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = brandPrimary,
-                                selectedLabelColor = brandOnPrimary
-                            )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = selectedCategory == null,
+                        onClick = { selectedCategory = null },
+                        leadingIcon = if (selectedCategory == null) {
+                            { Icon(Icons.Default.Check, contentDescription = null) }
+                        } else {
+                            null
+                        },
+                        label = { Text("Todos ativos") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = brandPrimary,
+                            selectedLabelColor = brandOnPrimary
                         )
-                    }
-                    items(categoryOptions, key = { it.wireKey }) { opt ->
+                    )
+                    categoryOptions.forEach { opt ->
                         FilterChip(
                             selected = selectedCategory == opt.wireKey,
                             onClick = {
                                 selectedCategory = if (selectedCategory == opt.wireKey) null else opt.wireKey
+                            },
+                            leadingIcon = if (selectedCategory == opt.wireKey) {
+                                { Icon(Icons.Default.Check, contentDescription = null) }
+                            } else {
+                                null
                             },
                             label = { Text(shortCategoryFilterLabel(opt)) },
                             colors = FilterChipDefaults.filterChipColors(
