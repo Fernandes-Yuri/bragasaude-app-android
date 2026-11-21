@@ -56,10 +56,10 @@ internal fun appointmentsDeltaLabel(delta: Int?): String = when (delta) {
 
 /** Leitura falada do delta, sem depender do glifo da seta. */
 internal fun appointmentsDeltaSpoken(delta: Int?): String = when (delta) {
-    null -> "Sem base na semana anterior"
-    0 -> "Igual à semana anterior"
-    else -> if (delta > 0) "Aumento de $delta em relação à semana anterior"
-    else "Redução de ${-delta} em relação à semana anterior"
+    null -> "Sem base na semana anterior."
+    0 -> "Igual à semana anterior."
+    else -> if (delta > 0) "Aumento de $delta em relação à semana anterior."
+    else "Redução de ${-delta} em relação à semana anterior."
 }
 
 /** Percentual de retenção no padrão pt-BR ("70,0%"). */
