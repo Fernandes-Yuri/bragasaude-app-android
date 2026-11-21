@@ -1150,7 +1150,7 @@ private fun templateChangeBullets(
     return bullets
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PartnerPreviewTabContent(
     programName: String,
