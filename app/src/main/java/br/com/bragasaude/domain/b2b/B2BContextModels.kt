@@ -374,12 +374,12 @@ enum class SharedCategoryOption(
     MEDICATIONS(
         wireKey = "medications",
         titlePtBr = "Adesão a medicamentos",
-        descriptionPtBr = "Confirmações de rotina e horários registrados no app."
+        descriptionPtBr = "O gestor pode consultar nomes, horários e confirmações dos lembretes para acompanhar sua rotina."
     ),
     AUTHORIZED_RECORDS(
         wireKey = "authorized_records",
         titlePtBr = "Registros autorizados de rotina",
-        descriptionPtBr = "Leituras de bem-estar que você escolher disponibilizar ao programa."
+        descriptionPtBr = "O gestor pode consultar pressão, glicemia, frequência cardíaca, saturação, peso, altura e IMC para acompanhar sua rotina."
     );
 
     companion object {
@@ -469,7 +469,9 @@ data class PartnerWalletKpisDto(
     val remindersRead: Int = 0,
     val appointmentsConfirmed: Int = 0,
     val periodDays: Int = 7,
-    val asOf: String? = null
+    val asOf: String? = null,
+    val dailyActiveUsers: List<Int>? = null,
+    val appointmentsDelta: Int? = null
 )
 
 @Serializable
@@ -589,7 +591,10 @@ data class ParticipantRoutineSummaryDto(
     val stepsSection: SharedStepsSectionDto? = null,
     val hydrationSection: SharedHydrationSectionDto? = null,
     val medicationsSection: SharedMedicationsSectionDto? = null,
-    val authorizedRecordsSection: SharedAuthorizedRecordsSectionDto? = null
+    val authorizedRecordsSection: SharedAuthorizedRecordsSectionDto? = null,
+    val periodEnd: String? = null,
+    val availableDetails: List<String> = emptyList(),
+    val detailCategory: String? = null
 )
 
 @Serializable
@@ -620,7 +625,8 @@ data class ProgramReminderDto(
     val createdAt: String,
     val acknowledgedCount: Int = 0,
     val acknowledgedAt: String? = null,
-    val acknowledgedByUid: String? = null
+    val acknowledgedByUid: String? = null,
+    val recipientCount: Int? = null
 )
 
 @Serializable

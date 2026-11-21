@@ -57,6 +57,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.pluralStringResource
+import br.com.bragasaude.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -73,6 +75,15 @@ import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
 import br.com.bragasaude.domain.b2b.ProgramReminderDto
 import br.com.bragasaude.domain.b2b.SharedCategoryOption
 import br.com.bragasaude.ui.components.BragaBottomSheet
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Locale
 
 private enum class ParticipantDetailSubTab(val title: String) {
@@ -296,7 +307,7 @@ fun WalletParticipantCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ParticipantDetailBottomSheet(
     summary: ParticipantRoutineSummaryDto,
@@ -310,6 +321,7 @@ fun ParticipantDetailBottomSheet(
     brandAccent: Color,
     softSurface: Color,
     onChangeDays: (Int) -> Unit,
+    onClinicalDetail: (String?) -> Unit,
     onActionFeedback: (String) -> Unit,
     onOpenSendReminder: (String, String) -> Unit,
     onOpenManageAppointments: (String, String) -> Unit = { _, _ -> },
@@ -377,30 +389,19 @@ fun ParticipantDetailBottomSheet(
                 }
             }
 
-            if (summary.familySupportActive) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    color = softSurface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.VerifiedUser,
-                            contentDescription = null,
-                            tint = brandAccent,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = summary.familySupportSummary?.takeIf { it.isNotBlank() }
-                                ?: "Rede familiar ativa neste programa (mensagens familiares permanecem privadas).",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+            val categoryLabels = summary.sharedCategories.filter {
+                it in enabledMetrics && (it == "steps" || it == "hydration" || it in summary.availableDetails)
+            }.mapNotNull { SharedCategoryOption.fromWire(it)?.titlePtBr }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(if (categoryLabels.isEmpty()) "Nenhuma categoria compartilhada" else
+                    "Participante autorizou compartilhamento: ${categoryLabels.joinToString()}.",
+                    modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                val tooltip = rememberTooltipState(isPersistent = true)
+                val scope = rememberCoroutineScope()
+                TooltipBox(state = tooltip, positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                    tooltip = { PlainTooltip { Text("Você está na visão do gestor deste programa. O participante escolhe as categorias e pode revogar o compartilhamento.") } }) {
+                    IconButton(onClick = { scope.launch { tooltip.show() } }) {
+                        Icon(Icons.Default.VerifiedUser, contentDescription = "Sobre o acesso do gestor")
                     }
                 }
             }
@@ -413,7 +414,10 @@ fun ParticipantDetailBottomSheet(
                 ParticipantDetailSubTab.entries.forEach { tab ->
                     Tab(
                         selected = selectedSubTab == tab,
-                        onClick = { selectedSubTab = tab },
+                        onClick = {
+                            if (tab != selectedSubTab) onClinicalDetail(null)
+                            selectedSubTab = tab
+                        },
                         text = {
                             Text(
                                 text = tab.title,
@@ -426,11 +430,13 @@ fun ParticipantDetailBottomSheet(
 
             when (selectedSubTab) {
                 ParticipantDetailSubTab.METRICS -> {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(7, 14, 30).forEach { days ->
                             FilterChip(
                                 selected = selectedDays == days,
-                                onClick = { if (!isLoading) onChangeDays(days) },
+                                enabled = !isLoading,
+                                onClick = { onChangeDays(days) },
+                                leadingIcon = if (selectedDays == days) { { Icon(Icons.Default.Check, null) } } else null,
                                 label = { Text(B2BTextFormatters.days(days)) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = brandPrimary,
@@ -452,15 +458,8 @@ fun ParticipantDetailBottomSheet(
                         unsharedNote = "Passos não compartilhados por este participante."
                     ) {
                         val steps = summary.stepsSection ?: return@MetricSlotSection
-                        val recent = steps.days.take(5).joinToString("\n") { d ->
-                            "• ${B2BTextFormatters.formatIsoDate(d.date)}: ${d.steps} ${B2BTextFormatters.plural(d.steps, "passo", "passos")} " +
-                                "(${d.activeMinutes} ${B2BTextFormatters.plural(d.activeMinutes, "min ativo", "min ativos")})"
-                        }
-                        SummaryMetricCard(
-                            title = "Passos (${steps.source})",
-                            body = "Média: ${steps.averageSteps} ${B2BTextFormatters.plural(steps.averageSteps, "passo", "passos")}/dia · ${B2BTextFormatters.days(steps.daysRecorded)}." +
-                                if (recent.isNotBlank()) "\n$recent" else ""
-                        )
+                        DailyMetricCard("Passos", steps.source, "passos", summary.patientUserId, summary.periodDays, summary.periodEnd,
+                            steps.days.map { d -> DailyReading(d.date, d.steps.toLong(), "${d.steps} ${B2BTextFormatters.plural(d.steps, "passo", "passos")} · ${B2BTextFormatters.countLabel(d.activeMinutes, "min ativo", "min ativos")}") })
                     }
 
                     MetricSlotSection(
@@ -471,14 +470,8 @@ fun ParticipantDetailBottomSheet(
                         unsharedNote = "Hidratação não compartilhada por este participante."
                     ) {
                         val hyd = summary.hydrationSection ?: return@MetricSlotSection
-                        val recent = hyd.days.take(5).joinToString("\n") { d ->
-                            "• ${B2BTextFormatters.formatIsoDate(d.date)}: ${d.totalMl} ml"
-                        }
-                        SummaryMetricCard(
-                            title = "Hidratação (${hyd.source})",
-                            body = "Média: ${hyd.averageMl} ml/dia · ${B2BTextFormatters.days(hyd.daysRecorded)}." +
-                                if (recent.isNotBlank()) "\n$recent" else ""
-                        )
+                        DailyMetricCard("Hidratação", hyd.source, "ml", summary.patientUserId, summary.periodDays, summary.periodEnd,
+                            hyd.days.map { d -> DailyReading(d.date, d.totalMl, "${d.totalMl} ml") })
                     }
 
                     MetricSlotSection(
@@ -488,6 +481,7 @@ fun ParticipantDetailBottomSheet(
                         disabledNote = "Lembretes de medicamentos desativados neste programa.",
                         unsharedNote = "Lembretes de medicamentos não compartilhados pelo participante."
                     ) {
+                        ClinicalDetailControl("medicação", "medications", summary, isLoading, onClinicalDetail)
                         val meds = summary.medicationsSection ?: return@MetricSlotSection
                         val listText = meds.items.take(5).joinToString("\n") { m ->
                             "• ${m.name} (${m.schedule.ifBlank { "sem horário fixo" }})"
@@ -506,6 +500,7 @@ fun ParticipantDetailBottomSheet(
                         disabledNote = "Registros de sinais e biometria desativados neste programa.",
                         unsharedNote = "Registros de sinais e biometria não compartilhados pelo participante."
                     ) {
+                        ClinicalDetailControl("sinais e biometria", "authorized_records", summary, isLoading, onClinicalDetail)
                         val recs = summary.authorizedRecordsSection ?: return@MetricSlotSection
                         val vitalLines = recs.records.take(6).map { r ->
                             val parts = buildList {
@@ -680,6 +675,54 @@ private fun MetricSlotSection(
 }
 
 @Composable
+private fun ClinicalDetailControl(label: String, category: String, summary: ParticipantRoutineSummaryDto,
+    loading: Boolean, onChange: (String?) -> Unit) {
+    if (category !in summary.availableDetails) {
+        MutedMetricNote("Detalhes de $label sem autorização específica vigente.")
+        return
+    }
+    val expanded = summary.detailCategory == category
+    TextButton(enabled = !loading, onClick = { onChange(if (expanded) null else category) }) {
+        Text(if (expanded) "Ocultar detalhes de $label" else "Consultar detalhes de $label")
+    }
+}
+
+private data class DailyReading(val date: String, val value: Long, val detail: String)
+
+@Composable
+private fun DailyMetricCard(title: String, source: String, unit: String, participant: String, period: Int,
+    periodEnd: String?, readings: List<DailyReading>) {
+    val end = remember(participant, period, periodEnd) {
+        runCatching { LocalDate.parse(periodEnd) }.getOrElse { LocalDate.now(ZoneId.of("America/Sao_Paulo")) }
+    }
+    val dates = (period.coerceIn(1, 90) - 1 downTo 0).map { end.minusDays(it.toLong()).toString() }
+    val byDate = readings.associateBy { it.date }
+    val values = dates.map { byDate[it]?.value }
+    val recorded = values.filterNotNull()
+    var expanded by remember(participant, end, period) { mutableStateOf(false) }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("$title · $source", style = MaterialTheme.typography.titleSmall)
+            if (recorded.isEmpty()) {
+                Text("Sem registros no período.")
+            } else {
+                val mean = recorded.average()
+                Text("Média de ${String.format(Locale.forLanguageTag("pt-BR"), "%.1f", mean)} $unit/dia em ${B2BTextFormatters.days(recorded.size)} com registro")
+                PartnerDailyBars(values, mean)
+                Text("${B2BTextFormatters.formatIsoDate(dates.first())} a ${B2BTextFormatters.formatIsoDate(dates.last())} · linha tracejada indica a média",
+                    style = MaterialTheme.typography.labelSmall)
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "Ocultar detalhes diários" else "Ver detalhes diários de $title")
+                }
+                if (expanded) dates.forEach { date ->
+                    Text("${B2BTextFormatters.formatIsoDate(date)} · ${byDate[date]?.detail ?: "Sem registro"}")
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SummaryMetricCard(title: String, body: String) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -833,10 +876,9 @@ fun OwnerSentRemindersCard(
                 val visibleReminders = if (showAllReminders) reminders else reminders.take(3)
                 visibleReminders.forEach { rem ->
                     val typeLabel = PartnerReminderType.fromWire(rem.reminderType).labelPtBr
-                    val targetLabel = rem.targetPatientName ?: "Lote de participantes"
+                    val targetLabel = if (rem.targetPatientId == null) "Envio em lote" else "Envio individual"
                     val sentDate = B2BTextFormatters.formatIsoDate(rem.createdAt).orEmpty()
-                    val ackLabel = "${rem.acknowledgedCount} " +
-                        B2BTextFormatters.plural(rem.acknowledgedCount, "leitura", "leituras")
+                    val ackLabel = B2BTextFormatters.countLabelAgreement(rem.acknowledgedCount, "leitura", "leituras", "confirmada", "confirmadas")
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
@@ -854,13 +896,20 @@ fun OwnerSentRemindersCard(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = listOfNotNull(sentDate.ifBlank { null }, targetLabel, ackLabel)
+                                text = listOfNotNull(sentDate.ifBlank { null }, targetLabel)
                                     .joinToString(" · "),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            val total = rem.recipientCount ?: if (rem.targetPatientId != null) 1 else null
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (total != null && total > 0 && rem.acknowledgedCount in 0..total) {
+                                    PartnerRing(rem.acknowledgedCount, total)
+                                    Text("${rem.acknowledgedCount} de $total com leitura confirmada")
+                                } else Text(ackLabel)
+                            }
                         }
                     }
                 }
@@ -936,7 +985,8 @@ fun PartnerSendReminderBottomSheet(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Limites: até 3/paciente/dia ou 20 lotes/dia. Nunca altera medicações.",
+                        text = pluralStringResource(R.plurals.b2b_individual_reminder_limit, 3, 3) + " " +
+                            pluralStringResource(R.plurals.b2b_batch_reminder_limit, 20, 20),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -145,16 +145,17 @@ class PartnerReceptionSignPdfGenerator(private val context: Context) {
             canvas.drawLine(46f, 764f, 549f, 764f, divider)
             val footerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.rgb(71, 85, 105)
-                textSize = 8.7f
+                textSize = 11f
             }
+            canvas.drawRect(40f, 767f, 555f, 837f, whiteBox)
             var fy = 782f
             PdfTextLayout.wrap(
                 "Sua conta pessoal e seus arquivos privados permanecem sob seu controle exclusivo. Este espaço organiza o acompanhamento da rotina com base no consentimento do participante e não substitui avaliação profissional ou prontuário oficial.",
                 495f,
                 footerPaint::measureText
-            ).take(3).forEach { line ->
+            ).forEach { line ->
                 canvas.drawText(line, 46f, fy, footerPaint)
-                fy += 11.5f
+                fy += 14f
             }
 
             doc.finishPage(page)

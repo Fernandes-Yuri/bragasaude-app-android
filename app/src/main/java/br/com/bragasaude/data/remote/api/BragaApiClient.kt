@@ -3114,7 +3114,8 @@ class BragaApiClient @Inject constructor(
     suspend fun joinPartnerProgram(
         rawCode: String,
         sharedCategories: Collection<String>,
-        familyShareEnabled: Boolean = false
+        familyShareEnabled: Boolean = false,
+        confirmedDetails: Boolean = false
     ): br.com.bragasaude.domain.b2b.PartnerEnrollmentResult = withContext(Dispatchers.IO) {
         try {
             val code = rawCode.trim().uppercase()
@@ -3135,6 +3136,7 @@ class BragaApiClient @Inject constructor(
             val payload = JSONObject().apply {
                 put("inviteCode", code)
                 put("sharedCategories", JSONArray(normalizedCats))
+                if (confirmedDetails) put("consentVersion", "program-routine-v1")
                 put("familyShareEnabled", familyShareEnabled)
             }
             val resp = postJsonDetailed("$baseUrl/api/programs/join", payload)
@@ -3163,7 +3165,8 @@ class BragaApiClient @Inject constructor(
     suspend fun updatePartnerConsent(
         programId: String,
         sharedCategories: Collection<String>,
-        familyShareEnabled: Boolean? = null
+        familyShareEnabled: Boolean? = null,
+        confirmedDetails: Boolean = false
     ): br.com.bragasaude.domain.b2b.PartnerEnrollmentResult = withContext(Dispatchers.IO) {
         try {
             val normalizedCats =
@@ -3177,6 +3180,7 @@ class BragaApiClient @Inject constructor(
             }
             val payload = JSONObject().apply {
                 put("sharedCategories", JSONArray(normalizedCats))
+                if (confirmedDetails) put("consentVersion", "program-routine-v1")
                 // Chamadas antigas preservam o opt-in existente; a UI envia true/false explícito.
                 familyShareEnabled?.let { put("familyShareEnabled", it) }
             }
@@ -3332,7 +3336,7 @@ class BragaApiClient @Inject constructor(
                     participants.add(
                         br.com.bragasaude.domain.b2b.PartnerParticipantItemDto(
                             patientUserId = uid,
-                            displayName = item.optString("displayName", "Participante"),
+                            displayName = participantDisplayName(item, "displayName", uid),
                             sharedCategories = parseNonEmptyStringArray(item.optJSONArray("sharedCategories")),
                             effectiveCategories = parseNonEmptyStringArray(item.optJSONArray("effectiveCategories")),
                             missingProgramCategories = parseNonEmptyStringArray(item.optJSONArray("missingProgramCategories")),
@@ -3358,6 +3362,11 @@ class BragaApiClient @Inject constructor(
                         activeUsers = kpi.optInt("activeUsers"), inactiveUsers = kpi.optInt("inactiveUsers"),
                         retentionRate = if (kpi.isNull("retentionRate")) null else kpi.optDouble("retentionRate"),
                         remindersRead = kpi.optInt("remindersRead"), appointmentsConfirmed = kpi.optInt("appointmentsConfirmed"),
+                        dailyActiveUsers = kpi.optJSONArray("dailyActiveUsers")?.let { array ->
+                            (0 until array.length()).map { array.optInt(it, -1) }
+                                .takeIf { it.size == 7 && it.all { count -> count >= 0 } }
+                        },
+                        appointmentsDelta = if (kpi.isNull("appointmentsDelta")) null else kpi.getInt("appointmentsDelta"),
                         periodDays = kpi.optInt("periodDays", 7), asOf = kpi.optString("asOf").takeIf { it.isNotBlank() }
                     )
                 },
@@ -3374,16 +3383,24 @@ class BragaApiClient @Inject constructor(
         }
     }
 
+    private fun participantDisplayName(obj: JSONObject, field: String, uid: String): String =
+        optNullableText(obj, field)?.takeUnless { name ->
+            name == uid || '@' in name || name.all { it.isDigit() || it in ".-+/ ()" }
+        } ?: "Participante"
+
     suspend fun getPartnerParticipantSummary(
         patientId: String,
-        days: Int = 30
+        days: Int = 30,
+        detailCategory: String? = null
     ): br.com.bragasaude.domain.b2b.ParticipantRoutineSummaryDto? = withContext(Dispatchers.IO) {
         try {
             val cleanId = patientId.trim()
             if (cleanId.isEmpty()) return@withContext null
             val encodedId = java.net.URLEncoder.encode(cleanId, "UTF-8")
             val clampedDays = days.coerceIn(1, 90)
-            val res = getJson("$baseUrl/api/b2b/program/me/participants/$encodedId/summary?days=$clampedDays")
+            if (detailCategory != null && detailCategory !in setOf("medications", "authorized_records")) return@withContext null
+            val detailQuery = detailCategory?.let { "&detailCategory=$it" }.orEmpty()
+            val res = getJson("$baseUrl/api/b2b/program/me/participants/$encodedId/summary?days=$clampedDays$detailQuery")
                 ?: return@withContext null
             val s = res.optJSONObject("summary") ?: return@withContext null
 
@@ -3396,7 +3413,14 @@ class BragaApiClient @Inject constructor(
                 }
             }
 
-            val stepsObj = s.optJSONObject("stepsSection")
+            if (s.optString("patientUserId") != cleanId) return@withContext null
+            val availableDetails = parseNonEmptyStringArray(s.optJSONArray("availableDetails"))
+                .filter { it in sharedCategories }
+            if (detailCategory != null &&
+                (s.optString("detailCategory") != detailCategory || detailCategory !in availableDetails)
+            ) return@withContext null
+
+            val stepsObj = s.optJSONObject("stepsSection")?.takeIf { "steps" in sharedCategories }
             val stepsSection = stepsObj?.let { obj ->
                 val dayArr = obj.optJSONArray("days")
                 val daysList = mutableListOf<br.com.bragasaude.domain.b2b.SharedStepsDayDto>()
@@ -3421,7 +3445,7 @@ class BragaApiClient @Inject constructor(
                 )
             }
 
-            val hydObj = s.optJSONObject("hydrationSection")
+            val hydObj = s.optJSONObject("hydrationSection")?.takeIf { "hydration" in sharedCategories }
             val hydrationSection = hydObj?.let { obj ->
                 val dayArr = obj.optJSONArray("days")
                 val daysList = mutableListOf<br.com.bragasaude.domain.b2b.SharedHydrationDayDto>()
@@ -3444,7 +3468,7 @@ class BragaApiClient @Inject constructor(
                 )
             }
 
-            val medObj = s.optJSONObject("medicationsSection")
+            val medObj = s.optJSONObject("medicationsSection")?.takeIf { detailCategory == "medications" }
             val medicationsSection = medObj?.let { obj ->
                 val itemArr = obj.optJSONArray("items")
                 val medList = mutableListOf<br.com.bragasaude.domain.b2b.SharedMedicationItemDto>()
@@ -3472,7 +3496,7 @@ class BragaApiClient @Inject constructor(
                 )
             }
 
-            val recObj = s.optJSONObject("authorizedRecordsSection")
+            val recObj = s.optJSONObject("authorizedRecordsSection")?.takeIf { detailCategory == "authorized_records" }
             val authorizedRecordsSection = recObj?.let { obj ->
                 val recArr = obj.optJSONArray("records")
                 val recList = mutableListOf<br.com.bragasaude.domain.b2b.SharedVitalEntryDto>()
@@ -3525,8 +3549,11 @@ class BragaApiClient @Inject constructor(
                 programName = s.optString("programName", ""),
                 companyName = s.optString("companyName", ""),
                 patientUserId = s.optString("patientUserId", cleanId),
-                participantName = s.optString("participantName", "Participante"),
+                participantName = participantDisplayName(s, "participantName", cleanId),
                 periodDays = s.optInt("periodDays", clampedDays),
+                periodEnd = optNullableText(s, "periodEnd"),
+                availableDetails = availableDetails,
+                detailCategory = detailCategory,
                 sharedCategories = sharedCategories,
                 familySupportActive = s.optBoolean("familySupportActive", false),
                 familySupportSummary = s.optString("familySupportSummary", "")
@@ -3539,7 +3566,7 @@ class BragaApiClient @Inject constructor(
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "Falha ao consultar resumo do participante B2B: ${e.message}")
+            Log.w(TAG, "Falha ao consultar resumo do participante B2B.")
             null
         }
     }
@@ -3710,6 +3737,7 @@ class BragaApiClient @Inject constructor(
             title = obj.optString("title", ""),
             body = obj.optString("body", ""),
             createdAt = obj.optString("createdAt", ""),
+            recipientCount = if (obj.isNull("recipientCount")) null else obj.optInt("recipientCount"),
             acknowledgedCount = obj.optInt("acknowledgedCount", 0),
             acknowledgedAt = optNullableText(obj, "acknowledgedAt"),
             acknowledgedByUid = optNullableText(obj, "acknowledgedByUid")
