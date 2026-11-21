@@ -125,6 +125,38 @@ class PartnerUxPolishFormattingTest {
     }
 
     @Test
+    fun `periodo solicitado vira texto humano e cai no texto livre como fallback`() {
+        assertEquals(
+            "Próxima semana · manhã",
+            appointmentPeriodHumanLabel("PROXIMA_SEMANA_MANHA")
+        )
+        // O gateway normaliza preservando acentos; o mapeador aceita as duas grafias.
+        assertEquals(
+            "Próxima semana · manhã",
+            appointmentPeriodHumanLabel("próxima semana manhã")
+        )
+        assertEquals("Próxima semana", appointmentPeriodHumanLabel("PRÓXIMA_SEMANA"))
+        assertEquals("Esta semana · tarde", appointmentPeriodHumanLabel("esta-semana-tarde"))
+        assertEquals("Qualquer horário", appointmentPeriodHumanLabel("INDIFERENTE"))
+        assertNull(appointmentPeriodHumanLabel("CODIGO_DESCONHECIDO"))
+        assertNull(appointmentPeriodHumanLabel("   "))
+
+        assertEquals(
+            "Preferência informada: Próxima semana · tarde",
+            appointmentPreferenceLine("quinta à tarde", "PROXIMA_SEMANA_TARDE")
+        )
+        assertEquals(
+            "Preferência informada: quinta à tarde",
+            appointmentPreferenceLine("  quinta à tarde  ", "CODIGO_DESCONHECIDO")
+        )
+        assertEquals(
+            "Preferência informada: Próxima semana",
+            appointmentPreferenceLine(null, "PROXIMA_SEMANA")
+        )
+        assertNull(appointmentPreferenceLine(null, null))
+    }
+
+    @Test
     fun `status de consentimento tem rotulo humano e fallback pelas categorias`() {
         assertEquals(
             "Consentimento completo",
