@@ -36,8 +36,14 @@ class PartnerWalletUxPolishTest {
 
     @Test
     fun `lembretes lidos falam leitura no singular e plural`() {
-        assertEquals("Lembretes lidos: 1 leitura.", walletRemindersSpoken(1))
-        assertEquals("Lembretes lidos: 0 leituras.", walletRemindersSpoken(0))
+        assertEquals(
+            "Lembretes lidos: 1 leitura. Sem lembretes enviados no período.",
+            walletRemindersSpoken(1)
+        )
+        assertEquals(
+            "Lembretes lidos: 0 leituras. Sem lembretes enviados no período.",
+            walletRemindersSpoken(0)
+        )
     }
 
     @Test

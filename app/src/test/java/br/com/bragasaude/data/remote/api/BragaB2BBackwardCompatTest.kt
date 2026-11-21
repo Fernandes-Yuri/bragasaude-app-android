@@ -1476,6 +1476,48 @@ class BragaB2BBackwardCompatTest {
     }
 
     @Test
+    fun `wallet kpis parseia reminders total e contadores e zera campos ausentes`(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'),
+                stubAuthService(), OkHttpClient(), FamilyE2eeManager())
+
+            // Campos aditivos do gateway a7395c1 chegam e são lidos sem falhar o parse.
+            server.enqueue(MockResponse().setBody(
+                """{"kpis":{"remindersRead":12,"remindersTotal":30,"unreadMessagesTotal":4,
+                    "pendingAppointmentsTotal":3,"appointmentsConfirmed":8}}"""
+            ))
+            val full = api.getMyPartnerParticipants()!!.kpis!!
+            assertEquals(12, full.remindersRead)
+            assertEquals(30, full.remindersTotal)
+            assertEquals(4, full.unreadMessagesTotal)
+            assertEquals(3, full.pendingAppointmentsTotal)
+            assertEquals(8, full.appointmentsConfirmed)
+            server.takeRequest()
+
+            // Resposta antiga (sem os campos) continua válida: defaults 0, sem inventar métricas.
+            server.enqueue(MockResponse().setBody("""{"kpis":{"remindersRead":7}}"""))
+            val legacy = api.getMyPartnerParticipants()!!.kpis!!
+            assertEquals(7, legacy.remindersRead)
+            assertEquals(0, legacy.remindersTotal)
+            assertEquals(0, legacy.unreadMessagesTotal)
+            assertEquals(0, legacy.pendingAppointmentsTotal)
+            server.takeRequest()
+
+            // JSON null também cai no default 0 em vez de estourar.
+            server.enqueue(MockResponse().setBody(
+                """{"kpis":{"remindersTotal":null,"unreadMessagesTotal":null,
+                    "pendingAppointmentsTotal":null}}"""
+            ))
+            val nulls = api.getMyPartnerParticipants()!!.kpis!!
+            assertEquals(0, nulls.remindersTotal)
+            assertEquals(0, nulls.unreadMessagesTotal)
+            assertEquals(0, nulls.pendingAppointmentsTotal)
+            server.takeRequest()
+        }
+    }
+
+    @Test
     fun `wallet kpis aceita series de 7 14 e 30 dias e nao coage delta ausente para zero`(): Unit = runBlocking {
         MockWebServer().use { server ->
             server.start()

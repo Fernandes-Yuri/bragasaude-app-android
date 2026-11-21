@@ -3381,6 +3381,11 @@ class BragaApiClient @Inject constructor(
                         activeUsers = kpi.optInt("activeUsers"), inactiveUsers = kpi.optInt("inactiveUsers"),
                         retentionRate = if (kpi.isNull("retentionRate")) null else kpi.optDouble("retentionRate"),
                         remindersRead = kpi.optInt("remindersRead"), appointmentsConfirmed = kpi.optInt("appointmentsConfirmed"),
+                        // Campos aditivos do gateway (a7395c1): ausência/não numérico vira 0
+                        // e a UI degrada para o comportamento antigo, sem inventar percentual.
+                        remindersTotal = kpi.optInt("remindersTotal", 0),
+                        pendingAppointmentsTotal = kpi.optInt("pendingAppointmentsTotal", 0),
+                        unreadMessagesTotal = kpi.optInt("unreadMessagesTotal", 0),
                         dailyActiveUsers = dailySeries,
                         // Ausência/JSON null continua null: a UI mostra "Sem base..." em vez de inventar 0.
                         appointmentsDelta = if (kpi.has("appointmentsDelta") && !kpi.isNull("appointmentsDelta")) {
@@ -4028,6 +4033,7 @@ class BragaApiClient @Inject constructor(
         patientName = optNullableText(a, "patientName"),
         modality = a.optString("modality", "IN_PERSON"),
         requestedSlotText = a.optString("requestedSlotText", ""),
+        requestedPeriod = optNullableText(a, "requestedPeriod"),
         scheduledAt = optNullableText(a, "scheduledAt"),
         patientNote = optNullableText(a, "patientNote"),
         partnerNote = optNullableText(a, "partnerNote"),
