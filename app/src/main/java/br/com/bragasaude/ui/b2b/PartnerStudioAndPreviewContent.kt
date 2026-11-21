@@ -1369,7 +1369,6 @@ fun PartnerPreviewTabContent(
                         onOpenSimulator = onOpenSimulator
                     )
                 }
-                }
             }
         }
     }
@@ -1406,7 +1405,6 @@ private fun PreviewCanvas(
     ) {
         MaterialTheme(colorScheme = previewScheme) {
             PartnerBrandTheme(primaryColorHex) {
-                CompositionLocalProvider(LocalContentColor provides previewScheme.onSurface) {
                 Column(Modifier.fillMaxWidth()) {
                     when (surfaceMode) {
                                     PreviewSurfaceMode.LOGIN -> PartnerLoginPreview()
