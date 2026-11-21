@@ -522,37 +522,11 @@ fun PartnerProgramOnboardingSheet(
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = "Código de convite do programa",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = prog.inviteCode ?: "Aguardando código",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = parsedColor
-                                )
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = parsedColor.copy(alpha = 0.14f)
-                            ) {
-                                Text(
-                                    text = "${prog.activeParticipants} / ${prog.seatLimit} ${B2BTextFormatters.plural(prog.seatLimit, "vaga", "vagas")}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = parsedColor,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
+                        Text("Código de convite do programa", style = MaterialTheme.typography.labelMedium)
+                        Text(prog.inviteCode ?: "Aguardando código", style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold)
+                        Text("${prog.activeParticipants} de ${prog.seatLimit} vagas em uso")
+                        if (prog.seatLimit > 0) PartnerProgress(prog.activeParticipants.toFloat() / prog.seatLimit)
 
                         Text(
                             text = if (prog.invitePaused) {

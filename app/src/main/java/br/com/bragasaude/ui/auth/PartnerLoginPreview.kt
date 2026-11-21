@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import br.com.bragasaude.ui.b2b.PartnerTechnologyCredit
@@ -20,9 +22,21 @@ fun PartnerLoginPreview() {
     var signup by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         LoginIdentity(showIntroduction = true)
-        TabRow(selectedTabIndex = if (signup) 1 else 0, containerColor = MaterialTheme.colorScheme.surface) {
-            Tab(selected = !signup, onClick = { signup = false }, text = { Text("Entrar") })
-            Tab(selected = signup, onClick = { signup = true }, text = { Text("Criar Nova Conta") })
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val style = MaterialTheme.typography.labelLarge
+            val measurer = rememberTextMeasurer()
+            val labels = listOf("Entrar", "Criar conta")
+            val longest = labels.maxOf { measurer.measure(AnnotatedString(it), style = style, softWrap = false).size.width }
+            val scale = (constraints.maxWidth.toFloat() / labels.size / longest.coerceAtLeast(1)).coerceAtMost(1f)
+            TabRow(selectedTabIndex = if (signup) 1 else 0, modifier = Modifier.height(48.dp),
+                containerColor = MaterialTheme.colorScheme.surface) {
+                labels.forEachIndexed { index, label ->
+                    Tab(selected = signup == (index == 1), onClick = { signup = index == 1 },
+                        modifier = Modifier.fillMaxHeight()) {
+                        Text(label, maxLines = 1, softWrap = false, style = style, fontSize = style.fontSize * scale)
+                    }
+                }
+            }
         }
         listOfNotNull("E-mail", "Senha", "Confirmar senha".takeIf { signup }).forEach { label ->
             OutlinedTextField(value = "", onValueChange = {}, readOnly = true,
