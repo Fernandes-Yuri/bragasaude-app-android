@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,10 +19,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PauseCircle
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -30,11 +40,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -48,6 +63,7 @@ import br.com.bragasaude.domain.b2b.PartnerProgramDto
 import br.com.bragasaude.domain.b2b.UpsertPartnerProgramRequest
 import br.com.bragasaude.ui.components.BragaBottomSheet
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -58,6 +74,7 @@ fun PartnerProgramOnboardingSheet(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val clipboardManager = LocalClipboardManager.current
 
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
@@ -75,6 +92,11 @@ fun PartnerProgramOnboardingSheet(
     var showManualLogoUrl by rememberSaveable { mutableStateOf(false) }
 
     var templateKey by rememberSaveable { mutableStateOf("CLINICA_GERAL") }
+    // Estado visual do indicador de etapas: o modelo padrão já vem selecionado, então só
+    // marcamos a etapa 1 como concluída quando o parceiro confirma um perfil ou traz dados.
+    var templateConfirmed by rememberSaveable { mutableStateOf(false) }
+    var councilDecisionMade by rememberSaveable { mutableStateOf(false) }
+    var inviteCopyFeedback by remember { mutableStateOf<String?>(null) }
     var responsibleName by rememberSaveable { mutableStateOf("") }
     var responsibleCpf by rememberSaveable { mutableStateOf("") }
     var responsibleRole by rememberSaveable { mutableStateOf("SOCIO_TITULAR") }
@@ -99,6 +121,7 @@ fun PartnerProgramOnboardingSheet(
         primaryColor = B2BOnboardingValidator.normalizeHexColorOrDefault(prog.primaryColor)
         logoUrl = prog.logoUrl.orEmpty()
         templateKey = prog.templateKey.ifBlank { "CLINICA_GERAL" }
+        templateConfirmed = true
         responsibleName = prog.responsibleName.orEmpty()
         responsibleRole = prog.responsibleRole.orEmpty().ifBlank { "SOCIO_TITULAR" }
         responsiblePhone = prog.responsiblePhone.orEmpty()
@@ -107,6 +130,8 @@ fun PartnerProgramOnboardingSheet(
         councilType = prog.councilType.orEmpty()
         councilNumber = prog.councilNumber.orEmpty()
         councilUf = prog.councilUf.orEmpty()
+        // Programa já salvo: a escolha (com ou sem conselho) já foi feita em algum momento.
+        councilDecisionMade = true
         if (!prog.termsAcceptedAt.isNullOrBlank()) {
             termsAccepted = true
         }
@@ -177,6 +202,14 @@ fun PartnerProgramOnboardingSheet(
             syncFromLoadedProgram(loaded)
         }
         isLoading = false
+    }
+
+    // Feedback do "Copiar código" some sozinho, mas fica no liveRegion enquanto visível.
+    LaunchedEffect(inviteCopyFeedback) {
+        if (inviteCopyFeedback != null) {
+            delay(4000)
+            inviteCopyFeedback = null
+        }
     }
 
     val logoPickerLauncher = rememberLauncherForActivityResult(
@@ -286,6 +319,36 @@ fun PartnerProgramOnboardingSheet(
         status == PartnerApprovalStatus.CHANGES_REQUESTED ||
         status == PartnerApprovalStatus.REJECTED
 
+    // --- Indicador visual de etapas (puramente de leitura: nenhuma validação nova) ---
+    val hasSavedCpf = !existingProgram?.responsibleCpfMasked.isNullOrBlank()
+    val cpfStepOk = if (responsibleCpf.isBlank()) hasSavedCpf else B2BOnboardingValidator.isValidCpf(responsibleCpf)
+    val ufStepOk = stateUf.trim().uppercase() in B2BOnboardingValidator.BR_UFS
+    val assistencialStep = B2BOnboardingValidator.isAssistencialTemplate(templateKey)
+    val onboardingStepsDone = listOf(
+        existingProgram != null || templateConfirmed || companyName.isNotBlank() || programName.isNotBlank(),
+        companyName.trim().length in 2..160 &&
+            programName.trim().length in 2..120 &&
+            B2BOnboardingValidator.isValidCnpj(cnpj) &&
+            city.trim().length in 2..96 &&
+            ufStepOk,
+        responsibleName.trim().length in 3..160 &&
+            cpfStepOk &&
+            B2BOnboardingValidator.RESPONSIBLE_ROLE_OPTIONS.any { it.key == responsibleRole.trim().uppercase() } &&
+            B2BOnboardingValidator.isValidResponsiblePhone(responsiblePhone),
+        !assistencialStep || councilDecisionMade || councilType.isNotBlank(),
+        B2BOnboardingValidator.isValidHexColor(primaryColor),
+        termsAccepted
+    )
+    val completedOnboardingSteps = onboardingStepsDone.count { it }
+    val currentOnboardingStep = onboardingStepsDone.indexOfFirst { !it }
+        .let { if (it < 0) ONBOARDING_STEP_TITLES.lastIndex else it }
+    val allOnboardingStepsDone = completedOnboardingSteps == ONBOARDING_STEP_TITLES.size
+    val onboardingStepSummary = if (allOnboardingStepsDone) {
+        "6 de 6 etapas preenchidas · dados completos"
+    } else {
+        "Etapa ${currentOnboardingStep + 1} de 6 · ${ONBOARDING_STEP_TITLES[currentOnboardingStep]}"
+    }
+
     BragaBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -340,6 +403,88 @@ fun PartnerProgramOnboardingSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
+            // Indicador de etapas: orienta onde o parceiro está antes de rolar a folha inteira.
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = "$onboardingStepSummary $completedOnboardingSteps de 6 etapas concluídas."
+                    },
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (allOnboardingStepsDone) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Text(
+                            text = onboardingStepSummary,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "$completedOnboardingSteps/6",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        onboardingStepsDone.forEachIndexed { index, done ->
+                            val isCurrent = index == currentOnboardingStep && !done
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(if (isCurrent) 10.dp else 6.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(
+                                        when {
+                                            done -> MaterialTheme.colorScheme.primary
+                                            isCurrent -> MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+                                            else -> MaterialTheme.colorScheme.outlineVariant
+                                        }
+                                    )
+                            )
+                        }
+                    }
+                    Text(
+                        text = if (allOnboardingStepsDone) {
+                            when (status) {
+                                PartnerApprovalStatus.APPROVED ->
+                                    "Empresa aprovada: as edições ficam salvas no programa."
+                                PartnerApprovalStatus.PENDING_REVIEW ->
+                                    "Solicitação enviada. Use \"Revalidar dados\" se alterar algo."
+                                else ->
+                                    "Tudo preenchido: confira os comprovantes e envie para a verificação KYB."
+                            }
+                        } else {
+                            ONBOARDING_STEP_HINTS[currentOnboardingStep]
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             // Prévia da marca do parceiro
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -387,7 +532,9 @@ fun PartnerProgramOnboardingSheet(
 
             if (!kybErrorDetail.isNullOrBlank()) {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { liveRegion = LiveRegionMode.Polite },
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer
@@ -442,7 +589,9 @@ fun PartnerProgramOnboardingSheet(
 
             if (status == PartnerApprovalStatus.APPROVED && kybDecisionBanner == "GREEN") {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { liveRegion = LiveRegionMode.Polite },
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = Color(0xFFDCFCE7)
@@ -463,6 +612,47 @@ fun PartnerProgramOnboardingSheet(
                             text = "CNPJ e responsável confirmados automaticamente na Receita Federal. Código de convite e placa de recepção liberados!",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF14532D)
+                        )
+                    }
+                }
+            }
+
+            // Empresa aprovada mas KYB ainda em conferência: sem esta linha o selo "Aprovado"
+            // parecia contradizer "Documentos: 0 · KYB aguardando" na aba Empresa.
+            if (status == PartnerApprovalStatus.APPROVED && kybDecisionBanner != "GREEN") {
+                val sentProofs = existingProgram?.proofDocuments?.size ?: 0
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.VerifiedUser,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Empresa aprovada · verificação KYB em andamento",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        Text(
+                            text = "Documentos enviados: $sentProofs de 2 opcionais. A conferência corre em paralelo e não bloqueia o código de convite, o QR Code nem a placa PDF.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
                 }
@@ -547,9 +737,95 @@ fun PartnerProgramOnboardingSheet(
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("Código de convite do programa", style = MaterialTheme.typography.labelMedium)
-                        Text(prog.inviteCode ?: "Aguardando código", style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Código de convite do programa", style = MaterialTheme.typography.labelMedium)
+                            // Estado por texto + ícone, não só pela cor do selo.
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (prog.invitePaused) {
+                                        Icons.Default.PauseCircle
+                                    } else {
+                                        Icons.Default.CheckCircle
+                                    },
+                                    contentDescription = null,
+                                    tint = if (prog.invitePaused) {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    } else {
+                                        parsedColor
+                                    },
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = if (prog.invitePaused) "Pausado" else "Ativo",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (prog.invitePaused) {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    } else {
+                                        parsedColor
+                                    }
+                                )
+                            }
+                        }
+                        Text(
+                            text = prog.inviteCode ?: "Aguardando código",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Button(
+                            onClick = {
+                                val code = prog.inviteCode?.trim().orEmpty()
+                                if (code.isBlank()) return@Button
+                                clipboardManager.setText(AnnotatedString(code))
+                                inviteCopyFeedback = "Código $code copiado para a área de transferência."
+                                Toast.makeText(context, "Código copiado.", Toast.LENGTH_SHORT).show()
+                            },
+                            enabled = !prog.inviteCode.isNullOrBlank() && !isSaving,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = parsedColor,
+                                contentColor = onParsedPrimary
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Copiar código", fontWeight = FontWeight.SemiBold)
+                        }
+                        AnimatedVisibility(visible = inviteCopyFeedback != null) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .semantics { liveRegion = LiveRegionMode.Polite },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = parsedColor,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = inviteCopyFeedback.orEmpty(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                         Text(
                             "${prog.activeParticipants} de ${B2BTextFormatters.countLabel(prog.seatLimit, "vaga", "vagas")} em uso"
                         )
@@ -557,9 +833,9 @@ fun PartnerProgramOnboardingSheet(
 
                         Text(
                             text = if (prog.invitePaused) {
-                                "Novas adesões estão pausadas. Participantes já vinculados continuam ativos."
+                                "Convites pausados: novas adesões ficam bloqueadas; participantes já vinculados seguem ativos."
                             } else {
-                                "Convites ativos dentro do limite da franquia contratada."
+                                "Convites ativos. Sem data de expiração: o código vale enquanto o programa estiver aprovado e houver vagas."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -646,10 +922,11 @@ fun PartnerProgramOnboardingSheet(
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             } else {
-                Text(
-                    text = "1. Perfil do programa",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
+                OnboardingSectionHeader(
+                    number = 1,
+                    title = "Perfil do programa",
+                    description = "Escolha o modelo que combina com a sua operação.",
+                    icon = Icons.Default.AutoAwesome
                 )
 
                 // Wrap em vez de rolagem horizontal: em telas estreitas e fonte ampliada os
@@ -662,16 +939,20 @@ fun PartnerProgramOnboardingSheet(
                     B2BOnboardingValidator.TEMPLATE_OPTIONS.forEach { option ->
                         FilterChip(
                             selected = templateKey.equals(option.key, ignoreCase = true),
-                            onClick = { templateKey = option.key },
+                            onClick = {
+                                templateKey = option.key
+                                templateConfirmed = true
+                            },
                             label = { Text(option.labelPtBr) }
                         )
                     }
                 }
 
-                Text(
-                    text = "2. Identificação da empresa",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
+                OnboardingSectionHeader(
+                    number = 2,
+                    title = "Identificação da empresa",
+                    description = "CNPJ, nome do programa e cidade/UF.",
+                    icon = Icons.Default.Description
                 )
 
                 OutlinedTextField(
@@ -742,10 +1023,11 @@ fun PartnerProgramOnboardingSheet(
                     )
                 }
 
-                Text(
-                    text = "3. Responsável pelo programa",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
+                OnboardingSectionHeader(
+                    number = 3,
+                    title = "Responsável pelo programa",
+                    description = "Quem responde legalmente e mantém o contato.",
+                    icon = Icons.Default.Person
                 )
 
                 OutlinedTextField(
@@ -827,14 +1109,15 @@ fun PartnerProgramOnboardingSheet(
                 val councilLocked = status == PartnerApprovalStatus.APPROVED &&
                     !existingProgram?.councilType.isNullOrBlank()
                 if (isAssistencial || councilType.isNotBlank() || councilNumber.isNotBlank()) {
-                    Text(
-                        text = if (isAssistencial) {
-                            "4. Registro no Conselho Profissional (recomendado para aprovação imediata)"
+                    OnboardingSectionHeader(
+                        number = 4,
+                        title = "Registro no Conselho Profissional",
+                        description = if (isAssistencial) {
+                            "Recomendado para aprovação imediata neste perfil."
                         } else {
-                            "4. Registro no Conselho Profissional (opcional)"
+                            "Opcional neste perfil de programa."
                         },
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
+                        icon = Icons.Default.VerifiedUser
                     )
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
@@ -848,6 +1131,7 @@ fun PartnerProgramOnboardingSheet(
                                 councilType = ""
                                 councilNumber = ""
                                 councilUf = ""
+                                councilDecisionMade = true
                             },
                             label = { Text("Sem conselho") }
                         )
@@ -855,7 +1139,10 @@ fun PartnerProgramOnboardingSheet(
                             FilterChip(
                                 selected = councilType.equals(ct, ignoreCase = true),
                                 enabled = !councilLocked,
-                                onClick = { councilType = ct },
+                                onClick = {
+                                    councilType = ct
+                                    councilDecisionMade = true
+                                },
                                 label = { Text(ct) }
                             )
                         }
@@ -903,10 +1190,11 @@ fun PartnerProgramOnboardingSheet(
                     }
                 }
 
-                Text(
-                    text = "5. Identidade visual",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
+                OnboardingSectionHeader(
+                    number = 5,
+                    title = "Identidade visual",
+                    description = "Cor principal e logo que aparecem no app do participante.",
+                    icon = Icons.Default.Palette
                 )
 
                 Text(
@@ -929,7 +1217,7 @@ fun PartnerProgramOnboardingSheet(
                         val isSelected = primaryColor.equals(preset, ignoreCase = true)
                         Box(
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
                                 .background(swatchColor)
                                 .border(
@@ -1096,10 +1384,11 @@ fun PartnerProgramOnboardingSheet(
                                 .padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text(
-                                text = "6. Comprovantes privados (opcional · até 2 arquivos (PDF ou imagem) de 5 MB cada)",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
+                            OnboardingSectionHeader(
+                                number = 6,
+                                title = "Comprovantes privados",
+                                description = "${currentProofs.size} de 2 enviados · PDF ou imagem de até 5 MB.",
+                                icon = Icons.Default.Lock
                             )
                             Text(
                                 text = "Armazenados em cofre privado criptografado somente durante a análise e expurgados automaticamente após aprovação ou recusa.",
@@ -1225,7 +1514,6 @@ fun PartnerProgramOnboardingSheet(
                     }
                 }
 
-                val hasSavedCpf = !existingProgram?.responsibleCpfMasked.isNullOrBlank()
                 val canSave = B2BOnboardingValidator.canSaveDraft(
                     companyName = companyName,
                     programName = programName,
@@ -1388,3 +1676,74 @@ private fun proofDocTypeLabel(raw: String?): String =
         .firstOrNull { it.key.equals(raw?.trim(), ignoreCase = true) }
         ?.labelPtBr
         ?: "Comprovante anexado"
+
+private val ONBOARDING_STEP_TITLES = listOf(
+    "Perfil do programa",
+    "Identificação da empresa",
+    "Responsável",
+    "Conselho profissional",
+    "Identidade visual",
+    "Comprovantes e termos"
+)
+
+private val ONBOARDING_STEP_HINTS = listOf(
+    "Toque em um modelo para confirmar o perfil do programa.",
+    "Informe razão social, nome do programa, CNPJ válido e cidade/UF.",
+    "Preencha o responsável, o vínculo e o telefone com DDD.",
+    "Selecione o conselho ou marque \"Sem conselho\" para seguir.",
+    "Confirme a cor principal e, se quiser, envie a logo.",
+    "Anexe até 2 comprovantes e aceite os termos para enviar."
+)
+
+/**
+ * Cabeçalho único das seis seções do onboarding: mesmo ícone, número, cor e descrição
+ * curta em todas elas, em vez dos títulos soltos que competiam com os campos.
+ */
+@Composable
+private fun OnboardingSectionHeader(
+    number: Int,
+    title: String,
+    description: String,
+    icon: ImageVector
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "Etapa $number de 6. $title. $description"
+            },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = "$number. $title",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}

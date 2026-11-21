@@ -1,5 +1,7 @@
 package br.com.bragasaude.ui.b2b
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,18 +15,33 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocalDrink
+import androidx.compose.material.icons.filled.Medication
+import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SupportAgent
@@ -56,9 +73,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import br.com.bragasaude.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -91,6 +111,42 @@ private enum class ParticipantDetailSubTab(val title: String) {
     METRICS("Métricas"),
     QUICK_ACTIONS("Ações rápidas")
 }
+
+private fun participantSubTabIcon(tab: ParticipantDetailSubTab): ImageVector = when (tab) {
+    ParticipantDetailSubTab.METRICS -> Icons.Default.BarChart
+    ParticipantDetailSubTab.QUICK_ACTIONS -> Icons.Default.Bolt
+}
+
+/** Normaliza o status de consentimento vindo do DTO (ou derivado das categorias). */
+internal fun normalizedConsentStatus(
+    consentStatus: String?,
+    sharedCategories: List<String>
+): String = when (consentStatus?.trim()?.uppercase(Locale.US)) {
+    "COMPLETE" -> "COMPLETE"
+    "PARTIAL" -> "PARTIAL"
+    "NONE" -> "NONE"
+    else -> if (sharedCategories.isEmpty()) "NONE" else "UNKNOWN"
+}
+
+/** Rótulo único usado pelo chip do detalhe e pela carteira (nunca só a cor). */
+internal fun participantConsentStatusLabel(
+    consentStatus: String?,
+    sharedCategories: List<String>
+): String = when (normalizedConsentStatus(consentStatus, sharedCategories)) {
+    "COMPLETE" -> "Consentimento completo"
+    "PARTIAL" -> "Consentimento parcial"
+    "NONE" -> "Sem categorias autorizadas"
+    else -> "Consentimento a confirmar"
+}
+
+private fun participantConsentIcon(consentStatus: String?, sharedCategories: List<String>): ImageVector =
+    when (normalizedConsentStatus(consentStatus, sharedCategories)) {
+        "COMPLETE" -> Icons.Default.CheckCircle
+        "PARTIAL" -> Icons.Default.Info
+        "NONE" -> Icons.Default.Block
+        else -> Icons.Default.Info
+    }
+
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -281,34 +337,118 @@ fun WalletParticipantCard(
     softSurface: Color,
     onClick: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = softSurface)) {
-        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(item.displayName, modifier = Modifier.weight(1f), maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold)
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, "Abrir detalhes", tint = brandAccent)
-            }
-            Text("Atividade no programa · 7 dias", style = MaterialTheme.typography.labelSmall)
-            Text(item.activityDatesLast7Days?.let { "${it.size}/7 dias ativos" } ?: "Atividade indisponível",
-                style = MaterialTheme.typography.bodyMedium, color = brandAccent)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        colors = CardDefaults.cardColors(containerColor = softSurface)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    "Lembretes: ${item.pendingRemindersCount?.let { B2BTextFormatters.countLabel(it, "pendente", "pendentes") } ?: "—"}",
+                    text = item.displayName,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Abrir detalhes de ${item.displayName}",
+                    tint = brandAccent
+                )
+            }
+            Text(
+                text = "Atividade no programa · últimos 7 dias",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = item.activityDatesLast7Days?.let { "${it.size} de 7 dias ativos" }
+                    ?: "Atividade indisponível",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = brandAccent
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Lembretes: ${
+                        item.pendingRemindersCount?.let {
+                            B2BTextFormatters.countLabel(it, "pendente", "pendentes")
+                        } ?: "—"
+                    }",
                     style = MaterialTheme.typography.labelSmall
                 )
-                Text("Agenda: ${item.upcomingAppointmentsCount?.toString() ?: "—"} em 7 dias",
-                    style = MaterialTheme.typography.labelSmall)
+                Text(
+                    text = "Agenda: ${item.upcomingAppointmentsCount?.toString() ?: "—"} em 7 dias",
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
-            val consent = when (item.consentStatus) {
-                "COMPLETE" -> "Completo"
-                "PARTIAL" -> "Parcial"
-                "NONE" -> "Sem categorias autorizadas"
-                else -> "Indisponível"
-            }
-            Text("Consentimento: $consent", style = MaterialTheme.typography.labelSmall)
+            ConsentStatusChip(
+                consentStatus = item.consentStatus,
+                sharedCategories = item.sharedCategories,
+                brandAccent = brandAccent
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConsentStatusChip(
+    consentStatus: String?,
+    sharedCategories: List<String>,
+    brandAccent: Color
+) {
+    val normalized = normalizedConsentStatus(consentStatus, sharedCategories)
+    val label = participantConsentStatusLabel(consentStatus, sharedCategories)
+    val container = when (normalized) {
+        "COMPLETE" -> brandAccent.copy(alpha = 0.14f)
+        "NONE" -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.65f)
+        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+    }
+    val content = when (normalized) {
+        "NONE" -> MaterialTheme.colorScheme.onErrorContainer
+        "COMPLETE" -> brandAccent
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Surface(
+        modifier = Modifier.semantics(mergeDescendants = true) {
+            contentDescription = "Status de consentimento: $label"
+        },
+        shape = RoundedCornerShape(50),
+        color = container
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = participantConsentIcon(consentStatus, sharedCategories),
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = content
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = content
+            )
         }
     }
 }
@@ -352,43 +492,47 @@ fun ParticipantDetailBottomSheet(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top
             ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(brandPrimary)
+                        .clearAndSetSemantics {},
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(brandPrimary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = (summary.participantName.firstOrNull() ?: 'P').uppercaseChar().toString(),
-                            color = brandOnPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = summary.participantName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "${summary.programName.ifBlank { B2BThemeEngine.PARTNER_AREA_TITLE }} · Últimos ${B2BTextFormatters.days(summary.periodDays)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = (summary.participantName.firstOrNull() ?: 'P').uppercaseChar().toString(),
+                        color = brandOnPrimary,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = summary.participantName,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${summary.programName.ifBlank { B2BThemeEngine.PARTNER_AREA_TITLE }} · Últimos ${B2BTextFormatters.days(summary.periodDays)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    ConsentStatusChip(
+                        consentStatus = participantItem?.consentStatus,
+                        sharedCategories = summary.sharedCategories,
+                        brandAccent = brandAccent
+                    )
                 }
                 TextButton(onClick = onDismiss) {
                     Text("Fechar", color = brandAccent)
@@ -399,9 +543,16 @@ fun ParticipantDetailBottomSheet(
                 it in enabledMetrics && (it == "steps" || it == "hydration" || it in summary.availableDetails)
             }.mapNotNull { SharedCategoryOption.fromWire(it)?.titlePtBr }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (categoryLabels.isEmpty()) "Nenhuma categoria compartilhada" else
-                    "Participante autorizou compartilhamento: ${categoryLabels.joinToString()}.",
-                    modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                Text(
+                    text = if (categoryLabels.isEmpty()) {
+                        "Nenhuma categoria autorizada neste programa"
+                    } else {
+                        "Categorias autorizadas: ${categoryLabels.joinToString()}"
+                    },
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 val tooltip = rememberTooltipState(isPersistent = true)
                 val scope = rememberCoroutineScope()
                 TooltipBox(state = tooltip, positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
@@ -450,228 +601,295 @@ fun ParticipantDetailBottomSheet(
                                 text = tab.title,
                                 fontWeight = if (selectedSubTab == tab) FontWeight.Bold else FontWeight.Medium
                             )
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = participantSubTabIcon(tab),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     )
                 }
             }
 
-            when (selectedSubTab) {
-                ParticipantDetailSubTab.METRICS -> {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(7, 14, 30).forEach { days ->
-                            FilterChip(
-                                selected = selectedDays == days,
-                                enabled = !isLoading,
-                                onClick = { onChangeDays(days) },
-                                leadingIcon = if (selectedDays == days) { { Icon(Icons.Default.Check, null) } } else null,
-                                label = { Text(B2BTextFormatters.days(days)) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = brandPrimary,
-                                    selectedLabelColor = brandOnPrimary
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                when (selectedSubTab) {
+                    ParticipantDetailSubTab.METRICS -> {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(7, 14, 30).forEach { days ->
+                                FilterChip(
+                                    selected = selectedDays == days,
+                                    enabled = !isLoading,
+                                    onClick = { onChangeDays(days) },
+                                    leadingIcon = if (selectedDays == days) { { Icon(Icons.Default.Check, null) } } else null,
+                                    label = { Text(B2BTextFormatters.days(days)) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = brandPrimary,
+                                        selectedLabelColor = brandOnPrimary
+                                    )
                                 )
+                            }
+                        }
+
+                        if (isLoading) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .semantics { liveRegion = LiveRegionMode.Polite },
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                LinearProgressIndicator(
+                                    modifier = Modifier.weight(1f),
+                                    color = brandAccent
+                                )
+                                Text(
+                                    text = "Atualizando últimos ${B2BTextFormatters.days(selectedDays)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        MetricSlotSection(
+                            metricKey = SharedCategoryOption.STEPS.wireKey,
+                            enabledMetrics = enabledMetrics,
+                            sharedCategories = summary.sharedCategories,
+                            disabledNote = "Passos desativados na configuração deste programa.",
+                            unsharedNote = "Passos não compartilhados por este participante."
+                        ) {
+                            val steps = summary.stepsSection ?: return@MetricSlotSection
+                            DailyMetricCard(
+                                title = "Passos",
+                                icon = Icons.Default.DirectionsWalk,
+                                unit = "passos",
+                                source = steps.source,
+                                participant = summary.patientUserId,
+                                period = summary.periodDays,
+                                periodEnd = summary.periodEnd,
+                                brandAccent = brandAccent,
+                                readings = steps.days.map { d ->
+                                    DailyReading(
+                                        d.date,
+                                        d.steps.toLong(),
+                                        "${d.steps} ${B2BTextFormatters.plural(d.steps, "passo", "passos")} · " +
+                                            B2BTextFormatters.countLabel(d.activeMinutes, "min ativo", "min ativos")
+                                    )
+                                }
+                            )
+                        }
+
+                        MetricSlotSection(
+                            metricKey = SharedCategoryOption.HYDRATION.wireKey,
+                            enabledMetrics = enabledMetrics,
+                            sharedCategories = summary.sharedCategories,
+                            disabledNote = "Hidratação desativada na configuração deste programa.",
+                            unsharedNote = "Hidratação não compartilhada por este participante."
+                        ) {
+                            val hyd = summary.hydrationSection ?: return@MetricSlotSection
+                            DailyMetricCard(
+                                title = "Hidratação",
+                                icon = Icons.Default.LocalDrink,
+                                unit = "ml",
+                                source = hyd.source,
+                                participant = summary.patientUserId,
+                                period = summary.periodDays,
+                                periodEnd = summary.periodEnd,
+                                brandAccent = brandAccent,
+                                readings = hyd.days.map { d ->
+                                    DailyReading(d.date, d.totalMl, "${d.totalMl} ml")
+                                }
+                            )
+                        }
+
+                        MetricSlotSection(
+                            metricKey = SharedCategoryOption.MEDICATIONS.wireKey,
+                            enabledMetrics = enabledMetrics,
+                            sharedCategories = summary.sharedCategories,
+                            disabledNote = "Lembretes de medicamentos desativados neste programa.",
+                            unsharedNote = "Lembretes de medicamentos não compartilhados pelo participante."
+                        ) {
+                            ClinicalDetailControl("medicação", "medications", summary, isLoading, onClinicalDetail)
+                            val meds = summary.medicationsSection ?: return@MetricSlotSection
+                            val listText = meds.items.take(5).joinToString("\n") { m ->
+                                "• ${m.name} (${m.schedule.ifBlank { "sem horário fixo" }})"
+                            }
+                            SummaryMetricCard(
+                                icon = Icons.Default.Medication,
+                                title = "Adesão a lembretes",
+                                source = meds.source,
+                                body = "${B2BTextFormatters.countLabel(meds.userConfirmationsInPeriod, "confirmação", "confirmações")} no período. ${meds.note}" +
+                                    if (listText.isNotBlank()) "\n$listText" else "",
+                                brandAccent = brandAccent
+                            )
+                        }
+
+                        MetricSlotSection(
+                            metricKey = SharedCategoryOption.AUTHORIZED_RECORDS.wireKey,
+                            enabledMetrics = enabledMetrics,
+                            sharedCategories = summary.sharedCategories,
+                            disabledNote = "Registros de sinais e biometria desativados neste programa.",
+                            unsharedNote = "Registros de sinais e biometria não compartilhados pelo participante."
+                        ) {
+                            ClinicalDetailControl("sinais e biometria", "authorized_records", summary, isLoading, onClinicalDetail)
+                            val recs = summary.authorizedRecordsSection ?: return@MetricSlotSection
+                            val vitalLines = recs.records.take(6).map { r ->
+                                val parts = buildList {
+                                    if (r.systolicPressure != null || r.diastolicPressure != null) {
+                                        add("PA ${r.systolicPressure ?: "--"}/${r.diastolicPressure ?: "--"} mmHg")
+                                    }
+                                    r.glucoseLevel?.let { add("Glicose $it mg/dL") }
+                                    r.heartRate?.let { add("FC $it bpm") }
+                                    r.oxygenSaturation?.let {
+                                        add("SpO2 ${String.format(Locale.US, "%.0f", it)}%")
+                                    }
+                                }.joinToString(" · ")
+                                "• ${B2BTextFormatters.formatIsoDate(r.measuredAt)} (${r.origin}): $parts"
+                            }
+                            val bioLines = recs.biometries.take(6).map { b ->
+                                val parts = buildList {
+                                    add("Peso ${String.format(Locale.US, "%.1f", b.weightKg)} kg")
+                                    b.heightM?.let { add("Altura ${String.format(Locale.US, "%.2f", it)} m") }
+                                    b.imc?.let { add("IMC ${String.format(Locale.US, "%.1f", it)}") }
+                                }.joinToString(" · ")
+                                "• ${B2BTextFormatters.formatIsoDate(b.measuredAt)} (Biometria): $parts"
+                            }
+                            val combined = buildList {
+                                if (bioLines.isNotEmpty()) {
+                                    add("Composição & Peso:")
+                                    addAll(bioLines)
+                                }
+                                if (vitalLines.isNotEmpty()) {
+                                    add("Sinais Vitais:")
+                                    addAll(vitalLines)
+                                }
+                                if (bioLines.isEmpty() && vitalLines.isEmpty()) {
+                                    add("Sem medições ou biometrias autorizadas registradas no período.")
+                                }
+                                add(recs.zeroFileEgressNotice)
+                            }.joinToString("\n")
+
+                            SummaryMetricCard(
+                                icon = Icons.Default.MonitorHeart,
+                                title = B2BThemeEngine.PARTNER_RECORDS_TITLE,
+                                source = recs.source,
+                                body = combined,
+                                brandAccent = brandAccent
                             )
                         }
                     }
 
-                    if (isLoading) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = brandAccent)
-                    }
+                    ParticipantDetailSubTab.QUICK_ACTIONS -> {
+                        val features = experienceConfig.features
+                        val pendingAppt = participantItem?.pendingAppointmentsCount ?: 0
+                        val unreadMsgs = participantItem?.unreadDirectMessagesCount ?: 0
 
-                    MetricSlotSection(
-                        metricKey = SharedCategoryOption.STEPS.wireKey,
-                        enabledMetrics = enabledMetrics,
-                        sharedCategories = summary.sharedCategories,
-                        disabledNote = "Passos desativados na configuração deste programa.",
-                        unsharedNote = "Passos não compartilhados por este participante."
-                    ) {
-                        val steps = summary.stepsSection ?: return@MetricSlotSection
-                        DailyMetricCard("Passos", steps.source, "passos", summary.patientUserId, summary.periodDays, summary.periodEnd,
-                            steps.days.map { d -> DailyReading(d.date, d.steps.toLong(), "${d.steps} ${B2BTextFormatters.plural(d.steps, "passo", "passos")} · ${B2BTextFormatters.countLabel(d.activeMinutes, "min ativo", "min ativos")}") })
-                    }
-
-                    MetricSlotSection(
-                        metricKey = SharedCategoryOption.HYDRATION.wireKey,
-                        enabledMetrics = enabledMetrics,
-                        sharedCategories = summary.sharedCategories,
-                        disabledNote = "Hidratação desativada na configuração deste programa.",
-                        unsharedNote = "Hidratação não compartilhada por este participante."
-                    ) {
-                        val hyd = summary.hydrationSection ?: return@MetricSlotSection
-                        DailyMetricCard("Hidratação", hyd.source, "ml", summary.patientUserId, summary.periodDays, summary.periodEnd,
-                            hyd.days.map { d -> DailyReading(d.date, d.totalMl, "${d.totalMl} ml") })
-                    }
-
-                    MetricSlotSection(
-                        metricKey = SharedCategoryOption.MEDICATIONS.wireKey,
-                        enabledMetrics = enabledMetrics,
-                        sharedCategories = summary.sharedCategories,
-                        disabledNote = "Lembretes de medicamentos desativados neste programa.",
-                        unsharedNote = "Lembretes de medicamentos não compartilhados pelo participante."
-                    ) {
-                        ClinicalDetailControl("medicação", "medications", summary, isLoading, onClinicalDetail)
-                        val meds = summary.medicationsSection ?: return@MetricSlotSection
-                        val listText = meds.items.take(5).joinToString("\n") { m ->
-                            "• ${m.name} (${m.schedule.ifBlank { "sem horário fixo" }})"
-                        }
-                        SummaryMetricCard(
-                            title = "Adesão a lembretes (${meds.source})",
-                            body = "${B2BTextFormatters.countLabel(meds.userConfirmationsInPeriod, "confirmação", "confirmações")} no período. ${meds.note}" +
-                                if (listText.isNotBlank()) "\n$listText" else ""
-                        )
-                    }
-
-                    MetricSlotSection(
-                        metricKey = SharedCategoryOption.AUTHORIZED_RECORDS.wireKey,
-                        enabledMetrics = enabledMetrics,
-                        sharedCategories = summary.sharedCategories,
-                        disabledNote = "Registros de sinais e biometria desativados neste programa.",
-                        unsharedNote = "Registros de sinais e biometria não compartilhados pelo participante."
-                    ) {
-                        ClinicalDetailControl("sinais e biometria", "authorized_records", summary, isLoading, onClinicalDetail)
-                        val recs = summary.authorizedRecordsSection ?: return@MetricSlotSection
-                        val vitalLines = recs.records.take(6).map { r ->
-                            val parts = buildList {
-                                if (r.systolicPressure != null || r.diastolicPressure != null) {
-                                    add("PA ${r.systolicPressure ?: "--"}/${r.diastolicPressure ?: "--"} mmHg")
+                        ParticipantQuickActionCard(
+                            icon = Icons.Default.NotificationsActive,
+                            title = "Enviar lembrete de rotina",
+                            subtitle = if (features.partnerRemindersEnabled) {
+                                "Envie uma orientação de rotina por push."
+                            } else {
+                                "Desativado nas configurações do programa."
+                            },
+                            enabled = features.partnerRemindersEnabled,
+                            brandAccent = brandAccent,
+                            onClick = {
+                                if (features.partnerRemindersEnabled) {
+                                    onOpenSendReminder(summary.patientUserId, summary.participantName)
+                                } else {
+                                    onActionFeedback(
+                                        "Ative Lembretes de Rotina na aba Estúdio antes de disparar orientações."
+                                    )
                                 }
-                                r.glucoseLevel?.let { add("Glicose $it mg/dL") }
-                                r.heartRate?.let { add("FC $it bpm") }
-                                r.oxygenSaturation?.let {
-                                    add("SpO2 ${String.format(Locale.US, "%.0f", it)}%")
+                            }
+                        )
+
+                        ParticipantQuickActionCard(
+                            icon = Icons.Default.CalendarMonth,
+                            title = "Ver agendamentos",
+                            subtitle = if (features.appointmentsEnabled) {
+                                if (pendingAppt > 0) {
+                                    "${B2BTextFormatters.countLabel(pendingAppt, "solicitação", "solicitações")} aguardando confirmação."
+                                } else {
+                                    "Consulte os horários deste participante."
                                 }
-                            }.joinToString(" · ")
-                            "• ${B2BTextFormatters.formatIsoDate(r.measuredAt)} (${r.origin}): $parts"
-                        }
-                        val bioLines = recs.biometries.take(6).map { b ->
-                            val parts = buildList {
-                                add("Peso ${String.format(Locale.US, "%.1f", b.weightKg)} kg")
-                                b.heightM?.let { add("Altura ${String.format(Locale.US, "%.2f", it)} m") }
-                                b.imc?.let { add("IMC ${String.format(Locale.US, "%.1f", it)}") }
-                            }.joinToString(" · ")
-                            "• ${B2BTextFormatters.formatIsoDate(b.measuredAt)} (Biometria): $parts"
-                        }
-                        val combined = buildList {
-                            if (bioLines.isNotEmpty()) {
-                                add("Composição & Peso:")
-                                addAll(bioLines)
+                            } else {
+                                "Desativado nas configurações do programa."
+                            },
+                            enabled = features.appointmentsEnabled,
+                            brandAccent = brandAccent,
+                            onClick = {
+                                if (features.appointmentsEnabled) {
+                                    onOpenManageAppointments(summary.patientUserId, summary.participantName)
+                                } else {
+                                    onActionFeedback(
+                                        "Ative Agendamento no Estúdio para receber solicitações de horários."
+                                    )
+                                }
                             }
-                            if (vitalLines.isNotEmpty()) {
-                                add("Sinais Vitais:")
-                                addAll(vitalLines)
-                            }
-                            if (bioLines.isEmpty() && vitalLines.isEmpty()) {
-                                add("Sem medições ou biometrias autorizadas registradas no período.")
-                            }
-                            add(recs.zeroFileEgressNotice)
-                        }.joinToString("\n")
-
-                        SummaryMetricCard(
-                            title = "${B2BThemeEngine.PARTNER_RECORDS_TITLE} (${recs.source})",
-                            body = combined
                         )
-                    }
-                }
 
-                ParticipantDetailSubTab.QUICK_ACTIONS -> {
-                    val features = experienceConfig.features
-                    val pendingAppt = participantItem?.pendingAppointmentsCount ?: 0
-                    val unreadMsgs = participantItem?.unreadDirectMessagesCount ?: 0
-
-                    ParticipantQuickActionCard(
-                        icon = Icons.Default.NotificationsActive,
-                        title = "Enviar lembrete de rotina",
-                        subtitle = if (features.partnerRemindersEnabled) {
-                            "Toque para enviar orientação de rotina ou hidratação por Push."
-                        } else {
-                            "Módulo desligado nas configurações do programa."
-                        },
-                        enabled = features.partnerRemindersEnabled,
-                        brandAccent = brandAccent,
-                        onClick = {
-                            if (features.partnerRemindersEnabled) {
-                                onOpenSendReminder(summary.patientUserId, summary.participantName)
+                        ParticipantQuickActionCard(
+                            icon = Icons.Default.SupportAgent,
+                            title = "Abrir chat direto",
+                            subtitle = if (features.directPartnerChatEnabled) {
+                                if (unreadMsgs > 0) {
+                                    B2BTextFormatters.countLabel(
+                                        unreadMsgs,
+                                        "mensagem não lida",
+                                        "mensagens não lidas"
+                                    ) + " no canal direto."
+                                } else {
+                                    "Canal assíncrono com ${summary.participantName}."
+                                }
                             } else {
-                                onActionFeedback(
-                                    "Ative Lembretes de Rotina na aba Estúdio antes de disparar orientações."
-                                )
+                                "Desativado nas configurações do programa."
+                            },
+                            enabled = features.directPartnerChatEnabled,
+                            brandAccent = brandAccent,
+                            onClick = {
+                                if (features.directPartnerChatEnabled) {
+                                    onOpenDirectChat(summary.patientUserId, summary.participantName)
+                                } else {
+                                    onActionFeedback(
+                                        "Ative o Chat Direto na aba Estúdio para conversar com participantes."
+                                    )
+                                }
                             }
-                        }
-                    )
-
-                    ParticipantQuickActionCard(
-                        icon = Icons.Default.CalendarMonth,
-                        title = if (pendingAppt > 0) {
-                            "Ver agendamentos (${B2BTextFormatters.countLabel(pendingAppt, "pendente", "pendentes")})"
-                        } else {
-                            "Ver agendamentos"
-                        },
-                        subtitle = if (features.appointmentsEnabled) {
-                            if (pendingAppt > 0) {
-                                "${B2BTextFormatters.countLabel(pendingAppt, "solicitação", "solicitações")} aguardando confirmação. Toque para decidir."
-                            } else {
-                                "Agenda do programa ativa. Toque para conferir os pedidos deste participante."
-                            }
-                        } else {
-                            "Agendamento desativado nas configurações do programa."
-                        },
-                        enabled = features.appointmentsEnabled,
-                        brandAccent = brandAccent,
-                        onClick = {
-                            if (features.appointmentsEnabled) {
-                                onOpenManageAppointments(summary.patientUserId, summary.participantName)
-                            } else {
-                                onActionFeedback(
-                                    "Ative Agendamento no Estúdio para receber solicitações de horários."
-                                )
-                            }
-                        }
-                    )
-
-                    ParticipantQuickActionCard(
-                        icon = Icons.Default.SupportAgent,
-                        title = if (unreadMsgs > 0) {
-                            "Abrir chat direto (${B2BTextFormatters.countLabel(unreadMsgs, "não lida", "não lidas")})"
-                        } else {
-                            "Abrir chat direto"
-                        },
-                        subtitle = if (features.directPartnerChatEnabled) {
-                            if (unreadMsgs > 0) {
-                                "${B2BTextFormatters.countLabel(unreadMsgs, "mensagem", "mensagens")} aguardando leitura no canal direto."
-                            } else {
-                                "Canal assíncrono direto com ${summary.participantName}."
-                            }
-                        } else {
-                            "Chat direto desativado nas configurações do programa."
-                        },
-                        enabled = features.directPartnerChatEnabled,
-                        brandAccent = brandAccent,
-                        onClick = {
-                            if (features.directPartnerChatEnabled) {
-                                onOpenDirectChat(summary.patientUserId, summary.participantName)
-                            } else {
-                                onActionFeedback(
-                                    "Ative o Chat Direto na aba Estúdio para conversar com participantes."
-                                )
-                            }
-                        }
-                    )
-
-                    HorizontalDivider()
-
-                    OutlinedButton(
-                        onClick = onRequestRemove,
-                        enabled = !isRemoving,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        ),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
-                    ) {
-                        Text(
-                            text = if (isRemoving) "Encerrando vínculo..." else "Encerrar vínculo deste participante",
-                            fontWeight = FontWeight.SemiBold
                         )
+
+                        HorizontalDivider()
+
+                        OutlinedButton(
+                            onClick = onRequestRemove,
+                            enabled = !isRemoving,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteOutline,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = if (isRemoving) "Encerrando vínculo..." else "Encerrar vínculo deste participante",
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
@@ -709,7 +927,17 @@ private fun ClinicalDetailControl(label: String, category: String, summary: Part
         return
     }
     val expanded = summary.detailCategory == category
-    TextButton(enabled = !loading, onClick = { onChange(if (expanded) null else category) }) {
+    TextButton(
+        enabled = !loading,
+        onClick = { onChange(if (expanded) null else category) },
+        modifier = Modifier.heightIn(min = 48.dp)
+    ) {
+        Icon(
+            imageVector = if (expanded) Icons.Default.Close else Icons.Default.Search,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.width(8.dp))
         Text(if (expanded) "Ocultar detalhes de $label" else "Consultar detalhes de $label")
     }
 }
@@ -717,8 +945,17 @@ private fun ClinicalDetailControl(label: String, category: String, summary: Part
 private data class DailyReading(val date: String, val value: Long, val detail: String)
 
 @Composable
-private fun DailyMetricCard(title: String, source: String, unit: String, participant: String, period: Int,
-    periodEnd: String?, readings: List<DailyReading>) {
+private fun DailyMetricCard(
+    title: String,
+    icon: ImageVector,
+    unit: String,
+    source: String,
+    participant: String,
+    period: Int,
+    periodEnd: String?,
+    brandAccent: Color,
+    readings: List<DailyReading>
+) {
     val end = remember(participant, period, periodEnd) {
         runCatching { LocalDate.parse(periodEnd) }.getOrElse { LocalDate.now(ZoneId.of("America/Sao_Paulo")) }
     }
@@ -728,21 +965,85 @@ private fun DailyMetricCard(title: String, source: String, unit: String, partici
     val recorded = values.filterNotNull()
     var expanded by remember(participant, end, period) { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("$title · $source", style = MaterialTheme.typography.titleSmall)
+        Column(
+            modifier = Modifier
+                .padding(14.dp)
+                .animateContentSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = brandAccent
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Fonte: $source",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = brandAccent.copy(alpha = 0.12f)
+                ) {
+                    Text(
+                        text = "$unit/dia",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = brandAccent,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
             if (recorded.isEmpty()) {
-                Text("Sem registros no período.")
+                MutedMetricNote("Sem registros nos últimos ${B2BTextFormatters.days(period)}.")
             } else {
                 val mean = recorded.average()
-                Text("Média de ${String.format(Locale.forLanguageTag("pt-BR"), "%.1f", mean)} $unit/dia em ${B2BTextFormatters.days(recorded.size)} com registro")
+                Text(
+                    text = "Média de ${String.format(Locale.forLanguageTag("pt-BR"), "%.1f", mean)} $unit/dia · " +
+                        "${recorded.size} de ${dates.size} dias com registro",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
                 PartnerDailyBars(values, mean)
-                Text("${B2BTextFormatters.formatIsoDate(dates.first())} a ${B2BTextFormatters.formatIsoDate(dates.last())} · linha tracejada indica a média",
-                    style = MaterialTheme.typography.labelSmall)
-                TextButton(onClick = { expanded = !expanded }) {
+                Text(
+                    text = "${B2BTextFormatters.formatIsoDate(dates.first())} a ${B2BTextFormatters.formatIsoDate(dates.last())} · linha tracejada indica a média",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(
+                    onClick = { expanded = !expanded },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
                     Text(if (expanded) "Ocultar detalhes diários" else "Ver detalhes diários de $title")
                 }
-                if (expanded) dates.forEach { date ->
-                    Text("${B2BTextFormatters.formatIsoDate(date)} · ${byDate[date]?.detail ?: "Sem registro"}")
+                AnimatedVisibility(visible = expanded) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        dates.forEach { date ->
+                            Text(
+                                text = "${B2BTextFormatters.formatIsoDate(date)} · ${byDate[date]?.detail ?: "Sem registro"}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -750,17 +1051,46 @@ private fun DailyMetricCard(title: String, source: String, unit: String, partici
 }
 
 @Composable
-private fun SummaryMetricCard(title: String, body: String) {
+private fun SummaryMetricCard(
+    icon: ImageVector,
+    title: String,
+    source: String,
+    body: String,
+    brandAccent: Color
+) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text(text = title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = brandAccent
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Fonte: $source",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             Text(text = body, style = MaterialTheme.typography.bodySmall)
         }
     }
@@ -797,11 +1127,24 @@ private fun ClinicalDetailsGuidance(message: String, accent: Color) {
 
 @Composable
 private fun MutedMetricNote(message: String) {
-    Text(
-        text = message,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+    }
 }
 
 @Composable
@@ -813,29 +1156,58 @@ private fun ParticipantQuickActionCard(
     brandAccent: Color,
     onClick: () -> Unit
 ) {
+    val stateDescriptionText = if (enabled) {
+        "Disponível"
+    } else {
+        "Desativado nas configurações do programa"
+    }
     Surface(
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .heightIn(min = 56.dp),
         shape = RoundedCornerShape(12.dp),
         color = if (enabled) {
             MaterialTheme.colorScheme.surface
         } else {
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         },
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        border = BorderStroke(
+            1.dp,
+            if (enabled) brandAccent.copy(alpha = 0.25f) else MaterialTheme.colorScheme.outlineVariant
+        )
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier
+                .padding(12.dp)
+                .semantics { stateDescription = stateDescriptionText },
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (enabled) brandAccent else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Column(modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (enabled) {
+                            brandAccent.copy(alpha = 0.12f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = if (enabled) brandAccent else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleSmall,
@@ -848,6 +1220,11 @@ private fun ParticipantQuickActionCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = if (enabled) brandAccent else MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

@@ -71,16 +71,35 @@ class PartnerBrandAppearanceTest {
         login()
         compose.onNodeWithText("Acesse sua conta").assertIsDisplayed()
         compose.onNodeWithText("Braga Saúde").assertDoesNotExist()
+        compose.onNodeWithText("Criar conta").assertIsDisplayed()
+        compose.onNodeWithText("Criar Nova Conta").assertDoesNotExist()
         compose.onNodeWithTag("login_button").assertIsDisplayed()
+        // O bloco legal fica ancorado acima do crédito e não depende de rolagem na 1ª dobra.
+        compose.onNodeWithTag("login_legal_footer").assertIsDisplayed()
+        compose.onNodeWithText("Termos de Uso").assertIsDisplayed()
+        compose.onNodeWithText("Privacidade").assertIsDisplayed()
+        compose.onNodeWithText("Continuar com o Google").assertIsDisplayed()
         screenshot("01-login-neutro")
         compose.onNodeWithText("E-mail").performTextInput("person@example.test")
         compose.onNodeWithText("Senha", substring = false).performTextInput("example-password")
         compose.onNodeWithTag("login_button").performClick()
         verify { auth.signInWithEmail("person@example.test", "example-password") }
-        compose.onNodeWithTag("login_content").performScrollToNode(hasTestTag("technology_credit"))
         compose.onNodeWithTag("technology_credit").assertIsDisplayed()
         compose.onAllNodesWithText("Tecnologia Braga Saúde").assertCountEquals(1)
         screenshot("02-login-rodape")
+    }
+
+    @Test fun forgotPasswordUsesAppBarAndReturnsToLogin() {
+        login()
+        compose.onNodeWithText("Esqueci minha senha").performScrollTo().performClick()
+        compose.onNodeWithText("Recuperação de senha").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Voltar ao login").assertIsDisplayed()
+        compose.onNodeWithText(
+            "Digite o e-mail cadastrado para receber o código de verificação:"
+        ).assertIsDisplayed()
+        screenshot("02b-recuperacao-senha")
+        compose.onNodeWithContentDescription("Voltar ao login").performClick()
+        compose.onNodeWithText("Acesse sua conta").assertIsDisplayed()
     }
 
     @Test fun companyShortcutKeepsBusinessSignupAndDiscreetBranding() {
@@ -120,7 +139,9 @@ class PartnerBrandAppearanceTest {
         compose.onNodeWithText("Acesse sua conta").assertIsDisplayed()
         screenshot("05-login-escuro-fonte-ampliada")
         compose.onNodeWithTag("login_button").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("login_content").performScrollToNode(hasTestTag("technology_credit"))
+        // Com fonte ampliada a tab bar quebra o rótulo em duas linhas, mas o bloco legal
+        // continua ancorado e visível acima do crédito.
+        compose.onNodeWithTag("login_legal_footer").assertIsDisplayed()
         compose.onNodeWithTag("technology_credit").assertIsDisplayed()
         compose.onNodeWithText("Privacidade").assertIsDisplayed()
         screenshot("08-login-escuro-rodape")
@@ -144,6 +165,8 @@ class PartnerBrandAppearanceTest {
         screenshot("06-estudio-previa-entrada-neutra")
         compose.onNodeWithText("Modo escuro").performClick()
         screenshot("07-estudio-previa-escura")
+        compose.onNodeWithText("Texto ampliado").performClick()
+        screenshot("07b-estudio-previa-texto-ampliado")
     }
 
     @Test fun partnerPaletteKeepsContrastSemanticErrorsAndAppThemePreference() {
