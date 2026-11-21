@@ -331,6 +331,7 @@ fun LoginScreen(
                     .testTag("login_content")
                     .imePadding()
                     .padding(horizontal = 20.dp, vertical = 12.dp),
+                contentPadding = PaddingValues(bottom = 96.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(if (isKeyboardVisible) 8.dp else 12.dp)
             ) {
