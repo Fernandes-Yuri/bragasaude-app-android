@@ -49,7 +49,15 @@ class BragaB2BBackwardCompatTest {
             api.updatePartnerConsent("prog-1", listOf("steps"))
             val legacyUpdate = server.takeRequest()
             assertEquals("/api/b2b/enrollments/prog-1/consent", legacyUpdate.path)
-            assertEquals(false, org.json.JSONObject(legacyUpdate.body.readUtf8()).has("familyShareEnabled"))
+            val legacyConsent = org.json.JSONObject(legacyUpdate.body.readUtf8())
+            assertEquals(false, legacyConsent.has("familyShareEnabled"))
+            assertEquals(false, legacyConsent.has("consentVersion"))
+
+            server.enqueue(MockResponse().setBody(context))
+            api.updatePartnerConsent("prog-1", listOf("medications"), confirmedDetails = true)
+            val confirmedConsent = org.json.JSONObject(server.takeRequest().body.readUtf8())
+            assertEquals("program-routine-v1", confirmedConsent.getString("consentVersion"))
+            assertEquals("medications", confirmedConsent.getJSONArray("sharedCategories").getString(0))
 
             for (enabled in listOf(true, false)) {
                 server.enqueue(MockResponse().setBody(context.replace(":true", ":$enabled")))
@@ -295,6 +303,19 @@ class BragaB2BBackwardCompatTest {
             assertNull(summary?.authorizedRecordsSection)
             val summaryReq = server.takeRequest()
             assertEquals("/api/b2b/program/me/participants/patient-1/summary?days=30", summaryReq.path)
+
+            // Um gateway antigo pode enviar detalhes no resumo inicial. O cliente descarta esses campos.
+            val legacy = """{"summary":{"patientUserId":"patient-1","sharedCategories":["medications","authorized_records"],
+                "medicationsSection":{"items":[{"name":"Exemplo"}]},"authorizedRecordsSection":{"records":[{}]}}}"""
+            server.enqueue(MockResponse().setBody(legacy))
+            val initial = api.getPartnerParticipantSummary("patient-1")
+            assertNotNull(initial)
+            assertNull(initial?.medicationsSection)
+            assertNull(initial?.authorizedRecordsSection)
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody(legacy))
+            assertNull(api.getPartnerParticipantSummary("patient-1", detailCategory = "medications"))
+            server.takeRequest()
 
             // Resposta 403/IDOR em acesso cruzado deve retornar null sem lancar excecao na UI
             server.enqueue(MockResponse().setResponseCode(403).setBody("""{"detail":"Participante sem vínculo ativo."}"""))
@@ -630,6 +651,7 @@ class BragaB2BBackwardCompatTest {
                 MockResponse().setBody(
                     """
                     {
+                      "kpis": {"dailyActiveUsers":[0,1,2,1,2,3,1],"appointmentsDelta":-2},
                       "participants": [
                         {
                           "patientUserId": "patient-1",
@@ -667,6 +689,8 @@ class BragaB2BBackwardCompatTest {
             )
             assertNotNull(page)
             assertEquals(1, page!!.participants.size)
+            assertEquals(listOf(0, 1, 2, 1, 2, 3, 1), page.kpis?.dailyActiveUsers)
+            assertEquals(-2, page.kpis?.appointmentsDelta)
             val p = page.participants[0]
             assertEquals(listOf("steps", "authorized_records"), p.effectiveCategories)
             assertEquals(listOf("hydration"), p.missingProgramCategories)
@@ -695,6 +719,8 @@ class BragaB2BBackwardCompatTest {
                         "patientUserId": "patient-1",
                         "participantName": "Ana Silva",
                         "periodDays": 14,
+                        "detailCategory": "authorized_records",
+                        "availableDetails": ["authorized_records"],
                         "sharedCategories": ["authorized_records"],
                         "familySupportActive": true,
                         "familySupportSummary": "Apoio familiar ativo",
@@ -728,7 +754,7 @@ class BragaB2BBackwardCompatTest {
                 )
             )
 
-            val summary = api.getPartnerParticipantSummary("patient-1", days = 14)
+            val summary = api.getPartnerParticipantSummary("patient-1", days = 14, detailCategory = "authorized_records")
             assertNotNull(summary)
             assertEquals(14, summary!!.periodDays)
             assertTrue(summary.familySupportActive)
@@ -738,7 +764,7 @@ class BragaB2BBackwardCompatTest {
             assertEquals(1, summary.authorizedRecordsSection!!.biometries.size)
             assertEquals(71.4, summary.authorizedRecordsSection!!.biometries[0].weightKg, 0.01)
             assertEquals(25.3, summary.authorizedRecordsSection!!.biometries[0].imc!!, 0.01)
-            assertEquals("/api/b2b/program/me/participants/patient-1/summary?days=14", server.takeRequest().path)
+            assertEquals("/api/b2b/program/me/participants/patient-1/summary?days=14&detailCategory=authorized_records", server.takeRequest().path)
         }
     }
 

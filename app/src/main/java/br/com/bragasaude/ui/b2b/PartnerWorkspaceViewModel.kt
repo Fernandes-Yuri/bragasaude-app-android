@@ -190,7 +190,18 @@ class PartnerWorkspaceViewModel @Inject constructor(
         _generatedPdf.value = null
     }
 
+    private var summaryJob: Job? = null
+
+    fun collapseClinicalDetails() {
+        summaryJob?.cancel()
+        _isLoadingSummary.value = false
+        _selectedSummary.value = _selectedSummary.value?.copy(detailCategory = null,
+            medicationsSection = null, authorizedRecordsSection = null)
+    }
+
     fun clearSelectedSummary() {
+        summaryJob?.cancel()
+        _isLoadingSummary.value = false
         _selectedSummary.value = null
         _selectedParticipantItem.value = null
     }
@@ -239,8 +250,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
             } else {
                 _walletKpis.value = null
                 _participants.value = emptyList()
-                _selectedSummary.value = null
-                _selectedParticipantItem.value = null
+                clearSelectedSummary()
                 _nextCursor.value = null
                 _hasMore.value = false
                 _statusMessage.value = "Não foi possível consultar a carteira."
@@ -381,8 +391,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
             _walletQuery.value = ""
             _walletCategoryFilter.value = null
             _walletAttentionOnly.value = false
-            _selectedSummary.value = null
-            _selectedParticipantItem.value = null
+            clearSelectedSummary()
             _activeDirectChatPage.value = null
             _directChatTargetPatientId.value = null
             val selected = b2bContextRepository.selectContext(uid, target)
@@ -426,8 +435,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
                 } else {
                     _walletKpis.value = null
                     _participants.value = emptyList()
-                    _selectedSummary.value = null
-                    _selectedParticipantItem.value = null
+                    clearSelectedSummary()
                     _nextCursor.value = null
                     _hasMore.value = false
                 }
@@ -719,19 +727,23 @@ class PartnerWorkspaceViewModel @Inject constructor(
         }
     }
 
-    fun openParticipantSummary(patientId: String, days: Int = _selectedPeriodDays.value) {
+    fun openParticipantSummary(patientId: String, days: Int = _selectedPeriodDays.value, detailCategory: String? = null) {
         val clamped = days.coerceIn(1, 90)
-        _selectedPeriodDays.value = clamped
-        _participants.value.firstOrNull { it.patientUserId == patientId }?.let { matched ->
-            _selectedParticipantItem.value = matched
-        }
-        workspaceScope.launch {
-            _isLoadingSummary.value = true
-            val summary = apiClient.getPartnerParticipantSummary(patientId, clamped)
+        val current = _selectedSummary.value
+        if (detailCategory != null &&
+            (current == null || current.patientUserId != patientId || detailCategory !in current.availableDetails)
+        ) return
+        if (current?.patientUserId == patientId) collapseClinicalDetails() else clearSelectedSummary()
+        _selectedParticipantItem.value = _participants.value.firstOrNull { it.patientUserId == patientId }
+        _isLoadingSummary.value = true
+        summaryJob = workspaceScope.launch {
+            val summary = apiClient.getPartnerParticipantSummary(patientId, clamped, detailCategory)
             _isLoadingSummary.value = false
             if (summary != null) {
                 _selectedSummary.value = summary
+                _selectedPeriodDays.value = summary.periodDays
             } else {
+                clearSelectedSummary()
                 _statusMessage.value = "Não foi possível carregar os registros autorizados deste participante."
             }
         }
@@ -750,8 +762,7 @@ class PartnerWorkspaceViewModel @Inject constructor(
                     current.copy(activeParticipants = (current.activeParticipants - 1).coerceAtLeast(0))
                 }
                 if (_selectedSummary.value?.patientUserId == cleanId) {
-                    _selectedSummary.value = null
-                    _selectedParticipantItem.value = null
+                    clearSelectedSummary()
                 }
                 _statusMessage.value = "Vínculo encerrado. A vaga foi liberada na sua franquia."
             } else {

@@ -3,12 +3,13 @@ package br.com.bragasaude.ui.b2b
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -47,15 +48,6 @@ fun PartnerConsentSheet(
     var enrollments by remember { mutableStateOf<List<B2BContextDescriptor>>(emptyList()) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    var selectedCategories by remember {
-        mutableStateOf(
-            setOf(
-                SharedCategoryOption.STEPS.wireKey,
-                SharedCategoryOption.HYDRATION.wireKey
-            )
-        )
-    }
-
     LaunchedEffect(initialInviteCode, initialProgramId) {
         val contexts = apiClient.getB2BContexts()
         enrollments = contexts.filter {
@@ -65,9 +57,6 @@ fun PartnerConsentSheet(
             ?: enrollments.firstOrNull()
         if (participant != null) {
             activeEnrollment = participant
-            if (participant.sharedCategories.isNotEmpty()) {
-                selectedCategories = participant.sharedCategories.toSet()
-            }
         }
         val cleanInitial = initialInviteCode.trim().uppercase()
         if (cleanInitial.length >= 4 && B2BOnboardingValidator.isValidInviteCode(cleanInitial)) {
@@ -79,6 +68,13 @@ fun PartnerConsentSheet(
 
     val consentProgramId = invitePreview?.programId
         ?: activeEnrollment?.programId?.takeIf { inviteCode.isBlank() }
+    var selectedCategories by remember(consentProgramId) {
+        mutableStateOf(enrollments.firstOrNull { it.programId == consentProgramId }?.sharedCategories.orEmpty().toSet())
+    }
+    var confirmedDetails by remember(consentProgramId, selectedCategories) { mutableStateOf(false) }
+    val clinicalSelection = SharedCategoryOption.entries.filter {
+        it.wireKey in selectedCategories && it in setOf(SharedCategoryOption.MEDICATIONS, SharedCategoryOption.AUTHORIZED_RECORDS)
+    }
     var familyShareEnabled by remember(consentProgramId) {
         mutableStateOf(enrollments.firstOrNull { it.programId == consentProgramId }?.familyShareEnabled ?: false)
     }
@@ -150,7 +146,6 @@ fun PartnerConsentSheet(
                             enabled = !isWorking,
                             onClick = {
                                 activeEnrollment = enrollment
-                                selectedCategories = enrollment.sharedCategories.toSet()
                                 errorMessage = null
                             },
                             label = { Text(enrollment.programName ?: "Programa parceiro") }
@@ -286,12 +281,9 @@ fun PartnerConsentSheet(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(enabled = !isWorking) {
-                                selectedCategories = if (isChecked) {
-                                    selectedCategories - option.wireKey
-                                } else {
-                                    selectedCategories + option.wireKey
-                                }
+                            .toggleable(value = isChecked, enabled = !isWorking, role = Role.Checkbox) { checked ->
+                                selectedCategories = if (checked) selectedCategories + option.wireKey
+                                    else selectedCategories - option.wireKey
                                 errorMessage = null
                             },
                         shape = RoundedCornerShape(14.dp),
@@ -315,14 +307,7 @@ fun PartnerConsentSheet(
                         ) {
                             Checkbox(
                                 checked = isChecked,
-                                onCheckedChange = { checked ->
-                                    selectedCategories = if (checked) {
-                                        selectedCategories + option.wireKey
-                                    } else {
-                                        selectedCategories - option.wireKey
-                                    }
-                                    errorMessage = null
-                                },
+                                onCheckedChange = null,
                                 enabled = !isWorking,
                                 colors = CheckboxDefaults.colors(checkedColor = brandColor)
                             )
@@ -379,8 +364,19 @@ fun PartnerConsentSheet(
                     )
                 }
 
+                if (clinicalSelection.isNotEmpty()) {
+                    val categories = clinicalSelection.joinToString { it.titlePtBr }
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier
+                        .fillMaxWidth().toggleable(value = confirmedDetails, enabled = !isWorking,
+                            role = Role.Checkbox, onValueChange = { confirmedDetails = it })) {
+                        Checkbox(checked = confirmedDetails, onCheckedChange = null)
+                        Text("Autorizo o gestor de $effectiveProgramName a consultar os detalhes de $categories para acompanhar minha rotina.",
+                            modifier = Modifier.padding(8.dp))
+                    }
+                }
                 val hasValidCategories =
-                    B2BOnboardingValidator.isValidConsentSelection(selectedCategories)
+                    B2BOnboardingValidator.isValidConsentSelection(selectedCategories) &&
+                        (clinicalSelection.isEmpty() || confirmedDetails)
                 val currentActive = activeEnrollment
                 val isUpdatingSameProgram = currentActive != null &&
                     (inviteCode.isBlank() || invitePreview?.programId == currentActive.programId)
@@ -393,7 +389,7 @@ fun PartnerConsentSheet(
                             isWorking = true
                             errorMessage = null
                             scope.launch {
-                                val res = apiClient.updatePartnerConsent(progId, selectedCategories, familyShareEnabled)
+                                val res = apiClient.updatePartnerConsent(progId, selectedCategories, familyShareEnabled, confirmedDetails = confirmedDetails)
                                 isWorking = false
                                 if (res.isSuccess && res.activeContext != null) {
                                     activeEnrollment = res.activeContext
@@ -412,7 +408,7 @@ fun PartnerConsentSheet(
                         enabled = hasValidCategories && !isWorking,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp),
+                            .heightIn(min = 52.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = brandColor)
                     ) {
@@ -466,7 +462,7 @@ fun PartnerConsentSheet(
                             isWorking = true
                             errorMessage = null
                             scope.launch {
-                                val res = apiClient.joinPartnerProgram(inviteCode, selectedCategories, familyShareEnabled)
+                                val res = apiClient.joinPartnerProgram(inviteCode, selectedCategories, familyShareEnabled, confirmedDetails = confirmedDetails)
                                 isWorking = false
                                 if (res.isSuccess && res.activeContext != null) {
                                     activeEnrollment = res.activeContext
@@ -487,7 +483,7 @@ fun PartnerConsentSheet(
                         enabled = canJoin && !isWorking,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp),
+                            .heightIn(min = 52.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = brandColor)
                     ) {

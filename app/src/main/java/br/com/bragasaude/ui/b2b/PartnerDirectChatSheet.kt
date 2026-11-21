@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,16 +95,17 @@ fun PartnerDirectChatBottomSheet(
                 }
             }
 
+            val darkNotice = MaterialTheme.colorScheme.surface.luminance() < 0.5f
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f),
+                color = if (darkNotice) Color(0xFF472600) else Color(0xFFFFF3E0),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f))
             ) {
                 Text(
                     text = B2BThemeEngine.DIRECT_CHAT_NON_URGENCY_NOTICE,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    color = if (darkNotice) Color(0xFFFFDBAC) else Color(0xFF713900),
                     modifier = Modifier.padding(10.dp)
                 )
             }

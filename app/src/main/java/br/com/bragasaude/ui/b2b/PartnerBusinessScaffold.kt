@@ -318,6 +318,10 @@ private fun PartnerBusinessContent(
             onChangeDays = { newDays ->
                 partnerViewModel.openParticipantSummary(summary.patientUserId, newDays)
             },
+            onClinicalDetail = { category ->
+                if (category == null) partnerViewModel.collapseClinicalDetails()
+                else partnerViewModel.openParticipantSummary(summary.patientUserId, summary.periodDays, category)
+            },
             onActionFeedback = { feedback ->
                 Toast.makeText(context, feedback, Toast.LENGTH_LONG).show()
             },
@@ -636,23 +640,24 @@ private fun PartnerBusinessContent(
             Column(modifier = Modifier.fillMaxWidth()) {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                     BusinessSessionTab.entries.forEach { tab ->
+                        val count = when (tab) {
+                            BusinessSessionTab.CARE -> unreadCountTotal
+                            BusinessSessionTab.OPERATIONS -> pendingAppointmentsCount
+                            else -> 0
+                        }
+                        val spokenLabel = when {
+                            count == 0 -> tab.label
+                            tab == BusinessSessionTab.CARE -> "${tab.label}, ${B2BTextFormatters.countLabel(count, "mensagem não lida", "mensagens não lidas")}"
+                            else -> "${tab.label}, ${B2BTextFormatters.countLabel(count, "agendamento pendente", "agendamentos pendentes")}"
+                        }
                         NavigationBarItem(
                             selected = selectedTab == tab,
                             onClick = { selectedTab = tab },
-                            icon = {
-                                Icon(
-                                    imageVector = tab.icon,
-                                    contentDescription = tab.label
-                                )
-                            },
+                            icon = { Icon(imageVector = tab.icon, contentDescription = spokenLabel) },
                             label = {
-                                val badgeSuffix = when (tab) {
-                                    BusinessSessionTab.CARE -> if (unreadCountTotal > 0) " ($unreadCountTotal)" else ""
-                                    BusinessSessionTab.OPERATIONS -> if (pendingAppointmentsCount > 0) " ($pendingAppointmentsCount)" else ""
-                                    else -> ""
-                                }
                                 Text(
-                                    text = "${tab.shortLabel}$badgeSuffix",
+                                    text = if (count > 0) "${tab.shortLabel} ($count)" else tab.shortLabel,
+                                    modifier = Modifier.clearAndSetSemantics {},
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -1035,7 +1040,7 @@ internal fun PartnerStatusChip(
     val brand = partnerBrandColors()
     val label = status?.labelPtBr ?: "Configuração inicial"
     val approved = status == PartnerApprovalStatus.APPROVED
-    val contentColor = if (approved) brand.accent else MaterialTheme.colorScheme.onSurfaceVariant
+    val contentColor = readableBrandAccent(if (approved) brand.primary else MaterialTheme.colorScheme.onSurfaceVariant, brand.softSurface)
     Surface(
         modifier = modifier.clearAndSetSemantics {
             contentDescription = "Status do programa: $label"
@@ -1493,6 +1498,7 @@ private fun BusinessCompanyTabContent(
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.SemiBold
                         )
+                        if (prog.seatLimit > 0) PartnerProgress(prog.activeParticipants.toFloat() / prog.seatLimit)
                         prog.inviteCode?.takeIf { it.isNotBlank() }?.let { code ->
                             Text(
                                 text = "Código atual: $code (${if (prog.invitePaused) "pausado" else "ativo"})",

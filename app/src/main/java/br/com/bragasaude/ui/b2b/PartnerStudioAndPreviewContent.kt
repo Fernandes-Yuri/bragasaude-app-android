@@ -3,6 +3,9 @@ package br.com.bragasaude.ui.b2b
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,7 +18,6 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FormatSize
-import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.SupportAgent
@@ -99,6 +101,9 @@ fun FirstAccessActivationChecklistCard(
                 fontWeight = FontWeight.Bold,
                 color = brandAccent
             )
+            val completed = listOf(approved, customized, hasParticipants).count { it }
+            Text("$completed de 3 etapas concluídas")
+            PartnerProgress(completed / 3f)
             ChecklistActionRow(
                 done = approved,
                 title = "1. Cadastro CNPJ e aprovação",
@@ -149,8 +154,8 @@ private fun ChecklistActionRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Icon(
-            imageVector = Icons.Default.CheckCircle,
-            contentDescription = null,
+            imageVector = if (done) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+            contentDescription = if (done) "Etapa concluída" else "Etapa pendente",
             tint = if (done) brandPrimary else MaterialTheme.colorScheme.outlineVariant,
             modifier = Modifier.size(20.dp)
         )
@@ -271,7 +276,7 @@ fun PartnerStudioTabContent(
                 // Grade com wrap em 2 colunas: mantém os dois primeiros cards inteiros na
                 // tela, sem o corte no meio da palavra causado pela borda do carrossel.
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val cardWidth = (maxWidth - 14.dp) / 2f
+                    val cardWidth = if (LocalDensity.current.fontScale >= 1.5f) maxWidth else (maxWidth - 14.dp) / 2f
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -282,7 +287,7 @@ fun PartnerStudioTabContent(
                             Card(
                                 modifier = Modifier
                                     .width(cardWidth)
-                                    .clickable {
+                                    .selectable(selected = selected, role = Role.RadioButton) {
                                         if (!selected) {
                                             if (draftConfig != ProgramExperienceConfigDto.defaultForTemplate(draftConfig.templateKey)) {
                                                 pendingTemplateConfirm = tpl
@@ -305,6 +310,12 @@ fun PartnerStudioTabContent(
                                     modifier = Modifier.padding(12.dp),
                                     verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
+                                    if (selected) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Text("Selecionado", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
                                     Text(
                                         text = tpl.title,
                                         style = MaterialTheme.typography.labelLarge,
@@ -486,7 +497,7 @@ fun PartnerStudioTabContent(
                                 .padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 listOf("IN_PERSON" to "Presencial", "REMOTE" to "Remoto").forEach { (key, lbl) ->
                                     val selected = draftConfig.appointmentsPolicy.allowedModalities.contains(key)
                                     FilterChip(
@@ -500,11 +511,14 @@ fun PartnerStudioTabContent(
                                                 )
                                             )
                                         },
+                                        leadingIcon = if (selected) {
+                                            { Icon(Icons.Default.CheckCircle, null, Modifier.size(18.dp)) }
+                                        } else null,
                                         label = { Text(lbl) }
                                     )
                                 }
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 listOf(
                                     "REQUEST_CONFIRMATION" to "Solicitar no app",
                                     "EXTERNAL_LINK_ONLY" to "Link HTTPS externo"
@@ -518,6 +532,9 @@ fun PartnerStudioTabContent(
                                                 )
                                             )
                                         },
+                                        leadingIcon = if (draftConfig.appointmentsPolicy.bookingMode == modeKey) {
+                                            { Icon(Icons.Default.CheckCircle, null, Modifier.size(18.dp)) }
+                                        } else null,
                                         label = { Text(modeLbl) }
                                     )
                                 }
@@ -884,7 +901,7 @@ fun PartnerPreviewTabContent(
                             label = { Text("Modo escuro") },
                             leadingIcon = {
                                 Icon(
-                                    imageVector = if (simulateDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                    imageVector = if (simulateDarkTheme) Icons.Default.CheckCircle else Icons.Default.DarkMode,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -900,7 +917,7 @@ fun PartnerPreviewTabContent(
                             label = { Text("Texto ampliado") },
                             leadingIcon = {
                                 Icon(
-                                    imageVector = Icons.Default.FormatSize,
+                                    imageVector = if (simulateLargeText) Icons.Default.CheckCircle else Icons.Default.FormatSize,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -933,7 +950,7 @@ fun PartnerPreviewTabContent(
                 } else lightColorScheme(background = previewSurface, surface = Color.White)
                 val density = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(density.density,
-                    density.fontScale * if (simulateLargeText) 1.3f else 1f)) {
+                    if (simulateLargeText) maxOf(2f, density.fontScale) else density.fontScale)) {
                     MaterialTheme(colorScheme = previewScheme) {
                         PartnerBrandTheme(primaryColorHex) {
                             Box(modifier = Modifier.padding(16.dp)) {

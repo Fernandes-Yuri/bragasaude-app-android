@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="b2b_individual_reminder_limit">
+        <item quantity="one">Até %1$d lembrete individual por participante ao dia.</item>
+        <item quantity="other">Até %1$d lembretes individuais por participante ao dia.</item>
+    </plurals>
+    <plurals name="b2b_batch_reminder_limit">
+        <item quantity="one">Até %1$d envio em lote por programa ao dia. Os lembretes não alteram medicações.</item>
+        <item quantity="other">Até %1$d envios em lote por programa ao dia. Os lembretes não alteram medicações.</item>
+    </plurals>
+</resources>
