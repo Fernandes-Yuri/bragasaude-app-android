@@ -1,6 +1,7 @@
 package br.com.bragasaude.ui.b2b
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -89,5 +90,14 @@ class PartnerWalletKpisFormattingTest {
             "Participantes: 2 ativos e 1 inativo. 3 mensagens não lidas.",
             walletMembersSpoken(2, 1, 3)
         )
+    }
+
+    @Test
+    fun `periodo da carteira usa fuso de Brasilia e rotulo local`() {
+        val label = walletPeriodLabel("2026-11-21T02:11:31Z", 7)
+        assertTrue(label.contains("Atividade no programa · 7 dias"))
+        assertTrue(label.contains("20/11/2026"))
+        assertTrue(label.contains("horário de Brasília"))
+        assertEquals("Atividade no programa · 7 dias", walletPeriodLabel(null, 7))
     }
 }

@@ -41,7 +41,7 @@ private val LightColorScheme = lightColorScheme(
     onSurfaceVariant = OnSurfaceVariant,
     error = Error,
     errorContainer = AccentRedLight,
-    onErrorContainer = AccentRed
+    onErrorContainer = Color(0xFF9A3412)
 )
 
 // ESQUEMA ESCURO HARMONIOSO E ELEGANTE (Verde-ardósia escuro, sem cortes bruscos)
