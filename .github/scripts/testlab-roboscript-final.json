@@ -1,0 +1,407 @@
+[
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Sair da Conta"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Sair da conta"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Sair da conta?"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir Perfil e Conta"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir Perfil e Conta?"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir Definitivamente"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Pausar conta"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Pausar sua conta?"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir Vínculo Familiar"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir vínculo familiar"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir vínculo familiar?"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir vínculo"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir Medicamento"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir Medicamento do Cuidado"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir publicação"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir publicação?"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir todo o histórico?"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir tudo"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir todas as conversas"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir todas"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir esta conversa?"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir este exame?"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir exame"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Excluir repetido"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "contentDescription": "Excluir vínculo familiar"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "contentDescription": "Excluir medicamento"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "contentDescription": "Excluir conversa"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "resourceIdRegex": ".*family\\.revoke.*"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "textRegex": "(?i).*(sair da conta|excluir perfil|excluir definitivamente|excluir v[ií]nculo|pausar conta).*"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Novo código"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Pausar convites"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "text": "Retomar convites"
+   }
+  ]
+ },
+ {
+  "eventType": "ELEMENT_IGNORED",
+  "elementDescriptors": [
+   {
+    "textRegex": "(?i).*(novo c[oó]digo|pausar convites|retomar convites|regenerar c[oó]digo).*"
+   }
+  ]
+ },
+ {
+  "eventType": "WAIT_FOR_ELEMENT",
+  "delayTime": 120000,
+  "elementDescriptors": [
+   {
+    "text": "Carteira global"
+   }
+  ]
+ },
+ {
+  "eventType": "WAIT",
+  "delayTime": 3000
+ },
+ {
+  "eventType": "TAKE_SCREENSHOT",
+  "screenshotName": "final-01-carteira"
+ },
+ {
+  "eventType": "VIEW_CLICKED",
+  "elementDescriptors": [
+   {
+    "text": "Jose Fred"
+   }
+  ]
+ },
+ {
+  "eventType": "WAIT_FOR_ELEMENT",
+  "delayTime": 30000,
+  "elementDescriptors": [
+   {
+    "text": "Passos"
+   }
+  ]
+ },
+ {
+  "eventType": "WAIT",
+  "delayTime": 2500
+ },
+ {
+  "eventType": "TAKE_SCREENSHOT",
+  "screenshotName": "final-02-detalhe-7d"
+ },
+ {
+  "eventType": "VIEW_CLICKED",
+  "elementDescriptors": [
+   {
+    "text": "14 dias"
+   }
+  ]
+ },
+ {
+  "eventType": "WAIT",
+  "delayTime": 2500
+ },
+ {
+  "eventType": "TAKE_SCREENSHOT",
+  "screenshotName": "final-03-detalhe-14d"
+ },
+ {
+  "eventType": "VIEW_CLICKED",
+  "elementDescriptors": [
+   {
+    "text": "Consultar detalhes de medicação"
+   }
+  ]
+ },
+ {
+  "eventType": "WAIT",
+  "delayTime": 3000
+ },
+ {
+  "eventType": "TAKE_SCREENSHOT",
+  "screenshotName": "final-04-detalhe-medicacao"
+ },
+ {
+  "eventType": "PRESSED_BACK"
+ },
+ {
+  "eventType": "WAIT",
+  "delayTime": 2000
+ },
+ {
+  "eventType": "TAKE_SCREENSHOT",
+  "screenshotName": "final-05-volta-carteira"
+ },
+ {
+  "eventType": "VIEW_CLICKED",
+  "elementDescriptors": [
+   {
+    "text": "Estúdio"
+   }
+  ]
+ },
+ {
+  "eventType": "WAIT",
+  "delayTime": 2500
+ },
+ {
+  "eventType": "VIEW_CLICKED",
+  "elementDescriptors": [
+   {
+    "text": "Prévia ao vivo"
+   }
+  ]
+ },
+ {
+  "eventType": "WAIT",
+  "delayTime": 2000
+ },
+ {
+  "eventType": "VIEW_CLICKED",
+  "elementDescriptors": [
+   {
+    "text": "Texto ampliado"
+   }
+  ]
+ },
+ {
+  "eventType": "WAIT",
+  "delayTime": 2000
+ },
+ {
+  "eventType": "TAKE_SCREENSHOT",
+  "screenshotName": "final-06-previa-texto-ampliado"
+ },
+ {
+  "eventType": "VIEW_CLICKED",
+  "elementDescriptors": [
+   {
+    "text": "Modo escuro"
+   }
+  ]
+ },
+ {
+  "eventType": "WAIT",
+  "delayTime": 2000
+ },
+ {
+  "eventType": "TAKE_SCREENSHOT",
+  "screenshotName": "final-07-previa-escuro"
+ }
+]
