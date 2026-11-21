@@ -467,7 +467,13 @@ data class PartnerWalletKpisDto(
     val inactiveUsers: Int = 0,
     val retentionRate: Double? = null,
     val remindersRead: Int = 0,
+    /** Total de lembretes enviados no período; 0 quando o gateway não informa. */
+    val remindersTotal: Int = 0,
     val appointmentsConfirmed: Int = 0,
+    /** Agendamentos aguardando confirmação do profissional; 0 quando ausente. */
+    val pendingAppointmentsTotal: Int = 0,
+    /** Mensagens diretas não lidas dos participantes; 0 quando ausente. */
+    val unreadMessagesTotal: Int = 0,
     val periodDays: Int = 7,
     val asOf: String? = null,
     val dailyActiveUsers: List<Int>? = null,
@@ -717,6 +723,8 @@ data class ProgramAppointmentDto(
     val patientName: String? = null,
     val modality: String,
     val requestedSlotText: String,
+    /** Período preferido normalizado pelo gateway (ex.: "PROXIMA_SEMANA_MANHA"); opcional. */
+    val requestedPeriod: String? = null,
     val scheduledAt: String? = null,
     val patientNote: String? = null,
     val partnerNote: String? = null,

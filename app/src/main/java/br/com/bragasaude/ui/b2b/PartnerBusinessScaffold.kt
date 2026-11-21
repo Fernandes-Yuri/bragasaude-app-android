@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -77,8 +78,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -116,6 +120,34 @@ internal fun navBadgeLabel(count: Int): String? = when {
     count > 99 -> "99+"
     else -> count.toString()
 }
+
+/**
+ * Fonte primária do badge de agendamentos. O contrato do gateway agrega
+ * `kpis.pendingAppointmentsTotal` (PENDING + RESCHEDULE_REQUESTED) para o
+ * programa inteiro; ele prevalece sobre a soma atual (página de agendamentos x
+ * contadores por participante). O parser entrega 0 tanto para "sem pendências"
+ * quanto para payload antigo sem o campo, então apenas total positivo é tratado
+ * como fonte primária; 0/negativo mantém o fallback da UI.
+ */
+internal fun pendingAppointmentsBadgeTotal(
+    kpiTotal: Int?,
+    fallbackTotal: Int
+): Int = kpiTotal?.takeIf { it > 0 } ?: fallbackTotal.coerceAtLeast(0)
+
+/**
+ * Fonte primária do badge de mensagens não lidas. O total global do gateway
+ * (`kpis.unreadMessagesTotal`) cobre a caixa inteira, inclusive conversas fora
+ * da página carregada; com o mesmo critério de "0 = ausente ou vazio", o
+ * fallback soma os contadores dos participantes, que é a soma já exibida hoje.
+ */
+internal fun unreadMessagesBadgeTotal(
+    kpiTotal: Int?,
+    participants: List<PartnerParticipantItemDto>
+): Int = kpiTotal?.takeIf { it > 0 }
+    ?: participants.sumOf { it.unreadDirectMessagesCount }
+
+/** Resultado da cópia do convite; falha usa liveRegion assertivo na UI. */
+private data class InviteCopyFeedback(val success: Boolean, val message: String)
 
 // O Scaffold já desconta a NavigationBar e o crédito de tecnologia via innerPadding; a
 // reserva extra no fim da lista evita que o último card fique sob a barra/gesto do sistema
@@ -617,9 +649,19 @@ private fun PartnerBusinessContent(
         )
     }
 
-    val unreadCountTotal = remember(participants) {
-        participants.sumOf { it.unreadDirectMessagesCount }
-    }
+    // Badges da barra: o total global de `walletKpis` é a fonte primária; a soma
+    // da página/participantes continua como fallback para payloads antigos. O KPI
+    // só é recalculado no refresh da carteira (ações locais de agendamento/leitura
+    // atualizam participantes, não o KPI), então o badge pode ficar defasado até
+    // o próximo refresh; o fallback evita esconder pendência em payload legado.
+    val pendingAppointmentsBadgeCount = pendingAppointmentsBadgeTotal(
+        kpiTotal = walletKpis?.pendingAppointmentsTotal,
+        fallbackTotal = pendingAppointmentsTotal
+    )
+    val unreadMessagesBadgeCount = unreadMessagesBadgeTotal(
+        kpiTotal = walletKpis?.unreadMessagesTotal,
+        participants = participants
+    )
     val isProgramApproved = programInfo?.parsedStatus == PartnerApprovalStatus.APPROVED
     val openStudio: () -> Unit = {
         studioShowPreview = false
@@ -690,8 +732,8 @@ private fun PartnerBusinessContent(
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                     BusinessSessionTab.entries.forEach { tab ->
                         val count = when (tab) {
-                            BusinessSessionTab.CARE -> unreadCountTotal
-                            BusinessSessionTab.OPERATIONS -> pendingAppointmentsTotal
+                            BusinessSessionTab.CARE -> unreadMessagesBadgeCount
+                            BusinessSessionTab.OPERATIONS -> pendingAppointmentsBadgeCount
                             else -> 0
                         }
                         val badgeText = navBadgeLabel(count)
@@ -1146,6 +1188,42 @@ private fun neutralReviewNote(status: PartnerApprovalStatus): String? =
     } else {
         null
     }
+
+private fun String?.isKybVerified(): Boolean = this?.trim()?.uppercase() == "GREEN"
+
+/**
+ * Linha única de KYB da aba Empresa. Substitui o texto cru
+ * "Documentos enviados: N · KYB: <status>" e fala a mesma língua do onboarding:
+ * a verificação documental é uma etapa separada da aprovação do programa, então
+ * o selo "Empresa aprovada" não contradiz mais o checklist.
+ */
+internal fun companyKybSummaryLine(
+    proofDocumentsCount: Int,
+    autoKybStatus: String?
+): String = if (autoKybStatus.isKybVerified()) {
+    "Verificação KYB concluída"
+} else {
+    "Documentos: $proofDocumentsCount de 2 enviados · verificação KYB em andamento"
+}
+
+/**
+ * Complemento da linha de KYB, exibido apenas com programa aprovado: deixa
+ * explícito que a conferência documental não bloqueia convite, QR Code nem
+ * placa PDF (mesma mensagem do onboarding e do checklist).
+ */
+internal fun companyKybSupportingLine(
+    proofDocumentsCount: Int,
+    autoKybStatus: String?,
+    approvalStatus: PartnerApprovalStatus?
+): String? {
+    if (autoKybStatus.isKybVerified()) return null
+    if (approvalStatus != PartnerApprovalStatus.APPROVED) return null
+    return if (proofDocumentsCount <= 0) {
+        "Empresa aprovada sem comprovantes anexados: a verificação KYB não bloqueia convite, QR Code nem placa PDF."
+    } else {
+        "A verificação KYB não bloqueia convite, QR Code nem placa PDF."
+    }
+}
 
 /**
  * Chip compacto e único de status do programa. Usar o mesmo componente no header
@@ -1666,6 +1744,12 @@ private fun BusinessCompanyTabContent(
     onLogout: () -> Unit,
     onDeleteAccount: () -> Unit
 ) {
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    // Feedback da cópia com ícone+texto e liveRegion: Toast sozinho não é
+    // confiável para leitores de tela e some antes da leitura terminar.
+    var copyFeedback by remember { mutableStateOf<InviteCopyFeedback?>(null) }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = b2bListContentPadding,
@@ -1718,11 +1802,39 @@ private fun BusinessCompanyTabContent(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Text(
-                            text = "Documentos enviados: ${programInfo.proofDocuments.size} · KYB: ${programInfo.autoKybStatus ?: "Aguardando conferência"}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        val kybVerified = programInfo.autoKybStatus.isKybVerified()
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (kybVerified) Icons.Default.CheckCircle else Icons.Default.Info,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = if (kybVerified) brandPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = companyKybSummaryLine(
+                                    proofDocumentsCount = programInfo.proofDocuments.size,
+                                    autoKybStatus = programInfo.autoKybStatus
+                                ),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (kybVerified) brandAccent else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        companyKybSupportingLine(
+                            proofDocumentsCount = programInfo.proofDocuments.size,
+                            autoKybStatus = programInfo.autoKybStatus,
+                            approvalStatus = programInfo.parsedStatus
+                        )?.let { supporting ->
+                            Text(
+                                text = supporting,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         val reviewNote = sanitizeReviewNote(programInfo.reviewNote)
                             ?: neutralReviewNote(programInfo.parsedStatus)
                         reviewNote?.let { note ->
@@ -1782,14 +1894,111 @@ private fun BusinessCompanyTabContent(
                         )
                         if (prog.seatLimit > 0) PartnerProgress(prog.activeParticipants.toFloat() / prog.seatLimit)
                         prog.inviteCode?.takeIf { it.isNotBlank() }?.let { code ->
-                            Text(
-                                text = "Código atual: $code (${if (prog.invitePaused) "pausado" else "ativo"})",
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                            // Um código novo invalida o feedback da cópia anterior.
+                            LaunchedEffect(code) { copyFeedback = null }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Text(
+                                        text = "Código do convite",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = code,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = brandAccent,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = if (prog.invitePaused) "Convites pausados" else "Convites ativos",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        val success = runCatching {
+                                            clipboard.setText(AnnotatedString(code))
+                                        }.isSuccess
+                                        val feedback = if (success) {
+                                            InviteCopyFeedback(
+                                                success = true,
+                                                message = "Código copiado. Cole no WhatsApp ou no e-mail."
+                                            )
+                                        } else {
+                                            InviteCopyFeedback(
+                                                success = false,
+                                                message = "Não foi possível copiar o código. Selecione o texto e copie manualmente."
+                                            )
+                                        }
+                                        copyFeedback = feedback
+                                        Toast.makeText(context, feedback.message, Toast.LENGTH_LONG).show()
+                                    },
+                                    modifier = Modifier.heightIn(min = 48.dp),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCopy,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Copiar código")
+                                }
+                            }
+                            copyFeedback?.let { feedback ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (feedback.success) {
+                                            Icons.Default.CheckCircle
+                                        } else {
+                                            Icons.Default.Info
+                                        },
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = if (feedback.success) {
+                                            brandPrimary
+                                        } else {
+                                            MaterialTheme.colorScheme.error
+                                        }
+                                    )
+                                    Text(
+                                        text = feedback.message,
+                                        modifier = Modifier.semantics {
+                                            liveRegion = if (feedback.success) {
+                                                LiveRegionMode.Polite
+                                            } else {
+                                                LiveRegionMode.Assertive
+                                            }
+                                        },
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (feedback.success) {
+                                            MaterialTheme.colorScheme.onSurface
+                                        } else {
+                                            MaterialTheme.colorScheme.error
+                                        }
+                                    )
+                                }
+                            }
                             if (prog.parsedStatus == PartnerApprovalStatus.APPROVED) {
                                 OutlinedButton(
                                     onClick = onOpenQr,
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 48.dp),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Icon(
@@ -1810,7 +2019,9 @@ private fun BusinessCompanyTabContent(
                                 OutlinedButton(
                                     onClick = onToggleInvitePaused,
                                     enabled = !isUpdatingInvitePolicy,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 48.dp),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Text(if (prog.invitePaused) "Retomar convites" else "Pausar convites")
@@ -1818,7 +2029,9 @@ private fun BusinessCompanyTabContent(
                                 OutlinedButton(
                                     onClick = onRegenerateInvite,
                                     enabled = !isUpdatingInvitePolicy,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 48.dp),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Text("Novo código")

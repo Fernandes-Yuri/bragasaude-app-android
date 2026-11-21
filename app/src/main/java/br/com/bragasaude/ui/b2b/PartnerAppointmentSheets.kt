@@ -100,10 +100,79 @@ internal fun appointmentScheduleHeadline(
     else -> "Aguardando confirmação do programa"
 }
 
-internal fun appointmentPreferenceLine(requestedSlotText: String?): String? {
-    val clean = requestedSlotText?.trim().orEmpty()
-    return clean.takeIf { it.isNotEmpty() }?.let { "Preferência informada: $it" }
+/**
+ * `requestedPeriod` chega do gateway como token estável (ex.: PROXIMA_SEMANA_MANHA),
+ * já em maiúsculas e sem espaços/hifens. Traduzimos apenas códigos conhecidos para
+ * texto humano; token desconhecido não vaza cru para a UI.
+ */
+internal fun appointmentPeriodHumanLabel(requestedPeriod: String?): String? {
+    val raw = requestedPeriod?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val token = raw
+        .uppercase(Locale.ROOT)
+        .replace(' ', '_')
+        .replace('-', '_')
+        .replace(Regex("_+"), "_")
+        .let(::stripPeriodAccents)
+    return when (token) {
+        "ESTA_SEMANA" -> "Esta semana"
+        "ESTA_SEMANA_MANHA" -> "Esta semana · manhã"
+        "ESTA_SEMANA_TARDE" -> "Esta semana · tarde"
+        "ESTA_SEMANA_NOITE" -> "Esta semana · noite"
+        "PROXIMA_SEMANA" -> "Próxima semana"
+        "PROXIMA_SEMANA_MANHA" -> "Próxima semana · manhã"
+        "PROXIMA_SEMANA_TARDE" -> "Próxima semana · tarde"
+        "PROXIMA_SEMANA_NOITE" -> "Próxima semana · noite"
+        "MANHA" -> "Manhã"
+        "TARDE" -> "Tarde"
+        "NOITE" -> "Noite"
+        "QUALQUER_HORARIO", "QUALQUER_DIA", "INDIFERENTE" -> "Qualquer horário"
+        else -> null
+    }
 }
+
+/** Remove acentos para casar tanto PRÓXIMA_SEMANA_MANHÃ quanto PROXIMA_SEMANA_MANHA. */
+private fun stripPeriodAccents(value: String): String = buildString(value.length) {
+    value.forEach { ch ->
+        append(
+            when (ch) {
+                'Á', 'À', 'Â', 'Ã', 'Ä' -> 'A'
+                'É', 'È', 'Ê', 'Ë' -> 'E'
+                'Í', 'Ì', 'Î', 'Ï' -> 'I'
+                'Ó', 'Ò', 'Ô', 'Õ', 'Ö' -> 'O'
+                'Ú', 'Ù', 'Û', 'Ü' -> 'U'
+                'Ç' -> 'C'
+                else -> ch
+            }
+        )
+    }
+}
+
+/**
+ * "Preferência informada" exibe o período humano quando o token é conhecido e
+ * cai no texto livre legado nos demais casos. O parâmetro `requestedPeriod` já
+ * está pronto para a integração do DTO; como o contrato do app ainda não expõe o
+ * campo, a ponte [preferenceLine] passa `null` para todos os cards da agenda.
+ */
+internal fun appointmentPreferenceLine(
+    requestedSlotText: String?,
+    requestedPeriod: String? = null
+): String? {
+    val value = appointmentPeriodHumanLabel(requestedPeriod)
+        ?: requestedSlotText?.trim()?.takeIf { it.isNotEmpty() }
+        ?: return null
+    return "Preferência informada: $value"
+}
+
+/**
+ * Ponte única UI <-> contrato. Quando `ProgramAppointmentDto` ganhar
+ * `requestedPeriod: String?` (gateway a7395c1), basta trocar o `null` abaixo pelo
+ * campo: os três cards da agenda já passam por aqui.
+ */
+private fun ProgramAppointmentDto.preferenceLine(): String? =
+    appointmentPreferenceLine(
+        requestedSlotText = requestedSlotText,
+        requestedPeriod = requestedPeriod
+    )
 
 internal fun appointmentDurationLabel(): String = APPOINTMENT_DURATION_FALLBACK_LABEL
 
@@ -330,7 +399,7 @@ fun OwnerAppointmentsWalletCard(
                                 if (status != ProgramAppointmentStatus.COMPLETED &&
                                     status != ProgramAppointmentStatus.CANCELLED
                                 ) {
-                                    appointmentPreferenceLine(appt.requestedSlotText)?.let { preference ->
+                                    appt.preferenceLine()?.let { preference ->
                                         Text(
                                             text = preference,
                                             style = MaterialTheme.typography.labelSmall,
@@ -712,7 +781,7 @@ fun ProgramAppointmentsParticipantCard(
                                 if (status != ProgramAppointmentStatus.COMPLETED &&
                                     status != ProgramAppointmentStatus.CANCELLED
                                 ) {
-                                    appointmentPreferenceLine(appt.requestedSlotText)?.let { preference ->
+                                    appt.preferenceLine()?.let { preference ->
                                         Text(
                                             text = preference,
                                             style = MaterialTheme.typography.labelSmall,
@@ -999,7 +1068,7 @@ fun OwnerAppointmentDecisionBottomSheet(
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold
                     )
-                    appointmentPreferenceLine(appointment.requestedSlotText)?.let { preference ->
+                    appointment.preferenceLine()?.let { preference ->
                         Text(
                             text = preference,
                             style = MaterialTheme.typography.bodySmall,
