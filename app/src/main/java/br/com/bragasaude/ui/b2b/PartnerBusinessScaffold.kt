@@ -77,6 +77,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -729,6 +730,10 @@ private fun PartnerBusinessContent(
         },
         bottomBar = {
             Column(modifier = Modifier.fillMaxWidth()) {
+                // Em telas estreitas (~320dp) os rótulos longos são truncados com o
+                // tamanho padrão do M3; reduzir a fonte do rótulo mantém as 5 abas
+                // legíveis sem encurtar o texto ("Operação"/"Estúdio") nem o badge.
+                val narrowBar = LocalConfiguration.current.screenWidthDp < 360
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                     BusinessSessionTab.entries.forEach { tab ->
                         val count = when (tab) {
@@ -768,6 +773,8 @@ private fun PartnerBusinessContent(
                                 Text(
                                     text = tab.shortLabel,
                                     modifier = Modifier.clearAndSetSemantics {},
+                                    fontSize = if (narrowBar) 8.sp else 10.sp,
+                                    letterSpacing = 0.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
