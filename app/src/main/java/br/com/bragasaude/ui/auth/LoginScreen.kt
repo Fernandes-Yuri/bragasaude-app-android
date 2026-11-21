@@ -1426,7 +1426,7 @@ private fun triggerGoogleFlow(
 
 /**
  * Bloco legal ancorado acima do crédito de tecnologia, sempre visível na primeira dobra.
- * Os links usam [Role.Link], sublinhado e o token `primary` (AA sobre o fundo claro/escuro),
+ * Os links usam [Role.Button], sublinhado e o token `primary` (AA sobre o fundo claro/escuro),
  * com alvo de toque mínimo de 48dp.
  */
 @Composable
@@ -1474,7 +1474,7 @@ private fun LegalLink(label: String, onClick: () -> Unit) {
             .defaultMinSize(minHeight = 48.dp)
             .clickable(
                 onClickLabel = "Abrir $label",
-                role = Role.Link,
+                role = Role.Button,
                 onClick = onClick
             )
             .padding(horizontal = 8.dp),
