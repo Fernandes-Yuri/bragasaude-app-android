@@ -10,14 +10,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.*
@@ -27,8 +29,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -44,7 +50,7 @@ import br.com.bragasaude.ui.components.BragaBottomSheet
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PartnerProgramOnboardingSheet(
     apiClient: BragaApiClient,
@@ -293,19 +299,38 @@ fun PartnerProgramOnboardingSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "PROGRAMA PARCEIRO",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
+                Text(
+                    text = "PROGRAMA PARCEIRO",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                // A folha é longa: sem um fechar no topo o usuário só o encontraria após rolar tudo.
+                TextButton(
+                    onClick = onDismiss,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
                     )
-                    Text(
-                        text = "Sua empresa. A sua marca.",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("Fechar", fontWeight = FontWeight.SemiBold)
                 }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Sua empresa. A sua marca.",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
                 PartnerStatusChip(status = status)
             }
 
@@ -525,7 +550,9 @@ fun PartnerProgramOnboardingSheet(
                         Text("Código de convite do programa", style = MaterialTheme.typography.labelMedium)
                         Text(prog.inviteCode ?: "Aguardando código", style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold)
-                        Text("${prog.activeParticipants} de ${prog.seatLimit} vagas em uso")
+                        Text(
+                            "${prog.activeParticipants} de ${B2BTextFormatters.countLabel(prog.seatLimit, "vaga", "vagas")} em uso"
+                        )
                         if (prog.seatLimit > 0) PartnerProgress(prog.activeParticipants.toFloat() / prog.seatLimit)
 
                         Text(
@@ -625,11 +652,14 @@ fun PartnerProgramOnboardingSheet(
                     fontWeight = FontWeight.Bold
                 )
 
-                LazyRow(
+                // Wrap em vez de rolagem horizontal: em telas estreitas e fonte ampliada os
+                // últimos perfis ("Nutrição e Bem-Estar", "Personalizado…") ficavam fora da borda.
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(B2BOnboardingValidator.TEMPLATE_OPTIONS) { option ->
+                    B2BOnboardingValidator.TEMPLATE_OPTIONS.forEach { option ->
                         FilterChip(
                             selected = templateKey.equals(option.key, ignoreCase = true),
                             onClick = { templateKey = option.key },
@@ -757,11 +787,12 @@ fun PartnerProgramOnboardingSheet(
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold
                 )
-                LazyRow(
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(B2BOnboardingValidator.RESPONSIBLE_ROLE_OPTIONS) { roleOpt ->
+                    B2BOnboardingValidator.RESPONSIBLE_ROLE_OPTIONS.forEach { roleOpt ->
                         FilterChip(
                             selected = responsibleRole.equals(roleOpt.key, ignoreCase = true),
                             onClick = { responsibleRole = roleOpt.key },
@@ -805,23 +836,22 @@ fun PartnerProgramOnboardingSheet(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
-                    LazyRow(
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        item {
-                            FilterChip(
-                                selected = councilType.isBlank(),
-                                enabled = !councilLocked,
-                                onClick = {
-                                    councilType = ""
-                                    councilNumber = ""
-                                    councilUf = ""
-                                },
-                                label = { Text("Sem conselho") }
-                            )
-                        }
-                        items(B2BOnboardingValidator.COUNCIL_TYPE_OPTIONS) { ct ->
+                        FilterChip(
+                            selected = councilType.isBlank(),
+                            enabled = !councilLocked,
+                            onClick = {
+                                councilType = ""
+                                councilNumber = ""
+                                councilUf = ""
+                            },
+                            label = { Text("Sem conselho") }
+                        )
+                        B2BOnboardingValidator.COUNCIL_TYPE_OPTIONS.forEach { ct ->
                             FilterChip(
                                 selected = councilType.equals(ct, ignoreCase = true),
                                 enabled = !councilLocked,
@@ -885,18 +915,21 @@ fun PartnerProgramOnboardingSheet(
                     fontWeight = FontWeight.SemiBold
                 )
 
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth()
+                // Anel + check no selecionado (antes o estado dependia só do anel de 3dp) e
+                // semântica de RadioButton para o leitor de tela anunciar cor e seleção.
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().selectableGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(B2BOnboardingValidator.PRESET_COLORS) { preset ->
+                    B2BOnboardingValidator.PRESET_COLORS.forEach { preset ->
                         val swatchColor = runCatching {
                             Color(android.graphics.Color.parseColor(preset))
                         }.getOrDefault(Color(0xFF1A6B5C))
                         val isSelected = primaryColor.equals(preset, ignoreCase = true)
                         Box(
                             modifier = Modifier
-                                .size(42.dp)
+                                .size(44.dp)
                                 .clip(CircleShape)
                                 .background(swatchColor)
                                 .border(
@@ -904,8 +937,29 @@ fun PartnerProgramOnboardingSheet(
                                     color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
                                     shape = CircleShape
                                 )
-                                .clickable { primaryColor = preset }
-                        )
+                                .selectable(
+                                    selected = isSelected,
+                                    role = Role.RadioButton,
+                                    onClick = { primaryColor = preset }
+                                )
+                                .semantics {
+                                    contentDescription = if (isSelected) {
+                                        "Cor principal selecionada: $preset"
+                                    } else {
+                                        "Selecionar cor principal $preset"
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = if (swatchColor.luminance() > 0.55f) Color.Black else Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -1043,7 +1097,7 @@ fun PartnerProgramOnboardingSheet(
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
-                                text = "6. Comprovantes privados (opcional · até 2 PDF/imagem de 5 MB)",
+                                text = "6. Comprovantes privados (opcional · até 2 arquivos (PDF ou imagem) de 5 MB cada)",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -1053,11 +1107,12 @@ fun PartnerProgramOnboardingSheet(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
-                            LazyRow(
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.fillMaxWidth()
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(B2BOnboardingValidator.PROOF_DOC_TYPE_OPTIONS) { docOpt ->
+                                B2BOnboardingValidator.PROOF_DOC_TYPE_OPTIONS.forEach { docOpt ->
                                     FilterChip(
                                         selected = selectedProofDocType == docOpt.key,
                                         onClick = { selectedProofDocType = docOpt.key },

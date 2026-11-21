@@ -68,7 +68,9 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = Color(0xFFF1F8F5),
     surfaceVariant = Color(0xFF22362F),      // Cards de apoio e seleções sutis
     onSurfaceVariant = Color(0xFFB0C8BF),
-    error = Error,
+    // O token semântico Error é escuro (#B91C1C) para garantir AA sobre branco; no tema
+    // escuro ele seria ilegível sobre a superfície verde-ardósia, então usamos o tom claro.
+    error = Color(0xFFFCA5A5),
     errorContainer = Color(0xFF7F1D1D),
     onErrorContainer = Color(0xFFFECACA)
 )

@@ -18,7 +18,8 @@ val BragaBackground = Color(0xFFFAFCFB)     // Fundo quase branco, limpo e abert
 val BragaCardSurface = Color(0xFFFFFFFF)    // Branco puro para elevação limpa
 val BragaCardBorder = Color(0xFFE5EBE8)     // Borda ultra-leve
 val BragaTextPrimary = Color(0xFF1E293B)    // Slate 800 - alta nitidez sem ser agressivo
-val BragaTextSecondary = Color(0xFF64748B)  // Slate 500 - legendas confortáveis
+// Slate 600: 7,58:1 no branco e 6,55:1 na menta — AA/AAA para legendas, inclusive em superfícies tingidas.
+val BragaTextSecondary = Color(0xFF475569)
 
 // Aliases para compatibilidade retroativa
 val TealPrimary = BragaEmerald
@@ -36,7 +37,8 @@ val OnPrimary = Color.White
 // Cores semânticas
 val Success = Color(0xFF10B981)
 val Warning = Color(0xFFF59E0B)
-val Error = Color(0xFFEF4444)
+// Red 700: 6,47:1 com texto branco em botões/chips de erro (o tom anterior ficava em 3,76:1).
+val Error = Color(0xFFB91C1C)
 val Info = Color(0xFF0EA5E9)
 
 val AccentRed = BragaEmergencyOrange
