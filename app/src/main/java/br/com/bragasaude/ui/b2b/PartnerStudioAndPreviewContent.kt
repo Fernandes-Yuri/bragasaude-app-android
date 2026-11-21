@@ -4,7 +4,15 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,10 +25,15 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material.icons.filled.HealthAndSafety
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
@@ -54,6 +67,7 @@ import br.com.bragasaude.domain.b2b.SharedCategoryOption
 import br.com.bragasaude.domain.b2b.TemplateCatalogItemDto
 import br.com.bragasaude.ui.components.BragaAlertDialog
 import br.com.bragasaude.ui.components.BragaBottomSheet
+import kotlinx.coroutines.delay
 import java.io.File
 
 enum class PartnerOwnerTab(val title: String) {
@@ -81,9 +95,21 @@ fun FirstAccessActivationChecklistCard(
     onOpenQr: () -> Unit
 ) {
     val approved = programInfo.parsedStatus == PartnerApprovalStatus.APPROVED
+    val kybStatus = programInfo.autoKybStatus?.trim()?.uppercase().orEmpty()
+    val kybVerified = kybStatus == "GREEN"
+    // Aprovação do programa e verificação KYB são etapas distintas: o checklist não pode
+    // anunciar "3 de 3 concluídas" enquanto o card de KYB ainda mostra documentos pendentes.
+    val kybInProgress = approved && !kybVerified
+    val documentsCount = programInfo.proofDocuments.size
     val customized = programInfo.experienceConfig !=
         ProgramExperienceConfigDto.defaultForTemplate(programInfo.templateKey)
     val hasParticipants = programInfo.activeParticipants > 0
+    val completed = listOf(approved, customized, hasParticipants).count { it }
+    val stepSummary = if (completed == 3 && kybInProgress) {
+        "3 de 3 etapas iniciais concluídas · falta verificação KYB"
+    } else {
+        "$completed de 3 etapas concluídas"
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -101,14 +127,61 @@ fun FirstAccessActivationChecklistCard(
                 fontWeight = FontWeight.Bold,
                 color = brandAccent
             )
-            val completed = listOf(approved, customized, hasParticipants).count { it }
-            Text("$completed de 3 etapas concluídas")
+            Text(stepSummary)
             PartnerProgress(completed / 3f)
+            if (kybInProgress) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Documentos: $documentsCount de 2 enviados · verificação em andamento",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        Text(
+                            text = "Esta conferência não bloqueia o convite, o QR Code nem a placa PDF; a equipe Braga analisa os comprovantes em paralelo.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        TextButton(
+                            onClick = onOpenOnboarding,
+                            modifier = Modifier.heightIn(min = 48.dp)
+                        ) {
+                            Text("Ver documentos")
+                        }
+                    }
+                }
+            }
             ChecklistActionRow(
                 done = approved,
                 title = "1. Cadastro CNPJ e aprovação",
-                subtitle = if (approved) "Empresa validada e convite liberado." else "Conclua os dados e termos do programa.",
+                subtitle = when {
+                    approved && kybInProgress ->
+                        "Empresa aprovada; verificação KYB em andamento (não bloqueia o convite)."
+                    approved -> "Empresa validada e convite liberado."
+                    else -> "Conclua os dados e termos do programa."
+                },
                 brandPrimary = brandPrimary,
+                statusLabel = if (kybInProgress) "KYB em andamento" else null,
                 onClick = onOpenOnboarding
             )
             ChecklistActionRow(
@@ -141,11 +214,13 @@ private fun ChecklistActionRow(
     subtitle: String,
     brandPrimary: Color,
     enabled: Boolean = true,
+    statusLabel: String? = null,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surface)
             .clickable(enabled = enabled, onClick = onClick)
@@ -170,6 +245,26 @@ private fun ChecklistActionRow(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (statusLabel != null) {
+                Row(
+                    modifier = Modifier.padding(top = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = statusLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
@@ -191,6 +286,15 @@ fun PartnerStudioTabContent(
     onSaveChanges: () -> Unit
 ) {
     var pendingTemplateConfirm by remember { mutableStateOf<TemplateCatalogItemDto?>(null) }
+    var appliedTemplateFeedback by remember { mutableStateOf<String?>(null) }
+    val applyModelFocus = remember { FocusRequester() }
+
+    LaunchedEffect(appliedTemplateFeedback) {
+        if (appliedTemplateFeedback != null) {
+            delay(5000)
+            appliedTemplateFeedback = null
+        }
+    }
 
     val catalog = remember(templates) {
         if (templates.isNotEmpty()) {
@@ -209,18 +313,49 @@ fun PartnerStudioTabContent(
     }
 
     pendingTemplateConfirm?.let { tpl ->
+        val changeBullets = templateChangeBullets(tpl, draftConfig)
+        // O foco vai para "Aplicar modelo": o diálogo é uma confirmação curta e não deve
+        // devolver o foco ao card de origem no meio da leitura.
+        LaunchedEffect(tpl.templateKey) {
+            runCatching { applyModelFocus.requestFocus() }
+        }
         BragaAlertDialog(
             onDismissRequest = { pendingTemplateConfirm = null },
-            title = { Text("Aplicar modelo de ${tpl.title}?") },
+            title = { Text("Aplicar o modelo ${tpl.title}?") },
             text = {
-                Text("Substitui os textos e opções do rascunho pelos padrões desse modelo. Você pode ajustar antes de salvar.")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "O rascunho atual será substituído pelos padrões deste modelo. Você revisa tudo antes de salvar.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = "O que muda no rascunho:",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    changeBullets.forEach { bullet ->
+                        Text(
+                            text = "• $bullet",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        text = "Nada é publicado até você tocar em \"Aplicar mudanças no programa\".",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         onDraftChange(tpl.defaultConfig.copy(templateKey = tpl.templateKey))
+                        appliedTemplateFeedback =
+                            "Modelo ${tpl.title} aplicado ao rascunho. Revise e salve para valer."
                         pendingTemplateConfirm = null
                     },
+                    modifier = Modifier.focusRequester(applyModelFocus),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = brandPrimary,
                         contentColor = brandOnPrimary
@@ -270,34 +405,44 @@ fun PartnerStudioTabContent(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "1. Modelo inicial por perfil (${B2BTextFormatters.countLabel(catalog.size, "modelo", "modelos")})",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
+            StudioSectionCard(
+                number = 1,
+                title = "Modelo inicial por perfil (${B2BTextFormatters.countLabel(catalog.size, "modelo", "modelos")})",
+                description = "A base de textos e módulos que você ajusta depois.",
+                icon = Icons.Default.AutoAwesome,
+                helpText = "Aplicar um modelo só preenche o rascunho do Estúdio. Nada chega ao participante antes de você revisar e salvar."
+            ) {
                 // Grade com wrap em 2 colunas: mantém os dois primeiros cards inteiros na
                 // tela, sem o corte no meio da palavra causado pela borda do carrossel.
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                     val cardWidth = if (LocalDensity.current.fontScale >= 1.5f) maxWidth else (maxWidth - 14.dp) / 2f
                     FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectableGroup(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         catalog.forEach { tpl ->
                             val selected = draftConfig.templateKey.equals(tpl.templateKey, ignoreCase = true)
+                            val benefit = templateBenefit(tpl)
                             Card(
                                 modifier = Modifier
                                     .width(cardWidth)
+                                    .heightIn(min = 96.dp)
                                     .selectable(selected = selected, role = Role.RadioButton) {
                                         if (!selected) {
                                             if (draftConfig != ProgramExperienceConfigDto.defaultForTemplate(draftConfig.templateKey)) {
                                                 pendingTemplateConfirm = tpl
                                             } else {
                                                 onDraftChange(tpl.defaultConfig.copy(templateKey = tpl.templateKey))
+                                                appliedTemplateFeedback =
+                                                    "Modelo ${tpl.title} aplicado ao rascunho. Revise e salve para valer."
                                             }
                                         }
+                                    }
+                                    .semantics {
+                                        contentDescription = "${tpl.title}. Benefício: $benefit"
                                     },
                                 shape = RoundedCornerShape(14.dp),
                                 colors = CardDefaults.cardColors(
@@ -313,12 +458,6 @@ fun PartnerStudioTabContent(
                                     modifier = Modifier.padding(12.dp),
                                     verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    if (selected) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Text("Selecionado", style = MaterialTheme.typography.labelSmall)
-                                        }
-                                    }
                                     Text(
                                         text = tpl.title,
                                         style = MaterialTheme.typography.labelLarge,
@@ -327,11 +466,30 @@ fun PartnerStudioTabContent(
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis
                                     )
+                                    if (selected) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.CheckCircle,
+                                                contentDescription = null,
+                                                tint = brandAccent,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Text(
+                                                text = "Selecionado",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = brandAccent
+                                            )
+                                        }
+                                    }
                                     Text(
-                                        text = tpl.subtitle,
+                                        text = benefit,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 3,
+                                        maxLines = 2,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
@@ -343,128 +501,98 @@ fun PartnerStudioTabContent(
         }
 
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "2. Boas-vindas & Identidade visual",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f)
-                        )
-                        TextButton(onClick = onOpenOnboarding) {
-                            Text("Logo / Cor / CNPJ")
-                        }
+            StudioSectionCard(
+                number = 2,
+                title = "Boas-vindas e identidade visual",
+                description = "Textos que o participante lê e atalho para logo, cor e CNPJ.",
+                icon = Icons.Default.Palette,
+                headerAction = {
+                    TextButton(onClick = onOpenOnboarding) {
+                        Text("Logo / Cor / CNPJ")
                     }
-                    OutlinedTextField(
-                        value = draftConfig.welcomeHeadline,
-                        onValueChange = {
-                            if (it.length <= 140) onDraftChange(draftConfig.copy(welcomeHeadline = it))
-                        },
-                        label = { Text("Título de boas-vindas") },
-                        supportingText = {
-                            Text("${draftConfig.welcomeHeadline.length}/140 caracteres")
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    OutlinedTextField(
-                        value = draftConfig.welcomeMessage,
-                        onValueChange = {
-                            if (it.length <= 500) onDraftChange(draftConfig.copy(welcomeMessage = it))
-                        },
-                        label = { Text("Mensagem aos participantes") },
-                        supportingText = {
-                            Text("Conteúdo educativo, não é diagnóstico nem prescrição · ${draftConfig.welcomeMessage.length}/500")
-                        },
-                        minLines = 2,
-                        maxLines = 4,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
                 }
+            ) {
+                OutlinedTextField(
+                    value = draftConfig.welcomeHeadline,
+                    onValueChange = {
+                        if (it.length <= 140) onDraftChange(draftConfig.copy(welcomeHeadline = it))
+                    },
+                    label = { Text("Título de boas-vindas") },
+                    supportingText = {
+                        Text("${draftConfig.welcomeHeadline.length}/140 caracteres")
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                OutlinedTextField(
+                    value = draftConfig.welcomeMessage,
+                    onValueChange = {
+                        if (it.length <= 500) onDraftChange(draftConfig.copy(welcomeMessage = it))
+                    },
+                    label = { Text("Mensagem aos participantes") },
+                    supportingText = {
+                        Text("Conteúdo educativo, não é diagnóstico nem prescrição · ${draftConfig.welcomeMessage.length}/500")
+                    },
+                    minLines = 2,
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
             }
         }
 
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            StudioSectionCard(
+                number = 3,
+                title = "Métricas acompanhadas no programa",
+                description = "O participante decide o que compartilhar, categoria por categoria.",
+                icon = Icons.Default.HealthAndSafety,
+                helpText = "As categorias ligadas aqui só aparecem para o parceiro depois da autorização do participante, que pode revogar o compartilhamento a qualquer momento."
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = "3. Métricas acompanhadas no programa",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "O participante escolhe quais destas categorias compartilhar.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        SharedCategoryOption.entries.forEach { opt ->
-                            val active = draftConfig.enabledMetrics.contains(opt.wireKey)
-                            FilterChip(
-                                selected = active,
-                                onClick = {
-                                    val next = if (active && draftConfig.enabledMetrics.size > 1) {
-                                        draftConfig.enabledMetrics - opt.wireKey
-                                    } else if (!active) {
-                                        draftConfig.enabledMetrics + opt.wireKey
-                                    } else {
-                                        draftConfig.enabledMetrics
-                                    }
-                                    onDraftChange(draftConfig.copy(enabledMetrics = next))
-                                },
-                                label = { Text(opt.titlePtBr) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = brandPrimary,
-                                    selectedLabelColor = brandOnPrimary
-                                )
+                    SharedCategoryOption.entries.forEach { opt ->
+                        val active = draftConfig.enabledMetrics.contains(opt.wireKey)
+                        FilterChip(
+                            selected = active,
+                            onClick = {
+                                val next = if (active && draftConfig.enabledMetrics.size > 1) {
+                                    draftConfig.enabledMetrics - opt.wireKey
+                                } else if (!active) {
+                                    draftConfig.enabledMetrics + opt.wireKey
+                                } else {
+                                    draftConfig.enabledMetrics
+                                }
+                                onDraftChange(draftConfig.copy(enabledMetrics = next))
+                            },
+                            // O check evita que a seleção dependa só da cor de fundo.
+                            leadingIcon = if (active) {
+                                { Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                            } else null,
+                            label = { Text(opt.titlePtBr) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = brandPrimary,
+                                selectedLabelColor = brandOnPrimary,
+                                selectedLeadingIconColor = brandOnPrimary
                             )
-                        }
+                        )
                     }
                 }
             }
         }
 
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            StudioSectionCard(
+                number = 4,
+                title = "Módulos No-Code do programa",
+                description = "Ligue só o que faz sentido para a operação do seu programa.",
+                icon = Icons.Default.Tune,
+                helpText = "Cada módulo ligado aqui aparece na prévia e no app do participante depois de salvar. Recepcionista IA depende do chat direto."
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "4. Módulos No-Code do Programa",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-
                     StudioFeatureSwitchRow(
                         title = "Lembretes de rotina do parceiro",
                         subtitle = "Envio de orientações educativas e avisos com a marca do programa.",
@@ -781,27 +909,49 @@ fun PartnerStudioTabContent(
                             )
                         }
                     )
-                }
             }
         }
 
         item {
-            Button(
-                onClick = onSaveChanges,
-                enabled = isDirty && isFormValid && !isSaving && programInfo != null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = brandPrimary,
-                    contentColor = brandOnPrimary
-                )
-            ) {
-                Text(
-                    text = if (isSaving) "Aplicando mudanças..." else if (isDirty) "Aplicar mudanças no programa" else "Configuração salva",
-                    fontWeight = FontWeight.Bold
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                AnimatedVisibility(visible = appliedTemplateFeedback != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { liveRegion = LiveRegionMode.Polite },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = brandAccent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = appliedTemplateFeedback.orEmpty(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Button(
+                    onClick = onSaveChanges,
+                    enabled = isDirty && isFormValid && !isSaving && programInfo != null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = brandPrimary,
+                        contentColor = brandOnPrimary
+                    )
+                ) {
+                    Text(
+                        text = if (isSaving) "Aplicando mudanças..." else if (isDirty) "Aplicar mudanças no programa" else "Configuração salva",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }
@@ -817,8 +967,9 @@ private fun StudioFeatureSwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 2.dp),
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -826,8 +977,177 @@ private fun StudioFeatureSwitchRow(
             Text(text = title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
             Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.semantics {
+                contentDescription = title
+                stateDescription = if (checked) "Ativado" else "Desativado"
+            }
+        )
     }
+}
+
+/**
+ * Container único das seções numeradas do Estúdio: mesmo card, mesmo ícone, mesma cor e
+ * uma descrição de uma linha. O "Saiba mais" substitui textos longos sempre visíveis por
+ * uma explicação sob demanda, sem tirar nenhum controle da tela.
+ */
+@Composable
+private fun StudioSectionCard(
+    number: Int,
+    title: String,
+    description: String,
+    icon: ImageVector,
+    helpText: String? = null,
+    headerAction: (@Composable () -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    var helpExpanded by rememberSaveable(title) { mutableStateOf(false) }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = "$number. $title",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (helpText != null) {
+                    IconButton(
+                        onClick = { helpExpanded = !helpExpanded },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (helpExpanded) Icons.Default.ExpandLess else Icons.Default.Info,
+                            contentDescription = if (helpExpanded) {
+                                "Ocultar explicação sobre $title"
+                            } else {
+                                "Saiba mais sobre $title"
+                            },
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+            headerAction?.let { action ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    action()
+                }
+            }
+            if (helpText != null) {
+                AnimatedVisibility(visible = helpExpanded) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                    ) {
+                        Text(
+                            text = helpText,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp)
+                                .semantics { liveRegion = LiveRegionMode.Polite }
+                        )
+                    }
+                }
+            }
+            content()
+        }
+    }
+}
+
+/** Benefício curto exibido no card de modelo; não repete o subtítulo técnico do catálogo. */
+private fun templateBenefit(template: TemplateCatalogItemDto): String =
+    when (template.templateKey.trim().uppercase()) {
+        "CLINICA_GERAL" -> "Boas-vindas e lembretes de retorno"
+        "NUTRICAO_BEM_ESTAR" -> "Hidratação e movimento no dia a dia"
+        "FISIO_REABILITACAO" -> "Rotina de movimento e retornos"
+        "CUIDADO_SENIOR_HOMECARE" -> "Apoio familiar com permissão"
+        "FARMACIA_ADESAO" -> "Lembretes de rotina e adesão"
+        "SAUDE_CORPORATIVA" -> "Bem-estar preventivo no trabalho"
+        "CUSTOM" -> "Comece do zero e ajuste tudo"
+        else -> template.subtitle.substringBefore('.').trim().take(64)
+            .ifBlank { "Configuração sugerida do perfil" }
+    }
+
+private fun enabledStudioModules(config: ProgramExperienceConfigDto): List<String> =
+    mutableListOf<String>().apply {
+        if (config.features.partnerRemindersEnabled) add("Lembretes de rotina")
+        if (config.features.appointmentsEnabled) add("Agendamento")
+        if (config.features.directPartnerChatEnabled) add("Chat direto")
+        if (config.features.aiReceptionistEnabled) add("Recepcionista IA")
+        if (config.features.assistantChatEnabled) add("Assistente educativo")
+        if (config.features.familyLinkEnabled) add("Apoio familiar")
+        if (config.features.preConsultationPdfEnabled) add("Resumo em PDF")
+    }
+
+/** Lista o que o diálogo "Aplicar modelo" realmente altera no rascunho atual. */
+private fun templateChangeBullets(
+    template: TemplateCatalogItemDto,
+    draft: ProgramExperienceConfigDto
+): List<String> {
+    val target = template.defaultConfig
+    val bullets = mutableListOf<String>()
+    if (target.welcomeHeadline != draft.welcomeHeadline) {
+        bullets += "Título de boas-vindas"
+    }
+    if (target.welcomeMessage != draft.welcomeMessage) {
+        bullets += "Mensagem aos participantes"
+    }
+    if (target.enabledMetrics.toSet() != draft.enabledMetrics.toSet()) {
+        val metrics = target.enabledMetrics.mapNotNull { SharedCategoryOption.fromWire(it)?.titlePtBr }
+        bullets += "Métricas (${metrics.size}): ${metrics.joinToString(", ")}"
+    }
+    val targetModules = enabledStudioModules(target)
+    val currentModules = enabledStudioModules(draft)
+    val added = targetModules.filter { it !in currentModules }
+    val removed = currentModules.filter { it !in targetModules }
+    if (added.isNotEmpty()) bullets += "Ativa módulos: ${added.joinToString(", ")}"
+    if (removed.isNotEmpty()) bullets += "Desativa módulos: ${removed.joinToString(", ")}"
+    if (bullets.isEmpty()) {
+        bullets += "Nenhum texto ou módulo muda; este modelo já está aplicado."
+    }
+    return bullets
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -848,6 +1168,7 @@ fun PartnerPreviewTabContent(
     var surfaceMode by rememberSaveable { mutableStateOf(PreviewSurfaceMode.LOGIN) }
     var simulateDarkTheme by rememberSaveable { mutableStateOf(false) }
     var simulateLargeText by rememberSaveable { mutableStateOf(false) }
+    var showFullScreenPreview by rememberSaveable { mutableStateOf(false) }
 
     val tokens = remember(primaryColorHex) {
         B2BThemeEngine.resolveAccessiblePalette(primaryColorHex)
@@ -855,6 +1176,83 @@ fun PartnerPreviewTabContent(
     val previewSurface = if (simulateDarkTheme) Color(0xFF0F1A16) else Color(0xFFF8FAFC)
     val previewCardBg = if (simulateDarkTheme) Color(0xFF172721) else softSurface
     val previewAccent = if (simulateDarkTheme) Color(android.graphics.Color.parseColor(tokens.accentOnDarkHex)) else brandAccent
+
+    // "Ver em tela cheia" usa a folha compartilhada (sem lib nova) e deixa a prévia
+    // ocupar mais altura, mantendo o CTA alcançável pela rolagem da própria folha.
+    if (showFullScreenPreview) {
+        BragaBottomSheet(onDismissRequest = { showFullScreenPreview = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Prévia em tela cheia",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = { showFullScreenPreview = false }) {
+                        Text("Fechar")
+                    }
+                }
+                PreviewModeChips(
+                    selectedMode = surfaceMode,
+                    onModeSelected = { surfaceMode = it },
+                    brandPrimary = brandPrimary,
+                    brandOnPrimary = brandOnPrimary
+                )
+                PreviewA11yToggles(
+                    simulateDarkTheme = simulateDarkTheme,
+                    simulateLargeText = simulateLargeText,
+                    onToggleDarkTheme = { simulateDarkTheme = !simulateDarkTheme },
+                    onToggleLargeText = { simulateLargeText = !simulateLargeText },
+                    brandPrimary = brandPrimary,
+                    brandOnPrimary = brandOnPrimary
+                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = previewSurface),
+                    border = BorderStroke(1.5.dp, brandPrimary.copy(alpha = 0.45f))
+                ) {
+                    Box(modifier = Modifier.padding(16.dp)) {
+                        PreviewCanvas(
+                            surfaceMode = surfaceMode,
+                            simulateDarkTheme = simulateDarkTheme,
+                            simulateLargeText = simulateLargeText,
+                            programName = programName,
+                            companyName = companyName,
+                            logoUrl = logoUrl,
+                            draftConfig = draftConfig,
+                            primaryColorHex = primaryColorHex,
+                            brandPrimary = brandPrimary,
+                            brandOnPrimary = brandOnPrimary,
+                            brandAccent = brandAccent,
+                            softBorder = softBorder,
+                            previewSurface = previewSurface,
+                            previewCardBg = previewCardBg,
+                            previewAccent = previewAccent,
+                            onOpenSimulator = onOpenSimulator
+                        )
+                    }
+                }
+                Text(
+                    text = "Role a folha para revisar o conteúdo completo, incluindo o botão principal da tela simulada.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -878,7 +1276,7 @@ fun PartnerPreviewTabContent(
                 ) {
                     Icon(Icons.Default.Visibility, contentDescription = null, tint = brandAccent)
                     Text(
-                        text = "Prévia ao vivo com dados demonstrativos e os toggles atuais do Estúdio.",
+                        text = "Prévia ao vivo com dados demonstrativos e os toggles atuais do Estúdio. Role a prévia para ver o CTA completo.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -887,73 +1285,45 @@ fun PartnerPreviewTabContent(
 
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                FlowRow(
+                PreviewModeChips(
+                    selectedMode = surfaceMode,
+                    onModeSelected = { surfaceMode = it },
+                    brandPrimary = brandPrimary,
+                    brandOnPrimary = brandOnPrimary
+                )
+                PreviewA11yToggles(
+                    simulateDarkTheme = simulateDarkTheme,
+                    simulateLargeText = simulateLargeText,
+                    onToggleDarkTheme = { simulateDarkTheme = !simulateDarkTheme },
+                    onToggleLargeText = { simulateLargeText = !simulateLargeText },
+                    brandPrimary = brandPrimary,
+                    brandOnPrimary = brandOnPrimary
+                )
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    PreviewSurfaceMode.entries.forEach { mode ->
-                        FilterChip(
-                            selected = surfaceMode == mode,
-                            onClick = { surfaceMode = mode },
-                            label = { Text(mode.label) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = brandPrimary,
-                                selectedLabelColor = brandOnPrimary
-                            )
-                        )
-                    }
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // UX-02.4: prévia e acessibilidade usam os mesmos FilterChips, com ícone e
-                    // estado ligado/desligado idêntico, em vez de TextButton + FilterChip.
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    OutlinedButton(
+                        onClick = onOpenSimulator,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        FilterChip(
-                            selected = simulateDarkTheme,
-                            onClick = { simulateDarkTheme = !simulateDarkTheme },
-                            label = { Text("Modo escuro") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = if (simulateDarkTheme) Icons.Default.CheckCircle else Icons.Default.DarkMode,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = brandPrimary,
-                                selectedLabelColor = brandOnPrimary,
-                                // Sem isto o check herdava onSecondaryContainer sobre a marca escura.
-                                selectedLeadingIconColor = brandOnPrimary
-                            )
-                        )
-                        FilterChip(
-                            selected = simulateLargeText,
-                            onClick = { simulateLargeText = !simulateLargeText },
-                            label = { Text("Texto ampliado") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = if (simulateLargeText) Icons.Default.CheckCircle else Icons.Default.FormatSize,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = brandPrimary,
-                                selectedLabelColor = brandOnPrimary,
-                                // Sem isto o check herdava onSecondaryContainer sobre a marca escura.
-                                selectedLeadingIconColor = brandOnPrimary
-                            )
-                        )
-                    }
-                    OutlinedButton(onClick = onOpenSimulator, shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Testar Recepcionista IA")
+                        Text("Testar IA")
+                    }
+                    OutlinedButton(
+                        onClick = { showFullScreenPreview = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Ver em tela cheia")
                     }
                 }
             }
@@ -961,21 +1331,82 @@ fun PartnerPreviewTabContent(
 
         item {
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        contentDescription =
+                            "Prévia ${surfaceMode.label} do programa ${programName.ifBlank { "selecionado" }}"
+                    },
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = previewSurface),
                 border = BorderStroke(1.5.dp, brandPrimary.copy(alpha = 0.45f))
             ) {
-                val previewScheme = if (simulateDarkTheme) {
-                    darkColorScheme(background = previewSurface, surface = Color(0xFF182822))
-                } else lightColorScheme(background = previewSurface, surface = Color.White)
-                val density = LocalDensity.current
-                CompositionLocalProvider(LocalDensity provides Density(density.density,
-                    if (simulateLargeText) maxOf(2f, density.fontScale) else density.fontScale)) {
-                    MaterialTheme(colorScheme = previewScheme) {
-                        PartnerBrandTheme(primaryColorHex) {
-                            Box(modifier = Modifier.padding(16.dp)) {
-                                when (surfaceMode) {
+                // Viewport rolável: a prévia mantém a altura de um "aparelho" e o CTA no fim
+                // continua alcançável sem competir com a rolagem da lista principal.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 560.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp)
+                ) {
+                    PreviewCanvas(
+                        surfaceMode = surfaceMode,
+                        simulateDarkTheme = simulateDarkTheme,
+                        simulateLargeText = simulateLargeText,
+                        programName = programName,
+                        companyName = companyName,
+                        logoUrl = logoUrl,
+                        draftConfig = draftConfig,
+                        primaryColorHex = primaryColorHex,
+                        brandPrimary = brandPrimary,
+                        brandOnPrimary = brandOnPrimary,
+                        brandAccent = brandAccent,
+                        softBorder = softBorder,
+                        previewSurface = previewSurface,
+                        previewCardBg = previewCardBg,
+                        previewAccent = previewAccent,
+                        onOpenSimulator = onOpenSimulator
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreviewCanvas(
+    surfaceMode: PreviewSurfaceMode,
+    simulateDarkTheme: Boolean,
+    simulateLargeText: Boolean,
+    programName: String,
+    companyName: String,
+    logoUrl: String?,
+    draftConfig: ProgramExperienceConfigDto,
+    primaryColorHex: String?,
+    brandPrimary: Color,
+    brandOnPrimary: Color,
+    brandAccent: Color,
+    softBorder: BorderStroke,
+    previewSurface: Color,
+    previewCardBg: Color,
+    previewAccent: Color,
+    onOpenSimulator: () -> Unit
+) {
+    val previewScheme = if (simulateDarkTheme) {
+        darkColorScheme(background = previewSurface, surface = Color(0xFF182822))
+    } else lightColorScheme(background = previewSurface, surface = Color.White)
+    val density = LocalDensity.current
+    CompositionLocalProvider(
+        LocalDensity provides Density(
+            density.density,
+            if (simulateLargeText) maxOf(2f, density.fontScale) else density.fontScale
+        )
+    ) {
+        MaterialTheme(colorScheme = previewScheme) {
+            PartnerBrandTheme(primaryColorHex) {
+                Column(Modifier.fillMaxWidth()) {
+                    when (surfaceMode) {
                                     PreviewSurfaceMode.LOGIN -> PartnerLoginPreview()
                                     PreviewSurfaceMode.HOME -> {
                                         ParticipantExperienceContent(
@@ -1063,13 +1494,106 @@ fun PartnerPreviewTabContent(
                                             }
                                         }
                                     }
-                                }
-                            }
-                        }
                     }
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PreviewModeChips(
+    selectedMode: PreviewSurfaceMode,
+    onModeSelected: (PreviewSurfaceMode) -> Unit,
+    brandPrimary: Color,
+    brandOnPrimary: Color
+) {
+    FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        PreviewSurfaceMode.entries.forEach { mode ->
+            FilterChip(
+                selected = selectedMode == mode,
+                onClick = { onModeSelected(mode) },
+                modifier = Modifier.semantics {
+                    contentDescription = "Ver prévia: ${mode.label}"
+                },
+                label = { Text(mode.label) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = brandPrimary,
+                    selectedLabelColor = brandOnPrimary
+                )
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PreviewA11yToggles(
+    simulateDarkTheme: Boolean,
+    simulateLargeText: Boolean,
+    onToggleDarkTheme: () -> Unit,
+    onToggleLargeText: () -> Unit,
+    brandPrimary: Color,
+    brandOnPrimary: Color
+) {
+    // UX-02.4: prévia e acessibilidade usam os mesmos FilterChips, com ícone e
+    // estado ligado/desligado idêntico, em vez de TextButton + FilterChip.
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        FilterChip(
+            selected = simulateDarkTheme,
+            onClick = onToggleDarkTheme,
+            label = { Text("Modo escuro") },
+            leadingIcon = {
+                Icon(
+                    imageVector = if (simulateDarkTheme) Icons.Default.CheckCircle else Icons.Default.DarkMode,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+            },
+            modifier = Modifier.semantics {
+                contentDescription = "Simular modo escuro na prévia"
+                stateDescription = if (simulateDarkTheme) "Ativado" else "Desativado"
+            },
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = brandPrimary,
+                selectedLabelColor = brandOnPrimary,
+                // Sem isto o check herdava onSecondaryContainer sobre a marca escura.
+                selectedLeadingIconColor = brandOnPrimary
+            )
+        )
+        FilterChip(
+            selected = simulateLargeText,
+            onClick = onToggleLargeText,
+            label = { Text("Texto ampliado") },
+            leadingIcon = {
+                Icon(
+                    imageVector = if (simulateLargeText) Icons.Default.CheckCircle else Icons.Default.FormatSize,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+            },
+            modifier = Modifier.semantics {
+                contentDescription = "Simular texto ampliado na prévia"
+                stateDescription = if (simulateLargeText) "Ativado" else "Desativado"
+            },
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = brandPrimary,
+                selectedLabelColor = brandOnPrimary,
+                // Sem isto o check herdava onSecondaryContainer sobre a marca escura.
+                selectedLeadingIconColor = brandOnPrimary
+            )
+        )
     }
 }
 

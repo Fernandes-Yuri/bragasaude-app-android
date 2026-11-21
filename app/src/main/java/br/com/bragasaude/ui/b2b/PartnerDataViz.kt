@@ -21,6 +21,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.util.Locale
 
 /**
@@ -61,14 +62,31 @@ internal fun PartnerRing(
         drawCircle(track, diameter / 2, style = style)
         drawArc(ink, -90f, 360f * part / total, false, inset, Size(diameter, diameter), style = style)
         if (label.isNotBlank()) {
-            val layout = measurer.measure(AnnotatedString(label), style = labelStyle)
-            drawText(
-                layout,
-                topLeft = Offset(
-                    (size.width - layout.size.width) / 2f,
-                    (size.height - layout.size.height) / 2f
+            // Em fontScale alto o texto pode ficar maior que o miolo do anel. Reduz o
+            // tamanho da fonte até caber (mantendo o mínimo legível) e, se ainda assim
+            // não couber, não desenha o centro: a descrição falada continua completa.
+            val available = (diameter - stroke).coerceAtLeast(0f)
+            var fitted = labelStyle
+            var layout = measurer.measure(AnnotatedString(label), style = fitted)
+            var steps = 0
+            while (
+                (layout.size.width > available || layout.size.height > available) &&
+                fitted.fontSize.value > 7f &&
+                steps < 12
+            ) {
+                fitted = fitted.copy(fontSize = (fitted.fontSize.value * 0.9f).sp)
+                layout = measurer.measure(AnnotatedString(label), style = fitted)
+                steps++
+            }
+            if (layout.size.width <= available && layout.size.height <= available) {
+                drawText(
+                    layout,
+                    topLeft = Offset(
+                        (size.width - layout.size.width) / 2f,
+                        (size.height - layout.size.height) / 2f
+                    )
                 )
-            )
+            }
         }
     }
 }
@@ -122,33 +140,71 @@ internal fun sparklineSummaryLabel(values: List<Int>): String? {
 }
 
 /**
+ * Descrição falada da sparkline, com o período explícito. A série completa continua
+ * sendo lida pelo canvas; o ponto de máximo e o último dia têm marcas de forma
+ * diferente para não depender só da cor.
+ */
+internal fun sparklineAccessibilityDescription(values: List<Int>, periodDays: Int? = null): String {
+    if (values.isEmpty()) return "Sem atividade no período."
+    val period = periodDays?.takeIf { it > 0 }
+        ?.let { " no período de ${B2BTextFormatters.days(it)}" }
+        .orEmpty()
+    return "Participantes ativos por dia$period, do mais antigo ao mais recente: ${values.joinToString()}."
+}
+
+/**
  * Traço da atividade diária com resumo textual (máximo e último dia) sempre visível
  * abaixo do canvas. O leitor de tela ouve a série completa pelo canvas e o resumo
  * pelo texto, sem depender de "Ver detalhes diários".
+ *
+ * O tracejado de base, o quadrado no pico e o anel no último ponto tornam a leitura
+ * possível sem cor. [periodDays] entra na descrição falada; o resumo visível mantém
+ * o formato curto histórico ("máx. N · último dia M").
  */
 @Composable
-internal fun PartnerSparkline(values: List<Int>) {
+internal fun PartnerSparkline(values: List<Int>, periodDays: Int? = null) {
     if (values.isEmpty()) {
         Text("Sem atividade no período")
         return
     }
     val ink = MaterialTheme.colorScheme.primary
-    val spoken = "Participantes ativos por dia, do mais antigo ao mais recente: ${values.joinToString()}."
+    val surface = MaterialTheme.colorScheme.surfaceContainerLow
+    val guide = trackColorFor(MaterialTheme.colorScheme.onSurfaceVariant, surface)
+    val spoken = sparklineAccessibilityDescription(values, periodDays)
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (values.size >= 2) {
             Canvas(
                 Modifier.fillMaxWidth().height(40.dp).semantics { this.contentDescription = spoken }
             ) {
                 val radius = 2.dp.toPx()
-                val peak = values.max().coerceAtLeast(1)
+                val peakValue = values.max()
+                val peak = peakValue.coerceAtLeast(1)
                 val points = values.mapIndexed { index, count ->
                     Offset(
                         radius + index * (size.width - 2 * radius) / values.lastIndex,
                         size.height - radius - (size.height - 2 * radius) * count / peak
                     )
                 }
+                // Base tracejada: referência visual mesmo em impressão/P&B.
+                drawLine(
+                    guide,
+                    Offset(0f, size.height - radius),
+                    Offset(size.width, size.height - radius),
+                    1.dp.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
+                )
                 points.zipWithNext().forEach { (from, to) -> drawLine(ink, from, to, radius) }
-                points.forEach { drawCircle(ink, radius, it) }
+                points.forEachIndexed { index, point ->
+                    when {
+                        index == values.lastIndex -> {
+                            drawCircle(ink, radius * 1.6f, point)
+                            drawCircle(surface, radius * 0.7f, point)
+                        }
+                        values[index] == peakValue ->
+                            drawRect(ink, point - Offset(radius, radius), Size(radius * 2, radius * 2))
+                        else -> drawCircle(ink, radius * 0.75f, point)
+                    }
+                }
             }
         }
         val summary = sparklineSummaryLabel(values)
@@ -156,7 +212,9 @@ internal fun PartnerSparkline(values: List<Int>) {
             Text(
                 text = summary,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                // onSurface garante o contraste do resumo; a rota original usava
+                // onSurfaceVariant, que fica no limite em superfícies claras.
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }
