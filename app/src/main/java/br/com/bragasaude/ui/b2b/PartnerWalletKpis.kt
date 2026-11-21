@@ -148,6 +148,25 @@ internal fun walletActivitySpoken(daily: List<Int>?, periodDays: Int): String {
  * Os cards com ação útil recebem `role = Button` e uma descrição falada própria.
  * A leitura visível continua igual; o texto falado usa os helpers acima.
  */
+/**
+ * Rótulo do período da carteira no fuso de Brasília (mesma base usada pelo gateway
+ * para os buckets diários desde a migration da Sprint C). O `asOf` chega em ISO/UTC.
+ */
+internal fun walletPeriodLabel(asOf: String?, periodDays: Int): String {
+    val date = asOf?.let {
+        runCatching {
+            java.time.OffsetDateTime.parse(it)
+                .atZoneSameInstant(java.time.ZoneId.of("America/Sao_Paulo"))
+                .toLocalDate()
+                .toString()
+        }.getOrNull()
+    }
+    return listOfNotNull(
+        "Atividade no programa · ${B2BTextFormatters.days(periodDays)}",
+        date?.let { "até ${B2BTextFormatters.formatIsoDate(it)} (horário de Brasília)" }
+    ).joinToString(" ")
+}
+
 @Composable
 fun PartnerWalletKpis(
     kpis: PartnerWalletKpisDto?,
@@ -162,20 +181,7 @@ fun PartnerWalletKpis(
             isLoading && kpis == null -> WalletKpisSkeleton()
             kpis == null -> WalletKpisEmptyState(onOpenStudio = onOpenStudio)
             else -> {
-                val endDate = kpis.asOf?.let {
-                    runCatching {
-                        java.time.OffsetDateTime.parse(it)
-                            .withOffsetSameInstant(java.time.ZoneOffset.UTC)
-                            .toLocalDate()
-                            .toString()
-                    }.getOrNull()
-                }
-                Text(
-                    listOfNotNull(
-                        "Atividade no programa · ${B2BTextFormatters.days(kpis.periodDays)}",
-                        endDate?.let { "até ${B2BTextFormatters.formatIsoDate(it)} (UTC)" }
-                    ).joinToString(" ")
-                )
+                Text(walletPeriodLabel(kpis.asOf, kpis.periodDays))
 
                 BoxWithConstraints(Modifier.fillMaxWidth().semantics { isTraversalGroup = true }) {
                     val columns = if (maxWidth < 320.dp || LocalDensity.current.fontScale >= 1.5f) 1 else 2
