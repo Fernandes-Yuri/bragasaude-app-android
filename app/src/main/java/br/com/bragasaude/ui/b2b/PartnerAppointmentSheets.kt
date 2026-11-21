@@ -64,11 +64,12 @@ private const val APPOINTMENT_DURATION_FALLBACK_LABEL = "Duração a combinar"
 
 internal fun formatAppointmentIsoPtBr(iso: String?): String? {
     val clean = iso?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    return runCatching {
-        Instant.parse(clean)
-            .atZone(ZoneId.systemDefault())
-            .format(ptBrDateTimeFormatter)
-    }.getOrNull() ?: clean
+    val zoned = runCatching { java.time.OffsetDateTime.parse(clean) }.getOrNull()
+        ?: runCatching { Instant.parse(clean).atOffset(java.time.ZoneOffset.UTC) }.getOrNull()
+    return zoned
+        ?.atZoneSameInstant(ZoneId.of("America/Sao_Paulo"))
+        ?.format(ptBrDateTimeFormatter)
+        ?: clean
 }
 
 /** Rótulo curto de status; sempre acompanhado do ícone (nunca só da cor). */

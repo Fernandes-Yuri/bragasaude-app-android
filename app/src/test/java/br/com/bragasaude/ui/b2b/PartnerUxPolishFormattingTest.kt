@@ -188,4 +188,12 @@ class PartnerUxPolishFormattingTest {
             normalizedConsentStatus(null, listOf("hydration")) == "UNKNOWN"
         )
     }
+
+    @Test
+    fun `horario de agendamento formata ISO com offset e fuso de Brasilia`() {
+        assertEquals("21/11/2026 às 19:00", formatAppointmentIsoPtBr("2026-11-21T22:00:00+00:00"))
+        assertEquals("21/11/2026 às 19:00", formatAppointmentIsoPtBr("2026-11-21T22:00:00Z"))
+        assertEquals("qualquer", formatAppointmentIsoPtBr("qualquer"))
+        assertEquals(null, formatAppointmentIsoPtBr(null))
+    }
 }
