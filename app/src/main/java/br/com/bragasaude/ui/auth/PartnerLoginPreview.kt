@@ -33,6 +33,7 @@ fun PartnerLoginPreview() {
     var signup by remember { mutableStateOf(false) }
     // Espaçamento um pouco menor que o do login real para o bloco legal caber na 1ª dobra
     // da prévia (a prévia é renderizada dentro de um card baixo, não em tela cheia).
+    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         LoginIdentity(showIntroduction = true)
         val labels = listOf("Entrar", "Criar conta")
@@ -110,5 +111,6 @@ fun PartnerLoginPreview() {
             modifier = Modifier.fillMaxWidth()
         )
         PartnerTechnologyCredit()
+    }
     }
 }
