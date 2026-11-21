@@ -5,6 +5,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import br.com.bragasaude.domain.b2b.PartnerApprovalStatus
 import br.com.bragasaude.domain.b2b.PartnerWalletKpisDto
+import android.app.Application
 import br.com.bragasaude.ui.theme.BragasaudeTheme
 import org.junit.Rule
 import org.junit.Test
@@ -18,7 +19,7 @@ import org.robolectric.annotation.Config
  * Accessibility Scanner no aparelho, mas protege as descrições faladas no CI.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], qualifiers = "w360dp-h800dp-mdpi")
+@Config(sdk = [34], application = Application::class, qualifiers = "w360dp-h800dp-mdpi")
 class PartnerAccessibilitySemanticsTest {
 
     @get:Rule
