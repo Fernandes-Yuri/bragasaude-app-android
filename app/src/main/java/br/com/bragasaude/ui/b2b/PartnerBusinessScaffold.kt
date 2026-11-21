@@ -19,19 +19,25 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -54,12 +60,14 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -67,9 +75,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -85,6 +95,7 @@ import br.com.bragasaude.domain.b2b.ProgramExperienceConfigDto
 import br.com.bragasaude.ui.auth.AuthViewModel
 import br.com.bragasaude.ui.components.BragaAlertDialog
 import br.com.bragasaude.ui.components.BragaBottomSheet
+import kotlinx.coroutines.launch
 
 enum class BusinessSessionTab(
     val label: String,
@@ -93,10 +104,17 @@ enum class BusinessSessionTab(
 ) {
     WALLET("Carteira", "Carteira", Icons.Default.Person),
     OPERATIONS("Operação", "Operação", Icons.Default.CalendarMonth),
-    // "Atendimento" + contador não cabe na barra; o rótulo curto evita ellipsis.
+    // Rótulo curto próprio: o contador vive no badge do ícone, sem encurtar o texto.
     CARE("Atendimento", "Atender", Icons.Default.SupportAgent),
     STUDIO("Estúdio", "Estúdio", Icons.Default.AutoAwesome),
     COMPANY("Empresa", "Empresa", Icons.Default.VerifiedUser)
+}
+
+/** Texto curto do badge da barra; 100+ vira "99+" para não estourar o ícone. */
+internal fun navBadgeLabel(count: Int): String? = when {
+    count <= 0 -> null
+    count > 99 -> "99+"
+    else -> count.toString()
 }
 
 // O Scaffold já desconta a NavigationBar e o crédito de tecnologia via innerPadding; a
@@ -152,6 +170,9 @@ private fun PartnerBusinessContent(
     val ownerReminders by partnerViewModel.ownerReminders.collectAsState()
     val isSendingReminder by partnerViewModel.isSendingReminder.collectAsState()
     val ownerAppointments by partnerViewModel.ownerAppointments.collectAsState()
+    // Agrega a primeira página de agendamentos e os contadores por participante;
+    // pode subestimar quando o contrato não expõe um total global.
+    val pendingAppointmentsTotal by partnerViewModel.pendingAppointmentsTotal.collectAsState()
     val updatingAppointmentId by partnerViewModel.updatingAppointmentId.collectAsState()
     val activeDirectChatPage by partnerViewModel.activeDirectChatPage.collectAsState()
     val directChatIsOwnerView by partnerViewModel.directChatIsOwnerView.collectAsState()
@@ -272,7 +293,7 @@ private fun PartnerBusinessContent(
 
     if (showAiSimulatorSheet) {
         AiReceptionistSimulatorSheet(
-            programName = programInfo?.programName ?: activeContext.programName ?: "Seu Programa",
+            programName = programInfo?.programName ?: activeContext.programName ?: "Seu programa",
             config = draftExperience,
             brandPrimary = brandPrimary,
             brandOnPrimary = brandOnPrimary,
@@ -599,8 +620,18 @@ private fun PartnerBusinessContent(
     val unreadCountTotal = remember(participants) {
         participants.sumOf { it.unreadDirectMessagesCount }
     }
-    val pendingAppointmentsCount = remember(ownerAppointments) {
-        ownerAppointments.count { it.status == "PENDING" }
+    val isProgramApproved = programInfo?.parsedStatus == PartnerApprovalStatus.APPROVED
+    val openStudio: () -> Unit = {
+        studioShowPreview = false
+        selectedTab = BusinessSessionTab.STUDIO
+    }
+    val walletListState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    // O card de Participantes leva à lista já filtrada por "Com atenção"; o filtro é
+    // idempotente (não desliga quando o gestor toca no card duas vezes).
+    val showWalletParticipants: () -> Unit = {
+        if (!walletAttentionOnly) partnerViewModel.toggleWalletAttentionOnly()
+        coroutineScope.launch { walletListState.animateScrollToItem(1) }
     }
 
     Scaffold(
@@ -636,7 +667,7 @@ private fun PartnerBusinessContent(
                             }
                         ) {
                             Text(
-                                text = "Espaço Pessoal",
+                                text = "Espaço pessoal",
                                 color = brandAccentText,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold
@@ -660,9 +691,10 @@ private fun PartnerBusinessContent(
                     BusinessSessionTab.entries.forEach { tab ->
                         val count = when (tab) {
                             BusinessSessionTab.CARE -> unreadCountTotal
-                            BusinessSessionTab.OPERATIONS -> pendingAppointmentsCount
+                            BusinessSessionTab.OPERATIONS -> pendingAppointmentsTotal
                             else -> 0
                         }
+                        val badgeText = navBadgeLabel(count)
                         val spokenLabel = when {
                             count == 0 -> tab.label
                             tab == BusinessSessionTab.CARE -> "${tab.label}, ${B2BTextFormatters.countLabel(count, "mensagem não lida", "mensagens não lidas")}"
@@ -671,10 +703,28 @@ private fun PartnerBusinessContent(
                         NavigationBarItem(
                             selected = selectedTab == tab,
                             onClick = { selectedTab = tab },
-                            icon = { Icon(imageVector = tab.icon, contentDescription = spokenLabel) },
+                            icon = {
+                                // O indicador fica sobre o ícone para o rótulo curto ("Atender",
+                                // "Operação") continuar inteiro mesmo com fonte grande.
+                                BadgedBox(
+                                    badge = {
+                                        if (badgeText != null) {
+                                            Badge {
+                                                Text(
+                                                    text = badgeText,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    modifier = Modifier.clearAndSetSemantics {}
+                                                )
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Icon(imageVector = tab.icon, contentDescription = spokenLabel)
+                                }
+                            },
                             label = {
                                 Text(
-                                    text = if (count > 0) "${tab.shortLabel} ($count)" else tab.shortLabel,
+                                    text = tab.shortLabel,
                                     modifier = Modifier.clearAndSetSemantics {},
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -698,7 +748,9 @@ private fun PartnerBusinessContent(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (isLoading) {
+            // A carteira tem skeleton próprio e pull-to-refresh; o spinner de tela
+            // cheia fica só para as demais abas.
+            if (isLoading && selectedTab != BusinessSessionTab.WALLET) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -719,44 +771,76 @@ private fun PartnerBusinessContent(
             } else {
                 when (selectedTab) {
                     BusinessSessionTab.WALLET -> {
-                        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = b2bListContentPadding,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            item { PartnerWalletKpis(walletKpis) }
-                            if (programInfo?.parsedStatus != PartnerApprovalStatus.APPROVED) {
+                        val showWalletSkeleton = isLoading && walletKpis == null
+                        PullToRefreshBox(
+                            isRefreshing = isLoading && !showWalletSkeleton,
+                            onRefresh = { partnerViewModel.refreshWorkspace() },
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            LazyColumn(
+                                state = walletListState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = b2bListContentPadding,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
                                 item {
-                                    PartnerPreApprovalBannerCard(
-                                        programInfo = programInfo, brandPrimary = brandPrimary,
-                                        brandOnPrimary = brandOnPrimary, brandAccent = brandAccentText,
-                                        softSurface = brandSoftSurface, softBorder = softBorderStroke,
-                                        onOpenOnboarding = { showOnboardingSheet = true }
+                                    PartnerWalletKpis(
+                                        kpis = walletKpis,
+                                        isLoading = showWalletSkeleton,
+                                        onOpenParticipants = if (isProgramApproved) showWalletParticipants else null,
+                                        onOpenOperations = { selectedTab = BusinessSessionTab.OPERATIONS },
+                                        onOpenStudio = openStudio
                                     )
                                 }
-                            } else {
-                                item {
-                                    PartnerWalletFiltersSection(
-                                        query = walletQuery, selectedCategory = walletCategoryFilter,
-                                        attentionOnly = walletAttentionOnly, enabledProgramMetrics = savedExperience.enabledMetrics,
-                                        isFiltering = isFilteringParticipants, brandPrimary = brandPrimary,
-                                        brandOnPrimary = brandOnPrimary, brandAccent = brandAccentText,
-                                        onQueryChange = partnerViewModel::updateWalletQuery,
-                                        onSelectCategory = partnerViewModel::selectWalletCategoryFilter,
-                                        onToggleAttentionOnly = partnerViewModel::toggleWalletAttentionOnly,
-                                        onClearFilters = partnerViewModel::clearWalletFilters
-                                    )
-                                }
-                                if (participants.isEmpty()) item {
-                                    Text("Nenhum participante encontrado.", style = MaterialTheme.typography.bodyMedium)
-                                }
-                                items(participants, key = { it.patientUserId }) { item ->
-                                    WalletParticipantCard(item = item, brandPrimary = brandPrimary,
-                                        brandOnPrimary = brandOnPrimary, brandAccent = brandAccentText,
-                                        softSurface = brandSoftSurface,
-                                        onClick = { partnerViewModel.openParticipantSummary(item.patientUserId) })
-                                }
-                                if (hasMore) item {
-                                    OutlinedButton(onClick = partnerViewModel::loadMoreParticipants,
-                                        enabled = !isLoadingMore, modifier = Modifier.fillMaxWidth()) {
-                                        Text(if (isLoadingMore) "Carregando..." else "Carregar mais")
+                                if (!showWalletSkeleton) {
+                                    if (!isProgramApproved) {
+                                        item {
+                                            PartnerPreApprovalBannerCard(
+                                                programInfo = programInfo, brandPrimary = brandPrimary,
+                                                brandOnPrimary = brandOnPrimary, brandAccent = brandAccentText,
+                                                softSurface = brandSoftSurface, softBorder = softBorderStroke,
+                                                onOpenOnboarding = { showOnboardingSheet = true }
+                                            )
+                                        }
+                                    } else {
+                                        item {
+                                            PartnerWalletFiltersSection(
+                                                query = walletQuery, selectedCategory = walletCategoryFilter,
+                                                attentionOnly = walletAttentionOnly, enabledProgramMetrics = savedExperience.enabledMetrics,
+                                                isFiltering = isFilteringParticipants, brandPrimary = brandPrimary,
+                                                brandOnPrimary = brandOnPrimary, brandAccent = brandAccentText,
+                                                onQueryChange = partnerViewModel::updateWalletQuery,
+                                                onSelectCategory = partnerViewModel::selectWalletCategoryFilter,
+                                                onToggleAttentionOnly = partnerViewModel::toggleWalletAttentionOnly,
+                                                onClearFilters = partnerViewModel::clearWalletFilters
+                                            )
+                                        }
+                                        if (participants.isEmpty()) item {
+                                            WalletParticipantsEmptyState(
+                                                hasFilters = walletQuery.isNotBlank() ||
+                                                    walletCategoryFilter != null || walletAttentionOnly,
+                                                inviteCode = programInfo?.inviteCode?.takeIf { it.isNotBlank() },
+                                                brandPrimary = brandPrimary,
+                                                brandOnPrimary = brandOnPrimary,
+                                                brandAccent = brandAccentText,
+                                                softSurface = brandSoftSurface,
+                                                softBorder = softBorderStroke,
+                                                onClearFilters = partnerViewModel::clearWalletFilters,
+                                                onOpenStudio = openStudio
+                                            )
+                                        }
+                                        items(participants, key = { it.patientUserId }) { item ->
+                                            WalletParticipantCard(item = item, brandPrimary = brandPrimary,
+                                                brandOnPrimary = brandOnPrimary, brandAccent = brandAccentText,
+                                                softSurface = brandSoftSurface,
+                                                onClick = { partnerViewModel.openParticipantSummary(item.patientUserId) })
+                                        }
+                                        if (hasMore) item {
+                                            OutlinedButton(onClick = partnerViewModel::loadMoreParticipants,
+                                                enabled = !isLoadingMore, modifier = Modifier.fillMaxWidth()) {
+                                                Text(if (isLoadingMore) "Carregando..." else "Carregar mais")
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -836,6 +920,9 @@ private fun PartnerBusinessContent(
                             } else {
                                 item {
                                     if (savedExperience.features.appointmentsEnabled) {
+                                        // O card da agenda já cobre o estado vazio (com
+                                        // "Compartilhar disponibilidade" e "Abrir Estúdio");
+                                        // mantê-lo evita duplicar dois vazios na mesma aba.
                                         OwnerAppointmentsWalletCard(
                                             appointments = ownerAppointments,
                                             policy = savedExperience.appointmentsPolicy,
@@ -843,6 +930,7 @@ private fun PartnerBusinessContent(
                                             brandPrimary = brandPrimary,
                                             brandAccent = brandAccentText,
                                             softBorder = softBorderStroke,
+                                            onOpenStudio = openStudio,
                                             onManageAppointment = { appt ->
                                                 selectedAppointmentToManage = appt
                                             }
@@ -853,36 +941,50 @@ private fun PartnerBusinessContent(
                                             body = "Ative agendamentos no Estúdio para receber pedidos de horário.",
                                             brandAccent = brandAccentText,
                                             softBorder = softBorderStroke,
-                                            onOpenStudio = {
-                                                studioShowPreview = false
-                                                selectedTab = BusinessSessionTab.STUDIO
-                                            }
+                                            onOpenStudio = openStudio
                                         )
                                     }
                                 }
 
                                 item {
                                     if (savedExperience.features.partnerRemindersEnabled) {
-                                        OwnerSentRemindersCard(
-                                            reminders = ownerReminders,
-                                            brandPrimary = brandPrimary,
-                                            brandOnPrimary = brandOnPrimary,
-                                            brandAccent = brandAccentText,
-                                            softBorder = softBorderStroke,
-                                            onOpenBatchComposer = {
-                                                reminderComposerTarget = null to "Lote da carteira"
-                                            }
-                                        )
+                                        if (ownerReminders.isEmpty()) {
+                                            BusinessEmptyStateCard(
+                                                icon = Icons.Default.NotificationsActive,
+                                                title = "Nenhum lembrete enviado ainda",
+                                                body = "Envie um aviso em lote para a carteira. Lembretes educativos, sem diagnóstico nem prescrição.",
+                                                primaryActionLabel = "Enviar lembrete em lote",
+                                                primaryActionIcon = Icons.Default.NotificationsActive,
+                                                onPrimaryAction = {
+                                                    reminderComposerTarget = null to "Lote da carteira"
+                                                },
+                                                secondaryActionLabel = "Abrir Estúdio",
+                                                onSecondaryAction = openStudio,
+                                                brandPrimary = brandPrimary,
+                                                brandOnPrimary = brandOnPrimary,
+                                                brandAccent = brandAccentText,
+                                                softSurface = brandSoftSurface,
+                                                softBorder = softBorderStroke
+                                            )
+                                        } else {
+                                            OwnerSentRemindersCard(
+                                                reminders = ownerReminders,
+                                                brandPrimary = brandPrimary,
+                                                brandOnPrimary = brandOnPrimary,
+                                                brandAccent = brandAccentText,
+                                                softBorder = softBorderStroke,
+                                                onOpenBatchComposer = {
+                                                    reminderComposerTarget = null to "Lote da carteira"
+                                                }
+                                            )
+                                        }
                                     } else {
                                         ModuleDisabledPromptCard(
                                             title = "Lembretes do programa desligados",
                                             body = "Ative lembretes no Estúdio para enviar avisos em lote.",
                                             brandAccent = brandAccentText,
                                             softBorder = softBorderStroke,
-                                            onOpenStudio = {
-                                                studioShowPreview = false
-                                                selectedTab = BusinessSessionTab.STUDIO
-                                            }
+                                            onOpenStudio = openStudio
                                         )
                                     }
                                 }
@@ -904,6 +1006,7 @@ private fun PartnerBusinessContent(
                             softBorder = softBorderStroke,
                             onOpenOnboarding = { showOnboardingSheet = true },
                             onOpenSimulator = { showAiSimulatorSheet = true },
+                            onOpenStudio = openStudio,
                             onOpenDirectChat = { patientId, displayName ->
                                 partnerViewModel.openOwnerDirectChat(patientId, displayName)
                             },
@@ -945,8 +1048,8 @@ private fun PartnerBusinessContent(
                             Box(modifier = Modifier.weight(1f)) {
                                 if (studioShowPreview) {
                                     PartnerPreviewTabContent(
-                                        programName = programInfo?.programName ?: activeContext.programName ?: "Seu Programa",
-                                        companyName = programInfo?.companyName ?: activeContext.companyName ?: "Sua Empresa",
+                                        programName = programInfo?.programName ?: activeContext.programName ?: "Seu programa",
+                                        companyName = programInfo?.companyName ?: activeContext.companyName ?: "Sua empresa",
                                         logoUrl = programInfo?.logoUrl ?: activeContext.logoUrl,
                                         primaryColorHex = programInfo?.primaryColor ?: activeContext.primaryColor,
                                         draftConfig = draftExperience,
@@ -1093,6 +1196,165 @@ internal fun PartnerStatusChip(
     }
 }
 
+/**
+ * Estado vazio compartilhado das abas do B2B. Ícone decorativo + título + texto curto
+ * e CTAs de até uma ação principal e uma secundária, sempre em largura total para
+ * fonte grande não cortar o rótulo.
+ */
+@Composable
+private fun BusinessEmptyStateCard(
+    icon: ImageVector,
+    title: String,
+    body: String,
+    brandPrimary: Color,
+    brandOnPrimary: Color,
+    brandAccent: Color,
+    softSurface: Color,
+    softBorder: BorderStroke,
+    primaryActionLabel: String? = null,
+    primaryActionIcon: ImageVector? = null,
+    onPrimaryAction: (() -> Unit)? = null,
+    secondaryActionLabel: String? = null,
+    onSecondaryAction: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = softBorder
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(softSurface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = brandAccent,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = brandAccent,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (onPrimaryAction != null && primaryActionLabel != null) {
+                Button(
+                    onClick = onPrimaryAction,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = brandPrimary,
+                        contentColor = brandOnPrimary
+                    )
+                ) {
+                    if (primaryActionIcon != null) {
+                        Icon(
+                            imageVector = primaryActionIcon,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(primaryActionLabel, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            if (onSecondaryAction != null && secondaryActionLabel != null) {
+                TextButton(onClick = onSecondaryAction, modifier = Modifier.fillMaxWidth()) {
+                    Text(secondaryActionLabel, color = brandAccent, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Carteira sem participantes: distingue "filtro sem resultado" de "carteira vazia".
+ * A carteira vazia oferece o código de convite já disponível no programa; sem código,
+ * leva ao Estúdio em vez de prometer um convite inexistente.
+ */
+@Composable
+private fun WalletParticipantsEmptyState(
+    hasFilters: Boolean,
+    inviteCode: String?,
+    brandPrimary: Color,
+    brandOnPrimary: Color,
+    brandAccent: Color,
+    softSurface: Color,
+    softBorder: BorderStroke,
+    onClearFilters: () -> Unit,
+    onOpenStudio: () -> Unit
+) {
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    if (hasFilters) {
+        BusinessEmptyStateCard(
+            icon = Icons.Default.Person,
+            title = "Nenhum participante com esses filtros",
+            body = "Ajuste a busca ou limpe os filtros para ver toda a carteira.",
+            brandPrimary = brandPrimary,
+            brandOnPrimary = brandOnPrimary,
+            brandAccent = brandAccent,
+            softSurface = softSurface,
+            softBorder = softBorder,
+            primaryActionLabel = "Limpar filtros",
+            onPrimaryAction = onClearFilters
+        )
+        return
+    }
+    BusinessEmptyStateCard(
+        icon = Icons.Default.Person,
+        title = "Sua carteira ainda está vazia",
+        body = if (inviteCode != null) {
+            "Compartilhe o convite do programa para o primeiro participante entrar."
+        } else {
+            "Abra o Estúdio para configurar o programa e liberar o convite aos participantes."
+        },
+        brandPrimary = brandPrimary,
+        brandOnPrimary = brandOnPrimary,
+        brandAccent = brandAccent,
+        softSurface = softSurface,
+        softBorder = softBorder,
+        primaryActionLabel = if (inviteCode != null) "Copiar convite" else "Abrir Estúdio",
+        primaryActionIcon = if (inviteCode != null) Icons.Default.ContentCopy else Icons.Default.AutoAwesome,
+        onPrimaryAction = {
+            if (inviteCode != null) {
+                clipboard.setText(AnnotatedString(inviteCode))
+                Toast.makeText(
+                    context,
+                    "Convite copiado. Cole no WhatsApp ou no e-mail.",
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                onOpenStudio()
+            }
+        },
+        secondaryActionLabel = if (inviteCode != null) "Abrir Estúdio" else null,
+        onSecondaryAction = if (inviteCode != null) onOpenStudio else null
+    )
+}
+
 @Composable
 private fun PartnerPreApprovalBannerCard(
     programInfo: PartnerProgramDto?,
@@ -1214,6 +1476,7 @@ private fun BusinessCareInboxTabContent(
     softBorder: BorderStroke,
     onOpenOnboarding: () -> Unit,
     onOpenSimulator: () -> Unit,
+    onOpenStudio: () -> Unit,
     onOpenDirectChat: (patientId: String, displayName: String) -> Unit,
     onLoadMore: () -> Unit
 ) {
@@ -1282,18 +1545,19 @@ private fun BusinessCareInboxTabContent(
             }
         } else if (orderedParticipants.isEmpty()) {
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                ) {
-                    Text(
-                        text = "Ainda não há participantes na fila de atendimento direto.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
+                BusinessEmptyStateCard(
+                    icon = Icons.Default.SupportAgent,
+                    title = "Fila de atendimento vazia",
+                    body = "Quando um participante iniciar uma conversa ou pedir um horário, a conversa aparece aqui.",
+                    brandPrimary = brandPrimary,
+                    brandOnPrimary = brandOnPrimary,
+                    brandAccent = brandAccent,
+                    softSurface = softSurface,
+                    softBorder = softBorder,
+                    primaryActionLabel = "Abrir Estúdio",
+                    primaryActionIcon = Icons.Default.AutoAwesome,
+                    onPrimaryAction = onOpenStudio
+                )
             }
         } else {
             item {
@@ -1534,7 +1798,7 @@ private fun BusinessCompanyTabContent(
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(Modifier.width(8.dp))
-                                    Text("QR Code e Placa PDF")
+                                    Text("QR Code e placa PDF")
                                 }
                             }
                         }

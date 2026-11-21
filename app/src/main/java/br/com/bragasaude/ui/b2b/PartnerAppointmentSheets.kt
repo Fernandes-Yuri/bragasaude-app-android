@@ -1,5 +1,8 @@
 package br.com.bragasaude.ui.b2b
 
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -8,14 +11,30 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Monitor
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,6 +59,9 @@ private val ptBrDateTimeFormatter: DateTimeFormatter =
 private val ptBrDayChipFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("dd/MM (EEE)", Locale("pt", "BR"))
 
+/** O contrato atual não envia duração: exibimos um rótulo honesto em vez de inventar minutos. */
+private const val APPOINTMENT_DURATION_FALLBACK_LABEL = "Duração a combinar"
+
 internal fun formatAppointmentIsoPtBr(iso: String?): String? {
     val clean = iso?.trim()?.takeIf { it.isNotEmpty() } ?: return null
     return runCatching {
@@ -49,6 +71,77 @@ internal fun formatAppointmentIsoPtBr(iso: String?): String? {
     }.getOrNull() ?: clean
 }
 
+/** Rótulo curto de status; sempre acompanhado do ícone (nunca só da cor). */
+internal fun appointmentStatusVisualLabel(status: ProgramAppointmentStatus): String = when (status) {
+    ProgramAppointmentStatus.PENDING -> "Pendente"
+    ProgramAppointmentStatus.CONFIRMED -> "Confirmado"
+    ProgramAppointmentStatus.RESCHEDULE_REQUESTED -> "Reagendar"
+    ProgramAppointmentStatus.CANCELLED -> "Cancelado"
+    ProgramAppointmentStatus.COMPLETED -> "Concluído"
+}
+
+/**
+ * Linha principal do card: o horário confirmado nunca é confundido com a
+ * preferência informada pelo participante.
+ */
+internal fun appointmentScheduleHeadline(
+    status: ProgramAppointmentStatus,
+    scheduledAtLabel: String?
+): String = when {
+    status == ProgramAppointmentStatus.CONFIRMED && scheduledAtLabel != null ->
+        "Confirmado para $scheduledAtLabel"
+    status == ProgramAppointmentStatus.RESCHEDULE_REQUESTED && scheduledAtLabel != null ->
+        "Novo horário sugerido: $scheduledAtLabel"
+    status == ProgramAppointmentStatus.COMPLETED && scheduledAtLabel != null ->
+        "Concluído em $scheduledAtLabel"
+    status == ProgramAppointmentStatus.COMPLETED -> "Atendimento concluído"
+    status == ProgramAppointmentStatus.CANCELLED -> "Atendimento cancelado"
+    scheduledAtLabel != null -> "Horário definido: $scheduledAtLabel"
+    else -> "Aguardando confirmação do programa"
+}
+
+internal fun appointmentPreferenceLine(requestedSlotText: String?): String? {
+    val clean = requestedSlotText?.trim().orEmpty()
+    return clean.takeIf { it.isNotEmpty() }?.let { "Preferência informada: $it" }
+}
+
+internal fun appointmentDurationLabel(): String = APPOINTMENT_DURATION_FALLBACK_LABEL
+
+private fun appointmentStatusIcon(status: ProgramAppointmentStatus): ImageVector = when (status) {
+    ProgramAppointmentStatus.PENDING -> Icons.Default.Schedule
+    ProgramAppointmentStatus.CONFIRMED -> Icons.Default.CheckCircle
+    ProgramAppointmentStatus.RESCHEDULE_REQUESTED -> Icons.Default.Refresh
+    ProgramAppointmentStatus.CANCELLED -> Icons.Default.Block
+    ProgramAppointmentStatus.COMPLETED -> Icons.Default.Check
+}
+
+private fun shareAppointmentsAvailability(context: Context, policy: AppointmentsPolicyDto) {
+    val summary = policy.availabilitiesSummary.trim()
+    if (summary.isEmpty()) {
+        Toast.makeText(
+            context,
+            "Configure a disponibilidade no Estúdio antes de compartilhar.",
+            Toast.LENGTH_LONG
+        ).show()
+        return
+    }
+    runCatching {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "Disponibilidade de agendamento")
+            putExtra(Intent.EXTRA_TEXT, "Agenda de atendimentos no Braga Saúde: $summary")
+        }
+        context.startActivity(Intent.createChooser(intent, "Compartilhar agenda"))
+    }.onFailure {
+        Toast.makeText(
+            context,
+            "Não foi possível abrir o compartilhamento agora.",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OwnerAppointmentsWalletCard(
     appointments: List<ProgramAppointmentDto>,
@@ -57,18 +150,28 @@ fun OwnerAppointmentsWalletCard(
     brandPrimary: Color,
     brandAccent: Color,
     softBorder: BorderStroke?,
-    onManageAppointment: (ProgramAppointmentDto) -> Unit
+    onManageAppointment: (ProgramAppointmentDto) -> Unit,
+    onOpenStudio: (() -> Unit)? = null
 ) {
     var pendingOnlyFilter by rememberSaveable { mutableStateOf(true) }
+    var showAll by rememberSaveable { mutableStateOf(false) }
     val pendingCount = appointments.count { it.status == "PENDING" }
-    val visibleList = remember(appointments, pendingOnlyFilter) {
-        val base = if (pendingOnlyFilter) {
-            appointments.filter { it.status == "PENDING" || it.status == "RESCHEDULE_REQUESTED" }
+    val awaitingCount = appointments.count {
+        it.status == "PENDING" || it.status == "RESCHEDULE_REQUESTED"
+    }
+    val filteredList = remember(appointments, pendingOnlyFilter) {
+        if (pendingOnlyFilter) {
+            appointments.filter {
+                it.status == "PENDING" || it.status == "RESCHEDULE_REQUESTED"
+            }
         } else {
             appointments
         }
-        base.take(8)
     }
+    val visibleList = remember(filteredList, showAll) {
+        if (showAll) filteredList else filteredList.take(5)
+    }
+    val context = LocalContext.current
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -120,7 +223,7 @@ fun OwnerAppointmentsWalletCard(
                             text = B2BTextFormatters.countLabel(pendingCount, "pendente", "pendentes"),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = brandAccent,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
@@ -132,7 +235,7 @@ fun OwnerAppointmentsWalletCard(
                     FilterChip(
                         selected = pendingOnlyFilter,
                         onClick = { pendingOnlyFilter = true },
-                        label = { Text("Aguardando") }
+                        label = { Text("Aguardando ($awaitingCount)") }
                     )
                     FilterChip(
                         selected = !pendingOnlyFilter,
@@ -142,67 +245,295 @@ fun OwnerAppointmentsWalletCard(
                 }
 
                 if (visibleList.isEmpty()) {
-                    Text(
-                        text = if (pendingOnlyFilter) {
-                            "Nenhuma solicitação pendente de confirmação no momento."
+                    AppointmentsEmptyState(
+                        title = if (pendingOnlyFilter) {
+                            "Nenhum pedido pendente"
                         } else {
-                            "Ainda não há solicitações de agendamento recebidas."
+                            "Nenhum agendamento ainda"
                         },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        supporting = if (pendingOnlyFilter) {
+                            "Quando um participante solicitar um horário, o pedido aparece aqui para você confirmar."
+                        } else {
+                            "Compartilhe a disponibilidade do programa para começar a receber solicitações."
+                        },
+                        brandAccent = brandAccent,
+                        action = {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(
+                                    onClick = { shareAppointmentsAvailability(context, policy) },
+                                    modifier = Modifier.heightIn(min = 48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Share,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Compartilhar disponibilidade")
+                                }
+                                if (onOpenStudio != null) {
+                                    OutlinedButton(
+                                        onClick = onOpenStudio,
+                                        modifier = Modifier.heightIn(min = 48.dp)
+                                    ) {
+                                        Text("Abrir Estúdio")
+                                    }
+                                }
+                            }
+                        }
                     )
                 } else {
                     visibleList.forEach { appt ->
                         val isBusy = updatingAppointmentId == appt.appointmentId
+                        val status = appt.parsedStatus
                         val formattedDt = formatAppointmentIsoPtBr(appt.scheduledAt)
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                         ) {
-                            Row(
+                            Column(
                                 modifier = Modifier.padding(12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "${appt.patientName ?: "Participante"} · ${appt.parsedModality.labelPtBr}",
+                                        text = appt.patientName ?: "Participante",
                                         style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    AppointmentStatusChip(status = status, brandPrimary = brandPrimary)
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = appointmentStatusIcon(status),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
-                                        text = "Preferência: ${appt.requestedSlotText}",
+                                        text = appointmentScheduleHeadline(status, formattedDt),
                                         style = MaterialTheme.typography.bodySmall,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = formattedDt?.let { "${appt.parsedStatus.labelPtBr} · $it" }
-                                            ?: appt.parsedStatus.labelPtBr,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = brandAccent
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                 }
-                                if (appt.parsedStatus != ProgramAppointmentStatus.CANCELLED &&
-                                    appt.parsedStatus != ProgramAppointmentStatus.COMPLETED
+                                if (status != ProgramAppointmentStatus.COMPLETED &&
+                                    status != ProgramAppointmentStatus.CANCELLED
+                                ) {
+                                    appointmentPreferenceLine(appt.requestedSlotText)?.let { preference ->
+                                        Text(
+                                            text = preference,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    AppointmentModalityChip(appt.parsedModality)
+                                    AppointmentDurationChip()
+                                }
+                                if (status != ProgramAppointmentStatus.CANCELLED &&
+                                    status != ProgramAppointmentStatus.COMPLETED
                                 ) {
                                     OutlinedButton(
                                         onClick = { onManageAppointment(appt) },
                                         enabled = !isBusy,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 48.dp),
                                         shape = RoundedCornerShape(10.dp)
                                     ) {
-                                        Text("Gerenciar")
+                                        if (isBusy) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp),
+                                                strokeWidth = 2.dp
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                        }
+                                        Text(if (isBusy) "Abrindo..." else "Gerenciar pedido")
                                     }
                                 }
                             }
                         }
                     }
+
+                    if (filteredList.size > 5) {
+                        TextButton(
+                            onClick = { showAll = !showAll },
+                            modifier = Modifier.heightIn(min = 48.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (showAll) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                if (showAll) {
+                                    "Mostrar menos"
+                                } else {
+                                    "Ver todos (${filteredList.size})"
+                                }
+                            )
+                        }
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AppointmentStatusChip(
+    status: ProgramAppointmentStatus,
+    brandPrimary: Color
+) {
+    val container = when (status) {
+        ProgramAppointmentStatus.CONFIRMED -> brandPrimary.copy(alpha = 0.14f)
+        ProgramAppointmentStatus.RESCHEDULE_REQUESTED ->
+            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f)
+        ProgramAppointmentStatus.CANCELLED ->
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.75f)
+        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+    }
+    val content = when (status) {
+        ProgramAppointmentStatus.RESCHEDULE_REQUESTED -> MaterialTheme.colorScheme.onSecondaryContainer
+        ProgramAppointmentStatus.CANCELLED -> MaterialTheme.colorScheme.onErrorContainer
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    Surface(shape = RoundedCornerShape(50), color = container) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = appointmentStatusIcon(status),
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = content
+            )
+            Text(
+                text = appointmentStatusVisualLabel(status),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = content
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppointmentModalityChip(modality: AppointmentModality) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (modality == AppointmentModality.REMOTE) {
+                    Icons.Default.Monitor
+                } else {
+                    Icons.Default.LocationOn
+                },
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = modality.labelPtBr,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppointmentDurationChip() {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Timer,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = appointmentDurationLabel(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppointmentsEmptyState(
+    title: String,
+    supporting: String,
+    brandAccent: Color,
+    action: (@Composable () -> Unit)? = null
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CalendarMonth,
+                    contentDescription = null,
+                    tint = brandAccent
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = supporting,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            action?.invoke()
         }
     }
 }
@@ -227,6 +558,10 @@ fun ProgramAppointmentsParticipantCard(
         AppointmentModality.fromWire(it).labelPtBr
     }
     val canRequest = B2BOnboardingValidator.canRequestAppointment(pendingCount)
+    var showAllAppointments by rememberSaveable { mutableStateOf(false) }
+    val visibleAppointments = remember(appointments, showAllAppointments) {
+        if (showAllAppointments) appointments else appointments.take(6)
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -305,9 +640,20 @@ fun ProgramAppointmentsParticipantCard(
                     )
                 }
 
-                if (appointments.isNotEmpty()) {
+                if (appointments.isEmpty()) {
+                    AppointmentsEmptyState(
+                        title = "Nenhum pedido pendente",
+                        supporting = "Use \"Solicitar horário\" acima para pedir seu próximo atendimento. O programa confirma a data final.",
+                        brandAccent = brandAccent
+                    )
+                } else {
                     HorizontalDivider()
-                    appointments.take(6).forEach { appt ->
+                    Text(
+                        text = "Solicitações (${appointments.size})",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    visibleAppointments.forEach { appt ->
                         val status = appt.parsedStatus
                         val isBusy = updatingAppointmentId == appt.appointmentId
                         val scheduledPt = formatAppointmentIsoPtBr(appt.scheduledAt)
@@ -322,37 +668,70 @@ fun ProgramAppointmentsParticipantCard(
                         ) {
                             Column(
                                 modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = "${appt.parsedModality.labelPtBr} · ${status.labelPtBr}",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        color = brandAccent
-                                    )
+                                    AppointmentStatusChip(status = status, brandPrimary = brandPrimary)
                                     if (canCancel) {
                                         TextButton(
                                             onClick = { onCancelAppointment(appt.appointmentId) },
-                                            enabled = !isBusy
+                                            enabled = !isBusy,
+                                            modifier = Modifier.heightIn(min = 48.dp)
                                         ) {
+                                            if (isBusy) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(16.dp),
+                                                    strokeWidth = 2.dp
+                                                )
+                                                Spacer(Modifier.width(6.dp))
+                                            }
                                             Text(if (isBusy) "Cancelando..." else "Cancelar")
                                         }
                                     }
                                 }
-                                Text(
-                                    text = "Solicitado: ${appt.requestedSlotText}",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                scheduledPt?.let { dt ->
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = appointmentStatusIcon(status),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                     Text(
-                                        text = "Horário definido: $dt",
+                                        text = appointmentScheduleHeadline(status, scheduledPt),
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                                if (status != ProgramAppointmentStatus.COMPLETED &&
+                                    status != ProgramAppointmentStatus.CANCELLED
+                                ) {
+                                    appointmentPreferenceLine(appt.requestedSlotText)?.let { preference ->
+                                        Text(
+                                            text = preference,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    AppointmentModalityChip(appt.parsedModality)
+                                    AppointmentDurationChip()
+                                }
+                                appt.patientNote?.takeIf { it.isNotBlank() }?.let { note ->
+                                    Text(
+                                        text = "Sua observação: $note",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                                 appt.partnerNote?.takeIf { it.isNotBlank() }?.let { note ->
@@ -363,6 +742,30 @@ fun ProgramAppointmentsParticipantCard(
                                     )
                                 }
                             }
+                        }
+                    }
+                    if (appointments.size > 6) {
+                        TextButton(
+                            onClick = { showAllAppointments = !showAllAppointments },
+                            modifier = Modifier.heightIn(min = 48.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (showAllAppointments) {
+                                    Icons.Default.ExpandLess
+                                } else {
+                                    Icons.Default.ExpandMore
+                                },
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                if (showAllAppointments) {
+                                    "Mostrar menos"
+                                } else {
+                                    "Ver todos (${appointments.size})"
+                                }
+                            )
                         }
                     }
                 }
@@ -394,6 +797,7 @@ fun RequestAppointmentBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -408,6 +812,11 @@ fun RequestAppointmentBottomSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Text(
+                text = "Você informa uma preferência; o programa confirma o horário final.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             Text(
                 text = "Modalidade",
@@ -419,6 +828,7 @@ fun RequestAppointmentBottomSheet(
                     val label = AppointmentModality.fromWire(modWire).labelPtBr
                     FilterChip(
                         selected = selectedModality == modWire,
+                        enabled = !isSubmitting,
                         onClick = { if (!isSubmitting) selectedModality = modWire },
                         label = { Text(label) }
                     )
@@ -455,6 +865,27 @@ fun RequestAppointmentBottomSheet(
                 shape = RoundedCornerShape(12.dp)
             )
 
+            if (isSubmitting) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { liveRegion = LiveRegionMode.Polite },
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = brandPrimary
+                    )
+                    Text(
+                        text = "Enviando solicitação…",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -462,7 +893,9 @@ fun RequestAppointmentBottomSheet(
                 OutlinedButton(
                     onClick = onDismiss,
                     enabled = !isSubmitting,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("Cancelar")
@@ -476,13 +909,23 @@ fun RequestAppointmentBottomSheet(
                         )
                     },
                     enabled = slotValid && !isSubmitting,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = brandPrimary,
                         contentColor = brandOnPrimary
                     )
                 ) {
+                    if (isSubmitting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = brandOnPrimary
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
                     Text(
                         text = if (isSubmitting) "Enviando..." else "Enviar solicitação",
                         fontWeight = FontWeight.Bold
@@ -526,11 +969,13 @@ fun OwnerAppointmentDecisionBottomSheet(
         val targetTime = LocalTime.of(selectedHour, selectedMinute)
         ZonedDateTime.of(targetDate, targetTime, ZoneId.systemDefault())
     }
+    val currentScheduledLabel = formatAppointmentIsoPtBr(appointment.scheduledAt)
 
     BragaBottomSheet(onDismissRequest = { if (!isUpdating) onDismiss() }) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -540,11 +985,44 @@ fun OwnerAppointmentDecisionBottomSheet(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
-            Text(
-                text = "${appointment.patientName ?: "Participante"} · ${appointment.parsedModality.labelPtBr}\nPedido: ${appointment.requestedSlotText}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = appointment.patientName ?: "Participante",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    appointmentPreferenceLine(appointment.requestedSlotText)?.let { preference ->
+                        Text(
+                            text = preference,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    currentScheduledLabel?.let { schedule ->
+                        Text(
+                            text = "Horário atual: $schedule",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                AppointmentStatusChip(status = appointment.parsedStatus, brandPrimary = brandPrimary)
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AppointmentModalityChip(appointment.parsedModality)
+                AppointmentDurationChip()
+            }
 
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
@@ -552,11 +1030,19 @@ fun OwnerAppointmentDecisionBottomSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 validTargets.forEach { stWire ->
-                    val label = ProgramAppointmentStatus.fromWire(stWire).labelPtBr
+                    val status = ProgramAppointmentStatus.fromWire(stWire)
                     FilterChip(
                         selected = targetStatus == stWire,
+                        enabled = !isUpdating,
                         onClick = { if (!isUpdating) targetStatus = stWire },
-                        label = { Text(label) }
+                        leadingIcon = {
+                            Icon(
+                                imageVector = appointmentStatusIcon(status),
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        label = { Text(status.labelPtBr) }
                     )
                 }
             }
@@ -576,6 +1062,7 @@ fun OwnerAppointmentDecisionBottomSheet(
                         val chipDate = LocalDate.now().plusDays(offset.toLong())
                         FilterChip(
                             selected = dayOffset == offset,
+                            enabled = !isUpdating,
                             onClick = { if (!isUpdating) dayOffset = offset },
                             label = { Text(chipDate.format(ptBrDayChipFormatter)) }
                         )
@@ -590,6 +1077,7 @@ fun OwnerAppointmentDecisionBottomSheet(
                         val lbl = String.format(Locale.US, "%02d:%02d", h, m)
                         FilterChip(
                             selected = selectedHour == h && selectedMinute == m,
+                            enabled = !isUpdating,
                             onClick = {
                                 if (!isUpdating) {
                                     selectedHour = h
@@ -615,6 +1103,7 @@ fun OwnerAppointmentDecisionBottomSheet(
                     )
                     Switch(
                         checked = allowOverlap,
+                        enabled = !isUpdating,
                         onCheckedChange = { if (!isUpdating) allowOverlap = it }
                     )
                 }
@@ -634,6 +1123,27 @@ fun OwnerAppointmentDecisionBottomSheet(
                 shape = RoundedCornerShape(12.dp)
             )
 
+            if (isUpdating) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { liveRegion = LiveRegionMode.Polite },
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = brandPrimary
+                    )
+                    Text(
+                        text = "Salvando decisão…",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -641,7 +1151,9 @@ fun OwnerAppointmentDecisionBottomSheet(
                 OutlinedButton(
                     onClick = onDismiss,
                     enabled = !isUpdating,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("Fechar")
@@ -661,13 +1173,23 @@ fun OwnerAppointmentDecisionBottomSheet(
                         )
                     },
                     enabled = !isUpdating,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = brandPrimary,
                         contentColor = brandOnPrimary
                     )
                 ) {
+                    if (isUpdating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = brandOnPrimary
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
                     Text(
                         text = if (isUpdating) "Salvando..." else "Salvar decisão",
                         fontWeight = FontWeight.Bold
