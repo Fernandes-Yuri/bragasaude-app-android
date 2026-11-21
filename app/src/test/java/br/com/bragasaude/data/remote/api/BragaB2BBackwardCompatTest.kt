@@ -1475,4 +1475,60 @@ class BragaB2BBackwardCompatTest {
         }
     }
 
+    @Test
+    fun `wallet kpis aceita series de 7 14 e 30 dias e nao coage delta ausente para zero`(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = BragaApiClient(mockk(relaxed = true), server.url("/").toString().trimEnd('/'),
+                stubAuthService(), OkHttpClient(), FamilyE2eeManager())
+
+            // 14 dias sem periodDays: o tamanho da série vira o período exibido.
+            server.enqueue(MockResponse().setBody(
+                """{"kpis":{"dailyActiveUsers":[${(1..14).joinToString(",")}]}}"""
+            ))
+            val fourteen = api.getMyPartnerParticipants()!!.kpis!!
+            assertEquals(14, fourteen.dailyActiveUsers!!.size)
+            assertEquals(14, fourteen.periodDays)
+            assertNull("appointmentsDelta ausente deve continuar null", fourteen.appointmentsDelta)
+            server.takeRequest()
+
+            // 30 dias com periodDays explícito continua mapeado 1:1.
+            server.enqueue(MockResponse().setBody(
+                """{"kpis":{"periodDays":30,"dailyActiveUsers":[${(1..30).joinToString(",")}]}}"""
+            ))
+            val thirty = api.getMyPartnerParticipants()!!.kpis!!
+            assertEquals(30, thirty.dailyActiveUsers!!.size)
+            assertEquals(30, thirty.periodDays)
+            server.takeRequest()
+
+            // Delta 0 é valor real; JSON null e ausência são "sem base".
+            server.enqueue(MockResponse().setBody("""{"kpis":{"appointmentsDelta":0}}"""))
+            assertEquals(0, api.getMyPartnerParticipants()!!.kpis!!.appointmentsDelta)
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody("""{"kpis":{"appointmentsDelta":null}}"""))
+            assertNull(api.getMyPartnerParticipants()!!.kpis!!.appointmentsDelta)
+            server.takeRequest()
+
+            // Acima de 31 pontos a série não é descartada: ficam os 31 dias mais recentes.
+            server.enqueue(MockResponse().setBody(
+                """{"kpis":{"periodDays":35,"dailyActiveUsers":[${(1..35).joinToString(",")}]}}"""
+            ))
+            val long = api.getMyPartnerParticipants()!!.kpis!!
+            assertEquals(31, long.dailyActiveUsers!!.size)
+            assertEquals(35, long.periodDays)
+            assertEquals(35, long.dailyActiveUsers!!.last())
+            server.takeRequest()
+
+            // Um único ponto não forma sparkline: fallback null sem falhar o parse.
+            server.enqueue(MockResponse().setBody("""{"kpis":{"dailyActiveUsers":[2]}}"""))
+            assertNull(api.getMyPartnerParticipants()!!.kpis!!.dailyActiveUsers)
+            server.takeRequest()
+
+            // kpis ausente continua null: a UI mostra "Ainda não há indicadores".
+            server.enqueue(MockResponse().setBody("""{"participants":[]}"""))
+            assertNull(api.getMyPartnerParticipants()!!.kpis)
+            server.takeRequest()
+        }
+    }
+
 }

@@ -7,6 +7,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import br.com.bragasaude.ui.b2b.PartnerTechnologyCredit
 
@@ -20,12 +22,14 @@ import br.com.bragasaude.ui.b2b.PartnerTechnologyCredit
 @Composable
 fun PartnerLoginPreview() {
     var signup by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    // Espaçamento um pouco menor que o do login real para o bloco legal caber na 1ª dobra
+    // da prévia (a prévia é renderizada dentro de um card baixo, não em tela cheia).
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         LoginIdentity(showIntroduction = true)
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val style = MaterialTheme.typography.labelLarge
             val measurer = rememberTextMeasurer()
-            val labels = listOf("Entrar", "Criar conta")
+            val labels = listOf("Entrar", "Criar Nova Conta")
             val longest = labels.maxOf { measurer.measure(AnnotatedString(it), style = style, softWrap = false).size.width }
             val scale = (constraints.maxWidth.toFloat() / labels.size / longest.coerceAtLeast(1)).coerceAtMost(1f)
             TabRow(selectedTabIndex = if (signup) 1 else 0, modifier = Modifier.height(48.dp),
@@ -50,8 +54,16 @@ fun PartnerLoginPreview() {
             modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)) {
             Text("Continuar com o Google")
         }
-        Text("Termos de Uso e Privacidade", style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // Affordance de link: mesma cor de destaque com contraste AA e sublinhado, no lugar do
+        // cinza sem ação aparente que parecia texto decorativo.
+        Text(
+            text = "Termos de Uso e Privacidade",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            textDecoration = TextDecoration.Underline,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
         PartnerTechnologyCredit()
     }
 }

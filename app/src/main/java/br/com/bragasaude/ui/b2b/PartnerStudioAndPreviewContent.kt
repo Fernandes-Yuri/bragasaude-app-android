@@ -263,7 +263,10 @@ fun PartnerStudioTabContent(
                     size = Size(size.width, 20.dp.toPx())
                 )
             },
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 28.dp, bottom = 20.dp),
+        // A tab bar + o crédito de tecnologia do Scaffold ficam abaixo desta área; a reserva
+        // extra (96dp, igual à das outras abas) garante que o último card/CTA role até ficar
+        // inteiro acima da barra, sem encostar ou cortar (telas 62/75/76).
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 28.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
@@ -514,7 +517,14 @@ fun PartnerStudioTabContent(
                                         leadingIcon = if (selected) {
                                             { Icon(Icons.Default.CheckCircle, null, Modifier.size(18.dp)) }
                                         } else null,
-                                        label = { Text(lbl) }
+                                        label = { Text(lbl) },
+                                        // O ícone herdava onSecondaryContainer sobre a marca escura
+                                        // e sumia; agora usa o mesmo contraste do rótulo.
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = brandPrimary,
+                                            selectedLabelColor = brandOnPrimary,
+                                            selectedLeadingIconColor = brandOnPrimary
+                                        )
                                     )
                                 }
                             }
@@ -535,7 +545,12 @@ fun PartnerStudioTabContent(
                                         leadingIcon = if (draftConfig.appointmentsPolicy.bookingMode == modeKey) {
                                             { Icon(Icons.Default.CheckCircle, null, Modifier.size(18.dp)) }
                                         } else null,
-                                        label = { Text(modeLbl) }
+                                        label = { Text(modeLbl) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = brandPrimary,
+                                            selectedLabelColor = brandOnPrimary,
+                                            selectedLeadingIconColor = brandOnPrimary
+                                        )
                                     )
                                 }
                             }
@@ -843,7 +858,9 @@ fun PartnerPreviewTabContent(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
+        // 96dp de folga inferior: o card da prévia e "Passos e atividade física" (HOME)
+        // precisam rolar até ficar inteiros acima da tab bar, sem corte.
+        contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
@@ -908,7 +925,9 @@ fun PartnerPreviewTabContent(
                             },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = brandPrimary,
-                                selectedLabelColor = brandOnPrimary
+                                selectedLabelColor = brandOnPrimary,
+                                // Sem isto o check herdava onSecondaryContainer sobre a marca escura.
+                                selectedLeadingIconColor = brandOnPrimary
                             )
                         )
                         FilterChip(
@@ -924,7 +943,9 @@ fun PartnerPreviewTabContent(
                             },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = brandPrimary,
-                                selectedLabelColor = brandOnPrimary
+                                selectedLabelColor = brandOnPrimary,
+                                // Sem isto o check herdava onSecondaryContainer sobre a marca escura.
+                                selectedLeadingIconColor = brandOnPrimary
                             )
                         )
                     }
@@ -1677,6 +1698,20 @@ fun AiReceptionistSimulatorSheet(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
+            // "Atendimento" e "agendamento" são janelas distintas: o cabeçalho rotula cada uma
+            // com o dado configurado, evitando que a resposta de horário pareça contraditória.
+            Text(
+                text = "Atendimento: ${config.directChatPolicy.serviceHoursLabel} · ${config.directChatPolicy.responseSlaLabel}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (config.features.appointmentsEnabled) {
+                Text(
+                    text = "Horários de agendamento: ${config.appointmentsPolicy.availabilitiesSummary}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Text(
                 text = "Ambiente de teste: nada é enviado aos participantes. Teste horários, FAQ " +
                     "e o bloqueio de segurança para conteúdo educativo, sem diagnóstico nem prescrição.",

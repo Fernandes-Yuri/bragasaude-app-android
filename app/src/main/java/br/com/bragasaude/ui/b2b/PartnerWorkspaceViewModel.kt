@@ -36,9 +36,12 @@ import kotlinx.coroutines.ensureActive
 import br.com.bragasaude.domain.b2b.PartnerWalletKpisDto
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -101,6 +104,8 @@ class PartnerWorkspaceViewModel @Inject constructor(
     val isFilteringParticipants: StateFlow<Boolean> = _isFilteringParticipants.asStateFlow()
 
     private var walletFilterJob: Job? = null
+    private var loadMoreJob: Job? = null
+    private var refreshJob: Job? = null
 
     private val _nextCursor = MutableStateFlow<String?>(null)
     private val _hasMore = MutableStateFlow(false)
@@ -114,6 +119,13 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     private val _isLoadingSummary = MutableStateFlow(false)
     val isLoadingSummary: StateFlow<Boolean> = _isLoadingSummary.asStateFlow()
+
+    /**
+     * Erro do detalhe do participante. Diferente de [statusMessage], é estado local da
+     * folha: a seleção continua de pé e a UI oferece [retrySelectedSummary] sem fechar.
+     */
+    private val _detailError = MutableStateFlow<String?>(null)
+    val detailError: StateFlow<String?> = _detailError.asStateFlow()
 
     private val _isRemovingParticipant = MutableStateFlow(false)
     val isRemovingParticipant: StateFlow<Boolean> = _isRemovingParticipant.asStateFlow()
@@ -180,6 +192,19 @@ class PartnerWorkspaceViewModel @Inject constructor(
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
 
+    /**
+     * Badge agregado de agendamentos pendentes. A UI atual conta apenas a primeira página
+     * de agendamentos (limite 50) ou os participantes filtrados/paginados, então pode
+     * subestimar. Aqui combinamos as duas fontes e usamos o maior valor conhecido; o
+     * unread de chat não tem fonte agregada no contrato atual e segue fora deste fluxo.
+     * O Scaffold deve consumir este fluxo na próxima rodada de UI.
+     */
+    val pendingAppointmentsTotal: StateFlow<Int> = combine(_ownerAppointments, _participants) { appointments, items ->
+        val fromAppointmentsPage = appointments.count { it.status == "PENDING" }
+        val fromParticipants = items.sumOf { it.pendingAppointmentsCount }
+        maxOf(fromAppointmentsPage, fromParticipants)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
     fun partnerApiClient(): BragaApiClient = apiClient
 
     fun consumeStatusMessage() {
@@ -191,6 +216,8 @@ class PartnerWorkspaceViewModel @Inject constructor(
     }
 
     private var summaryJob: Job? = null
+    private data class SummaryRequest(val patientId: String, val days: Int, val detailCategory: String?)
+    private var lastSummaryRequest: SummaryRequest? = null
 
     fun collapseClinicalDetails() {
         summaryJob?.cancel()
@@ -202,6 +229,8 @@ class PartnerWorkspaceViewModel @Inject constructor(
     fun clearSelectedSummary() {
         summaryJob?.cancel()
         _isLoadingSummary.value = false
+        _detailError.value = null
+        lastSummaryRequest = null
         _selectedSummary.value = null
         _selectedParticipantItem.value = null
     }
@@ -237,6 +266,9 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     private fun scheduleWalletReload(debounceMs: Long) {
         walletFilterJob?.cancel()
+        // Uma página extra em voo pertence ao filtro anterior; não pode ser anexada à lista nova.
+        loadMoreJob?.cancel()
+        loadMoreJob = null
         walletFilterJob = workspaceScope.launch {
             if (debounceMs > 0L) delay(debounceMs)
             _isFilteringParticipants.value = true
@@ -260,37 +292,49 @@ class PartnerWorkspaceViewModel @Inject constructor(
     }
 
     fun refreshWorkspace() {
+        // Deduplica cargas concorrentes: Scaffold e tela de participante (ou dois
+        // LaunchedEffect no mesmo frame) pedem o mesmo refresh. Sem o guard, cada
+        // chamada refazia GET /business/registration e /session/contexts. O refresh
+        // manual continua valendo sempre que não há carga em andamento.
+        if (refreshJob?.isActive == true) return
         val uid = auth.currentUser?.uid ?: return
         clearSensitiveBusinessMemory()
-        workspaceScope.launch {
-            _isLoading.value = true
-            b2bContextRepository.hydrateFromCache(uid)
-            val contexts = b2bContextRepository.syncContexts(uid)
-            coroutineContext.ensureActive()
-            val current = activeContextStore.activeContext.value
-            val businessOnlyOrActive = activeContextStore.isBusinessSession.value ||
-                activeContextStore.accountMode.value == AppAccountMode.BUSINESS_ONLY
-            if (businessOnlyOrActive) {
-                val ownerCtx = contexts.firstOrNull {
-                    it.parsedMode == AppContextMode.PARTNER_OWNER && it.approvalStatus == "APPROVED"
-                } ?: contexts.firstOrNull { it.parsedMode == AppContextMode.PARTNER_OWNER }
-                if (ownerCtx != null && current.cacheKey() != ownerCtx.cacheKey()) {
-                    b2bContextRepository.selectContext(uid, ownerCtx)
+        refreshJob = workspaceScope.launch {
+            try {
+                _isLoading.value = true
+                b2bContextRepository.hydrateFromCache(uid)
+                val contexts = b2bContextRepository.syncContexts(uid)
+                coroutineContext.ensureActive()
+                val current = activeContextStore.activeContext.value
+                val businessOnlyOrActive = activeContextStore.isBusinessSession.value ||
+                    activeContextStore.accountMode.value == AppAccountMode.BUSINESS_ONLY
+                if (businessOnlyOrActive) {
+                    val ownerCtx = contexts.firstOrNull {
+                        it.parsedMode == AppContextMode.PARTNER_OWNER && it.approvalStatus == "APPROVED"
+                    } ?: contexts.firstOrNull { it.parsedMode == AppContextMode.PARTNER_OWNER }
+                    if (ownerCtx != null && current.cacheKey() != ownerCtx.cacheKey()) {
+                        b2bContextRepository.selectContext(uid, ownerCtx)
+                    }
+                } else if (!current.isPartnerContext) {
+                    val firstPartner = contexts.firstOrNull {
+                        it.parsedMode == AppContextMode.PARTNER_PARTICIPANT
+                    }
+                    if (firstPartner != null) {
+                        b2bContextRepository.selectContext(uid, firstPartner)
+                    }
                 }
-            } else if (!current.isPartnerContext) {
-                val firstPartner = contexts.firstOrNull {
-                    it.parsedMode == AppContextMode.PARTNER_PARTICIPANT
-                }
-                if (firstPartner != null) {
-                    b2bContextRepository.selectContext(uid, firstPartner)
-                }
+                reloadModeData()
+            } finally {
+                _isLoading.value = false
             }
-            reloadModeData()
-            _isLoading.value = false
         }
     }
 
     fun clearSensitiveBusinessMemory() {
+        refreshJob?.cancel()
+        refreshJob = null
+        loadMoreJob?.cancel()
+        loadMoreJob = null
         workspaceJob.cancel()
         workspaceJob = SupervisorJob(viewModelScope.coroutineContext[Job])
         walletFilterJob?.cancel()
@@ -312,6 +356,8 @@ class PartnerWorkspaceViewModel @Inject constructor(
         _selectedParticipantItem.value = null
         _selectedSummary.value = null
         _isLoadingSummary.value = false
+        _detailError.value = null
+        lastSummaryRequest = null
         _isRemovingParticipant.value = false
         _selectedPeriodDays.value = 30
         _ownerReminders.value = emptyList()
@@ -712,39 +758,77 @@ class PartnerWorkspaceViewModel @Inject constructor(
 
     fun loadMoreParticipants() {
         if (_isLoadingMore.value || !_hasMore.value) return
+        if (loadMoreJob?.isActive == true) return
         val cursor = _nextCursor.value ?: return
-        workspaceScope.launch {
-            _isLoadingMore.value = true
-            val page = fetchParticipantsPage(cursor = cursor)
-            if (page != null) {
-                _walletKpis.value = page.kpis
-                _participants.value = (_participants.value + page.participants)
-                    .distinctBy { it.patientUserId }
-                _nextCursor.value = page.nextCursor
-                _hasMore.value = page.hasMore
+        loadMoreJob = workspaceScope.launch {
+            try {
+                _isLoadingMore.value = true
+                val page = fetchParticipantsPage(cursor = cursor)
+                if (page != null) {
+                    _walletKpis.value = page.kpis
+                    _participants.value = (_participants.value + page.participants)
+                        .distinctBy { it.patientUserId }
+                    _nextCursor.value = page.nextCursor
+                    _hasMore.value = page.hasMore
+                }
+            } finally {
+                _isLoadingMore.value = false
             }
-            _isLoadingMore.value = false
         }
     }
 
+    /**
+     * Abre o detalhe. Em falha NÃO limpa a seleção: a folha continua aberta com
+     * [detailError] e [retrySelectedSummary] refaz a mesma consulta.
+     */
     fun openParticipantSummary(patientId: String, days: Int = _selectedPeriodDays.value, detailCategory: String? = null) {
         val clamped = days.coerceIn(1, 90)
         val current = _selectedSummary.value
         if (detailCategory != null &&
             (current == null || current.patientUserId != patientId || detailCategory !in current.availableDetails)
         ) return
-        if (current?.patientUserId == patientId) collapseClinicalDetails() else clearSelectedSummary()
-        _selectedParticipantItem.value = _participants.value.firstOrNull { it.patientUserId == patientId }
+        val request = SummaryRequest(patientId, clamped, detailCategory)
+        // Reabrir o mesmo detalhe enquanto a carga está em voo não dispara outra request.
+        if (_isLoadingSummary.value && lastSummaryRequest == request) return
+        if (current?.patientUserId == patientId) {
+            collapseClinicalDetails()
+        } else {
+            summaryJob?.cancel()
+            _selectedSummary.value = null
+            _selectedParticipantItem.value = _participants.value.firstOrNull { it.patientUserId == patientId }
+        }
+        startSummaryRequest(request)
+    }
+
+    fun retrySelectedSummary() {
+        if (_isLoadingSummary.value) return
+        val request = lastSummaryRequest ?: return
+        startSummaryRequest(request)
+    }
+
+    /** Limpa o aviso de falha do detalhe (ex.: após o usuário dispensar o snackbar). */
+    fun clearDetailError() {
+        _detailError.value = null
+    }
+
+    private fun startSummaryRequest(request: SummaryRequest) {
+        summaryJob?.cancel()
+        lastSummaryRequest = request
+        _detailError.value = null
         _isLoadingSummary.value = true
         summaryJob = workspaceScope.launch {
-            val summary = apiClient.getPartnerParticipantSummary(patientId, clamped, detailCategory)
+            val summary = apiClient.getPartnerParticipantSummary(
+                request.patientId,
+                request.days,
+                request.detailCategory
+            )
             _isLoadingSummary.value = false
             if (summary != null) {
                 _selectedSummary.value = summary
                 _selectedPeriodDays.value = summary.periodDays
             } else {
-                clearSelectedSummary()
-                _statusMessage.value = "Não foi possível carregar os registros autorizados deste participante."
+                // Mantém _selectedParticipantItem para a folha exibir o erro e o retry.
+                _detailError.value = "Não foi possível carregar os registros autorizados deste participante."
             }
         }
     }

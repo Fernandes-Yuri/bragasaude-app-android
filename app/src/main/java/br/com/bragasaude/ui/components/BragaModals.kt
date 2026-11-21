@@ -1,5 +1,9 @@
 package br.com.bragasaude.ui.components
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.view.Window
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -7,9 +11,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
 
 /** Estado por composição: a Orbe não disputa atenção com janelas, inclusive aninhadas. */
 @Stable
@@ -92,10 +100,57 @@ fun BragaBottomSheet(
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
             tonalElevation = 0.dp,
-            dragHandle = { BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.outlineVariant) },
-            content = content
-        )
+            dragHandle = { BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.outlineVariant) }
+        ) {
+            SheetContentWithStatusBar(content = content)
+        }
     }
+}
+
+/**
+ * O ModalBottomSheet abre em uma janela de diálogo própria (edge-to-edge), portanto os
+ * insets consumidos pela Activity não chegam até aqui: sem o padding do topo o conteúdo
+ * de uma folha alta (KYB/onboarding) começa sob a status bar e perde a primeira linha.
+ * A aparência dos ícones precisa ser recalculada para esta janela porque o Material 3 a
+ * define pela luminância do tema do sistema, não pela superfície real do app.
+ */
+@Composable
+private fun SheetContentWithStatusBar(content: @Composable ColumnScope.() -> Unit) {
+    ModalStatusBarAppearance()
+    Column(modifier = Modifier.fillMaxWidth().statusBarsPadding(), content = content)
+}
+
+@Composable
+private fun ModalStatusBarAppearance() {
+    val view = LocalView.current
+    if (view.isInEditMode) return
+    val useDarkIcons = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+    DisposableEffect(view, useDarkIcons) {
+        val window = view.modalHostWindow()
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        val previousLightStatusBars = controller?.isAppearanceLightStatusBars
+        controller?.isAppearanceLightStatusBars = useDarkIcons
+        onDispose {
+            if (controller != null && previousLightStatusBars != null) {
+                controller.isAppearanceLightStatusBars = previousLightStatusBars
+            }
+        }
+    }
+}
+
+/**
+ * A folha vive na janela do diálogo (que implementa [DialogWindowProvider]); fora dela,
+ * caímos para a janela da Activity, como em BragasaudeTheme.
+ */
+private fun android.view.View.modalHostWindow(): Window? {
+    (this as? DialogWindowProvider)?.window?.let { return it }
+    var context: Context = this.context
+    while (context is ContextWrapper) {
+        (context as? Activity)?.let { return it.window }
+        if (context === context.baseContext) break
+        context = context.baseContext
+    }
+    return null
 }
 
 /** Formulários: corpo limitado/rolável e rodapé acessível acima do teclado. */
