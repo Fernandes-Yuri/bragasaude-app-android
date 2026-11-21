@@ -72,7 +72,7 @@ class PartnerAccessibilitySemanticsTest {
         compose.onNodeWithText("2 de 2 lidos").assertExists()
         compose.onNodeWithText("1 pendente para você").assertExists()
         compose.onNodeWithText("3 mensagens não lidas").assertExists()
-        compose.onNodeWithText("Ativos: 2").assertExists()
+        compose.onNodeWithContentDescription("Ativos: 2").assertExists()
         compose.onNodeWithText("Carteira global")
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
     }
@@ -97,7 +97,7 @@ class PartnerAccessibilitySemanticsTest {
     @Test
     fun `estado vazio da carteira nao anuncia grafico`() {
         content { PartnerWalletKpis(kpis = null) }
-        compose.onNodeWithText("Ainda não há indicadores para este programa.").assertExists()
+        compose.onNodeWithText("Ainda não há indicadores").assertExists()
         compose.onNode(
             hasContentDescription("Participantes ativos por dia", substring = true)
         ).assertDoesNotExist()
